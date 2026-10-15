@@ -27,6 +27,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/bus"
@@ -49,7 +50,7 @@ const (
 type Gateway struct {
 	Events       eventlog.Store
 	Bus          bus.Bus
-	Auth         identity.Authenticator
+	Auth         identity.RequestAuthenticator
 	Conversation conversation.Reader
 	Logger       *slog.Logger
 	// OriginPatterns allows cross-origin browsers (e.g. a Vite dev server).
@@ -74,6 +75,13 @@ type outEvent struct {
 
 // ServeHTTP upgrades the request and runs the connection until it closes.
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Browsers authenticate with the session cookie sent on the upgrade
+	// request (the origin check below blocks cross-site use of it); agents
+	// and scripts send a token in the hello frame instead.
+	var cookie string
+	if c, err := r.Cookie(httpx.SessionCookie); err == nil {
+		cookie = c.Value
+	}
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: g.OriginPatterns})
 	if err != nil {
 		return
@@ -89,7 +97,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "expected hello")
 		return
 	}
-	actor, err := g.Auth.Authenticate(ctx, h.Token)
+	var actor identity.Actor
+	if h.Token != "" {
+		actor, err = g.Auth.Authenticate(ctx, h.Token)
+	} else {
+		actor, _, err = g.Auth.AuthenticateSession(ctx, cookie)
+	}
 	if err != nil {
 		_ = c.Close(websocket.StatusPolicyViolation, "unauthorized")
 		return

@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"time"
 
 	"colonyhall/internal/platform/ids"
 )
@@ -18,4 +19,18 @@ type Store interface {
 	ListActors(ctx context.Context, workspaceID ids.ID) ([]Actor, error)
 	CreateToken(ctx context.Context, t Token) error
 	ActorByTokenHash(ctx context.Context, hash []byte) (Actor, error)
+
+	// ActorsByHandle finds the handle in every workspace (for login).
+	ActorsByHandle(ctx context.Context, handle string) ([]Actor, error)
+	WorkspaceByName(ctx context.Context, name string) (Workspace, error)
+
+	// Credential returns the actor's password hash.
+	Credential(ctx context.Context, actorID ids.ID) (string, error)
+	SetCredential(ctx context.Context, actorID ids.ID, hash string, at time.Time) error
+
+	CreateSession(ctx context.Context, s Session) error
+	// SessionByTokenHash returns a non-revoked session and its actor;
+	// the caller checks expiry.
+	SessionByTokenHash(ctx context.Context, hash []byte) (Session, Actor, error)
+	RevokeSession(ctx context.Context, id ids.ID, at time.Time) error
 }

@@ -19,7 +19,7 @@ logs:            ## Follow server logs
 	$(COMPOSE) logs -f server
 
 run-mem:         ## Run the server in-process with in-memory stores (no Docker)
-	COLONY_STORE=memory COLONY_DEV_SEED=1 $(GO) run ./cmd/colonyhall
+	COLONY_STORE=memory COLONY_DEV_SEED=1 COLONY_SECURE_COOKIES=0 $(GO) run ./cmd/colonyhall
 
 fake-agent:      ## Run the fake agent against the local server
 	$(GO) run ./cmd/fake-agent -token col_dev_agent_token_do_not_use_in_production -scenario scenarios/ping.yaml

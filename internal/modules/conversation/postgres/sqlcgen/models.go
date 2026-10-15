@@ -55,6 +55,12 @@ type ConsumerOffset struct {
 	UpdatedAt    time.Time
 }
 
+type Credential struct {
+	ActorID      uuid.UUID
+	PasswordHash string
+	UpdatedAt    time.Time
+}
+
 type Delivery struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -96,6 +102,17 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	DeletedAt    *time.Time
+}
+
+type Session struct {
+	ID        uuid.UUID
+	ActorID   uuid.UUID
+	TokenHash []byte
+	CsrfToken string
+	UserAgent string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt *time.Time
 }
 
 type Workspace struct {

@@ -42,7 +42,7 @@ func TestPostgres(t *testing.T) {
 	}
 	Run(t, func(t *testing.T) Backend {
 		_, err := pg.Pool.Exec(ctx, `TRUNCATE delivery, consumer_offset, event, message, channel_member,
-			channel, api_token, actor, workspace RESTART IDENTITY CASCADE`)
+			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)
 		}

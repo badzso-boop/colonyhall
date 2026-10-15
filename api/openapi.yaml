@@ -14,8 +14,55 @@ servers:
 
 security:
   - bearer: []
+  - session: []
 
 paths:
+  /auth/login:
+    post:
+      operationId: login
+      tags: [identity]
+      security: []
+      description: Humans only. Sets the HttpOnly session cookie. Browser requests that change state must send csrf_token in the X-CSRF-Token header.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/LoginRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Logged in, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInfo" } } } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [identity]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Logged out; the cookie is cleared }
+
+  /auth/session:
+    get:
+      operationId: getSession
+      tags: [identity]
+      description: The current actor and, for cookie sessions, the CSRF token (e.g. after a page reload).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInfo" } } } }
+
+  /actors/{actorId}/password:
+    parameters:
+      - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setPassword
+      tags: [identity]
+      description: Your own password (current_password required) or, for admins, anyone's in the workspace.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetPasswordRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Changed }
+
   /me:
     get:
       operationId: getMe
@@ -147,6 +194,10 @@ components:
     bearer:
       type: http
       scheme: bearer
+    session:
+      type: apiKey
+      in: cookie
+      name: colony_session
 
   parameters:
     ChannelId:
@@ -203,6 +254,25 @@ components:
         handle: { type: string, description: "2-32 characters: lowercase letters, digits and '-'" }
         display_name: { type: string }
         role: { $ref: "#/components/schemas/Role" }
+    LoginRequest:
+      type: object
+      required: [handle, password]
+      properties:
+        handle: { type: string }
+        password: { type: string }
+        workspace: { type: string, description: Only needed when the handle exists in several workspaces }
+    SessionInfo:
+      type: object
+      required: [actor, csrf_token]
+      properties:
+        actor: { $ref: "#/components/schemas/Actor" }
+        csrf_token: { type: string, description: Empty for bearer-token callers }
+    SetPasswordRequest:
+      type: object
+      required: [new_password]
+      properties:
+        current_password: { type: string }
+        new_password: { type: string, minLength: 12, maxLength: 256 }
     CreateActorResponse:
       type: object
       required: [actor, token]

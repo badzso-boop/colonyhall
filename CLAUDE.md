@@ -59,7 +59,9 @@ A Go a `/usr/local/go/bin`-ben van, a `golangci-lint` a `~/go/bin`-ben (mindkett
 | `make test-pg` | A tár-szerződéstesztek Postgres ellen (kell hozzá `make dev`; a `colony_test` adatbázist törli) |
 | `make lint` | golangci-lint, a depguard rétegszabályokkal |
 
-Fejlesztői tokenek (csak a `COLONY_DEV_SEED=1` helyi stacken): admin `col_dev_admin_token_do_not_use_in_production`, `@fake-agent` `col_dev_agent_token_do_not_use_in_production`.
+Fejlesztői belépés (csak a `COLONY_DEV_SEED=1` helyi stacken): `@norbi` jelszava `colonyhall-dev-password`; Bearer tokenek: admin `col_dev_admin_token_do_not_use_in_production`, `@fake-agent` `col_dev_agent_token_do_not_use_in_production`.
+
+Jelszó beállítása parancssorból (a jelszó a stdin-ről jön, nem kerül a shell-előzménybe): `read -rs PW && echo "$PW" | COLONY_DATABASE_URL=… go run ./cmd/colonyhall set-password -handle norbi`.
 
 Minden változtatás után: `make lint test`, és ha az adattár változott, `make test-pg` is.
 

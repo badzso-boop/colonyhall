@@ -20,7 +20,7 @@ func ToAPI(it delivery.InboxItem) apispec.InboxItem {
 }
 
 // Register mounts the inbox routes on mux. Every route requires auth.
-func Register(mux *http.ServeMux, svc *delivery.Service, auth identity.Authenticator) {
+func Register(mux *http.ServeMux, svc *delivery.Service, auth identity.RequestAuthenticator) {
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
 
 	mux.Handle("GET /api/v1/agent/inbox", wrap(func(w http.ResponseWriter, r *http.Request) {

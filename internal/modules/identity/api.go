@@ -18,7 +18,14 @@ type Authenticator interface {
 	Authenticate(ctx context.Context, secret string) (Actor, error)
 }
 
+// RequestAuthenticator accepts both bearer tokens (agents, scripts) and
+// browser session cookies (humans).
+type RequestAuthenticator interface {
+	Authenticator
+	AuthenticateSession(ctx context.Context, secret string) (Actor, Session, error)
+}
+
 var (
-	_ Directory     = (*Service)(nil)
-	_ Authenticator = (*Service)(nil)
+	_ Directory            = (*Service)(nil)
+	_ RequestAuthenticator = (*Service)(nil)
 )

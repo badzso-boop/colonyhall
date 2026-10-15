@@ -51,6 +51,8 @@ type Options struct {
 	Logger      *slog.Logger
 	// OriginPatterns allows cross-origin WebSocket clients.
 	OriginPatterns []string
+	// SecureCookies marks the session cookie HTTPS-only.
+	SecureCookies bool
 }
 
 // App is a wired-up Colonyhall server.
@@ -115,7 +117,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Handle: dlSvc.HandleEvent, Logger: opt.Logger}
 
 	mux := http.NewServeMux()
-	idhttp.Register(mux, idSvc)
+	idhttp.Register(mux, idSvc, idhttp.Options{SecureCookies: opt.SecureCookies})
 	convhttp.Register(mux, cvSvc, idSvc)
 	delhttp.Register(mux, dlSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor) {
@@ -148,23 +150,31 @@ func (a *App) Run(ctx context.Context) error {
 // Close releases resources.
 func (a *App) Close() { a.close() }
 
-// Development seed: fixed tokens so a local stack is usable immediately.
+// Development seed: fixed credentials so a local stack is usable immediately.
 // Never enable on a reachable server.
 const (
-	DevAdminToken = "col_dev_admin_token_do_not_use_in_production"
-	DevAgentToken = "col_dev_agent_token_do_not_use_in_production"
+	DevAdminToken    = "col_dev_admin_token_do_not_use_in_production"
+	DevAgentToken    = "col_dev_agent_token_do_not_use_in_production"
+	DevAdminPassword = "colonyhall-dev-password"
 )
 
 // SeedDev creates a workspace with @norbi (owner), @fake-agent and #general,
 // unless the admin token already works.
 func (a *App) SeedDev(ctx context.Context) error {
-	if _, err := a.Identity.Authenticate(ctx, DevAdminToken); err == nil {
+	if owner, err := a.Identity.Authenticate(ctx, DevAdminToken); err == nil {
+		// Already seeded; databases seeded before passwords existed get one now.
+		if _, err := a.Identity.Store.Credential(ctx, owner.ID); errors.Is(err, db.ErrNotFound) {
+			return a.Identity.ResetPassword(ctx, owner.ID, DevAdminPassword)
+		}
 		return nil
 	} else if !errors.Is(err, identity.ErrUnauthorized) {
 		return err
 	}
 	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "norbi", "Norbi", DevAdminToken)
 	if err != nil {
+		return fmt.Errorf("seed: %w", err)
+	}
+	if err := a.Identity.ResetPassword(ctx, owner.ID, DevAdminPassword); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
 	agent, _, err := a.Identity.CreateActor(ctx, owner, identity.NewActorInput{

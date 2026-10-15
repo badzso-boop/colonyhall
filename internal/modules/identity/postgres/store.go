@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -92,4 +93,59 @@ func many(rows []sqlcgen.Actor, err error) ([]identity.Actor, error) {
 		out = append(out, toActor(r))
 	}
 	return out, nil
+}
+
+// ActorsByHandle finds the handle in every workspace.
+func (s *Store) ActorsByHandle(ctx context.Context, handle string) ([]identity.Actor, error) {
+	return many(s.q(ctx).ActorsByHandle(ctx, handle))
+}
+
+// WorkspaceByName loads a workspace.
+func (s *Store) WorkspaceByName(ctx context.Context, name string) (identity.Workspace, error) {
+	w, err := s.q(ctx).WorkspaceByName(ctx, name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Workspace{}, db.ErrNotFound
+	}
+	return identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt}, err
+}
+
+// Credential returns the actor's password hash.
+func (s *Store) Credential(ctx context.Context, actorID ids.ID) (string, error) {
+	h, err := s.q(ctx).Credential(ctx, actorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", db.ErrNotFound
+	}
+	return h, err
+}
+
+// SetCredential stores or replaces the actor's password hash.
+func (s *Store) SetCredential(ctx context.Context, actorID ids.ID, hash string, at time.Time) error {
+	return s.q(ctx).SetCredential(ctx, sqlcgen.SetCredentialParams{ActorID: actorID, PasswordHash: hash, UpdatedAt: at})
+}
+
+// CreateSession stores a session.
+func (s *Store) CreateSession(ctx context.Context, x identity.Session) error {
+	return s.q(ctx).CreateSession(ctx, sqlcgen.CreateSessionParams{
+		ID: x.ID, ActorID: x.ActorID, TokenHash: x.TokenHash, CsrfToken: x.CSRFToken,
+		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt,
+	})
+}
+
+// SessionByTokenHash returns a non-revoked session and its actor.
+func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (identity.Session, identity.Actor, error) {
+	r, err := s.q(ctx).SessionByTokenHash(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Session{}, identity.Actor{}, db.ErrNotFound
+	}
+	if err != nil {
+		return identity.Session{}, identity.Actor{}, err
+	}
+	x := r.Session
+	return identity.Session{ID: x.ID, ActorID: x.ActorID, TokenHash: x.TokenHash, CSRFToken: x.CsrfToken,
+		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt}, toActor(r.Actor), nil
+}
+
+// RevokeSession ends a session.
+func (s *Store) RevokeSession(ctx context.Context, id ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeSession(ctx, sqlcgen.RevokeSessionParams{ID: id, RevokedAt: &at})
 }

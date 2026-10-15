@@ -37,7 +37,7 @@ func channelToAPI(c conversation.ChannelView) apispec.Channel {
 }
 
 // Register mounts the conversation routes on mux. Every route requires auth.
-func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Authenticator) {
+func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.RequestAuthenticator) {
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
 
 	mux.Handle("GET /api/v1/channels", wrap(func(w http.ResponseWriter, r *http.Request) {

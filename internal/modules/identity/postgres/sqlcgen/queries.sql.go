@@ -78,6 +78,39 @@ func (q *Queries) ActorByTokenHash(ctx context.Context, tokenHash []byte) (Actor
 	return i, err
 }
 
+const actorsByHandle = `-- name: ActorsByHandle :many
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at FROM actor WHERE handle = $1 ORDER BY workspace_id
+`
+
+func (q *Queries) ActorsByHandle(ctx context.Context, handle string) ([]Actor, error) {
+	rows, err := q.db.Query(ctx, actorsByHandle, handle)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Actor
+	for rows.Next() {
+		var i Actor
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Kind,
+			&i.Handle,
+			&i.DisplayName,
+			&i.Role,
+			&i.State,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const actorsByIDs = `-- name: ActorsByIDs :many
 SELECT id, workspace_id, kind, handle, display_name, role, state, created_at FROM actor WHERE id = ANY($1::uuid[]) ORDER BY handle
 `
@@ -141,6 +174,34 @@ func (q *Queries) CreateActor(ctx context.Context, arg CreateActorParams) error 
 	return err
 }
 
+const createSession = `-- name: CreateSession :exec
+INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+`
+
+type CreateSessionParams struct {
+	ID        uuid.UUID
+	ActorID   uuid.UUID
+	TokenHash []byte
+	CsrfToken string
+	UserAgent string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
+	_, err := q.db.Exec(ctx, createSession,
+		arg.ID,
+		arg.ActorID,
+		arg.TokenHash,
+		arg.CsrfToken,
+		arg.UserAgent,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const createToken = `-- name: CreateToken :exec
 INSERT INTO api_token (id, actor_id, token_hash, label, created_at) VALUES ($1, $2, $3, $4, $5)
 `
@@ -179,6 +240,17 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	return err
 }
 
+const credential = `-- name: Credential :one
+SELECT password_hash FROM credential WHERE actor_id = $1
+`
+
+func (q *Queries) Credential(ctx context.Context, actorID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, credential, actorID)
+	var password_hash string
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
 const listActors = `-- name: ListActors :many
 SELECT id, workspace_id, kind, handle, display_name, role, state, created_at FROM actor WHERE workspace_id = $1 ORDER BY handle
 `
@@ -210,4 +282,80 @@ func (q *Queries) ListActors(ctx context.Context, workspaceID uuid.UUID) ([]Acto
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeSession = `-- name: RevokeSession :exec
+UPDATE session SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL
+`
+
+type RevokeSessionParams struct {
+	ID        uuid.UUID
+	RevokedAt *time.Time
+}
+
+func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
+	_, err := q.db.Exec(ctx, revokeSession, arg.ID, arg.RevokedAt)
+	return err
+}
+
+const sessionByTokenHash = `-- name: SessionByTokenHash :one
+SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at
+FROM session s JOIN actor a ON a.id = s.actor_id
+WHERE s.token_hash = $1 AND s.revoked_at IS NULL
+`
+
+type SessionByTokenHashRow struct {
+	Session Session
+	Actor   Actor
+}
+
+func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (SessionByTokenHashRow, error) {
+	row := q.db.QueryRow(ctx, sessionByTokenHash, tokenHash)
+	var i SessionByTokenHashRow
+	err := row.Scan(
+		&i.Session.ID,
+		&i.Session.ActorID,
+		&i.Session.TokenHash,
+		&i.Session.CsrfToken,
+		&i.Session.UserAgent,
+		&i.Session.CreatedAt,
+		&i.Session.ExpiresAt,
+		&i.Session.RevokedAt,
+		&i.Actor.ID,
+		&i.Actor.WorkspaceID,
+		&i.Actor.Kind,
+		&i.Actor.Handle,
+		&i.Actor.DisplayName,
+		&i.Actor.Role,
+		&i.Actor.State,
+		&i.Actor.CreatedAt,
+	)
+	return i, err
+}
+
+const setCredential = `-- name: SetCredential :exec
+INSERT INTO credential (actor_id, password_hash, updated_at) VALUES ($1, $2, $3)
+ON CONFLICT (actor_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at
+`
+
+type SetCredentialParams struct {
+	ActorID      uuid.UUID
+	PasswordHash string
+	UpdatedAt    time.Time
+}
+
+func (q *Queries) SetCredential(ctx context.Context, arg SetCredentialParams) error {
+	_, err := q.db.Exec(ctx, setCredential, arg.ActorID, arg.PasswordHash, arg.UpdatedAt)
+	return err
+}
+
+const workspaceByName = `-- name: WorkspaceByName :one
+SELECT id, name, created_at FROM workspace WHERE name = $1
+`
+
+func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, error) {
+	row := q.db.QueryRow(ctx, workspaceByName, name)
+	var i Workspace
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
 }

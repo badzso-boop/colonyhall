@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/platform/bus"
@@ -20,6 +21,9 @@ type Service struct {
 	Tx     db.TxRunner
 	IDs    ids.Generator
 	Clock  clock.Clock
+
+	limiterOnce  sync.Once
+	loginLimiter *loginLimiter
 }
 
 // NewActorInput describes an actor to create.

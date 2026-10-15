@@ -17,6 +17,20 @@ import (
 
 type actorKey struct{}
 
+type sessionKey struct{}
+
+// SessionCookie is the name of the browser session cookie.
+const SessionCookie = "colony_session"
+
+// CSRFHeader carries the session's CSRF token on unsafe browser requests.
+const CSRFHeader = "X-CSRF-Token"
+
+// Session returns the browser session of the request, if it used one.
+func Session(r *http.Request) (identity.Session, bool) {
+	s, ok := r.Context().Value(sessionKey{}).(identity.Session)
+	return s, ok
+}
+
 // WithActor stores the authenticated actor in ctx.
 func WithActor(ctx context.Context, a identity.Actor) context.Context {
 	return context.WithValue(ctx, actorKey{}, a)
@@ -37,15 +51,44 @@ func BearerToken(r *http.Request) string {
 	return ""
 }
 
-// RequireAuth rejects requests without a valid bearer token.
-func RequireAuth(auth identity.Authenticator, next http.Handler) http.Handler {
+// ErrCSRF is returned when a cookie-authenticated request lacks a valid CSRF token.
+var ErrCSRF = errors.New("missing or invalid CSRF token")
+
+// RequireAuth accepts a bearer token (agents, scripts) or a session cookie
+// (browsers). Cookie requests that change state must also send the
+// session's CSRF token in the X-CSRF-Token header.
+func RequireAuth(auth identity.RequestAuthenticator, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		a, err := auth.Authenticate(r.Context(), BearerToken(r))
+		ctx := r.Context()
+		if tok := BearerToken(r); tok != "" {
+			a, err := auth.Authenticate(ctx, tok)
+			if err != nil {
+				Error(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(WithActor(ctx, a)))
+			return
+		}
+		c, err := r.Cookie(SessionCookie)
+		if err != nil {
+			Error(w, r, identity.ErrUnauthorized)
+			return
+		}
+		a, sess, err := auth.AuthenticateSession(ctx, c.Value)
 		if err != nil {
 			Error(w, r, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), a)))
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if !sess.CSRFMatches(r.Header.Get(CSRFHeader)) {
+				Error(w, r, ErrCSRF)
+				return
+			}
+		}
+		ctx = context.WithValue(WithActor(ctx, a), sessionKey{}, sess)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -71,17 +114,30 @@ type BadRequest struct{ Detail string }
 
 func (e *BadRequest) Error() string { return e.Detail }
 
-// Validation errors registered by modules map to 400 responses.
-var validationErrors []error
+type statusErr struct {
+	err    error
+	status int
+}
+
+// statusErrors maps module errors to HTTP statuses; modules register theirs
+// from their httpapi package.
+var statusErrors = []statusErr{
+	{identity.ErrForbidden, http.StatusForbidden},
+	{ErrCSRF, http.StatusForbidden},
+}
+
+// RegisterStatus reports the given errors with an HTTP status.
+func RegisterStatus(status int, errs ...error) {
+	for _, e := range errs {
+		statusErrors = append(statusErrors, statusErr{e, status})
+	}
+}
 
 // RegisterValidation marks errors that should be reported as 400 Bad Request.
-func RegisterValidation(errs ...error) { validationErrors = append(validationErrors, errs...) }
-
-// Forbidden errors registered by modules map to 403 responses.
-var forbiddenErrors = []error{identity.ErrForbidden}
+func RegisterValidation(errs ...error) { RegisterStatus(http.StatusBadRequest, errs...) }
 
 // RegisterForbidden marks errors that should be reported as 403 Forbidden.
-func RegisterForbidden(errs ...error) { forbiddenErrors = append(forbiddenErrors, errs...) }
+func RegisterForbidden(errs ...error) { RegisterStatus(http.StatusForbidden, errs...) }
 
 type problem struct {
 	Type   string `json:"type"`
@@ -114,14 +170,9 @@ func classify(err error) (int, string, string) {
 	case errors.Is(err, db.ErrConflict):
 		return http.StatusConflict, "Conflict", err.Error()
 	}
-	for _, f := range forbiddenErrors {
-		if errors.Is(err, f) {
-			return http.StatusForbidden, "Forbidden", err.Error()
-		}
-	}
-	for _, v := range validationErrors {
-		if errors.Is(err, v) {
-			return http.StatusBadRequest, "Bad Request", err.Error()
+	for _, se := range statusErrors {
+		if errors.Is(err, se.err) {
+			return se.status, http.StatusText(se.status), err.Error()
 		}
 	}
 	return http.StatusInternalServerError, "Internal Server Error", err.Error()

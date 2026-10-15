@@ -188,6 +188,15 @@ type InboxItem struct {
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Handle   string `json:"handle"`
+	Password string `json:"password"`
+
+	// Workspace Only needed when the handle exists in several workspaces
+	Workspace *string `json:"workspace,omitempty"`
+}
+
 // Message defines model for Message.
 type Message struct {
 	AuthorId     openapi_types.UUID   `json:"author_id"`
@@ -231,6 +240,20 @@ type SendMessageRequest struct {
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
+// SessionInfo defines model for SessionInfo.
+type SessionInfo struct {
+	Actor Actor `json:"actor"`
+
+	// CsrfToken Empty for bearer-token callers
+	CsrfToken string `json:"csrf_token"`
+}
+
+// SetPasswordRequest defines model for SetPasswordRequest.
+type SetPasswordRequest struct {
+	CurrentPassword *string `json:"current_password,omitempty"`
+	NewPassword     string  `json:"new_password"`
+}
+
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
 
@@ -249,8 +272,14 @@ type ListMessagesParams struct {
 // CreateActorJSONRequestBody defines body for CreateActor for application/json ContentType.
 type CreateActorJSONRequestBody = CreateActorRequest
 
+// SetPasswordJSONRequestBody defines body for SetPassword for application/json ContentType.
+type SetPasswordJSONRequestBody = SetPasswordRequest
+
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest
+
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
 
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest

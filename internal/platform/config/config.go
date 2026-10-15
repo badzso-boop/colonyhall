@@ -20,16 +20,19 @@ type Config struct {
 	// DevSeed creates a demo workspace with fixed tokens on startup.
 	// Never enable it on a reachable server.
 	DevSeed bool
+	// SecureCookies marks the session cookie HTTPS-only (default on).
+	SecureCookies bool
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
 func FromEnv() (Config, error) {
 	c := Config{
-		Role:        getenv("COLONY_ROLE", "all"),
-		HTTPAddr:    getenv("COLONY_HTTP_ADDR", ":8080"),
-		Store:       getenv("COLONY_STORE", "postgres"),
-		DatabaseURL: os.Getenv("COLONY_DATABASE_URL"),
-		DevSeed:     os.Getenv("COLONY_DEV_SEED") == "1",
+		Role:          getenv("COLONY_ROLE", "all"),
+		HTTPAddr:      getenv("COLONY_HTTP_ADDR", ":8080"),
+		Store:         getenv("COLONY_STORE", "postgres"),
+		DatabaseURL:   os.Getenv("COLONY_DATABASE_URL"),
+		DevSeed:       os.Getenv("COLONY_DEV_SEED") == "1",
+		SecureCookies: os.Getenv("COLONY_SECURE_COOKIES") != "0",
 	}
 	if c.Role != "all" {
 		return c, fmt.Errorf("config: COLONY_ROLE=%q is not supported yet; use \"all\"", c.Role)

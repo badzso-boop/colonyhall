@@ -121,6 +121,36 @@ func testIdentity(t *testing.T, b Backend) {
 	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("other")); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("unknown token: got %v", err)
 	}
+	// Credentials and sessions.
+	if _, err := b.Identity.Credential(ctx, f.human.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("no credential yet: got %v", err)
+	}
+	must(t, b.Identity.SetCredential(ctx, f.human.ID, "hash-1", t0))
+	must(t, b.Identity.SetCredential(ctx, f.human.ID, "hash-2", t0))
+	if h, err := b.Identity.Credential(ctx, f.human.ID); err != nil || h != "hash-2" {
+		t.Fatalf("credential must be replaced: %q %v", h, err)
+	}
+	sess := identity.Session{ID: gen.New(), ActorID: f.human.ID, TokenHash: identity.HashSecret("cookie"),
+		CSRFToken: "csrf", UserAgent: "test", CreatedAt: t0, ExpiresAt: t0.Add(time.Hour)}
+	must(t, b.Identity.CreateSession(ctx, sess))
+	got2, a2, err := b.Identity.SessionByTokenHash(ctx, identity.HashSecret("cookie"))
+	must(t, err)
+	if got2.ID != sess.ID || got2.CSRFToken != "csrf" || a2.ID != f.human.ID || !got2.ExpiresAt.Equal(sess.ExpiresAt) {
+		t.Fatalf("SessionByTokenHash: %+v %+v", got2, a2)
+	}
+	must(t, b.Identity.RevokeSession(ctx, sess.ID, t0))
+	if _, _, err := b.Identity.SessionByTokenHash(ctx, identity.HashSecret("cookie")); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("revoked session still found: %v", err)
+	}
+	byHandle, err := b.Identity.ActorsByHandle(ctx, "norbi")
+	must(t, err)
+	if len(byHandle) != 1 || byHandle[0].ID != f.human.ID {
+		t.Fatalf("ActorsByHandle: %+v", byHandle)
+	}
+	if w, err := b.Identity.WorkspaceByName(ctx, "test"); err != nil || w.ID != f.ws.ID {
+		t.Fatalf("WorkspaceByName: %+v %v", w, err)
+	}
+
 	list, err := b.Identity.ListActors(ctx, f.ws.ID)
 	must(t, err)
 	if len(list) != 2 || list[0].Handle != "bot" {
