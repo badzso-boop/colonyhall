@@ -48,7 +48,7 @@ func (c *ClaudeCode) Decide(ctx context.Context, req DecideRequest) (RunResult, 
 		"--json-schema", DecisionSchema,
 	}
 	args = withModel(args, req.Model)
-	res, out, err := c.exec(ctx, req.Dir, args)
+	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args)
 	if err != nil {
 		return res, err
 	}
@@ -65,18 +65,17 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 		args = append(args, "--add-dir", d)
 	}
 	args = withModel(args, req.Model)
-	res, out, err := c.execAs(ctx, req.Dir, req, args)
+	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args)
 	res.Text = out.Result
 	return res, err
 }
 
-func (c *ClaudeCode) exec(ctx context.Context, dir string, args []string) (RunResult, claudeOutput, error) {
-	return c.execAs(ctx, dir, WorkRequest{}, args)
-}
-
-func (c *ClaudeCode) execAs(ctx context.Context, dir string, req WorkRequest, args []string) (RunResult, claudeOutput, error) {
+func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args []string) (RunResult, claudeOutput, error) {
 	start := time.Now()
-	name, args := req.command(c.bin(), args)
+	name, args, err := wrap.command(c.bin(), args)
+	if err != nil {
+		return RunResult{}, claudeOutput{}, fmt.Errorf("sandbox: %w", err)
+	}
 	stdout, _, err := c.Run(ctx, dir, name, args)
 	res := RunResult{Duration: time.Since(start)}
 	var out claudeOutput

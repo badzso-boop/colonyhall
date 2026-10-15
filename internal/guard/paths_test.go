@@ -3,7 +3,6 @@ package guard
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -54,21 +53,29 @@ func TestSandboxArgs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(rw, ".env"), []byte("SECRET=1"), 0o600); err != nil {
-		t.Fatal(err)
+	for _, f := range []string{filepath.Join(rw, ".env"), filepath.Join(home, ".claude", ".credentials.json")} {
+		if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	sb := &Sandbox{Bwrap: "bwrap", Home: home, Root: filepath.Join(home, ".local/share/colonyhall/sandbox")}
 	agentDir := filepath.Join(sb.Root, "bot")
-	args := sb.Args("claude-code", agentDir, rw, []Grant{{Path: ro}, {Path: rw, Write: true}}, "claude", []string{"-p", "hi"})
+	args, err := sb.Command("claude-code", agentDir, rw, []Grant{{Path: ro}, {Path: rw, Write: true}}, "claude", []string{"-p", "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	joined := strings.Join(args, " ")
+	cfg := filepath.Join(agentDir, "config", "claude")
 	for _, want := range []string{
 		"--ro-bind " + ro + " " + ro,
 		"--bind " + rw + " " + rw,
-		"--bind " + filepath.Join(home, ".claude") + " ",
-		"--tmpfs " + filepath.Join(home, ".gemini"), // another client's login stays hidden
+		"--tmpfs " + filepath.Join(home, ".claude"), // the real config is never visible
+		"--tmpfs " + filepath.Join(home, ".gemini"),
 		"--tmpfs " + filepath.Join(home, ".ssh"),
 		"--ro-bind /dev/null " + filepath.Join(rw, ".env"),
 		"--bind " + agentDir + " " + agentDir,
+		"--bind " + filepath.Join(home, ".claude", ".credentials.json") + " " + filepath.Join(cfg, ".credentials.json"),
+		"--setenv CLAUDE_CONFIG_DIR " + cfg,
 		"--clearenv",
 		"--chdir " + rw + " -- claude -p hi",
 	} {
@@ -76,8 +83,11 @@ func TestSandboxArgs(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, joined)
 		}
 	}
+	if strings.Contains(joined, "--bind "+filepath.Join(home, ".claude")+" ") {
+		t.Error("the real ~/.claude must never be bound")
+	}
 	// The hiding must come after the grants, or a broad grant reveals it.
-	if i, j := slices.Index(args, rw), strings.Index(joined, "--tmpfs "+filepath.Join(home, ".ssh")); i < 0 || j < strings.Index(joined, "--bind "+rw) {
+	if strings.Index(joined, "--tmpfs "+filepath.Join(home, ".ssh")) < strings.Index(joined, "--bind "+rw) {
 		t.Error("deny list must be mounted after the grants")
 	}
 }

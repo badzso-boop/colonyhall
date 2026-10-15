@@ -26,6 +26,7 @@ type DecideRequest struct {
 	Items  []PromptItem
 	Model  string
 	Dir    string
+	Wrap   Wrapper
 }
 
 // WorkRequest is the input of a work run.
@@ -36,14 +37,17 @@ type WorkRequest struct {
 	PermissionMode string // client-specific, e.g. Claude's acceptEdits; empty = client default
 	AddDirs        []string
 	// Wrap, when set, wraps the client command (the bwrap sandbox).
-	Wrap func(name string, args []string) (string, []string)
+	Wrap Wrapper
 }
 
-func (r WorkRequest) command(name string, args []string) (string, []string) {
-	if r.Wrap == nil {
-		return name, args
+// Wrapper wraps a client command, e.g. in the bwrap sandbox.
+type Wrapper func(name string, args []string) (string, []string, error)
+
+func (w Wrapper) command(name string, args []string) (string, []string, error) {
+	if w == nil {
+		return name, args, nil
 	}
-	return r.Wrap(name, args)
+	return w(name, args)
 }
 
 // Usage counts tokens of one run.

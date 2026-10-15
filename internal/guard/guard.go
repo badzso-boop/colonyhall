@@ -27,6 +27,9 @@ type Agent struct {
 	// the server's grants checked against this machine's roots. Without
 	// it, Cfg.AllowWork and Cfg.Dir apply (single-machine config).
 	Policy func() WorkPolicy
+	// DecideWrap, when set (host mode), runs decision runs in the sandbox
+	// too: Antigravity cannot switch its tools off.
+	DecideWrap Wrapper
 
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
@@ -113,7 +116,7 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		pitems = append(pitems, PromptItem{Item: it, Context: a.threadContext(runCtx, it)})
 	}
 	dctx, cancel := context.WithTimeout(runCtx, a.Cfg.DecideTimeout)
-	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.me.Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir})
+	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.me.Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir, Wrap: a.DecideWrap})
 	cancel()
 	a.logRun("decide", a.Cfg.Model, len(items), res, err)
 	if err != nil {
@@ -203,7 +206,7 @@ type WorkPolicy struct {
 	Reason  string // why not, shown in the chat
 	Dir     string
 	AddDirs []string
-	Wrap    func(name string, args []string) (string, []string)
+	Wrap    Wrapper
 }
 
 func (a *Agent) policy() WorkPolicy {

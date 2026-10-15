@@ -240,6 +240,12 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		}
 		newAdapter = func(ac AgentConfig) Adapter { return factory(ac, s.Run) }
 	}
+	if s.sandbox == nil && *s.Cfg.RequireSandbox && ha.Client != "claude-code" {
+		// Only Claude Code can run a decision without any tools; other
+		// clients would read untrusted messages with tools, unsandboxed.
+		s.Log.Error("guard: agent not started: its client needs the sandbox even to decide", "agent", "@"+ha.Handle, "client", ha.Client)
+		return
+	}
 	dir, err := s.agentDir(ha)
 	if err != nil {
 		s.Log.Error("guard: agent refused", "err", err)
@@ -265,6 +271,13 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		Log:     s.Log,
 	}
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
+	if sb := s.sandbox; sb != nil {
+		decideDir, client := ac.Dir, ha.Client
+		agent.DecideWrap = func(name string, args []string) (string, []string, error) {
+			a, err := sb.Command(client, dir, decideDir, nil, name, args)
+			return sb.Bwrap, a, err
+		}
+	}
 	m.agent = agent
 	actx, cancel := context.WithCancel(ctx)
 	m.cancel = cancel
@@ -316,8 +329,9 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	p := WorkPolicy{Allowed: true, Dir: work, AddDirs: add}
 	if s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
-		p.Wrap = func(name string, args []string) (string, []string) {
-			return sb.Bwrap, sb.Args(client, agentDir, work, grants, name, args)
+		p.Wrap = func(name string, args []string) (string, []string, error) {
+			a, err := sb.Command(client, agentDir, work, grants, name, args)
+			return sb.Bwrap, a, err
 		}
 	}
 	return p
