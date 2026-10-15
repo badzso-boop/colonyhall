@@ -247,14 +247,14 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 			return AgentConfig{}, err
 		}
 	}
-	if in.Mode == AgentModeDirect && in.RootDir == "" {
-		return AgentConfig{}, ErrBadRootDir
-	}
 	sandbox := false
 	if in.Sandbox != nil {
 		sandbox = *in.Sandbox
 	} else if in.Mode == AgentModeCompact {
 		sandbox = true
+	}
+	if (in.Mode == AgentModeDirect || !sandbox) && in.RootDir == "" {
+		return AgentConfig{}, ErrBadRootDir
 	}
 	if in.PermissionMode == "" && in.Client == "claude-code" {
 		in.PermissionMode = "auto"

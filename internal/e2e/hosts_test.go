@@ -97,6 +97,10 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct"}, nil); s != http.StatusBadRequest {
 		t.Fatalf("direct mode without root_dir allowed: %d", s)
 	}
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": false}, nil); s != http.StatusBadRequest {
+		t.Fatalf("compact mode with sandbox=false without root_dir allowed: %d", s)
+	}
 
 	var tok struct{ Token string }
 	if s := e.do("POST", "/api/v1/host/agents/"+agent+"/token", hostToken, nil, &tok); s != http.StatusCreated {
