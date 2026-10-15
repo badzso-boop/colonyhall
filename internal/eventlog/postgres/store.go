@@ -1,4 +1,5 @@
-// Package postgres is the Postgres implementation of eventlog.Store.
+// Package postgres implements eventlog.Store on Postgres. SQL lives in
+// queries.sql; sqlcgen is generated from it by sqlc.
 package postgres
 
 import (
@@ -9,73 +10,60 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/eventlog/postgres/sqlcgen"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
-// appendLockKey is the advisory lock that makes event writes single-writer.
-const appendLockKey = 7243100001
-
-// Store implements eventlog.Store on Postgres.
+// Store implements eventlog.Store.
 type Store struct{ DB *db.Postgres }
+
+func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.DB.Q(ctx)) }
 
 // Append takes the append lock for the rest of the transaction, then
 // assigns the next sequence number. Because the lock is held until commit,
 // sequence order equals commit order.
 func (s *Store) Append(ctx context.Context, e *eventlog.Event) error {
 	return s.DB.InTx(ctx, func(ctx context.Context) error {
-		q := s.DB.Q(ctx)
-		if _, err := q.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, appendLockKey); err != nil {
+		q := s.q(ctx)
+		if err := q.LockAppend(ctx); err != nil {
 			return fmt.Errorf("eventlog: lock: %w", err)
 		}
-		return q.QueryRow(ctx, `
-			INSERT INTO event (seq, id, workspace_id, type, actor_id, channel_id,
-			                   aggregate_type, aggregate_id, payload, schema_version, at)
-			VALUES (nextval('event_seq'), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			RETURNING seq`,
-			e.ID, e.WorkspaceID, e.Type, e.ActorID, nullID(e.ChannelID),
-			e.AggregateType, e.AggregateID, e.Payload, e.SchemaVersion, e.At,
-		).Scan(&e.Seq)
+		seq, err := q.InsertEvent(ctx, sqlcgen.InsertEventParams{
+			ID: e.ID, WorkspaceID: e.WorkspaceID, Type: e.Type, ActorID: e.ActorID,
+			ChannelID: nullID(e.ChannelID), AggregateType: e.AggregateType, AggregateID: e.AggregateID,
+			Payload: e.Payload, SchemaVersion: int32(e.SchemaVersion), At: e.At,
+		})
+		e.Seq = seq
+		return err
 	})
 }
 
 // Since returns events after the given sequence number.
 func (s *Store) Since(ctx context.Context, after int64, limit int) ([]eventlog.Event, error) {
-	rows, err := s.DB.Q(ctx).Query(ctx, `
-		SELECT seq, id, workspace_id, type, actor_id, channel_id,
-		       aggregate_type, aggregate_id, payload, schema_version, at
-		FROM event WHERE seq > $1 ORDER BY seq LIMIT $2`, after, limit)
+	rows, err := s.q(ctx).EventsSince(ctx, sqlcgen.EventsSinceParams{Seq: after, Limit: int32(limit)})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []eventlog.Event
-	for rows.Next() {
-		var e eventlog.Event
-		var channel *ids.ID
-		if err := rows.Scan(&e.Seq, &e.ID, &e.WorkspaceID, &e.Type, &e.ActorID, &channel,
-			&e.AggregateType, &e.AggregateID, &e.Payload, &e.SchemaVersion, &e.At); err != nil {
-			return nil, err
-		}
-		if channel != nil {
-			e.ChannelID = *channel
+	out := make([]eventlog.Event, 0, len(rows))
+	for _, r := range rows {
+		e := eventlog.Event{Seq: r.Seq, ID: r.ID, WorkspaceID: r.WorkspaceID, Type: r.Type, ActorID: r.ActorID,
+			AggregateType: r.AggregateType, AggregateID: r.AggregateID, Payload: r.Payload,
+			SchemaVersion: int(r.SchemaVersion), At: r.At}
+		if r.ChannelID != nil {
+			e.ChannelID = *r.ChannelID
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Head returns the newest sequence number.
-func (s *Store) Head(ctx context.Context) (int64, error) {
-	var seq int64
-	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT COALESCE(MAX(seq), 0) FROM event`).Scan(&seq)
-	return seq, err
-}
+func (s *Store) Head(ctx context.Context) (int64, error) { return s.q(ctx).Head(ctx) }
 
 // Offset returns a consumer's stored position.
 func (s *Store) Offset(ctx context.Context, consumer string) (int64, error) {
-	var seq int64
-	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT last_seq FROM consumer_offset WHERE consumer_name = $1`, consumer).Scan(&seq)
+	seq, err := s.q(ctx).ConsumerOffset(ctx, consumer)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
@@ -84,11 +72,7 @@ func (s *Store) Offset(ctx context.Context, consumer string) (int64, error) {
 
 // SetOffset stores a consumer's position.
 func (s *Store) SetOffset(ctx context.Context, consumer string, seq int64) error {
-	_, err := s.DB.Q(ctx).Exec(ctx, `
-		INSERT INTO consumer_offset (consumer_name, last_seq, updated_at) VALUES ($1, $2, now())
-		ON CONFLICT (consumer_name) DO UPDATE SET last_seq = EXCLUDED.last_seq, updated_at = now()`,
-		consumer, seq)
-	return err
+	return s.q(ctx).SetConsumerOffset(ctx, sqlcgen.SetConsumerOffsetParams{ConsumerName: consumer, LastSeq: seq})
 }
 
 func nullID(id ids.ID) *ids.ID {

@@ -30,7 +30,7 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
    - Minden `Store` interfészre ugyanaz a `internal/storetest` készlet fut a `memory` és a `postgres` megvalósításon.
    - Az eseménysorszám kiosztása advisory lock alatt történik (egy író), különben a sorszámok nem a commit sorrendjében látszanak.
 2. **Az idő, az azonosító és a véletlen port** (`Clock`, `IDGenerator`, `Random`). A domainben és az app rétegben tilos a `time.Now()`, a közvetlen UUID-generálás és a `math/rand`; tesztben léptethető óra fut.
-3. **Szerződés-első:** REST/WebSocket változás először az `api/openapi.yaml`-ben, utána kódgenerálás (`oapi-codegen` a Go-hoz, `openapi-typescript` a webhez). Generált fájlt kézzel ne szerkessz.
+3. **Szerződés-első:** REST/WebSocket változás először az `api/openapi.yaml`-ben, utána `make gen` (`oapi-codegen` → `internal/apispec`; a webhez `openapi-typescript`). SQL: a modul `postgres/queries.sql`-jébe, utána `make gen` (sqlc → `postgres/sqlcgen`). Generált fájlt kézzel ne szerkessz. A végponttól végpontig tartó tesztek minden választ az OpenAPI-leíráshoz mérnek.
 4. **Append-only adatok:** üzenet, üzenetverzió, esemény, futás, keretmérés és audit soha nem módosul és nem törlődik; törlés csak `deleted_at` jelöléssel.
 5. **Tranzakciós outbox:** minden állapotváltozás ugyanabban a tranzakcióban ír az `event` táblába, mint maga az adat.
 6. **Migrációk:** `goose`, sorszámozott SQL, kiterjeszt-majd-szűkít minta. Már lefutott migrációt soha ne módosíts; új migrációt írj.
@@ -65,7 +65,6 @@ Minden változtatás után: `make lint test`, és ha az adattár változott, `ma
 
 ## Eltérések a tervtől (tudatos, átmeneti)
 
-- **SQL:** a 0. fázisban kézzel írt pgx-lekérdezések vannak a `postgres/` csomagokban, `sqlc` még nincs. Az 1. fázisban, amikor a lekérdezések száma nő, áttérünk sqlc-re; a `Store` interfészek és a szerződéstesztek miatt ez csak az adaptereket érinti.
 - **Webes felület:** a 0. fázisban egyetlen fejlesztői HTML-oldal van (`internal/httpserver/web/index.html`). A React + Vite PWA az 1. fázisban jön.
 - **Szerepkörök:** egyelőre csak a `COLONY_ROLE=all` működik, a busz memórián belüli.
 

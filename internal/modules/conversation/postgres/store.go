@@ -1,4 +1,5 @@
-// Package postgres implements conversation.Store on Postgres.
+// Package postgres implements conversation.Store on Postgres. SQL lives in
+// queries.sql; sqlcgen is generated from it by sqlc.
 package postgres
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/conversation/postgres/sqlcgen"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
@@ -16,14 +18,14 @@ import (
 // Store implements conversation.Store.
 type Store struct{ DB *db.Postgres }
 
-const channelColumns = `id, workspace_id, kind, name, msg_count, created_by, created_at`
-const messageColumns = `id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body,
-	mentions, reply_count, last_reply_at, created_at`
+func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.DB.Q(ctx)) }
 
 // CreateChannel inserts a channel.
 func (s *Store) CreateChannel(ctx context.Context, c conversation.Channel) error {
-	_, err := s.DB.Q(ctx).Exec(ctx, `INSERT INTO channel (`+channelColumns+`) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		c.ID, c.WorkspaceID, c.Kind, c.Name, c.MsgCount, c.CreatedBy, c.CreatedAt)
+	err := s.q(ctx).CreateChannel(ctx, sqlcgen.CreateChannelParams{
+		ID: c.ID, WorkspaceID: c.WorkspaceID, Kind: string(c.Kind), Name: c.Name,
+		MsgCount: c.MsgCount, CreatedBy: c.CreatedBy, CreatedAt: c.CreatedAt,
+	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
 	}
@@ -32,45 +34,39 @@ func (s *Store) CreateChannel(ctx context.Context, c conversation.Channel) error
 
 // ChannelByID loads a channel.
 func (s *Store) ChannelByID(ctx context.Context, id ids.ID) (conversation.Channel, error) {
-	return scanChannel(s.DB.Q(ctx).QueryRow(ctx, `SELECT `+channelColumns+` FROM channel WHERE id = $1`, id))
+	return oneChannel(s.q(ctx).ChannelByID(ctx, id))
 }
 
 // ChannelByName loads a channel by name.
 func (s *Store) ChannelByName(ctx context.Context, workspaceID ids.ID, name string) (conversation.Channel, error) {
-	return scanChannel(s.DB.Q(ctx).QueryRow(ctx,
-		`SELECT `+channelColumns+` FROM channel WHERE workspace_id = $1 AND name = $2`, workspaceID, name))
+	return oneChannel(s.q(ctx).ChannelByName(ctx, sqlcgen.ChannelByNameParams{WorkspaceID: workspaceID, Name: name}))
 }
 
 // ChannelsForActor lists channels with the actor's unread counts.
 func (s *Store) ChannelsForActor(ctx context.Context, workspaceID, actorID ids.ID, all bool) ([]conversation.ChannelView, error) {
-	rows, err := s.DB.Q(ctx).Query(ctx, `
-		SELECT c.id, c.workspace_id, c.kind, c.name, c.msg_count, c.created_by, c.created_at,
-		       m.actor_id IS NOT NULL, COALESCE(c.msg_count - m.msg_count, 0), COALESCE(m.mention_count, 0)
-		FROM channel c
-		LEFT JOIN channel_member m ON m.channel_id = c.id AND m.actor_id = $2
-		WHERE c.workspace_id = $1 AND ($3 OR m.actor_id IS NOT NULL)
-		ORDER BY c.name`, workspaceID, actorID, all)
+	rows, err := s.q(ctx).ChannelsForActor(ctx, sqlcgen.ChannelsForActorParams{
+		ActorID: actorID, WorkspaceID: workspaceID, AllChannels: all,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []conversation.ChannelView
-	for rows.Next() {
-		var v conversation.ChannelView
-		if err := rows.Scan(&v.ID, &v.WorkspaceID, &v.Kind, &v.Name, &v.MsgCount, &v.CreatedBy, &v.CreatedAt,
-			&v.IsMember, &v.Unread, &v.Mentions); err != nil {
-			return nil, err
-		}
-		out = append(out, v)
+	out := make([]conversation.ChannelView, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, conversation.ChannelView{
+			Channel: conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
+				Name: r.Name, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt},
+			IsMember: r.IsMember, Unread: r.Unread, Mentions: r.Mentions,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // AddMember inserts a membership.
 func (s *Store) AddMember(ctx context.Context, m conversation.Member) error {
-	_, err := s.DB.Q(ctx).Exec(ctx, `
-		INSERT INTO channel_member (channel_id, actor_id, can_write, msg_count, mention_count, joined_at)
-		VALUES ($1,$2,$3,$4,$5,$6)`, m.ChannelID, m.ActorID, m.CanWrite, m.MsgCount, m.MentionCount, m.JoinedAt)
+	err := s.q(ctx).AddMember(ctx, sqlcgen.AddMemberParams{
+		ChannelID: m.ChannelID, ActorID: m.ActorID, CanWrite: m.CanWrite,
+		MsgCount: m.MsgCount, MentionCount: m.MentionCount, JoinedAt: m.JoinedAt,
+	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
 	}
@@ -79,35 +75,33 @@ func (s *Store) AddMember(ctx context.Context, m conversation.Member) error {
 
 // Member loads a membership.
 func (s *Store) Member(ctx context.Context, channelID, actorID ids.ID) (conversation.Member, error) {
-	var m conversation.Member
-	err := s.DB.Q(ctx).QueryRow(ctx, `
-		SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at
-		FROM channel_member WHERE channel_id = $1 AND actor_id = $2`, channelID, actorID).
-		Scan(&m.ChannelID, &m.ActorID, &m.CanWrite, &m.MsgCount, &m.MentionCount, &m.JoinedAt)
+	r, err := s.q(ctx).Member(ctx, sqlcgen.MemberParams{ChannelID: channelID, ActorID: actorID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return m, db.ErrNotFound
+		return conversation.Member{}, db.ErrNotFound
 	}
-	return m, err
+	if err != nil {
+		return conversation.Member{}, err
+	}
+	return conversation.Member{ChannelID: r.ChannelID, ActorID: r.ActorID, CanWrite: r.CanWrite,
+		MsgCount: r.MsgCount, MentionCount: r.MentionCount, JoinedAt: r.JoinedAt}, nil
 }
 
 // MemberIDs lists the channel's members.
 func (s *Store) MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error) {
-	rows, err := s.DB.Q(ctx).Query(ctx, `SELECT actor_id FROM channel_member WHERE channel_id = $1 ORDER BY actor_id`, channelID)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[ids.ID])
+	return s.q(ctx).MemberIDs(ctx, channelID)
 }
 
 // InsertMessage inserts a message.
 func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error {
-	if m.Mentions == nil {
-		m.Mentions = []ids.ID{} // a nil slice would be stored as NULL
+	mentions := m.Mentions
+	if mentions == nil {
+		mentions = []ids.ID{} // a nil slice would be stored as NULL
 	}
-	_, err := s.DB.Q(ctx).Exec(ctx, `INSERT INTO message (`+messageColumns+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		m.ID, m.WorkspaceID, m.ChannelID, nullID(m.ThreadRootID), m.AuthorID, nullString(m.ClientMsgID),
-		m.Kind, m.Body, m.Mentions, m.ReplyCount, m.LastReplyAt, m.CreatedAt)
+	err := s.q(ctx).InsertMessage(ctx, sqlcgen.InsertMessageParams{
+		ID: m.ID, WorkspaceID: m.WorkspaceID, ChannelID: m.ChannelID, ThreadRootID: nullID(m.ThreadRootID),
+		AuthorID: m.AuthorID, ClientMsgID: nullString(m.ClientMsgID), Kind: m.Kind, Body: m.Body,
+		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
+	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
 	}
@@ -116,52 +110,34 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 
 // MessageByID loads a message.
 func (s *Store) MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error) {
-	return scanMessage(s.DB.Q(ctx).QueryRow(ctx, `SELECT `+messageColumns+` FROM message WHERE id = $1`, id))
+	return oneMessage(s.q(ctx).MessageByID(ctx, id))
 }
 
 // MessageByClientID loads a message by the author's client id.
 func (s *Store) MessageByClientID(ctx context.Context, authorID ids.ID, clientMsgID string) (conversation.Message, error) {
-	return scanMessage(s.DB.Q(ctx).QueryRow(ctx,
-		`SELECT `+messageColumns+` FROM message WHERE author_id = $1 AND client_msg_id = $2`, authorID, clientMsgID))
+	return oneMessage(s.q(ctx).MessageByClientID(ctx, sqlcgen.MessageByClientIDParams{AuthorID: authorID, ClientMsgID: &clientMsgID}))
 }
 
 // MessagesByIDs loads several messages, oldest first.
 func (s *Store) MessagesByIDs(ctx context.Context, idList []ids.ID) ([]conversation.Message, error) {
-	rows, err := s.DB.Q(ctx).Query(ctx, `SELECT `+messageColumns+` FROM message WHERE id = ANY($1) ORDER BY id`, idList)
-	if err != nil {
-		return nil, err
-	}
-	return collectMessages(rows)
+	return manyMessages(s.q(ctx).MessagesByIDs(ctx, idList))
 }
 
 // ListMessages returns a page, oldest first.
 func (s *Store) ListMessages(ctx context.Context, channelID, before ids.ID, limit int) ([]conversation.Message, error) {
-	rows, err := s.DB.Q(ctx).Query(ctx, `
-		SELECT * FROM (
-			SELECT `+messageColumns+` FROM message
-			WHERE channel_id = $1 AND deleted_at IS NULL AND ($2::uuid IS NULL OR id < $2)
-			ORDER BY id DESC LIMIT $3
-		) page ORDER BY id`, channelID, nullID(before), limit)
-	if err != nil {
-		return nil, err
-	}
-	return collectMessages(rows)
+	return manyMessages(s.q(ctx).ListMessages(ctx, sqlcgen.ListMessagesParams{
+		ChannelID: channelID, Before: nullID(before), PageSize: int32(limit),
+	}))
 }
 
 // IncrementMsgCount bumps the channel's message count.
 func (s *Store) IncrementMsgCount(ctx context.Context, channelID ids.ID) (int64, error) {
-	var n int64
-	err := s.DB.Q(ctx).QueryRow(ctx,
-		`UPDATE channel SET msg_count = msg_count + 1 WHERE id = $1 RETURNING msg_count`, channelID).Scan(&n)
-	return n, err
+	return s.q(ctx).IncrementMsgCount(ctx, channelID)
 }
 
 // SetSeen records what the member has seen.
 func (s *Store) SetSeen(ctx context.Context, channelID, actorID ids.ID, count int64) error {
-	_, err := s.DB.Q(ctx).Exec(ctx, `
-		UPDATE channel_member SET msg_count = GREATEST(msg_count, $3), mention_count = 0
-		WHERE channel_id = $1 AND actor_id = $2`, channelID, actorID, count)
-	return err
+	return s.q(ctx).SetSeen(ctx, sqlcgen.SetSeenParams{Seen: count, ChannelID: channelID, ActorID: actorID})
 }
 
 // IncrementMentions bumps the mention counters.
@@ -169,57 +145,57 @@ func (s *Store) IncrementMentions(ctx context.Context, channelID ids.ID, actorID
 	if len(actorIDs) == 0 {
 		return nil
 	}
-	_, err := s.DB.Q(ctx).Exec(ctx, `
-		UPDATE channel_member SET mention_count = mention_count + 1
-		WHERE channel_id = $1 AND actor_id = ANY($2)`, channelID, actorIDs)
-	return err
+	return s.q(ctx).IncrementMentions(ctx, sqlcgen.IncrementMentionsParams{ChannelID: channelID, ActorIds: actorIDs})
 }
 
 // BumpThread updates the root's reply counters.
 func (s *Store) BumpThread(ctx context.Context, rootID ids.ID, at time.Time) error {
-	_, err := s.DB.Q(ctx).Exec(ctx,
-		`UPDATE message SET reply_count = reply_count + 1, last_reply_at = $2 WHERE id = $1`, rootID, at)
-	return err
+	return s.q(ctx).BumpThread(ctx, sqlcgen.BumpThreadParams{At: at, ID: rootID})
 }
 
-func scanChannel(row pgx.Row) (conversation.Channel, error) {
-	var c conversation.Channel
-	err := row.Scan(&c.ID, &c.WorkspaceID, &c.Kind, &c.Name, &c.MsgCount, &c.CreatedBy, &c.CreatedAt)
+func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
-		return c, db.ErrNotFound
+		return conversation.Channel{}, db.ErrNotFound
 	}
-	return c, err
+	if err != nil {
+		return conversation.Channel{}, err
+	}
+	return conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
+		Name: r.Name, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}, nil
 }
 
-func scanMessage(row pgx.Row) (conversation.Message, error) {
-	var m conversation.Message
-	var root *ids.ID
-	var clientID *string
-	err := row.Scan(&m.ID, &m.WorkspaceID, &m.ChannelID, &root, &m.AuthorID, &clientID, &m.Kind, &m.Body,
-		&m.Mentions, &m.ReplyCount, &m.LastReplyAt, &m.CreatedAt)
+func toMessage(r sqlcgen.Message) conversation.Message {
+	m := conversation.Message{ID: r.ID, WorkspaceID: r.WorkspaceID, ChannelID: r.ChannelID, AuthorID: r.AuthorID,
+		Kind: r.Kind, Body: r.Body, Mentions: r.Mentions, ReplyCount: int(r.ReplyCount),
+		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt}
+	if r.ThreadRootID != nil {
+		m.ThreadRootID = *r.ThreadRootID
+	}
+	if r.ClientMsgID != nil {
+		m.ClientMsgID = *r.ClientMsgID
+	}
+	return m
+}
+
+func oneMessage(r sqlcgen.Message, err error) (conversation.Message, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
-		return m, db.ErrNotFound
+		return conversation.Message{}, db.ErrNotFound
 	}
-	if root != nil {
-		m.ThreadRootID = *root
+	if err != nil {
+		return conversation.Message{}, err
 	}
-	if clientID != nil {
-		m.ClientMsgID = *clientID
-	}
-	return m, err
+	return toMessage(r), nil
 }
 
-func collectMessages(rows pgx.Rows) ([]conversation.Message, error) {
-	defer rows.Close()
-	var out []conversation.Message
-	for rows.Next() {
-		m, err := scanMessage(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, m)
+func manyMessages(rows []sqlcgen.Message, err error) ([]conversation.Message, error) {
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	out := make([]conversation.Message, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toMessage(r))
+	}
+	return out, nil
 }
 
 func nullID(id ids.ID) *ids.ID {

@@ -38,7 +38,8 @@ linters:
               desc: WebSocket belongs in internal/gateway
         no-foreign-adapters:
           # Modules may use another module's root package (its api.go), never its adapters.
-          files: ["**/internal/modules/**", "**/internal/gateway/**", "**/internal/mcpserver/**", "**/internal/eventlog/*.go"]
+          # A module's own postgres/ package may import its generated postgres/sqlcgen.
+          files: ["**/internal/modules/**", "!**/internal/modules/*/postgres/**", "**/internal/gateway/**", "**/internal/mcpserver/**", "**/internal/eventlog/*.go"]
           deny:
             - pkg: colonyhall/internal/modules/identity/postgres
             - pkg: colonyhall/internal/modules/identity/memory

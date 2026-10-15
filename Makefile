@@ -1,6 +1,7 @@
 GO      ?= go
 COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
+SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
 .PHONY: help dev down logs run-mem fake-agent test test-pg lint vet fmt build gen gen-check
 
@@ -31,10 +32,11 @@ test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 
 gen:             ## Regenerate code from api/openapi.yaml and SQL queries
 	$(GO) tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+	$(SQLC) generate
 
 gen-check:       ## Fail if generated code is out of date
 	$(MAKE) gen
-	git diff --exit-code -- internal/apispec
+	git diff --exit-code -- internal/apispec $$(find internal -type d -name sqlcgen)
 
 lint:            ## golangci-lint with the depguard layer rules
 	golangci-lint run ./...
