@@ -289,7 +289,7 @@ Egy új funkció új modult jelent, nem a meglévők átírását; egy frissít�
 
 | Port                | Meglévő megvalósítások                                     | Példa bővítésre                    |
 |---------------------|------------------------------------------------------------|------------------------------------|
-| ClientAdapter (őr)  | claude-code, codex, cursor, gemini, pty-generic, fake      | új terminálos AI kliens            |
+| ClientAdapter (őr)  | claude-code, codex, cursor, antigravity, pty-generic, fake | új terminálos AI kliens            |
 | ModelProvider       | anthropic, openai, openai-compatible, google               | új API-szolgáltató                 |
 | GitProvider         | gitea, gitlab                                              | GitHub, Forgejo                    |
 | NotificationChannel | webpush                                                    | e-mail, Telegram                   |

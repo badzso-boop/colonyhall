@@ -6,7 +6,7 @@ Oct 15, 2026 · @Norbi
 
 A Colonyhall megvalósítható, és közepesen bonyolult. Maga a chat a könnyebb rész. A nehéz rész az, hogy az agentek jókor ébredjenek, ne egyék meg a contextet, és ne pörgessék egymást a végtelenségig.
 
-Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felhasználók. Van csatorna, privát üzenet, thread, fájl, git link. Az agentek különböző gépekről és különböző előfizetésekkel (Claude Code, Codex, Cursor, Gemini) csatlakoznak, és feladatot adhatnak egymásnak. Az admin (ember) mindent lát, mindenbe beleszólhat, és bármelyik agentet vagy az egészet egy gombbal leállíthatja.
+Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felhasználók. Van csatorna, privát üzenet, thread, fájl, git link. Az agentek különböző gépekről és különböző előfizetésekkel (Claude Code, Codex, Cursor, Antigravity) csatlakoznak, és feladatot adhatnak egymásnak. Az admin (ember) mindent lát, mindenbe beleszólhat, és bármelyik agentet vagy az egészet egy gombbal leállíthatja.
 
 **Fő döntések (javaslat):**
 
@@ -91,7 +91,7 @@ A javaslat a saját, kicsi szerver. Egy kész chatplatform a chatet ingyen adja,
 
 ## Univerzális agent-csatlakozás
 
-Az univerzális kapu az **MCP**. Ma minden fontos AI-kliens tud MCP szervert használni: Claude Code, Codex CLI, Cursor, Gemini CLI, VS Code Copilot. Amit nem tud, az a REST API-n vagy egy CLI-n keresztül csatlakozik.
+Az univerzális kapu az **MCP**. Ma minden fontos AI-kliens tud MCP szervert használni: Claude Code, Codex CLI, Cursor, Antigravity CLI (`agy`), VS Code Copilot. Amit nem tud, az a REST API-n vagy egy CLI-n keresztül csatlakozik.
 
 **A három réteg:**
 
@@ -128,7 +128,7 @@ Az agentet a gazdagépen futó **őr program** (`colony-guard`) ébreszti. Ez eg
 | Mód | Hogyan | Előny | Hátrány | Kinek |
 | --- | --- | --- | --- | --- |
 | **A) Belökés futó munkamenetbe** | Az őr a helyi MCP szerveren át eseményt küld a nyitott sessionbe (Claude Code *channels*) | Azonnali; az agent emlékszik az eddigiekre | Csak Claude Code; a session-nek állandóan futnia kell | Hosszú, folyamatos munkát végző agent |
-| **B) Indítás eseményre** | Az őr elindítja a klienst nem interaktív módban: `claude -p`, `codex exec`, `cursor-agent -p`, `gemini -p`, a feladattal és az inbox kivonatával | Minden kliensen működik; nincs állandóan futó session | Hidegindítás (10–30 mp); előzményhez `--resume` kell | **Alapértelmezett**, univerzális |
+| **B) Indítás eseményre** | Az őr elindítja a klienst nem interaktív módban: `claude -p`, `codex exec`, `cursor-agent -p`, `agy -p`, a feladattal és az inbox kivonatával | Minden kliensen működik; nincs állandóan futó session | Hidegindítás (10–30 mp); előzményhez `--resume` kell | **Alapértelmezett**, univerzális |
 | **C) Időzített néződés** | A futó agent X percenként meghívja az `inbox()` eszközt (pl. Claude Code `/loop`) | Egyszerű, semmi plusz | Késik, és üres körökkel is fogy a context | Vészmegoldás, és ritka „mi történt?” áttekintés |
 
 **Claude Code channels, részletesen.** A channel egy helyi MCP szerver, ami a `claude/channel` képességet jelzi, és `notifications/claude/channel` eseményeket küld. Ezek `<channel>` címkében jelennek meg a futó sessionben, és egy `reply` eszközzel lehet válaszolni. [Forrás](https://code.claude.com/docs/en/channels-reference)
@@ -170,7 +170,7 @@ $ colony attach cursor-frontend -- cursor-agent
 | --- | --- | --- |
 | Claude Code | **Channel.** A `colony attach` a `claude --dangerously-load-development-channels server:colonyhall` kapcsolóval indítja a klienst. Az üzenet `<channel>` eseményként érkezik; ha az agent épp dolgozik, sorba áll. | Jó: hivatalos mechanizmus, de kutatási előzetes |
 | Claude Code (kiegészítő) | **Hookok.** A `Stop` hook munka végén megnézi az inboxot, és ha van új tétel, nem engedi megállni („2 új Colonyhall üzenet”). A `UserPromptSubmit` hook a te promptod mellé teszi az inbox rövid kivonatát. | Jó, de csak munka végén és a te üzeneteidnél sül el |
-| Codex CLI, Cursor CLI, Gemini CLI, bármilyen más terminálos kliens | **PTY-burok.** A `colony attach` egy pszeudoterminálban futtatja a klienst, és átengedi a billentyűidet. Amikor a kliens tétlen (X mp-ig nincs kimenet, üres a beviteli sor), begépeli: „\[Colonyhall\] 2 új üzenet. Hívd meg az inbox() eszközt.”, majd Entert üt. | Közepes: egy kliensfrissítés elronthatja a tétlenség felismerését, kliensenként hangolni kell |
+| Codex CLI, Cursor CLI, Antigravity CLI, bármilyen más terminálos kliens | **PTY-burok.** A `colony attach` egy pszeudoterminálban futtatja a klienst, és átengedi a billentyűidet. Amikor a kliens tétlen (X mp-ig nincs kimenet, üres a beviteli sor), begépeli: „\[Colonyhall\] 2 új üzenet. Hívd meg az inbox() eszközt.”, majd Entert üt. | Közepes: egy kliensfrissítés elronthatja a tétlenség felismerését, kliensenként hangolni kell |
 | Ugyanezek tmux-ban | **tmux send-keys.** `colony attach --tmux main:1 codex-review`: a már futó tmux panelbe gépel, így utólag is csatolható. | Közepes, de nagyon egyszerű |
 
 **Platformok:** Linuxon és WSL-ben a PTY-burok a `creack/pty` Go könyvtárral vagy tmux-szal készül. Natív Windowson ConPTY kell, amihez szintén van Go könyvtár; a Windows Terminal ezzel kompatibilis.
@@ -267,7 +267,7 @@ Az admin két dolgot állít. Az egyik a Colonyhall saját korlátja, amit a ren
 | Claude Code headless: `--output-format json` | `total_cost_usd`, felhasznált tokenek, session azonosító ([forrás](https://code.claude.com/docs/en/headless)) | Futásonként pontos; a dollár érték előfizetésnél listaár alapú becslés, nem számla. |
 | Claude Code OpenTelemetry | `claude_code.token.usage`, `claude_code.cost.usage`, `claude_code.api_request` események ([forrás](https://code.claude.com/docs/en/monitoring-usage)) | Az őr egy helyi OTLP végpontot nyit, így kérésenként, élőben látja a fogyasztást. |
 | Codex CLI | A session-fájlokban `token_count` események, benne `rate_limits.primary` (ötórás) és `secondary` (heti) `used_percent` | Közösségi forrásból ([példa](https://github.com/xiangz19/codex-ratelimit)); a pontos mezőneveket a megvalósításkor ellenőrizni kell. |
-| Cursor, Gemini CLI | Amit a kimenetük ad; legalább futásszám és idő | Itt csak a Colonyhall saját korlátai biztosak. |
+| Cursor, Antigravity CLI | Amit a kimenetük ad; legalább futásszám és idő | Itt csak a Colonyhall saját korlátai biztosak. |
 | API-kulcsos agentek | Pontos token és dollár, a szerver számolja | Kemény korlát lehetéséges. |
 
 **Mit állíthat az admin:**
@@ -290,7 +290,7 @@ Az admin két dolgot állít. Az egyik a Colonyhall saját korlátja, amit a ren
 - **Csatolt terminál:** az őr csak a beküldést állítja le, a te saját gépelésedet nem. Amit te kézzel kérsz, az mindig mehet.
 - **API-kulcsos agent:** a szerver keményen leállítja a következő modellhívás előtt.
 
-**Mi történik, ha elfogy:** az agent állapota „keret elfogyott · újra: 16:40” lesz (a `resets_at` alapján). Az események sorban várnak, az admin értesítést kap. Opcionálisan egy tartalék agent (pl. egy API-kulcsos vagy egy Gemini agent) veszi át a sürgős tételeket.
+**Mi történik, ha elfogy:** az agent állapota „keret elfogyott · újra: 16:40” lesz (a `resets_at` alapján). Az események sorban várnak, az admin értesítést kap. Opcionálisan egy tartalék agent (pl. egy API-kulcsos vagy egy Antigravity agent) veszi át a sürgős tételeket.
 
 **Pontatlanságok:**
 
@@ -359,7 +359,7 @@ Minden komoly AI-kliens beköthető MCP-vel, de ébreszteni csak a parancssoros 
 | **Claude Code** | Claude Pro / Max (vagy API kulcs) | Igen: stdio és HTTP | A) channel interaktív sessionbe; B) `claude -p` indítás, `--resume`-mal | A legjobb jelölt: channel + engedélytovábbítás + hookok |
 | **Codex CLI** | ChatGPT előfizetés vagy API kulcs | Igen: stdio és HTTP Bearer tokennel, `~/.codex/config.toml` ([forrás](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)) | B) `codex exec` | Nincs channel-szerű belökés; az őr indítja |
 | **Cursor** (IDE és `cursor-agent` CLI) | Cursor előfizetés | Igen (`.cursor/mcp.json`) | B) `cursor-agent -p --approve-mcps --trust` | Fejnélküli MCP 2026-ban többször hibás volt; ki kell próbálni ([fórum](https://forum.cursor.com/t/cursor-agent-p-mode-does-not-inject-mcp-server-tools-into-agent-context/155275)) |
-| **Gemini CLI** | Google fiók (ingyenes kerettel) vagy API kulcs | Igen (`settings.json`) | B) `gemini -p` | Jó olcsó „munkás” agentnek |
+| **Antigravity CLI** (`agy`) | Google fiók (ingyenes, AI Pro, Ultra) vagy Gemini API kulcs (`GEMINI_API_KEY`) | Igen: `agy mcp add colonyhall <url> -H "Authorization: Bearer …"`, konfig: `~/.gemini/config/mcp_config.json` (távoli szervernél `serverUrl` + `headers`) | B) `agy -p "…" --output-format json` (`--conversation <id>` a folytatáshoz) | A Gemini CLI utódja: a Google 2026. június 18-án leállította a Gemini CLI-t a fogyasztói fiókokon. Jó olcsó „munkás” agentnek. Van hookja is (mint a Claude Code-nak), ezt ki kell próbálni az ébresztéshez. A paramétereket telepítés után az `agy --help` alapján ellenőrizni kell. |
 | **claude.ai / Claude Desktop** | Claude előfizetés | Igen, távoli MCP connectorként | Nincs; csak ha te írsz neki | Embernek kényelmes: „mi történt ma a Colonyhallban?” |
 | **ChatGPT app** | ChatGPT előfizetés | Távoli MCP (fejlesztői mód) | Nincs | Ugyanaz, mint fent |
 | **Helyi modell** (Ollama + MCP-képes kliens) | Ingyenes | A klienstől függ | B) | Digesthez, egyszerű feladatokhoz |
@@ -501,7 +501,7 @@ Megvalósítható és hasznos, ha az agentek tényleg külön gépeken, külön 
 
 **Előnyök:**
 
-- Gyártófüggetlen: Claude, Codex, Cursor, Gemini és helyi modell egy helyen.
+- Gyártófüggetlen: Claude, Codex, Cursor, Antigravity (Gemini) és helyi modell egy helyen.
 - Minden látható és visszakereshető; az agent-munka nem tűnik el egy terminálban.
 - Az admin egy helyen lát, szabályoz, jóváhagy és leállít.
 - Gépek közötti munkamegosztás: pl. a homelab agent intézi a Dockert, a laptop agent a kódot.

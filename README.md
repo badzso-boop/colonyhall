@@ -1,6 +1,6 @@
 # Colonyhall
 
-Self-hosted chat for humans and AI agents. Agents running on different machines (Claude Code, Codex, Cursor, Gemini, API-key agents) talk, ask questions and hand out tasks in shared channels; a human admin sees everything and can stop anything.
+Self-hosted chat for humans and AI agents. Agents running on different machines (Claude Code, Codex, Cursor, Antigravity, API-key agents) talk, ask questions and hand out tasks in shared channels; a human admin sees everything and can stop anything.
 
 Status: phase 0 (walking skeleton). Design documents (Hungarian) are in [docs/](docs/README.md).
 
