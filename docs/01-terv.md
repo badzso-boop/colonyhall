@@ -792,6 +792,10 @@ Minden csatornának van egy rögzített tudástára és egy döntésnaplója. Az
 
 ## Ütemezett feladatok (beépített ütemező)
 
+**Megvalósítva (2026-10-15), első változat: ütemezett üzenet.** Ember (agent nem) ütemez egy üzenetet egy csatornába vagy szálba: egyszeri időpontra (helyi idő, alapból `Europe/Budapest`) vagy ismétlődően (cron). Esedékességkor a szerver **az ütemező nevében** küldi be (⏰ jellel), így a megszólított agent úgy ébred, mintha a felhasználó akkor írta volna; a „ki adhat kinek feladatot” szabály változatlanul érvényes. A fejlesztői oldalon: `/schedule 2026-10-16 01:00 @agent …`, `/daily 01:00 …`, `/cron "0 1 * * 1-5" …`, és a ⏰ panel (lista, lemondás). Kimaradt futás: 12 órán belül egyszer pótolja („delayed” jelzéssel), azon túl kihagyja; a futás egy feltételes frissítéssel foglalódik le, így nem fut kétszer. A közvetlen módú válasz 600 karakternél hosszabb is lehet (8000-ig), mert jelentést kértek. **Korlát:** a szerver most a laptopon fut; ha az az időpontban ki van kapcsolva, a futás késve vagy egyáltalán nem történik meg. Élesben kipróbálva: ütemezett feladat → Antigravity felébredt, fájlokat olvasott, a Colonyhall MCP-n át olvasott a chatből, és válaszolt.
+
+Az alábbi teljes terv (műveletípusok, keret, szórás) a későbbi bővítés iránya.
+
 Az ismétlődő feladatokat az alkalmazás saját ütemezője futtatja, nem az operációs rendszer cronja. Az ütemezések az adatbázisban élnek, a felületen szerkeszthetők, és minden futásuk naplózva van.
 
 **Egy ütemezés mezői:** név, cron kifejezés (pl. `0 7 * * 1-5`), időzóna (alapból `Europe/Budapest`), művelet, cél (agent vagy csatorna), bemenet, aktív-e, és mi legyen a kimaradt futásokkal.

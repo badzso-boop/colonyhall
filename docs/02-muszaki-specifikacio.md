@@ -321,6 +321,10 @@ A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei be
 
 **Sandboxban nincs parancsfuttatás (megvalósítva):** Claude munkafutás `--tools Read,Write,Edit,Glob,Grep --disallowedTools Bash`, és az engedélykihagyó módok nem érvényesek; Antigravity: az agent saját beállításaiban minden futáskor üres `allow` lista és `deny: ["command(*)"]`, mód `accept-edits`.
 
+**Antigravity MCP (megvalósítva):** az `agy`-nak nincs `--mcp-config` kapcsolója, és a konfigurációjában nem helyettesít környezeti változót (élesben kipróbálva), ezért a token fájlba kerül, de **soha nem a felhasználó projektjébe**: az `agy` az őr agentenkénti mappájából indul (`agy-workspace/.agents/mcp_config.json`, 0600, csak a futás idejére), a projektet `--add-dir` adja hozzá. Előfeltétel: a felhasználó `agy`-beállításában `mcp(colonyhall/*)` engedély.
+
+**Ütemező (megvalósítva):** `schedule` modul és tábla; `POST/GET /schedules`, `DELETE /schedules/{id}`; csak ember. A szerveren 15 mp-enként fut (`RunDue`): esedékes tétel → feltételes `UPDATE … WHERE next_run_at = <esedékesség>` (lefoglalás) → `SendMessage` a létrehozó nevében, `client_msg_id = s-<id>-<unix>` (újrapróbálásnál nincs duplikáció) → esemény (`schedule.fired`). Cron: `robfig/cron` 5 mezős kifejezés az ütemezés időzónájában; kimaradt futások egybe olvadnak.
+
 **Titok-átadó mappa:** `guard.yaml`: `exchange_dir` (pl. `/mnt/z/colonyhall-exchange` a WSL-en, `~/colonyhall-exchange` a szerveren); az őr induláskor ellenőrzi, hogy elérhető-e, és jelenti a szervernek.
 
 ### Gépek, engedélyek és sandbox (választható mód, megvalósítva)
