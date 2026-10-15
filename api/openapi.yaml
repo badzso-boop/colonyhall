@@ -451,6 +451,29 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Issued, content: { application/json: { schema: { $ref: "#/components/schemas/AgentToken" } } } }
 
+  /agent/errors:
+    post:
+      operationId: reportRunError
+      tags: [runs]
+      description: Agents. Store the details of a run error; the chat only gets a reference. Secrets are redacted.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RunErrorRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/RunErrorRef" } } } }
+
+  /errors/{errorId}:
+    parameters:
+      - { name: errorId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getRunError
+      tags: [runs]
+      description: Humans only. The details of a run error referenced in the chat.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunError" } } } }
+
 components:
   securitySchemes:
     bearer:
@@ -706,7 +729,7 @@ components:
 
     InboxItem:
       type: object
-      required: [id, kind, item_id, channel, channel_id, author, body, mentioned, dm, at]
+      required: [id, kind, item_id, channel, channel_id, author, author_kind, body, mentioned, dm, at]
       properties:
         id: { type: string, format: uuid }
         kind: { type: string }
@@ -715,6 +738,7 @@ components:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
         author: { type: string }
+        author_kind: { type: string, enum: [human, agent], description: Who caused the item }
         body: { type: string }
         mentioned: { type: boolean }
         dm: { type: boolean }
@@ -896,3 +920,27 @@ components:
       properties:
         token: { type: string }
         expires_at: { type: string, format: date-time }
+    RunErrorRequest:
+      type: object
+      required: [channel_id, summary]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        summary: { type: string, maxLength: 400 }
+        detail: { type: string, maxLength: 20000 }
+    RunErrorRef:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+    RunError:
+      type: object
+      required: [id, agent_id, channel_id, summary, detail, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        summary: { type: string }
+        detail: { type: string }
+        created_at: { type: string, format: date-time }

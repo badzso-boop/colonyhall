@@ -41,6 +41,10 @@ import (
 	idhttp "colonyhall/internal/modules/identity/httpapi"
 	idmem "colonyhall/internal/modules/identity/memory"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/runs"
+	runhttp "colonyhall/internal/modules/runs/httpapi"
+	runmem "colonyhall/internal/modules/runs/memory"
+	runpg "colonyhall/internal/modules/runs/postgres"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
@@ -99,6 +103,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dlStore  delivery.Store
 		auStore  audit.Store
 		hoStore  hosts.Store
+		ruStore  runs.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
@@ -107,6 +112,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		tx = &db.Memory{}
 		events, idStore, cvStore, dlStore, auStore = evmem.New(), idmem.New(), convmem.New(), delmem.New(), audmem.New()
 		hoStore = hostmem.New()
+		ruStore = runmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -120,6 +126,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		events, idStore, cvStore, dlStore = &evpg.Store{DB: pg}, &idpg.Store{DB: pg}, &convpg.Store{DB: pg}, &delpg.Store{DB: pg}
 		auStore = &audpg.Store{DB: pg}
 		hoStore = &hostpg.Store{DB: pg}
+		ruStore = &runpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -142,6 +149,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	delhttp.Register(mux, dlSvc, idSvc)
 	audhttp.Register(mux, auSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
+	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)

@@ -178,6 +178,17 @@ type Reaction struct {
 	RemovedAt *time.Time
 }
 
+type RunError struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	AgentID      uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Summary      string
+	Detail       string
+	CreatedAt    time.Time
+}
+
 type Session struct {
 	ID        uuid.UUID
 	ActorID   uuid.UUID

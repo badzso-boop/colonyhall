@@ -11,16 +11,16 @@ import (
 
 // Defines values for ActorKind.
 const (
-	Agent ActorKind = "agent"
-	Human ActorKind = "human"
+	ActorKindAgent ActorKind = "agent"
+	ActorKindHuman ActorKind = "human"
 )
 
 // Valid indicates whether the value is a known member of the ActorKind enum.
 func (e ActorKind) Valid() bool {
 	switch e {
-	case Agent:
+	case ActorKindAgent:
 		return true
-	case Human:
+	case ActorKindHuman:
 		return true
 	default:
 		return false
@@ -168,6 +168,24 @@ func (e HostAgentMode) Valid() bool {
 	case HostAgentModeCompact:
 		return true
 	case HostAgentModeDirect:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InboxItemAuthorKind.
+const (
+	InboxItemAuthorKindAgent InboxItemAuthorKind = "agent"
+	InboxItemAuthorKindHuman InboxItemAuthorKind = "human"
+)
+
+// Valid indicates whether the value is a known member of the InboxItemAuthorKind enum.
+func (e InboxItemAuthorKind) Valid() bool {
+	switch e {
+	case InboxItemAuthorKindAgent:
+		return true
+	case InboxItemAuthorKindHuman:
 		return true
 	default:
 		return false
@@ -516,8 +534,11 @@ type Inbox struct {
 
 // InboxItem defines model for InboxItem.
 type InboxItem struct {
-	At           time.Time           `json:"at"`
-	Author       string              `json:"author"`
+	At     time.Time `json:"at"`
+	Author string    `json:"author"`
+
+	// AuthorKind Who caused the item
+	AuthorKind   InboxItemAuthorKind `json:"author_kind"`
 	Body         string              `json:"body"`
 	Channel      string              `json:"channel"`
 	ChannelId    openapi_types.UUID  `json:"channel_id"`
@@ -528,6 +549,9 @@ type InboxItem struct {
 	Mentioned    bool                `json:"mentioned"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
+
+// InboxItemAuthorKind Who caused the item
+type InboxItemAuthorKind string
 
 // IssueTokenRequest defines model for IssueTokenRequest.
 type IssueTokenRequest struct {
@@ -609,6 +633,30 @@ type ReactionSummary struct {
 
 // Role defines model for Role.
 type Role string
+
+// RunError defines model for RunError.
+type RunError struct {
+	AgentId      openapi_types.UUID  `json:"agent_id"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	CreatedAt    time.Time           `json:"created_at"`
+	Detail       string              `json:"detail"`
+	Id           openapi_types.UUID  `json:"id"`
+	Summary      string              `json:"summary"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// RunErrorRef defines model for RunErrorRef.
+type RunErrorRef struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+// RunErrorRequest defines model for RunErrorRequest.
+type RunErrorRequest struct {
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	Detail       *string             `json:"detail,omitempty"`
+	Summary      string              `json:"summary"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
 
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
@@ -714,6 +762,9 @@ type IssueTokenJSONRequestBody = IssueTokenRequest
 
 // EmergencyClearJSONRequestBody defines body for EmergencyClear for application/json ContentType.
 type EmergencyClearJSONRequestBody = EmergencyClearRequest
+
+// ReportRunErrorJSONRequestBody defines body for ReportRunError for application/json ContentType.
+type ReportRunErrorJSONRequestBody = RunErrorRequest
 
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest

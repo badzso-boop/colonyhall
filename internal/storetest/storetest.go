@@ -16,6 +16,7 @@ import (
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
@@ -29,6 +30,7 @@ type Backend struct {
 	Delivery     delivery.Store
 	Audit        audit.Store
 	Hosts        hosts.Store
+	Runs         runs.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -39,6 +41,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("delivery", func(t *testing.T) { testDelivery(t, newBackend(t)) })
 	t.Run("audit", func(t *testing.T) { testAudit(t, newBackend(t)) })
 	t.Run("hosts", func(t *testing.T) { testHosts(t, newBackend(t)) })
+	t.Run("runs", func(t *testing.T) { testRuns(t, newBackend(t)) })
 }
 
 var (
@@ -489,5 +492,26 @@ func testHosts(t *testing.T, b Backend) {
 	must(t, b.Identity.RevokeHostTokens(ctx, h.ID, ids.Nil, t0))
 	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("host-tok"), t0.Add(time.Minute)); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("revoked host token: %v", err)
+	}
+}
+
+func testRuns(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	e := runs.Error{ID: gen.New(), WorkspaceID: f.ws.ID, AgentID: f.agent.ID, ChannelID: f.channel.ID,
+		Summary: "provider unavailable", Detail: "503 from agy", CreatedAt: t0}
+	must(t, b.Runs.InsertError(ctx, e))
+	got, err := b.Runs.ErrorByID(ctx, e.ID)
+	if err != nil || got.Detail != "503 from agy" || got.ThreadRootID != ids.Nil || got.AgentID != f.agent.ID {
+		t.Fatalf("ErrorByID: %+v %v", got, err)
+	}
+	withThread := e
+	withThread.ID, withThread.ThreadRootID = gen.New(), gen.New()
+	must(t, b.Runs.InsertError(ctx, withThread))
+	if got, _ := b.Runs.ErrorByID(ctx, withThread.ID); got.ThreadRootID != withThread.ThreadRootID {
+		t.Fatalf("thread root: %+v", got)
+	}
+	if _, err := b.Runs.ErrorByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("missing: %v", err)
 	}
 }
