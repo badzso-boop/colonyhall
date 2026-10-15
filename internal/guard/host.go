@@ -258,6 +258,16 @@ func (s *Supervisor) agentDir(ha HostAgent) (string, error) {
 	return dir, nil
 }
 
+func cleanStaleMCPConfigs(dir string) {
+	matches, err := filepath.Glob(filepath.Join(dir, "mcp-*.json"))
+	if err != nil {
+		return
+	}
+	for _, f := range matches {
+		_ = os.Remove(f)
+	}
+}
+
 func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, grants []Grant) {
 	if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
 		s.Log.Error("guard: agent not started: unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)", "agent", "@"+ha.Handle)
@@ -289,6 +299,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			return
 		}
 	}
+	cleanStaleMCPConfigs(dir)
 	ac := s.Cfg.Defaults
 	ac.Name, ac.Client, ac.Model, ac.WorkModel = ha.Handle, ha.Client, ha.Model, ha.WorkModel
 	ac.AllowWork, ac.PermissionMode, ac.Command = ha.AllowWork, ha.PermissionMode, s.Cfg.Commands[ha.Client]

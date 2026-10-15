@@ -514,3 +514,90 @@ func TestClaudeDirectPreservesSessionIDOnErrorOutput(t *testing.T) {
 		t.Fatalf("expected SessionID to be preserved on error output: got %q", res.SessionID)
 	}
 }
+
+func TestStartAgentCleansStaleMCPConfigs(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "project")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sandboxDir := filepath.Join(dir, "sandbox")
+	agentDir := filepath.Join(sandboxDir, "bot")
+	if err := os.MkdirAll(agentDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create stale MCP config files and a non-MCP file
+	stale1 := filepath.Join(agentDir, "mcp-123456.json")
+	stale2 := filepath.Join(agentDir, "mcp-abcdef.json")
+	keepFile := filepath.Join(agentDir, "notes.txt")
+	if err := os.WriteFile(stale1, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale2, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keepFile, []byte("preserve me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	agentID := uuid.New().String()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/token"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "tok", "expires_at": time.Now().Add(time.Hour)})
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	sup := &Supervisor{
+		Cfg: Config{
+			Server:           ts.URL,
+			Roots:            []string{root},
+			SandboxDir:       sandboxDir,
+			AllowUnsandboxed: true,
+		},
+		host:   &Client{BaseURL: ts.URL, Token: "host-tok", HTTP: ts.Client()},
+		roots:  []string{root},
+		home:   dir,
+		agents: map[string]*managed{},
+		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NewAdapter: func(AgentConfig) Adapter {
+			return &ClaudeCode{}
+		},
+	}
+
+	cfg := HostConfig{
+		Version: "v1",
+		Agents: []HostAgent{
+			{
+				AgentID:        agentID,
+				Handle:         "bot",
+				Client:         "claude-code",
+				Mode:           "direct",
+				RootDir:        root,
+				Sandbox:        false,
+				PermissionMode: "auto",
+			},
+		},
+	}
+
+	sup.reconcile(context.Background(), cfg)
+	sup.stopAll()
+
+	// Verify stale MCP files are removed
+	if _, err := os.Stat(stale1); !os.IsNotExist(err) {
+		t.Fatalf("expected stale1 to be removed, got err: %v", err)
+	}
+	if _, err := os.Stat(stale2); !os.IsNotExist(err) {
+		t.Fatalf("expected stale2 to be removed, got err: %v", err)
+	}
+	// Verify other files are intact
+	if _, err := os.Stat(keepFile); err != nil {
+		t.Fatalf("expected keepFile to remain, got err: %v", err)
+	}
+}
