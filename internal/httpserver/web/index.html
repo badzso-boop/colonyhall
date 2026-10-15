@@ -40,6 +40,13 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
+  #hostsPanel { overflow:auto; padding:12px 16px; display:none; }
+  #hostsPanel.on { display:block; } #feed.off { display:none; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0 0 12px; background:var(--surface); }
+  .card h3 { margin:0 0 4px; font-size:15px; } .muted { color:var(--muted); font-size:12px; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
+  .grant { font-family:ui-monospace, monospace; font-size:12px; }
+  .warn { color:#b3261e; } code.code { font-size:16px; letter-spacing:1px; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; min-height:calc(100vh - 54px); }
     nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; } section { height:calc(72vh - 54px); } }
 </style>
@@ -52,13 +59,14 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="logout" hidden></button>
+  <span id="me"></span><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
   <nav><div id="channels"></div><div class="dmbox"><input id="dmto" placeholder="@handle"><button id="dmbtn">DM</button></div></nav>
   <section>
     <div id="feed"></div>
+    <div id="hostsPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <form id="send"><input id="text" autocomplete="off"><button></button></form>
@@ -68,9 +76,17 @@
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
-        online: "élő kapcsolat", offline: "nincs kapcsolat", reconnecting: "újracsatlakozás…", reply: "Válasz", replyIn: "Válasz a szálban:", inThread: "a szálban:" },
+        online: "élő kapcsolat", offline: "nincs kapcsolat", reconnecting: "újracsatlakozás…", reply: "Válasz", replyIn: "Válasz a szálban:", inThread: "a szálban:",
+        hosts: "Gépek", chat: "Chat", pair: "Párosítókód", pairHelp: "A gépen futtasd (10 percig érvényes):", revoke: "Visszavonás",
+        lastSeen: "utoljára", never: "még soha", roots: "Gyökérmappák", clients: "Kliensek", sandbox: "Sandbox", none: "nincs",
+        rejected: "Elutasított engedély", assign: "Agent hozzárendelése", work: "munka", grant: "Mappa engedélyezése",
+        read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép." },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
-        online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:" },
+        online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
+        hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
+        lastSeen: "last seen", never: "never", roots: "Roots", clients: "Clients", sandbox: "Sandbox", none: "none",
+        rejected: "Refused grant", assign: "Assign agent", work: "work", grant: "Grant folder",
+        read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet." },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -206,15 +222,95 @@ function connectWS() {
       await refreshMessage(d.message_id);
     } else if (f.event_type === "actor.created" || f.event_type.startsWith("channel.")) {
       await load();
+    } else if (f.event_type.startsWith("host.") && hostsOpen) {
+      renderHosts();
     }
   };
   ws.onclose = () => { $("status").textContent = L.reconnecting; setTimeout(connectWS, 2000); };
+}
+
+// --- Machines (admins) ---------------------------------------------------
+const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
+let hostsOpen = false;
+$("hostsbtn").textContent = L.hosts;
+$("hostsbtn").onclick = () => { hostsOpen = !hostsOpen; $("hostsbtn").textContent = hostsOpen ? L.chat : L.hosts;
+  $("feed").className = hostsOpen ? "off" : ""; $("hostsPanel").className = hostsOpen ? "on" : ""; if (hostsOpen) renderHosts(); };
+
+async function renderHosts() {
+  const panel = $("hostsPanel");
+  const { hosts } = await api("/api/v1/hosts");
+  panel.innerHTML = "";
+  const pairBox = el("div", { className: "card" });
+  const pairBtn = el("button", { textContent: L.pair });
+  pairBtn.onclick = async () => {
+    const pc = await api("/api/v1/hosts/pairing-codes", { method: "POST" }).catch(e => alert(e.message));
+    if (!pc) return;
+    pairBox.querySelector(".pairout")?.remove();
+    pairBox.append(el("div", { className: "pairout" }, el("div", { className: "muted", textContent: L.pairHelp }),
+      el("code", { className: "code", textContent: pc.code }), el("pre", { className: "grant",
+        textContent: `colony guard enroll -server ${location.origin} -code ${pc.code} -name <gép-neve>` })));
+  };
+  pairBox.append(pairBtn);
+  panel.append(pairBox);
+  if (!hosts.length) panel.append(el("p", { className: "muted", textContent: L.noHosts }));
+  const agents = Object.values(actors).filter(a => a.kind === "agent");
+  for (const h of hosts) {
+    const c = el("div", { className: "card" });
+    const seen = h.last_seen_at ? new Date(h.last_seen_at).toLocaleString() : L.never;
+    c.append(el("h3", { textContent: `${h.name} · ${h.state}` }), el("div", { className: "muted", textContent: `${L.lastSeen}: ${seen} · ${h.report.os || ""} · guard ${h.report.guard_version || "?"}` }));
+    c.append(el("div", { className: "muted", textContent: `${L.roots}: ${(h.report.roots || []).join(", ") || L.none}` }));
+    c.append(el("div", { className: "muted", textContent: `${L.clients}: ${(h.report.clients || []).map(x => x.name + (x.version ? " " + x.version : "")).join(", ") || L.none} · ${L.sandbox}: ${h.report.sandbox || L.none}` }));
+    for (const r of h.report.rejected || []) c.append(el("div", { className: "warn grant", textContent: `${L.rejected}: @${actors[r.agent_id]?.handle || "?"} ${r.path} — ${r.reason}` }));
+    if (h.state === "approved") {
+      const rv = el("button", { textContent: L.revoke });
+      rv.onclick = async () => { if (confirm(h.name + ": " + L.revoke + "?")) { await api(`/api/v1/hosts/${h.id}/state`, { method: "PUT", body: JSON.stringify({ state: "revoked" }) }).catch(e => alert(e.message)); renderHosts(); } };
+      c.append(el("div", { className: "row" }, rv));
+    }
+    for (const a of h.agents) {
+      const box = el("div", { className: "card" });
+      box.append(el("b", { textContent: `@${a.handle}` }), el("span", { className: "muted", textContent: ` · ${a.client} · ${a.model || "-"}${a.allow_work ? " · " + L.work + ": " + (a.work_model || "-") : ""}` }));
+      const un = el("button", { textContent: L.unassign });
+      un.onclick = async () => { await api(`/api/v1/agents/${a.agent_id}/host`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
+      box.append(" ", un);
+      for (const g of a.grants) {
+        const x = el("button", { textContent: "✕" });
+        x.onclick = async () => { await api(`/api/v1/grants/${g.id}`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
+        box.append(el("div", { className: "row grant" }, `${g.mode === "write" ? L.write : L.read} · ${g.path} `, x));
+      }
+      const path = el("input", { placeholder: "/abs/path", size: 28 });
+      const mode = el("select", {}, el("option", { value: "read", textContent: L.read }), el("option", { value: "write", textContent: L.write }));
+      const add = el("button", { textContent: L.grant });
+      add.onclick = async () => {
+        const g = await api(`/api/v1/agents/${a.agent_id}/grants`, { method: "POST", body: JSON.stringify({ path: path.value.trim(), mode: mode.value }) }).catch(e => alert(e.message));
+        if (g && g.outside_roots) alert(g.path + ": " + L.outside);
+        renderHosts();
+      };
+      box.append(el("div", { className: "row" }, path, mode, add));
+      c.append(box);
+    }
+    if (h.state === "approved") {
+      const sel = el("select", {}, ...agents.map(a => el("option", { value: a.id, textContent: "@" + a.handle })));
+      const client = el("select", {}, el("option", { value: "claude-code", textContent: "claude-code" }), el("option", { value: "antigravity", textContent: "antigravity" }));
+      const model = el("input", { placeholder: "model (haiku)", size: 14 });
+      const wmodel = el("input", { placeholder: "work model", size: 12 });
+      const work = el("input", { type: "checkbox" });
+      const go = el("button", { textContent: L.assign });
+      go.onclick = async () => {
+        await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({ host_id: h.id, client: client.value,
+          model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked }) }).catch(e => alert(e.message));
+        renderHosts();
+      };
+      c.append(el("div", { className: "row" }, sel, client, model, wmodel, el("label", {}, work, " " + L.work), go));
+    }
+    panel.append(c);
+  }
 }
 
 async function start() {
   const s = await api("/api/v1/auth/session");
   me = s.actor; csrf = s.csrf_token || "";
   $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
+  $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
   await load(); if (!ws) connectWS();
 }
 
