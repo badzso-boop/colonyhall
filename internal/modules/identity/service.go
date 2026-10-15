@@ -62,10 +62,11 @@ func (s *Service) Bootstrap(ctx context.Context, workspaceName, ownerHandle, own
 	return ws, owner, secret, nil
 }
 
-// CreateActor creates a human or agent. Only admins may do this.
+// CreateActor creates a human or agent. Only human admins may do this, and
+// only with a role below their own (an admin cannot mint another admin).
 // It returns the new actor and its token secret (shown once).
 func (s *Service) CreateActor(ctx context.Context, by Actor, in NewActorInput) (Actor, string, error) {
-	if !by.IsAdmin() {
+	if by.Kind != KindHuman || !by.IsAdmin() || by.Role.Rank() <= in.Role.Rank() {
 		return Actor{}, "", ErrForbidden
 	}
 	in.WorkspaceID = by.WorkspaceID

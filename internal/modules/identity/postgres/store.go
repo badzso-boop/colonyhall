@@ -149,3 +149,8 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (identity.S
 func (s *Store) RevokeSession(ctx context.Context, id ids.ID, at time.Time) error {
 	return s.q(ctx).RevokeSession(ctx, sqlcgen.RevokeSessionParams{ID: id, RevokedAt: &at})
 }
+
+// RevokeSessionsForActor revokes every session of the actor except keep.
+func (s *Store) RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeSessionsForActor(ctx, sqlcgen.RevokeSessionsForActorParams{At: at, ActorID: actorID, Keep: keep})
+}

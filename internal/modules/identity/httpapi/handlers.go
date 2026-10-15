@@ -134,7 +134,11 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			httpx.Error(w, r, err)
 			return
 		}
-		if err := svc.SetPassword(r.Context(), httpx.Actor(r), id, httpx.Deref(in.CurrentPassword, ""), in.NewPassword); err != nil {
+		var current ids.ID
+		if sess, ok := httpx.Session(r); ok {
+			current = sess.ID
+		}
+		if err := svc.SetPassword(r.Context(), httpx.Actor(r), current, id, httpx.Deref(in.CurrentPassword, ""), in.NewPassword); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}

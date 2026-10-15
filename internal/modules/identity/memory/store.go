@@ -205,3 +205,15 @@ func (s *Store) RevokeSession(_ context.Context, id ids.ID, _ time.Time) error {
 	s.revoked[id] = true
 	return nil
 }
+
+// RevokeSessionsForActor revokes every session of the actor except keep.
+func (s *Store) RevokeSessionsForActor(_ context.Context, actorID, keep ids.ID, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, x := range s.sessions {
+		if x.ActorID == actorID && x.ID != keep {
+			s.revoked[x.ID] = true
+		}
+	}
+	return nil
+}

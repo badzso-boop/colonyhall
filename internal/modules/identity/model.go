@@ -54,6 +54,28 @@ type Actor struct {
 // IsAdmin reports whether the actor may see and control everything.
 func (a Actor) IsAdmin() bool { return a.Role == RoleOwner || a.Role == RoleAdmin }
 
+// Rank orders roles: owner > admin > member > observer.
+func (r Role) Rank() int {
+	switch r {
+	case RoleOwner:
+		return 3
+	case RoleAdmin:
+		return 2
+	case RoleMember:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// CanManage reports whether a may control target's account (password,
+// tokens, state): only human admins, and only for actors of strictly lower
+// rank, so an admin can never take over an owner or another admin.
+func (a Actor) CanManage(target Actor) bool {
+	return a.Kind == KindHuman && a.IsAdmin() && a.WorkspaceID == target.WorkspaceID &&
+		a.Role.Rank() > target.Role.Rank()
+}
+
 // Token is a stored API token; only the hash of the secret is kept.
 type Token struct {
 	ID        ids.ID

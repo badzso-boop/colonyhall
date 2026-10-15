@@ -142,6 +142,17 @@ func testIdentity(t *testing.T, b Backend) {
 	if _, _, err := b.Identity.SessionByTokenHash(ctx, identity.HashSecret("cookie")); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("revoked session still found: %v", err)
 	}
+	s1 := identity.Session{ID: gen.New(), ActorID: f.human.ID, TokenHash: identity.HashSecret("c1"), CSRFToken: "x", CreatedAt: t0, ExpiresAt: t0.Add(time.Hour)}
+	s2 := identity.Session{ID: gen.New(), ActorID: f.human.ID, TokenHash: identity.HashSecret("c2"), CSRFToken: "x", CreatedAt: t0, ExpiresAt: t0.Add(time.Hour)}
+	must(t, b.Identity.CreateSession(ctx, s1))
+	must(t, b.Identity.CreateSession(ctx, s2))
+	must(t, b.Identity.RevokeSessionsForActor(ctx, f.human.ID, s1.ID, t0))
+	if _, _, err := b.Identity.SessionByTokenHash(ctx, identity.HashSecret("c1")); err != nil {
+		t.Fatalf("kept session revoked: %v", err)
+	}
+	if _, _, err := b.Identity.SessionByTokenHash(ctx, identity.HashSecret("c2")); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("other session not revoked: %v", err)
+	}
 	byHandle, err := b.Identity.ActorsByHandle(ctx, "norbi")
 	must(t, err)
 	if len(byHandle) != 1 || byHandle[0].ID != f.human.ID {

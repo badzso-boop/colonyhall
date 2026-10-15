@@ -298,6 +298,22 @@ func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) er
 	return err
 }
 
+const revokeSessionsForActor = `-- name: RevokeSessionsForActor :exec
+UPDATE session SET revoked_at = $1::timestamptz
+WHERE actor_id = $2 AND id <> $3 AND revoked_at IS NULL
+`
+
+type RevokeSessionsForActorParams struct {
+	At      time.Time
+	ActorID uuid.UUID
+	Keep    uuid.UUID
+}
+
+func (q *Queries) RevokeSessionsForActor(ctx context.Context, arg RevokeSessionsForActorParams) error {
+	_, err := q.db.Exec(ctx, revokeSessionsForActor, arg.At, arg.ActorID, arg.Keep)
+	return err
+}
+
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
 SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at
 FROM session s JOIN actor a ON a.id = s.actor_id
@@ -350,12 +366,18 @@ func (q *Queries) SetCredential(ctx context.Context, arg SetCredentialParams) er
 }
 
 const workspaceByName = `-- name: WorkspaceByName :one
-SELECT id, name, created_at FROM workspace WHERE name = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by FROM workspace WHERE name = $1
 `
 
 func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, error) {
 	row := q.db.QueryRow(ctx, workspaceByName, name)
 	var i Workspace
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.EmergencyStopAt,
+		&i.EmergencyStopBy,
+	)
 	return i, err
 }

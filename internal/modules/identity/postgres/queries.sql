@@ -48,3 +48,7 @@ WHERE s.token_hash = $1 AND s.revoked_at IS NULL;
 
 -- name: RevokeSession :exec
 UPDATE session SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;
+
+-- name: RevokeSessionsForActor :exec
+UPDATE session SET revoked_at = sqlc.arg(at)::timestamptz
+WHERE actor_id = sqlc.arg(actor_id) AND id <> sqlc.arg(keep) AND revoked_at IS NULL;

@@ -160,8 +160,10 @@ func (s *Service) Logout(ctx context.Context, sessionID ids.ID) error {
 }
 
 // SetPassword changes a human's password. People may change their own
-// (with the current password); admins may set anyone's in their workspace.
-func (s *Service) SetPassword(ctx context.Context, by Actor, targetID ids.ID, current, next string) error {
+// (with the current password; their current session stays logged in).
+// Human admins may set the password of lower-ranked people only. Every
+// other session of the target is revoked.
+func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, targetID ids.ID, current, next string) error {
 	target, err := s.Store.ActorByID(ctx, targetID)
 	if err != nil {
 		return err
@@ -172,6 +174,7 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, targetID ids.ID, cu
 	if target.Kind != KindHuman {
 		return ErrForbidden
 	}
+	keep := ids.Nil // session that survives the change
 	switch {
 	case by.ID == target.ID:
 		hash, err := s.Store.Credential(ctx, target.ID)
@@ -186,11 +189,16 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, targetID ids.ID, cu
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return err
 		}
-	case by.IsAdmin():
+		keep = currentSession
+	case by.CanManage(target):
 	default:
 		return ErrForbidden
 	}
-	return s.ResetPassword(ctx, target.ID, next)
+	if err := s.ResetPassword(ctx, target.ID, next); err != nil {
+		return err
+	}
+	// A changed password logs out every other browser of that person.
+	return s.Store.RevokeSessionsForActor(ctx, target.ID, keep, s.Clock.Now())
 }
 
 // ResetPassword sets a password without any permission check. Only trusted

@@ -33,4 +33,7 @@ type Store interface {
 	// the caller checks expiry.
 	SessionByTokenHash(ctx context.Context, hash []byte) (Session, Actor, error)
 	RevokeSession(ctx context.Context, id ids.ID, at time.Time) error
+	// RevokeSessionsForActor revokes every session of the actor except keep
+	// (ids.Nil keeps none).
+	RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID, at time.Time) error
 }
