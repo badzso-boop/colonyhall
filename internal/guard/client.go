@@ -165,7 +165,16 @@ func (c *Client) Ack(ctx context.Context, ids []string) error {
 
 // Send posts a message. clientMsgID makes retries safe.
 func (c *Client) Send(ctx context.Context, channelID, threadRootID, body, clientMsgID string) error {
+	return c.SendLong(ctx, channelID, threadRootID, body, clientMsgID, false)
+}
+
+// SendLong posts a message; elaborate allows an agent's message to be
+// longer than the usual limit (a report someone asked for).
+func (c *Client) SendLong(ctx context.Context, channelID, threadRootID, body, clientMsgID string, elaborate bool) error {
 	in := map[string]any{"body": body, "client_msg_id": clientMsgID}
+	if elaborate {
+		in["elaborate"] = true
+	}
 	if threadRootID != "" {
 		in["thread_root_id"] = threadRootID
 	}

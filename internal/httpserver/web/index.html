@@ -40,7 +40,8 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel { overflow:auto; padding:12px 16px; display:none; }
+  #hostsPanel, #schedPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on { display:block; }
   #hostsPanel.on { display:block; } #feed.off { display:none; }
   .card { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0 0 12px; background:var(--surface); }
   .card h3 { margin:0 0 4px; font-size:15px; } .muted { color:var(--muted); font-size:12px; }
@@ -63,7 +64,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><button id="schedbtn" hidden>⏰</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -71,6 +72,7 @@
   <section>
     <div id="feed"></div>
     <div id="hostsPanel"></div>
+    <div id="schedPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <form id="send"><input id="text" autocomplete="off"><button></button></form>
@@ -357,6 +359,7 @@ async function start() {
   me = s.actor; csrf = s.csrf_token || "";
   $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
   $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
+  $("schedbtn").hidden = me.kind !== "human";
   await load(); if (!ws) connectWS();
 }
 
@@ -390,11 +393,65 @@ $("dmbtn").onclick = async () => {
   if (c) { $("dmto").value = ""; await load(); await open(c.id); }
 };
 
+// --- Schedules -------------------------------------------------------------
+// /schedule 2026-10-16 01:00 text   one-off, local time (Europe/Budapest)
+// /daily 01:00 text                  every day
+// /cron "0 1 * * 1-5" text           any 5-field cron expression
+function parseScheduleCommand(body) {
+  let m = /^\/schedule\s+(\d{4}[-.]\d{2}[-.]\d{2}\.?)\s+(\d{1,2}:\d{2})\s+([\s\S]+)$/.exec(body);
+  if (m) return { at: m[1].replace(/\./g, "-").replace(/-$/, "") + " " + m[2].padStart(5, "0"), body: m[3] };
+  m = /^\/daily\s+(\d{1,2}):(\d{2})\s+([\s\S]+)$/.exec(body);
+  if (m) return { cron: `${+m[2]} ${+m[1]} * * *`, body: m[3] };
+  m = /^\/cron\s+"([^"]+)"\s+([\s\S]+)$/.exec(body);
+  if (m) return { cron: m[1], body: m[2] };
+  return null;
+}
+
+function note(text) {
+  $("feed").appendChild(el("div", { className: "msg muted", textContent: text }));
+  $("feed").scrollTop = $("feed").scrollHeight;
+}
+
+let schedOpen = false;
+$("schedbtn").onclick = () => { schedOpen = !schedOpen; $("schedPanel").className = schedOpen ? "on" : "";
+  $("feed").className = schedOpen ? "off" : ""; if (schedOpen) renderSchedules(); };
+
+async function renderSchedules() {
+  const { schedules } = await api("/api/v1/schedules");
+  const panel = $("schedPanel");
+  panel.innerHTML = "";
+  panel.append(el("div", { className: "muted", textContent: '/schedule 2026-10-16 01:00 … · /daily 01:00 … · /cron "0 1 * * 1-5" …' }));
+  for (const s of schedules) {
+    const c = el("div", { className: "card" });
+    const ch = channels.find(x => x.id === s.channel_id);
+    c.append(el("b", { textContent: s.cron ? `⏰ ${s.cron}` : "⏰ " + new Date(s.next_run_at).toLocaleString() }),
+      el("span", { className: "muted", textContent: ` · ${ch ? chanLabel(ch) : "?"} · ${s.state} · ${s.run_count}×` +
+        (s.state === "active" ? ` · next: ${new Date(s.next_run_at).toLocaleString()}` : "") }),
+      el("div", { className: "body", textContent: s.body }));
+    if (s.last_error) c.append(el("div", { className: "warn", textContent: s.last_error }));
+    if (s.state === "active") {
+      const x = el("button", { textContent: "✕" });
+      x.onclick = async () => { await api(`/api/v1/schedules/${s.id}`, { method: "DELETE" }).catch(e => alert(e.message)); renderSchedules(); };
+      c.append(x);
+    }
+    panel.append(c);
+  }
+}
+
 $("send").onsubmit = async (e) => {
   e.preventDefault();
   const body = $("text").value.trim();
   if (!body || !current) return;
   $("text").value = "";
+  if (/^\/(schedule|daily|cron)\b/.test(body)) {
+    const cmd = parseScheduleCommand(body);
+    if (!cmd) { note('⏰ ?  /schedule 2026-10-16 01:00 …  ·  /daily 01:00 …  ·  /cron "0 1 * * *" …'); return; }
+    const req = { channel_id: current, body: cmd.body, at: cmd.at, cron: cmd.cron };
+    if (replyRoot) req.thread_root_id = replyRoot;
+    const s = await api("/api/v1/schedules", { method: "POST", body: JSON.stringify(req) }).catch(err => { note("⏰ " + err.message); return null; });
+    if (s) note(`⏰ ${new Date(s.next_run_at).toLocaleString()}${s.cron ? " (" + s.cron + ")" : ""}: ${s.body}`);
+    return;
+  }
   const req = { body, client_msg_id: uid() };
   if (replyRoot) req.thread_root_id = replyRoot;
   await api(`/api/v1/channels/${current}/messages`, { method: "POST", body: JSON.stringify(req) }).catch(err => alert(err.message));

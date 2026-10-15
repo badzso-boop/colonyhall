@@ -385,7 +385,7 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 			return err
 		}
 	} else {
-		if err := a.reply(ctx, last, res.Text, "gd-"+last.ID); err != nil {
+		if err := a.replyLong(ctx, last, res.Text, "gd-"+last.ID); err != nil {
 			if errors.Is(err, errHalted) || ctx.Err() != nil {
 				return errHalted
 			}

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // Agent runs the guard loop for one agent.
@@ -323,6 +324,24 @@ func (a *Agent) reply(ctx context.Context, it Item, text, clientID string) error
 		thread = it.ItemID
 	}
 	return halted(a.Client.Send(ctx, it.ChannelID, thread, clip(strings.TrimSpace(text), MaxReplyLen), clientID))
+}
+
+// MaxLongReply bounds a direct-mode answer (a report someone asked for).
+const MaxLongReply = 8000
+
+// replyLong answers in the thread like reply, but a text longer than the
+// usual limit is sent as an elaborate message instead of being cut. Used
+// for direct-mode answers: a human asked, and a report may be long.
+func (a *Agent) replyLong(ctx context.Context, it Item, text, clientID string) error {
+	text = strings.TrimSpace(text)
+	if utf8.RuneCountInString(text) <= MaxReplyLen {
+		return a.reply(ctx, it, text, clientID)
+	}
+	thread := it.ThreadRootID
+	if thread == "" && !it.DM {
+		thread = it.ItemID
+	}
+	return halted(a.Client.SendLong(ctx, it.ChannelID, thread, clip(text, MaxLongReply), clientID, true))
 }
 
 func halted(err error) error {
