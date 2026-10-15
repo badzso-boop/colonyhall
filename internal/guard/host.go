@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -207,6 +208,28 @@ func (s *Supervisor) checkGrants(ha HostAgent, rejected *[]Rejected) []Grant {
 	return out
 }
 
+// The server is not trusted with this machine's file system: a handle
+// becomes a folder name and an agent id goes into a URL, so both must have
+// exactly the server's documented shape.
+var (
+	handleRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,31}$`)
+	agentIDRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+)
+
+// agentDir returns the agent's folder inside the sandbox root, or an error
+// if the handle could escape it.
+func (s *Supervisor) agentDir(ha HostAgent) (string, error) {
+	if !handleRe.MatchString(ha.Handle) || !agentIDRe.MatchString(ha.AgentID) {
+		return "", fmt.Errorf("guard: refusing agent with handle %q / id %q from the server", ha.Handle, ha.AgentID)
+	}
+	root := filepath.Clean(s.Cfg.SandboxDir)
+	dir := filepath.Join(root, ha.Handle)
+	if filepath.Dir(dir) != root {
+		return "", fmt.Errorf("guard: agent folder %q escapes the sandbox", dir)
+	}
+	return dir, nil
+}
+
 func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, grants []Grant) {
 	newAdapter := s.NewAdapter
 	if newAdapter == nil {
@@ -217,7 +240,11 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		}
 		newAdapter = func(ac AgentConfig) Adapter { return factory(ac, s.Run) }
 	}
-	dir := filepath.Join(s.Cfg.SandboxDir, ha.Handle)
+	dir, err := s.agentDir(ha)
+	if err != nil {
+		s.Log.Error("guard: agent refused", "err", err)
+		return
+	}
 	for _, d := range []string{dir, filepath.Join(dir, "work"), filepath.Join(dir, "decide")} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			s.Log.Error("guard: sandbox folder", "err", err)

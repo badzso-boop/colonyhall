@@ -81,3 +81,25 @@ func TestSandboxArgs(t *testing.T) {
 		t.Error("deny list must be mounted after the grants")
 	}
 }
+
+// TestAgentDirRejectsServerTraversal: a malicious server must not be able
+// to point an agent's writable folder outside the sandbox root.
+func TestAgentDirRejectsServerTraversal(t *testing.T) {
+	root := t.TempDir()
+	s := &Supervisor{Cfg: Config{SandboxDir: root}}
+	id := "01a13fdf-0d46-7dd6-b537-1436c7ed0491"
+	if dir, err := s.agentDir(HostAgent{AgentID: id, Handle: "claude"}); err != nil || dir != filepath.Join(root, "claude") {
+		t.Fatalf("valid handle: %s %v", dir, err)
+	}
+	for _, ha := range []HostAgent{
+		{AgentID: id, Handle: "../../etc"},
+		{AgentID: id, Handle: ".."},
+		{AgentID: id, Handle: "a/b"},
+		{AgentID: id, Handle: ""},
+		{AgentID: "../hosts", Handle: "claude"},
+	} {
+		if dir, err := s.agentDir(ha); err == nil {
+			t.Errorf("%+v accepted as %s", ha, dir)
+		}
+	}
+}
