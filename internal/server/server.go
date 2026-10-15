@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -45,6 +46,10 @@ import (
 	runhttp "colonyhall/internal/modules/runs/httpapi"
 	runmem "colonyhall/internal/modules/runs/memory"
 	runpg "colonyhall/internal/modules/runs/postgres"
+	"colonyhall/internal/modules/schedule"
+	schedhttp "colonyhall/internal/modules/schedule/httpapi"
+	schedmem "colonyhall/internal/modules/schedule/memory"
+	schedpg "colonyhall/internal/modules/schedule/postgres"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
@@ -76,6 +81,8 @@ type App struct {
 	Delivery     *delivery.Service
 	Audit        *audit.Service
 	Hosts        *hosts.Service
+	Schedule     *schedule.Service
+	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
 	Bus          bus.Bus
@@ -104,6 +111,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		auStore  audit.Store
 		hoStore  hosts.Store
 		ruStore  runs.Store
+		scStore  schedule.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
@@ -113,6 +121,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		events, idStore, cvStore, dlStore, auStore = evmem.New(), idmem.New(), convmem.New(), delmem.New(), audmem.New()
 		hoStore = hostmem.New()
 		ruStore = runmem.New()
+		scStore = schedmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -127,6 +136,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		auStore = &audpg.Store{DB: pg}
 		hoStore = &hostpg.Store{DB: pg}
 		ruStore = &runpg.Store{DB: pg}
+		scStore = &schedpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -149,6 +159,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	delhttp.Register(mux, dlSvc, idSvc)
 	audhttp.Register(mux, auSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
+	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	schedhttp.Register(mux, scSvc, idSvc)
 	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
@@ -168,6 +180,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Delivery:     dlSvc,
 		Audit:        auSvc,
 		Hosts:        hoSvc,
+		Schedule:     scSvc,
+		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,
 		Bus:          b,
@@ -178,6 +192,11 @@ func New(ctx context.Context, opt Options) (*App, error) {
 // Run starts the background consumers and blocks until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Schedule.Loop(ctx, 15*time.Second, a.logger.Info)
+	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)
 		go func() {

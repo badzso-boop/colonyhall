@@ -17,6 +17,7 @@ import (
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/runs"
+	"colonyhall/internal/modules/schedule"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
@@ -31,6 +32,7 @@ type Backend struct {
 	Audit        audit.Store
 	Hosts        hosts.Store
 	Runs         runs.Store
+	Schedule     schedule.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -42,6 +44,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("audit", func(t *testing.T) { testAudit(t, newBackend(t)) })
 	t.Run("hosts", func(t *testing.T) { testHosts(t, newBackend(t)) })
 	t.Run("runs", func(t *testing.T) { testRuns(t, newBackend(t)) })
+	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
 }
 
 var (
@@ -512,6 +515,50 @@ func testRuns(t *testing.T, b Backend) {
 		t.Fatalf("thread root: %+v", got)
 	}
 	if _, err := b.Runs.ErrorByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("missing: %v", err)
+	}
+}
+
+func testSchedule(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Schedule
+	at := t0.Add(time.Hour)
+	sc := schedule.Schedule{ID: gen.New(), WorkspaceID: f.ws.ID, CreatedBy: f.human.ID, ChannelID: f.channel.ID, Body: "hi",
+		Cron: "0 1 * * *", Timezone: "Europe/Budapest", CatchUp: schedule.CatchUpOnce, State: schedule.StateActive, NextRunAt: at, CreatedAt: t0}
+	must(t, st.Create(ctx, sc))
+	other := sc
+	other.ID, other.NextRunAt, other.ThreadRootID = gen.New(), t0.Add(3*time.Hour), gen.New()
+	must(t, st.Create(ctx, other))
+	if due, _ := st.Due(ctx, t0, 10); len(due) != 0 {
+		t.Fatalf("nothing due yet: %+v", due)
+	}
+	due, err := st.Due(ctx, t0.Add(time.Hour), 10)
+	if err != nil || len(due) != 1 || due[0].ID != sc.ID {
+		t.Fatalf("Due: %+v %v", due, err)
+	}
+	next := at.Add(24 * time.Hour)
+	if ok, err := st.Claim(ctx, sc.ID, at, next, schedule.StateActive, at); err != nil || !ok {
+		t.Fatalf("Claim: %v %v", ok, err)
+	}
+	if ok, _ := st.Claim(ctx, sc.ID, at, next, schedule.StateActive, at); ok {
+		t.Fatal("a run can be claimed once")
+	}
+	msg := gen.New()
+	must(t, st.Record(ctx, sc.ID, msg, ""))
+	got, err := st.ByID(ctx, sc.ID)
+	if err != nil || !got.NextRunAt.Equal(next) || got.RunCount != 1 || got.LastMessageID != msg || got.LastRunAt == nil {
+		t.Fatalf("after claim: %+v %v", got, err)
+	}
+	must(t, st.SetState(ctx, other.ID, schedule.StateCanceled))
+	if due, _ := st.Due(ctx, t0.Add(10*time.Hour), 10); len(due) != 0 {
+		t.Fatalf("canceled and future schedules are not due: %+v", due)
+	}
+	list, err := st.List(ctx, f.ws.ID)
+	if err != nil || len(list) != 2 || list[0].ThreadRootID != other.ThreadRootID { // by next run
+		t.Fatalf("List: %+v %v", list, err)
+	}
+	if _, err := st.ByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("missing: %v", err)
 	}
 }

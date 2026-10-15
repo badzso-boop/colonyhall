@@ -189,6 +189,25 @@ type RunError struct {
 	CreatedAt    time.Time
 }
 
+type Schedule struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	CreatedBy     uuid.UUID
+	ChannelID     uuid.UUID
+	ThreadRootID  *uuid.UUID
+	Body          string
+	Cron          string
+	Timezone      string
+	CatchUp       string
+	State         string
+	NextRunAt     time.Time
+	LastRunAt     *time.Time
+	LastMessageID *uuid.UUID
+	LastError     string
+	RunCount      int32
+	CreatedAt     time.Time
+}
+
 type Session struct {
 	ID        uuid.UUID
 	ActorID   uuid.UUID

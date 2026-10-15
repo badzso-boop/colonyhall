@@ -84,6 +84,24 @@ func (e ChannelKind) Valid() bool {
 	}
 }
 
+// Defines values for CreateScheduleRequestCatchUp.
+const (
+	CreateScheduleRequestCatchUpOnce CreateScheduleRequestCatchUp = "once"
+	CreateScheduleRequestCatchUpSkip CreateScheduleRequestCatchUp = "skip"
+)
+
+// Valid indicates whether the value is a known member of the CreateScheduleRequestCatchUp enum.
+func (e CreateScheduleRequestCatchUp) Valid() bool {
+	switch e {
+	case CreateScheduleRequestCatchUpOnce:
+		return true
+	case CreateScheduleRequestCatchUpSkip:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FolderGrantMode.
 const (
 	FolderGrantModeRead  FolderGrantMode = "read"
@@ -234,6 +252,45 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleCatchUp.
+const (
+	ScheduleCatchUpOnce ScheduleCatchUp = "once"
+	ScheduleCatchUpSkip ScheduleCatchUp = "skip"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleCatchUp enum.
+func (e ScheduleCatchUp) Valid() bool {
+	switch e {
+	case ScheduleCatchUpOnce:
+		return true
+	case ScheduleCatchUpSkip:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleState.
+const (
+	ScheduleStateActive   ScheduleState = "active"
+	ScheduleStateCanceled ScheduleState = "canceled"
+	ScheduleStateDone     ScheduleState = "done"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleState enum.
+func (e ScheduleState) Valid() bool {
+	switch e {
+	case ScheduleStateActive:
+		return true
+	case ScheduleStateCanceled:
+		return true
+	case ScheduleStateDone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SetHostStateRequestState.
 const (
 	SetHostStateRequestStateApproved SetHostStateRequestState = "approved"
@@ -254,19 +311,19 @@ func (e SetHostStateRequestState) Valid() bool {
 
 // Defines values for SetStateRequestState.
 const (
-	Active  SetStateRequestState = "active"
-	Paused  SetStateRequestState = "paused"
-	Stopped SetStateRequestState = "stopped"
+	SetStateRequestStateActive  SetStateRequestState = "active"
+	SetStateRequestStatePaused  SetStateRequestState = "paused"
+	SetStateRequestStateStopped SetStateRequestState = "stopped"
 )
 
 // Valid indicates whether the value is a known member of the SetStateRequestState enum.
 func (e SetStateRequestState) Valid() bool {
 	switch e {
-	case Active:
+	case SetStateRequestStateActive:
 		return true
-	case Paused:
+	case SetStateRequestStatePaused:
 		return true
-	case Stopped:
+	case SetStateRequestStateStopped:
 		return true
 	default:
 		return false
@@ -408,6 +465,27 @@ type CreateChannelRequest struct {
 	Kind *ChannelKind `json:"kind,omitempty"`
 	Name string       `json:"name"`
 }
+
+// CreateScheduleRequest defines model for CreateScheduleRequest.
+type CreateScheduleRequest struct {
+	// At One-off: RFC 3339, or local time in `timezone` as YYYY-MM-DD HH:MM
+	At   *string `json:"at,omitempty"`
+	Body string  `json:"body"`
+
+	// CatchUp Missed while the server was down: run once (within 12 h) or skip
+	CatchUp   *CreateScheduleRequestCatchUp `json:"catch_up,omitempty"`
+	ChannelId openapi_types.UUID            `json:"channel_id"`
+
+	// Cron Repeating: 5-field cron expression in `timezone`, e.g. 0 1 * * *
+	Cron         *string             `json:"cron,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+
+	// Timezone IANA zone, default Europe/Budapest
+	Timezone *string `json:"timezone,omitempty"`
+}
+
+// CreateScheduleRequestCatchUp Missed while the server was down: run once (within 12 h) or skip
+type CreateScheduleRequestCatchUp string
 
 // EmergencyClearRequest defines model for EmergencyClearRequest.
 type EmergencyClearRequest struct {
@@ -658,6 +736,36 @@ type RunErrorRequest struct {
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
+// Schedule defines model for Schedule.
+type Schedule struct {
+	Body          string              `json:"body"`
+	CatchUp       ScheduleCatchUp     `json:"catch_up"`
+	ChannelId     openapi_types.UUID  `json:"channel_id"`
+	CreatedAt     time.Time           `json:"created_at"`
+	CreatedBy     openapi_types.UUID  `json:"created_by"`
+	Cron          string              `json:"cron"`
+	Id            openapi_types.UUID  `json:"id"`
+	LastError     string              `json:"last_error"`
+	LastMessageId *openapi_types.UUID `json:"last_message_id,omitempty"`
+	LastRunAt     *time.Time          `json:"last_run_at,omitempty"`
+	NextRunAt     time.Time           `json:"next_run_at"`
+	RunCount      int                 `json:"run_count"`
+	State         ScheduleState       `json:"state"`
+	ThreadRootId  *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	Timezone      string              `json:"timezone"`
+}
+
+// ScheduleCatchUp defines model for Schedule.CatchUp.
+type ScheduleCatchUp string
+
+// ScheduleState defines model for Schedule.State.
+type ScheduleState string
+
+// ScheduleList defines model for ScheduleList.
+type ScheduleList struct {
+	Schedules []Schedule `json:"schedules"`
+}
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	Body string `json:"body"`
@@ -798,3 +906,6 @@ type EnrollHostJSONRequestBody = EnrollRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
+
+// CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
+type CreateScheduleJSONRequestBody = CreateScheduleRequest

@@ -32,6 +32,7 @@ type env struct {
 	app    *server.App
 	srv    *httptest.Server
 	router routers.Router
+	clock  *clock.Manual
 }
 
 // specRouter loads api/openapi.yaml so every response in these tests is
@@ -56,9 +57,10 @@ func specRouter(t *testing.T, baseURL string) routers.Router {
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	ctx := context.Background()
+	clk := clock.NewManual(time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC))
 	app, err := server.New(ctx, server.Options{
 		Store: "memory",
-		Clock: clock.NewManual(time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC)),
+		Clock: clk,
 		IDs:   &ids.Sequential{},
 	})
 	if err != nil {
@@ -69,7 +71,7 @@ func newEnv(t *testing.T) *env {
 	}
 	srv := httptest.NewServer(app.Handler)
 	t.Cleanup(srv.Close)
-	return &env{t: t, app: app, srv: srv, router: specRouter(t, srv.URL)}
+	return &env{t: t, app: app, srv: srv, router: specRouter(t, srv.URL), clock: clk}
 }
 
 func (e *env) do(method, path, token string, body any, out any) int {

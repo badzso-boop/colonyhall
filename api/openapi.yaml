@@ -474,6 +474,36 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunError" } } } }
 
+  /schedules:
+    get:
+      operationId: listSchedules
+      tags: [schedule]
+      description: Humans. Your schedules (admins see all).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: By next run, content: { application/json: { schema: { $ref: "#/components/schemas/ScheduleList" } } } }
+    post:
+      operationId: createSchedule
+      tags: [schedule]
+      description: Humans. At the given time the server posts the message in your name (one-off with `at`, repeating with `cron`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateScheduleRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Scheduled, content: { application/json: { schema: { $ref: "#/components/schemas/Schedule" } } } }
+
+  /schedules/{scheduleId}:
+    parameters:
+      - { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: cancelSchedule
+      tags: [schedule]
+      description: The creator or an admin.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Canceled }
+
 components:
   securitySchemes:
     bearer:
@@ -944,3 +974,38 @@ components:
         summary: { type: string }
         detail: { type: string }
         created_at: { type: string, format: date-time }
+    CreateScheduleRequest:
+      type: object
+      required: [channel_id, body]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        body: { type: string, maxLength: 20000 }
+        at: { type: string, description: "One-off: RFC 3339, or local time in `timezone` as YYYY-MM-DD HH:MM" }
+        cron: { type: string, description: "Repeating: 5-field cron expression in `timezone`, e.g. 0 1 * * *" }
+        timezone: { type: string, description: "IANA zone, default Europe/Budapest" }
+        catch_up: { type: string, enum: [once, skip], description: "Missed while the server was down: run once (within 12 h) or skip" }
+    Schedule:
+      type: object
+      required: [id, created_by, channel_id, body, cron, timezone, catch_up, state, next_run_at, last_error, run_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        created_by: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        body: { type: string }
+        cron: { type: string }
+        timezone: { type: string }
+        catch_up: { type: string, enum: [once, skip] }
+        state: { type: string, enum: [active, done, canceled] }
+        next_run_at: { type: string, format: date-time }
+        last_run_at: { type: string, format: date-time }
+        last_message_id: { type: string, format: uuid }
+        last_error: { type: string }
+        run_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    ScheduleList:
+      type: object
+      required: [schedules]
+      properties:
+        schedules: { type: array, items: { $ref: "#/components/schemas/Schedule" } }
