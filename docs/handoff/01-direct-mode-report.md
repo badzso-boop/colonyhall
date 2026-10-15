@@ -73,3 +73,48 @@ Minden parancs a repó gyökeréből, az előírt környezeti változókkal futo
 1. **Ideiglenes MCP-fájl életciklusa:** Érdemes ellenőrizni az `internal/guard/direct.go` fájlban a `writeMCPConfig` hívást és a `cleanup()` defer futását, biztosítva, hogy szálankénti futás után az átmeneti tokenfájl azonnal törlődik.
 2. **Munkamenet-folytatás logikája:** A `ClaudeCode.Direct` argumentum-összeállításában az első futás `--session-id <uuid>`, a további futások `--resume <uuid>` kapcsolót kapnak; ennek állapotkövetése a `direct_state.json`-ban ellenőrizendő.
 3. **Supervisor bwrap elágazás:** A `Supervisor.reconcile`, `startAgent` és `policy` függvényekben a `ha.Sandbox` logikája: direct módban (`sandbox=false`) sem a döntési, sem a munkafutások nem kerülnek bwrap alá, de a `root_dir` ellenőrzése szigorúan érvényesül.
+
+---
+
+## 6. 2. kör: review javítások
+
+A felülvizsgálat során jelzett észrevételek javítása (egy commit per javítás, mindegyikhez megelőzően elbukó teszttel):
+
+### 6.1. Változtatások commitonként
+
+- `e0735a5` **Guard: require allow_unsandboxed in guard.yaml for unsandboxed agents** (Fix 1)
+  - A gép tulajdonosának engedélye (`allow_unsandboxed: true`, alapértelmezés szerint `false`) szükséges a `guard.yaml`-ban a sandbox nélküli (`sandbox: false`, pl. direct mód) agentek futtatásához.
+  - A Supervisor `reconcile` és `startAgent` logikájában az engedély hiányában az agent nem indul el, a szervernek jelentett `Rejected` listába kerül egyértelmű indoklással (`"unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)"`), és figyelmeztetés kerül a naplóba.
+  - A beállítás megjelenik a `HostReport` sémában (`api/openapi.yaml`, `internal/apispec`, `internal/modules/hosts/model.go`, `internal/guard/client.go`), valamint a fejlesztői felület „Gépek” paneljén is.
+  - Új egységteszt (`TestSupervisorReconcileAllowUnsandboxed`) és e2e szerződésteszt (`TestSupervisorAllowUnsandboxedE2E`) igazolja a működést.
+
+- `0108396` **Guard: recover Claude Code sessions after failed or aborted first runs** (Fix 2)
+  - A Claude Code munkamenet-folytatás (`req.Resume`) eldöntése mostantól: `state.ClaudeSessions[id] || claudeSessionExists(id)`, ahol a `claudeSessionExists` ellenőrzi a lemezre írt `<id>.jsonl` fájl létezését a `$CLAUDE_CONFIG_DIR/projects/*/` vagy `~/.claude/projects/*/` alatt.
+  - Ha az első futás megszakad vagy hibára fut, miután a Claude létrehozta a munkamenetet a lemezen, az újrafutás automatikusan `--resume`-mal folytatódik duplikált `--session-id` helyett.
+  - Ha a futás kimenetet adott `session_id`-val, az az állapotfájlba mentésre kerül akkor is, ha `is_error: true` volt.
+  - Fedve új egységtesztekkel: `TestClaudeSessionExists`, `TestClaudeDirectResumeAfterFailedFirstRun`, `TestClaudeDirectPreservesSessionIDOnErrorOutput`.
+
+- `0c79d32` **Hosts: require root_dir whenever sandbox is disabled** (Fix 3)
+  - A szerveroldali hozzárendelés (`hosts.Service.Assign`) mostantól megköveteli a `root_dir` megadását minden olyan esetben, amikor a `sandbox` értéke `false` (beleértve a `mode=compact, sandbox=false` kombinációt is), megelőzve az olyan hozzárendelések elfogadását, amelyeket az őr azonnal elutasítana.
+  - Frissítve az e2e szerződésteszt (`internal/e2e/hosts_test.go`), amely ellenőrzi a 400 Bad Request választ hiányzó `root_dir` esetén.
+
+- `6498224` **Guard: instruct direct mode agents not to post duplicate thread replies** (Fix 4)
+  - A `DirectPrompt` instrukciói kiegészültek: az agent záró válaszát az őr automatikusan közzéteszi a szálban, így a Colonyhall MCP eszközökkel ne küldje el újra ugyanoda a választ (csak más agentek vagy más csatornák felé).
+  - Frissítve a `TestDirectPrompt` teszt az új figyelmeztetés ellenőrzésére.
+
+- `0be44eb` **Guard: remove stale MCP config files when starting an agent** (Fix 5)
+  - Az agent ciklus indításakor (`startAgent`) az őr automatikusan felkutatja és törli az esetleges korábbi váratlan leállásból vagy összeomlásból visszamaradt átmeneti `mcp-*.json` fájlokat az agent mappájából.
+  - Új egységteszt (`TestStartAgentCleansStaleMCPConfigs`) igazolja a tisztítás működését és az egyéb fájlok megőrzését.
+
+### 6.2. Hozott döntések
+
+1. **`claudeSessionExists` keresési minták:** A `filepath.Glob` mind a `CLAUDE_CONFIG_DIR`, mind a felhasználó valódi `~/.claude` mappája alatti `projects/*/<id>.jsonl` helyeket pásztázza; mivel az azonosító determinisztikus UUIDv5, nem tartalmazhat elérési út-bejárási karaktereket.
+2. **`cleanStaleMCPConfigs` elhelyezése:** A takarítás közvetlenül az agent munkamappáinak biztosítása után történik a `startAgent`-ben, még az agent loop elindítása előtt, így a friss indítás garantáltan tiszta könyvtárral indul.
+
+### 6.3. Végső parancsok és eredményeik
+
+1. **`make test`** -> `PASS` (minden belső csomag sikeres)
+2. **`make lint`** -> `0 issues.`
+3. **`make test-pg`** -> `PASS` (minden postgres tárolóteszt zöld)
+4. **`make gen-check`** -> 0 diff (szerződések és generált kódok szinkronban)
+
