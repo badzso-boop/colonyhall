@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -342,5 +343,36 @@ func TestDirectModeNeverSilent(t *testing.T) {
 	last := msgs[len(msgs)-1]
 	if last.ThreadRootID != q.ID || !strings.Contains(last.Body, "write_file") || !strings.HasPrefix(last.Body, "⚠️") {
 		t.Fatalf("the thread must say why nothing happened: %+v", last)
+	}
+}
+
+// TestGiveUpIsAnnounced: after repeated failures (e.g. the provider is
+// down) the guard drops the item but tells the thread; before, the item
+// vanished without a word.
+func TestGiveUpIsAnnounced(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	q, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent second question"})
+	ad := &scriptedAdapter{direct: func(context.Context, guard.DirectRequest) (guard.RunResult, error) {
+		return guard.RunResult{}, errors.New("agy: Eligibility check failed: UNAVAILABLE (code 503)")
+	}}
+	a := e.guardAgent(ad, false)
+	dir := t.TempDir()
+	a.Mode, a.RootDir, a.StateDir = "direct", dir, dir
+	for range 3 {
+		if err := e.app.Drain(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		_ = a.Tick(context.Background())
+	}
+	msgs := e.messages(general)
+	last := msgs[len(msgs)-1]
+	if last.ThreadRootID != q.ID || !strings.Contains(last.Body, "503") {
+		t.Fatalf("the give-up must be announced in the thread: %+v", last)
+	}
+	var in struct{ Total int }
+	e.do("GET", "/api/v1/agent/inbox", server.DevAgentToken, nil, &in)
+	if in.Total != 0 {
+		t.Fatalf("the item is acked after the announcement, total %d", in.Total)
 	}
 }

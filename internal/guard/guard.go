@@ -172,6 +172,9 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 // giveUpAfterRetries keeps failed items for a retry, but acknowledges them
 // after maxAttempts so a broken client cannot loop on them.
 func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause error) error {
+	if a.attempts == nil {
+		a.attempts = map[string]int{}
+	}
 	var drop []string
 	for _, it := range items {
 		a.attempts[it.ID]++
@@ -182,6 +185,20 @@ func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause erro
 	}
 	if len(drop) > 0 {
 		a.Log.Error("guard: giving up on items after repeated failures", "agent", "@"+a.me.Handle, "items", len(drop), "err", cause)
+		// Say so in the thread: a silent drop looks like the agent never
+		// got the message.
+		dropped := map[string]bool{}
+		for _, id := range drop {
+			dropped[id] = true
+		}
+		for _, it := range items {
+			if dropped[it.ID] {
+				msg := "⚠️ I could not handle this after " + fmt.Sprint(maxAttempts) + " attempts: " + clip(cause.Error(), 200)
+				if err := a.reply(ctx, it, msg, "gx-"+it.ID); err != nil {
+					a.Log.Warn("guard: could not report the failure", "err", err)
+				}
+			}
+		}
 		if err := a.Client.Ack(ctx, drop); err != nil {
 			return err
 		}
