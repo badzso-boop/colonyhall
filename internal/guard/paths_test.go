@@ -1,10 +1,13 @@
 package guard
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCheckGrant(t *testing.T) {
@@ -65,7 +68,7 @@ func TestSandboxArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(args, " ")
-	cfg := filepath.Join(agentDir, "config", "claude")
+	cfg := agentDir + ".config/claude"
 	for _, want := range []string{
 		"--ro-bind " + ro + " " + ro,
 		"--bind " + rw + " " + rw,
@@ -74,7 +77,7 @@ func TestSandboxArgs(t *testing.T) {
 		"--tmpfs " + filepath.Join(home, ".ssh"),
 		"--ro-bind /dev/null " + filepath.Join(rw, ".env"),
 		"--bind " + agentDir + " " + agentDir,
-		"--bind " + filepath.Join(home, ".claude", ".credentials.json") + " " + filepath.Join(cfg, ".credentials.json"),
+		"--bind " + cfg + " " + cfg,
 		"--setenv CLAUDE_CONFIG_DIR " + cfg,
 		"--clearenv",
 		"--chdir " + rw + " -- claude -p hi",
@@ -83,8 +86,11 @@ func TestSandboxArgs(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, joined)
 		}
 	}
-	if strings.Contains(joined, "--bind "+filepath.Join(home, ".claude")+" ") {
-		t.Error("the real ~/.claude must never be bound")
+	if strings.Contains(joined, "--bind "+filepath.Join(home, ".claude")) {
+		t.Error("nothing of the real ~/.claude may be bound writable")
+	}
+	if raw, err := os.ReadFile(filepath.Join(cfg, ".credentials.json")); err != nil || string(raw) != "x" {
+		t.Errorf("the login is copied into the agent's config: %q %v", raw, err)
 	}
 	// The hiding must come after the grants, or a broad grant reveals it.
 	if strings.Index(joined, "--tmpfs "+filepath.Join(home, ".ssh")) < strings.Index(joined, "--bind "+rw) {
@@ -113,3 +119,92 @@ func TestAgentDirRejectsServerTraversal(t *testing.T) {
 		}
 	}
 }
+
+// TestSandboxConfigSymlinks: links a previous run planted in the agent's
+// config must not make the guard write outside it, nor become bind sources.
+func TestSandboxConfigSymlinks(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	outside := filepath.Join(base, "outside")
+	for _, d := range []string{filepath.Join(home, ".gemini", "antigravity-cli"), filepath.Join(home, ".claude"), outside} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for f, v := range map[string]string{
+		filepath.Join(home, ".gemini", "antigravity-cli", "antigravity-oauth-token"): "TOKEN",
+		filepath.Join(home, ".gemini", "antigravity-cli", "settings.json"):           "{}",
+		filepath.Join(home, ".claude", ".credentials.json"):                          "CREDS",
+		filepath.Join(outside, "victim"):                                             "KEEP",
+	} {
+		if err := os.WriteFile(f, []byte(v), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sb := &Sandbox{Bwrap: "bwrap", Home: home, Root: filepath.Join(base, "sandbox")}
+	agentDir := filepath.Join(sb.Root, "bot")
+	if _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
+		t.Fatal(err)
+	}
+	// A run replaces files in its config with links to the host.
+	cli := agentDir + ".config/gemini/antigravity-cli"
+	_ = os.Remove(filepath.Join(cli, "antigravity-oauth-token"))
+	if err := os.Symlink(filepath.Join(outside, "victim"), filepath.Join(cli, "antigravity-oauth-token")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(outside, "victim")); string(raw) != "KEEP" {
+		t.Fatalf("the guard wrote through a planted link: %q", raw)
+	}
+	if fi, err := os.Lstat(filepath.Join(cli, "antigravity-oauth-token")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("the planted link must be replaced by a fresh token copy: %v %v", fi, err)
+	}
+	// The whole client folder swapped for a link to the host: refused.
+	gem := agentDir + ".config/gemini"
+	if err := os.RemoveAll(gem); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, gem); err != nil {
+		t.Fatal(err)
+	}
+	if args, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err == nil {
+		t.Fatalf("a linked config folder must be refused, got %v", args)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 1 {
+		t.Fatalf("the guard created files outside: %v", entries)
+	}
+}
+
+// TestPolicyRechecksGrants: a granted folder swapped for a symlink after
+// the config arrived is not mounted.
+func TestPolicyRechecksGrants(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "projects")
+	app, docs, outside := filepath.Join(root, "app"), filepath.Join(root, "app", "docs"), filepath.Join(base, "etc")
+	for _, d := range []string{docs, outside} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	roots, _ := ResolveRoots([]string{root})
+	off := false
+	s := &Supervisor{Cfg: Config{RequireSandbox: &off}, roots: roots, Log: discardLog(), lastOK: time.Now()}
+	m := &managed{conf: HostAgent{Handle: "bot", AllowWork: true}, grants: []Grant{{Path: app, Write: true}, {Path: docs}}}
+	if p := s.policy(m, filepath.Join(base, "sb", "bot")); !p.Allowed || len(p.AddDirs) != 1 {
+		t.Fatalf("before: %+v", p)
+	}
+	// With write access to app, a run swaps app/docs for a link to the host.
+	if err := os.RemoveAll(docs); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, docs); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.policy(m, filepath.Join(base, "sb", "bot")); len(p.AddDirs) != 0 || p.Dir != app {
+		t.Fatalf("the swapped grant must be dropped: %+v", p)
+	}
+}
+
+func discardLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }

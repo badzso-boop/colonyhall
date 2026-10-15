@@ -84,6 +84,13 @@ func (s *Supervisor) start(ctx context.Context) error {
 		return err
 	}
 	s.sandbox = DetectSandbox(ctx, s.home, s.Cfg.SandboxDir)
+	if s.sandbox != nil && s.Cfg.ClaudeTokenFile != "" {
+		raw, err := os.ReadFile(s.Cfg.ClaudeTokenFile)
+		if err != nil {
+			return fmt.Errorf("guard: claude_token_file: %w", err)
+		}
+		s.sandbox.ClaudeToken = strings.TrimSpace(string(raw))
+	}
 	if s.sandbox == nil && *s.Cfg.RequireSandbox {
 		s.Log.Warn("guard: no working bwrap; work runs are disabled (install bubblewrap or set require_sandbox: false)")
 	}
@@ -310,6 +317,17 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	case s.sandbox == nil && *s.Cfg.RequireSandbox:
 		return WorkPolicy{Reason: "Work is disabled on my machine: no sandbox (bwrap) is available there."}
 	}
+	// Re-check every grant now: a run with write access could have swapped a
+	// granted subfolder for a symlink since the config arrived.
+	var ok []Grant
+	for _, g := range grants {
+		if real, reason := CheckGrant(g.Path, s.roots, s.home); reason == "" && real == g.Path {
+			ok = append(ok, g)
+		} else {
+			s.Log.Warn("guard: grant dropped for this run", "agent", "@"+conf.Handle, "path", g.Path, "reason", reason)
+		}
+	}
+	grants = ok
 	work := filepath.Join(agentDir, "work")
 	for _, g := range grants { // prefer a writable folder, then a readable one
 		if g.Write {

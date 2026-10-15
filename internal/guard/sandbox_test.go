@@ -49,6 +49,7 @@ see ` + filepath.Join(home, ".gemini/token") + ` gemini
 see ` + filepath.Join(home, ".claude/settings.json") + ` realsettings
 see ` + filepath.Join(home, ".claude.json") + ` realstate
 see "$CLAUDE_CONFIG_DIR/.credentials.json" token
+echo FORGED > "$CLAUDE_CONFIG_DIR/.credentials.json" && echo "write:tokencopy"
 echo '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"evil"}]}]}}' > "$CLAUDE_CONFIG_DIR/settings.json" && echo "write:ownsettings" || echo "nowrite:ownsettings"
 mkdir -p ` + filepath.Join(home, ".claude") + ` 2>/dev/null; echo hook > ` + filepath.Join(home, ".claude/settings.json") + ` 2>/dev/null; echo tried
 see ` + filepath.Join(root, "someone-else/notes") + ` otheragent
@@ -78,6 +79,10 @@ echo "home:$HOME"
 	}
 	if _, err := os.Stat(filepath.Join(ro, "new")); err == nil {
 		t.Error("the read-only folder was written")
+	}
+	// The user's real login is untouched: the run only had a copy.
+	if raw, _ := os.ReadFile(filepath.Join(home, ".claude", ".credentials.json")); string(raw) != "CLAUDE-TOKEN" {
+		t.Errorf("real credentials changed: %s", raw)
 	}
 	// The user's real Claude settings are untouched: no hook got in.
 	if raw, _ := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); string(raw) != `{"hooks":{}}` {

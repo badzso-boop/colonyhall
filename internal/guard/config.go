@@ -27,7 +27,10 @@ type Config struct {
 	RequireSandbox *bool             `yaml:"require_sandbox"` // default true: no work runs without bwrap
 	ConfigPoll     time.Duration     `yaml:"config_poll"`
 	Commands       map[string]string `yaml:"commands"` // client → binary, e.g. claude-code: claude
-	Defaults       AgentConfig       `yaml:"defaults"` // poll, debounce, batch, timeouts for host-mode agents
+	// ClaudeTokenFile holds a token from `claude setup-token`; sandboxed
+	// Claude runs use it instead of a copy of the user's login file.
+	ClaudeTokenFile string      `yaml:"claude_token_file"`
+	Defaults        AgentConfig `yaml:"defaults"` // poll, debounce, batch, timeouts for host-mode agents
 }
 
 // HostMode reports whether the server manages this machine's agents.
@@ -100,8 +103,10 @@ func (c *Config) validateHost() error {
 	if c.SandboxDir == "" {
 		c.SandboxDir = filepath.Join(home, ".local", "share", "colonyhall", "sandbox")
 	}
-	if strings.HasPrefix(c.HostTokenFile, "~/") {
-		c.HostTokenFile = filepath.Join(home, c.HostTokenFile[2:])
+	for _, p := range []*string{&c.HostTokenFile, &c.ClaudeTokenFile, &c.SandboxDir} {
+		if strings.HasPrefix(*p, "~/") {
+			*p = filepath.Join(home, (*p)[2:])
+		}
 	}
 	if c.RequireSandbox == nil {
 		t := true

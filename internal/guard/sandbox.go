@@ -2,6 +2,8 @@ package guard
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +20,9 @@ type Sandbox struct {
 	Version string
 	Home    string // the user's real home
 	Root    string // the guard's sandbox folder (all agents)
+	// ClaudeToken, when set (from `claude setup-token`), is given to Claude
+	// instead of a copy of the user's login file.
+	ClaudeToken string
 }
 
 // DetectSandbox finds a working bwrap, or returns nil.
@@ -120,82 +125,109 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 }
 
 // clientMounts prepares the agent's own config folder for the client and
-// returns the mounts and environment that point the client at it. Only the
-// login token comes from the user's real config, writable so a refreshed
-// token is kept; a token cannot run code.
+// returns the mounts and environment that point the client at it.
+//
+// The folder lives next to the agent's sandbox folder (<agent>.config), not
+// inside it, so a run cannot swap it for a symlink that a later bwrap call
+// would follow on the host. The guard writes into it only through os.Root,
+// which refuses to follow links out of it. Login tokens are copied in fresh
+// for every run and never written back: a run cannot plant its own
+// credentials into the user's real login.
 func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, error) {
+	cfgRoot := agentDir + ".config"
+	if err := os.MkdirAll(cfgRoot, 0o700); err != nil {
+		return nil, nil, err
+	}
 	switch client {
 	case "claude-code":
-		cfg := filepath.Join(agentDir, "config", "claude")
-		if err := os.MkdirAll(cfg, 0o700); err != nil {
+		dir, err := s.ownConfig(cfgRoot, "claude", func(r *os.Root) error {
+			if s.ClaudeToken != "" {
+				return nil // passed as CLAUDE_CODE_OAUTH_TOKEN instead
+			}
+			return copyInto(r, filepath.Join(s.Home, ".claude", ".credentials.json"), ".credentials.json", true)
+		})
+		if err != nil {
 			return nil, nil, err
 		}
-		var a []string
-		if real := filepath.Join(s.Home, ".claude", ".credentials.json"); exists(real) {
-			dst := filepath.Join(cfg, ".credentials.json")
-			if err := touch(dst); err != nil {
-				return nil, nil, err
-			}
-			a = append(a, "--bind", real, dst)
+		env := []string{"--setenv", "CLAUDE_CONFIG_DIR", dir}
+		if s.ClaudeToken != "" {
+			env = append(env, "--setenv", "CLAUDE_CODE_OAUTH_TOKEN", s.ClaudeToken)
 		}
-		return a, []string{"--setenv", "CLAUDE_CONFIG_DIR", cfg}, nil
+		return []string{"--bind", dir, dir}, env, nil
 	case "antigravity":
-		own := filepath.Join(agentDir, "config", "gemini")
-		cli := filepath.Join(own, "antigravity-cli")
-		if err := os.MkdirAll(cli, 0o700); err != nil {
-			return nil, nil, err
-		}
 		realCLI := filepath.Join(s.Home, ".gemini", "antigravity-cli")
-		// Settings are copied once; the agent may change its copy, which
-		// only ever affects its own sandboxed runs.
-		for _, f := range []string{"antigravity-cli/settings.json", "antigravity-cli/installation_id", "google_accounts.json", "installation_id"} {
-			if err := copyOnce(filepath.Join(s.Home, ".gemini", f), filepath.Join(own, f)); err != nil {
-				return nil, nil, err
+		dir, err := s.ownConfig(cfgRoot, "gemini", func(r *os.Root) error {
+			for _, d := range []string{"antigravity-cli/bin", "antigravity-cli/builtin"} {
+				if err := r.MkdirAll(d, 0o700); err != nil {
+					return err
+				}
 			}
+			// Settings are copied once; the agent may change its copy, which
+			// only ever affects its own sandboxed runs.
+			for _, f := range []string{"antigravity-cli/settings.json", "antigravity-cli/installation_id", "google_accounts.json", "installation_id"} {
+				if err := copyInto(r, filepath.Join(s.Home, ".gemini", f), f, false); err != nil {
+					return err
+				}
+			}
+			return copyInto(r, filepath.Join(realCLI, "antigravity-oauth-token"), "antigravity-cli/antigravity-oauth-token", true)
+		})
+		if err != nil {
+			return nil, nil, err
 		}
 		gem := filepath.Join(s.Home, ".gemini")
-		a := []string{"--bind", own, gem}
+		a := []string{"--bind", dir, gem}
 		for _, d := range []string{"bin", "builtin"} { // helper programs, read-only
 			if real := filepath.Join(realCLI, d); exists(real) {
-				if err := os.MkdirAll(filepath.Join(cli, d), 0o700); err != nil {
-					return nil, nil, err
-				}
 				a = append(a, "--ro-bind", real, filepath.Join(gem, "antigravity-cli", d))
 			}
-		}
-		if real := filepath.Join(realCLI, "antigravity-oauth-token"); exists(real) {
-			if err := touch(filepath.Join(cli, "antigravity-oauth-token")); err != nil {
-				return nil, nil, err
-			}
-			a = append(a, "--bind", real, filepath.Join(gem, "antigravity-cli", "antigravity-oauth-token"))
 		}
 		return a, nil, nil
 	}
 	return nil, nil, nil
 }
 
-// touch makes sure a mount target file exists.
-func touch(p string) error {
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o600)
+// ownConfig opens (creating) cfgRoot/name as a real folder and runs prep in
+// it through os.Root.
+func (s *Sandbox) ownConfig(cfgRoot, name string, prep func(*os.Root) error) (string, error) {
+	r, err := os.OpenRoot(cfgRoot)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return f.Close()
+	defer func() { _ = r.Close() }()
+	if err := r.MkdirAll(name, 0o700); err != nil {
+		return "", err
+	}
+	if fi, err := r.Lstat(name); err != nil || !fi.IsDir() {
+		return "", fmt.Errorf("sandbox: %s/%s is not a folder", cfgRoot, name)
+	}
+	sub, err := r.OpenRoot(name)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = sub.Close() }()
+	if err := prep(sub); err != nil {
+		return "", err
+	}
+	return filepath.Join(cfgRoot, name), nil
 }
 
-// copyOnce copies src to dst unless dst exists or src does not.
-func copyOnce(src, dst string) error {
-	if exists(dst) || !exists(src) {
-		return nil
+// copyInto copies a file from the real home into the agent's config.
+// always: overwrite every run (login tokens); otherwise only once.
+func copyInto(r *os.Root, src, dst string, always bool) error {
+	if !always {
+		if _, err := r.Lstat(dst); err == nil {
+			return nil
+		}
 	}
 	raw, err := os.ReadFile(src)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(dst, raw, 0o600)
+	_ = r.Remove(dst) // a link the agent may have put there is replaced, never followed
+	return r.WriteFile(dst, raw, 0o600)
 }
 
 // systemDir mounts a top-level system folder read-only, or recreates it
