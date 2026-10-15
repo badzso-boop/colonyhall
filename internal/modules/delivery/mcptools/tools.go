@@ -113,16 +113,24 @@ func FormatInbox(handle string, items []delivery.InboxItem, total int) string {
 		fmt.Fprintf(&b, " (showing %d, +%d more)", len(items), total-len(items))
 	}
 	for i, it := range items {
-		reason := "mention"
-		if it.Flags.Has(delivery.FlagDM) {
-			reason = "dm"
-		}
-		if it.ItemKind == delivery.ItemReactionDown {
-			reason = "👎 on your message"
-		}
 		body := it.Body
 		if len(body) > maxBodyInList {
 			body = body[:maxBodyInList] + "…"
+		}
+		if it.ItemKind == delivery.ItemReactionDown {
+			// The body is the agent's own message; say so, or models take the
+			// reactor for its author.
+			fmt.Fprintf(&b, "\n%d. id=%s #%s @%s reacted 👎 (disagrees) to your message=%s", i+1, it.ID,
+				it.ChannelName, it.AuthorHandle, it.ItemID)
+			if it.ThreadRootID != ids.Nil {
+				fmt.Fprintf(&b, " thread=%s", it.ThreadRootID)
+			}
+			fmt.Fprintf(&b, "\n   your message: %q", body)
+			continue
+		}
+		reason := "mention"
+		if it.Flags.Has(delivery.FlagDM) {
+			reason = "dm"
 		}
 		fmt.Fprintf(&b, "\n%d. id=%s #%s @%s %s (%s)", i+1, it.ID, it.ChannelName, it.AuthorHandle,
 			it.MessageAt.Format("2006-01-02 15:04"), reason)
