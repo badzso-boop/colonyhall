@@ -28,49 +28,81 @@
   form { display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); }
   form input { flex:1; }
   #status { color:var(--muted); font-size:12px; margin-left:auto; }
-  @media (max-width:640px) { main { grid-template-columns:1fr; } nav { border-right:0; border-bottom:1px solid var(--line); max-height:30vh; } }
+  .msg.reply { margin-left:22px; padding-left:10px; border-left:2px solid var(--line); }
+  .re { color:var(--muted); font-size:12px; }
+  .acts { display:inline-flex; gap:4px; margin-left:8px; }
+  .acts button, .chip { padding:0 6px; font-size:12px; border-radius:10px; }
+  .chip.mine { border-color:var(--accent); }
+  .chips { display:flex; gap:4px; margin-top:2px; flex-wrap:wrap; }
+  #replybar { display:none; padding:4px 16px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); }
+  #replybar.on { display:flex; gap:8px; align-items:center; }
+  #login { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  #login input { width:9em; }
+  details summary { cursor:pointer; color:var(--muted); font-size:12px; }
+  .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
+  @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; min-height:calc(100vh - 54px); }
+    nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; } section { height:calc(72vh - 54px); } }
 </style>
 </head>
 <body>
 <header>
   <b>Colonyhall</b>
-  <input id="token" type="password" size="28" autocomplete="off">
-  <button id="connect"></button>
+  <form id="login">
+    <input id="handle" autocomplete="username"><input id="password" type="password" autocomplete="current-password">
+    <button id="loginbtn"></button>
+    <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
+  </form>
+  <span id="me"></span><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
-  <nav id="channels"></nav>
+  <nav><div id="channels"></div><div class="dmbox"><input id="dmto" placeholder="@handle"><button id="dmbtn">DM</button></div></nav>
   <section>
     <div id="feed"></div>
-    <form id="send"><input id="text" autocomplete="off"><button></button></form>
+    <div>
+      <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
+      <form id="send"><input id="text" autocomplete="off"><button></button></form>
+    </div>
   </section>
 </main>
 <script>
 const I18N = {
-  hu: { token: "API token", connect: "Csatlakozás", send: "Küldés", message: "Üzenet… (@név megemlít)",
-        online: "élő kapcsolat", offline: "nincs kapcsolat", reconnecting: "újracsatlakozás…", pick: "Válassz csatornát" },
-  en: { token: "API token", connect: "Connect", send: "Send", message: "Message… (@name to mention)",
-        online: "live", offline: "offline", reconnecting: "reconnecting…", pick: "Pick a channel" },
+  hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
+        online: "élő kapcsolat", offline: "nincs kapcsolat", reconnecting: "újracsatlakozás…", reply: "Válasz", replyIn: "Válasz a szálban:", inThread: "a szálban:" },
+  en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
+        online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
-$("token").placeholder = L.token; $("connect").textContent = L.connect;
-$("text").placeholder = L.message; document.querySelector("#send button").textContent = L.send;
+$("handle").placeholder = L.handle; $("password").placeholder = L.password; $("loginbtn").textContent = L.login;
+$("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button").textContent = L.send;
 
-let token = "", channels = [], actors = {}, current = null, lastSeq = null, ws = null;
+let token = "", csrf = "", me = null, channels = [], actors = {}, current = null, lastSeq = null, ws = null;
+let msgs = new Map(), replyRoot = null;
 try { token = localStorage.getItem("colony_token") || ""; } catch {}
-$("token").value = token;
+
+// Plain-HTTP pages (e.g. over Tailscale) have no crypto.randomUUID.
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, { ...opts, headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" } });
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = "Bearer " + token;
+  else if (csrf) headers["X-CSRF-Token"] = csrf;
+  const res = await fetch(path, { ...opts, headers, credentials: "same-origin" });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.status);
   return res.status === 204 ? null : res.json();
+}
+
+function chanLabel(c) {
+  if (c.kind !== "dm") return "#" + c.name;
+  const others = (c.member_ids || []).filter(id => id !== me.id).map(id => "@" + (actors[id]?.handle || "?"));
+  return "✉ " + (others.join(", ") || "@" + me.handle);
 }
 
 async function load() {
   const [a, c] = await Promise.all([api("/api/v1/actors"), api("/api/v1/channels")]);
   actors = Object.fromEntries(a.actors.map(x => [x.id, x]));
-  channels = c.channels;
+  channels = c.channels.filter(x => x.is_member);
   renderChannels();
   if (!current && channels.length) await open(channels[0].id);
 }
@@ -80,52 +112,98 @@ function renderChannels() {
   for (const c of channels) {
     const d = document.createElement("div");
     d.className = c.id === current ? "on" : "";
-    d.innerHTML = `<span>#${c.name}</span><span class="n">${c.unread > 0 && c.id !== current ? c.unread : ""}</span>`;
+    d.innerHTML = `<span></span><span class="n">${c.unread > 0 && c.id !== current ? c.unread : ""}</span>`;
+    d.firstChild.textContent = chanLabel(c);
     d.onclick = () => open(c.id);
     $("channels").appendChild(d);
   }
 }
 
 async function open(id) {
-  current = id;
+  current = id; setReply(null);
   const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
-  $("feed").innerHTML = "";
-  r.messages.forEach(addMessage);
+  msgs = new Map(r.messages.map(m => [m.id, m]));
+  renderFeed();
   await api(`/api/v1/channels/${id}/read`, { method: "POST" }).catch(() => {});
   const c = channels.find(x => x.id === id); if (c) c.unread = 0;
   renderChannels();
 }
 
-function addMessage(m) {
+function renderFeed() {
+  $("feed").innerHTML = "";
+  for (const m of msgs.values()) $("feed").appendChild(renderMsg(m));
+  $("feed").scrollTop = $("feed").scrollHeight;
+}
+
+function renderMsg(m) {
   const a = actors[m.author_id] || { handle: "?", kind: "human" };
   const div = document.createElement("div");
-  div.className = "msg";
-  div.innerHTML = `<span class="who ${a.kind}"></span><span class="at"></span><div class="body"></div>`;
+  div.className = "msg" + (m.thread_root_id ? " reply" : "");
+  div.innerHTML = `<div class="re"></div><span class="who ${a.kind}"></span><span class="at"></span>` +
+    `<span class="acts"><button data-e="👍">👍</button><button data-e="👎">👎</button><button data-r>${L.reply}</button></span>` +
+    `<div class="body"></div><div class="chips"></div>`;
+  if (m.thread_root_id) {
+    const root = msgs.get(m.thread_root_id);
+    div.querySelector(".re").textContent = "↪ " + L.inThread + " " + (root ? root.body.slice(0, 60) : "…");
+  }
   div.querySelector(".who").textContent = "@" + a.handle;
   div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
   div.querySelector(".body").textContent = m.body;
-  $("feed").appendChild(div);
-  $("feed").scrollTop = $("feed").scrollHeight;
+  for (const r of m.reactions || []) {
+    const chip = document.createElement("button");
+    chip.className = "chip" + (r.actor_ids.includes(me.id) ? " mine" : "");
+    chip.textContent = r.emoji + " " + r.count;
+    chip.title = r.actor_ids.map(id => "@" + (actors[id]?.handle || "?")).join(", ");
+    chip.onclick = () => toggleReaction(m, r.emoji);
+    div.querySelector(".chips").appendChild(chip);
+  }
+  div.querySelectorAll("[data-e]").forEach(b => b.onclick = () => toggleReaction(m, b.dataset.e));
+  div.querySelector("[data-r]").onclick = () => setReply(m.thread_root_id || m.id);
+  return div;
+}
+
+async function toggleReaction(m, emoji) {
+  const mine = (m.reactions || []).some(r => r.emoji === emoji && r.actor_ids.includes(me.id));
+  await api(`/api/v1/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`, { method: mine ? "DELETE" : "PUT" }).catch(e => alert(e.message));
+}
+
+function setReply(rootId) {
+  replyRoot = rootId;
+  $("replybar").className = rootId ? "on" : "";
+  if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? r.body.slice(0, 80) : ""); $("text").focus(); }
+}
+$("replycancel").onclick = () => setReply(null);
+
+async function refreshMessage(id) {
+  // Reactions changed: reload the open channel (cheap at dev-page scale).
+  if (!msgs.has(id)) return;
+  const r = await api(`/api/v1/channels/${current}/messages?limit=100`);
+  msgs = new Map(r.messages.map(m => [m.id, m]));
+  const keep = $("feed").scrollTop; renderFeed(); $("feed").scrollTop = keep;
 }
 
 function connectWS() {
   const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/ui";
   ws = new WebSocket(url);
-  ws.onopen = () => ws.send(JSON.stringify({ type: "hello", token, last_seq: lastSeq }));
+  ws.onopen = () => ws.send(JSON.stringify(token ? { type: "hello", token, last_seq: lastSeq } : { type: "hello", last_seq: lastSeq }));
   ws.onmessage = async (ev) => {
     const f = JSON.parse(ev.data);
     if (f.type === "welcome") { if (lastSeq === null) lastSeq = f.head; $("status").textContent = L.online; }
     if (f.type === "resync_required") { lastSeq = f.head; await load(); }
     if (f.type !== "event") return;
     lastSeq = f.seq;
+    const d = f.data || {};
     if (f.event_type === "message.created") {
-      if (f.data.channel_id === current) {
-        addMessage({ ...f.data, id: f.data.message_id });
+      if (d.channel_id === current) {
+        const m = { id: d.message_id, author_id: d.author_id, body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, reactions: [] };
+        msgs.set(m.id, m); $("feed").appendChild(renderMsg(m)); $("feed").scrollTop = $("feed").scrollHeight;
         api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
       } else {
-        const c = channels.find(x => x.id === f.data.channel_id);
-        if (c) { c.unread++; renderChannels(); }
+        const c = channels.find(x => x.id === d.channel_id);
+        if (c) { c.unread++; renderChannels(); } else await load();
       }
+    } else if (f.event_type.startsWith("reaction.") && d.channel_id === current) {
+      await refreshMessage(d.message_id);
     } else if (f.event_type === "actor.created" || f.event_type.startsWith("channel.")) {
       await load();
     }
@@ -133,10 +211,41 @@ function connectWS() {
   ws.onclose = () => { $("status").textContent = L.reconnecting; setTimeout(connectWS, 2000); };
 }
 
-$("connect").onclick = async () => {
-  token = $("token").value.trim();
-  try { localStorage.setItem("colony_token", token); } catch {}
-  try { await load(); if (!ws) connectWS(); } catch (e) { $("status").textContent = e.message; }
+async function start() {
+  const s = await api("/api/v1/auth/session");
+  me = s.actor; csrf = s.csrf_token || "";
+  $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
+  await load(); if (!ws) connectWS();
+}
+
+$("login").onsubmit = async (e) => {
+  e.preventDefault();
+  const t = $("token").value.trim();
+  try {
+    if (t) { token = t; try { localStorage.setItem("colony_token", t); } catch {} }
+    else {
+      token = "";
+      const res = await fetch("/api/v1/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+        body: JSON.stringify({ handle: $("handle").value.trim().replace(/^@/, ""), password: $("password").value }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.status);
+      $("password").value = "";
+    }
+    await start();
+  } catch (err) { $("status").textContent = err.message; }
+};
+
+$("logout").onclick = async () => {
+  await api("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
+  try { localStorage.removeItem("colony_token"); } catch {}
+  location.reload();
+};
+
+$("dmbtn").onclick = async () => {
+  const h = $("dmto").value.trim().replace(/^@/, "");
+  const a = Object.values(actors).find(x => x.handle === h);
+  if (!a) { alert("?" + h); return; }
+  const c = await api("/api/v1/dms", { method: "POST", body: JSON.stringify({ actor_ids: [a.id] }) }).catch(e => alert(e.message));
+  if (c) { $("dmto").value = ""; await load(); await open(c.id); }
 };
 
 $("send").onsubmit = async (e) => {
@@ -144,12 +253,13 @@ $("send").onsubmit = async (e) => {
   const body = $("text").value.trim();
   if (!body || !current) return;
   $("text").value = "";
-  await api(`/api/v1/channels/${current}/messages`, { method: "POST",
-    body: JSON.stringify({ body, client_msg_id: crypto.randomUUID() }) }).catch(err => alert(err.message));
+  const req = { body, client_msg_id: uid() };
+  if (replyRoot) req.thread_root_id = replyRoot;
+  await api(`/api/v1/channels/${current}/messages`, { method: "POST", body: JSON.stringify(req) }).catch(err => alert(err.message));
 };
 
 $("status").textContent = L.offline;
-if (token) $("connect").click();
+start().catch(() => {});
 </script>
 </body>
 </html>

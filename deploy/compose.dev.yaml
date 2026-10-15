@@ -32,7 +32,8 @@ services:
       COLONY_DEV_SEED: "1"
       COLONY_SECURE_COOKIES: "0"   # plain HTTP on localhost
     ports:
-      - "127.0.0.1:8080:8080"
+      # COLONY_BIND=0.0.0.0 also exposes it on other interfaces (e.g. Tailscale).
+      - "${COLONY_BIND:-127.0.0.1}:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
