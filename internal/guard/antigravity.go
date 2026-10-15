@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -84,7 +85,11 @@ func (a *Antigravity) execAs(ctx context.Context, dir string, req WorkRequest, a
 		return res, out, err
 	}
 	if out.Status != "SUCCESS" {
-		return res, out, fmt.Errorf("agy: run status %q", out.Status)
+		// A run can end in ERROR after it already produced its decision.
+		if len(out.Structured) > 0 && string(out.Structured) != "null" {
+			return res, out, nil
+		}
+		return res, out, fmt.Errorf("agy: run status %q: %s", out.Status, clip(strings.TrimSpace(out.Response), 200))
 	}
 	return res, out, nil
 }

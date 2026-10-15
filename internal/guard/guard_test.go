@@ -119,6 +119,10 @@ func TestAntigravityDecide(t *testing.T) {
 	if res.Decision.Actions[0].Text != "Jupiter" || res.Usage.Total() != 13050 {
 		t.Fatalf("%+v", res)
 	}
+	f.stdout = `{"status":"ERROR","response":"","structured_output":{"actions":[{"ref":"1","kind":"none"}]}}`
+	if _, err := a.Decide(context.Background(), DecideRequest{Handle: "bot", Items: []PromptItem{{}}}); err != nil {
+		t.Fatalf("a decision that arrived before the error is usable: %v", err)
+	}
 	f.stdout = `{"status":"ERROR","response":""}`
 	if _, err := a.Decide(context.Background(), DecideRequest{Handle: "bot", Items: []PromptItem{{}}}); err == nil {
 		t.Fatal("a failed run must be an error")
