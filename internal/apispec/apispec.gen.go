@@ -27,6 +27,24 @@ func (e ActorKind) Valid() bool {
 	}
 }
 
+// Defines values for AssignRequestClient.
+const (
+	AssignRequestClientAntigravity AssignRequestClient = "antigravity"
+	AssignRequestClientClaudeCode  AssignRequestClient = "claude-code"
+)
+
+// Valid indicates whether the value is a known member of the AssignRequestClient enum.
+func (e AssignRequestClient) Valid() bool {
+	switch e {
+	case AssignRequestClientAntigravity:
+		return true
+	case AssignRequestClientClaudeCode:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChannelKind.
 const (
 	Dm      ChannelKind = "dm"
@@ -42,6 +60,78 @@ func (e ChannelKind) Valid() bool {
 	case Private:
 		return true
 	case Public:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FolderGrantMode.
+const (
+	FolderGrantModeRead  FolderGrantMode = "read"
+	FolderGrantModeWrite FolderGrantMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the FolderGrantMode enum.
+func (e FolderGrantMode) Valid() bool {
+	switch e {
+	case FolderGrantModeRead:
+		return true
+	case FolderGrantModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GrantRequestMode.
+const (
+	GrantRequestModeRead  GrantRequestMode = "read"
+	GrantRequestModeWrite GrantRequestMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the GrantRequestMode enum.
+func (e GrantRequestMode) Valid() bool {
+	switch e {
+	case GrantRequestModeRead:
+		return true
+	case GrantRequestModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostState.
+const (
+	HostStateApproved HostState = "approved"
+	HostStateRevoked  HostState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the HostState enum.
+func (e HostState) Valid() bool {
+	switch e {
+	case HostStateApproved:
+		return true
+	case HostStateRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostAgentClient.
+const (
+	HostAgentClientAntigravity HostAgentClient = "antigravity"
+	HostAgentClientClaudeCode  HostAgentClient = "claude-code"
+)
+
+// Valid indicates whether the value is a known member of the HostAgentClient enum.
+func (e HostAgentClient) Valid() bool {
+	switch e {
+	case HostAgentClientAntigravity:
+		return true
+	case HostAgentClientClaudeCode:
 		return true
 	default:
 		return false
@@ -84,6 +174,24 @@ func (e Role) Valid() bool {
 	case Observer:
 		return true
 	case Owner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SetHostStateRequestState.
+const (
+	SetHostStateRequestStateApproved SetHostStateRequestState = "approved"
+	SetHostStateRequestStateRevoked  SetHostStateRequestState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the SetHostStateRequestState enum.
+func (e SetHostStateRequestState) Valid() bool {
+	switch e {
+	case SetHostStateRequestStateApproved:
+		return true
+	case SetHostStateRequestStateRevoked:
 		return true
 	default:
 		return false
@@ -153,6 +261,25 @@ type AddMemberRequest struct {
 type AdminStatus struct {
 	EmergencyStop EmergencyStop `json:"emergency_stop"`
 }
+
+// AgentToken defines model for AgentToken.
+type AgentToken struct {
+	ExpiresAt time.Time `json:"expires_at"`
+	Token     string    `json:"token"`
+}
+
+// AssignRequest defines model for AssignRequest.
+type AssignRequest struct {
+	AllowWork      *bool               `json:"allow_work,omitempty"`
+	Client         AssignRequestClient `json:"client"`
+	HostId         openapi_types.UUID  `json:"host_id"`
+	Model          *string             `json:"model,omitempty"`
+	PermissionMode *string             `json:"permission_mode,omitempty"`
+	WorkModel      *string             `json:"work_model,omitempty"`
+}
+
+// AssignRequestClient defines model for AssignRequest.Client.
+type AssignRequestClient string
 
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
@@ -234,6 +361,103 @@ type EmergencyStop struct {
 	Since  *time.Time          `json:"since,omitempty"`
 }
 
+// EnrollRequest defines model for EnrollRequest.
+type EnrollRequest struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+// EnrollResponse defines model for EnrollResponse.
+type EnrollResponse struct {
+	HostId openapi_types.UUID `json:"host_id"`
+
+	// Token Host token; shown once
+	Token string `json:"token"`
+}
+
+// FolderGrant defines model for FolderGrant.
+type FolderGrant struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Mode      FolderGrantMode    `json:"mode"`
+
+	// OutsideRoots Only when created: the path is outside the roots the host reported
+	OutsideRoots *bool  `json:"outside_roots,omitempty"`
+	Path         string `json:"path"`
+}
+
+// FolderGrantMode defines model for FolderGrant.Mode.
+type FolderGrantMode string
+
+// GrantRequest defines model for GrantRequest.
+type GrantRequest struct {
+	Mode GrantRequestMode `json:"mode"`
+	Path string           `json:"path"`
+}
+
+// GrantRequestMode defines model for GrantRequest.Mode.
+type GrantRequestMode string
+
+// Host defines model for Host.
+type Host struct {
+	Agents     []HostAgent        `json:"agents"`
+	CreatedAt  time.Time          `json:"created_at"`
+	Id         openapi_types.UUID `json:"id"`
+	LastSeenAt *time.Time         `json:"last_seen_at,omitempty"`
+	Name       string             `json:"name"`
+	Report     HostReport         `json:"report"`
+	State      HostState          `json:"state"`
+}
+
+// HostState defines model for Host.State.
+type HostState string
+
+// HostAgent defines model for HostAgent.
+type HostAgent struct {
+	AgentId        openapi_types.UUID `json:"agent_id"`
+	AllowWork      bool               `json:"allow_work"`
+	Client         HostAgentClient    `json:"client"`
+	Grants         []FolderGrant      `json:"grants"`
+	Handle         string             `json:"handle"`
+	HostId         openapi_types.UUID `json:"host_id"`
+	Model          string             `json:"model"`
+	PermissionMode string             `json:"permission_mode"`
+	WorkModel      string             `json:"work_model"`
+}
+
+// HostAgentClient defines model for HostAgent.Client.
+type HostAgentClient string
+
+// HostConfig defines model for HostConfig.
+type HostConfig struct {
+	Agents  []HostAgent `json:"agents"`
+	Version string      `json:"version"`
+}
+
+// HostList defines model for HostList.
+type HostList struct {
+	Hosts []Host `json:"hosts"`
+}
+
+// HostReport defines model for HostReport.
+type HostReport struct {
+	Clients []struct {
+		Name    string  `json:"name"`
+		Version *string `json:"version,omitempty"`
+	} `json:"clients"`
+	GuardVersion *string `json:"guard_version,omitempty"`
+	Os           *string `json:"os,omitempty"`
+	Rejected     []struct {
+		AgentId string `json:"agent_id"`
+		Path    string `json:"path"`
+		Reason  string `json:"reason"`
+	} `json:"rejected"`
+	Roots []string `json:"roots"`
+
+	// Sandbox e.g. bwrap 0.9.0; empty when none
+	Sandbox *string `json:"sandbox,omitempty"`
+}
+
 // Inbox defines model for Inbox.
 type Inbox struct {
 	Items []InboxItem `json:"items"`
@@ -305,6 +529,12 @@ type OpenDMRequest struct {
 	ActorIds []openapi_types.UUID `json:"actor_ids"`
 }
 
+// PairingCode defines model for PairingCode.
+type PairingCode struct {
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
@@ -355,6 +585,14 @@ type SessionInfo struct {
 	// CsrfToken Empty for bearer-token callers
 	CsrfToken string `json:"csrf_token"`
 }
+
+// SetHostStateRequest defines model for SetHostStateRequest.
+type SetHostStateRequest struct {
+	State SetHostStateRequestState `json:"state"`
+}
+
+// SetHostStateRequestState defines model for SetHostStateRequest.State.
+type SetHostStateRequestState string
 
 // SetPasswordRequest defines model for SetPasswordRequest.
 type SetPasswordRequest struct {
@@ -430,6 +668,12 @@ type EmergencyClearJSONRequestBody = EmergencyClearRequest
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest
 
+// AddGrantJSONRequestBody defines body for AddGrant for application/json ContentType.
+type AddGrantJSONRequestBody = GrantRequest
+
+// AssignAgentJSONRequestBody defines body for AssignAgent for application/json ContentType.
+type AssignAgentJSONRequestBody = AssignRequest
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -444,3 +688,12 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // OpenDMJSONRequestBody defines body for OpenDM for application/json ContentType.
 type OpenDMJSONRequestBody = OpenDMRequest
+
+// HostReportJSONRequestBody defines body for HostReport for application/json ContentType.
+type HostReportJSONRequestBody = HostReport
+
+// EnrollHostJSONRequestBody defines body for EnrollHost for application/json ContentType.
+type EnrollHostJSONRequestBody = EnrollRequest
+
+// SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
+type SetHostStateJSONRequestBody = SetHostStateRequest

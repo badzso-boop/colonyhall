@@ -329,6 +329,128 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Acknowledged, content: { application/json: { schema: { $ref: "#/components/schemas/AckResponse" } } } }
 
+  /hosts/pairing-codes:
+    post:
+      operationId: createPairingCode
+      tags: [hosts]
+      description: Human admins. A one-time code (10 minutes) for `colony guard enroll`; shown once.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/PairingCode" } } } }
+
+  /hosts/enroll:
+    post:
+      operationId: enrollHost
+      tags: [hosts]
+      security: []
+      description: A guard registers with a pairing code and receives its host token (shown once).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EnrollRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Enrolled, content: { application/json: { schema: { $ref: "#/components/schemas/EnrollResponse" } } } }
+
+  /hosts:
+    get:
+      operationId: listHosts
+      tags: [hosts]
+      description: Human admins. Machines with their report, agents and active folder grants.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostList" } } } }
+
+  /hosts/{hostId}/state:
+    parameters:
+      - { name: hostId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setHostState
+      tags: [hosts]
+      description: Revoking a host also revokes every agent token it was given.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetHostStateRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Changed }
+
+  /agents/{agentId}/host:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: assignAgent
+      tags: [hosts]
+      description: Run the agent on a host. Moving it to another host revokes its grants and tokens on the old one.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssignRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Assigned, content: { application/json: { schema: { $ref: "#/components/schemas/HostAgent" } } } }
+    delete:
+      operationId: unassignAgent
+      tags: [hosts]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Unassigned; grants and host tokens end }
+
+  /agents/{agentId}/grants:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: addGrant
+      tags: [hosts]
+      description: Let the agent use a folder on its host. The guard only honours paths inside its own root folders.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/GrantRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Granted, content: { application/json: { schema: { $ref: "#/components/schemas/FolderGrant" } } } }
+
+  /grants/{grantId}:
+    parameters:
+      - { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: revokeGrant
+      tags: [hosts]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Revoked }
+
+  /host/report:
+    post:
+      operationId: hostReport
+      tags: [hosts]
+      description: Guard (host token). What the machine has; shown to admins.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HostReport" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Stored }
+
+  /host/config:
+    get:
+      operationId: hostConfig
+      tags: [hosts]
+      description: Guard (host token). The host's agents and grants; send If-None-Match with the last version.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostConfig" } } } }
+        "304": { description: Unchanged }
+
+  /host/agents/{agentId}/token:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: hostAgentToken
+      tags: [hosts]
+      description: Guard (host token). A short-lived token for an agent assigned to this host.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Issued, content: { application/json: { schema: { $ref: "#/components/schemas/AgentToken" } } } }
+
 components:
   securitySchemes:
     bearer:
@@ -652,3 +774,118 @@ components:
       properties:
         type: { type: string, enum: [resync_required] }
         head: { type: integer, format: int64 }
+
+    PairingCode:
+      type: object
+      required: [code, expires_at]
+      properties:
+        code: { type: string }
+        expires_at: { type: string, format: date-time }
+    EnrollRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string, maxLength: 64 }
+    EnrollResponse:
+      type: object
+      required: [host_id, token]
+      properties:
+        host_id: { type: string, format: uuid }
+        token: { type: string, description: Host token; shown once }
+    SetHostStateRequest:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string, enum: [approved, revoked] }
+    HostReport:
+      type: object
+      required: [roots, clients, rejected]
+      properties:
+        guard_version: { type: string }
+        os: { type: string }
+        roots: { type: array, items: { type: string } }
+        clients:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              version: { type: string }
+        sandbox: { type: string, description: "e.g. bwrap 0.9.0; empty when none" }
+        rejected:
+          type: array
+          items:
+            type: object
+            required: [agent_id, path, reason]
+            properties:
+              agent_id: { type: string }
+              path: { type: string }
+              reason: { type: string }
+    FolderGrant:
+      type: object
+      required: [id, path, mode, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        path: { type: string }
+        mode: { type: string, enum: [read, write] }
+        created_at: { type: string, format: date-time }
+        outside_roots: { type: boolean, description: "Only when created: the path is outside the roots the host reported" }
+    HostAgent:
+      type: object
+      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, grants]
+      properties:
+        agent_id: { type: string, format: uuid }
+        handle: { type: string }
+        host_id: { type: string, format: uuid }
+        client: { type: string, enum: [claude-code, antigravity] }
+        model: { type: string }
+        work_model: { type: string }
+        allow_work: { type: boolean }
+        permission_mode: { type: string }
+        grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
+    AssignRequest:
+      type: object
+      required: [host_id, client]
+      properties:
+        host_id: { type: string, format: uuid }
+        client: { type: string, enum: [claude-code, antigravity] }
+        model: { type: string, maxLength: 100 }
+        work_model: { type: string, maxLength: 100 }
+        allow_work: { type: boolean }
+        permission_mode: { type: string, maxLength: 40 }
+    GrantRequest:
+      type: object
+      required: [path, mode]
+      properties:
+        path: { type: string, maxLength: 1024 }
+        mode: { type: string, enum: [read, write] }
+    Host:
+      type: object
+      required: [id, name, state, created_at, report, agents]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        state: { type: string, enum: [approved, revoked] }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        report: { $ref: "#/components/schemas/HostReport" }
+        agents: { type: array, items: { $ref: "#/components/schemas/HostAgent" } }
+    HostList:
+      type: object
+      required: [hosts]
+      properties:
+        hosts: { type: array, items: { $ref: "#/components/schemas/Host" } }
+    HostConfig:
+      type: object
+      required: [version, agents]
+      properties:
+        version: { type: string }
+        agents: { type: array, items: { $ref: "#/components/schemas/HostAgent" } }
+    AgentToken:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token: { type: string }
+        expires_at: { type: string, format: date-time }

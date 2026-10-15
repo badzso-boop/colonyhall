@@ -21,6 +21,19 @@ type Actor struct {
 	CreatedAt   time.Time
 }
 
+type AgentHost struct {
+	AgentID        uuid.UUID
+	HostID         uuid.UUID
+	WorkspaceID    uuid.UUID
+	Client         string
+	Model          string
+	WorkModel      string
+	AllowWork      bool
+	PermissionMode string
+	CreatedBy      uuid.UUID
+	CreatedAt      time.Time
+}
+
 type ApiToken struct {
 	ID        uuid.UUID
 	ActorID   uuid.UUID
@@ -28,6 +41,8 @@ type ApiToken struct {
 	Label     string
 	CreatedAt time.Time
 	RevokedAt *time.Time
+	HostID    *uuid.UUID
+	ExpiresAt *time.Time
 }
 
 type AuditLog struct {
@@ -100,6 +115,40 @@ type Event struct {
 	Payload       []byte
 	SchemaVersion int32
 	At            time.Time
+}
+
+type FolderGrant struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	AgentID     uuid.UUID
+	HostID      uuid.UUID
+	Path        string
+	Mode        string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+	RevokedAt   *time.Time
+}
+
+type Host struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	TokenHash   []byte
+	State       string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+	LastSeenAt  *time.Time
+	Report      []byte
+}
+
+type HostPairingCode struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	CodeHash    []byte
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	UsedAt      *time.Time
 }
 
 type Message struct {

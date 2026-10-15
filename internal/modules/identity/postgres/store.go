@@ -61,12 +61,18 @@ func (s *Store) ListActors(ctx context.Context, workspaceID ids.ID) ([]identity.
 func (s *Store) CreateToken(ctx context.Context, t identity.Token) error {
 	return s.q(ctx).CreateToken(ctx, sqlcgen.CreateTokenParams{
 		ID: t.ID, ActorID: t.ActorID, TokenHash: t.Hash, Label: t.Label, CreatedAt: t.CreatedAt,
+		HostID: nullID(t.HostID), ExpiresAt: t.ExpiresAt,
 	})
 }
 
 // ActorByTokenHash finds the actor owning a non-revoked token.
-func (s *Store) ActorByTokenHash(ctx context.Context, hash []byte) (identity.Actor, error) {
-	return one(s.q(ctx).ActorByTokenHash(ctx, hash))
+func (s *Store) ActorByTokenHash(ctx context.Context, hash []byte, now time.Time) (identity.Actor, error) {
+	return one(s.q(ctx).ActorByTokenHash(ctx, sqlcgen.ActorByTokenHashParams{TokenHash: hash, Now: now}))
+}
+
+// RevokeHostTokens revokes a host's agent tokens.
+func (s *Store) RevokeHostTokens(ctx context.Context, hostID, agentID ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeHostTokens(ctx, sqlcgen.RevokeHostTokensParams{At: &at, HostID: &hostID, AgentID: nullID(agentID)})
 }
 
 func toActor(r sqlcgen.Actor) identity.Actor {
@@ -164,8 +170,19 @@ func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
 }
 
 func toToken(t sqlcgen.ApiToken) identity.Token {
-	return identity.Token{ID: t.ID, ActorID: t.ActorID, Hash: t.TokenHash, Label: t.Label,
-		CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt}
+	out := identity.Token{ID: t.ID, ActorID: t.ActorID, Hash: t.TokenHash, Label: t.Label,
+		CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt, ExpiresAt: t.ExpiresAt}
+	if t.HostID != nil {
+		out.HostID = *t.HostID
+	}
+	return out
+}
+
+func nullID(id ids.ID) *ids.ID {
+	if id == ids.Nil {
+		return nil
+	}
+	return &id
 }
 
 // ListTokens lists an actor's tokens, oldest first.

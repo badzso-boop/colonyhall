@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"time"
 
 	"colonyhall/internal/platform/ids"
 )
@@ -25,7 +26,15 @@ type RequestAuthenticator interface {
 	AuthenticateSession(ctx context.Context, secret string) (Actor, Session, error)
 }
 
+// HostTokens lets the hosts module mint and revoke the short-lived agent
+// tokens guards request for their assigned agents.
+type HostTokens interface {
+	IssueHostToken(ctx context.Context, agentID, hostID ids.ID, ttl time.Duration) (string, time.Time, error)
+	RevokeHostTokens(ctx context.Context, hostID, agentID ids.ID) error
+}
+
 var (
+	_ HostTokens           = (*Service)(nil)
 	_ Directory            = (*Service)(nil)
 	_ RequestAuthenticator = (*Service)(nil)
 )

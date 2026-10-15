@@ -25,7 +25,12 @@ type Store interface {
 	WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error)
 	// SetEmergencyStop turns the stop on (at != nil) or off (at == nil).
 	SetEmergencyStop(ctx context.Context, workspaceID ids.ID, at *time.Time, by ids.ID) error
-	ActorByTokenHash(ctx context.Context, hash []byte) (Actor, error)
+	// ActorByTokenHash finds the actor of a token that is neither revoked
+	// nor expired at now.
+	ActorByTokenHash(ctx context.Context, hash []byte, now time.Time) (Actor, error)
+	// RevokeHostTokens revokes the host's agent tokens (one agent, or all
+	// when agentID is ids.Nil).
+	RevokeHostTokens(ctx context.Context, hostID, agentID ids.ID, at time.Time) error
 
 	// ActorsByHandle finds the handle in every workspace (for login).
 	ActorsByHandle(ctx context.Context, handle string) ([]Actor, error)

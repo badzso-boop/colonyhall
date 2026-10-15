@@ -66,6 +66,9 @@ linters:
             - pkg: colonyhall/internal/modules/audit/postgres
             - pkg: colonyhall/internal/modules/audit/memory
             - pkg: colonyhall/internal/modules/audit/httpapi
+            - pkg: colonyhall/internal/modules/hosts/postgres
+            - pkg: colonyhall/internal/modules/hosts/memory
+            - pkg: colonyhall/internal/modules/hosts/httpapi
             - pkg: colonyhall/internal/server
               desc: only cmd/ may use the composition root
 

@@ -101,6 +101,10 @@ type Token struct {
 	Label     string
 	CreatedAt time.Time
 	RevokedAt *time.Time
+	// HostID and ExpiresAt are set on short-lived tokens a guard requested
+	// for an agent assigned to its host.
+	HostID    ids.ID
+	ExpiresAt *time.Time
 }
 
 // Errors returned by the identity service.

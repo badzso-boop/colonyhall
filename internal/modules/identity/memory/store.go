@@ -105,11 +105,11 @@ func (s *Store) CreateToken(_ context.Context, t identity.Token) error {
 }
 
 // ActorByTokenHash finds the token's actor.
-func (s *Store) ActorByTokenHash(_ context.Context, hash []byte) (identity.Actor, error) {
+func (s *Store) ActorByTokenHash(_ context.Context, hash []byte, now time.Time) (identity.Actor, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	t, ok := s.tokens[string(hash)]
-	if !ok || t.RevokedAt != nil {
+	if !ok || t.RevokedAt != nil || (t.ExpiresAt != nil && !t.ExpiresAt.After(now)) {
 		return identity.Actor{}, db.ErrNotFound
 	}
 	a, ok := s.actors[t.ActorID]
@@ -244,6 +244,19 @@ func (s *Store) TokenByID(_ context.Context, id ids.ID) (identity.Token, error) 
 		return identity.Token{}, db.ErrNotFound
 	}
 	return s.tokens[key], nil
+}
+
+// RevokeHostTokens revokes a host's agent tokens.
+func (s *Store) RevokeHostTokens(_ context.Context, hostID, agentID ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, t := range s.tokens {
+		if t.HostID == hostID && t.RevokedAt == nil && (agentID == ids.Nil || t.ActorID == agentID) {
+			t.RevokedAt = &at
+			s.tokens[k] = t
+		}
+	}
+	return nil
 }
 
 // RevokeToken revokes a token.

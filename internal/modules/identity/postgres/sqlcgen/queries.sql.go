@@ -60,10 +60,16 @@ func (q *Queries) ActorByID(ctx context.Context, id uuid.UUID) (Actor, error) {
 const actorByTokenHash = `-- name: ActorByTokenHash :one
 SELECT a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at FROM api_token t JOIN actor a ON a.id = t.actor_id
 WHERE t.token_hash = $1 AND t.revoked_at IS NULL
+  AND (t.expires_at IS NULL OR t.expires_at > $2::timestamptz)
 `
 
-func (q *Queries) ActorByTokenHash(ctx context.Context, tokenHash []byte) (Actor, error) {
-	row := q.db.QueryRow(ctx, actorByTokenHash, tokenHash)
+type ActorByTokenHashParams struct {
+	TokenHash []byte
+	Now       time.Time
+}
+
+func (q *Queries) ActorByTokenHash(ctx context.Context, arg ActorByTokenHashParams) (Actor, error) {
+	row := q.db.QueryRow(ctx, actorByTokenHash, arg.TokenHash, arg.Now)
 	var i Actor
 	err := row.Scan(
 		&i.ID,
@@ -203,7 +209,8 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const createToken = `-- name: CreateToken :exec
-INSERT INTO api_token (id, actor_id, token_hash, label, created_at) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateTokenParams struct {
@@ -212,6 +219,8 @@ type CreateTokenParams struct {
 	TokenHash []byte
 	Label     string
 	CreatedAt time.Time
+	HostID    *uuid.UUID
+	ExpiresAt *time.Time
 }
 
 func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error {
@@ -221,6 +230,8 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error 
 		arg.TokenHash,
 		arg.Label,
 		arg.CreatedAt,
+		arg.HostID,
+		arg.ExpiresAt,
 	)
 	return err
 }
@@ -285,7 +296,7 @@ func (q *Queries) ListActors(ctx context.Context, workspaceID uuid.UUID) ([]Acto
 }
 
 const listTokens = `-- name: ListTokens :many
-SELECT id, actor_id, token_hash, label, created_at, revoked_at FROM api_token WHERE actor_id = $1 ORDER BY created_at
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at FROM api_token WHERE actor_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken, error) {
@@ -304,6 +315,8 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 			&i.Label,
 			&i.CreatedAt,
 			&i.RevokedAt,
+			&i.HostID,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -313,6 +326,23 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeHostTokens = `-- name: RevokeHostTokens :exec
+UPDATE api_token SET revoked_at = $1
+WHERE host_id = $2 AND revoked_at IS NULL
+  AND ($3::uuid IS NULL OR actor_id = $3::uuid)
+`
+
+type RevokeHostTokensParams struct {
+	At      *time.Time
+	HostID  *uuid.UUID
+	AgentID *uuid.UUID
+}
+
+func (q *Queries) RevokeHostTokens(ctx context.Context, arg RevokeHostTokensParams) error {
+	_, err := q.db.Exec(ctx, revokeHostTokens, arg.At, arg.HostID, arg.AgentID)
+	return err
 }
 
 const revokeSession = `-- name: RevokeSession :exec
@@ -440,7 +470,7 @@ func (q *Queries) SetEmergencyStop(ctx context.Context, arg SetEmergencyStopPara
 }
 
 const tokenByID = `-- name: TokenByID :one
-SELECT id, actor_id, token_hash, label, created_at, revoked_at FROM api_token WHERE id = $1
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at FROM api_token WHERE id = $1
 `
 
 func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error) {
@@ -453,6 +483,8 @@ func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error)
 		&i.Label,
 		&i.CreatedAt,
 		&i.RevokedAt,
+		&i.HostID,
+		&i.ExpiresAt,
 	)
 	return i, err
 }

@@ -18,11 +18,18 @@ SELECT * FROM actor WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY handle;
 SELECT * FROM actor WHERE workspace_id = $1 ORDER BY handle;
 
 -- name: CreateToken :exec
-INSERT INTO api_token (id, actor_id, token_hash, label, created_at) VALUES ($1, $2, $3, $4, $5);
+INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at)
+VALUES ($1, $2, $3, $4, $5, sqlc.narg(host_id), sqlc.narg(expires_at));
 
 -- name: ActorByTokenHash :one
 SELECT a.* FROM api_token t JOIN actor a ON a.id = t.actor_id
-WHERE t.token_hash = $1 AND t.revoked_at IS NULL;
+WHERE t.token_hash = sqlc.arg(token_hash) AND t.revoked_at IS NULL
+  AND (t.expires_at IS NULL OR t.expires_at > sqlc.arg(now)::timestamptz);
+
+-- name: RevokeHostTokens :exec
+UPDATE api_token SET revoked_at = sqlc.arg(at)
+WHERE host_id = sqlc.arg(host_id) AND revoked_at IS NULL
+  AND (sqlc.narg(agent_id)::uuid IS NULL OR actor_id = sqlc.narg(agent_id)::uuid);
 
 -- name: ActorsByHandle :many
 SELECT * FROM actor WHERE handle = $1 ORDER BY workspace_id;

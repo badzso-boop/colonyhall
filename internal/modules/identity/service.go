@@ -136,7 +136,7 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if secret == "" {
 		return Actor{}, ErrUnauthorized
 	}
-	a, err := s.Store.ActorByTokenHash(ctx, HashSecret(secret))
+	a, err := s.Store.ActorByTokenHash(ctx, HashSecret(secret), s.Clock.Now())
 	if errors.Is(err, db.ErrNotFound) {
 		return Actor{}, ErrUnauthorized
 	}

@@ -14,6 +14,7 @@ import (
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
+	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
@@ -27,6 +28,7 @@ type Backend struct {
 	Conversation conversation.Store
 	Delivery     delivery.Store
 	Audit        audit.Store
+	Hosts        hosts.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -36,6 +38,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("conversation", func(t *testing.T) { testConversation(t, newBackend(t)) })
 	t.Run("delivery", func(t *testing.T) { testDelivery(t, newBackend(t)) })
 	t.Run("audit", func(t *testing.T) { testAudit(t, newBackend(t)) })
+	t.Run("hosts", func(t *testing.T) { testHosts(t, newBackend(t)) })
 }
 
 var (
@@ -118,10 +121,10 @@ func testIdentity(t *testing.T, b Backend) {
 		t.Fatalf("ActorByHandle: %+v", got)
 	}
 	must(t, b.Identity.CreateToken(ctx, identity.Token{ID: gen.New(), ActorID: f.agent.ID, Hash: identity.HashSecret("s3cret"), Label: "x", CreatedAt: t0}))
-	if a, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("s3cret")); err != nil || a.ID != f.agent.ID {
+	if a, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("s3cret"), t0); err != nil || a.ID != f.agent.ID {
 		t.Fatalf("token lookup: %v %+v", err, a)
 	}
-	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("other")); !errors.Is(err, db.ErrNotFound) {
+	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("other"), t0); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("unknown token: got %v", err)
 	}
 	// Credentials and sessions.
@@ -172,7 +175,7 @@ func testIdentity(t *testing.T, b Backend) {
 	if got, err := b.Identity.TokenByID(ctx, tok.ID); err != nil || got.RevokedAt == nil || got.Label != "laptop" {
 		t.Fatalf("TokenByID after revoke: %+v %v", got, err)
 	}
-	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("t2")); !errors.Is(err, db.ErrNotFound) {
+	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("t2"), t0); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("revoked token still authenticates: %v", err)
 	}
 	toks, err := b.Identity.ListTokens(ctx, f.agent.ID)
@@ -390,5 +393,96 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func testHosts(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	hs := b.Hosts
+
+	code := hosts.PairingCode{ID: gen.New(), WorkspaceID: f.ws.ID, CodeHash: hosts.Hash("CODE1"), CreatedBy: f.human.ID,
+		CreatedAt: t0, ExpiresAt: t0.Add(10 * time.Minute)}
+	must(t, hs.CreatePairingCode(ctx, code))
+	if _, err := hs.UsePairingCode(ctx, hosts.Hash("CODE1"), t0.Add(11*time.Minute)); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expired code: %v", err)
+	}
+	pc, err := hs.UsePairingCode(ctx, hosts.Hash("CODE1"), t0.Add(time.Minute))
+	if err != nil || pc.CreatedBy != f.human.ID {
+		t.Fatalf("use code: %+v %v", pc, err)
+	}
+	if _, err := hs.UsePairingCode(ctx, hosts.Hash("CODE1"), t0.Add(time.Minute)); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a code works once: %v", err)
+	}
+
+	h := hosts.Host{ID: gen.New(), WorkspaceID: f.ws.ID, Name: "laptop", TokenHash: hosts.Hash("colh_x"), State: hosts.StateApproved,
+		CreatedBy: f.human.ID, CreatedAt: t0, Report: hosts.Report{Roots: []string{}, Clients: []hosts.Client{}, Rejected: []hosts.Rejected{}}}
+	must(t, hs.CreateHost(ctx, h))
+	got, err := hs.HostByTokenHash(ctx, hosts.Hash("colh_x"))
+	if err != nil || got.ID != h.ID || got.Name != "laptop" {
+		t.Fatalf("HostByTokenHash: %+v %v", got, err)
+	}
+	rep := hosts.Report{GuardVersion: "1", Roots: []string{"/work"}, Clients: []hosts.Client{{Name: "claude-code", Version: "2"}},
+		Sandbox: "bwrap 0.9.0", Rejected: []hosts.Rejected{{AgentID: "a", Path: "/etc", Reason: "outside roots"}}}
+	must(t, hs.SaveReport(ctx, h.ID, rep, t0.Add(time.Minute)))
+	must(t, hs.SetHostState(ctx, h.ID, hosts.StateRevoked))
+	list, err := hs.ListHosts(ctx, f.ws.ID)
+	must(t, err)
+	if len(list) != 1 || list[0].State != hosts.StateRevoked || list[0].LastSeenAt == nil ||
+		list[0].Report.Sandbox != "bwrap 0.9.0" || len(list[0].Report.Rejected) != 1 || list[0].Report.Clients[0].Version != "2" {
+		t.Fatalf("ListHosts: %+v", list)
+	}
+
+	a := hosts.Assignment{AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
+		WorkModel: "sonnet", AllowWork: true, CreatedBy: f.human.ID, CreatedAt: t0}
+	must(t, hs.SetAssignment(ctx, a))
+	a.Model = "opus"
+	must(t, hs.SetAssignment(ctx, a)) // replaces
+	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
+	if err != nil || ga.Model != "opus" || !ga.AllowWork {
+		t.Fatalf("AssignmentByAgent: %+v %v", ga, err)
+	}
+	as, err := hs.AssignmentsForHost(ctx, h.ID)
+	if err != nil || len(as) != 1 {
+		t.Fatalf("AssignmentsForHost: %+v %v", as, err)
+	}
+
+	g1 := hosts.Grant{ID: gen.New(), WorkspaceID: f.ws.ID, AgentID: f.agent.ID, HostID: h.ID, Path: "/work/b", Mode: hosts.ModeWrite, CreatedBy: f.human.ID, CreatedAt: t0}
+	g2 := hosts.Grant{ID: gen.New(), WorkspaceID: f.ws.ID, AgentID: f.agent.ID, HostID: h.ID, Path: "/work/a", Mode: hosts.ModeRead, CreatedBy: f.human.ID, CreatedAt: t0}
+	must(t, hs.AddGrant(ctx, g1))
+	must(t, hs.AddGrant(ctx, g2))
+	gs, err := hs.ActiveGrants(ctx, h.ID, f.agent.ID)
+	if err != nil || len(gs) != 2 || gs[0].Path != "/work/a" {
+		t.Fatalf("ActiveGrants (by path): %+v %v", gs, err)
+	}
+	must(t, hs.RevokeGrant(ctx, g2.ID, t0))
+	if gs, _ = hs.ActiveGrants(ctx, h.ID, f.agent.ID); len(gs) != 1 || gs[0].ID != g1.ID {
+		t.Fatalf("after revoke: %+v", gs)
+	}
+	if g, err := hs.GrantByID(ctx, g2.ID); err != nil || g.RevokedAt == nil {
+		t.Fatalf("revoked grants are kept: %+v %v", g, err)
+	}
+	must(t, hs.RevokeGrantsForAgent(ctx, f.agent.ID, t0))
+	if gs, _ = hs.ActiveGrants(ctx, h.ID, f.agent.ID); len(gs) != 0 {
+		t.Fatalf("after RevokeGrantsForAgent: %+v", gs)
+	}
+	must(t, hs.DeleteAssignment(ctx, f.agent.ID))
+	if _, err := hs.AssignmentByAgent(ctx, f.agent.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("deleted assignment: %v", err)
+	}
+
+	// Host-bound, expiring agent tokens (identity store).
+	exp := t0.Add(time.Hour)
+	tok := identity.Token{ID: gen.New(), ActorID: f.agent.ID, Hash: identity.HashSecret("host-tok"), Label: "host", CreatedAt: t0, HostID: h.ID, ExpiresAt: &exp}
+	must(t, b.Identity.CreateToken(ctx, tok))
+	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("host-tok"), t0.Add(time.Minute)); err != nil {
+		t.Fatalf("valid host token: %v", err)
+	}
+	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("host-tok"), t0.Add(2*time.Hour)); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expired host token: %v", err)
+	}
+	must(t, b.Identity.RevokeHostTokens(ctx, h.ID, ids.Nil, t0))
+	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("host-tok"), t0.Add(time.Minute)); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("revoked host token: %v", err)
 	}
 }
