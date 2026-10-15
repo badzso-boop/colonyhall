@@ -1,41 +1,22 @@
 // Package httpapi exposes the delivery module (the agent inbox) over REST.
+// Request and response shapes come from api/openapi.yaml (internal/apispec).
 package httpapi
 
 import (
 	"net/http"
 	"strconv"
-	"time"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/identity"
-	"colonyhall/internal/platform/ids"
 )
 
-// ItemDTO is the JSON form of an inbox item.
-type ItemDTO struct {
-	ID           string    `json:"id"`
-	Kind         string    `json:"kind"`
-	ItemID       string    `json:"item_id"`
-	Channel      string    `json:"channel"`
-	ChannelID    string    `json:"channel_id"`
-	ThreadRootID string    `json:"thread_root_id,omitempty"`
-	Author       string    `json:"author"`
-	Body         string    `json:"body"`
-	Mentioned    bool      `json:"mentioned"`
-	DM           bool      `json:"dm"`
-	At           time.Time `json:"at"`
-}
-
-// ToDTO converts an inbox item.
-func ToDTO(it delivery.InboxItem) ItemDTO {
-	d := ItemDTO{ID: it.ID.String(), Kind: it.ItemKind, ItemID: it.ItemID.String(), Channel: it.ChannelName,
-		ChannelID: it.ChannelID.String(), Author: it.AuthorHandle, Body: it.Body,
-		Mentioned: it.Flags.Has(delivery.FlagMentioned), DM: it.Flags.Has(delivery.FlagDM), At: it.MessageAt}
-	if it.ThreadRootID != ids.Nil {
-		d.ThreadRootID = it.ThreadRootID.String()
-	}
-	return d
+// ToAPI converts an inbox item to its API shape.
+func ToAPI(it delivery.InboxItem) apispec.InboxItem {
+	return apispec.InboxItem{Id: it.ID, Kind: it.ItemKind, ItemId: it.ItemID, Channel: it.ChannelName,
+		ChannelId: it.ChannelID, ThreadRootId: httpx.Ptr(it.ThreadRootID), Author: it.AuthorHandle, Body: it.Body,
+		Mentioned: it.Flags.Has(delivery.FlagMentioned), Dm: it.Flags.Has(delivery.FlagDM), At: it.MessageAt}
 }
 
 // Register mounts the inbox routes on mux. Every route requires auth.
@@ -49,35 +30,24 @@ func Register(mux *http.ServeMux, svc *delivery.Service, auth identity.Authentic
 			httpx.Error(w, r, err)
 			return
 		}
-		out := make([]ItemDTO, 0, len(items))
+		out := apispec.Inbox{Total: total, Items: make([]apispec.InboxItem, 0, len(items))}
 		for _, it := range items {
-			out = append(out, ToDTO(it))
+			out.Items = append(out.Items, ToAPI(it))
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"items": out, "total": total})
+		httpx.JSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("POST /api/v1/agent/inbox/ack", wrap(func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			IDs []string `json:"ids"`
-		}
+		var in apispec.AckRequest
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		list := make([]ids.ID, 0, len(in.IDs))
-		for _, s := range in.IDs {
-			id, err := ids.Parse(s)
-			if err != nil {
-				httpx.Error(w, r, &httpx.BadRequest{Detail: "ids must be UUIDs"})
-				return
-			}
-			list = append(list, id)
-		}
-		n, err := svc.Ack(r.Context(), httpx.Actor(r), list)
+		n, err := svc.Ack(r.Context(), httpx.Actor(r), in.Ids)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"acked": n})
+		httpx.JSON(w, http.StatusOK, apispec.AckResponse{Acked: n})
 	}))
 }

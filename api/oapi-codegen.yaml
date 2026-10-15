@@ -1,0 +1,7 @@
+# Generates Go types from api/openapi.yaml (models only; handlers stay hand-written).
+# Optional fields become pointers, so "absent" and "zero" stay distinguishable
+# (e.g. can_write defaults to true when absent).
+package: apispec
+output: internal/apispec/apispec.gen.go
+generate:
+  models: true

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,10 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/legacy"
 
 	"colonyhall/internal/fakeagent"
 	"colonyhall/internal/platform/clock"
@@ -23,9 +28,29 @@ import (
 )
 
 type env struct {
-	t   *testing.T
-	app *server.App
-	srv *httptest.Server
+	t      *testing.T
+	app    *server.App
+	srv    *httptest.Server
+	router routers.Router
+}
+
+// specRouter loads api/openapi.yaml so every response in these tests is
+// checked against the documented contract.
+func specRouter(t *testing.T, baseURL string) routers.Router {
+	t.Helper()
+	doc, err := openapi3.NewLoader().LoadFromFile("../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := doc.Validate(context.Background()); err != nil {
+		t.Fatalf("api/openapi.yaml is invalid: %v", err)
+	}
+	doc.Servers = openapi3.Servers{{URL: baseURL + "/api/v1"}}
+	r, err := legacy.NewRouter(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
 
 func newEnv(t *testing.T) *env {
@@ -44,7 +69,7 @@ func newEnv(t *testing.T) *env {
 	}
 	srv := httptest.NewServer(app.Handler)
 	t.Cleanup(srv.Close)
-	return &env{t: t, app: app, srv: srv}
+	return &env{t: t, app: app, srv: srv, router: specRouter(t, srv.URL)}
 }
 
 func (e *env) do(method, path, token string, body any, out any) int {
@@ -61,10 +86,34 @@ func (e *env) do(method, path, token string, body any, out any) int {
 		e.t.Fatal(err)
 	}
 	defer func() { _ = res.Body.Close() }()
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	e.checkContract(req, res, raw)
 	if out != nil {
-		_ = json.NewDecoder(res.Body).Decode(out)
+		_ = json.Unmarshal(raw, out)
 	}
 	return res.StatusCode
+}
+
+// checkContract fails the test if the response does not match api/openapi.yaml.
+func (e *env) checkContract(req *http.Request, res *http.Response, body []byte) {
+	e.t.Helper()
+	route, params, err := e.router.FindRoute(req)
+	if err != nil {
+		e.t.Fatalf("%s %s is not in api/openapi.yaml: %v", req.Method, req.URL.Path, err)
+	}
+	in := &openapi3filter.ResponseValidationInput{
+		RequestValidationInput: &openapi3filter.RequestValidationInput{Request: req, PathParams: params, Route: route},
+		Status:                 res.StatusCode,
+		Header:                 res.Header,
+		Body:                   io.NopCloser(bytes.NewReader(body)),
+		Options:                &openapi3filter.Options{IncludeResponseStatus: true},
+	}
+	if err := openapi3filter.ValidateResponse(context.Background(), in); err != nil {
+		e.t.Errorf("%s %s → %d does not match api/openapi.yaml: %v", req.Method, req.URL.Path, res.StatusCode, err)
+	}
 }
 
 func (e *env) generalID() string {

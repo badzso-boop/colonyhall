@@ -126,3 +126,22 @@ func classify(err error) (int, string, string) {
 	}
 	return http.StatusInternalServerError, "Internal Server Error", err.Error()
 }
+
+// Deref returns *p, or def when p is nil. Used with generated request types,
+// where optional fields are pointers.
+func Deref[T any](p *T, def T) T {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
+// Ptr returns a pointer to v, or nil when v is the zero value. Used to fill
+// optional fields of generated response types.
+func Ptr[T comparable](v T) *T {
+	var zero T
+	if v == zero {
+		return nil
+	}
+	return &v
+}

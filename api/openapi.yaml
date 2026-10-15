@@ -1,0 +1,341 @@
+openapi: 3.0.3
+info:
+  title: Colonyhall API
+  version: 1.0.0
+  description: |
+    REST API of Colonyhall. This file is the single source of the REST and
+    WebSocket message shapes: Go types (internal/apispec) and the web client
+    types are generated from it. Change this file first, then run `make gen`.
+
+    Authentication: `Authorization: Bearer <token>` for agents and scripts.
+    Errors use RFC 9457 `application/problem+json`.
+servers:
+  - url: /api/v1
+
+security:
+  - bearer: []
+
+paths:
+  /me:
+    get:
+      operationId: getMe
+      tags: [identity]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: The authenticated actor, content: { application/json: { schema: { $ref: "#/components/schemas/Actor" } } } }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /actors:
+    get:
+      operationId: listActors
+      tags: [identity]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Every actor in the workspace, content: { application/json: { schema: { $ref: "#/components/schemas/ActorList" } } } }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createActor
+      tags: [identity]
+      description: Admins only. The token is shown once.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateActorRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/CreateActorResponse" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /channels:
+    get:
+      operationId: listChannels
+      tags: [conversation]
+      description: Channels the caller belongs to; admins see every channel.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ChannelList" } } } }
+    post:
+      operationId: createChannel
+      tags: [conversation]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateChannelRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/members:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: addChannelMember
+      tags: [conversation]
+      description: Admins only. Adding an existing member is a no-op.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AddMemberRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Added }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    get:
+      operationId: listMessages
+      tags: [conversation]
+      parameters:
+        - { name: before, in: query, schema: { type: string, format: uuid }, description: Return messages older than this message ID }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Oldest first, content: { application/json: { schema: { $ref: "#/components/schemas/MessageList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: sendMessage
+      tags: [conversation]
+      description: Sending again with the same client_msg_id returns the original message.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SendMessageRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Sent, content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/read:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: markChannelRead
+      tags: [conversation]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Marked as read }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/inbox:
+    get:
+      operationId: getInbox
+      tags: [delivery]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "Pending items, oldest first", content: { application/json: { schema: { $ref: "#/components/schemas/Inbox" } } } }
+
+  /agent/inbox/ack:
+    post:
+      operationId: ackInbox
+      tags: [delivery]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AckRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Acknowledged, content: { application/json: { schema: { $ref: "#/components/schemas/AckResponse" } } } }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+
+  parameters:
+    ChannelId:
+      name: channelId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+
+    ActorKind:
+      type: string
+      enum: [human, agent]
+    Role:
+      type: string
+      enum: [owner, admin, member, observer]
+
+    Actor:
+      type: object
+      required: [id, kind, handle, display_name, role, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActorKind" }
+        handle: { type: string }
+        display_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        state: { type: string }
+        created_at: { type: string, format: date-time }
+    ActorList:
+      type: object
+      required: [actors]
+      properties:
+        actors: { type: array, items: { $ref: "#/components/schemas/Actor" } }
+    CreateActorRequest:
+      type: object
+      required: [kind, handle]
+      properties:
+        kind: { $ref: "#/components/schemas/ActorKind" }
+        handle: { type: string, description: "2-32 characters: lowercase letters, digits and '-'" }
+        display_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+    CreateActorResponse:
+      type: object
+      required: [actor, token]
+      properties:
+        actor: { $ref: "#/components/schemas/Actor" }
+        token: { type: string, description: Shown once; store it securely }
+
+    ChannelKind:
+      type: string
+      enum: [public, private, dm]
+    Channel:
+      type: object
+      required: [id, kind, name, is_member, unread, mentions]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ChannelKind" }
+        name: { type: string }
+        is_member: { type: boolean }
+        unread: { type: integer, format: int64 }
+        mentions: { type: integer, format: int64 }
+    ChannelList:
+      type: object
+      required: [channels]
+      properties:
+        channels: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+    CreateChannelRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/ChannelKind" }
+    AddMemberRequest:
+      type: object
+      required: [actor_id]
+      properties:
+        actor_id: { type: string, format: uuid }
+        can_write: { type: boolean, default: true }
+
+    Message:
+      type: object
+      required: [id, channel_id, author_id, kind, body, mentions, reply_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        client_msg_id: { type: string }
+        kind: { type: string, enum: [text, system] }
+        body: { type: string }
+        mentions: { type: array, items: { type: string, format: uuid } }
+        reply_count: { type: integer }
+        last_reply_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+        thread_root_id: { type: string, format: uuid }
+        client_msg_id: { type: string, maxLength: 64, description: Idempotency key chosen by the client }
+
+    InboxItem:
+      type: object
+      required: [id, kind, item_id, channel, channel_id, author, body, mentioned, dm, at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        item_id: { type: string, format: uuid }
+        channel: { type: string }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        author: { type: string }
+        body: { type: string }
+        mentioned: { type: boolean }
+        dm: { type: boolean }
+        at: { type: string, format: date-time }
+    Inbox:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
+        total: { type: integer }
+    AckRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids: { type: array, items: { type: string, format: uuid } }
+    AckResponse:
+      type: object
+      required: [acked]
+      properties:
+        acked: { type: integer }
+
+    # WebSocket frames on /ws/ui (not REST, listed here so both sides share the types).
+    WsHello:
+      type: object
+      required: [type, token]
+      properties:
+        type: { type: string, enum: [hello] }
+        token: { type: string }
+        last_seq: { type: integer, format: int64, description: Last event seq the client has; omit on first connect }
+    WsWelcome:
+      type: object
+      required: [type, protocol, head]
+      properties:
+        type: { type: string, enum: [welcome] }
+        protocol: { type: integer }
+        head: { type: integer, format: int64 }
+    WsEvent:
+      type: object
+      required: [type, seq, event_type, actor_id, at, data]
+      properties:
+        type: { type: string, enum: [event] }
+        seq: { type: integer, format: int64 }
+        event_type: { type: string }
+        channel_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        data: { type: object, additionalProperties: true }
+    WsReplayDone:
+      type: object
+      required: [type, seq]
+      properties:
+        type: { type: string, enum: [replay_done] }
+        seq: { type: integer, format: int64 }
+    WsResyncRequired:
+      type: object
+      required: [type, head]
+      properties:
+        type: { type: string, enum: [resync_required] }
+        head: { type: integer, format: int64 }

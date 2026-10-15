@@ -2,7 +2,7 @@ GO      ?= go
 COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 
-.PHONY: help dev down logs run-mem fake-agent test test-pg lint vet fmt build
+.PHONY: help dev down logs run-mem fake-agent test test-pg lint vet fmt build gen gen-check
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -28,6 +28,13 @@ test:            ## Unit, contract (memory) and end-to-end tests
 
 test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
+
+gen:             ## Regenerate code from api/openapi.yaml and SQL queries
+	$(GO) tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+
+gen-check:       ## Fail if generated code is out of date
+	$(MAKE) gen
+	git diff --exit-code -- internal/apispec
 
 lint:            ## golangci-lint with the depguard layer rules
 	golangci-lint run ./...

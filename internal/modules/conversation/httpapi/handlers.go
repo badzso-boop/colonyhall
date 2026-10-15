@@ -1,11 +1,12 @@
 // Package httpapi exposes the conversation module over REST.
+// Request and response shapes come from api/openapi.yaml (internal/apispec).
 package httpapi
 
 import (
 	"net/http"
 	"strconv"
-	"time"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
@@ -18,43 +19,21 @@ func init() {
 	httpx.RegisterForbidden(conversation.ErrForbidden)
 }
 
-// ChannelDTO is the JSON form of a channel as seen by the caller.
-type ChannelDTO struct {
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	Name     string `json:"name"`
-	IsMember bool   `json:"is_member"`
-	Unread   int64  `json:"unread"`
-	Mentions int64  `json:"mentions"`
+// MessageToAPI converts a message to its API shape.
+func MessageToAPI(m conversation.Message) apispec.Message {
+	out := apispec.Message{Id: m.ID, ChannelId: m.ChannelID, AuthorId: m.AuthorID,
+		ClientMsgId: httpx.Ptr(m.ClientMsgID), Kind: apispec.MessageKind(m.Kind), Body: m.Body,
+		ReplyCount: m.ReplyCount, LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
+		ThreadRootId: httpx.Ptr(m.ThreadRootID), Mentions: m.Mentions}
+	if out.Mentions == nil {
+		out.Mentions = []ids.ID{}
+	}
+	return out
 }
 
-// MessageDTO is the JSON form of a message.
-type MessageDTO struct {
-	ID           string     `json:"id"`
-	ChannelID    string     `json:"channel_id"`
-	ThreadRootID string     `json:"thread_root_id,omitempty"`
-	AuthorID     string     `json:"author_id"`
-	ClientMsgID  string     `json:"client_msg_id,omitempty"`
-	Kind         string     `json:"kind"`
-	Body         string     `json:"body"`
-	Mentions     []string   `json:"mentions"`
-	ReplyCount   int        `json:"reply_count"`
-	LastReplyAt  *time.Time `json:"last_reply_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-}
-
-// MessageToDTO converts a message.
-func MessageToDTO(m conversation.Message) MessageDTO {
-	d := MessageDTO{ID: m.ID.String(), ChannelID: m.ChannelID.String(), AuthorID: m.AuthorID.String(),
-		ClientMsgID: m.ClientMsgID, Kind: m.Kind, Body: m.Body, ReplyCount: m.ReplyCount,
-		LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt, Mentions: []string{}}
-	if m.ThreadRootID != ids.Nil {
-		d.ThreadRootID = m.ThreadRootID.String()
-	}
-	for _, id := range m.Mentions {
-		d.Mentions = append(d.Mentions, id.String())
-	}
-	return d
+func channelToAPI(c conversation.ChannelView) apispec.Channel {
+	return apispec.Channel{Id: c.ID, Kind: apispec.ChannelKind(c.Kind), Name: c.Name,
+		IsMember: c.IsMember, Unread: c.Unread, Mentions: c.Mentions}
 }
 
 // Register mounts the conversation routes on mux. Every route requires auth.
@@ -67,29 +46,26 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Authe
 			httpx.Error(w, r, err)
 			return
 		}
-		out := make([]ChannelDTO, 0, len(list))
+		out := apispec.ChannelList{Channels: make([]apispec.Channel, 0, len(list))}
 		for _, c := range list {
-			out = append(out, ChannelDTO{ID: c.ID.String(), Kind: string(c.Kind), Name: c.Name,
-				IsMember: c.IsMember, Unread: c.Unread, Mentions: c.Mentions})
+			out.Channels = append(out.Channels, channelToAPI(c))
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"channels": out})
+		httpx.JSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("POST /api/v1/channels", wrap(func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Name string `json:"name"`
-			Kind string `json:"kind"`
-		}
+		var in apispec.CreateChannelRequest
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		c, err := svc.CreateChannel(r.Context(), httpx.Actor(r), in.Name, conversation.ChannelKind(in.Kind))
+		kind := conversation.ChannelKind(httpx.Deref(in.Kind, apispec.Public))
+		c, err := svc.CreateChannel(r.Context(), httpx.Actor(r), in.Name, kind)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusCreated, ChannelDTO{ID: c.ID.String(), Kind: string(c.Kind), Name: c.Name, IsMember: true})
+		httpx.JSON(w, http.StatusCreated, channelToAPI(conversation.ChannelView{Channel: c, IsMember: true}))
 	}))
 
 	mux.Handle("POST /api/v1/channels/{id}/members", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -97,21 +73,12 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Authe
 		if !ok {
 			return
 		}
-		var in struct {
-			ActorID  string `json:"actor_id"`
-			CanWrite *bool  `json:"can_write"`
-		}
+		var in apispec.AddMemberRequest
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		actorID, err := ids.Parse(in.ActorID)
-		if err != nil {
-			httpx.Error(w, r, &httpx.BadRequest{Detail: "actor_id must be a UUID"})
-			return
-		}
-		canWrite := in.CanWrite == nil || *in.CanWrite
-		if err := svc.AddMember(r.Context(), httpx.Actor(r), channelID, actorID, canWrite); err != nil {
+		if err := svc.AddMember(r.Context(), httpx.Actor(r), channelID, in.ActorId, httpx.Deref(in.CanWrite, true)); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
@@ -137,11 +104,11 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Authe
 			httpx.Error(w, r, err)
 			return
 		}
-		out := make([]MessageDTO, 0, len(msgs))
+		out := apispec.MessageList{Messages: make([]apispec.Message, 0, len(msgs))}
 		for _, m := range msgs {
-			out = append(out, MessageToDTO(m))
+			out.Messages = append(out.Messages, MessageToAPI(m))
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"messages": out})
+		httpx.JSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("POST /api/v1/channels/{id}/messages", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -149,31 +116,20 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Authe
 		if !ok {
 			return
 		}
-		var in struct {
-			Body         string `json:"body"`
-			ThreadRootID string `json:"thread_root_id"`
-			ClientMsgID  string `json:"client_msg_id"`
-		}
+		var in apispec.SendMessageRequest
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		root := ids.Nil
-		if in.ThreadRootID != "" {
-			var err error
-			if root, err = ids.Parse(in.ThreadRootID); err != nil {
-				httpx.Error(w, r, &httpx.BadRequest{Detail: "thread_root_id must be a message ID"})
-				return
-			}
-		}
 		m, err := svc.SendMessage(r.Context(), httpx.Actor(r), conversation.SendInput{
-			ChannelID: channelID, ThreadRootID: root, ClientMsgID: in.ClientMsgID, Body: in.Body,
+			ChannelID: channelID, ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil),
+			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusCreated, MessageToDTO(m))
+		httpx.JSON(w, http.StatusCreated, MessageToAPI(m))
 	}))
 
 	mux.Handle("POST /api/v1/channels/{id}/read", wrap(func(w http.ResponseWriter, r *http.Request) {
