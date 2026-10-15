@@ -1,11 +1,16 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"colonyhall/internal/server"
 )
@@ -192,5 +197,30 @@ func TestAgentMessageRules(t *testing.T) {
 	// Humans are not limited.
 	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "OK"}); s != http.StatusCreated {
 		t.Fatalf("human ok: status %d", s)
+	}
+}
+
+// TestDMNameCannotBeSquatted: nobody can pre-create a normal channel under the
+// name a DM will get, so opening the DM never returns someone else's channel.
+func TestDMNameCannotBeSquatted(t *testing.T) {
+	e := newEnv(t)
+	var me struct{ ID string }
+	e.do("GET", "/api/v1/me", server.DevAgentToken, nil, &me)
+	var admin struct{ ID string }
+	e.do("GET", "/api/v1/me", server.DevAdminToken, nil, &admin)
+	a, b := uuid.MustParse(me.ID), uuid.MustParse(admin.ID)
+	if bytes.Compare(a[:], b[:]) > 0 {
+		a, b = b, a
+	}
+	sum := sha256.Sum256(append(a[:], b[:]...))
+	name := "dm-" + hex.EncodeToString(sum[:])[:16]
+
+	if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": name, "kind": "public"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("squat %s: status %d", name, s)
+	}
+	var dm struct{ Name, Kind string }
+	e.do("POST", "/api/v1/dms", server.DevAgentToken, map[string]any{"actor_ids": []string{admin.ID}}, &dm)
+	if dm.Kind != "dm" || dm.Name != name {
+		t.Fatalf("dm: %+v (expected name %s)", dm, name)
 	}
 }

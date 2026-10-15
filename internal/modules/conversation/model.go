@@ -101,7 +101,7 @@ var (
 	ErrBodyTooLong     = errors.New("message is too long")
 	ErrInvalidClientID = errors.New("client_msg_id is too long")
 	ErrBadThread       = errors.New("thread root must be a top-level message in the same channel")
-	ErrBadEmoji        = errors.New("emoji must be 1-32 characters without spaces")
+	ErrBadEmoji        = errors.New("emoji must be a short emoji sequence (1-32 characters, no text)")
 	ErrBadDM           = errors.New("a DM needs 1-8 other people from this workspace")
 )
 
@@ -110,9 +110,12 @@ var (
 	mentionPattern = regexp.MustCompile(`(?:^|[^a-zA-Z0-9_])@([a-z0-9][a-z0-9-]{1,31})`)
 )
 
+// dmPrefix is reserved for DM channels (see dmName).
+const dmPrefix = "dm-"
+
 // ValidateName checks a channel name.
 func ValidateName(name string) error {
-	if !namePattern.MatchString(name) {
+	if !namePattern.MatchString(name) || strings.HasPrefix(name, dmPrefix) {
 		return ErrInvalidName
 	}
 	return nil

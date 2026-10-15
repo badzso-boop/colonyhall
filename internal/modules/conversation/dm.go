@@ -25,7 +25,7 @@ func dmName(members []ids.ID) string {
 	for _, id := range sorted {
 		h.Write(id[:])
 	}
-	return "dm-" + hex.EncodeToString(h.Sum(nil))[:16]
+	return dmPrefix + hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 // OpenDM returns the DM channel between the caller and others, creating it
@@ -51,6 +51,16 @@ func (s *Service) OpenDM(ctx context.Context, by identity.Actor, others []ids.ID
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
 		existing, err := s.Store.ChannelByName(ctx, by.WorkspaceID, name)
 		if err == nil {
+			// Never hand out a channel that merely has the name: it must be a
+			// DM with exactly these members (guards against squatting and
+			// against a hash-prefix collision).
+			ok, err := s.sameMembers(ctx, existing, members)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return ErrBadDM
+			}
 			c = existing
 			return nil
 		}
@@ -97,4 +107,27 @@ func (s *Service) OpenDMByHandle(ctx context.Context, by identity.Actor, handle 
 		return Channel{}, err
 	}
 	return s.OpenDM(ctx, by, []ids.ID{a.ID})
+}
+
+func (s *Service) sameMembers(ctx context.Context, c Channel, members []ids.ID) (bool, error) {
+	if c.Kind != KindDM {
+		return false, nil
+	}
+	stored, err := s.Store.MemberIDs(ctx, c.ID)
+	if err != nil {
+		return false, err
+	}
+	if len(stored) != len(members) {
+		return false, nil
+	}
+	want := map[ids.ID]bool{}
+	for _, id := range members {
+		want[id] = true
+	}
+	for _, id := range stored {
+		if !want[id] {
+			return false, nil
+		}
+	}
+	return true, nil
 }
