@@ -17,3 +17,4 @@ coverage.out
 .vscode/
 .DS_Store
 Thumbs.db
+guard.yaml

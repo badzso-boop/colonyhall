@@ -47,6 +47,14 @@ func ToAPI(a identity.Actor) apispec.Actor {
 		Role: apispec.Role(a.Role), State: a.State, CreatedAt: a.CreatedAt}
 }
 
+// meToAPI is ToAPI plus the computed halted flag, which is only known for
+// the actor making the request.
+func meToAPI(a identity.Actor) apispec.Actor {
+	out := ToAPI(a)
+	out.Halted = &a.Halted
+	return out
+}
+
 // Register mounts the identity routes on mux.
 func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	auth := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(svc, h) }
@@ -100,7 +108,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("GET /api/v1/me", auth(func(w http.ResponseWriter, r *http.Request) {
-		httpx.JSON(w, http.StatusOK, ToAPI(httpx.Actor(r)))
+		httpx.JSON(w, http.StatusOK, meToAPI(httpx.Actor(r)))
 	}))
 
 	mux.Handle("GET /api/v1/actors", auth(func(w http.ResponseWriter, r *http.Request) {

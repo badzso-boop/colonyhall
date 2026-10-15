@@ -1,0 +1,376 @@
+// Package guard is the "őr": a small client process next to the AI clients.
+// It watches each agent's inbox over the REST API and, when something
+// arrives, runs the agent's client once to decide, then posts the replies,
+// reactions and acks itself. It stops a running client at once when the
+// agent is paused or an emergency stop is on.
+package guard
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Agent runs the guard loop for one agent.
+type Agent struct {
+	Cfg     AgentConfig
+	Client  *Client
+	Adapter Adapter
+	Log     *slog.Logger
+
+	me       Me
+	handles  map[string]string
+	failures int
+	attempts map[string]int // item id → failed decision runs
+}
+
+// maxAttempts bounds retries of the same items, so a broken client does not
+// burn tokens forever. After that the items are acknowledged and logged.
+const maxAttempts = 3
+
+// errHalted means the agent must stop writing (paused, stopped, emergency).
+var errHalted = errors.New("agent is halted")
+
+// Run loops until ctx ends.
+func (a *Agent) Run(ctx context.Context) error {
+	if a.attempts == nil {
+		a.attempts = map[string]int{}
+	}
+	me, err := a.Client.Me(ctx)
+	if err != nil {
+		return fmt.Errorf("guard %s: cannot reach the server: %w", a.Cfg.Name, err)
+	}
+	a.me = me
+	a.Log.Info("guard: watching", "agent", "@"+me.Handle, "client", a.Cfg.Client, "model", a.Cfg.Model)
+	for {
+		if err := sleep(ctx, a.pause()); err != nil {
+			return nil
+		}
+		if err := a.Tick(ctx); err != nil && ctx.Err() == nil {
+			a.failures++
+			a.Log.Warn("guard: tick failed", "agent", "@"+a.me.Handle, "err", err, "failures", a.failures)
+		}
+	}
+}
+
+// pause is the poll interval, backing off after failures (max 5 minutes).
+func (a *Agent) pause() time.Duration {
+	d := a.Cfg.Poll
+	for i := 0; i < a.failures && d < 5*time.Minute; i++ {
+		d *= 2
+	}
+	return min(d, 5*time.Minute)
+}
+
+// Tick checks the inbox once and handles what is there.
+func (a *Agent) Tick(ctx context.Context) error {
+	me, err := a.Client.Me(ctx)
+	if err != nil {
+		return err
+	}
+	a.me = me
+	if me.Halted {
+		return nil
+	}
+	_, total, err := a.Client.Inbox(ctx, 1)
+	if err != nil || total == 0 {
+		return err
+	}
+	// Let a burst of messages arrive, so one run answers all of them.
+	if err := sleep(ctx, a.Cfg.Debounce); err != nil {
+		return nil
+	}
+	items, _, err := a.Client.Inbox(ctx, a.Cfg.Batch)
+	if err != nil || len(items) == 0 {
+		return err
+	}
+	if err := a.handle(ctx, items); err != nil {
+		return err
+	}
+	a.failures = 0
+	return nil
+}
+
+func (a *Agent) handle(ctx context.Context, items []Item) error {
+	runCtx, stop := a.watchHalt(ctx)
+	defer stop()
+
+	pitems := make([]PromptItem, 0, len(items))
+	for _, it := range items {
+		pitems = append(pitems, PromptItem{Item: it, Context: a.threadContext(runCtx, it)})
+	}
+	dctx, cancel := context.WithTimeout(runCtx, a.Cfg.DecideTimeout)
+	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.me.Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir})
+	cancel()
+	a.logRun("decide", a.Cfg.Model, len(items), res, err)
+	if err != nil {
+		if runCtx.Err() != nil && ctx.Err() == nil {
+			a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
+			return nil
+		}
+		return a.giveUpAfterRetries(ctx, items, err)
+	}
+	for _, it := range items {
+		delete(a.attempts, it.ID)
+	}
+
+	byRef := map[string]Action{}
+	for _, act := range res.Decision.Actions {
+		byRef[act.Ref] = act
+	}
+	var acked []string
+	for i := range items {
+		ref := strconv.Itoa(i + 1) // refs follow item order (BuildPrompt)
+		it, ok := res.Refs[ref]
+		if !ok {
+			it = pitems[i]
+		}
+		act, ok := byRef[ref]
+		if !ok {
+			act = Action{Kind: ActNone}
+		}
+		if err := a.apply(runCtx, it, act); err != nil {
+			_ = a.Client.Ack(ctx, acked)
+			if errors.Is(err, errHalted) || runCtx.Err() != nil {
+				a.Log.Warn("guard: stopped mid-run, agent halted", "agent", "@"+a.me.Handle)
+				return nil
+			}
+			return err
+		}
+		acked = append(acked, it.ID)
+	}
+	return a.Client.Ack(ctx, acked)
+}
+
+// giveUpAfterRetries keeps failed items for a retry, but acknowledges them
+// after maxAttempts so a broken client cannot loop on them.
+func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause error) error {
+	var drop []string
+	for _, it := range items {
+		a.attempts[it.ID]++
+		if a.attempts[it.ID] >= maxAttempts {
+			drop = append(drop, it.ID)
+			delete(a.attempts, it.ID)
+		}
+	}
+	if len(drop) > 0 {
+		a.Log.Error("guard: giving up on items after repeated failures", "agent", "@"+a.me.Handle, "items", len(drop), "err", cause)
+		if err := a.Client.Ack(ctx, drop); err != nil {
+			return err
+		}
+	}
+	return cause
+}
+
+func (a *Agent) apply(ctx context.Context, it PromptItem, act Action) error {
+	if ctx.Err() != nil {
+		return errHalted
+	}
+	switch act.Kind {
+	case ActReply:
+		if strings.TrimSpace(act.Text) == "" {
+			return nil
+		}
+		return a.reply(ctx, it.Item, act.Text, "g-"+it.ID)
+	case ActReact:
+		emoji := act.Emoji
+		if emoji != "👎" {
+			emoji = "👍"
+		}
+		return halted(a.Client.React(ctx, it.ItemID, emoji))
+	case ActWork:
+		return a.work(ctx, it, act.Task)
+	}
+	return nil
+}
+
+func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
+	if !a.Cfg.AllowWork {
+		return a.reply(ctx, it.Item, "I can only chat here; ask a human to run this task.", "g-"+it.ID)
+	}
+	if strings.TrimSpace(task) == "" {
+		task = it.Body
+	}
+	if err := halted(a.Client.React(ctx, it.ItemID, "👀")); err != nil {
+		return err
+	}
+	wctx, cancel := context.WithTimeout(ctx, a.Cfg.WorkTimeout)
+	res, err := a.Adapter.Work(wctx, WorkRequest{
+		Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: a.Cfg.Dir, PermissionMode: a.Cfg.PermissionMode,
+	})
+	cancel()
+	a.logRun("work", a.Cfg.WorkModel, 1, res, err)
+	if ctx.Err() != nil {
+		return errHalted
+	}
+	text := res.Text
+	if err != nil {
+		text = "⚠️ " + clip(err.Error(), 300)
+	}
+	if strings.TrimSpace(text) == "" {
+		text = "Done."
+	}
+	return a.reply(ctx, it.Item, text, "gw-"+it.ID)
+}
+
+// reply answers in the item's thread (top level in a DM without a thread).
+func (a *Agent) reply(ctx context.Context, it Item, text, clientID string) error {
+	thread := it.ThreadRootID
+	if thread == "" && !it.DM {
+		thread = it.ItemID
+	}
+	return halted(a.Client.Send(ctx, it.ChannelID, thread, clip(strings.TrimSpace(text), MaxReplyLen), clientID))
+}
+
+func halted(err error) error {
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == http.StatusForbidden {
+		return fmt.Errorf("%w: %s", errHalted, ae.Detail)
+	}
+	return err
+}
+
+// threadContext returns up to maxContextMsgs earlier messages of the item's
+// thread, so the model can answer a reply without a read tool call.
+func (a *Agent) threadContext(ctx context.Context, it Item) []ContextMsg {
+	if it.ThreadRootID == "" {
+		return nil
+	}
+	root, replies, err := a.Client.Thread(ctx, it.ThreadRootID)
+	if err != nil {
+		return nil
+	}
+	msgs := append([]Message{root}, replies...)
+	var earlier []Message
+	for _, m := range msgs {
+		if m.ID == it.ItemID {
+			break
+		}
+		earlier = append(earlier, m)
+	}
+	if len(earlier) > maxContextMsgs {
+		earlier = append(earlier[:1], earlier[len(earlier)-maxContextMsgs+1:]...) // keep the root
+	}
+	out := make([]ContextMsg, 0, len(earlier))
+	for _, m := range earlier {
+		out = append(out, ContextMsg{Author: a.handleOf(ctx, m.AuthorID), Body: m.Body})
+	}
+	return out
+}
+
+func (a *Agent) handleOf(ctx context.Context, id string) string {
+	if h, ok := a.handles[id]; ok {
+		return h
+	}
+	if hs, err := a.Client.Handles(ctx); err == nil {
+		a.handles = hs
+	}
+	if h, ok := a.handles[id]; ok {
+		return h
+	}
+	return "unknown"
+}
+
+// watchHalt cancels the returned context as soon as the agent may no longer
+// write: the client process is killed, nothing more is posted.
+func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
+	runCtx, cancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(a.Cfg.HaltCheck)
+		defer t.Stop()
+		for {
+			select {
+			case <-runCtx.Done():
+				return
+			case <-t.C:
+				me, err := a.Client.Me(runCtx)
+				var ae *APIError
+				if errors.As(err, &ae) && ae.Status == http.StatusUnauthorized {
+					me.Halted, me.State = true, "stopped" // a stopped agent's token stops working
+				}
+				if me.Halted {
+					a.Log.Warn("guard: halt detected, stopping the client", "agent", "@"+a.me.Handle, "state", me.State)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return runCtx, func() { cancel(); wg.Wait() }
+}
+
+func (a *Agent) logRun(phase, model string, items int, res RunResult, err error) {
+	attrs := []any{"agent", "@" + a.me.Handle, "phase", phase, "client", a.Cfg.Client, "model", model, "items", items,
+		"tokens", res.Usage.Total(), "in", res.Usage.Input, "out", res.Usage.Output,
+		"cache_read", res.Usage.CacheRead, "cache_write", res.Usage.CacheWrite, "ms", res.Duration.Milliseconds()}
+	if phase == "decide" && err == nil {
+		attrs = append(attrs, "actions", summarize(res.Decision))
+	}
+	if err != nil {
+		a.Log.Warn("guard: run failed", append(attrs, "err", err)...)
+		return
+	}
+	a.Log.Info("guard: run", attrs...)
+}
+
+func summarize(d Decision) string {
+	counts := map[string]int{}
+	for _, a := range d.Actions {
+		counts[a.Kind]++
+	}
+	var parts []string
+	for _, k := range []string{ActReply, ActReact, ActWork, ActNone} {
+		if counts[k] > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", k, counts[k]))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// RunAll starts one loop per configured agent and blocks until ctx ends.
+func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error {
+	var wg sync.WaitGroup
+	errs := make(chan error, len(cfg.Agents))
+	for _, ac := range cfg.Agents {
+		token, err := ac.Token()
+		if err != nil {
+			return err
+		}
+		agent := &Agent{
+			Cfg:     ac,
+			Client:  &Client{BaseURL: cfg.Server, Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}},
+			Adapter: Adapters[ac.Client](ac, run),
+			Log:     log,
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := agent.Run(ctx); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	return <-errs
+}

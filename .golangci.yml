@@ -36,6 +36,16 @@ linters:
               desc: MCP belongs in the module's mcptools/ package
             - pkg: github.com/coder/websocket
               desc: WebSocket belongs in internal/gateway
+        guard-is-an-api-client:
+          # The guard runs on agent machines and talks to the server only over
+          # the public REST API.
+          files: ["**/internal/guard/**", "**/cmd/colony/**"]
+          deny:
+            - pkg: colonyhall/internal/modules
+              desc: the guard uses the REST API, not server internals
+            - pkg: colonyhall/internal/server
+            - pkg: colonyhall/internal/eventlog
+            - pkg: colonyhall/internal/httpx
         no-foreign-adapters:
           # Modules may use another module's root package (its api.go), never its adapters.
           # A module's own postgres/ package may import its generated postgres/sqlcgen.

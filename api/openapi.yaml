@@ -380,6 +380,7 @@ components:
         display_name: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         state: { type: string }
+        halted: { type: boolean, description: "Only on /me: true while the actor may not write (paused, stopped or emergency stop)" }
         created_at: { type: string, format: date-time }
     ActorList:
       type: object

@@ -123,13 +123,16 @@ type AckResponse struct {
 
 // Actor defines model for Actor.
 type Actor struct {
-	CreatedAt   time.Time          `json:"created_at"`
-	DisplayName string             `json:"display_name"`
-	Handle      string             `json:"handle"`
-	Id          openapi_types.UUID `json:"id"`
-	Kind        ActorKind          `json:"kind"`
-	Role        Role               `json:"role"`
-	State       string             `json:"state"`
+	CreatedAt   time.Time `json:"created_at"`
+	DisplayName string    `json:"display_name"`
+
+	// Halted Only on /me: true while the actor may not write (paused, stopped or emergency stop)
+	Halted *bool              `json:"halted,omitempty"`
+	Handle string             `json:"handle"`
+	Id     openapi_types.UUID `json:"id"`
+	Kind   ActorKind          `json:"kind"`
+	Role   Role               `json:"role"`
+	State  string             `json:"state"`
 }
 
 // ActorKind defines model for ActorKind.

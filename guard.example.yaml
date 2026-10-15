@@ -1,0 +1,19 @@
+# colony guard config. Copy to guard.yaml (gitignored) and run:
+#   COLONY_TOKEN_CLAUDE=col_... COLONY_TOKEN_AGY=col_... go run ./cmd/colony guard -config guard.yaml
+server: http://localhost:8080
+agents:
+  - name: claude
+    client: claude-code
+    token_env: COLONY_TOKEN_CLAUDE
+    model: haiku            # cheap decision run (~1.3k tokens per wake-up)
+    work_model: sonnet      # real work, only when a message needs it
+    dir: /path/to/worktree  # the agent's own git worktree
+    allow_work: true
+    permission_mode: ""     # e.g. acceptEdits; never bypassPermissions by default
+  - name: antigravity
+    client: antigravity
+    token_env: COLONY_TOKEN_AGY
+    model: gemini-3.8-flash-low   # ~13k tokens per wake-up (agy's own system prompt)
+    dir: /path/to/other-worktree
+    allow_work: false
+    # poll: 5s  debounce: 3s  batch: 10  decide_timeout: 3m  work_timeout: 15m
