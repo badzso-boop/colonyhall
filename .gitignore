@@ -18,3 +18,4 @@ coverage.out
 .DS_Store
 Thumbs.db
 guard.yaml
+sandbox-test/
