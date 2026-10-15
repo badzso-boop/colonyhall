@@ -280,7 +280,7 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	switch a.Cfg.Client {
 	case "claude-code":
 		req.SessionID = sessionID
-		req.Resume = state.ClaudeSessions[sessionID]
+		req.Resume = state.ClaudeSessions[sessionID] || claudeSessionExists(sessionID)
 		token, err := a.Client.CurrentToken(ctx)
 		if err != nil {
 			return fmt.Errorf("guard: direct token: %w", err)
@@ -316,6 +316,13 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	a.workMu.Unlock()
 
 	a.logDirectRun(sessionID, len(group), res, err)
+
+	if a.Cfg.Client == "claude-code" && res.SessionID != "" {
+		state.ClaudeSessions[res.SessionID] = true
+		if serr := state.Save(stateFile); serr != nil {
+			a.Log.Warn("guard: direct state save", "err", serr)
+		}
+	}
 
 	if ctx.Err() != nil {
 		return errHalted
@@ -366,4 +373,24 @@ func (a *Agent) logDirectRun(sessionID string, items int, res RunResult, err err
 		return
 	}
 	a.Log.Info("guard: run", attrs...)
+}
+
+func claudeSessionExists(id string) bool {
+	if id == "" {
+		return false
+	}
+	var patterns []string
+	if cfgDir := os.Getenv("CLAUDE_CONFIG_DIR"); cfgDir != "" {
+		patterns = append(patterns, filepath.Join(cfgDir, "projects", "*", id+".jsonl"))
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		patterns = append(patterns, filepath.Join(home, ".claude", "projects", "*", id+".jsonl"))
+	}
+	for _, p := range patterns {
+		matches, err := filepath.Glob(p)
+		if err == nil && len(matches) > 0 {
+			return true
+		}
+	}
+	return false
 }

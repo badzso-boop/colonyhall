@@ -376,3 +376,138 @@ func TestSupervisorReconcileAllowUnsandboxed(t *testing.T) {
 	}
 	sup.stopAll()
 }
+
+func TestClaudeSessionExists(t *testing.T) {
+	cfgDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfgDir)
+
+	sessionID := "test-session-uuid"
+	if claudeSessionExists(sessionID) {
+		t.Fatal("expected session not to exist yet")
+	}
+
+	projDir := filepath.Join(cfgDir, "projects", "my-project")
+	if err := os.MkdirAll(projDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sessionFile := filepath.Join(projDir, sessionID+".jsonl")
+	if err := os.WriteFile(sessionFile, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if !claudeSessionExists(sessionID) {
+		t.Fatal("expected session to exist after creating jsonl")
+	}
+}
+
+type directTestAdapter struct {
+	calls []DirectRequest
+	impl  func(ctx context.Context, req DirectRequest) (RunResult, error)
+}
+
+func (d *directTestAdapter) Decide(context.Context, DecideRequest) (RunResult, error) {
+	return RunResult{}, nil
+}
+func (d *directTestAdapter) Work(context.Context, WorkRequest) (RunResult, error) {
+	return RunResult{}, nil
+}
+func (d *directTestAdapter) Direct(ctx context.Context, req DirectRequest) (RunResult, error) {
+	d.calls = append(d.calls, req)
+	if d.impl != nil {
+		return d.impl(ctx, req)
+	}
+	return RunResult{Text: "ok"}, nil
+}
+
+func TestClaudeDirectResumeAfterFailedFirstRun(t *testing.T) {
+	cfgDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfgDir)
+	stateDir := t.TempDir()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/ack"):
+			w.WriteHeader(http.StatusOK)
+		case strings.HasSuffix(r.URL.Path, "/messages"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "msg-reply"})
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	var firstRunSessionID string
+	ad := &directTestAdapter{}
+	ad.impl = func(ctx context.Context, req DirectRequest) (RunResult, error) {
+		if len(ad.calls) == 1 {
+			// First run: simulate Claude creating session file on disk, then failing/killed
+			firstRunSessionID = req.SessionID
+			projDir := filepath.Join(cfgDir, "projects", "proj1")
+			_ = os.MkdirAll(projDir, 0o700)
+			_ = os.WriteFile(filepath.Join(projDir, req.SessionID+".jsonl"), []byte("{}\n"), 0o600)
+			return RunResult{}, errors.New("process terminated")
+		}
+		// Second run
+		return RunResult{Text: "recovered response"}, nil
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:    "claude-code",
+			Model:     "haiku",
+			HaltCheck: 10 * time.Millisecond,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "tok", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+	}
+
+	items := []Item{
+		{ID: "it-1", ItemID: "msg-root", Channel: "general", ChannelID: "c1", Body: "hello"},
+	}
+
+	// First run fails
+	err := agent.handleDirect(context.Background(), items)
+	if err == nil {
+		t.Fatal("expected error on first run")
+	}
+	if len(ad.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(ad.calls))
+	}
+	if ad.calls[0].Resume {
+		t.Fatal("first run should not have Resume set")
+	}
+
+	// Second run (retry on same thread)
+	err = agent.handleDirect(context.Background(), items)
+	if err != nil {
+		t.Fatalf("second run failed: %v", err)
+	}
+	if len(ad.calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(ad.calls))
+	}
+	if !ad.calls[1].Resume {
+		t.Fatal("second run must use Resume after first run created session file")
+	}
+	if ad.calls[1].SessionID != firstRunSessionID {
+		t.Fatalf("session ID mismatch: got %s, want %s", ad.calls[1].SessionID, firstRunSessionID)
+	}
+}
+
+func TestClaudeDirectPreservesSessionIDOnErrorOutput(t *testing.T) {
+	var f fakeRunner
+	c := &ClaudeCode{Run: f.run}
+	f.stdout = `{"is_error":true,"session_id":"sess-err-1","subtype":"api_error","result":"rate limit"}`
+	res, err := c.Direct(context.Background(), DirectRequest{
+		Prompt:    "test",
+		SessionID: "sess-err-1",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if res.SessionID != "sess-err-1" {
+		t.Fatalf("expected SessionID to be preserved on error output: got %q", res.SessionID)
+	}
+}

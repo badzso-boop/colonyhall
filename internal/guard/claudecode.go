@@ -93,8 +93,6 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	res.Text = out.Result
 	if out.SessionID != "" {
 		res.SessionID = out.SessionID
-	} else {
-		res.SessionID = req.SessionID
 	}
 	return res, err
 }
@@ -110,6 +108,7 @@ func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args 
 	var out claudeOutput
 	if jerr := json.Unmarshal(stdout, &out); jerr == nil {
 		res.Usage = Usage{Input: out.Usage.Input, Output: out.Usage.Output, CacheRead: out.Usage.CacheRead, CacheWrite: out.Usage.CacheWrite}
+		res.SessionID = out.SessionID
 	} else if err == nil {
 		return res, out, fmt.Errorf("claude: unreadable output: %w", jerr)
 	}
