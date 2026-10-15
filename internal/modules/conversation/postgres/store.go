@@ -211,3 +211,38 @@ func nullString(s string) *string {
 	}
 	return &s
 }
+
+// AddReaction adds or restores a reaction.
+func (s *Store) AddReaction(ctx context.Context, r conversation.Reaction) (bool, error) {
+	n, err := s.q(ctx).AddReaction(ctx, sqlcgen.AddReactionParams{MessageID: r.MessageID, ActorID: r.ActorID, Emoji: r.Emoji, CreatedAt: r.CreatedAt})
+	return n == 1, err
+}
+
+// RemoveReaction soft-removes a reaction.
+func (s *Store) RemoveReaction(ctx context.Context, messageID, actorID ids.ID, emoji string, at time.Time) (bool, error) {
+	n, err := s.q(ctx).RemoveReaction(ctx, sqlcgen.RemoveReactionParams{At: at, MessageID: messageID, ActorID: actorID, Emoji: emoji})
+	return n == 1, err
+}
+
+// ReactionsFor returns active reactions on the messages.
+func (s *Store) ReactionsFor(ctx context.Context, messageIDs []ids.ID) ([]conversation.Reaction, error) {
+	rows, err := s.q(ctx).ReactionsFor(ctx, messageIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]conversation.Reaction, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, conversation.Reaction{MessageID: r.MessageID, ActorID: r.ActorID, Emoji: r.Emoji, CreatedAt: r.CreatedAt})
+	}
+	return out, nil
+}
+
+// ThreadMessages returns the root and its replies.
+func (s *Store) ThreadMessages(ctx context.Context, rootID ids.ID) ([]conversation.Message, error) {
+	return manyMessages(s.q(ctx).ThreadMessages(ctx, rootID))
+}
+
+// LastMessageNotBy returns the newest message by someone else.
+func (s *Store) LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (conversation.Message, error) {
+	return oneMessage(s.q(ctx).LastMessageNotBy(ctx, sqlcgen.LastMessageNotByParams{ChannelID: channelID, AuthorID: actorID}))
+}

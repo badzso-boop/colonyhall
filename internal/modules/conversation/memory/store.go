@@ -21,6 +21,17 @@ type Store struct {
 	channels map[ids.ID]conversation.Channel
 	members  map[memberKey]conversation.Member
 	messages map[ids.ID]conversation.Message
+	reacts   map[reactKey]reactRow
+}
+
+type reactKey struct {
+	message, actor ids.ID
+	emoji          string
+}
+
+type reactRow struct {
+	r       conversation.Reaction
+	removed bool
 }
 
 // New returns an empty store.
@@ -29,6 +40,7 @@ func New() *Store {
 		channels: map[ids.ID]conversation.Channel{},
 		members:  map[memberKey]conversation.Member{},
 		messages: map[ids.ID]conversation.Message{},
+		reacts:   map[reactKey]reactRow{},
 	}
 }
 
@@ -267,4 +279,87 @@ func sortMessages(ms []conversation.Message) {
 
 func sortIDs(list []ids.ID) {
 	sort.Slice(list, func(i, j int) bool { return bytes.Compare(list[i][:], list[j][:]) < 0 })
+}
+
+// AddReaction adds or restores a reaction.
+func (s *Store) AddReaction(_ context.Context, r conversation.Reaction) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := reactKey{r.MessageID, r.ActorID, r.Emoji}
+	if row, ok := s.reacts[k]; ok && !row.removed {
+		return false, nil
+	}
+	s.reacts[k] = reactRow{r: r}
+	return true, nil
+}
+
+// RemoveReaction soft-removes a reaction.
+func (s *Store) RemoveReaction(_ context.Context, messageID, actorID ids.ID, emoji string, _ time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := reactKey{messageID, actorID, emoji}
+	row, ok := s.reacts[k]
+	if !ok || row.removed {
+		return false, nil
+	}
+	row.removed = true
+	s.reacts[k] = row
+	return true, nil
+}
+
+// ReactionsFor returns active reactions on the messages, oldest first.
+func (s *Store) ReactionsFor(_ context.Context, messageIDs []ids.ID) ([]conversation.Reaction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	want := map[ids.ID]bool{}
+	for _, id := range messageIDs {
+		want[id] = true
+	}
+	var out []conversation.Reaction
+	for _, row := range s.reacts {
+		if !row.removed && want[row.r.MessageID] {
+			out = append(out, row.r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return bytes.Compare(out[i].ActorID[:], out[j].ActorID[:]) < 0
+	})
+	return out, nil
+}
+
+// ThreadMessages returns the root and its replies, oldest first.
+func (s *Store) ThreadMessages(_ context.Context, rootID ids.ID) ([]conversation.Message, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []conversation.Message
+	for _, m := range s.messages {
+		if m.ID == rootID || m.ThreadRootID == rootID {
+			out = append(out, m)
+		}
+	}
+	sortMessages(out)
+	return out, nil
+}
+
+// LastMessageNotBy returns the newest message by someone else.
+func (s *Store) LastMessageNotBy(_ context.Context, channelID, actorID ids.ID) (conversation.Message, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var best *conversation.Message
+	for _, m := range s.messages {
+		if m.ChannelID != channelID || m.AuthorID == actorID {
+			continue
+		}
+		if best == nil || bytes.Compare(m.ID[:], best.ID[:]) > 0 {
+			m := m
+			best = &m
+		}
+	}
+	if best == nil {
+		return conversation.Message{}, db.ErrNotFound
+	}
+	return *best, nil
 }

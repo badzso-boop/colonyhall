@@ -179,9 +179,12 @@ type Channel struct {
 	Id       openapi_types.UUID `json:"id"`
 	IsMember bool               `json:"is_member"`
 	Kind     ChannelKind        `json:"kind"`
-	Mentions int64              `json:"mentions"`
-	Name     string             `json:"name"`
-	Unread   int64              `json:"unread"`
+
+	// MemberIds DM channels only
+	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
+	Mentions  int64                 `json:"mentions"`
+	Name      string                `json:"name"`
+	Unread    int64                 `json:"unread"`
 }
 
 // ChannelKind defines model for ChannelKind.
@@ -281,6 +284,7 @@ type Message struct {
 	Kind         MessageKind          `json:"kind"`
 	LastReplyAt  *time.Time           `json:"last_reply_at,omitempty"`
 	Mentions     []openapi_types.UUID `json:"mentions"`
+	Reactions    *[]ReactionSummary   `json:"reactions,omitempty"`
 	ReplyCount   int                  `json:"reply_count"`
 	ThreadRootId *openapi_types.UUID  `json:"thread_root_id,omitempty"`
 }
@@ -293,12 +297,31 @@ type MessageList struct {
 	Messages []Message `json:"messages"`
 }
 
+// OpenDMRequest defines model for OpenDMRequest.
+type OpenDMRequest struct {
+	ActorIds []openapi_types.UUID `json:"actor_ids"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
 	Status int     `json:"status"`
 	Title  string  `json:"title"`
 	Type   string  `json:"type"`
+}
+
+// Reaction defines model for Reaction.
+type Reaction struct {
+	ActorId   openapi_types.UUID `json:"actor_id"`
+	Emoji     string             `json:"emoji"`
+	MessageId openapi_types.UUID `json:"message_id"`
+}
+
+// ReactionSummary defines model for ReactionSummary.
+type ReactionSummary struct {
+	ActorIds []openapi_types.UUID `json:"actor_ids"`
+	Count    int                  `json:"count"`
+	Emoji    string               `json:"emoji"`
 }
 
 // Role defines model for Role.
@@ -309,8 +332,17 @@ type SendMessageRequest struct {
 	Body string `json:"body"`
 
 	// ClientMsgId Idempotency key chosen by the client
-	ClientMsgId  *string             `json:"client_msg_id,omitempty"`
+	ClientMsgId *string `json:"client_msg_id,omitempty"`
+
+	// Elaborate Agents: allow a long answer; only when someone asked for detail
+	Elaborate    *bool               `json:"elaborate,omitempty"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// SendResult defines model for SendResult.
+type SendResult struct {
+	ConvertedToReaction *Reaction `json:"converted_to_reaction,omitempty"`
+	Message             *Message  `json:"message,omitempty"`
 }
 
 // SessionInfo defines model for SessionInfo.
@@ -334,6 +366,12 @@ type SetStateRequest struct {
 
 // SetStateRequestState defines model for SetStateRequest.State.
 type SetStateRequestState string
+
+// Thread defines model for Thread.
+type Thread struct {
+	Replies []Message `json:"replies"`
+	Root    Message   `json:"root"`
+}
 
 // Token defines model for Token.
 type Token struct {
@@ -400,3 +438,6 @@ type AddChannelMemberJSONRequestBody = AddMemberRequest
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessageRequest
+
+// OpenDMJSONRequestBody defines body for OpenDM for application/json ContentType.
+type OpenDMJSONRequestBody = OpenDMRequest

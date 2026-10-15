@@ -7,7 +7,18 @@ const (
 	EventChannelCreated = "channel.created"
 	EventMemberAdded    = "channel.member_added"
 	EventMessageCreated = "message.created"
+	EventReactionAdded  = "reaction.added"
+	EventReactionRemove = "reaction.removed"
 )
+
+// ReactionEvent is the payload of the reaction events.
+type ReactionEvent struct {
+	MessageID       string `json:"message_id"`
+	ChannelID       string `json:"channel_id"`
+	ActorID         string `json:"actor_id"`
+	MessageAuthorID string `json:"message_author_id"`
+	Emoji           string `json:"emoji"`
+}
 
 // ChannelCreated is the payload of EventChannelCreated.
 type ChannelCreated struct {

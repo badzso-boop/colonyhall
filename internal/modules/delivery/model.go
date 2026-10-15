@@ -25,7 +25,8 @@ func (f Flags) Has(f2 Flags) bool { return f&f2 == f2 }
 
 // Item kinds.
 const (
-	ItemMessage = "message"
+	ItemMessage      = "message"
+	ItemReactionDown = "reaction_down" // a 👎 on the recipient's message; never wakes
 )
 
 // Delivery is one inbox row.
@@ -36,6 +37,7 @@ type Delivery struct {
 	ItemKind    string
 	ItemID      ids.ID
 	ChannelID   ids.ID
+	FromActorID ids.ID // who caused it: the author, the reactor, …
 	Flags       Flags
 	EventSeq    int64
 	CreatedAt   time.Time

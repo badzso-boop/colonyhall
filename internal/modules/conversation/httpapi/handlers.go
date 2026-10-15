@@ -15,7 +15,9 @@ import (
 
 func init() {
 	httpx.RegisterValidation(conversation.ErrInvalidName, conversation.ErrEmptyBody, conversation.ErrBodyTooLong,
-		conversation.ErrInvalidClientID, conversation.ErrBadThread)
+		conversation.ErrInvalidClientID, conversation.ErrBadThread, conversation.ErrBadEmoji, conversation.ErrBadDM,
+		conversation.ErrAgentTooLong, conversation.ErrTooManyMentions, conversation.ErrGroupMention,
+		conversation.ErrNothingToAck)
 	httpx.RegisterForbidden(conversation.ErrForbidden)
 }
 
@@ -28,12 +30,36 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	if out.Mentions == nil {
 		out.Mentions = []ids.ID{}
 	}
+	if len(m.Reactions) > 0 {
+		rs := make([]apispec.ReactionSummary, 0, len(m.Reactions))
+		for _, r := range m.Reactions {
+			rs = append(rs, apispec.ReactionSummary{Emoji: r.Emoji, Count: r.Count, ActorIds: r.ActorIDs})
+		}
+		out.Reactions = &rs
+	}
 	return out
 }
 
 func channelToAPI(c conversation.ChannelView) apispec.Channel {
-	return apispec.Channel{Id: c.ID, Kind: apispec.ChannelKind(c.Kind), Name: c.Name,
+	out := apispec.Channel{Id: c.ID, Kind: apispec.ChannelKind(c.Kind), Name: c.Name,
 		IsMember: c.IsMember, Unread: c.Unread, Mentions: c.Mentions}
+	if c.MemberIDs != nil {
+		out.MemberIds = &c.MemberIDs
+	}
+	return out
+}
+
+// SendResultToAPI converts a send outcome.
+func SendResultToAPI(r conversation.SendResult) apispec.SendResult {
+	var out apispec.SendResult
+	if r.Message != nil {
+		m := MessageToAPI(*r.Message)
+		out.Message = &m
+	}
+	if c := r.ConvertedToReaction; c != nil {
+		out.ConvertedToReaction = &apispec.Reaction{MessageId: c.MessageID, ActorId: c.ActorID, Emoji: c.Emoji}
+	}
+	return out
 }
 
 // Register mounts the conversation routes on mux. Every route requires auth.
@@ -121,16 +147,80 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			httpx.Error(w, r, err)
 			return
 		}
-		m, err := svc.SendMessage(r.Context(), httpx.Actor(r), conversation.SendInput{
+		res, err := svc.SendMessage(r.Context(), httpx.Actor(r), conversation.SendInput{
 			ChannelID: channelID, ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil),
-			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body,
+			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body, Elaborate: httpx.Deref(in.Elaborate, false),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusCreated, MessageToAPI(m))
+		status := http.StatusCreated
+		if res.Message == nil {
+			status = http.StatusOK
+		}
+		httpx.JSON(w, status, SendResultToAPI(res))
 	}))
+
+	mux.Handle("POST /api/v1/dms", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.OpenDMRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		by := httpx.Actor(r)
+		c, err := svc.OpenDM(r.Context(), by, in.ActorIds)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		members, err := svc.MemberIDs(r.Context(), c.ID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, channelToAPI(conversation.ChannelView{Channel: c, IsMember: true, MemberIDs: members}))
+	}))
+
+	mux.Handle("GET /api/v1/messages/{id}/thread", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		root, replies, err := svc.Thread(r.Context(), httpx.Actor(r), id)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.Thread{Root: MessageToAPI(root), Replies: make([]apispec.Message, 0, len(replies))}
+		for _, m := range replies {
+			out.Replies = append(out.Replies, MessageToAPI(m))
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	reaction := func(add bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			id, ok := pathID(w, r, "id")
+			if !ok {
+				return
+			}
+			emoji := r.PathValue("emoji")
+			var err error
+			if add {
+				err = svc.React(r.Context(), httpx.Actor(r), id, emoji)
+			} else {
+				err = svc.Unreact(r.Context(), httpx.Actor(r), id, emoji)
+			}
+			if err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}
+	mux.Handle("PUT /api/v1/messages/{id}/reactions/{emoji}", wrap(reaction(true)))
+	mux.Handle("DELETE /api/v1/messages/{id}/reactions/{emoji}", wrap(reaction(false)))
 
 	mux.Handle("POST /api/v1/channels/{id}/read", wrap(func(w http.ResponseWriter, r *http.Request) {
 		channelID, ok := pathID(w, r, "id")

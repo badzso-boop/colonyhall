@@ -31,6 +31,7 @@ type InboxOutput struct {
 // ItemOut is one inbox item in InboxOutput.
 type ItemOut struct {
 	ID        string `json:"id"`
+	Kind      string `json:"kind"`
 	Channel   string `json:"channel"`
 	Author    string `json:"author"`
 	Body      string `json:"body"`
@@ -66,7 +67,7 @@ func Register(s *mcp.Server, svc *delivery.Service, current CurrentActor) {
 		}
 		out := InboxOutput{Total: total, Items: make([]ItemOut, 0, len(items))}
 		for _, it := range items {
-			o := ItemOut{ID: it.ID.String(), Channel: it.ChannelName, Author: it.AuthorHandle, Body: it.Body,
+			o := ItemOut{ID: it.ID.String(), Kind: it.ItemKind, Channel: it.ChannelName, Author: it.AuthorHandle, Body: it.Body,
 				MessageID: it.ItemID.String(), Mentioned: it.Flags.Has(delivery.FlagMentioned), DM: it.Flags.Has(delivery.FlagDM)}
 			if it.ThreadRootID != ids.Nil {
 				o.Thread = it.ThreadRootID.String()
@@ -115,6 +116,9 @@ func FormatInbox(handle string, items []delivery.InboxItem, total int) string {
 		reason := "mention"
 		if it.Flags.Has(delivery.FlagDM) {
 			reason = "dm"
+		}
+		if it.ItemKind == delivery.ItemReactionDown {
+			reason = "👎 on your message"
 		}
 		body := it.Body
 		if len(body) > maxBodyInList {

@@ -135,6 +135,29 @@ type message struct {
 	AuthorID     string `json:"author_id"`
 	ThreadRootID string `json:"thread_root_id"`
 	Body         string `json:"body"`
+	Reactions    []struct {
+		Emoji    string   `json:"emoji"`
+		Count    int      `json:"count"`
+		ActorIDs []string `json:"actor_ids"`
+	} `json:"reactions"`
+}
+
+type sendResult struct {
+	Message             *message `json:"message"`
+	ConvertedToReaction *struct {
+		MessageID string `json:"message_id"`
+		Emoji     string `json:"emoji"`
+	} `json:"converted_to_reaction"`
+}
+
+// send posts a message and returns it (zero if it became a reaction).
+func (e *env) send(token, channelID string, body map[string]any) (message, int) {
+	var r sendResult
+	s := e.do("POST", "/api/v1/channels/"+channelID+"/messages", token, body, &r)
+	if r.Message == nil {
+		return message{}, s
+	}
+	return *r.Message, s
 }
 
 // TestMentionWakesAgentAndReplyArrives is the phase 0 walking skeleton:
@@ -162,9 +185,7 @@ func TestMentionWakesAgentAndReplyArrives(t *testing.T) {
 	expectFrame(t, ctx, ws, "replay_done")
 
 	// The human mentions the agent.
-	var sent message
-	status := e.do("POST", "/api/v1/channels/"+general+"/messages", server.DevAdminToken,
-		map[string]any{"body": "@fake-agent ping", "client_msg_id": "c1"}, &sent)
+	sent, status := e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent ping", "client_msg_id": "c1"})
 	if status != http.StatusCreated {
 		t.Fatalf("send: status %d", status)
 	}
@@ -219,9 +240,8 @@ func TestMentionWakesAgentAndReplyArrives(t *testing.T) {
 func TestSendIsIdempotent(t *testing.T) {
 	e := newEnv(t)
 	general := e.generalID()
-	var a, b message
-	e.do("POST", "/api/v1/channels/"+general+"/messages", server.DevAdminToken, map[string]any{"body": "hello", "client_msg_id": "same"}, &a)
-	e.do("POST", "/api/v1/channels/"+general+"/messages", server.DevAdminToken, map[string]any{"body": "hello", "client_msg_id": "same"}, &b)
+	a, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "hello", "client_msg_id": "same"})
+	b, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "hello", "client_msg_id": "same"})
 	if a.ID == "" || a.ID != b.ID {
 		t.Fatalf("resend created a duplicate: %s vs %s", a.ID, b.ID)
 	}

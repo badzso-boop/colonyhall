@@ -85,6 +85,7 @@ type Delivery struct {
 	EventSeq    int64
 	CreatedAt   time.Time
 	AckedAt     *time.Time
+	FromActorID *uuid.UUID
 }
 
 type Event struct {
@@ -115,6 +116,14 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	DeletedAt    *time.Time
+}
+
+type Reaction struct {
+	MessageID uuid.UUID
+	ActorID   uuid.UUID
+	Emoji     string
+	CreatedAt time.Time
+	RemovedAt *time.Time
 }
 
 type Session struct {

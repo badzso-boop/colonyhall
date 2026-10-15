@@ -35,4 +35,15 @@ type Store interface {
 	SetSeen(ctx context.Context, channelID, actorID ids.ID, count int64) error
 	IncrementMentions(ctx context.Context, channelID ids.ID, actorIDs []ids.ID) error
 	BumpThread(ctx context.Context, rootID ids.ID, at time.Time) error
+
+	// AddReaction adds (or restores) a reaction; it reports whether anything changed.
+	AddReaction(ctx context.Context, r Reaction) (bool, error)
+	// RemoveReaction soft-removes a reaction; it reports whether anything changed.
+	RemoveReaction(ctx context.Context, messageID, actorID ids.ID, emoji string, at time.Time) (bool, error)
+	// ReactionsFor returns active reactions on the messages, oldest first.
+	ReactionsFor(ctx context.Context, messageIDs []ids.ID) ([]Reaction, error)
+	// ThreadMessages returns the root and its replies, oldest first.
+	ThreadMessages(ctx context.Context, rootID ids.ID) ([]Message, error)
+	// LastMessageNotBy returns the newest message in the channel by someone else.
+	LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (Message, error)
 }

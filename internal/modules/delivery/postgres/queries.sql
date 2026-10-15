@@ -1,6 +1,6 @@
 -- name: InsertDelivery :execrows
-INSERT INTO delivery (id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO delivery (id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, from_actor_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (recipient_id, item_kind, item_id) DO NOTHING;
 
 -- name: CountPending :one

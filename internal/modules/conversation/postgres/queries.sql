@@ -64,3 +64,24 @@ WHERE channel_id = sqlc.arg(channel_id) AND actor_id = ANY(sqlc.arg(actor_ids)::
 
 -- name: BumpThread :exec
 UPDATE message SET reply_count = reply_count + 1, last_reply_at = sqlc.arg(at)::timestamptz WHERE id = sqlc.arg(id);
+
+-- name: AddReaction :execrows
+INSERT INTO reaction (message_id, actor_id, emoji, created_at) VALUES ($1, $2, $3, $4)
+ON CONFLICT (message_id, actor_id, emoji) DO UPDATE SET removed_at = NULL, created_at = EXCLUDED.created_at
+WHERE reaction.removed_at IS NOT NULL;
+
+-- name: RemoveReaction :execrows
+UPDATE reaction SET removed_at = sqlc.arg(at)::timestamptz
+WHERE message_id = sqlc.arg(message_id) AND actor_id = sqlc.arg(actor_id) AND emoji = sqlc.arg(emoji) AND removed_at IS NULL;
+
+-- name: ReactionsFor :many
+SELECT message_id, actor_id, emoji, created_at FROM reaction
+WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) AND removed_at IS NULL
+ORDER BY created_at, actor_id;
+
+-- name: ThreadMessages :many
+SELECT * FROM message WHERE (id = sqlc.arg(root_id) OR thread_root_id = sqlc.arg(root_id)) AND deleted_at IS NULL
+ORDER BY id;
+
+-- name: LastMessageNotBy :one
+SELECT * FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1;

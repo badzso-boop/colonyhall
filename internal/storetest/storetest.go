@@ -264,6 +264,58 @@ func testConversation(t *testing.T, b Backend) {
 	if len(members) != 2 {
 		t.Fatalf("MemberIDs: %v", members)
 	}
+	testThreadsAndReactions(t, b, f, msgs)
+}
+
+func testThreadsAndReactions(t *testing.T, b Backend, f fixture, msgs []conversation.Message) {
+	ctx := context.Background()
+	reply := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: f.channel.ID, AuthorID: f.agent.ID,
+		ThreadRootID: msgs[0].ID, Kind: "text", Body: "reply", CreatedAt: t0}
+	must(t, b.Conversation.InsertMessage(ctx, reply))
+	thread, err := b.Conversation.ThreadMessages(ctx, msgs[0].ID)
+	must(t, err)
+	if len(thread) != 2 || thread[0].ID != msgs[0].ID || thread[1].ID != reply.ID {
+		t.Fatalf("ThreadMessages: %+v", thread)
+	}
+	last, err := b.Conversation.LastMessageNotBy(ctx, f.channel.ID, f.agent.ID)
+	must(t, err)
+	if last.ID != msgs[2].ID {
+		t.Fatalf("LastMessageNotBy agent: %s", last.ID)
+	}
+	if _, err := b.Conversation.LastMessageNotBy(ctx, gen.New(), f.agent.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("LastMessageNotBy empty channel: %v", err)
+	}
+
+	r := conversation.Reaction{MessageID: msgs[0].ID, ActorID: f.agent.ID, Emoji: "👍", CreatedAt: t0}
+	if ok, err := b.Conversation.AddReaction(ctx, r); err != nil || !ok {
+		t.Fatalf("AddReaction: %v %v", ok, err)
+	}
+	if ok, err := b.Conversation.AddReaction(ctx, r); err != nil || ok {
+		t.Fatalf("second AddReaction must be a no-op: %v %v", ok, err)
+	}
+	r2 := conversation.Reaction{MessageID: msgs[0].ID, ActorID: f.human.ID, Emoji: "👍", CreatedAt: t0.Add(time.Second)}
+	if _, err := b.Conversation.AddReaction(ctx, r2); err != nil {
+		t.Fatal(err)
+	}
+	got, err := b.Conversation.ReactionsFor(ctx, []ids.ID{msgs[0].ID, msgs[1].ID})
+	must(t, err)
+	if len(got) != 2 || got[0].ActorID != f.agent.ID || got[1].ActorID != f.human.ID {
+		t.Fatalf("ReactionsFor: %+v", got)
+	}
+	if ok, err := b.Conversation.RemoveReaction(ctx, msgs[0].ID, f.agent.ID, "👍", t0); err != nil || !ok {
+		t.Fatalf("RemoveReaction: %v %v", ok, err)
+	}
+	if ok, err := b.Conversation.RemoveReaction(ctx, msgs[0].ID, f.agent.ID, "👍", t0); err != nil || ok {
+		t.Fatalf("second RemoveReaction must be a no-op: %v %v", ok, err)
+	}
+	got, _ = b.Conversation.ReactionsFor(ctx, []ids.ID{msgs[0].ID})
+	if len(got) != 1 || got[0].ActorID != f.human.ID {
+		t.Fatalf("after remove: %+v", got)
+	}
+	// A removed reaction can be added again.
+	if ok, err := b.Conversation.AddReaction(ctx, r); err != nil || !ok {
+		t.Fatalf("re-add: %v %v", ok, err)
+	}
 }
 
 func testDelivery(t *testing.T, b Backend) {
@@ -271,7 +323,8 @@ func testDelivery(t *testing.T, b Backend) {
 	f := setup(t, b)
 	item := gen.New()
 	d := delivery.Delivery{ID: gen.New(), WorkspaceID: f.ws.ID, RecipientID: f.agent.ID, ItemKind: delivery.ItemMessage,
-		ItemID: item, ChannelID: f.channel.ID, Flags: delivery.FlagUnread | delivery.FlagMentioned | delivery.FlagWake, EventSeq: 1, CreatedAt: t0}
+		ItemID: item, ChannelID: f.channel.ID, FromActorID: f.human.ID,
+		Flags: delivery.FlagUnread | delivery.FlagMentioned | delivery.FlagWake, EventSeq: 1, CreatedAt: t0}
 	ok, err := b.Delivery.Insert(ctx, d)
 	must(t, err)
 	if !ok {
@@ -284,7 +337,7 @@ func testDelivery(t *testing.T, b Backend) {
 	}
 	pending, total, err := b.Delivery.Pending(ctx, f.agent.ID, 10)
 	must(t, err)
-	if total != 1 || len(pending) != 1 || !pending[0].Flags.Has(delivery.FlagWake) {
+	if total != 1 || len(pending) != 1 || !pending[0].Flags.Has(delivery.FlagWake) || pending[0].FromActorID != f.human.ID {
 		t.Fatalf("Pending: %d %+v", total, pending)
 	}
 	if n, err := b.Delivery.Ack(ctx, f.human.ID, []ids.ID{d.ID}, t0); err != nil || n != 0 {

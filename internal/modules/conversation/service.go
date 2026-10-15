@@ -132,20 +132,35 @@ type SendInput struct {
 	ThreadRootID ids.ID
 	ClientMsgID  string
 	Body         string
+	// Elaborate lets an agent exceed AgentMaxBody; set only when someone
+	// asked for a detailed answer.
+	Elaborate bool
+}
+
+// SendResult is the outcome of SendMessage: either a posted message, or
+// (for an agent's bare acknowledgement) the 👍 reaction it became.
+type SendResult struct {
+	Message             *Message
+	ConvertedToReaction *Reaction
 }
 
 // SendMessage posts a message. Sending again with the same ClientMsgID
-// returns the original message instead of creating a duplicate.
-func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInput) (Message, error) {
+// returns the original message instead of creating a duplicate. For agents
+// the shared agent rules apply: bare acknowledgements become a 👍 reaction,
+// and length and mention limits are enforced.
+func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInput) (SendResult, error) {
 	if by.Halted {
-		return Message{}, identity.ErrHalted
+		return SendResult{}, identity.ErrHalted
 	}
 	body, err := ValidateBody(in.Body)
 	if err != nil {
-		return Message{}, err
+		return SendResult{}, err
 	}
 	if len(in.ClientMsgID) > MaxClientMsgID {
-		return Message{}, ErrInvalidClientID
+		return SendResult{}, ErrInvalidClientID
+	}
+	if by.Kind == identity.KindAgent && IsAcknowledgement(body) {
+		return s.ackAsReaction(ctx, by, in)
 	}
 	var msg Message
 	var seq int64
@@ -181,6 +196,11 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		if err != nil {
 			return err
 		}
+		if by.Kind == identity.KindAgent {
+			if err := checkAgentMessage(body, len(MentionedHandles(body)), in.Elaborate); err != nil {
+				return err
+			}
+		}
 		now := s.Clock.Now()
 		msg = Message{
 			ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, ChannelID: c.ID, ThreadRootID: in.ThreadRootID,
@@ -211,12 +231,45 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		return err
 	})
 	if err != nil {
-		return Message{}, err
+		return SendResult{}, err
 	}
 	if seq > 0 {
 		s.Bus.Notify(seq)
 	}
-	return msg, nil
+	return SendResult{Message: &msg}, nil
+}
+
+// ackAsReaction turns an agent's "ok"/"thanks" into a 👍 on the message it
+// answers: the thread root, or else the newest message by someone else.
+func (s *Service) ackAsReaction(ctx context.Context, by identity.Actor, in SendInput) (SendResult, error) {
+	var target ids.ID
+	var seq int64
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+		if _, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID); err != nil {
+			return err
+		}
+		target = in.ThreadRootID
+		if target == ids.Nil {
+			last, err := s.Store.LastMessageNotBy(ctx, in.ChannelID, by.ID)
+			if errors.Is(err, db.ErrNotFound) {
+				return ErrNothingToAck
+			}
+			if err != nil {
+				return err
+			}
+			target = last.ID
+		}
+		var err error
+		seq, err = s.reactInTx(ctx, by, target, ThumbsUp, true)
+		return err
+	})
+	if err != nil {
+		return SendResult{}, err
+	}
+	if seq > 0 {
+		s.Bus.Notify(seq)
+	}
+	return SendResult{ConvertedToReaction: &Reaction{MessageID: target, ActorID: by.ID, Emoji: ThumbsUp}}, nil
 }
 
 // resolveMentions keeps the @handles that are members of the channel,
@@ -263,7 +316,18 @@ func MessageCreatedPayload(m Message) MessageCreated {
 
 // ListChannels lists the channels the actor may see, with unread counts.
 func (s *Service) ListChannels(ctx context.Context, by identity.Actor) ([]ChannelView, error) {
-	return s.Store.ChannelsForActor(ctx, by.WorkspaceID, by.ID, by.IsAdmin())
+	views, err := s.Store.ChannelsForActor(ctx, by.WorkspaceID, by.ID, by.IsAdmin())
+	if err != nil {
+		return nil, err
+	}
+	for i := range views {
+		if views[i].Kind == KindDM {
+			if views[i].MemberIDs, err = s.Store.MemberIDs(ctx, views[i].ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return views, nil
 }
 
 // ResolveChannel finds a channel by name (with or without '#') and checks read access.
@@ -300,7 +364,11 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if limit > MaxPageSize {
 		limit = MaxPageSize
 	}
-	return s.Store.ListMessages(ctx, channelID, before, limit)
+	msgs, err := s.Store.ListMessages(ctx, channelID, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	return s.withReactions(ctx, msgs)
 }
 
 // MarkRead marks every message in the channel as seen by the actor.

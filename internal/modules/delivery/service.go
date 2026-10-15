@@ -27,14 +27,50 @@ type Service struct {
 // HandleEvent reacts to events from other modules. It runs inside the
 // consumer transaction; inserting is idempotent, so replaying is safe.
 func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
-	if e.Type != conversation.EventMessageCreated {
+	switch e.Type {
+	case conversation.EventMessageCreated:
+		var p conversation.MessageCreated
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+		}
+		return s.onMessage(ctx, e, p)
+	case conversation.EventReactionAdded:
+		var p conversation.ReactionEvent
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+		}
+		return s.onReaction(ctx, e, p)
+	}
+	return nil
+}
+
+// onReaction tells an agent that someone disagreed (👎) with its message.
+// Reactions never wake anyone: the item waits for the next wake-up.
+func (s *Service) onReaction(ctx context.Context, e eventlog.Event, p conversation.ReactionEvent) error {
+	if p.Emoji != conversation.ThumbsDown || p.ActorID == p.MessageAuthorID {
 		return nil
 	}
-	var p conversation.MessageCreated
-	if err := json.Unmarshal(e.Payload, &p); err != nil {
-		return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+	authorID, err := ids.Parse(p.MessageAuthorID)
+	if err != nil {
+		return err
 	}
-	return s.onMessage(ctx, e, p)
+	msgID, err := ids.Parse(p.MessageID)
+	if err != nil {
+		return err
+	}
+	author, err := s.Directory.ActorByID(ctx, authorID)
+	if err != nil {
+		return err
+	}
+	if author.Kind != identity.KindAgent {
+		return nil
+	}
+	_, err = s.Store.Insert(ctx, Delivery{
+		ID: s.IDs.New(), WorkspaceID: e.WorkspaceID, RecipientID: author.ID, ItemKind: ItemReactionDown,
+		ItemID: msgID, ChannelID: e.ChannelID, FromActorID: e.ActorID, Flags: FlagUnread,
+		EventSeq: e.Seq, CreatedAt: s.Clock.Now(),
+	})
+	return err
 }
 
 func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversation.MessageCreated) error {
@@ -77,7 +113,7 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 		}
 		d := Delivery{
 			ID: s.IDs.New(), WorkspaceID: e.WorkspaceID, RecipientID: a.ID, ItemKind: ItemMessage,
-			ItemID: msgID, ChannelID: ch.ID, Flags: flags, EventSeq: e.Seq, CreatedAt: s.Clock.Now(),
+			ItemID: msgID, ChannelID: ch.ID, FromActorID: e.ActorID, Flags: flags, EventSeq: e.Seq, CreatedAt: s.Clock.Now(),
 		}
 		if _, err := s.Store.Insert(ctx, d); err != nil {
 			return err
@@ -101,7 +137,7 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 	}
 	msgIDs := make([]ids.ID, 0, len(ds))
 	for _, d := range ds {
-		if d.ItemKind == ItemMessage {
+		if d.ItemKind == ItemMessage || d.ItemKind == ItemReactionDown {
 			msgIDs = append(msgIDs, d.ItemID)
 		}
 	}
@@ -114,6 +150,11 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 	for _, m := range msgs {
 		byID[m.ID] = m
 		authorIDs = append(authorIDs, m.AuthorID)
+	}
+	for _, d := range ds {
+		if d.FromActorID != ids.Nil {
+			authorIDs = append(authorIDs, d.FromActorID)
+		}
 	}
 	authors, err := s.Directory.ActorsByIDs(ctx, authorIDs)
 	if err != nil {
@@ -132,6 +173,9 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 			item.AuthorHandle = handles[m.AuthorID]
 			item.ThreadRootID = m.ThreadRootID
 			item.MessageAt = m.CreatedAt
+		}
+		if d.FromActorID != ids.Nil {
+			item.AuthorHandle = handles[d.FromActorID]
 		}
 		if _, ok := channelNames[d.ChannelID]; !ok {
 			ch, err := s.Conversation.ChannelByID(ctx, d.ChannelID)

@@ -49,6 +49,23 @@ type ChannelView struct {
 	Unread   int64
 	Mentions int64
 	IsMember bool
+	// MemberIDs is filled for DM channels, so clients can show who is in it.
+	MemberIDs []ids.ID
+}
+
+// Reaction is one actor's emoji on a message. Removal is a soft mark.
+type Reaction struct {
+	MessageID ids.ID
+	ActorID   ids.ID
+	Emoji     string
+	CreatedAt time.Time
+}
+
+// ReactionSummary groups a message's reactions by emoji.
+type ReactionSummary struct {
+	Emoji    string
+	Count    int
+	ActorIDs []ids.ID
 }
 
 // Message is one chat message. Rows are append-only.
@@ -65,6 +82,7 @@ type Message struct {
 	ReplyCount   int
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
+	Reactions    []ReactionSummary // filled on reads
 }
 
 // Limits.
@@ -83,6 +101,8 @@ var (
 	ErrBodyTooLong     = errors.New("message is too long")
 	ErrInvalidClientID = errors.New("client_msg_id is too long")
 	ErrBadThread       = errors.New("thread root must be a top-level message in the same channel")
+	ErrBadEmoji        = errors.New("emoji must be 1-32 characters without spaces")
+	ErrBadDM           = errors.New("a DM needs 1-8 other people from this workspace")
 )
 
 var (

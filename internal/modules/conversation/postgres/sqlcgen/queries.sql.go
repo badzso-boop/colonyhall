@@ -38,6 +38,32 @@ func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) error {
 	return err
 }
 
+const addReaction = `-- name: AddReaction :execrows
+INSERT INTO reaction (message_id, actor_id, emoji, created_at) VALUES ($1, $2, $3, $4)
+ON CONFLICT (message_id, actor_id, emoji) DO UPDATE SET removed_at = NULL, created_at = EXCLUDED.created_at
+WHERE reaction.removed_at IS NOT NULL
+`
+
+type AddReactionParams struct {
+	MessageID uuid.UUID
+	ActorID   uuid.UUID
+	Emoji     string
+	CreatedAt time.Time
+}
+
+func (q *Queries) AddReaction(ctx context.Context, arg AddReactionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addReaction,
+		arg.MessageID,
+		arg.ActorID,
+		arg.Emoji,
+		arg.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const bumpThread = `-- name: BumpThread :exec
 UPDATE message SET reply_count = reply_count + 1, last_reply_at = $1::timestamptz WHERE id = $2
 `
@@ -249,6 +275,36 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 	return err
 }
 
+const lastMessageNotBy = `-- name: LastMessageNotBy :one
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1
+`
+
+type LastMessageNotByParams struct {
+	ChannelID uuid.UUID
+	AuthorID  uuid.UUID
+}
+
+func (q *Queries) LastMessageNotBy(ctx context.Context, arg LastMessageNotByParams) (Message, error) {
+	row := q.db.QueryRow(ctx, lastMessageNotBy, arg.ChannelID, arg.AuthorID)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ChannelID,
+		&i.ThreadRootID,
+		&i.AuthorID,
+		&i.ClientMsgID,
+		&i.Kind,
+		&i.Body,
+		&i.Mentions,
+		&i.ReplyCount,
+		&i.LastReplyAt,
+		&i.CreatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const listMessages = `-- name: ListMessages :many
 SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM (
     SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message
@@ -439,6 +495,69 @@ func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message
 	return items, nil
 }
 
+const reactionsFor = `-- name: ReactionsFor :many
+SELECT message_id, actor_id, emoji, created_at FROM reaction
+WHERE message_id = ANY($1::uuid[]) AND removed_at IS NULL
+ORDER BY created_at, actor_id
+`
+
+type ReactionsForRow struct {
+	MessageID uuid.UUID
+	ActorID   uuid.UUID
+	Emoji     string
+	CreatedAt time.Time
+}
+
+func (q *Queries) ReactionsFor(ctx context.Context, messageIds []uuid.UUID) ([]ReactionsForRow, error) {
+	rows, err := q.db.Query(ctx, reactionsFor, messageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReactionsForRow
+	for rows.Next() {
+		var i ReactionsForRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.ActorID,
+			&i.Emoji,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeReaction = `-- name: RemoveReaction :execrows
+UPDATE reaction SET removed_at = $1::timestamptz
+WHERE message_id = $2 AND actor_id = $3 AND emoji = $4 AND removed_at IS NULL
+`
+
+type RemoveReactionParams struct {
+	At        time.Time
+	MessageID uuid.UUID
+	ActorID   uuid.UUID
+	Emoji     string
+}
+
+func (q *Queries) RemoveReaction(ctx context.Context, arg RemoveReactionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeReaction,
+		arg.At,
+		arg.MessageID,
+		arg.ActorID,
+		arg.Emoji,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setSeen = `-- name: SetSeen :exec
 UPDATE channel_member SET msg_count = GREATEST(msg_count, $1::bigint), mention_count = 0
 WHERE channel_id = $2 AND actor_id = $3
@@ -453,4 +572,43 @@ type SetSeenParams struct {
 func (q *Queries) SetSeen(ctx context.Context, arg SetSeenParams) error {
 	_, err := q.db.Exec(ctx, setSeen, arg.Seen, arg.ChannelID, arg.ActorID)
 	return err
+}
+
+const threadMessages = `-- name: ThreadMessages :many
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE (id = $1 OR thread_root_id = $1) AND deleted_at IS NULL
+ORDER BY id
+`
+
+func (q *Queries) ThreadMessages(ctx context.Context, rootID uuid.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, threadMessages, rootID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.AuthorID,
+			&i.ClientMsgID,
+			&i.Kind,
+			&i.Body,
+			&i.Mentions,
+			&i.ReplyCount,
+			&i.LastReplyAt,
+			&i.CreatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
