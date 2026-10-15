@@ -285,6 +285,9 @@ func TestDirectPrompt(t *testing.T) {
 	if !strings.Contains(p, "You were messaged in Colonyhall.") {
 		t.Fatalf("missing instructions in prompt:\n%s", p)
 	}
+	if !strings.Contains(p, "Your final answer is posted to this thread for you; do not post it yourself with the colonyhall tools") {
+		t.Fatalf("missing duplicate reply warning in prompt:\n%s", p)
+	}
 }
 
 func TestSupervisorReconcileAllowUnsandboxed(t *testing.T) {
