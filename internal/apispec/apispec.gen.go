@@ -90,6 +90,27 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for SetStateRequestState.
+const (
+	Active  SetStateRequestState = "active"
+	Paused  SetStateRequestState = "paused"
+	Stopped SetStateRequestState = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the SetStateRequestState enum.
+func (e SetStateRequestState) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Paused:
+		return true
+	case Stopped:
+		return true
+	default:
+		return false
+	}
+}
+
 // AckRequest defines model for AckRequest.
 type AckRequest struct {
 	Ids []openapi_types.UUID `json:"ids"`
@@ -123,6 +144,34 @@ type ActorList struct {
 type AddMemberRequest struct {
 	ActorId  openapi_types.UUID `json:"actor_id"`
 	CanWrite *bool              `json:"can_write,omitempty"`
+}
+
+// AdminStatus defines model for AdminStatus.
+type AdminStatus struct {
+	EmergencyStop EmergencyStop `json:"emergency_stop"`
+}
+
+// AuditEntry defines model for AuditEntry.
+type AuditEntry struct {
+	Action     string                 `json:"action"`
+	ActorId    openapi_types.UUID     `json:"actor_id"`
+	At         time.Time              `json:"at"`
+	Payload    map[string]interface{} `json:"payload"`
+	Seq        int64                  `json:"seq"`
+	TargetId   openapi_types.UUID     `json:"target_id"`
+	TargetType string                 `json:"target_type"`
+}
+
+// AuditPage defines model for AuditPage.
+type AuditPage struct {
+	Entries []AuditEntry `json:"entries"`
+}
+
+// AuditVerify defines model for AuditVerify.
+type AuditVerify struct {
+	BrokenAt *int64 `json:"broken_at,omitempty"`
+	Checked  int    `json:"checked"`
+	Ok       bool   `json:"ok"`
 }
 
 // Channel defines model for Channel.
@@ -167,6 +216,18 @@ type CreateChannelRequest struct {
 	Name string       `json:"name"`
 }
 
+// EmergencyClearRequest defines model for EmergencyClearRequest.
+type EmergencyClearRequest struct {
+	Password string `json:"password"`
+}
+
+// EmergencyStop defines model for EmergencyStop.
+type EmergencyStop struct {
+	Active bool                `json:"active"`
+	By     *openapi_types.UUID `json:"by,omitempty"`
+	Since  *time.Time          `json:"since,omitempty"`
+}
+
 // Inbox defines model for Inbox.
 type Inbox struct {
 	Items []InboxItem `json:"items"`
@@ -186,6 +247,18 @@ type InboxItem struct {
 	Kind         string              `json:"kind"`
 	Mentioned    bool                `json:"mentioned"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// IssueTokenRequest defines model for IssueTokenRequest.
+type IssueTokenRequest struct {
+	Label *string `json:"label,omitempty"`
+}
+
+// IssueTokenResponse defines model for IssueTokenResponse.
+type IssueTokenResponse struct {
+	// Secret Shown once
+	Secret string `json:"secret"`
+	Token  Token  `json:"token"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -254,8 +327,37 @@ type SetPasswordRequest struct {
 	NewPassword     string  `json:"new_password"`
 }
 
+// SetStateRequest defines model for SetStateRequest.
+type SetStateRequest struct {
+	State SetStateRequestState `json:"state"`
+}
+
+// SetStateRequestState defines model for SetStateRequest.State.
+type SetStateRequestState string
+
+// Token defines model for Token.
+type Token struct {
+	ActorId   openapi_types.UUID `json:"actor_id"`
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Label     string             `json:"label"`
+	RevokedAt *time.Time         `json:"revoked_at,omitempty"`
+}
+
+// TokenList defines model for TokenList.
+type TokenList struct {
+	Tokens []Token `json:"tokens"`
+}
+
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
+
+// ListAuditParams defines parameters for ListAudit.
+type ListAuditParams struct {
+	// Before Return entries older than this seq
+	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
 
 // GetInboxParams defines parameters for GetInbox.
 type GetInboxParams struct {
@@ -274,6 +376,15 @@ type CreateActorJSONRequestBody = CreateActorRequest
 
 // SetPasswordJSONRequestBody defines body for SetPassword for application/json ContentType.
 type SetPasswordJSONRequestBody = SetPasswordRequest
+
+// SetActorStateJSONRequestBody defines body for SetActorState for application/json ContentType.
+type SetActorStateJSONRequestBody = SetStateRequest
+
+// IssueTokenJSONRequestBody defines body for IssueToken for application/json ContentType.
+type IssueTokenJSONRequestBody = IssueTokenRequest
+
+// EmergencyClearJSONRequestBody defines body for EmergencyClear for application/json ContentType.
+type EmergencyClearJSONRequestBody = EmergencyClearRequest
 
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest

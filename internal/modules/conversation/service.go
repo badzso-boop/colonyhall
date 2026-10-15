@@ -26,7 +26,7 @@ type Service struct {
 }
 
 func subject(a identity.Actor) policy.Subject {
-	return policy.Subject{IsAdmin: a.IsAdmin(), IsAgent: a.Kind == identity.KindAgent}
+	return policy.Subject{IsAdmin: a.IsAdmin(), IsAgent: a.Kind == identity.KindAgent, Halted: a.Halted}
 }
 
 func (s *Service) membership(ctx context.Context, channelID, actorID ids.ID) (policy.Membership, error) {
@@ -137,6 +137,9 @@ type SendInput struct {
 // SendMessage posts a message. Sending again with the same ClientMsgID
 // returns the original message instead of creating a duplicate.
 func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInput) (Message, error) {
+	if by.Halted {
+		return Message{}, identity.ErrHalted
+	}
 	body, err := ValidateBody(in.Body)
 	if err != nil {
 		return Message{}, err

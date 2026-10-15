@@ -168,7 +168,7 @@ func TestMentionWakesAgentAndReplyArrives(t *testing.T) {
 	if status != http.StatusCreated {
 		t.Fatalf("send: status %d", status)
 	}
-	if err := e.app.DeliveryConsumer.Drain(ctx); err != nil {
+	if err := e.app.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
 

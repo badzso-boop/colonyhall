@@ -52,3 +52,21 @@ UPDATE session SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;
 -- name: RevokeSessionsForActor :exec
 UPDATE session SET revoked_at = sqlc.arg(at)::timestamptz
 WHERE actor_id = sqlc.arg(actor_id) AND id <> sqlc.arg(keep) AND revoked_at IS NULL;
+
+-- name: ListTokens :many
+SELECT * FROM api_token WHERE actor_id = $1 ORDER BY created_at;
+
+-- name: TokenByID :one
+SELECT * FROM api_token WHERE id = $1;
+
+-- name: RevokeToken :exec
+UPDATE api_token SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;
+
+-- name: SetActorState :exec
+UPDATE actor SET state = $2 WHERE id = $1;
+
+-- name: WorkspaceByID :one
+SELECT * FROM workspace WHERE id = $1;
+
+-- name: SetEmergencyStop :exec
+UPDATE workspace SET emergency_stop_at = sqlc.narg(at), emergency_stop_by = sqlc.narg(by) WHERE id = sqlc.arg(id);

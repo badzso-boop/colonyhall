@@ -45,13 +45,21 @@ type AckInput struct {
 	IDs []string `json:"ids" jsonschema:"inbox item ids to mark as handled"`
 }
 
+// CurrentActor returns the calling actor with its up-to-date state; tools
+// call it on every invocation so pauses and emergency stops apply at once.
+type CurrentActor func(ctx context.Context) (identity.Actor, error)
+
 // Register adds the inbox tools for the given actor.
-func Register(s *mcp.Server, svc *delivery.Service, actor identity.Actor) {
+func Register(s *mcp.Server, svc *delivery.Service, current CurrentActor) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "inbox",
 		Description: "List what needs your attention: mentions and direct messages you have not acknowledged yet. " +
 			"Call this first when you are woken up. Acknowledge handled items with ack.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in InboxInput) (*mcp.CallToolResult, InboxOutput, error) {
+		actor, err := current(ctx)
+		if err != nil {
+			return nil, InboxOutput{}, err
+		}
 		items, total, err := svc.Inbox(ctx, actor, in.Limit)
 		if err != nil {
 			return nil, InboxOutput{}, err
@@ -72,6 +80,10 @@ func Register(s *mcp.Server, svc *delivery.Service, actor identity.Actor) {
 		Name:        "ack",
 		Description: "Mark inbox items as handled so they do not show up again.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in AckInput) (*mcp.CallToolResult, any, error) {
+		actor, err := current(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 		list := make([]ids.ID, 0, len(in.IDs))
 		for _, s := range in.IDs {
 			id, err := ids.Parse(s)

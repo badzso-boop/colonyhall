@@ -30,6 +30,19 @@ type ApiToken struct {
 	RevokedAt *time.Time
 }
 
+type AuditLog struct {
+	Seq         int64
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	Action      string
+	TargetType  string
+	TargetID    uuid.UUID
+	Payload     []byte
+	At          time.Time
+	PrevHash    []byte
+	Hash        []byte
+}
+
 type Channel struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -116,7 +129,9 @@ type Session struct {
 }
 
 type Workspace struct {
-	ID        uuid.UUID
-	Name      string
-	CreatedAt time.Time
+	ID              uuid.UUID
+	Name            string
+	CreatedAt       time.Time
+	EmergencyStopAt *time.Time
+	EmergencyStopBy *uuid.UUID
 }

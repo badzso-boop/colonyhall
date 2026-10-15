@@ -143,10 +143,7 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if err != nil {
 		return Actor{}, err
 	}
-	if a.State != "active" {
-		return Actor{}, ErrUnauthorized
-	}
-	return a, nil
+	return s.load(ctx, a)
 }
 
 // ActorByID implements Directory.

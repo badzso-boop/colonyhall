@@ -18,6 +18,7 @@ type Store struct {
 	workspaces map[ids.ID]identity.Workspace
 	actors     map[ids.ID]identity.Actor
 	tokens     map[string]identity.Token // key: string(hash)
+	tokenByID  map[ids.ID]string         // token id → hash key
 	creds      map[ids.ID]string
 	sessions   map[string]identity.Session // key: string(token hash)
 	revoked    map[ids.ID]bool
@@ -29,6 +30,7 @@ func New() *Store {
 		workspaces: map[ids.ID]identity.Workspace{},
 		actors:     map[ids.ID]identity.Actor{},
 		tokens:     map[string]identity.Token{},
+		tokenByID:  map[ids.ID]string{},
 		creds:      map[ids.ID]string{},
 		sessions:   map[string]identity.Session{},
 		revoked:    map[ids.ID]bool{},
@@ -98,6 +100,7 @@ func (s *Store) CreateToken(_ context.Context, t identity.Token) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tokens[string(t.Hash)] = t
+	s.tokenByID[t.ID] = string(t.Hash)
 	return nil
 }
 
@@ -106,7 +109,7 @@ func (s *Store) ActorByTokenHash(_ context.Context, hash []byte) (identity.Actor
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	t, ok := s.tokens[string(hash)]
-	if !ok {
+	if !ok || t.RevokedAt != nil {
 		return identity.Actor{}, db.ErrNotFound
 	}
 	a, ok := s.actors[t.ActorID]
@@ -215,5 +218,87 @@ func (s *Store) RevokeSessionsForActor(_ context.Context, actorID, keep ids.ID, 
 			s.revoked[x.ID] = true
 		}
 	}
+	return nil
+}
+
+// ListTokens lists an actor's tokens, oldest first.
+func (s *Store) ListTokens(_ context.Context, actorID ids.ID) ([]identity.Token, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []identity.Token
+	for _, t := range s.tokens {
+		if t.ActorID == actorID {
+			out = append(out, t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+
+// TokenByID loads a token.
+func (s *Store) TokenByID(_ context.Context, id ids.ID) (identity.Token, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	key, ok := s.tokenByID[id]
+	if !ok {
+		return identity.Token{}, db.ErrNotFound
+	}
+	return s.tokens[key], nil
+}
+
+// RevokeToken revokes a token.
+func (s *Store) RevokeToken(_ context.Context, id ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key, ok := s.tokenByID[id]
+	if !ok {
+		return nil
+	}
+	t := s.tokens[key]
+	if t.RevokedAt == nil {
+		t.RevokedAt = &at
+		s.tokens[key] = t
+	}
+	return nil
+}
+
+// SetActorState changes an actor's state.
+func (s *Store) SetActorState(_ context.Context, actorID ids.ID, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.actors[actorID]
+	if !ok {
+		return db.ErrNotFound
+	}
+	a.State = state
+	s.actors[actorID] = a
+	return nil
+}
+
+// WorkspaceByID loads a workspace.
+func (s *Store) WorkspaceByID(_ context.Context, id ids.ID) (identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return identity.Workspace{}, db.ErrNotFound
+	}
+	return w, nil
+}
+
+// SetEmergencyStop turns the emergency stop on or off.
+func (s *Store) SetEmergencyStop(_ context.Context, workspaceID ids.ID, at *time.Time, by ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[workspaceID]
+	if !ok {
+		return db.ErrNotFound
+	}
+	w.EmergencyStopAt = at
+	w.EmergencyStopBy = ids.Nil
+	if at != nil {
+		w.EmergencyStopBy = by
+	}
+	s.workspaces[workspaceID] = w
 	return nil
 }

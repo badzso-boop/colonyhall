@@ -37,7 +37,18 @@ type Workspace struct {
 	ID        ids.ID
 	Name      string
 	CreatedAt time.Time
+	// EmergencyStopAt is set while the emergency stop is on: every agent is
+	// halted (no writes, no wake-ups) until an admin clears it.
+	EmergencyStopAt *time.Time
+	EmergencyStopBy ids.ID
 }
+
+// Actor states.
+const (
+	StateActive  = "active"
+	StatePaused  = "paused"  // may authenticate and read, may not write
+	StateStopped = "stopped" // tokens and sessions rejected
+)
 
 // Actor is anyone who can read or write: a human or an AI agent.
 type Actor struct {
@@ -49,6 +60,11 @@ type Actor struct {
 	Role        Role
 	State       string
 	CreatedAt   time.Time
+
+	// Halted is computed when the actor is loaded for a request, never
+	// stored: the actor is paused, or it is an agent while the workspace's
+	// emergency stop is on. Halted actors may read but not write.
+	Halted bool
 }
 
 // IsAdmin reports whether the actor may see and control everything.
@@ -83,6 +99,7 @@ type Token struct {
 	Hash      []byte
 	Label     string
 	CreatedAt time.Time
+	RevokedAt *time.Time
 }
 
 // Errors returned by the identity service.
@@ -91,6 +108,8 @@ var (
 	ErrUnauthorized  = errors.New("invalid or revoked token")
 	ErrForbidden     = errors.New("not allowed")
 	ErrInvalidKind   = errors.New("kind must be \"human\" or \"agent\"")
+	ErrInvalidState  = errors.New("state must be active, paused or stopped")
+	ErrHalted        = errors.New("writing is paused for this actor (paused or emergency stop)")
 )
 
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,31}$`)

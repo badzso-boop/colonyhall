@@ -35,3 +35,7 @@ sql:
     schema: migrations
     queries: internal/modules/delivery/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/delivery/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/audit/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/audit/postgres/sqlcgen } }

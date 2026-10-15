@@ -49,6 +49,101 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInfo" } } } }
 
+  /actors/{actorId}/tokens:
+    parameters:
+      - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listTokens
+      tags: [identity]
+      description: Your own tokens, or those of an actor you manage.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Oldest first, content: { application/json: { schema: { $ref: "#/components/schemas/TokenList" } } } }
+    post:
+      operationId: issueToken
+      tags: [identity]
+      description: Human admins, for actors of lower rank. The secret is shown once.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/IssueTokenRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Issued, content: { application/json: { schema: { $ref: "#/components/schemas/IssueTokenResponse" } } } }
+
+  /tokens/{tokenId}:
+    parameters:
+      - { name: tokenId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: revokeToken
+      tags: [identity]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Revoked }
+
+  /actors/{actorId}/state:
+    parameters:
+      - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setActorState
+      tags: [identity]
+      description: "paused: may read, not write. stopped: tokens and sessions rejected."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetStateRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Changed }
+
+  /admin/status:
+    get:
+      operationId: getAdminStatus
+      tags: [admin]
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AdminStatus" } } } }
+
+  /admin/emergency-stop:
+    post:
+      operationId: emergencyStop
+      tags: [admin]
+      description: Halts every agent in the workspace (no writes) until cleared. Human admins only.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/AdminStatus" } } } }
+
+  /admin/emergency-clear:
+    post:
+      operationId: emergencyClear
+      tags: [admin]
+      description: Requires the admin's password again.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EmergencyClearRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Cleared, content: { application/json: { schema: { $ref: "#/components/schemas/AdminStatus" } } } }
+
+  /admin/audit:
+    get:
+      operationId: listAudit
+      tags: [admin]
+      description: Every recorded event of the workspace, newest first. Admins only.
+      parameters:
+        - { name: before, in: query, schema: { type: integer, format: int64 }, description: Return entries older than this seq }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuditPage" } } } }
+
+  /admin/audit/verify:
+    get:
+      operationId: verifyAudit
+      tags: [admin]
+      description: Recomputes the hash chain; ok=false names the first altered entry.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuditVerify" } } } }
+
   /actors/{actorId}/password:
     parameters:
       - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -273,6 +368,75 @@ components:
       properties:
         current_password: { type: string }
         new_password: { type: string, minLength: 12, maxLength: 256 }
+    Token:
+      type: object
+      required: [id, actor_id, label, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        label: { type: string }
+        created_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
+    TokenList:
+      type: object
+      required: [tokens]
+      properties:
+        tokens: { type: array, items: { $ref: "#/components/schemas/Token" } }
+    IssueTokenRequest:
+      type: object
+      properties:
+        label: { type: string, maxLength: 64 }
+    IssueTokenResponse:
+      type: object
+      required: [token, secret]
+      properties:
+        token: { $ref: "#/components/schemas/Token" }
+        secret: { type: string, description: Shown once }
+    SetStateRequest:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string, enum: [active, paused, stopped] }
+    EmergencyStop:
+      type: object
+      required: [active]
+      properties:
+        active: { type: boolean }
+        since: { type: string, format: date-time }
+        by: { type: string, format: uuid }
+    AdminStatus:
+      type: object
+      required: [emergency_stop]
+      properties:
+        emergency_stop: { $ref: "#/components/schemas/EmergencyStop" }
+    EmergencyClearRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string }
+    AuditEntry:
+      type: object
+      required: [seq, actor_id, action, target_type, target_id, payload, at]
+      properties:
+        seq: { type: integer, format: int64 }
+        actor_id: { type: string, format: uuid }
+        action: { type: string }
+        target_type: { type: string }
+        target_id: { type: string, format: uuid }
+        payload: { type: object, additionalProperties: true }
+        at: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      required: [entries]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+    AuditVerify:
+      type: object
+      required: [ok, checked]
+      properties:
+        ok: { type: boolean }
+        checked: { type: integer }
+        broken_at: { type: integer, format: int64 }
     CreateActorResponse:
       type: object
       required: [actor, token]

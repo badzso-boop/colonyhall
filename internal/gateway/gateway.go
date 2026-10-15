@@ -20,6 +20,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -216,7 +217,9 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 		return true, nil
 	}
 	if e.ChannelID == ids.Nil {
-		return false, nil
+		// Workspace-wide announcements (e.g. the emergency stop) reach
+		// everyone; other channel-less events are admin-only.
+		return strings.HasPrefix(e.Type, "workspace."), nil
 	}
 	// A membership change for this actor invalidates the cached answer.
 	if e.Type == conversation.EventMemberAdded {

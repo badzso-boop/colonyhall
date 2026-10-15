@@ -59,7 +59,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 	if errors.Is(err, ErrWorkspaceRequired) {
 		return Actor{}, Session{}, "", err
 	}
-	if err != nil || a.Kind != KindHuman || a.State != "active" {
+	if err != nil || a.Kind != KindHuman || a.State != StateActive {
 		_, _ = VerifyPassword(in.Password, dummyHash) // equalise timing
 		return fail()
 	}
@@ -76,6 +76,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 		return Actor{}, Session{}, "", err
 	}
 	if !ok {
+		s.recordLogin(ctx, a, EventLoginFailed, in.UserAgent)
 		return fail()
 	}
 	s.limiter().reset(in.Handle)
@@ -94,7 +95,15 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 	if err := s.Store.CreateSession(ctx, sess); err != nil {
 		return Actor{}, Session{}, "", err
 	}
+	s.recordLogin(ctx, a, EventLogin, in.UserAgent)
 	return a, sess, secret, nil
+}
+
+// recordLogin writes a login event for the audit log. A failure to record
+// is ignored on purpose: it must never lock people out.
+func (s *Service) recordLogin(ctx context.Context, a Actor, typ, userAgent string) {
+	_ = s.record(ctx, a, typ, "actor", a.ID, LoginEvent{ActorID: a.ID.String(), UserAgent: truncate(userAgent, 256)},
+		func(context.Context) error { return nil })
 }
 
 func (s *Service) findLoginActor(ctx context.Context, in LoginInput) (Actor, error) {
@@ -148,8 +157,12 @@ func (s *Service) AuthenticateSession(ctx context.Context, secret string) (Actor
 	if err != nil {
 		return Actor{}, Session{}, err
 	}
-	if !s.Clock.Now().Before(sess.ExpiresAt) || a.State != "active" {
+	if !s.Clock.Now().Before(sess.ExpiresAt) {
 		return Actor{}, Session{}, ErrUnauthorized
+	}
+	a, err = s.load(ctx, a)
+	if err != nil {
+		return Actor{}, Session{}, err
 	}
 	return a, sess, nil
 }

@@ -18,6 +18,13 @@ type Store interface {
 	ActorsByIDs(ctx context.Context, idList []ids.ID) ([]Actor, error)
 	ListActors(ctx context.Context, workspaceID ids.ID) ([]Actor, error)
 	CreateToken(ctx context.Context, t Token) error
+	ListTokens(ctx context.Context, actorID ids.ID) ([]Token, error)
+	TokenByID(ctx context.Context, id ids.ID) (Token, error)
+	RevokeToken(ctx context.Context, id ids.ID, at time.Time) error
+	SetActorState(ctx context.Context, actorID ids.ID, state string) error
+	WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error)
+	// SetEmergencyStop turns the stop on (at != nil) or off (at == nil).
+	SetEmergencyStop(ctx context.Context, workspaceID ids.ID, at *time.Time, by ids.ID) error
 	ActorByTokenHash(ctx context.Context, hash []byte) (Actor, error)
 
 	// ActorsByHandle finds the handle in every workspace (for login).

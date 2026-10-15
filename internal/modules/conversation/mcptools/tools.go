@@ -29,13 +29,21 @@ type ReadInput struct {
 	Limit   int    `json:"limit,omitempty" jsonschema:"number of most recent messages (default 10, max 50)"`
 }
 
+// CurrentActor returns the calling actor with its up-to-date state; tools
+// call it on every invocation so pauses and emergency stops apply at once.
+type CurrentActor func(ctx context.Context) (identity.Actor, error)
+
 // Register adds the messaging tools for the given actor.
-func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, actor identity.Actor) {
+func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, current CurrentActor) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "send",
 		Description: "Post a message to a channel, optionally as a reply in a thread. " +
 			"Reply in the thread the request came from. Mention (@handle) only people you need to act.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SendInput) (*mcp.CallToolResult, any, error) {
+		actor, err := current(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 		ch, err := resolve(ctx, svc, actor, in.Channel)
 		if err != nil {
 			return nil, nil, err
@@ -59,6 +67,10 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 		Name:        "read",
 		Description: "Read the most recent messages of a channel. Prefer inbox; read only when you need more context.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ReadInput) (*mcp.CallToolResult, any, error) {
+		actor, err := current(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 		ch, err := resolve(ctx, svc, actor, in.Channel)
 		if err != nil {
 			return nil, nil, err

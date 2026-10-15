@@ -284,6 +284,37 @@ func (q *Queries) ListActors(ctx context.Context, workspaceID uuid.UUID) ([]Acto
 	return items, nil
 }
 
+const listTokens = `-- name: ListTokens :many
+SELECT id, actor_id, token_hash, label, created_at, revoked_at FROM api_token WHERE actor_id = $1 ORDER BY created_at
+`
+
+func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken, error) {
+	rows, err := q.db.Query(ctx, listTokens, actorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ApiToken
+	for rows.Next() {
+		var i ApiToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActorID,
+			&i.TokenHash,
+			&i.Label,
+			&i.CreatedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeSession = `-- name: RevokeSession :exec
 UPDATE session SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL
 `
@@ -311,6 +342,20 @@ type RevokeSessionsForActorParams struct {
 
 func (q *Queries) RevokeSessionsForActor(ctx context.Context, arg RevokeSessionsForActorParams) error {
 	_, err := q.db.Exec(ctx, revokeSessionsForActor, arg.At, arg.ActorID, arg.Keep)
+	return err
+}
+
+const revokeToken = `-- name: RevokeToken :exec
+UPDATE api_token SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL
+`
+
+type RevokeTokenParams struct {
+	ID        uuid.UUID
+	RevokedAt *time.Time
+}
+
+func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error {
+	_, err := q.db.Exec(ctx, revokeToken, arg.ID, arg.RevokedAt)
 	return err
 }
 
@@ -349,6 +394,20 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 	return i, err
 }
 
+const setActorState = `-- name: SetActorState :exec
+UPDATE actor SET state = $2 WHERE id = $1
+`
+
+type SetActorStateParams struct {
+	ID    uuid.UUID
+	State string
+}
+
+func (q *Queries) SetActorState(ctx context.Context, arg SetActorStateParams) error {
+	_, err := q.db.Exec(ctx, setActorState, arg.ID, arg.State)
+	return err
+}
+
 const setCredential = `-- name: SetCredential :exec
 INSERT INTO credential (actor_id, password_hash, updated_at) VALUES ($1, $2, $3)
 ON CONFLICT (actor_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at
@@ -363,6 +422,56 @@ type SetCredentialParams struct {
 func (q *Queries) SetCredential(ctx context.Context, arg SetCredentialParams) error {
 	_, err := q.db.Exec(ctx, setCredential, arg.ActorID, arg.PasswordHash, arg.UpdatedAt)
 	return err
+}
+
+const setEmergencyStop = `-- name: SetEmergencyStop :exec
+UPDATE workspace SET emergency_stop_at = $1, emergency_stop_by = $2 WHERE id = $3
+`
+
+type SetEmergencyStopParams struct {
+	At *time.Time
+	By *uuid.UUID
+	ID uuid.UUID
+}
+
+func (q *Queries) SetEmergencyStop(ctx context.Context, arg SetEmergencyStopParams) error {
+	_, err := q.db.Exec(ctx, setEmergencyStop, arg.At, arg.By, arg.ID)
+	return err
+}
+
+const tokenByID = `-- name: TokenByID :one
+SELECT id, actor_id, token_hash, label, created_at, revoked_at FROM api_token WHERE id = $1
+`
+
+func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error) {
+	row := q.db.QueryRow(ctx, tokenByID, id)
+	var i ApiToken
+	err := row.Scan(
+		&i.ID,
+		&i.ActorID,
+		&i.TokenHash,
+		&i.Label,
+		&i.CreatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const workspaceByID = `-- name: WorkspaceByID :one
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by FROM workspace WHERE id = $1
+`
+
+func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error) {
+	row := q.db.QueryRow(ctx, workspaceByID, id)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.EmergencyStopAt,
+		&i.EmergencyStopBy,
+	)
+	return i, err
 }
 
 const workspaceByName = `-- name: WorkspaceByName :one

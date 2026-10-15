@@ -7,6 +7,9 @@ package policy
 type Subject struct {
 	IsAdmin bool
 	IsAgent bool
+	// Halted: paused, or an agent during an emergency stop. Halted
+	// subjects may read but never write.
+	Halted bool
 }
 
 // Membership is the subject's membership in a channel, if any.
@@ -23,12 +26,15 @@ func CanReadChannel(s Subject, m Membership) bool {
 // CanWriteChannel: admins may always write (to intervene anywhere);
 // members need write permission.
 func CanWriteChannel(s Subject, m Membership) bool {
+	if s.Halted {
+		return false
+	}
 	return s.IsAdmin || (m.IsMember && m.CanWrite)
 }
 
 // CanCreateChannel: humans may create channels; agents may not.
 func CanCreateChannel(s Subject) bool {
-	return !s.IsAgent
+	return !s.IsAgent && !s.Halted
 }
 
 // CanManageMembers: only admins add or remove members.

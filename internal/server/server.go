@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -18,6 +19,10 @@ import (
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpserver"
 	"colonyhall/internal/mcpserver"
+	"colonyhall/internal/modules/audit"
+	audhttp "colonyhall/internal/modules/audit/httpapi"
+	audmem "colonyhall/internal/modules/audit/memory"
+	audpg "colonyhall/internal/modules/audit/postgres"
 	"colonyhall/internal/modules/conversation"
 	convhttp "colonyhall/internal/modules/conversation/httpapi"
 	convmcp "colonyhall/internal/modules/conversation/mcptools"
@@ -57,14 +62,15 @@ type Options struct {
 
 // App is a wired-up Colonyhall server.
 type App struct {
-	Handler          http.Handler
-	Identity         *identity.Service
-	Conversation     *conversation.Service
-	Delivery         *delivery.Service
-	DeliveryConsumer *eventlog.Consumer
-	Events           eventlog.Store
-	Bus              bus.Bus
-	close            func()
+	Handler      http.Handler
+	Identity     *identity.Service
+	Conversation *conversation.Service
+	Delivery     *delivery.Service
+	Audit        *audit.Service
+	Consumers    []*eventlog.Consumer
+	Events       eventlog.Store
+	Bus          bus.Bus
+	close        func()
 }
 
 // New builds the application. For Store=postgres it also applies migrations.
@@ -86,13 +92,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		idStore  identity.Store
 		cvStore  conversation.Store
 		dlStore  delivery.Store
+		auStore  audit.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
 	switch opt.Store {
 	case "memory":
 		tx = &db.Memory{}
-		events, idStore, cvStore, dlStore = evmem.New(), idmem.New(), convmem.New(), delmem.New()
+		events, idStore, cvStore, dlStore, auStore = evmem.New(), idmem.New(), convmem.New(), delmem.New(), audmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -104,6 +111,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		}
 		tx = pg
 		events, idStore, cvStore, dlStore = &evpg.Store{DB: pg}, &idpg.Store{DB: pg}, &convpg.Store{DB: pg}, &delpg.Store{DB: pg}
+		auStore = &audpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -113,16 +121,21 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	cvSvc := &conversation.Service{Store: cvStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
-	consumer := &eventlog.Consumer{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b,
-		Handle: dlSvc.HandleEvent, Logger: opt.Logger}
+	auSvc := &audit.Service{Store: auStore}
+	consumers := []*eventlog.Consumer{
+		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
+		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
+	}
 
 	mux := http.NewServeMux()
 	idhttp.Register(mux, idSvc, idhttp.Options{SecureCookies: opt.SecureCookies})
 	convhttp.Register(mux, cvSvc, idSvc)
 	delhttp.Register(mux, dlSvc, idSvc)
+	audhttp.Register(mux, auSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor) {
-		delmcp.Register(s, dlSvc, actor)
-		convmcp.Register(s, cvSvc, idSvc, actor)
+		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
+		delmcp.Register(s, dlSvc, current)
+		convmcp.Register(s, cvSvc, idSvc, current)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -131,20 +144,41 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Logger: opt.Logger, OriginPatterns: opt.OriginPatterns})
 
 	return &App{
-		Handler:          httpserver.New(mux, ready, opt.Logger),
-		Identity:         idSvc,
-		Conversation:     cvSvc,
-		Delivery:         dlSvc,
-		DeliveryConsumer: consumer,
-		Events:           events,
-		Bus:              b,
-		close:            closeAll,
+		Handler:      httpserver.New(mux, ready, opt.Logger),
+		Identity:     idSvc,
+		Conversation: cvSvc,
+		Delivery:     dlSvc,
+		Audit:        auSvc,
+		Consumers:    consumers,
+		Events:       events,
+		Bus:          b,
+		close:        closeAll,
 	}, nil
 }
 
 // Run starts the background consumers and blocks until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
-	return a.DeliveryConsumer.Run(ctx)
+	var wg sync.WaitGroup
+	for _, c := range a.Consumers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = c.Run(ctx)
+		}()
+	}
+	wg.Wait()
+	return nil
+}
+
+// Drain runs every consumer until it has processed all current events.
+// Tests use it to make the asynchronous parts deterministic.
+func (a *App) Drain(ctx context.Context) error {
+	for _, c := range a.Consumers {
+		if err := c.Drain(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Close releases resources.

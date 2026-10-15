@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/identity"
@@ -25,6 +26,7 @@ type Backend struct {
 	Identity     identity.Store
 	Conversation conversation.Store
 	Delivery     delivery.Store
+	Audit        audit.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -33,6 +35,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("identity", func(t *testing.T) { testIdentity(t, newBackend(t)) })
 	t.Run("conversation", func(t *testing.T) { testConversation(t, newBackend(t)) })
 	t.Run("delivery", func(t *testing.T) { testDelivery(t, newBackend(t)) })
+	t.Run("audit", func(t *testing.T) { testAudit(t, newBackend(t)) })
 }
 
 var (
@@ -162,6 +165,35 @@ func testIdentity(t *testing.T, b Backend) {
 		t.Fatalf("WorkspaceByName: %+v %v", w, err)
 	}
 
+	// Tokens, actor state, emergency stop.
+	tok := identity.Token{ID: gen.New(), ActorID: f.agent.ID, Hash: identity.HashSecret("t2"), Label: "laptop", CreatedAt: t0.Add(time.Second)}
+	must(t, b.Identity.CreateToken(ctx, tok))
+	must(t, b.Identity.RevokeToken(ctx, tok.ID, t0))
+	if got, err := b.Identity.TokenByID(ctx, tok.ID); err != nil || got.RevokedAt == nil || got.Label != "laptop" {
+		t.Fatalf("TokenByID after revoke: %+v %v", got, err)
+	}
+	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("t2")); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("revoked token still authenticates: %v", err)
+	}
+	toks, err := b.Identity.ListTokens(ctx, f.agent.ID)
+	must(t, err)
+	if len(toks) != 2 || toks[1].ID != tok.ID {
+		t.Fatalf("ListTokens oldest first: %+v", toks)
+	}
+	must(t, b.Identity.SetActorState(ctx, f.agent.ID, identity.StatePaused))
+	if a, _ := b.Identity.ActorByID(ctx, f.agent.ID); a.State != identity.StatePaused {
+		t.Fatalf("state not saved: %q", a.State)
+	}
+	stopAt := t0.Add(time.Minute)
+	must(t, b.Identity.SetEmergencyStop(ctx, f.ws.ID, &stopAt, f.human.ID))
+	if w, _ := b.Identity.WorkspaceByID(ctx, f.ws.ID); w.EmergencyStopAt == nil || w.EmergencyStopBy != f.human.ID {
+		t.Fatalf("emergency stop not saved: %+v", w)
+	}
+	must(t, b.Identity.SetEmergencyStop(ctx, f.ws.ID, nil, ids.Nil))
+	if w, _ := b.Identity.WorkspaceByID(ctx, f.ws.ID); w.EmergencyStopAt != nil {
+		t.Fatalf("emergency stop not cleared: %+v", w)
+	}
+
 	list, err := b.Identity.ListActors(ctx, f.ws.ID)
 	must(t, err)
 	if len(list) != 2 || list[0].Handle != "bot" {
@@ -263,6 +295,41 @@ func testDelivery(t *testing.T, b Backend) {
 	}
 	if _, total, _ = b.Delivery.Pending(ctx, f.agent.ID, 10); total != 0 {
 		t.Fatalf("acked item still pending")
+	}
+}
+
+func testAudit(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	svc := &audit.Service{Store: b.Audit}
+	for i := 1; i <= 3; i++ {
+		e, err := eventlog.NewEvent(gen.New(), f.ws.ID, "test.event", f.human.ID, ids.Nil, "test", gen.New(), map[string]int{"n": i}, t0.Add(time.Duration(i)*time.Nanosecond*1500))
+		must(t, err)
+		e.Seq = int64(i * 10)
+		must(t, svc.HandleEvent(ctx, e))
+		must(t, svc.HandleEvent(ctx, e)) // replay is a no-op
+	}
+	last, err := b.Audit.Last(ctx, f.ws.ID)
+	must(t, err)
+	if last.Seq != 30 {
+		t.Fatalf("Last = %d", last.Seq)
+	}
+	page, err := b.Audit.Page(ctx, f.ws.ID, 30, 10)
+	must(t, err)
+	if len(page) != 2 || page[0].Seq != 20 {
+		t.Fatalf("Page before 30, newest first: %+v", page)
+	}
+	fwd, err := b.Audit.Forward(ctx, f.ws.ID, 10, 10)
+	must(t, err)
+	if len(fwd) != 2 || fwd[0].Seq != 20 {
+		t.Fatalf("Forward after 10: %+v", fwd)
+	}
+	// The stored chain verifies: hashes survive the round trip through the
+	// store (timestamp precision, JSON normalisation).
+	for i, e := range append([]audit.Entry{page[1]}, fwd...) {
+		if string(e.ComputeHash()) != string(e.Hash) {
+			t.Fatalf("entry %d (seq %d) does not verify after storage", i, e.Seq)
+		}
 	}
 }
 

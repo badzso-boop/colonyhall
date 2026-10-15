@@ -18,6 +18,20 @@ func init() {
 		identity.ErrWorkspaceRequired)
 	httpx.RegisterStatus(http.StatusUnauthorized, identity.ErrBadCredentials)
 	httpx.RegisterStatus(http.StatusTooManyRequests, identity.ErrTooManyAttempts)
+	httpx.RegisterValidation(identity.ErrInvalidState)
+	httpx.RegisterForbidden(identity.ErrHalted)
+}
+
+func tokenToAPI(t identity.Token) apispec.Token {
+	return apispec.Token{Id: t.ID, ActorId: t.ActorID, Label: t.Label, CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt}
+}
+
+func workspaceStatus(w identity.Workspace) apispec.AdminStatus {
+	st := apispec.AdminStatus{EmergencyStop: apispec.EmergencyStop{Active: w.EmergencyStopAt != nil, Since: w.EmergencyStopAt}}
+	if w.EmergencyStopAt != nil {
+		st.EmergencyStop.By = &w.EmergencyStopBy
+	}
+	return st
 }
 
 // Options configures the identity routes.
@@ -123,6 +137,112 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 		httpx.JSON(w, http.StatusCreated, apispec.CreateActorResponse{Actor: ToAPI(a), Token: secret})
 	}))
 
+	mux.Handle("GET /api/v1/actors/{id}/tokens", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		list, err := svc.ListTokens(r.Context(), httpx.Actor(r), id)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.TokenList{Tokens: make([]apispec.Token, 0, len(list))}
+		for _, t := range list {
+			out.Tokens = append(out.Tokens, tokenToAPI(t))
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	mux.Handle("POST /api/v1/actors/{id}/tokens", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in apispec.IssueTokenRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		t, secret, err := svc.IssueToken(r.Context(), httpx.Actor(r), id, httpx.Deref(in.Label, ""))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, apispec.IssueTokenResponse{Token: tokenToAPI(t), Secret: secret})
+	}))
+
+	mux.Handle("DELETE /api/v1/tokens/{id}", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := svc.RevokeToken(r.Context(), httpx.Actor(r), id); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("PUT /api/v1/actors/{id}/state", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in apispec.SetStateRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if err := svc.SetActorState(r.Context(), httpx.Actor(r), id, string(in.State)); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("GET /api/v1/admin/status", auth(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := svc.Workspace(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, workspaceStatus(ws))
+	}))
+
+	mux.Handle("POST /api/v1/admin/emergency-stop", auth(func(w http.ResponseWriter, r *http.Request) {
+		by := httpx.Actor(r)
+		if err := svc.EmergencyStop(r.Context(), by); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		ws, err := svc.Workspace(r.Context(), by)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, workspaceStatus(ws))
+	}))
+
+	mux.Handle("POST /api/v1/admin/emergency-clear", auth(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.EmergencyClearRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		by := httpx.Actor(r)
+		if err := svc.ClearEmergency(r.Context(), by, in.Password); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		ws, err := svc.Workspace(r.Context(), by)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, workspaceStatus(ws))
+	}))
+
 	mux.Handle("PUT /api/v1/actors/{id}/password", auth(func(w http.ResponseWriter, r *http.Request) {
 		id, err := ids.Parse(r.PathValue("id"))
 		if err != nil {
@@ -144,4 +264,13 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
+}
+
+func pathID(w http.ResponseWriter, r *http.Request) (ids.ID, bool) {
+	id, err := ids.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, &httpx.BadRequest{Detail: "id must be a UUID"})
+		return ids.Nil, false
+	}
+	return id, true
 }

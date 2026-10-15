@@ -7,6 +7,8 @@ import (
 
 	evmem "colonyhall/internal/eventlog/memory"
 	evpg "colonyhall/internal/eventlog/postgres"
+	audmem "colonyhall/internal/modules/audit/memory"
+	audpg "colonyhall/internal/modules/audit/postgres"
 	convmem "colonyhall/internal/modules/conversation/memory"
 	convpg "colonyhall/internal/modules/conversation/postgres"
 	delmem "colonyhall/internal/modules/delivery/memory"
@@ -20,7 +22,7 @@ import (
 func TestMemory(t *testing.T) {
 	Run(t, func(t *testing.T) Backend {
 		return Backend{Tx: &db.Memory{}, Events: evmem.New(), Identity: idmem.New(),
-			Conversation: convmem.New(), Delivery: delmem.New()}
+			Conversation: convmem.New(), Delivery: delmem.New(), Audit: audmem.New()}
 	})
 }
 
@@ -41,12 +43,12 @@ func TestPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	Run(t, func(t *testing.T) Backend {
-		_, err := pg.Pool.Exec(ctx, `TRUNCATE delivery, consumer_offset, event, message, channel_member,
+		_, err := pg.Pool.Exec(ctx, `TRUNCATE audit_log, delivery, consumer_offset, event, message, channel_member,
 			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return Backend{Tx: pg, Events: &evpg.Store{DB: pg}, Identity: &idpg.Store{DB: pg},
-			Conversation: &convpg.Store{DB: pg}, Delivery: &delpg.Store{DB: pg}}
+			Conversation: &convpg.Store{DB: pg}, Delivery: &delpg.Store{DB: pg}, Audit: &audpg.Store{DB: pg}}
 	})
 }

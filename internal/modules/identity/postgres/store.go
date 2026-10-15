@@ -106,7 +106,7 @@ func (s *Store) WorkspaceByName(ctx context.Context, name string) (identity.Work
 	if errors.Is(err, pgx.ErrNoRows) {
 		return identity.Workspace{}, db.ErrNotFound
 	}
-	return identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt}, err
+	return toWorkspace(w), err
 }
 
 // Credential returns the actor's password hash.
@@ -153,4 +153,67 @@ func (s *Store) RevokeSession(ctx context.Context, id ids.ID, at time.Time) erro
 // RevokeSessionsForActor revokes every session of the actor except keep.
 func (s *Store) RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID, at time.Time) error {
 	return s.q(ctx).RevokeSessionsForActor(ctx, sqlcgen.RevokeSessionsForActorParams{At: at, ActorID: actorID, Keep: keep})
+}
+
+func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
+	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, EmergencyStopAt: w.EmergencyStopAt}
+	if w.EmergencyStopBy != nil {
+		out.EmergencyStopBy = *w.EmergencyStopBy
+	}
+	return out
+}
+
+func toToken(t sqlcgen.ApiToken) identity.Token {
+	return identity.Token{ID: t.ID, ActorID: t.ActorID, Hash: t.TokenHash, Label: t.Label,
+		CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt}
+}
+
+// ListTokens lists an actor's tokens, oldest first.
+func (s *Store) ListTokens(ctx context.Context, actorID ids.ID) ([]identity.Token, error) {
+	rows, err := s.q(ctx).ListTokens(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]identity.Token, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toToken(r))
+	}
+	return out, nil
+}
+
+// TokenByID loads a token.
+func (s *Store) TokenByID(ctx context.Context, id ids.ID) (identity.Token, error) {
+	t, err := s.q(ctx).TokenByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Token{}, db.ErrNotFound
+	}
+	return toToken(t), err
+}
+
+// RevokeToken revokes a token.
+func (s *Store) RevokeToken(ctx context.Context, id ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeToken(ctx, sqlcgen.RevokeTokenParams{ID: id, RevokedAt: &at})
+}
+
+// SetActorState changes an actor's state.
+func (s *Store) SetActorState(ctx context.Context, actorID ids.ID, state string) error {
+	return s.q(ctx).SetActorState(ctx, sqlcgen.SetActorStateParams{ID: actorID, State: state})
+}
+
+// WorkspaceByID loads a workspace.
+func (s *Store) WorkspaceByID(ctx context.Context, id ids.ID) (identity.Workspace, error) {
+	w, err := s.q(ctx).WorkspaceByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Workspace{}, db.ErrNotFound
+	}
+	return toWorkspace(w), err
+}
+
+// SetEmergencyStop turns the emergency stop on or off.
+func (s *Store) SetEmergencyStop(ctx context.Context, workspaceID ids.ID, at *time.Time, by ids.ID) error {
+	var byPtr *ids.ID
+	if at != nil {
+		byPtr = &by
+	}
+	return s.q(ctx).SetEmergencyStop(ctx, sqlcgen.SetEmergencyStopParams{At: at, By: byPtr, ID: workspaceID})
 }
