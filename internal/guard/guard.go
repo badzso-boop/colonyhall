@@ -23,6 +23,13 @@ type Agent struct {
 	Client  *Client
 	Adapter Adapter
 	Log     *slog.Logger
+	// Policy, when set (host mode), decides whether and where work runs:
+	// the server's grants checked against this machine's roots. Without
+	// it, Cfg.AllowWork and Cfg.Dir apply (single-machine config).
+	Policy func() WorkPolicy
+
+	workMu     sync.Mutex
+	workCancel context.CancelFunc
 
 	me       Me
 	handles  map[string]string
@@ -190,9 +197,38 @@ func (a *Agent) apply(ctx context.Context, it PromptItem, act Action) error {
 	return nil
 }
 
-func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
+// WorkPolicy says whether and where a work run may happen.
+type WorkPolicy struct {
+	Allowed bool
+	Reason  string // why not, shown in the chat
+	Dir     string
+	AddDirs []string
+	Wrap    func(name string, args []string) (string, []string)
+}
+
+func (a *Agent) policy() WorkPolicy {
+	if a.Policy != nil {
+		return a.Policy()
+	}
 	if !a.Cfg.AllowWork {
-		return a.reply(ctx, it.Item, "I can only chat here; ask a human to run this task.", "g-"+it.ID)
+		return WorkPolicy{Reason: "I can only chat here; ask a human to run this task."}
+	}
+	return WorkPolicy{Allowed: true, Dir: a.Cfg.Dir}
+}
+
+// StopWork cancels a running work run, e.g. because its grants changed.
+func (a *Agent) StopWork() {
+	a.workMu.Lock()
+	defer a.workMu.Unlock()
+	if a.workCancel != nil {
+		a.workCancel()
+	}
+}
+
+func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
+	p := a.policy()
+	if !p.Allowed {
+		return a.reply(ctx, it.Item, p.Reason, "g-"+it.ID)
 	}
 	if strings.TrimSpace(task) == "" {
 		task = it.Body
@@ -201,10 +237,18 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		return err
 	}
 	wctx, cancel := context.WithTimeout(ctx, a.Cfg.WorkTimeout)
+	a.workMu.Lock()
+	a.workCancel = cancel
+	a.workMu.Unlock()
 	res, err := a.Adapter.Work(wctx, WorkRequest{
-		Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: a.Cfg.Dir, PermissionMode: a.Cfg.PermissionMode,
+		Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
+		AddDirs: p.AddDirs, Wrap: p.Wrap,
 	})
+	stopped := errors.Is(wctx.Err(), context.Canceled)
 	cancel()
+	a.workMu.Lock()
+	a.workCancel = nil
+	a.workMu.Unlock()
 	a.logRun("work", a.Cfg.WorkModel, 1, res, err)
 	if ctx.Err() != nil {
 		return errHalted
@@ -212,6 +256,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	text := res.Text
 	if err != nil {
 		text = "⚠️ " + clip(err.Error(), 300)
+	}
+	if stopped {
+		text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
 	}
 	if strings.TrimSpace(text) == "" {
 		text = "Done."

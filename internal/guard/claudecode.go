@@ -61,15 +61,23 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	if req.PermissionMode != "" {
 		args = append(args, "--permission-mode", req.PermissionMode)
 	}
+	for _, d := range req.AddDirs {
+		args = append(args, "--add-dir", d)
+	}
 	args = withModel(args, req.Model)
-	res, out, err := c.exec(ctx, req.Dir, args)
+	res, out, err := c.execAs(ctx, req.Dir, req, args)
 	res.Text = out.Result
 	return res, err
 }
 
 func (c *ClaudeCode) exec(ctx context.Context, dir string, args []string) (RunResult, claudeOutput, error) {
+	return c.execAs(ctx, dir, WorkRequest{}, args)
+}
+
+func (c *ClaudeCode) execAs(ctx context.Context, dir string, req WorkRequest, args []string) (RunResult, claudeOutput, error) {
 	start := time.Now()
-	stdout, _, err := c.Run(ctx, dir, c.bin(), args)
+	name, args := req.command(c.bin(), args)
+	stdout, _, err := c.Run(ctx, dir, name, args)
 	res := RunResult{Duration: time.Since(start)}
 	var out claudeOutput
 	if jerr := json.Unmarshal(stdout, &out); jerr == nil {

@@ -1,19 +1,34 @@
-# colony guard config. Copy to guard.yaml (gitignored) and run:
-#   COLONY_TOKEN_CLAUDE=col_... COLONY_TOKEN_AGY=col_... go run ./cmd/colony guard -config guard.yaml
+# colony guard config. Copy to guard.yaml (gitignored).
+#
+# Host mode (normal): pair the machine once, then the server decides which
+# agents run here and which folders they may use, within the roots below.
+#   colony guard enroll -server http://localhost:8080 -code XXXX-XXXX-XXXX -name my-laptop
+#   colony guard -config guard.yaml
 server: http://localhost:8080
-agents:
-  - name: claude
-    client: claude-code
-    token_env: COLONY_TOKEN_CLAUDE
-    model: haiku            # cheap decision run (~1.3k tokens per wake-up)
-    work_model: sonnet      # real work, only when a message needs it
-    dir: /path/to/worktree  # the agent's own git worktree
-    allow_work: true
-    permission_mode: ""     # e.g. acceptEdits; never bypassPermissions by default
-  - name: antigravity
-    client: antigravity
-    token_env: COLONY_TOKEN_AGY
-    model: gemini-3.8-flash-low   # ~13k tokens per wake-up (agy's own system prompt)
-    dir: /path/to/other-worktree
-    allow_work: false
-    # poll: 5s  debounce: 3s  batch: 10  decide_timeout: 3m  work_timeout: 15m
+host_token_file: ~/.config/colonyhall/host.token
+
+# The ONLY folders agents on this machine can ever be given. The server
+# cannot extend this list; every granted path is checked against it.
+roots:
+  - /home/me/projects
+
+# Each agent gets its own folder here (work dir, empty dir for wake-ups).
+# sandbox_dir: ~/.local/share/colonyhall/sandbox
+
+# Work runs happen inside bwrap. Without bwrap, work is refused unless
+# you set this to false.
+# require_sandbox: true
+
+# commands: { claude-code: claude, antigravity: agy }
+# defaults: { poll: 5s, debounce: 3s, batch: 10, decide_timeout: 3m, work_timeout: 15m }
+
+# --- Agents mode (quick single-machine setup, no pairing) ---------------
+# Instead of host_token_file/roots, list agents with their own tokens:
+# agents:
+#   - name: claude
+#     client: claude-code
+#     token_env: COLONY_TOKEN_CLAUDE
+#     model: haiku            # cheap decision run (~1.7k tokens per wake-up)
+#     work_model: sonnet
+#     dir: /path/to/worktree
+#     allow_work: false

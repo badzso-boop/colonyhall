@@ -3,17 +3,35 @@ package guard
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the guard's YAML file.
+// Config is the guard's YAML file. Two modes:
+//
+//   - host mode (host_token_file set): the server says which agents run
+//     here and which folders they may use; this file only sets the
+//     machine owner's limits (roots, sandbox). This is the normal mode.
+//   - agents mode (agents listed): a fixed list with tokens, for a quick
+//     single-machine setup without pairing.
 type Config struct {
 	Server string        `yaml:"server"`
 	Agents []AgentConfig `yaml:"agents"`
+
+	HostTokenFile  string            `yaml:"host_token_file"`
+	Roots          []string          `yaml:"roots"`           // the only folders agents can ever get
+	SandboxDir     string            `yaml:"sandbox_dir"`     // default ~/.local/share/colonyhall/sandbox
+	RequireSandbox *bool             `yaml:"require_sandbox"` // default true: no work runs without bwrap
+	ConfigPoll     time.Duration     `yaml:"config_poll"`
+	Commands       map[string]string `yaml:"commands"` // client → binary, e.g. claude-code: claude
+	Defaults       AgentConfig       `yaml:"defaults"` // poll, debounce, batch, timeouts for host-mode agents
 }
+
+// HostMode reports whether the server manages this machine's agents.
+func (c *Config) HostMode() bool { return c.HostTokenFile != "" }
 
 // AgentConfig describes one agent the guard runs.
 type AgentConfig struct {
@@ -53,39 +71,76 @@ func (c *Config) Validate() error {
 	if c.Server == "" {
 		return fmt.Errorf("guard: server is required")
 	}
+	if c.HostMode() {
+		return c.validateHost()
+	}
 	if len(c.Agents) == 0 {
-		return fmt.Errorf("guard: no agents configured")
+		return fmt.Errorf("guard: no agents configured (or set host_token_file for host mode)")
 	}
 	for i := range c.Agents {
 		a := &c.Agents[i]
-		if _, ok := Adapters[a.Client]; !ok {
-			return fmt.Errorf("guard: agent %d: unknown client %q (have %s)", i+1, a.Client, strings.Join(AdapterNames(), ", "))
-		}
 		if a.TokenEnv == "" && a.TokenFile == "" {
 			return fmt.Errorf("guard: agent %d: token_env or token_file is required", i+1)
 		}
-		if a.Name == "" {
-			a.Name = a.Client
+		if err := a.defaults(); err != nil {
+			return fmt.Errorf("guard: agent %d: %w", i+1, err)
 		}
-		if a.Dir == "" {
-			a.Dir = "."
+	}
+	return nil
+}
+
+func (c *Config) validateHost() error {
+	if len(c.Agents) > 0 {
+		return fmt.Errorf("guard: host mode: agents come from the server; remove the agents list")
+	}
+	if len(c.Roots) == 0 {
+		return fmt.Errorf("guard: host mode: list at least one root folder (roots)")
+	}
+	home, _ := os.UserHomeDir()
+	if c.SandboxDir == "" {
+		c.SandboxDir = filepath.Join(home, ".local", "share", "colonyhall", "sandbox")
+	}
+	if strings.HasPrefix(c.HostTokenFile, "~/") {
+		c.HostTokenFile = filepath.Join(home, c.HostTokenFile[2:])
+	}
+	if c.RequireSandbox == nil {
+		t := true
+		c.RequireSandbox = &t
+	}
+	if c.ConfigPoll <= 0 {
+		c.ConfigPoll = 10 * time.Second
+	}
+	if c.Commands == nil {
+		c.Commands = map[string]string{}
+	}
+	return nil
+}
+
+func (a *AgentConfig) defaults() error {
+	if _, ok := Adapters[a.Client]; !ok {
+		return fmt.Errorf("unknown client %q (have %s)", a.Client, strings.Join(AdapterNames(), ", "))
+	}
+	if a.Name == "" {
+		a.Name = a.Client
+	}
+	if a.Dir == "" {
+		a.Dir = "."
+	}
+	def := func(d *time.Duration, v time.Duration) {
+		if *d <= 0 {
+			*d = v
 		}
-		def := func(d *time.Duration, v time.Duration) {
-			if *d <= 0 {
-				*d = v
-			}
-		}
-		def(&a.Poll, 5*time.Second)
-		def(&a.Debounce, 3*time.Second)
-		def(&a.DecideTimeout, 3*time.Minute)
-		def(&a.WorkTimeout, 15*time.Minute)
-		def(&a.HaltCheck, 2*time.Second)
-		if a.Batch <= 0 {
-			a.Batch = 10
-		}
-		if a.WorkModel == "" {
-			a.WorkModel = a.Model
-		}
+	}
+	def(&a.Poll, 5*time.Second)
+	def(&a.Debounce, 3*time.Second)
+	def(&a.DecideTimeout, 3*time.Minute)
+	def(&a.WorkTimeout, 15*time.Minute)
+	def(&a.HaltCheck, 2*time.Second)
+	if a.Batch <= 0 {
+		a.Batch = 10
+	}
+	if a.WorkModel == "" {
+		a.WorkModel = a.Model
 	}
 	return nil
 }

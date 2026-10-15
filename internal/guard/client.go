@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,16 @@ import (
 type Client struct {
 	BaseURL string
 	Token   string
-	HTTP    *http.Client
+	// Tokens, when set, supplies the token instead of Token (host mode:
+	// short-lived agent tokens the guard requests and renews).
+	Tokens TokenSource
+	HTTP   *http.Client
+}
+
+// TokenSource hands out a valid token; Invalidate drops a rejected one.
+type TokenSource interface {
+	Token(ctx context.Context) (string, error)
+	Invalidate()
 }
 
 // Me is the agent as /me returns it.
@@ -59,19 +69,33 @@ type APIError struct {
 func (e *APIError) Error() string { return fmt.Sprintf("colonyhall: HTTP %d: %s", e.Status, e.Detail) }
 
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
+	_, err := c.doH(ctx, method, path, nil, in, out)
+	return err
+}
+
+func (c *Client) doH(ctx context.Context, method, path string, hdr map[string]string, in, out any) (http.Header, error) {
 	var body io.Reader
 	if in != nil {
 		raw, err := json.Marshal(in)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		body = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, strings.TrimSuffix(c.BaseURL, "/")+path, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	for k, v := range hdr {
+		req.Header.Set(k, v)
+	}
+	token := c.Token
+	if c.Tokens != nil {
+		if token, err = c.Tokens.Token(ctx); err != nil {
+			return nil, err
+		}
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -81,12 +105,15 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	}
 	res, err := hc.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if res.StatusCode == http.StatusUnauthorized && c.Tokens != nil {
+		c.Tokens.Invalidate()
 	}
 	if res.StatusCode >= 300 {
 		var p struct{ Detail, Title string }
@@ -94,12 +121,12 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		if p.Detail == "" {
 			p.Detail = p.Title
 		}
-		return &APIError{Status: res.StatusCode, Detail: p.Detail}
+		return res.Header, &APIError{Status: res.StatusCode, Detail: p.Detail}
 	}
 	if out != nil && len(raw) > 0 {
-		return json.Unmarshal(raw, out)
+		return res.Header, json.Unmarshal(raw, out)
 	}
-	return nil
+	return res.Header, nil
 }
 
 // Me returns the agent with its current state.
@@ -164,4 +191,84 @@ func (c *Client) Handles(ctx context.Context) (map[string]string, error) {
 		out[a.ID] = a.Handle
 	}
 	return out, nil
+}
+
+// HostAgent is one agent of the host config.
+type HostAgent struct {
+	AgentID        string  `json:"agent_id"`
+	Handle         string  `json:"handle"`
+	Client         string  `json:"client"`
+	Model          string  `json:"model"`
+	WorkModel      string  `json:"work_model"`
+	AllowWork      bool    `json:"allow_work"`
+	PermissionMode string  `json:"permission_mode"`
+	Grants         []Grant `json:"grants"`
+}
+
+// HostConfig is what the server says this machine runs.
+type HostConfig struct {
+	Version string      `json:"version"`
+	Agents  []HostAgent `json:"agents"`
+}
+
+// HostReport is what the guard tells the server about this machine.
+type HostReport struct {
+	GuardVersion string         `json:"guard_version"`
+	OS           string         `json:"os"`
+	Roots        []string       `json:"roots"`
+	Clients      []ReportClient `json:"clients"`
+	Sandbox      string         `json:"sandbox"`
+	Rejected     []Rejected     `json:"rejected"`
+}
+
+// ReportClient is an AI client found on this machine.
+type ReportClient struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// Rejected is a grant this machine refused, with the reason.
+type Rejected struct {
+	AgentID string `json:"agent_id"`
+	Path    string `json:"path"`
+	Reason  string `json:"reason"`
+}
+
+// Enroll registers this machine with a pairing code; it returns the host
+// token (call on a Client without a token).
+func (c *Client) Enroll(ctx context.Context, code, name string) (string, error) {
+	var r struct {
+		Token string `json:"token"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/v1/hosts/enroll", map[string]any{"code": code, "name": name}, &r)
+	return r.Token, err
+}
+
+// Report sends the machine report (host token).
+func (c *Client) Report(ctx context.Context, r HostReport) error {
+	return c.do(ctx, http.MethodPost, "/api/v1/host/report", r, nil)
+}
+
+// HostConfig fetches the config; changed is false when version is current.
+func (c *Client) HostConfig(ctx context.Context, version string) (cfg HostConfig, changed bool, err error) {
+	hdr := map[string]string{}
+	if version != "" {
+		hdr["If-None-Match"] = `"` + version + `"`
+	}
+	_, err = c.doH(ctx, http.MethodGet, "/api/v1/host/config", hdr, nil, &cfg)
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == http.StatusNotModified {
+		return HostConfig{Version: version}, false, nil
+	}
+	return cfg, err == nil, err
+}
+
+// AgentToken requests a short-lived token for an assigned agent.
+func (c *Client) AgentToken(ctx context.Context, agentID string) (string, time.Time, error) {
+	var r struct {
+		Token     string    `json:"token"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/v1/host/agents/"+agentID+"/token", nil, &r)
+	return r.Token, r.ExpiresAt, err
 }

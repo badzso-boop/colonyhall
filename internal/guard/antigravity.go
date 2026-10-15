@@ -56,15 +56,23 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 	if req.PermissionMode != "" {
 		args = append(args, "--mode", req.PermissionMode)
 	}
+	for _, d := range req.AddDirs {
+		args = append(args, "--add-dir", d)
+	}
 	args = withModel(args, req.Model)
-	res, out, err := a.exec(ctx, req.Dir, args)
+	res, out, err := a.execAs(ctx, req.Dir, req, args)
 	res.Text = out.Response
 	return res, err
 }
 
 func (a *Antigravity) exec(ctx context.Context, dir string, args []string) (RunResult, agyOutput, error) {
+	return a.execAs(ctx, dir, WorkRequest{}, args)
+}
+
+func (a *Antigravity) execAs(ctx context.Context, dir string, req WorkRequest, args []string) (RunResult, agyOutput, error) {
 	start := time.Now()
-	stdout, _, err := a.Run(ctx, dir, a.bin(), args)
+	name, args := req.command(a.bin(), args)
+	stdout, _, err := a.Run(ctx, dir, name, args)
 	res := RunResult{Duration: time.Since(start)}
 	var out agyOutput
 	if jerr := json.Unmarshal(stdout, &out); jerr == nil {

@@ -34,6 +34,16 @@ type WorkRequest struct {
 	Model          string
 	Dir            string
 	PermissionMode string // client-specific, e.g. Claude's acceptEdits; empty = client default
+	AddDirs        []string
+	// Wrap, when set, wraps the client command (the bwrap sandbox).
+	Wrap func(name string, args []string) (string, []string)
+}
+
+func (r WorkRequest) command(name string, args []string) (string, []string) {
+	if r.Wrap == nil {
+		return name, args
+	}
+	return r.Wrap(name, args)
 }
 
 // Usage counts tokens of one run.
