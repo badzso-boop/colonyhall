@@ -32,6 +32,9 @@ type AgentHost struct {
 	PermissionMode string
 	CreatedBy      uuid.UUID
 	CreatedAt      time.Time
+	Mode           string
+	RootDir        string
+	Sandbox        bool
 }
 
 type ApiToken struct {

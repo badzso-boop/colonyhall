@@ -9,11 +9,17 @@ import (
 )
 
 type hostAgent struct {
-	AgentID string `json:"agent_id"`
-	Handle  string `json:"handle"`
-	Client  string `json:"client"`
-	Model   string `json:"model"`
-	Grants  []struct {
+	AgentID        string `json:"agent_id"`
+	Handle         string `json:"handle"`
+	Client         string `json:"client"`
+	Model          string `json:"model"`
+	WorkModel      string `json:"work_model"`
+	AllowWork      bool   `json:"allow_work"`
+	PermissionMode string `json:"permission_mode"`
+	Mode           string `json:"mode"`
+	RootDir        string `json:"root_dir"`
+	Sandbox        bool   `json:"sandbox"`
+	Grants         []struct {
 		ID           string `json:"id"`
 		Path         string `json:"path"`
 		Mode         string `json:"mode"`
@@ -75,12 +81,23 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 	}
 	var assigned hostAgent
 	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "allow_work": true}, &assigned); s != http.StatusOK {
+		map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "allow_work": true, "root_dir": "/app"}, &assigned); s != http.StatusOK {
 		t.Fatalf("assign: %d", s)
 	}
-	if assigned.Handle != "fake-agent" || assigned.Model != "haiku" {
+	if assigned.Handle != "fake-agent" || assigned.Model != "haiku" || assigned.Mode != "direct" || assigned.RootDir != "/app" || assigned.Sandbox != false || assigned.PermissionMode != "auto" {
 		t.Fatalf("assigned: %+v", assigned)
 	}
+
+	// Validation tests: invalid mode and missing root_dir in direct mode.
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "invalid", "root_dir": "/app"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("invalid mode allowed: %d", s)
+	}
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("direct mode without root_dir allowed: %d", s)
+	}
+
 	var tok struct{ Token string }
 	if s := e.do("POST", "/api/v1/host/agents/"+agent+"/token", hostToken, nil, &tok); s != http.StatusCreated {
 		t.Fatalf("agent token: %d", s)
@@ -99,7 +116,7 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 	}
 
 	// Revoking the host ends its own token and every agent token it got.
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "antigravity"}, nil)
+	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "antigravity", "mode": "compact"}, nil)
 	e.do("POST", "/api/v1/host/agents/"+agent+"/token", hostToken, nil, &tok)
 	if s := e.do("PUT", "/api/v1/hosts/"+host+"/state", server.DevAdminToken, map[string]any{"state": "revoked"}, nil); s != http.StatusNoContent {
 		t.Fatalf("revoke host: %d", s)
@@ -110,7 +127,7 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 	if s := e.do("GET", "/api/v1/me", tok.Token, nil, nil); s != http.StatusUnauthorized {
 		t.Fatalf("agent token of revoked host: %d", s)
 	}
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "claude-code"}, nil); s != http.StatusBadRequest {
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "claude-code", "mode": "compact"}, nil); s != http.StatusBadRequest {
 		t.Fatalf("assign to revoked host: %d", s)
 	}
 }
@@ -123,7 +140,7 @@ func TestHostConfigAndGrants(t *testing.T) {
 	if s := e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": "/work", "mode": "write"}, nil); s != http.StatusBadRequest {
 		t.Fatalf("grant before assignment: %d", s)
 	}
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "claude-code", "model": "haiku"}, nil)
+	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "mode": "compact"}, nil)
 	for _, bad := range []string{"work", "/work/../etc", "/work/", "/a//b"} {
 		if s := e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": bad, "mode": "read"}, nil); s != http.StatusBadRequest {
 			t.Fatalf("bad path %q: %d", bad, s)

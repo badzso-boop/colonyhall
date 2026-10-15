@@ -121,9 +121,11 @@ func (s *Store) Touch(ctx context.Context, id ids.ID, at time.Time) error {
 
 // SetAssignment creates or replaces an agent's assignment.
 func (s *Store) SetAssignment(ctx context.Context, a hosts.Assignment) error {
-	return s.q(ctx).SetAssignment(ctx, sqlcgen.SetAssignmentParams{AgentID: a.AgentID, HostID: a.HostID,
-		WorkspaceID: a.WorkspaceID, Client: a.Client, Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork,
-		PermissionMode: a.PermissionMode, CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt})
+	return s.q(ctx).SetAssignment(ctx, sqlcgen.SetAssignmentParams{
+		AgentID: a.AgentID, HostID: a.HostID, WorkspaceID: a.WorkspaceID, Client: a.Client,
+		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
+		Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt,
+	})
 }
 
 // DeleteAssignment removes an agent's assignment.
@@ -132,9 +134,12 @@ func (s *Store) DeleteAssignment(ctx context.Context, agentID ids.ID) error {
 }
 
 func toAssignment(r sqlcgen.AgentHost) hosts.Assignment {
-	return hosts.Assignment{AgentID: r.AgentID, HostID: r.HostID, WorkspaceID: r.WorkspaceID, Client: r.Client,
+	return hosts.Assignment{
+		AgentID: r.AgentID, HostID: r.HostID, WorkspaceID: r.WorkspaceID, Client: r.Client,
 		Model: r.Model, WorkModel: r.WorkModel, AllowWork: r.AllowWork, PermissionMode: r.PermissionMode,
-		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}
+		Mode: r.Mode, RootDir: r.RootDir, Sandbox: r.Sandbox,
+		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
+	}
 }
 
 // AssignmentByAgent loads an agent's assignment.

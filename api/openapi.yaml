@@ -834,7 +834,7 @@ components:
         outside_roots: { type: boolean, description: "Only when created: the path is outside the roots the host reported" }
     HostAgent:
       type: object
-      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, grants]
+      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, grants]
       properties:
         agent_id: { type: string, format: uuid }
         handle: { type: string }
@@ -844,6 +844,9 @@ components:
         work_model: { type: string }
         allow_work: { type: boolean }
         permission_mode: { type: string }
+        mode: { type: string, enum: [direct, compact] }
+        root_dir: { type: string }
+        sandbox: { type: boolean }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -855,6 +858,9 @@ components:
         work_model: { type: string, maxLength: 100 }
         allow_work: { type: boolean }
         permission_mode: { type: string, maxLength: 40 }
+        mode: { type: string, enum: [direct, compact] }
+        root_dir: { type: string, maxLength: 1024 }
+        sandbox: { type: boolean }
     GrantRequest:
       type: object
       required: [path, mode]

@@ -45,6 +45,24 @@ func (e AssignRequestClient) Valid() bool {
 	}
 }
 
+// Defines values for AssignRequestMode.
+const (
+	AssignRequestModeCompact AssignRequestMode = "compact"
+	AssignRequestModeDirect  AssignRequestMode = "direct"
+)
+
+// Valid indicates whether the value is a known member of the AssignRequestMode enum.
+func (e AssignRequestMode) Valid() bool {
+	switch e {
+	case AssignRequestModeCompact:
+		return true
+	case AssignRequestModeDirect:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChannelKind.
 const (
 	Dm      ChannelKind = "dm"
@@ -132,6 +150,24 @@ func (e HostAgentClient) Valid() bool {
 	case HostAgentClientAntigravity:
 		return true
 	case HostAgentClientClaudeCode:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostAgentMode.
+const (
+	HostAgentModeCompact HostAgentMode = "compact"
+	HostAgentModeDirect  HostAgentMode = "direct"
+)
+
+// Valid indicates whether the value is a known member of the HostAgentMode enum.
+func (e HostAgentMode) Valid() bool {
+	switch e {
+	case HostAgentModeCompact:
+		return true
+	case HostAgentModeDirect:
 		return true
 	default:
 		return false
@@ -273,13 +309,19 @@ type AssignRequest struct {
 	AllowWork      *bool               `json:"allow_work,omitempty"`
 	Client         AssignRequestClient `json:"client"`
 	HostId         openapi_types.UUID  `json:"host_id"`
+	Mode           *AssignRequestMode  `json:"mode,omitempty"`
 	Model          *string             `json:"model,omitempty"`
 	PermissionMode *string             `json:"permission_mode,omitempty"`
+	RootDir        *string             `json:"root_dir,omitempty"`
+	Sandbox        *bool               `json:"sandbox,omitempty"`
 	WorkModel      *string             `json:"work_model,omitempty"`
 }
 
 // AssignRequestClient defines model for AssignRequest.Client.
 type AssignRequestClient string
+
+// AssignRequestMode defines model for AssignRequest.Mode.
+type AssignRequestMode string
 
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
@@ -420,13 +462,19 @@ type HostAgent struct {
 	Grants         []FolderGrant      `json:"grants"`
 	Handle         string             `json:"handle"`
 	HostId         openapi_types.UUID `json:"host_id"`
+	Mode           HostAgentMode      `json:"mode"`
 	Model          string             `json:"model"`
 	PermissionMode string             `json:"permission_mode"`
+	RootDir        string             `json:"root_dir"`
+	Sandbox        bool               `json:"sandbox"`
 	WorkModel      string             `json:"work_model"`
 }
 
 // HostAgentClient defines model for HostAgent.Client.
 type HostAgentClient string
+
+// HostAgentMode defines model for HostAgent.Mode.
+type HostAgentMode string
 
 // HostConfig defines model for HostConfig.
 type HostConfig struct {

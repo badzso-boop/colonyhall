@@ -25,6 +25,9 @@ type AssignmentEvent struct {
 	Client    string `json:"client,omitempty"`
 	Model     string `json:"model,omitempty"`
 	AllowWork bool   `json:"allow_work"`
+	Mode      string `json:"mode,omitempty"`
+	RootDir   string `json:"root_dir,omitempty"`
+	Sandbox   bool   `json:"sandbox"`
 }
 
 // GrantEvent is the payload of grant events.

@@ -64,7 +64,7 @@ func TestSupervisorHostMode(t *testing.T) {
 
 	agent := e.agentID()
 	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true}, nil)
+		map[string]any{"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true, "mode": "compact"}, nil)
 	for _, g := range []map[string]any{{"path": app, "mode": "write"}, {"path": docs, "mode": "read"}, {"path": outside, "mode": "write"}} {
 		e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, g, nil)
 	}

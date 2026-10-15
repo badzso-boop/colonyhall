@@ -83,6 +83,12 @@ type Rejected struct {
 	Reason  string `json:"reason"`
 }
 
+// Agent assignment modes.
+const (
+	AgentModeDirect  = "direct"
+	AgentModeCompact = "compact"
+)
+
 // Assignment says which host runs an agent, and how.
 type Assignment struct {
 	AgentID        ids.ID
@@ -93,6 +99,9 @@ type Assignment struct {
 	WorkModel      string
 	AllowWork      bool
 	PermissionMode string
+	Mode           string
+	RootDir        string
+	Sandbox        bool
 	CreatedBy      ids.ID
 	CreatedAt      time.Time
 }
@@ -124,6 +133,8 @@ var (
 	ErrBadHostToken = errors.New("invalid or revoked host token")
 	ErrBadPath      = errors.New("path must be absolute and clean (no '..'), at most 1024 characters")
 	ErrBadMode      = errors.New("mode must be read or write")
+	ErrBadAgentMode = errors.New("mode must be direct or compact")
+	ErrBadRootDir   = errors.New("direct mode requires a root_dir")
 	ErrBadClient    = errors.New("client must be claude-code or antigravity")
 	ErrBadName      = errors.New("host name must be 1-64 characters")
 	ErrNotAssigned  = errors.New("the agent is not assigned to this host")

@@ -433,13 +433,18 @@ func testHosts(t *testing.T, b Backend) {
 		t.Fatalf("ListHosts: %+v", list)
 	}
 
-	a := hosts.Assignment{AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
-		WorkModel: "sonnet", AllowWork: true, CreatedBy: f.human.ID, CreatedAt: t0}
+	a := hosts.Assignment{
+		AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
+		WorkModel: "sonnet", AllowWork: true, Mode: hosts.AgentModeDirect, RootDir: "/work", Sandbox: false,
+		CreatedBy: f.human.ID, CreatedAt: t0,
+	}
 	must(t, hs.SetAssignment(ctx, a))
 	a.Model = "opus"
+	a.Mode = hosts.AgentModeCompact
+	a.Sandbox = true
 	must(t, hs.SetAssignment(ctx, a)) // replaces
 	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Model != "opus" || !ga.AllowWork {
+	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || !ga.Sandbox {
 		t.Fatalf("AssignmentByAgent: %+v %v", ga, err)
 	}
 	as, err := hs.AssignmentsForHost(ctx, h.ID)
