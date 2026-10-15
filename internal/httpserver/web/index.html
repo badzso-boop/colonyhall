@@ -47,6 +47,10 @@
   .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
   .grant { font-family:ui-monospace, monospace; font-size:12px; }
   .warn { color:#b3261e; } code.code { font-size:16px; letter-spacing:1px; }
+  #errModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
+  #errModal.on { display:flex; }
+  #errModal .card { max-width:720px; width:100%; max-height:80vh; overflow:auto; }
+  #errModal pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; min-height:calc(100vh - 54px); }
     nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; } section { height:calc(72vh - 54px); } }
 </style>
@@ -73,6 +77,7 @@
     </div>
   </section>
 </main>
+<div id="errModal"><div class="card"><h3 id="errTitle"></h3><div class="muted" id="errMeta"></div><pre id="errDetail"></pre><button id="errClose">✕</button></div></div>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -81,14 +86,14 @@ const I18N = {
         lastSeen: "utoljára", never: "még soha", roots: "Gyökérmappák", clients: "Kliensek", sandbox: "Sandbox", none: "nincs",
         rejected: "Elutasított engedély", assign: "Agent hozzárendelése", work: "munka", grant: "Mappa engedélyezése",
         read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép.",
-        allowUnsandboxed: "sandbox nélkül engedélyezve", yes: "igen", no: "nem" },
+        allowUnsandboxed: "sandbox nélkül engedélyezve", yes: "igen", no: "nem", errorDetails: "Hiba részletei" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
         lastSeen: "last seen", never: "never", roots: "Roots", clients: "Clients", sandbox: "Sandbox", none: "none",
         rejected: "Refused grant", assign: "Assign agent", work: "work", grant: "Grant folder",
         read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet.",
-        allowUnsandboxed: "unsandboxed allowed", yes: "yes", no: "no" },
+        allowUnsandboxed: "unsandboxed allowed", yes: "yes", no: "no", errorDetails: "Error details" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -166,7 +171,14 @@ function renderMsg(m) {
   }
   div.querySelector(".who").textContent = "@" + a.handle;
   div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
-  div.querySelector(".body").textContent = m.body;
+  // "[error:<id>]" from the guard: details are for humans, shown on demand.
+  const ref = /\[error:([0-9a-f-]{36})\]/.exec(m.body);
+  div.querySelector(".body").textContent = ref ? m.body.replace(ref[0], "").trim() : m.body;
+  if (ref && me.kind === "human") {
+    const btn = el("button", { textContent: L.errorDetails });
+    btn.onclick = () => showError(ref[1]);
+    div.querySelector(".body").append(" ", btn);
+  }
   for (const r of m.reactions || []) {
     const chip = document.createElement("button");
     chip.className = "chip" + (r.actor_ids.includes(me.id) ? " mine" : "");
@@ -179,6 +191,16 @@ function renderMsg(m) {
   div.querySelector("[data-r]").onclick = () => setReply(m.thread_root_id || m.id);
   return div;
 }
+
+async function showError(id) {
+  const e = await api(`/api/v1/errors/${id}`).catch(err => { alert(err.message); return null; });
+  if (!e) return;
+  $("errTitle").textContent = e.summary;
+  $("errMeta").textContent = `@${actors[e.agent_id]?.handle || "?"} · ${new Date(e.created_at).toLocaleString()}`;
+  $("errDetail").textContent = e.detail;
+  $("errModal").className = "on";
+}
+$("errClose").onclick = () => { $("errModal").className = ""; };
 
 async function toggleReaction(m, emoji) {
   const mine = (m.reactions || []).some(r => r.emoji === emoji && r.actor_ids.includes(me.id));
