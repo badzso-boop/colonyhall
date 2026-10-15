@@ -36,8 +36,8 @@ Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felha
 
 1. A felhasználó a telefonjáról ír a WSL-es gépen dolgozó agentnek: „költöztesd ezt az appot a szerverre”.
 2. Az őr felébreszti az agentet a projekt könyvtárában, a felhasználó saját beállításaival, auto engedélymódban.
-3. Az agent a titkokat (`.env`) a közös átadó mappába teszi a `/mnt/z`-n (a szerver home könyvtára), és a chatben szól a `@szerveres` agentnek; a chatbe csak a fájl helye kerül, a titok soha.
-4. A homelab őre felébreszti a szerveres agentet: átveszi a titkokat, buildel, Dockerben elindítja, és a Cloudflare-ért felelős agenttől aldomaint kér.
+3. Az agent a titkokat (`.env`) a közös átadó mappába teszi a `/mnt/z`-n (a szerver home könyvtára), és a chatben jelzi, hogy kész; a chatbe csak a fájl helye kerül, a titok soha.
+4. A felhasználó (ember) szól a `@szerveres` agentnek; a homelab őre felébreszti: átveszi a titkokat, buildel, Dockerben elindítja. A Cloudflare-aldomaint is a felhasználó kéri a felelős agenttől. (Teljes hozzáférésű agent csak embertől fogad el feladatot; lásd lent.)
 5. Ahol az auto mód megállna, jóváhagyáskérés jön a felhasználó telefonjára. A végén a szálban ott a link.
 
 **Az agent futása (közvetlen mód, alapértelmezett a saját agenteknek):**
@@ -50,6 +50,17 @@ Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felha
 - **A tömör ébresztés** (eszközök nélküli döntő futás, kb. 1,7 ezer token) megmarad azoknak az agenteknek, amelyek csak csevegnek.
 
 **Titkok átadása gépek között:** a WSL-es gép a `/mnt/z`-n eléri a szerver home könyvtárát (`\\192.168.0.45\szmajli01-home`). Ott van a közös átadó mappa: `~/colonyhall-exchange/<projekt>/` (gépen: `/mnt/z/colonyhall-exchange/<projekt>/`). Szabályok: a fájl `chmod 600`; a chatbe csak a hely kerül; a fogadó agent átmásolja a helyére, majd törli az átadó mappából; az átadó mappa soha nem kerül gitbe; a régi fájlokat időnként törölni kell. Az őr induláskor ellenőrzi, hogy a `Z:` csatolva van-e.
+
+**Ki adhat feladatot kinek (döntés, 2026-10-15):**
+
+| Címzett | Ember adhat feladatot | Agent adhat feladatot | Mit tehet |
+| --- | --- | --- | --- |
+| Teljes hozzáférésű agent (közvetlen mód, sandbox nélkül) | Igen | **Nem** – az őr nem indít futást, a szálba ennyit ír: „csak embertől fogadok el feladatot” (DM-ben nem válaszol, hogy ne pörögjenek) | Mindent, amit a felhasználó a terminálban; mindent lát, a sandboxos agentek mappáit is |
+| Sandboxos agent | Igen | Igen | Csak a kapott mappákat látja, ott olvas vagy ír; **parancsot nem futtat** (Claude: csak fájleszközök; Antigravity: üres engedélylista, `command(*)` tiltva, `accept-edits`) |
+
+Következmény a példára: a gépes agent nem utasíthatja a szerveres, teljes hozzáférésű agentet. A teljes hozzáférésű agenteket mindig ember indítja; egymás között csak információt adhatnak át (pl. az átadó mappán át), feladatot nem.
+
+**Hibák:** a chatbe soha nem kerül hibarészlet, csak „⚠️ I ran into an error.” és egy hivatkozás. A részleteket az őr a szerverre küldi (titkok kitakarva), ott csak az az ember olvashatja, aki a beszélgetést is látja (a felületen „Hiba részletei” gomb); agent nem. Az őr naplójában is megvan.
 
 **Ami változatlan:** a vészleállító és a szüneteltetés (a futó CLI-t leállítja), az audit napló, a gépek párosítása, a rövid lejáratú tokenek, a gépenkénti gyökérmappák. A sandbox (`bwrap`) megmarad választható módként idegen vagy kísérleti agenteknek.
 

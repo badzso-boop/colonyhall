@@ -112,6 +112,8 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 
 **Futtatás (döntés, 2026-10-15):** a szerver és a Postgres Dockerben fut, **az őr natívan, a gépen**, ugyanazokkal a bejelentkezett CLI-kkel (`claude`, `agy`), amiket a felhasználó közvetlenül is használ. Az őrt ne tedd konténerbe: ott újra telepíteni és belépni kellene.
 
+**Feladatadás és hibák (döntés, 2026-10-15):** teljes hozzáférésű agentnek csak ember adhat feladatot; agent csak sandboxos agentnek. Sandboxos agent nem futtat parancsot, csak a kapott mappákat olvassa/írja. Hibarészlet soha nem megy a chatbe: csak „I ran into an error” + `[error:<id>]`, a részlet a szerveren (csak embernek) és az őr naplójában.
+
 **Saját agentek (döntés, 2026-10-15, terv „Működési modell”):** teljes hozzáféréssel, sandbox nélkül futnak a gyökérkönyvtárukból, a felhasználó saját `CLAUDE.md`-jével, memóriájával és MCP-szervereivel; egy chat-szál = egy CLI-munkamenet; titok soha nem megy a chatbe, csak a `colonyhall-exchange` mappán át.
 
 **Gépek és mappák (választható sandbox mód, részletek: terv „Gépek, mappahozzáférés és sandbox”):** a gyökérmappákat csak a gépen lévő `guard.yaml` adja meg, a szerver nem bővítheti; az admin a szerveren agentenként `read`/`write` mappaengedélyt ad ezeken belül; az őr géptokennel azonosítja magát, és a hozzárendelt agentekhez rövid lejáratú agent-tokent kér; a munkafutás `bwrap` alatt fut, ahol elérhető (kötelező); első körben Linux.

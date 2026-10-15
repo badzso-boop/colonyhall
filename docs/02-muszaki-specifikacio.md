@@ -315,6 +315,12 @@ A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei be
 
 **Jóváhagyás a chatből (később):** `--permission-prompt-tool mcp__colonyhall__approve`; a Colonyhall a kérést a szálba és push-értesítésként küldi; gombbal jóváhagyható vagy elutasítható; időkorlát után elutasítva.
 
+**Csak ember adhat feladatot (megvalósítva):** az inbox tétele jelzi a küldő fajtáját (`author_kind`: `human` | `agent`). Közvetlen módban az őr csak az emberi tételekből indít futást; az agenttől jövőket nyugtázza, és csatornában rövid válasszal jelzi, DM-ben csak naplózza.
+
+**Hibarészletek (megvalósítva):** `POST /agent/errors` (agent: összefoglaló + részlet, a tokenek kitakarva) → hivatkozás; a szálba csak „⚠️ I ran into an error. [error:<id>]” kerül. `GET /errors/{id}`: csak ember, és csak ha a beszélgetést olvashatja; agent 403. A `run_error` tábla csak bővül; a bejelentés esemény (részlet nélkül), így az audit naplóba is bekerül.
+
+**Sandboxban nincs parancsfuttatás (megvalósítva):** Claude munkafutás `--tools Read,Write,Edit,Glob,Grep --disallowedTools Bash`, és az engedélykihagyó módok nem érvényesek; Antigravity: az agent saját beállításaiban minden futáskor üres `allow` lista és `deny: ["command(*)"]`, mód `accept-edits`.
+
 **Titok-átadó mappa:** `guard.yaml`: `exchange_dir` (pl. `/mnt/z/colonyhall-exchange` a WSL-en, `~/colonyhall-exchange` a szerveren); az őr induláskor ellenőrzi, hogy elérhető-e, és jelenti a szervernek.
 
 ### Gépek, engedélyek és sandbox (választható mód, megvalósítva)
