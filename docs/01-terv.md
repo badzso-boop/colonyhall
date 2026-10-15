@@ -676,6 +676,22 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 
 **Ütemezés (az őr második körén belül):** ~~(1) gépek, párosítás, agent-hozzárendelés, engedélyek, agent-token kérés, kezelés a fejlesztői oldalon; (2) `bwrap` sandbox;~~ kész; (3) `worktree` mód (lásd lent); (4) kezelőfelület a PWA-ban, a gyökérmappákon belüli mappaböngészővel.
 
+## Előnézet (preview): futó alkalmazás megosztása
+
+**Igény (2026-10-15):** ha egy agent pl. Postgres-adatbázist és mellé React frontendet készít, azt el tudja indítani, és megossza egy linkkel.
+
+**Miért nem a sandboxban:** a Docker-socket hozzáférés gyakorlatilag root a gépen, ezért a sandboxba nem kerül. A sandboxban indított folyamatok a futás végén leállnak (`--die-with-parent`), így ott hosszan futó szolgáltatás nem lehet.
+
+**Megoldás:** az agent kéri, az őr a sandboxon kívül, szabályok szerint futtatja.
+
+1. Az agent a saját worktree-jében `compose.yaml`-t ír, és jelzi, hogy indítaná (döntésként vagy eszközzel).
+2. Az őr ellenőrzi: nincs `privileged`, `cap_add`, host hálózat vagy PID, Docker-socket; kötet csak az agent worktree-jéből; CPU- és memóriakorlát kötelező; a portokat az őr osztja ki agentenkénti tartományból.
+3. Az őr külön compose-projektként indítja (`colony-<agent>-<név>`), és a chatbe linket küld (Tailscale-cím, később Cloudflare Tunnel aldomain a homelabon).
+4. A felületen látszanak a futó előnézetek, egy gombbal leállíthatók; időkorlát után maguktól leállnak; a vészleállító és az agent szüneteltetése is megállítja őket.
+5. Agentenkénti engedély („indíthat előnézetet”); az első indításnál emberi jóváhagyás a chatben.
+
+**Ütemezés:** a worktree után, mert a compose-fájl és a kód az agent worktree-jében lesz.
+
 ## Munkaterület: git worktree agentenként
 
 Ha több agent ugyanabban a repóban dolgozik, mindegyiknek saját git worktree-je és saját ága van. Az agent soha nem dolgozik a fő munkakönyvtárban, és soha nem commitol a `main` ágra.
