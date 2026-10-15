@@ -193,8 +193,8 @@ func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause erro
 		}
 		for _, it := range items {
 			if dropped[it.ID] {
-				msg := "⚠️ I could not handle this after " + fmt.Sprint(maxAttempts) + " attempts: " + clip(cause.Error(), 200)
-				if err := a.reply(ctx, it, msg, "gx-"+it.ID); err != nil {
+				summary := fmt.Sprintf("gave up after %d attempts", maxAttempts)
+				if err := a.reportError(ctx, it, summary, cause.Error(), "gx-"+it.ID); err != nil {
 					a.Log.Warn("guard: could not report the failure", "err", err)
 				}
 			}
@@ -235,6 +235,7 @@ type WorkPolicy struct {
 	Dir     string
 	AddDirs []string
 	Wrap    Wrapper
+	NoExec  bool
 }
 
 func (a *Agent) policy() WorkPolicy {
@@ -273,7 +274,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	a.workMu.Unlock()
 	res, err := a.Adapter.Work(wctx, WorkRequest{
 		Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
-		AddDirs: p.AddDirs, Wrap: p.Wrap,
+		AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
 	})
 	stopped := errors.Is(wctx.Err(), context.Canceled)
 	cancel()
@@ -285,8 +286,8 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		return errHalted
 	}
 	text := res.Text
-	if err != nil {
-		text = "⚠️ " + clip(err.Error(), 300)
+	if err != nil && !stopped {
+		return a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
 	}
 	if stopped {
 		text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
@@ -295,6 +296,24 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		text = "Done."
 	}
 	return a.reply(ctx, it.Item, text, "gw-"+it.ID)
+}
+
+// reportError keeps an error's details out of the chat: they go to the
+// server (humans only) and the guard's log; the thread gets a short note
+// with a reference the web page turns into a "details" button.
+func (a *Agent) reportError(ctx context.Context, it Item, summary, detail, clientID string) error {
+	a.Log.Error("guard: run error", "agent", "@"+a.me.Handle, "summary", summary, "detail", detail)
+	thread := it.ThreadRootID
+	if thread == "" && !it.DM {
+		thread = it.ItemID
+	}
+	msg := "⚠️ I ran into an error."
+	if id, err := a.Client.ReportError(ctx, it.ChannelID, thread, summary, detail); err == nil && id != "" {
+		msg += " [error:" + id + "]"
+	} else if err != nil {
+		a.Log.Warn("guard: could not store the error details", "err", err)
+	}
+	return a.reply(ctx, it, msg, clientID)
 }
 
 // reply answers in the item's thread (top level in a DM without a thread).

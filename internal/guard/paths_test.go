@@ -1,6 +1,8 @@
 package guard
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -234,3 +236,62 @@ func TestPolicyRechecksGrants(t *testing.T) {
 }
 
 func discardLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+// TestSandboxedRunsCannotExecute: sandboxed agents read and write their
+// folders but run no commands (decision, 2026-10-15).
+func TestSandboxedRunsCannotExecute(t *testing.T) {
+	// Claude: only file tools, Bash explicitly disallowed.
+	f := &fakeRunner{stdout: `{"result":"ok"}`}
+	c := &ClaudeCode{Run: f.run}
+	if _, err := c.Work(context.Background(), WorkRequest{Prompt: "x", NoExec: true}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := flagValue(f.args, "--tools"); v != ClaudeFileTools {
+		t.Errorf("--tools %q", v)
+	}
+	if v, _ := flagValue(f.args, "--disallowedTools"); v != "Bash" {
+		t.Errorf("--disallowedTools %q", v)
+	}
+
+	// Antigravity: the agent's own settings deny commands on every run,
+	// even if a previous run allowed them again.
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	cli := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(cli, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	user := `{"model":"x","permissions":{"allow":["read_url(*)","command(git *)","command(rm *)"]}}`
+	if err := os.WriteFile(filepath.Join(cli, "settings.json"), []byte(user), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sb := &Sandbox{Bwrap: "bwrap", Home: home, Root: filepath.Join(base, "sandbox")}
+	agentDir := filepath.Join(sb.Root, "bot")
+	own := agentDir + ".config/gemini/antigravity-cli/settings.json"
+	for round := 0; round < 2; round++ {
+		if _, _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := os.ReadFile(own)
+		var s struct {
+			Model       string
+			Permissions struct{ Allow, Deny []string }
+		}
+		if err := json.Unmarshal(raw, &s); err != nil {
+			t.Fatal(err)
+		}
+		wantAllow := []string{"read_url(*)"} // round 0: the user's settings minus commands
+		if round == 1 {
+			wantAllow = []string{} // round 1: the run's own edit, minus commands
+		}
+		if !slices.Equal(s.Permissions.Allow, wantAllow) || !slices.Equal(s.Permissions.Deny, []string{"command(*)"}) ||
+			(round == 0 && s.Model != "x") {
+			t.Fatalf("round %d: %s", round, raw)
+		}
+		// A run tries to allow commands again in its copy.
+		_ = os.WriteFile(own, []byte(`{"permissions":{"allow":["command(*)"]}}`), 0o600)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(cli, "settings.json")); string(raw) != user {
+		t.Errorf("the user's own agy settings must not change: %s", raw)
+	}
+}

@@ -65,6 +65,9 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	for _, d := range req.AddDirs {
 		args = append(args, "--add-dir", d)
 	}
+	if req.NoExec {
+		args = append(args, "--tools", ClaudeFileTools, "--disallowedTools", "Bash")
+	}
 	args = withModel(args, req.Model)
 	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args)
 	res.Text = out.Result
@@ -120,6 +123,10 @@ func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args 
 	}
 	return res, out, nil
 }
+
+// ClaudeFileTools are the only tools of a sandboxed work run: files, no
+// shell, no network.
+const ClaudeFileTools = "Read,Write,Edit,Glob,Grep"
 
 func withModel(args []string, model string) []string {
 	if model != "" {

@@ -471,7 +471,7 @@ func TestClaudeDirectResumeAfterFailedFirstRun(t *testing.T) {
 	}
 
 	items := []Item{
-		{ID: "it-1", ItemID: "msg-root", Channel: "general", ChannelID: "c1", Body: "hello"},
+		{ID: "it-1", AuthorKind: "human", ItemID: "msg-root", Channel: "general", ChannelID: "c1", Body: "hello"},
 	}
 
 	// First run fails

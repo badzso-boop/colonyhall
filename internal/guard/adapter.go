@@ -38,6 +38,9 @@ type WorkRequest struct {
 	Dir            string
 	PermissionMode string // client-specific, e.g. Claude's acceptEdits; empty = client default
 	AddDirs        []string
+	// NoExec limits the run to file tools: sandboxed agents may read and
+	// write their granted folders but not run commands.
+	NoExec bool
 	// Wrap, when set, wraps the client command (the bwrap sandbox).
 	Wrap Wrapper
 }

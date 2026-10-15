@@ -390,6 +390,9 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		}
 	}
 	p := WorkPolicy{Allowed: true, Dir: work, AddDirs: add}
+	// Sandboxed agents may read and write their folders but not run
+	// commands (decision, 2026-10-15); full-access agents run as in a terminal.
+	p.NoExec = conf.Sandbox
 	if conf.Sandbox && s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
 		p.Wrap = func(name string, args []string) (string, []string, []string, error) {

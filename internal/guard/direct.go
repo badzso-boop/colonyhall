@@ -217,6 +217,7 @@ func (a *Agent) handleDirect(ctx context.Context, items []Item) error {
 	runCtx, stop := a.watchHalt(ctx)
 	defer stop()
 
+	items = a.humanOnly(ctx, items)
 	groups := GroupByThread(items)
 	stateDir := a.StateDir
 	if stateDir == "" {
@@ -353,18 +354,21 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 
 	// Never stay silent: an empty answer means the run got stuck, and the
 	// person who asked would otherwise think the agent never saw it.
-	text := res.Text
-	if strings.TrimSpace(text) == "" {
+	last := group[len(group)-1]
+	if strings.TrimSpace(res.Text) == "" {
+		detail := "The run ended without an answer."
 		if len(res.Denied) > 0 {
-			text = "⚠️ I could not finish: my client refused " + strings.Join(res.Denied, ", ") +
-				" (a run without a terminal cannot ask for permission). Change my permission mode on the Machines page."
-		} else {
-			text = "⚠️ The run ended without an answer."
+			detail = "The client refused: " + strings.Join(res.Denied, ", ") +
+				". A run without a terminal cannot ask for permission; change the agent's permission mode on the Machines page."
 		}
-	}
-	{
-		last := group[len(group)-1]
-		if err := a.reply(ctx, last, text, "gd-"+last.ID); err != nil {
+		if err := a.reportError(ctx, last, "run ended without an answer", detail, "gd-"+last.ID); err != nil {
+			if errors.Is(err, errHalted) || ctx.Err() != nil {
+				return errHalted
+			}
+			return err
+		}
+	} else {
+		if err := a.reply(ctx, last, res.Text, "gd-"+last.ID); err != nil {
 			if errors.Is(err, errHalted) || ctx.Err() != nil {
 				return errHalted
 			}
@@ -410,4 +414,36 @@ func claudeSessionExists(id string) bool {
 		}
 	}
 	return false
+}
+
+// humanOnly keeps the items a full-access agent may act on: requests from
+// humans. An agent cannot give a full-access agent a task (decision,
+// 2026-10-15): its items are acknowledged with a short note instead, so the
+// sender knows. Reactions from agents are simply acknowledged.
+func (a *Agent) humanOnly(ctx context.Context, items []Item) []Item {
+	var keep, refused []Item
+	for _, it := range items {
+		if it.AuthorKind == "human" {
+			keep = append(keep, it)
+		} else {
+			refused = append(refused, it)
+		}
+	}
+	noted := map[string]bool{}
+	for _, it := range refused {
+		a.Log.Warn("guard: task from a non-human refused", "agent", "@"+a.me.Handle, "from", "@"+it.Author, "kind", it.AuthorKind)
+		root := ThreadRoot(it)
+		// No note in a DM: it would wake the sending agent and could start
+		// a ping-pong between the two.
+		if it.Kind != "reaction_down" && !it.DM && !noted[root] {
+			noted[root] = true
+			if err := a.reply(ctx, it, "⛔ I only take tasks from humans.", "gh-"+it.ID); err != nil {
+				a.Log.Warn("guard: could not answer a refused task", "err", err)
+			}
+		}
+		if err := a.Client.Ack(ctx, []string{it.ID}); err != nil {
+			a.Log.Warn("guard: ack", "err", err)
+		}
+	}
+	return keep
 }

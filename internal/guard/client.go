@@ -55,6 +55,7 @@ type Item struct {
 	ChannelID    string    `json:"channel_id"`
 	ThreadRootID string    `json:"thread_root_id"`
 	Author       string    `json:"author"`
+	AuthorKind   string    `json:"author_kind"`
 	Body         string    `json:"body"`
 	Mentioned    bool      `json:"mentioned"`
 	DM           bool      `json:"dm"`
@@ -283,4 +284,18 @@ func (c *Client) AgentToken(ctx context.Context, agentID string) (string, time.T
 	}
 	err := c.do(ctx, http.MethodPost, "/api/v1/host/agents/"+agentID+"/token", nil, &r)
 	return r.Token, r.ExpiresAt, err
+}
+
+// ReportError stores a run error's details on the server and returns its
+// id; only humans can read them.
+func (c *Client) ReportError(ctx context.Context, channelID, threadRootID, summary, detail string) (string, error) {
+	in := map[string]any{"channel_id": channelID, "summary": summary, "detail": detail}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	var r struct {
+		ID string `json:"id"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/v1/agent/errors", in, &r)
+	return r.ID, err
 }

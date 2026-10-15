@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -174,6 +175,9 @@ func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, err
 					return err
 				}
 			}
+			if err := denyCommands(r, "antigravity-cli/settings.json"); err != nil {
+				return err
+			}
 			return copyInto(r, filepath.Join(realCLI, "antigravity-oauth-token"), "antigravity-cli/antigravity-oauth-token", true)
 		})
 		if err != nil {
@@ -262,4 +266,42 @@ func hide(p string) []string {
 func exists(p string) bool {
 	_, err := os.Lstat(p)
 	return err == nil
+}
+
+// denyCommands rewrites the agent's own agy settings for every run: no
+// command(...) allow rules, and command(*) denied. Sandboxed agents may
+// read and write files, not run commands; doing it every run also undoes
+// any change a run made to its copy.
+func denyCommands(r *os.Root, name string) error {
+	settings := map[string]any{}
+	if raw, err := r.ReadFile(name); err == nil {
+		if err := json.Unmarshal(raw, &settings); err != nil {
+			settings = map[string]any{}
+		}
+	}
+	perms, _ := settings["permissions"].(map[string]any)
+	if perms == nil {
+		perms = map[string]any{}
+	}
+	var allow []any
+	if list, ok := perms["allow"].([]any); ok {
+		for _, v := range list {
+			if s, ok := v.(string); ok && strings.HasPrefix(s, "command(") {
+				continue
+			}
+			allow = append(allow, v)
+		}
+	}
+	if allow == nil {
+		allow = []any{}
+	}
+	perms["allow"] = allow
+	perms["deny"] = []any{"command(*)"}
+	settings["permissions"] = perms
+	raw, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	_ = r.Remove(name)
+	return r.WriteFile(name, raw, 0o600)
 }
