@@ -17,10 +17,11 @@ type Antigravity struct {
 }
 
 type agyOutput struct {
-	Response   string          `json:"response"`
-	Structured json.RawMessage `json:"structured_output"`
-	Status     string          `json:"status"`
-	Denied     []struct {
+	Response       string          `json:"response"`
+	Structured     json.RawMessage `json:"structured_output"`
+	Status         string          `json:"status"`
+	ConversationID string          `json:"conversation_id"`
+	Denied         []struct {
 		Action string `json:"action"`
 	} `json:"denied_actions"`
 	Usage struct {
@@ -63,6 +64,22 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 	args = withModel(args, req.Model)
 	res, out, err := a.execAs(ctx, req.Dir, req.Wrap, args)
 	res.Text = out.Response
+	return res, err
+}
+
+// Direct implements Adapter.
+func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult, error) {
+	args := []string{"-p", req.Prompt}
+	if req.ConversationID != "" {
+		args = append(args, "--conversation", req.ConversationID)
+	}
+	args = append(args, "--output-format", "json")
+	if req.Model != "" {
+		args = withModel(args, req.Model)
+	}
+	res, out, err := a.execAs(ctx, req.Dir, nil, args)
+	res.Text = out.Response
+	res.ConversationID = out.ConversationID
 	return res, err
 }
 

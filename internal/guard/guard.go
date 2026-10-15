@@ -31,6 +31,11 @@ type Agent struct {
 	// too: Antigravity cannot switch its tools off.
 	DecideWrap Wrapper
 
+	// Mode is "direct" or "compact" (empty defaults to compact).
+	Mode     string
+	RootDir  string
+	StateDir string
+
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
 
@@ -100,8 +105,14 @@ func (a *Agent) Tick(ctx context.Context) error {
 	if err != nil || len(items) == 0 {
 		return err
 	}
-	if err := a.handle(ctx, items); err != nil {
-		return err
+	if a.Mode == "direct" || (a.Mode == "" && a.Cfg.Mode == "direct") {
+		if err := a.handleDirect(ctx, items); err != nil {
+			return err
+		}
+	} else {
+		if err := a.handle(ctx, items); err != nil {
+			return err
+		}
 	}
 	a.failures = 0
 	return nil

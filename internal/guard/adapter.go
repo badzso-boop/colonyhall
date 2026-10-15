@@ -18,6 +18,8 @@ type Adapter interface {
 	Decide(ctx context.Context, req DecideRequest) (RunResult, error)
 	// Work is a full agent run with the client's tools, in the work dir.
 	Work(ctx context.Context, req WorkRequest) (RunResult, error)
+	// Direct is a full CLI session per thread, run in the root dir.
+	Direct(ctx context.Context, req DirectRequest) (RunResult, error)
 }
 
 // DecideRequest is the input of a decision run.
@@ -38,6 +40,19 @@ type WorkRequest struct {
 	AddDirs        []string
 	// Wrap, when set, wraps the client command (the bwrap sandbox).
 	Wrap Wrapper
+}
+
+// DirectRequest is the input of a direct mode run: a full interactive session
+// in the agent's root directory.
+type DirectRequest struct {
+	Prompt         string
+	Model          string
+	Dir            string
+	SessionID      string
+	Resume         bool
+	ConversationID string
+	PermissionMode string
+	MCPConfigPath  string
 }
 
 // Wrapper wraps a client command, e.g. in the bwrap sandbox.
@@ -63,11 +78,13 @@ func (u Usage) Total() int { return u.Input + u.Output + u.CacheRead + u.CacheWr
 
 // RunResult is what a client run produced.
 type RunResult struct {
-	Text     string   // final text (work runs) or raw JSON (decision runs)
-	Decision Decision // parsed decision (decision runs)
-	Refs     map[string]PromptItem
-	Usage    Usage
-	Duration time.Duration
+	Text           string   // final text (work runs) or raw JSON (decision runs)
+	Decision       Decision // parsed decision (decision runs)
+	Refs           map[string]PromptItem
+	Usage          Usage
+	Duration       time.Duration
+	SessionID      string
+	ConversationID string
 }
 
 // Runner executes a command; tests replace it.

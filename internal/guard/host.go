@@ -160,10 +160,22 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 	for _, ha := range cfg.Agents {
 		want[ha.AgentID] = true
 		grants := s.checkGrants(ha, &rejected)
-		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle}, "|")
 		s.mu.Lock()
 		m := s.agents[ha.AgentID]
 		s.mu.Unlock()
+		if !ha.Sandbox || ha.Mode == "direct" || ha.RootDir != "" {
+			realRoot, reason := CheckGrant(ha.RootDir, s.roots, s.home)
+			if reason != "" {
+				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
+				s.Log.Warn("guard: root_dir refused", "agent", "@"+ha.Handle, "path", ha.RootDir, "reason", reason)
+				if m != nil {
+					s.stop(ha.AgentID)
+				}
+				continue
+			}
+			ha.RootDir = realRoot
+		}
+		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, fmt.Sprint(ha.Sandbox)}, "|")
 		switch {
 		case m != nil && m.key == key:
 			s.mu.Lock()
@@ -247,7 +259,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		}
 		newAdapter = func(ac AgentConfig) Adapter { return factory(ac, s.Run) }
 	}
-	if s.sandbox == nil && *s.Cfg.RequireSandbox && ha.Client != "claude-code" {
+	if ha.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox && ha.Client != "claude-code" {
 		// Only Claude Code can run a decision without any tools; other
 		// clients would read untrusted messages with tools, unsandboxed.
 		s.Log.Error("guard: agent not started: its client needs the sandbox even to decide", "agent", "@"+ha.Handle, "client", ha.Client)
@@ -267,18 +279,23 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	ac := s.Cfg.Defaults
 	ac.Name, ac.Client, ac.Model, ac.WorkModel = ha.Handle, ha.Client, ha.Model, ha.WorkModel
 	ac.AllowWork, ac.PermissionMode, ac.Command = ha.AllowWork, ha.PermissionMode, s.Cfg.Commands[ha.Client]
+	ac.Mode, ac.RootDir = ha.Mode, ha.RootDir
 	ac.Dir = filepath.Join(dir, "decide") // decision runs: an empty folder, no tools
 	_ = ac.defaults()
 
 	m := &managed{key: key, grants: grants, conf: ha, done: make(chan struct{})}
 	agent := &Agent{
-		Cfg:     ac,
-		Client:  &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: s.host.HTTP},
-		Adapter: newAdapter(ac),
-		Log:     s.Log,
+		Cfg:      ac,
+		Client:   &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: s.host.HTTP},
+		Adapter:  newAdapter(ac),
+		Log:      s.Log,
+		Mode:     ha.Mode,
+		RootDir:  ha.RootDir,
+		StateDir: dir,
 	}
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
-	if sb := s.sandbox; sb != nil {
+	if ha.Sandbox && s.sandbox != nil {
+		sb := s.sandbox
 		decideDir, client := ac.Dir, ha.Client
 		agent.DecideWrap = func(name string, args []string) (string, []string, []string, error) {
 			a, env, err := sb.Command(client, dir, decideDir, nil, name, args)
@@ -314,7 +331,7 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		return WorkPolicy{Reason: "I can only chat here; ask a human to run this task."}
 	case !fresh:
 		return WorkPolicy{Reason: "I cannot confirm my folder access with the server right now; try again later."}
-	case s.sandbox == nil && *s.Cfg.RequireSandbox:
+	case conf.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox:
 		return WorkPolicy{Reason: "Work is disabled on my machine: no sandbox (bwrap) is available there."}
 	}
 	// Re-check every grant now: a run with write access could have swapped a
@@ -345,7 +362,7 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		}
 	}
 	p := WorkPolicy{Allowed: true, Dir: work, AddDirs: add}
-	if s.sandbox != nil {
+	if conf.Sandbox && s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
 		p.Wrap = func(name string, args []string) (string, []string, []string, error) {
 			a, env, err := sb.Command(client, agentDir, work, grants, name, args)

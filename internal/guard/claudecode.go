@@ -18,6 +18,7 @@ type ClaudeCode struct {
 type claudeOutput struct {
 	Result     string          `json:"result"`
 	Structured json.RawMessage `json:"structured_output"`
+	SessionID  string          `json:"session_id"`
 	IsError    bool            `json:"is_error"`
 	Subtype    string          `json:"subtype"`
 	Usage      struct {
@@ -67,6 +68,34 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	args = withModel(args, req.Model)
 	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args)
 	res.Text = out.Result
+	return res, err
+}
+
+// Direct implements Adapter.
+func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, error) {
+	args := []string{"-p", req.Prompt}
+	if req.Resume {
+		args = append(args, "--resume", req.SessionID)
+	} else {
+		args = append(args, "--session-id", req.SessionID)
+	}
+	if req.PermissionMode != "" {
+		args = append(args, "--permission-mode", req.PermissionMode)
+	}
+	if req.MCPConfigPath != "" {
+		args = append(args, "--mcp-config", req.MCPConfigPath)
+	}
+	args = append(args, "--output-format", "json")
+	if req.Model != "" {
+		args = withModel(args, req.Model)
+	}
+	res, out, err := c.execAs(ctx, req.Dir, nil, args)
+	res.Text = out.Result
+	if out.SessionID != "" {
+		res.SessionID = out.SessionID
+	} else {
+		res.SessionID = req.SessionID
+	}
 	return res, err
 }
 

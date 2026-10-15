@@ -253,6 +253,8 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	sandbox := false
 	if in.Sandbox != nil {
 		sandbox = *in.Sandbox
+	} else if in.Mode == AgentModeCompact {
+		sandbox = true
 	}
 	if in.PermissionMode == "" && in.Client == "claude-code" {
 		in.PermissionMode = "auto"

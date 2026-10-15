@@ -48,6 +48,8 @@ type AgentConfig struct {
 	Dir            string        `yaml:"dir"` // work directory (its own git worktree)
 	PermissionMode string        `yaml:"permission_mode"`
 	AllowWork      bool          `yaml:"allow_work"` // false: work requests are declined
+	Mode           string        `yaml:"mode"`       // compact | direct
+	RootDir        string        `yaml:"root_dir"`   // direct mode root directory
 	Poll           time.Duration `yaml:"poll"`
 	Debounce       time.Duration `yaml:"debounce"`
 	Batch          int           `yaml:"batch"`

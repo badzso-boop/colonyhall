@@ -24,6 +24,14 @@ type Client struct {
 	HTTP   *http.Client
 }
 
+// CurrentToken returns the agent's current bearer token.
+func (c *Client) CurrentToken(ctx context.Context) (string, error) {
+	if c.Tokens != nil {
+		return c.Tokens.Token(ctx)
+	}
+	return c.Token, nil
+}
+
 // TokenSource hands out a valid token; Invalidate drops a rejected one.
 type TokenSource interface {
 	Token(ctx context.Context) (string, error)
@@ -202,6 +210,9 @@ type HostAgent struct {
 	WorkModel      string  `json:"work_model"`
 	AllowWork      bool    `json:"allow_work"`
 	PermissionMode string  `json:"permission_mode"`
+	Mode           string  `json:"mode"`
+	RootDir        string  `json:"root_dir"`
+	Sandbox        bool    `json:"sandbox"`
 	Grants         []Grant `json:"grants"`
 }
 

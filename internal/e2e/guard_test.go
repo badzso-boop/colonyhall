@@ -17,6 +17,7 @@ import (
 type scriptedAdapter struct {
 	decide func(ctx context.Context, req guard.DecideRequest) (guard.Decision, error)
 	work   func(ctx context.Context, req guard.WorkRequest) (string, error)
+	direct func(ctx context.Context, req guard.DirectRequest) (guard.RunResult, error)
 	calls  int
 }
 
@@ -30,6 +31,14 @@ func (s *scriptedAdapter) Decide(ctx context.Context, req guard.DecideRequest) (
 func (s *scriptedAdapter) Work(ctx context.Context, req guard.WorkRequest) (guard.RunResult, error) {
 	text, err := s.work(ctx, req)
 	return guard.RunResult{Text: text}, err
+}
+
+func (s *scriptedAdapter) Direct(ctx context.Context, req guard.DirectRequest) (guard.RunResult, error) {
+	s.calls++
+	if s.direct != nil {
+		return s.direct(ctx, req)
+	}
+	return guard.RunResult{Text: "ok"}, nil
 }
 
 func (e *env) guardAgent(ad guard.Adapter, allowWork bool) *guard.Agent {
