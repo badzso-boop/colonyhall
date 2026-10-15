@@ -287,6 +287,47 @@ Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`).
 
 **Naplózás:** minden futás egy sor: agent, fázis, kliens, modell, tételszám, token (be/ki/cache), idő, döntések. A szerveroldali futásnapló az őr második körében jön.
 
+### Gépek, engedélyek és sandbox (az őr második köre, terv)
+
+**`guard.yaml` (a gépen, a szerver nem írhatja felül):** `server`, `host_token_file`, `roots` (gyökérmappák), `sandbox_dir`. Agentek és tokenek már nincsenek benne.
+
+**Adatmodell:**
+
+| Tábla | Mezők | Megjegyzés |
+| --- | --- | --- |
+| `host` | id, workspace_id, name, token_hash, state (`pending`, `approved`, `revoked`), last_seen_at, report (jsonb: gyökérmappák, kliensek és verziók, `bwrap` elérhető-e, elutasított utak) | A párosítókód lejár (10 perc) |
+| `agent_host` | agent_id, host_id, client, model, work_model, allow_work, created_at | Egy agent egyszerre egy gépen (egyedi agent_id) |
+| `folder_grant` | id, agent_id, host_id, path, mode (`read`, `write`), created_by, created_at, revoked_at | Visszavonás jelöléssel; minden változás audit esemény |
+| `api_token` (bővítés) | host_id, expires_at | Az őr által kért agent-token: rövid lejáratú (1 óra), a géphez kötött |
+
+**API:**
+
+| Végpont | Ki hívja | Mit csinál |
+| --- | --- | --- |
+| `POST /hosts/enroll` | Őr (párosítókóddal) | Géptokent ad, a gép `pending` |
+| `PUT /hosts/{id}/state` | Admin | Jóváhagyás vagy visszavonás |
+| `POST /host/report` | Őr (géptoken) | Gyökérmappák, kliensek, `bwrap`, elutasított utak |
+| `GET /host/config` | Őr (géptoken) | Verzió + agentenként: kliens, modell, `allow_work`, engedélyek; `ETag`-gel, később WebSocket-jelzéssel |
+| `POST /host/agents/{agentId}/token` | Őr (géptoken) | Rövid lejáratú agent-token, csak hozzárendelt agenthez |
+| `GET/POST /agents/{id}/grants`, `DELETE /grants/{id}` | Admin | Engedélyek kezelése; a szerver figyelmeztet, ha az út a gép jelentett gyökérmappáin kívül esik |
+
+**Útellenőrzés az őrben:** `filepath.Clean` → `filepath.EvalSymlinks` → a feloldott útnak egy (szintén feloldott) gyökérmappán belül kell lennie, és nem eshet a fix tiltólistára. Ami nem felel meg, nem kerül a futásba, és a következő `report` felsorolja.
+
+**Munkafutás `bwrap` alatt (Linux, kötelező, ha elérhető):**
+
+```
+bwrap --die-with-parent --unshare-pid --unshare-ipc --new-session \
+  --ro-bind /usr /usr --ro-bind /etc /etc --symlink usr/bin /bin --symlink usr/lib /lib --symlink usr/lib64 /lib64 \
+  --proc /proc --dev /dev --tmpfs /tmp \
+  --bind <sandbox>/<agent>/home $HOME \
+  --bind ~/.claude ~/.claude --bind ~/.claude.json ~/.claude.json \   # csak a saját kliensé
+  --ro-bind <read-mappa> <read-mappa> --bind <write-mappa> <write-mappa> \
+  --ro-bind /dev/null <write-mappa>/.env \                            # tiltólista egy engedélyen belül
+  --chdir <első write-mappa vagy sandbox> -- claude -p …
+```
+
+A hálózat nyitva marad (a kliensnek el kell érnie a szolgáltatóját). A kliens bináris útja és függőségei csak olvashatóan kerülnek be.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.

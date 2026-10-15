@@ -641,6 +641,39 @@ A kérdés külön objektum, saját azonosítóval (`Q-123`). Így bárki válas
 - **Lezárás:** a kérdés állapota: nyitott, megválaszolt, visszavont vagy lejárt. A megválaszolt kérdés válasza automatikusan felajánlható döntésnapló-bejegyzésnek.
 - **Alapértelmezett választás:** ha a kérdésben van `default` és egy határidő, lejáratkor az agent az alapértelmezettel folytathatja. Ez csak visszafordítható döntéseknél engedélyezett, emberi kérdésnél soha.
 
+## Gépek, mappahozzáférés és sandbox
+
+**Döntés (2026-10-15):** melyik agent mit lát egy gépen, azt a szerveren állítja be az admin (később a felületről), de a **felső határt a gép tulajdonosa húzza meg**, és ezt a szerver nem bővítheti. Az első körben a projekt Linuxon (és WSL-ben) fut.
+
+| Réteg | Ki állítja | Hol | Jelentés |
+| --- | --- | --- | --- |
+| Gyökérmappák | A gép tulajdonosa | `guard.yaml` (`roots`) | Ezen kívül az őr semmit nem ad ki, akármit kér a szerver |
+| Engedély | Admin | Szerver | Agentenként és gépenként: mappa + mód (`read` vagy `write`) |
+| Végrehajtás | Az őr | A gépen, futásonként | A kliens csak az engedélyezett mappákat éri el |
+
+**Gép és agentek:** minden gép egy regisztrált őr (`colony guard enroll` → párosítókód → az admin jóváhagyja). Az őrnek saját **géptokenje** van; a `guard.yaml`-ban nincs agent-token. Az admin a felületen rendeli az agenteket a géphez (egy agent egyszerre egy gépen), és az őr a hozzárendelt agentekhez **rövid lejáratú agent-tokent kér** a szervertől. Ezek csak a memóriában élnek; a gép visszavonása mindet érvényteleníti.
+
+**Sandbox minden gépen:** az őrnek van egy saját sandbox-mappája (alapból `~/.local/share/colonyhall/sandbox`). Agentenként itt van az agent munkaterülete és saját „otthona”. A munkafutás **kötelezően `bwrap` (bubblewrap) alatt fut, ahol elérhető**: a kliens csak ezt látja:
+
+- az engedélyezett mappákat a saját útvonalukon (`read`: csak olvasható, `write`: írható);
+- az agent sandbox-mappáját (írható);
+- a saját kliense belépési adatait (pl. `~/.claude`), hogy ne kelljen újra belépni;
+- a rendszer futtatáshoz szükséges részeit, csak olvashatóan.
+
+Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépési adatai. Ez nem Docker: a gépen telepített, bejelentkezett CLI-k futnak, csak elszigetelt nézettel. Ahol nincs `bwrap`, ott a felület ezt jelzi, és írási engedély csak külön megerősítéssel adható.
+
+**Szabályok:**
+
+- Új agent alapból **semmilyen mappát nem lát**; csak chatelni tud.
+- Fix tiltólista minden engedélyen belül is: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, más kliensek belépési adatai; a `.env` fájlok külön engedély nélkül rejtve maradnak.
+- Az őr minden kapott utat feloldja (symlinkkel együtt); ami a gyökérmappákon kívülre mutat, azt elutasítja és jelenti.
+- Engedély visszavonása vagy módosítása futás közben: az őr leállítja a futást, mint vészleállításnál.
+- Ha az őr pár percig nem éri el a szervert, nem indít munkafutást (nem tudja, érvényesek-e még az engedélyek); csevegni tud.
+- A döntő futásnak (eszközök nélküli ébresztés) nincs szüksége mappára: üres ideiglenes mappában fut.
+- Minden engedélyváltozás az audit naplóba kerül, minden munkafutás naplózza, milyen mappákkal futott.
+
+**Ütemezés (az őr második körén belül):** (1) gépek, párosítás, agent-hozzárendelés, engedélyek, agent-token kérés, kezelés a fejlesztői oldalon; (2) `bwrap` sandbox; (3) `worktree` mód (lásd lent); (4) kezelőfelület a PWA-ban, a gyökérmappákon belüli mappaböngészővel.
+
 ## Munkaterület: git worktree agentenként
 
 Ha több agent ugyanabban a repóban dolgozik, mindegyiknek saját git worktree-je és saját ága van. Az agent soha nem dolgozik a fő munkakönyvtárban, és soha nem commitol a `main` ágra.
