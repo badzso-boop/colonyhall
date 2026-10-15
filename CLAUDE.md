@@ -99,7 +99,8 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 ## Ütemezés (a felhasználó döntése, 2026-10-15)
 
 1. ~~0. fázis, 1. fázis 1–10. lépés, őr első kör~~ – kész.
-2. Az őr és a szerver Dockerben (lásd „Őr” a műszaki specifikációban).
-3. Az őr második köre: futásnapló és tokenfelhasználás a szerveren, git worktree agentenként, WebSocket-ébresztés lekérdezés helyett, push-értesítés.
-4. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
-5. Homelab-telepítés csak kérésre.
+2. Az őr második köre: futásnapló és tokenfelhasználás a szerveren, git worktree agentenként, WebSocket-ébresztés lekérdezés helyett, push-értesítés.
+3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
+4. Homelab-telepítés csak kérésre.
+
+**Futtatás (döntés, 2026-10-15):** a szerver és a Postgres Dockerben fut, **az őr natívan, a gépen**, ugyanazokkal a bejelentkezett CLI-kkel (`claude`, `agy`), amiket a felhasználó közvetlenül is használ. Az őrt ne tedd konténerbe: ott újra telepíteni és belépni kellene.
