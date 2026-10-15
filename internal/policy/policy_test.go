@@ -27,6 +27,7 @@ func TestChannelRules(t *testing.T) {
 		{"halted agent cannot write", CanWriteChannel(Subject{IsAgent: true, Halted: true}, writer), false},
 		{"halted admin cannot write", CanWriteChannel(Subject{IsAdmin: true, Halted: true}, writer), false},
 		{"halted human cannot create channel", CanCreateChannel(Subject{Halted: true}), false},
+		{"halted admin cannot manage members", CanManageMembers(Subject{IsAdmin: true, Halted: true}), false},
 	}
 	for _, c := range cases {
 		if c.got != c.want {

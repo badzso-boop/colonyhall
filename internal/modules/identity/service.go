@@ -66,7 +66,7 @@ func (s *Service) Bootstrap(ctx context.Context, workspaceName, ownerHandle, own
 // only with a role below their own (an admin cannot mint another admin).
 // It returns the new actor and its token secret (shown once).
 func (s *Service) CreateActor(ctx context.Context, by Actor, in NewActorInput) (Actor, string, error) {
-	if by.Kind != KindHuman || !by.IsAdmin() || by.Role.Rank() <= in.Role.Rank() {
+	if by.Kind != KindHuman || !by.IsAdmin() || by.Halted || by.Role.Rank() <= in.Role.Rank() {
 		return Actor{}, "", ErrForbidden
 	}
 	in.WorkspaceID = by.WorkspaceID

@@ -37,7 +37,7 @@ func CanCreateChannel(s Subject) bool {
 	return !s.IsAgent && !s.Halted
 }
 
-// CanManageMembers: only admins add or remove members.
+// CanManageMembers: only admins who are not halted add or remove members.
 func CanManageMembers(s Subject) bool {
-	return s.IsAdmin
+	return s.IsAdmin && !s.Halted
 }

@@ -176,3 +176,33 @@ func TestAuditLogIsTamperEvident(t *testing.T) {
 		t.Fatalf("tampering not detected: %+v (edited seq %d)", v, victim)
 	}
 }
+
+// TestPausedAdminCannotAdminister: pausing an admin takes away every
+// administrative write, not only chat messages.
+func TestPausedAdminCannotAdminister(t *testing.T) {
+	e := newEnv(t)
+	agent, general := e.agentID(), e.generalID()
+	var created struct {
+		Actor struct{ ID string }
+		Token string
+	}
+	e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "human", "handle": "anna", "role": "admin"}, &created)
+	admin := created.Token
+	if s := e.do("PUT", "/api/v1/actors/"+created.Actor.ID+"/state", server.DevAdminToken, map[string]any{"state": "paused"}, nil); s != http.StatusNoContent {
+		t.Fatalf("pause admin: status %d", s)
+	}
+	checks := []struct {
+		name, method, path string
+		body               any
+	}{
+		{"issue token", "POST", "/api/v1/actors/" + agent + "/tokens", map[string]any{}},
+		{"change agent state", "PUT", "/api/v1/actors/" + agent + "/state", map[string]any{"state": "stopped"}},
+		{"create actor", "POST", "/api/v1/actors", map[string]any{"kind": "agent", "handle": "sneaky"}},
+		{"add member", "POST", "/api/v1/channels/" + general + "/members", map[string]any{"actor_id": created.Actor.ID}},
+	}
+	for _, c := range checks {
+		if s := e.do(c.method, c.path, admin, c.body, nil); s != http.StatusForbidden {
+			t.Errorf("paused admin can %s: status %d", c.name, s)
+		}
+	}
+}

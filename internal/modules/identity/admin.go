@@ -158,8 +158,10 @@ func (s *Service) EmergencyStop(ctx context.Context, by Actor) error {
 
 // ClearEmergency lifts the emergency stop. It requires the admin's
 // password again, so a hijacked browser session alone cannot restart agents.
+// A paused admin cannot lift it. (Turning the stop on stays allowed for
+// every human admin: it only ever reduces what agents can do.)
 func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string) error {
-	if by.Kind != KindHuman || !by.IsAdmin() {
+	if by.Kind != KindHuman || !by.IsAdmin() || by.Halted {
 		return ErrForbidden
 	}
 	hash, err := s.Store.Credential(ctx, by.ID)

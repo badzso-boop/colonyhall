@@ -85,10 +85,11 @@ func (r Role) Rank() int {
 }
 
 // CanManage reports whether a may control target's account (password,
-// tokens, state): only human admins, and only for actors of strictly lower
-// rank, so an admin can never take over an owner or another admin.
+// tokens, state): only human admins who are not halted, and only for actors
+// of strictly lower rank, so an admin can never take over an owner or
+// another admin.
 func (a Actor) CanManage(target Actor) bool {
-	return a.Kind == KindHuman && a.IsAdmin() && a.WorkspaceID == target.WorkspaceID &&
+	return a.Kind == KindHuman && a.IsAdmin() && !a.Halted && a.WorkspaceID == target.WorkspaceID &&
 		a.Role.Rank() > target.Role.Rank()
 }
 
