@@ -49,6 +49,9 @@ type InboxItem struct {
 	Delivery
 	ChannelName  string
 	AuthorHandle string
+	// AuthorKind tells whether a human or an agent caused the item; the
+	// guard lets full-access agents take tasks from humans only.
+	AuthorKind   string
 	Body         string
 	ThreadRootID ids.ID
 	MessageAt    time.Time

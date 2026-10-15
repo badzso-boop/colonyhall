@@ -161,8 +161,10 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 		return nil, 0, err
 	}
 	handles := map[ids.ID]string{}
+	kinds := map[ids.ID]string{}
 	for _, a := range authors {
 		handles[a.ID] = a.Handle
+		kinds[a.ID] = string(a.Kind)
 	}
 	channelNames := map[ids.ID]string{}
 	items := make([]InboxItem, 0, len(ds))
@@ -171,11 +173,13 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 		if m, ok := byID[d.ItemID]; ok {
 			item.Body = m.Body
 			item.AuthorHandle = handles[m.AuthorID]
+			item.AuthorKind = kinds[m.AuthorID]
 			item.ThreadRootID = m.ThreadRootID
 			item.MessageAt = m.CreatedAt
 		}
 		if d.FromActorID != ids.Nil {
 			item.AuthorHandle = handles[d.FromActorID]
+			item.AuthorKind = kinds[d.FromActorID]
 		}
 		if _, ok := channelNames[d.ChannelID]; !ok {
 			ch, err := s.Conversation.ChannelByID(ctx, d.ChannelID)
