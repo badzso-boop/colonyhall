@@ -85,6 +85,9 @@ type RunResult struct {
 	Duration       time.Duration
 	SessionID      string
 	ConversationID string
+	// Denied lists actions the client refused because a headless run
+	// cannot ask for permission (Antigravity reports them).
+	Denied []string
 }
 
 // Runner executes a command; tests replace it.

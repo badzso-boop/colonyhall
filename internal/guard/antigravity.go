@@ -73,6 +73,7 @@ func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult,
 	if req.ConversationID != "" {
 		args = append(args, "--conversation", req.ConversationID)
 	}
+	args = append(args, agyPermissionArgs(req.PermissionMode)...)
 	args = append(args, "--output-format", "json")
 	if req.Model != "" {
 		args = withModel(args, req.Model)
@@ -80,7 +81,25 @@ func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult,
 	res, out, err := a.execAs(ctx, req.Dir, nil, args)
 	res.Text = out.Response
 	res.ConversationID = out.ConversationID
+	for _, d := range out.Denied {
+		res.Denied = append(res.Denied, d.Action)
+	}
 	return res, err
+}
+
+// agyPermissionArgs maps the agent's permission mode to agy flags. A
+// headless agy run denies anything its allow list does not cover (even
+// writing a file), so direct agents need at least accept-edits.
+func agyPermissionArgs(mode string) []string {
+	switch mode {
+	case "auto", "accept-edits", "acceptEdits":
+		return []string{"--mode", "accept-edits"}
+	case "plan":
+		return []string{"--mode", "plan"}
+	case "bypassPermissions", "bypass":
+		return []string{"--dangerously-skip-permissions"} // only when the admin chose it for this agent
+	}
+	return nil
 }
 
 func (a *Antigravity) execAs(ctx context.Context, dir string, wrap Wrapper, args []string) (RunResult, agyOutput, error) {

@@ -344,10 +344,20 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		a.Log.Warn("guard: direct state save", "err", serr)
 	}
 
-	// Post reply if final text is non-empty
-	if strings.TrimSpace(res.Text) != "" {
+	// Never stay silent: an empty answer means the run got stuck, and the
+	// person who asked would otherwise think the agent never saw it.
+	text := res.Text
+	if strings.TrimSpace(text) == "" {
+		if len(res.Denied) > 0 {
+			text = "⚠️ I could not finish: my client refused " + strings.Join(res.Denied, ", ") +
+				" (a run without a terminal cannot ask for permission). Change my permission mode on the Machines page."
+		} else {
+			text = "⚠️ The run ended without an answer."
+		}
+	}
+	{
 		last := group[len(group)-1]
-		if err := a.reply(ctx, last, res.Text, "gd-"+last.ID); err != nil {
+		if err := a.reply(ctx, last, text, "gd-"+last.ID); err != nil {
 			if errors.Is(err, errHalted) || ctx.Err() != nil {
 				return errHalted
 			}

@@ -256,8 +256,8 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	if (in.Mode == AgentModeDirect || !sandbox) && in.RootDir == "" {
 		return AgentConfig{}, ErrBadRootDir
 	}
-	if in.PermissionMode == "" && in.Client == "claude-code" {
-		in.PermissionMode = "auto"
+	if in.PermissionMode == "" {
+		in.PermissionMode = "auto" // claude: --permission-mode auto; antigravity: --mode accept-edits
 	}
 	if in.WorkModel == "" {
 		in.WorkModel = in.Model

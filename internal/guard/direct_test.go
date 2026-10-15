@@ -601,3 +601,33 @@ func TestStartAgentCleansStaleMCPConfigs(t *testing.T) {
 		t.Fatalf("expected keepFile to remain, got err: %v", err)
 	}
 }
+
+// TestAntigravityDirectPermissionAndDenials: a headless agy run denies file
+// writes unless accept-edits is passed (seen live); denied actions are
+// reported so the guard can say why the run produced no answer.
+func TestAntigravityDirectPermissionAndDenials(t *testing.T) {
+	var f fakeRunner
+	a := &Antigravity{Run: f.run}
+	for mode, want := range map[string][]string{
+		"auto":              {"--mode", "accept-edits"},
+		"accept-edits":      {"--mode", "accept-edits"},
+		"plan":              {"--mode", "plan"},
+		"bypassPermissions": {"--dangerously-skip-permissions"},
+	} {
+		f.stdout = `{"status":"SUCCESS","response":"ok"}`
+		if _, err := a.Direct(context.Background(), DirectRequest{Prompt: "x", PermissionMode: mode}); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(f.args, " "), strings.Join(want, " ")) {
+			t.Errorf("%s: args %v, want %v", mode, f.args, want)
+		}
+	}
+	f.stdout = `{"status":"SUCCESS","response":"","denied_actions":[{"action":"write_file","display_name":"WriteToFile"}]}`
+	res, err := a.Direct(context.Background(), DirectRequest{Prompt: "x"})
+	if err != nil || len(res.Denied) != 1 || res.Denied[0] != "write_file" {
+		t.Fatalf("denied: %+v %v", res, err)
+	}
+	if slices.Contains(f.args, "--mode") {
+		t.Errorf("no permission mode: no flag, got %v", f.args)
+	}
+}

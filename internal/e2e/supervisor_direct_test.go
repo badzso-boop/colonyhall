@@ -323,3 +323,24 @@ func TestSupervisorAllowUnsandboxedE2E(t *testing.T) {
 		t.Fatal("agent should not have been called when allow_unsandboxed is false")
 	}
 }
+
+// TestDirectModeNeverSilent: a run that ends without an answer (here the
+// client refused a write, as headless agy does) still tells the thread why;
+// before, the item was acked and the sender saw nothing.
+func TestDirectModeNeverSilent(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	q, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent create notes.txt"})
+	ad := &scriptedAdapter{direct: func(context.Context, guard.DirectRequest) (guard.RunResult, error) {
+		return guard.RunResult{Text: "", Denied: []string{"write_file"}}, nil
+	}}
+	a := e.guardAgent(ad, false)
+	dir := t.TempDir()
+	a.Mode, a.RootDir, a.StateDir = "direct", dir, dir
+	e.tick(a)
+	msgs := e.messages(general)
+	last := msgs[len(msgs)-1]
+	if last.ThreadRootID != q.ID || !strings.Contains(last.Body, "write_file") || !strings.HasPrefix(last.Body, "⚠️") {
+		t.Fatalf("the thread must say why nothing happened: %+v", last)
+	}
+}
