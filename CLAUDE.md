@@ -102,11 +102,11 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 1. ~~0. fázis, 1. fázis 1–10. lépés, őr első kör~~ – kész.
 2. **Irányváltás (döntés, 2026-10-15): a saját agentek távirányítása.** Részletek: terv „Működési modell”. Ebben a sorrendben:
    1. ~~Gépek, párosítás, mappaengedélyek, rövid lejáratú agent-tokenek, `bwrap` sandbox~~ – kész (a sandbox mostantól választható mód).
-   2. Közvetlen mód: teljes hozzáférés a gyökérkönyvtárból, a felhasználó saját beállításaival; szálanként folytatott munkamenet (`--session-id`/`--resume`); Colonyhall MCP az agentnél; agentenkénti engedélymód (alapból `auto`).
+   2. ~~Közvetlen mód: teljes hozzáférés a gyökérkönyvtárból, a felhasználó saját beállításaival; szálanként folytatott munkamenet (`--session-id`/`--resume`); Colonyhall MCP az agentnél; agentenkénti engedélymód (alapból `auto`)~~ – kész.
    3. Őr a homelab szerveren.
    4. Agent–agent együttműködés; titkok átadása a `Z:` meghajtón (`colonyhall-exchange`); közös utasítás.
    5. Jóváhagyás a chatből (`--permission-prompt-tool`).
-   6. Később: a sandbox környezeti változói ne a parancssorban menjenek; worktree; előnézet; futásnapló a szerveren; WebSocket-ébresztés; push.
+   6. Később: worktree; előnézet; futásnapló a szerveren; WebSocket-ébresztés; push. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.
 

@@ -287,27 +287,31 @@ Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`).
 
 **Naplózás:** minden futás egy sor: agent, fázis, kliens, modell, tételszám, token (be/ki/cache), idő, döntések. A szerveroldali futásnapló az őr második körében jön.
 
-### Közvetlen mód (terv, 2026-10-15): a saját agentek futtatása
+### Közvetlen mód (megvalósítva, 2026-10-15): a saját agentek futtatása
 
-A saját agentek alapértelmezése (lásd terv, „Működési modell”). A hozzárendelés (`agent_host`) új mezői: `mode` (`direct` | `compact`), `root_dir` (a gyökérkönyvtár a gépen, a gép gyökérmappáin belül), `permission_mode` (alapból `auto`), `sandbox` (alapból ki).
+A saját agentek alapértelmezése (lásd terv, „Működési modell”). A hozzárendelés (`agent_host`) új mezői (`00006_direct_mode.sql` migráció): `mode` (`direct` | `compact`), `root_dir` (a gyökérkönyvtár a gépen, a gép gyökérmappáin belül kötelező direct módban), `permission_mode` (alapból `auto` Claude-nál), `sandbox` (alapból ki direct módban, compactnál be).
 
-**Munkamenet szálanként:** `session_id = UUIDv5(agent_id, szál gyökérüzenetének id)`. Az őr az első futásnál `--session-id`, utána `--resume` kapcsolóval indít; az őr tárolja, melyik munkamenet létezik már (a szerveren, futásnaplóval együtt). Egy agentnél egyszerre egy futás; ha közben új üzenet jön ugyanabba a szálba, a következő `--resume` viszi.
+**Munkamenet szálanként:** `session_id = UUIDv5(agent_id, szál gyökérüzenetének id)`. Az őr az inbox elemeket szálanként csoportosítja (`ThreadRootID` vagy tétel ID, DM esetén csatorna ID). Az első futásnál `--session-id`, utána `--resume` kapcsolóval indít. Az állapotot egy helyi, atomi módon mentett, 0600-as jogosultságú `direct_state.json` fájlban tartja az agent mappájában (`sandbox_dir/<handle>/direct_state.json`), amely tárolja a létező Claude munkameneteket és az Antigravity szál → `conversation_id` megfeleltetéseket. Egy agentnél egyszerre egy futás fut; leállítás (szünet, stop, vészleállító) esetén a folyamat megszakad, semmi nem kerül kiküldésre és az inbox elemek feldolgozatlanok maradnak.
 
 **Parancs (Claude Code):**
 
 ```
 claude -p "<új üzenetek <colonyhall_message> keretben>" \
   --session-id <uuid> | --resume <uuid> \
-  --permission-mode auto \
+  --permission-mode <mode> \
   --mcp-config <ideiglenes fájl: colonyhall MCP + agent-token> \
   --output-format json
 ```
 
-A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei betöltődnek (nincs `--strict-mcp-config`, nincs `--setting-sources ""`, nincs `--no-session-persistence`). Az ideiglenes MCP-konfiguráció `0600`, futás után törlődik; a token rövid lejáratú.
+A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei betöltődnek (tilos és nem kerül átadásra: `--strict-mcp-config`, `--setting-sources`, `--system-prompt`, `--tools`, `--no-session-persistence`). Az ideiglenes MCP-konfiguráció `0600` jogosultsággal jön létre az agent mappájában, a futás végeztével azonnal törlődik; a token a `CurrentToken` hívásból származik és soha nem kerül naplóba.
 
-**Antigravity:** `agy -p "<üzenetek>" --conversation <id> --output-format json`; a Colonyhall MCP a munkakönyvtár `.agents/mcp_config.json`-jából vagy a globális konfigurációból; engedélyek a saját `settings.json` szerint.
+**Antigravity:** `agy -p "<üzenetek>" [--conversation <id>] --output-format json`; a kimenetből kiolvasott `conversation_id` elmentésre kerül a következő futásokhoz a szálban. (Megjegyzés: ebben a feladatban az Antigravity-hez nem történik MCP-konfiguráció injektálás.)
 
-**Válasz a chatbe:** a futás végső szövege a szálba kerül (ha az agent az MCP-n át még nem válaszolt); a 600 karakteres szabály itt is érvényes, hosszabbat az agent fájlba ír, és linket küld.
+**Válasz a chatbe:** a futás végső szövege válaszként kerül a szálba (ha nem üres); a 600 karakteres korlát érvényes. A sikeres válasz után a csoport inbox elemei nyugtázásra kerülnek (`Ack`).
+
+**Supervisor ellenőrzés:** `sandbox=false` esetén a kliens sem döntési, sem munkafutásban nem fut `bwrap` alatt; a megadott `root_dir`-nek azonban kötelezően át kell mennie a gép gyökérmappáinak ellenőrzésén (`CheckGrant`), különben az őr megtagadja az indítást és felveszi a `Rejected` listába.
+
+**Fejlesztői oldal:** a „Gépek” panelen az agent hozzárendelési űrlapon megadható a mód (`direct`/`compact`), a gyökérmappa (`root_dir`), a sandbox jelölőnégyzet és a permission mode select (`auto`, `acceptEdits`, `default`, `plan`). Minden hozzárendelt agent kártyáján láthatók ezek a beállítások.
 
 **Jóváhagyás a chatből (később):** `--permission-prompt-tool mcp__colonyhall__approve`; a Colonyhall a kérést a szálba és push-értesítésként küldi; gombbal jóváhagyható vagy elutasítható; időkorlát után elutasítva.
 
