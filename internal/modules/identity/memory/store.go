@@ -2,6 +2,7 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"sort"
 	"sync"
@@ -231,7 +232,12 @@ func (s *Store) ListTokens(_ context.Context, actorID ids.ID) ([]identity.Token,
 			out = append(out, t)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return bytes.Compare(out[i].ID[:], out[j].ID[:]) < 0 // ids are time-ordered
+	})
 	return out, nil
 }
 

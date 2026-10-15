@@ -61,7 +61,7 @@ UPDATE session SET revoked_at = sqlc.arg(at)::timestamptz
 WHERE actor_id = sqlc.arg(actor_id) AND id <> sqlc.arg(keep) AND revoked_at IS NULL;
 
 -- name: ListTokens :many
-SELECT * FROM api_token WHERE actor_id = $1 ORDER BY created_at;
+SELECT * FROM api_token WHERE actor_id = $1 ORDER BY created_at, id;
 
 -- name: TokenByID :one
 SELECT * FROM api_token WHERE id = $1;

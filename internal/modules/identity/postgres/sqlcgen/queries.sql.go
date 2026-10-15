@@ -296,7 +296,7 @@ func (q *Queries) ListActors(ctx context.Context, workspaceID uuid.UUID) ([]Acto
 }
 
 const listTokens = `-- name: ListTokens :many
-SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at FROM api_token WHERE actor_id = $1 ORDER BY created_at
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at FROM api_token WHERE actor_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken, error) {
