@@ -93,5 +93,12 @@ func (s *Service) GetError(ctx context.Context, by identity.Actor, id ids.ID) (E
 	if e.WorkspaceID != by.WorkspaceID {
 		return Error{}, db.ErrNotFound
 	}
+	// Only someone who can read the conversation it happened in.
+	if ok, err := s.Conversation.CanRead(ctx, by, e.ChannelID); err != nil || !ok {
+		if err == nil {
+			err = ErrForbidden
+		}
+		return Error{}, err
+	}
 	return e, nil
 }

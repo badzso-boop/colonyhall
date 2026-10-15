@@ -450,3 +450,23 @@ func TestFullAccessAgentTakesTasksFromHumansOnly(t *testing.T) {
 		t.Fatalf("a human's task must run: %d calls", calls)
 	}
 }
+
+// TestErrorDetailsNeedChannelAccess: a human who cannot read the channel
+// an error happened in cannot read its details either.
+func TestErrorDetailsNeedChannelAccess(t *testing.T) {
+	e := newEnv(t)
+	var ch struct{ ID string }
+	e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": "ops-private", "kind": "private"}, &ch)
+	e.do("POST", "/api/v1/channels/"+ch.ID+"/members", server.DevAdminToken, map[string]any{"actor_id": e.agentID()}, nil)
+	var ref struct{ ID string }
+	if s := e.do("POST", "/api/v1/agent/errors", server.DevAgentToken, map[string]any{"channel_id": ch.ID, "summary": "x", "detail": "secret path /srv/app"}, &ref); s != http.StatusCreated {
+		t.Fatalf("report: %d", s)
+	}
+	_, memberToken := e.createActor("human", "guest", "member")
+	if s := e.do("GET", "/api/v1/errors/"+ref.ID, memberToken, nil, nil); s != http.StatusForbidden {
+		t.Fatalf("a human outside the channel reads the details: %d", s)
+	}
+	if s := e.do("GET", "/api/v1/errors/"+ref.ID, server.DevAdminToken, nil, nil); s != http.StatusOK {
+		t.Fatalf("the admin reads the details: %d", s)
+	}
+}

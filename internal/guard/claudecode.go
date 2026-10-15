@@ -59,8 +59,12 @@ func (c *ClaudeCode) Decide(ctx context.Context, req DecideRequest) (RunResult, 
 // Work implements Adapter.
 func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
 	args := []string{"-p", req.Prompt, "--output-format", "json", "--no-session-persistence"}
-	if req.PermissionMode != "" {
-		args = append(args, "--permission-mode", req.PermissionMode)
+	mode := req.PermissionMode
+	if req.NoExec && mode != "" && mode != "acceptEdits" && mode != "plan" {
+		mode = "acceptEdits" // sandboxed: no mode that skips permission checks
+	}
+	if mode != "" {
+		args = append(args, "--permission-mode", mode)
 	}
 	for _, d := range req.AddDirs {
 		args = append(args, "--add-dir", d)

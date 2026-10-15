@@ -55,9 +55,11 @@ func (a *Antigravity) Decide(ctx context.Context, req DecideRequest) (RunResult,
 // Work implements Adapter.
 func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
 	args := []string{"-p", req.Prompt, "--output-format", "json"}
-	if req.PermissionMode != "" {
-		args = append(args, "--mode", req.PermissionMode)
+	mode := req.PermissionMode
+	if req.NoExec {
+		mode = "accept-edits" // sandboxed: file edits yes, nothing that bypasses permissions
 	}
+	args = append(args, agyPermissionArgs(mode)...)
 	for _, d := range req.AddDirs {
 		args = append(args, "--add-dir", d)
 	}

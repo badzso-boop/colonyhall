@@ -269,9 +269,10 @@ func exists(p string) bool {
 }
 
 // denyCommands rewrites the agent's own agy settings for every run: no
-// command(...) allow rules, and command(*) denied. Sandboxed agents may
-// read and write files, not run commands; doing it every run also undoes
-// any change a run made to its copy.
+// allow rules at all (any inherited rule could permit running something),
+// and command(*) denied. A headless run denies whatever is not allowed, so
+// with accept-edits the agent can read and edit files and nothing else.
+// Doing it every run also undoes any change a run made to its copy.
 func denyCommands(r *os.Root, name string) error {
 	settings := map[string]any{}
 	if raw, err := r.ReadFile(name); err == nil {
@@ -283,19 +284,7 @@ func denyCommands(r *os.Root, name string) error {
 	if perms == nil {
 		perms = map[string]any{}
 	}
-	var allow []any
-	if list, ok := perms["allow"].([]any); ok {
-		for _, v := range list {
-			if s, ok := v.(string); ok && strings.HasPrefix(s, "command(") {
-				continue
-			}
-			allow = append(allow, v)
-		}
-	}
-	if allow == nil {
-		allow = []any{}
-	}
-	perms["allow"] = allow
+	perms["allow"] = []any{}
 	perms["deny"] = []any{"command(*)"}
 	settings["permissions"] = perms
 	raw, err := json.MarshalIndent(settings, "", "  ")

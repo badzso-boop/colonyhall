@@ -252,6 +252,21 @@ func TestSandboxedRunsCannotExecute(t *testing.T) {
 	if v, _ := flagValue(f.args, "--disallowedTools"); v != "Bash" {
 		t.Errorf("--disallowedTools %q", v)
 	}
+	// A permission mode that skips checks is not honoured in the sandbox.
+	if _, err := c.Work(context.Background(), WorkRequest{Prompt: "x", NoExec: true, PermissionMode: "bypassPermissions"}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := flagValue(f.args, "--permission-mode"); v != "acceptEdits" {
+		t.Errorf("sandboxed claude permission mode %q", v)
+	}
+	ag := &Antigravity{Run: f.run}
+	f.stdout = `{"status":"SUCCESS","response":"ok"}`
+	if _, err := ag.Work(context.Background(), WorkRequest{Prompt: "x", NoExec: true, PermissionMode: "bypassPermissions"}); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(f.args, "--dangerously-skip-permissions") {
+		t.Errorf("sandboxed agy must not skip permissions: %v", f.args)
+	}
 
 	// Antigravity: the agent's own settings deny commands on every run,
 	// even if a previous run allowed them again.
@@ -280,11 +295,7 @@ func TestSandboxedRunsCannotExecute(t *testing.T) {
 		if err := json.Unmarshal(raw, &s); err != nil {
 			t.Fatal(err)
 		}
-		wantAllow := []string{"read_url(*)"} // round 0: the user's settings minus commands
-		if round == 1 {
-			wantAllow = []string{} // round 1: the run's own edit, minus commands
-		}
-		if !slices.Equal(s.Permissions.Allow, wantAllow) || !slices.Equal(s.Permissions.Deny, []string{"command(*)"}) ||
+		if len(s.Permissions.Allow) != 0 || !slices.Equal(s.Permissions.Deny, []string{"command(*)"}) ||
 			(round == 0 && s.Model != "x") {
 			t.Fatalf("round %d: %s", round, raw)
 		}
