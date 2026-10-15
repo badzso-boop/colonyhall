@@ -76,6 +76,9 @@ func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult,
 		args = append(args, "--conversation", req.ConversationID)
 	}
 	args = append(args, agyPermissionArgs(req.PermissionMode)...)
+	for _, d := range req.AddDirs {
+		args = append(args, "--add-dir", d)
+	}
 	args = append(args, "--output-format", "json")
 	if req.Model != "" {
 		args = withModel(args, req.Model)

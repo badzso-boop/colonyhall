@@ -301,6 +301,23 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		cleanup = cl
 	case "antigravity":
 		req.ConversationID = state.Conversations[threadRoot]
+		// agy has no --mcp-config flag and does not expand ${VAR} in its
+		// MCP config, so the token must sit in a file. It must never be
+		// written into the user's project (a run could commit it): agy
+		// starts in the guard's own folder, which holds the config, and
+		// gets the project with --add-dir.
+		token, err := a.Client.CurrentToken(ctx)
+		if err != nil {
+			return fmt.Errorf("guard: direct token: %w", err)
+		}
+		ws := filepath.Join(stateDir, "agy-workspace")
+		cl, err := writeAgyMCPConfig(ws, a.Client.BaseURL, token)
+		if err != nil {
+			return fmt.Errorf("guard: direct mcp config: %w", err)
+		}
+		cleanup = cl
+		req.Dir, req.AddDirs = ws, []string{rootDir}
+		req.Prompt = "Your project folder is " + rootDir + "; work there.\n\n" + req.Prompt
 	}
 
 	defer func() {
@@ -446,4 +463,40 @@ func (a *Agent) humanOnly(ctx context.Context, items []Item) []Item {
 		}
 	}
 	return keep
+}
+
+// agyMCPFile is where agy reads a workspace's MCP servers.
+const agyMCPFile = ".agents/mcp_config.json"
+
+// writeAgyMCPConfig writes the Colonyhall MCP server, with the agent's
+// token, into the guard-owned agy workspace (0600) and returns a cleanup.
+func writeAgyMCPConfig(ws, serverURL, token string) (func(), error) {
+	dir := filepath.Join(ws, ".agents")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	doc := map[string]any{"mcpServers": map[string]any{"colonyhall": map[string]any{
+		"serverUrl": strings.TrimSuffix(serverURL, "/") + "/mcp",
+		"headers":   map[string]string{"Authorization": "Bearer " + token},
+	}}}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(ws, agyMCPFile)
+	_ = os.Remove(path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Write(raw); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return nil, err
+	}
+	return func() { _ = os.Remove(path) }, nil
 }

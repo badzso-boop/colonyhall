@@ -56,6 +56,7 @@ type DirectRequest struct {
 	ConversationID string
 	PermissionMode string
 	MCPConfigPath  string
+	AddDirs        []string
 }
 
 // Wrapper wraps a client command, e.g. in the bwrap sandbox.

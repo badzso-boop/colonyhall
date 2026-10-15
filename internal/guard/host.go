@@ -300,6 +300,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		}
 	}
 	cleanStaleMCPConfigs(dir)
+	_ = os.Remove(filepath.Join(dir, "agy-workspace", agyMCPFile)) // left by a crash
 	ac := s.Cfg.Defaults
 	ac.Name, ac.Client, ac.Model, ac.WorkModel = ha.Handle, ha.Client, ha.Model, ha.WorkModel
 	ac.AllowWork, ac.PermissionMode, ac.Command = ha.AllowWork, ha.PermissionMode, s.Cfg.Commands[ha.Client]

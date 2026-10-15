@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -633,4 +634,52 @@ func TestAntigravityDirectPermissionAndDenials(t *testing.T) {
 	if slices.Contains(f.args, "--mode") {
 		t.Errorf("no permission mode: no flag, got %v", f.args)
 	}
+}
+
+// TestAntigravityDirectMCPOutsideProject: agy gets the Colonyhall MCP from
+// a guard-owned workspace; the token never lands in the project folder.
+func TestAntigravityDirectMCPOutsideProject(t *testing.T) {
+	stateDir, root := t.TempDir(), t.TempDir()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer ts.Close()
+	var seen DirectRequest
+	var cfgDuringRun []byte
+	ad := &directTestAdapter{}
+	ad.impl = func(_ context.Context, req DirectRequest) (RunResult, error) {
+		seen = req
+		cfgDuringRun, _ = os.ReadFile(filepath.Join(req.Dir, agyMCPFile))
+		return RunResult{Text: "ok", ConversationID: "c1"}, nil
+	}
+	agent := &Agent{
+		Cfg:     AgentConfig{Client: "antigravity", HaltCheck: time.Hour},
+		Client:  &Client{BaseURL: ts.URL, Token: "col_secret_token_value", HTTP: ts.Client()},
+		Adapter: ad, StateDir: stateDir, RootDir: root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+	}
+	items := []Item{{ID: "it-1", AuthorKind: "human", ItemID: "m1", Channel: "general", ChannelID: "c1", Body: "hi"}}
+	if err := agent.handleDirect(context.Background(), items); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(seen.Dir, stateDir) || len(seen.AddDirs) != 1 || seen.AddDirs[0] != root {
+		t.Fatalf("agy must start in the guard's folder with the project added: %+v", seen)
+	}
+	if !strings.Contains(string(cfgDuringRun), "col_secret_token_value") || !strings.Contains(seen.Prompt, root) {
+		t.Fatalf("config during run: %s; prompt: %s", cfgDuringRun, seen.Prompt)
+	}
+	if _, err := os.Stat(filepath.Join(seen.Dir, agyMCPFile)); !os.IsNotExist(err) {
+		t.Error("the token file must be removed after the run")
+	}
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, _ error) error {
+		if !d.IsDir() {
+			raw, _ := os.ReadFile(p)
+			if strings.Contains(string(raw), "col_secret") {
+				t.Errorf("token in the project: %s", p)
+			}
+		}
+		return nil
+	})
 }
