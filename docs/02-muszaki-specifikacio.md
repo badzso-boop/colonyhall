@@ -287,7 +287,7 @@ Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`).
 
 **Naplózás:** minden futás egy sor: agent, fázis, kliens, modell, tételszám, token (be/ki/cache), idő, döntések. A szerveroldali futásnapló az őr második körében jön.
 
-### Gépek, engedélyek és sandbox (az őr második köre, terv)
+### Gépek, engedélyek és sandbox (az őr második köre, megvalósítva)
 
 **`guard.yaml` (a gépen, a szerver nem írhatja felül):** `server`, `host_token_file`, `roots` (gyökérmappák), `sandbox_dir`. Agentek és tokenek már nincsenek benne.
 
@@ -295,7 +295,8 @@ Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`).
 
 | Tábla | Mezők | Megjegyzés |
 | --- | --- | --- |
-| `host` | id, workspace_id, name, token_hash, state (`pending`, `approved`, `revoked`), last_seen_at, report (jsonb: gyökérmappák, kliensek és verziók, `bwrap` elérhető-e, elutasított utak) | A párosítókód lejár (10 perc) |
+| `host_pairing_code` | id, workspace_id, code_hash, created_by, created_at, expires_at, used_at | Egyszer használható |
+| `host` | id, workspace_id, name, token_hash, state (`approved`, `revoked`), last_seen_at, report (jsonb: gyökérmappák, kliensek és verziók, `bwrap` elérhető-e, elutasított utak) | A párosítókód lejár (10 perc) |
 | `agent_host` | agent_id, host_id, client, model, work_model, allow_work, created_at | Egy agent egyszerre egy gépen (egyedi agent_id) |
 | `folder_grant` | id, agent_id, host_id, path, mode (`read`, `write`), created_by, created_at, revoked_at | Visszavonás jelöléssel; minden változás audit esemény |
 | `api_token` (bővítés) | host_id, expires_at | Az őr által kért agent-token: rövid lejáratú (1 óra), a géphez kötött |
@@ -304,8 +305,11 @@ Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`).
 
 | Végpont | Ki hívja | Mit csinál |
 | --- | --- | --- |
-| `POST /hosts/enroll` | Őr (párosítókóddal) | Géptokent ad, a gép `pending` |
-| `PUT /hosts/{id}/state` | Admin | Jóváhagyás vagy visszavonás |
+| `POST /hosts/pairing-codes` | Admin | Egyszer használható, 10 percig érvényes kód (csak egyszer látszik) |
+| `POST /hosts/enroll` | Őr (párosítókóddal) | Géptokent ad (`colh_…`); a gép rögtön `approved`, mert a kódot admin adta ki |
+| `GET /hosts` | Admin | Gépek a jelentésükkel, agentjeikkel és aktív engedélyeikkel |
+| `PUT /hosts/{id}/state` | Admin | Visszavonás (minden agent-tokenje is) vagy újra jóváhagyás |
+| `PUT /agents/{id}/host`, `DELETE /agents/{id}/host` | Admin | Hozzárendelés gépre (kliens, modellek, munka, engedélymód) vagy levétel; áthelyezés vagy levétel visszavonja az engedélyeket és a tokeneket |
 | `POST /host/report` | Őr (géptoken) | Gyökérmappák, kliensek, `bwrap`, elutasított utak |
 | `GET /host/config` | Őr (géptoken) | Verzió + agentenként: kliens, modell, `allow_work`, engedélyek; `ETag`-gel, később WebSocket-jelzéssel |
 | `POST /host/agents/{agentId}/token` | Őr (géptoken) | Rövid lejáratú agent-token, csak hozzárendelt agenthez |
@@ -327,6 +331,10 @@ bwrap --die-with-parent --unshare-pid --unshare-ipc --new-session \
 ```
 
 A hálózat nyitva marad (a kliensnek el kell érnie a szolgáltatóját). A kliens bináris útja és függőségei csak olvashatóan kerülnek be.
+
+**Megvalósítás (`internal/guard`):** `host.go` (felügyelő: jelentés, konfiguráció ETaggel 10 mp-enként, agent-ciklusok indítása/leállítása, tokenmegújítás 10 perccel lejárat előtt), `paths.go` (útellenőrzés, tiltólista), `sandbox.go` (`bwrap` parancssor). A mountok sorrendje: rendszer csak olvashatóan → üres home → `~/.local` csak olvashatóan → engedélyezett mappák → tiltólista, más kliensek belépési adatai és más agentek sandboxa elrejtve → saját kliens fájljai írhatóan → saját agent-mappa. A környezet törlődik, csak egy engedélyezett lista marad (PATH, nyelv, proxy, kliens API-kulcsok). Az őr a szervertől kapott agent-nevet és -azonosítót szigorú mintához köti, mert mappanév és URL lesz belőlük.
+
+**`guard.yaml` gépes módban:** `server`, `host_token_file`, `roots`, `sandbox_dir`, `require_sandbox` (alapból igaz: `bwrap` nélkül nincs munkafutás), `config_poll`, `commands`, `defaults` (poll, debounce, batch, időkorlátok). Minta: `guard.example.yaml`.
 
 ## Verziózás, kompatibilitás, bővíthetőség
 

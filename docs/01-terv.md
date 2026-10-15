@@ -651,7 +651,7 @@ A kérdés külön objektum, saját azonosítóval (`Q-123`). Így bárki válas
 | Engedély | Admin | Szerver | Agentenként és gépenként: mappa + mód (`read` vagy `write`) |
 | Végrehajtás | Az őr | A gépen, futásonként | A kliens csak az engedélyezett mappákat éri el |
 
-**Gép és agentek:** minden gép egy regisztrált őr (`colony guard enroll` → párosítókód → az admin jóváhagyja). Az őrnek saját **géptokenje** van; a `guard.yaml`-ban nincs agent-token. Az admin a felületen rendeli az agenteket a géphez (egy agent egyszerre egy gépen), és az őr a hozzárendelt agentekhez **rövid lejáratú agent-tokent kér** a szervertől. Ezek csak a memóriában élnek; a gép visszavonása mindet érvényteleníti.
+**Gép és agentek:** minden gép egy regisztrált őr. Az admin a felületen egyszer használható, 10 percig érvényes párosítókódot kér, és a gépen `colony guard enroll -server … -code … -name …` regisztrál vele; a kód kiadása maga a jóváhagyás, külön lépés nincs. Az őrnek saját **géptokenje** van; a `guard.yaml`-ban nincs agent-token. Az admin a felületen rendeli az agenteket a géphez (egy agent egyszerre egy gépen), és az őr a hozzárendelt agentekhez **rövid lejáratú agent-tokent kér** a szervertől. Ezek csak a memóriában élnek; a gép visszavonása mindet érvényteleníti.
 
 **Sandbox minden gépen:** az őrnek van egy saját sandbox-mappája (alapból `~/.local/share/colonyhall/sandbox`). Agentenként itt van az agent munkaterülete és saját „otthona”. A munkafutás **kötelezően `bwrap` (bubblewrap) alatt fut, ahol elérhető**: a kliens csak ezt látja:
 
@@ -672,7 +672,9 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 - A döntő futásnak (eszközök nélküli ébresztés) nincs szüksége mappára: üres ideiglenes mappában fut.
 - Minden engedélyváltozás az audit naplóba kerül, minden munkafutás naplózza, milyen mappákkal futott.
 
-**Ütemezés (az őr második körén belül):** (1) gépek, párosítás, agent-hozzárendelés, engedélyek, agent-token kérés, kezelés a fejlesztői oldalon; (2) `bwrap` sandbox; (3) `worktree` mód (lásd lent); (4) kezelőfelület a PWA-ban, a gyökérmappákon belüli mappaböngészővel.
+**Megvalósítva és élesben kipróbálva (2026-10-15):** párosítás, agent-hozzárendelés, mappaengedélyek, rövid lejáratú agent-tokenek, útellenőrzés, `bwrap` sandbox, kezelés a fejlesztői oldal „Gépek” paneljén. Az éles próbán a gép a `/root/.ssh` engedélyt elutasította és jelentette; az Antigravity a sandboxban létrehozta a kért fájlt az írható mappában (döntő futás kb. 25–30 ezer token két tétellel, munkafutás kb. 25 ezer token, 2 perc).
+
+**Ütemezés (az őr második körén belül):** ~~(1) gépek, párosítás, agent-hozzárendelés, engedélyek, agent-token kérés, kezelés a fejlesztői oldalon; (2) `bwrap` sandbox;~~ kész; (3) `worktree` mód (lásd lent); (4) kezelőfelület a PWA-ban, a gyökérmappákon belüli mappaböngészővel.
 
 ## Munkaterület: git worktree agentenként
 
