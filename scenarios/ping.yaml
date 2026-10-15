@@ -1,0 +1,9 @@
+# Deterministic fake-agent scenario: the first matching step handles an item.
+agent: fake-agent
+steps:
+  - on: { kind: any, text_contains: "ping" }
+    reply: "pong"
+  - on: { kind: any, text_contains: "status" }
+    reply: "Minden rendben, nincs nyitott feladatom."
+  # Anything else is acknowledged without a reply.
+  - on: { kind: any }

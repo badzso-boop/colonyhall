@@ -1,0 +1,60 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - depguard
+    - errorlint
+    - bodyclose
+    - misspell
+  settings:
+    depguard:
+      # Layer rules from CLAUDE.md. When a module is added, add its adapter
+      # packages to the "adapters" lists below.
+      rules:
+        platform-is-generic:
+          files: ["**/internal/platform/**"]
+          deny:
+            - pkg: colonyhall/internal/modules
+              desc: platform must not depend on business modules
+            - pkg: colonyhall/internal/httpx
+              desc: platform must not depend on transport helpers
+        policy-is-pure:
+          files: ["**/internal/policy/**"]
+          deny:
+            - pkg: colonyhall/internal
+              desc: policy is pure functions; pass facts in, do not import other packages
+        module-core-has-no-io:
+          # model.go, events.go, service.go, store.go, api.go of every module
+          files: ["**/internal/modules/*/*.go", "!$test"]
+          deny:
+            - pkg: github.com/jackc/pgx
+              desc: SQL belongs in the module's postgres/ package
+            - pkg: net/http
+              desc: HTTP belongs in the module's httpapi/ package
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: MCP belongs in the module's mcptools/ package
+            - pkg: github.com/coder/websocket
+              desc: WebSocket belongs in internal/gateway
+        no-foreign-adapters:
+          # Modules may use another module's root package (its api.go), never its adapters.
+          files: ["**/internal/modules/**", "**/internal/gateway/**", "**/internal/mcpserver/**", "**/internal/eventlog/*.go"]
+          deny:
+            - pkg: colonyhall/internal/modules/identity/postgres
+            - pkg: colonyhall/internal/modules/identity/memory
+            - pkg: colonyhall/internal/modules/identity/httpapi
+            - pkg: colonyhall/internal/modules/identity/mcptools
+            - pkg: colonyhall/internal/modules/conversation/postgres
+            - pkg: colonyhall/internal/modules/conversation/memory
+            - pkg: colonyhall/internal/modules/conversation/httpapi
+            - pkg: colonyhall/internal/modules/conversation/mcptools
+            - pkg: colonyhall/internal/modules/delivery/postgres
+            - pkg: colonyhall/internal/modules/delivery/memory
+            - pkg: colonyhall/internal/modules/delivery/httpapi
+            - pkg: colonyhall/internal/modules/delivery/mcptools
+            - pkg: colonyhall/internal/server
+              desc: only cmd/ may use the composition root
+
+formatters:
+  enable:
+    - gofmt

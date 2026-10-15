@@ -1,0 +1,38 @@
+package conversation
+
+import (
+	"context"
+	"time"
+
+	"colonyhall/internal/platform/ids"
+)
+
+// Store persists channels, members and messages. Implementations: postgres,
+// memory. Lookups return db.ErrNotFound; unique violations return db.ErrConflict.
+type Store interface {
+	CreateChannel(ctx context.Context, c Channel) error
+	ChannelByID(ctx context.Context, id ids.ID) (Channel, error)
+	ChannelByName(ctx context.Context, workspaceID ids.ID, name string) (Channel, error)
+	// ChannelsForActor lists channels the actor belongs to; all=true lists
+	// every channel in the workspace (for admins), marking membership.
+	ChannelsForActor(ctx context.Context, workspaceID, actorID ids.ID, all bool) ([]ChannelView, error)
+
+	AddMember(ctx context.Context, m Member) error
+	Member(ctx context.Context, channelID, actorID ids.ID) (Member, error)
+	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
+
+	InsertMessage(ctx context.Context, m Message) error
+	MessageByID(ctx context.Context, id ids.ID) (Message, error)
+	MessageByClientID(ctx context.Context, authorID ids.ID, clientMsgID string) (Message, error)
+	MessagesByIDs(ctx context.Context, idList []ids.ID) ([]Message, error)
+	// ListMessages returns up to limit messages older than before (or the
+	// newest when before is ids.Nil), oldest first.
+	ListMessages(ctx context.Context, channelID, before ids.ID, limit int) ([]Message, error)
+
+	// IncrementMsgCount adds one to the channel's message count and returns it.
+	IncrementMsgCount(ctx context.Context, channelID ids.ID) (int64, error)
+	// SetSeen marks the member as having seen count messages and clears mentions.
+	SetSeen(ctx context.Context, channelID, actorID ids.ID, count int64) error
+	IncrementMentions(ctx context.Context, channelID ids.ID, actorIDs []ids.ID) error
+	BumpThread(ctx context.Context, rootID ids.ID, at time.Time) error
+}

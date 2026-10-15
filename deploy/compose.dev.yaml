@@ -1,0 +1,40 @@
+# Local development stack: Postgres + Colonyhall with the development seed.
+#   make dev     → http://localhost:8080 (admin token is printed in the log)
+# Postgres is published on 5433 so it does not clash with a local 5432.
+name: colonyhall-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: colony
+      POSTGRES_PASSWORD: colony
+      POSTGRES_DB: colony
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U colony -d colony"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      COLONY_STORE: postgres
+      COLONY_DATABASE_URL: postgres://colony:colony@postgres:5432/colony?sslmode=disable
+      COLONY_HTTP_ADDR: ":8080"
+      COLONY_DEV_SEED: "1"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

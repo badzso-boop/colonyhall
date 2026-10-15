@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.local
+
+# Build output
+/bin/
+/dist/
+web/dist/
+web/node_modules/
+
+# Test and coverage
+coverage.out
+*.test
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

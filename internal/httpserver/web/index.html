@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colonyhall (dev)</title>
+<style>
+  /* Phase 0 developer page. The real UI (React + Vite PWA) arrives in phase 1. */
+  :root { --bg:#f4f5f3; --surface:#fff; --fg:#1d211f; --muted:#646b66; --line:#dcdfda; --accent:#a8670f; --agent:#3d5a80; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141715; --surface:#1c201e; --fg:#e6e9e6; --muted:#9aa29c; --line:#303632; --accent:#e0a347; --agent:#93b0d8; color-scheme: dark; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--surface); flex-wrap:wrap; }
+  header b { color:var(--accent); }
+  input, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg); }
+  button { cursor:pointer; }
+  main { display:grid; grid-template-columns:220px 1fr; height:calc(100vh - 54px); }
+  nav { border-right:1px solid var(--line); padding:10px; overflow:auto; }
+  nav div { padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; }
+  nav div.on { background:var(--surface); font-weight:600; }
+  nav .n { color:var(--accent); font-weight:600; }
+  section { display:grid; grid-template-rows:1fr auto; min-width:0; }
+  #feed { overflow:auto; padding:12px 16px; }
+  .msg { padding:6px 0; }
+  .who { font-weight:600; } .who.agent { color:var(--agent); }
+  .at { color:var(--muted); font-size:12px; margin-left:6px; }
+  .body { white-space:pre-wrap; overflow-wrap:anywhere; }
+  form { display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); }
+  form input { flex:1; }
+  #status { color:var(--muted); font-size:12px; margin-left:auto; }
+  @media (max-width:640px) { main { grid-template-columns:1fr; } nav { border-right:0; border-bottom:1px solid var(--line); max-height:30vh; } }
+</style>
+</head>
+<body>
+<header>
+  <b>Colonyhall</b>
+  <input id="token" type="password" size="28" autocomplete="off">
+  <button id="connect"></button>
+  <span id="status"></span>
+</header>
+<main>
+  <nav id="channels"></nav>
+  <section>
+    <div id="feed"></div>
+    <form id="send"><input id="text" autocomplete="off"><button></button></form>
+  </section>
+</main>
+<script>
+const I18N = {
+  hu: { token: "API token", connect: "Csatlakozás", send: "Küldés", message: "Üzenet… (@név megemlít)",
+        online: "élő kapcsolat", offline: "nincs kapcsolat", reconnecting: "újracsatlakozás…", pick: "Válassz csatornát" },
+  en: { token: "API token", connect: "Connect", send: "Send", message: "Message… (@name to mention)",
+        online: "live", offline: "offline", reconnecting: "reconnecting…", pick: "Pick a channel" },
+};
+const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
+const $ = (id) => document.getElementById(id);
+$("token").placeholder = L.token; $("connect").textContent = L.connect;
+$("text").placeholder = L.message; document.querySelector("#send button").textContent = L.send;
+
+let token = "", channels = [], actors = {}, current = null, lastSeq = null, ws = null;
+try { token = localStorage.getItem("colony_token") || ""; } catch {}
+$("token").value = token;
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" } });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.status);
+  return res.status === 204 ? null : res.json();
+}
+
+async function load() {
+  const [a, c] = await Promise.all([api("/api/v1/actors"), api("/api/v1/channels")]);
+  actors = Object.fromEntries(a.actors.map(x => [x.id, x]));
+  channels = c.channels;
+  renderChannels();
+  if (!current && channels.length) await open(channels[0].id);
+}
+
+function renderChannels() {
+  $("channels").innerHTML = "";
+  for (const c of channels) {
+    const d = document.createElement("div");
+    d.className = c.id === current ? "on" : "";
+    d.innerHTML = `<span>#${c.name}</span><span class="n">${c.unread > 0 && c.id !== current ? c.unread : ""}</span>`;
+    d.onclick = () => open(c.id);
+    $("channels").appendChild(d);
+  }
+}
+
+async function open(id) {
+  current = id;
+  const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
+  $("feed").innerHTML = "";
+  r.messages.forEach(addMessage);
+  await api(`/api/v1/channels/${id}/read`, { method: "POST" }).catch(() => {});
+  const c = channels.find(x => x.id === id); if (c) c.unread = 0;
+  renderChannels();
+}
+
+function addMessage(m) {
+  const a = actors[m.author_id] || { handle: "?", kind: "human" };
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = `<span class="who ${a.kind}"></span><span class="at"></span><div class="body"></div>`;
+  div.querySelector(".who").textContent = "@" + a.handle;
+  div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
+  div.querySelector(".body").textContent = m.body;
+  $("feed").appendChild(div);
+  $("feed").scrollTop = $("feed").scrollHeight;
+}
+
+function connectWS() {
+  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/ui";
+  ws = new WebSocket(url);
+  ws.onopen = () => ws.send(JSON.stringify({ type: "hello", token, last_seq: lastSeq }));
+  ws.onmessage = async (ev) => {
+    const f = JSON.parse(ev.data);
+    if (f.type === "welcome") { if (lastSeq === null) lastSeq = f.head; $("status").textContent = L.online; }
+    if (f.type === "resync_required") { lastSeq = f.head; await load(); }
+    if (f.type !== "event") return;
+    lastSeq = f.seq;
+    if (f.event_type === "message.created") {
+      if (f.data.channel_id === current) {
+        addMessage({ ...f.data, id: f.data.message_id });
+        api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
+      } else {
+        const c = channels.find(x => x.id === f.data.channel_id);
+        if (c) { c.unread++; renderChannels(); }
+      }
+    } else if (f.event_type === "actor.created" || f.event_type.startsWith("channel.")) {
+      await load();
+    }
+  };
+  ws.onclose = () => { $("status").textContent = L.reconnecting; setTimeout(connectWS, 2000); };
+}
+
+$("connect").onclick = async () => {
+  token = $("token").value.trim();
+  try { localStorage.setItem("colony_token", token); } catch {}
+  try { await load(); if (!ws) connectWS(); } catch (e) { $("status").textContent = e.message; }
+};
+
+$("send").onsubmit = async (e) => {
+  e.preventDefault();
+  const body = $("text").value.trim();
+  if (!body || !current) return;
+  $("text").value = "";
+  await api(`/api/v1/channels/${current}/messages`, { method: "POST",
+    body: JSON.stringify({ body, client_msg_id: crypto.randomUUID() }) }).catch(err => alert(err.message));
+};
+
+$("status").textContent = L.offline;
+if (token) $("connect").click();
+</script>
+</body>
+</html>
