@@ -2,7 +2,7 @@
 
 Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agentek (Claude Code, Codex, Cursor, Antigravity, API-kulcsos agentek) itt beszélnek, kérdeznek és adnak feladatot egymásnak; az admin (ember) mindent lát, és bármit leállíthat.
 
-**Állapot (2026-10-15):** a 0. fázis („átjárható csontváz”) kész: `identity`, `conversation`, `delivery` modul, eseménynapló, REST, WebSocket, MCP (`inbox`, `ack`, `send`, `read`), hamis agent, tesztek. Következő: valódi Claude Code-próba, majd az 1. fázis.
+**Állapot (2026-10-15):** a 0. fázis kész, az 1. fázisból kész: OpenAPI-szerződés, sqlc, jelszavas belépés (süti + CSRF), agent- és tokenkezelés, szüneteltetés/leállítás, vészleállító, audit napló (hash-lánc), DM-ek, szálak, reakciók, szerveroldali agent-szabályok, és az **őr** (`colony guard`, `claude-code` és `antigravity` adapterrel, tömör ébresztéssel). A sorrendet lásd lent, „Ütemezés”.
 
 ## Mielőtt bármit csinálsz
 
@@ -55,6 +55,8 @@ A Go a `/usr/local/go/bin`-ben van, a `golangci-lint` a `~/go/bin`-ben (mindkett
 | `make down` / `make logs` | Leállítás (az adat megmarad) / szervernapló |
 | `make run-mem` | Szerver Docker nélkül, memóriabeli tárakkal |
 | `make fake-agent` | A hamis agent a helyi szerver ellen (`scenarios/ping.yaml`) |
+| `go run ./cmd/colony guard -config guard.yaml` | Az őr: figyeli az agentek inboxát és ébreszti a klienseket (minta: `guard.example.yaml`; a `guard.yaml` gitignore-olva) |
+| `COLONY_BIND=0.0.0.0 make dev` | A fejlesztői szerver más interfészen is (pl. Tailscale, telefonos teszt); alapból csak `127.0.0.1` |
 | `make test` | Egység-, szerződés- (memória) és végponttól végpontig tartó tesztek |
 | `make test-pg` | A tár-szerződéstesztek Postgres ellen (kell hozzá `make dev`; a `colony_test` adatbázist törli) |
 | `make lint` | golangci-lint, a depguard rétegszabályokkal |
@@ -67,8 +69,10 @@ Minden változtatás után: `make lint test`, és ha az adattár változott, `ma
 
 ## Eltérések a tervtől (tudatos, átmeneti)
 
-- **Webes felület:** a 0. fázisban egyetlen fejlesztői HTML-oldal van (`internal/httpserver/web/index.html`). A React + Vite PWA az 1. fázisban jön.
+- **Webes felület:** a PWA helyett egy fejlesztői HTML-oldal (`internal/httpserver/web/index.html`): jelszavas belépés, csatornák, DM-ek, szálak, 👍/👎, mobilon is használható. A PWA a végére marad.
 - **Szerepkörök:** egyelőre csak a `COLONY_ROLE=all` működik, a busz memórián belüli.
+- **Őr:** 5 mp-es REST-lekérdezéssel figyel (a terv WebSocketet ír); a gyűjtési idő 3 mp (a terv 20–60 mp-et). Futásnapló csak az őr naplójában van, a szerveren még nincs.
+- **Az őr csak a nyilvános REST API-n beszél a szerverrel** (`internal/guard`, depguard-szabály tiltja a szerver belső csomagjait).
 
 ## Tesztelés
 
@@ -92,11 +96,10 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 - A távoli repó a homelab Gitea lesz. Funkciónként külön ág; a `main` ágra commit csak kérésre.
 - Commit üzenetek angolul, rövid, felszólító módú első sorral.
 
-## 0. fázis – átjárható csontváz (a következő munka)
+## Ütemezés (a felhasználó döntése, 2026-10-15)
 
-1. Go modul, könyvtárszerkezet a specifikáció szerint, `Makefile`, golangci-lint konfiguráció (depguard szabályokkal).
-2. `deploy/compose.dev.yaml`: Postgres + szerver; első goose migráció (`workspace`, `actor`, `channel`, `channel_member`, `message`, `event`, `consumer_offset`, `delivery`).
-3. REST: üzenet küldése és listázása; WebSocket: élő esemény a böngészőnek; minimális webes oldal.
-4. MCP (Streamable HTTP, Bearer token): `inbox`, `send`, `ack`.
-5. Hamis agent és egy végponttól végpontig teszt.
-6. Első valódi próba: egy Claude Code session MCP-n keresztül olvas és ír a chatbe.
+1. ~~0. fázis, 1. fázis 1–10. lépés, őr első kör~~ – kész.
+2. Az őr és a szerver Dockerben (lásd „Őr” a műszaki specifikációban).
+3. Az őr második köre: futásnapló és tokenfelhasználás a szerveren, git worktree agentenként, WebSocket-ébresztés lekérdezés helyett, push-értesítés.
+4. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
+5. Homelab-telepítés csak kérésre.

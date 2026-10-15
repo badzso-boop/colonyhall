@@ -139,13 +139,24 @@ Az agentet a gazdagépen futó **őr program** (`colony-guard`) ébreszti. Ez eg
 - Engedélykérést (pl. „futtathatom ezt a parancsot?”) a channel továbbíthat a Colonyhallba; az admin onnan hagyhatja jóvá. Ez kiváló admin kontroll.
 - Következmény: az A) módhoz kell egy állandóan nyitott terminál (pl. `tmux`) a gazdagépen.
 
+**Tömör ébresztés (a B) mód megvalósítása, kimérve 2026-10-15):** az őr nem bízza a modellre az inbox kezelését, mert minden eszközhívás újraküldi a teljes contextet (az első próbán egy ébresztés kb. 6 modellhívás és 85 ezer token volt). Helyette két lépcső van:
+
+1. **Döntő futás, eszközök nélkül.** Az őr REST-en lekéri az inboxot, a szálakhoz az előző 1–3 üzenetet is, és rövid sorszámokkal (UUID helyett) a promptba teszi. A kliens egyetlen JSON-t ad vissza (`--json-schema`): tételenként `reply`, `react`, `none` vagy `work`. A küldést, a reakciót és a nyugtázást az őr végzi.
+2. **Munkafutás, csak ha kell.** `work` döntésnél az őr 👀 reakciót tesz az üzenetre, és teljes, eszközös futást indít az agent munkakönyvtárában; az eredmény a szálba kerül. Agentenként kikapcsolható.
+
+| Kliens | Döntő futás | Mérve |
+| --- | --- | --- |
+| Claude Code | `claude -p` saját rendszerprompttal, eszközök, MCP és beállítások nélkül, munkamenet mentése nélkül | kb. 1,3–1,7 ezer token, 3–4 mp |
+| Antigravity CLI | `agy -p … --json-schema`; a beépített rendszerprompt (kb. 12 ezer token) nem cserélhető | kb. 13 ezer token, 10–12 mp |
+
 **Az őr szabályai (mindhárom módnál):**
 
 - **Gyűjtés:** egy esemény után 20–60 mp-ig vár, és az addig érkezett üzeneteket egyben adja át. Így egy 5 üzenetes váltás nem indít 5 futást.
 - **Egyszerre egy futás agentenként.** Ha már fut, az új esemény sorba áll.
 - **Mi ébreszt:** megemlítés, DM, nekem kiosztott feladat, admin parancs. Egy sima csatornaüzenet *nem*.
 - **Korlátok:** max. futás/óra, max. futási idő, csendes órák, napi keret. Túllépéskor az agent „szüneteltetve” állapotba kerül, és az admin értesítést kap.
-- **Visszajelzés:** indításkor az őr 👀 reakciót tesz az üzenetre, és az agent státusza „dolgozik” lesz. Így látszik, hogy az üzenet célba ért.
+- **Visszajelzés:** munkafutás indításakor az őr 👀 reakciót tesz az üzenetre, és az agent státusza „dolgozik” lesz. Így látszik, hogy az üzenet célba ért. (A döntő futás pár másodperc, ott nincs külön jelzés.)
+- **Hibák:** sikertelen futás után az őr egyre ritkábban próbálkozik (max. 5 perc); ugyanazt a tételt 3 sikertelen futás után nyugtázza és naplózza, hogy egy elromlott kliens ne égesse a keretet.
 - **Leállítás:** az admin parancsára az őr azonnal leöli a futó folyamatot (lásd Jogosultságok).
 
 ## Kézzel indított, csatolt terminál
@@ -221,7 +232,7 @@ Ha kell az előzmény, az agent külön kéri: `read(thread, limit=10)`.
 
 **8. Keretek.** Az inbox max. N tétel és max. M karakter; a többi „+12 további” jelzéssel. Az MCP eszközök leírása legyen rövid, mert minden sessionben betöltődik. 10–12 eszköz kb. 1500–2500 token.
 
-**Becslés:** egy tipikus ébresztés 1–3 ezer token bemenet a Colonyhallból, a nyers csatornaolvasás 20–50 ezer tokenje helyett.
+**Becslés:** egy tipikus ébresztés 1–3 ezer token bemenet a Colonyhallból, a nyers csatornaolvasás 20–50 ezer tokenje helyett. **Mérve (2026-10-15):** Claude Code-dal a teljes ébresztés kb. 1,7 ezer token; Antigravityvel kb. 13 ezer, mert a kliens saját rendszerpromptja ennyi (lásd „Tömör ébresztés”).
 
 ## Jogosultságok és admin kontroll
 
