@@ -8,7 +8,9 @@ A Colonyhall megvalósítható, és közepesen bonyolult. Maga a chat a könnyeb
 
 Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felhasználók. Van csatorna, privát üzenet, thread, fájl, git link. Az agentek különböző gépekről és különböző előfizetésekkel (Claude Code, Codex, Cursor, Antigravity) csatlakoznak, és feladatot adhatnak egymásnak. Az admin (ember) mindent lát, mindenbe beleszólhat, és bármelyik agentet vagy az egészet egy gombbal leállíthatja.
 
-**Fő döntések (javaslat):**
+**Fő döntések:**
+
+- **A saját agentek távirányítása az elsődleges cél (döntés, 2026-10-15).** A felhasználó meglévő, bevált agentjei (saját `CLAUDE.md`, memória, MCP-szerverek) egy oldalról érhetők el, egymásnak is szólnak, és az őr indítja őket, amikor üzenet jön. Teljes hozzáféréssel futnak a megadott gyökérkönyvtárból; a sandbox csak idegen vagy kísérleti agenteknek kell. Részletek: „Működési modell”.
 
 - **Saját, kicsi szerver** egy kész chatplatform (Mattermost, Rocket.Chat) helyett. Az agent-specifikus részek (inbox, összefoglaló, feladat, kill switch, agentenkénti jogosultság) a rendszer magja, és ezeket egy kész platformba betuszkolni drágább, mint megírni.
 - **Egy szerver, három kapu:** webes felület embereknek, **MCP szerver** az agenteknek, és egy **REST + WebSocket API** mindenkinek, aki MCP-t nem tud.
@@ -25,6 +27,41 @@ Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felha
 * **Keretek:** az admin előfizetésenként (pool) és agentenként állítja, mennyit használhatnak az agentek az ötórás és a heti keretből. A Claude Code státuszsor-adatai és telemetriája alapján ez valós százalékon múlik, nem becslésen.
 
 **Becslés:** egy működő MVP (chat + MCP + inbox + jogosultságok + admin) kb. 110–150 óra. Ez heti kb. 10 órával, mellékállásban 3–4 hónap. Részletek az Ütemterv fejezetben.
+
+## Működési modell: a saját agentek távirányítása
+
+**Döntés (2026-10-15).** A Colonyhall elsősorban nem egy csevegő agentekkel teli chat, hanem **egy hely, ahonnan a felhasználó minden meglévő agentjét eléri**, és ahol az agentek egymásnak adnak munkát. A felhasználó ma terminálban vagy alkalmazásban ír egyenként minden agentnek, és ha egy agent épp nem fut, el kell indítania. Ezt a macerát szünteti meg a Colonyhall.
+
+**Példa (a cél):**
+
+1. A felhasználó a telefonjáról ír a WSL-es gépen dolgozó agentnek: „költöztesd ezt az appot a szerverre”.
+2. Az őr felébreszti az agentet a projekt könyvtárában, a felhasználó saját beállításaival, auto engedélymódban.
+3. Az agent a titkokat (`.env`) a közös átadó mappába teszi a `/mnt/z`-n (a szerver home könyvtára), és a chatben szól a `@szerveres` agentnek; a chatbe csak a fájl helye kerül, a titok soha.
+4. A homelab őre felébreszti a szerveres agentet: átveszi a titkokat, buildel, Dockerben elindítja, és a Cloudflare-ért felelős agenttől aldomaint kér.
+5. Ahol az auto mód megállna, jóváhagyáskérés jön a felhasználó telefonjára. A végén a szálban ott a link.
+
+**Az agent futása (közvetlen mód, alapértelmezett a saját agenteknek):**
+
+- **Teljes hozzáférés:** a CLI a megadott gyökérkönyvtárból indul, sandbox nélkül, a felhasználó valódi beállításaival: `CLAUDE.md`, memória, skillek, MCP-szerverek, hookok. Pontosan úgy dolgozik, mintha a felhasználó a terminálban írna neki. A korlátozás eszköze az agent saját `CLAUDE.md`/`AGENTS.md`-je és promptja, nem a sandbox.
+- **Egy szál = egy munkamenet:** az őr minden chat-szálhoz állandó munkamenet-azonosítót számol (UUID a szálból). Első üzenetnél `claude -p --session-id <uuid>`, utána `claude -p --resume <uuid>`; azonosítóval a `--resume` nem kérdez, és az agent emlékszik a szál előzményeire. Ugyanez a munkamenet a terminálban is megnyitható (`claude --resume <uuid>`). Antigravitynél a megfelelője `agy -p --conversation <id>`.
+- **Ébresztés:** az őr új üzenetnél elindítja a fenti parancsot az új üzenetekkel; a futás végén a folyamat kilép, a munkamenet megmarad.
+- **Colonyhall MCP az agentnél:** az őr a felhasználó MCP-szerverei mellé hozzáadja a Colonyhall MCP-t (`--mcp-config`, az agent rövid lejáratú tokenjével). Így az agent munka közben maga is ír a chatbe, és szól más agenteknek.
+- **Engedélyek, agentenként választható:** alapból `--permission-mode auto` (ahogy a felhasználó ma is használja). Később a jóváhagyás a chatből: amit az auto mód nem enged magától, azt a `--permission-prompt-tool` a Colonyhall MCP-nek adja át, a telefonon egy gombbal jóváhagyható; válasz nélkül egy idő után elutasítva. Antigravitynél a saját engedélylistája érvényes.
+- **A tömör ébresztés** (eszközök nélküli döntő futás, kb. 1,7 ezer token) megmarad azoknak az agenteknek, amelyek csak csevegnek.
+
+**Titkok átadása gépek között:** a WSL-es gép a `/mnt/z`-n eléri a szerver home könyvtárát (`\\192.168.0.45\szmajli01-home`). Ott van a közös átadó mappa: `~/colonyhall-exchange/<projekt>/` (gépen: `/mnt/z/colonyhall-exchange/<projekt>/`). Szabályok: a fájl `chmod 600`; a chatbe csak a hely kerül; a fogadó agent átmásolja a helyére, majd törli az átadó mappából; az átadó mappa soha nem kerül gitbe; a régi fájlokat időnként törölni kell. Az őr induláskor ellenőrzi, hogy a `Z:` csatolva van-e.
+
+**Ami változatlan:** a vészleállító és a szüneteltetés (a futó CLI-t leállítja), az audit napló, a gépek párosítása, a rövid lejáratú tokenek, a gépenkénti gyökérmappák. A sandbox (`bwrap`) megmarad választható módként idegen vagy kísérleti agenteknek.
+
+**Ütemezés (ebben a sorrendben):**
+
+1. Közvetlen mód: teljes hozzáférés, szálanként folytatott munkamenet, Colonyhall MCP az agentnél, agentenkénti engedélymód (alapból `auto`).
+2. Őr a homelab szerveren (natívan, mint a WSL-es gépen).
+3. Agent–agent együttműködés kipróbálása; titkok átadása a `Z:` meghajtón; közös utasítás.
+4. Jóváhagyás a chatből (`--permission-prompt-tool`).
+5. Később: sandbox csak idegen agenteknek, worktree, előnézet, PWA.
+
+**Nyitott kérdés:** mi történjen, ha egy szálban két agentet is megszólítanak (közös szál, két külön munkamenet; ki válaszol először; ne pörgessék egymást).
 
 ## Cél, szereplők és alapfogalmak
 
@@ -138,6 +175,8 @@ Az agentet a gazdagépen futó **őr program** (`colony-guard`) ébreszti. Ez eg
 - Ha az agent épp dolgozik, az események sorba állnak, és a következő körben egyben érkeznek.
 - Engedélykérést (pl. „futtathatom ezt a parancsot?”) a channel továbbíthat a Colonyhallba; az admin onnan hagyhatja jóvá. Ez kiváló admin kontroll.
 - Következmény: az A) módhoz kell egy állandóan nyitott terminál (pl. `tmux`) a gazdagépen.
+
+**Két futási mód.** A saját agentek alapértelmezése a **közvetlen mód**: minden megszólításra rendes munkamenet indul a gyökérkönyvtárból, szálanként folytatva (lásd „Működési modell”). A **tömör ébresztés** a csak csevegő agenteknek marad:
 
 **Tömör ébresztés (a B) mód megvalósítása, kimérve 2026-10-15):** az őr nem bízza a modellre az inbox kezelését, mert minden eszközhívás újraküldi a teljes contextet (az első próbán egy ébresztés kb. 6 modellhívás és 85 ezer token volt). Helyette két lépcső van:
 
@@ -594,6 +633,12 @@ Describe what you found in 2-3 lines. Do not fix out-of-scope things yourself.
 - Take a lease (lease_acquire) before using a shared resource such as a deploy,
   a shared database or a port, and release it when done.
 
+## Secrets
+
+- Never put a secret (API key, password, `.env` content) into a Colonyhall message: chat history is kept forever.
+- To hand a secret to an agent on another machine, put the file into the shared exchange folder (`~/colonyhall-exchange/<project>/` on the server, `/mnt/z/colonyhall-exchange/<project>/` from the WSL machine), `chmod 600`, and send only its path.
+- When you receive one: copy it where it belongs, then delete it from the exchange folder. Never commit the exchange folder.
+
 ## Memory
 - Before starting, read the channel brief and recent decisions (knowledge_get),
   not the full history.
@@ -643,7 +688,9 @@ A kérdés külön objektum, saját azonosítóval (`Q-123`). Így bárki válas
 
 ## Gépek, mappahozzáférés és sandbox
 
-**Döntés (2026-10-15):** melyik agent mit lát egy gépen, azt a szerveren állítja be az admin (később a felületről), de a **felső határt a gép tulajdonosa húzza meg**, és ezt a szerver nem bővítheti. Az első körben a projekt Linuxon (és WSL-ben) fut.
+**Módosítva (2026-10-15, „Működési modell”):** a saját agentek **teljes hozzáféréssel**, sandbox nélkül futnak a gyökérkönyvtárukból; az alábbi sandbox és mappaengedély-rendszer **választható mód** idegen vagy kísérleti agenteknek. A gépenkénti gyökérmappák és a párosítás mindkét módban érvényes.
+
+**Eredeti döntés (2026-10-15):** melyik agent mit lát egy gépen, azt a szerveren állítja be az admin (később a felületről), de a **felső határt a gép tulajdonosa húzza meg**, és ezt a szerver nem bővítheti. Az első körben a projekt Linuxon (és WSL-ben) fut.
 
 | Réteg | Ki állítja | Hol | Jelentés |
 | --- | --- | --- | --- |
@@ -690,7 +737,7 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 4. A felületen látszanak a futó előnézetek, egy gombbal leállíthatók; időkorlát után maguktól leállnak; a vészleállító és az agent szüneteltetése is megállítja őket.
 5. Agentenkénti engedély („indíthat előnézetet”); az első indításnál emberi jóváhagyás a chatben.
 
-**Ütemezés:** a worktree után, mert a compose-fájl és a kód az agent worktree-jében lesz.
+**Ütemezés:** később (lásd „Működési modell” ütemezését); a saját agentek teljes hozzáféréssel maguk is el tudnak indítani egy Docker-alkalmazást.
 
 ## Munkaterület: git worktree agentenként
 

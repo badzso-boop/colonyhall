@@ -100,16 +100,18 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 ## Ütemezés (a felhasználó döntése, 2026-10-15)
 
 1. ~~0. fázis, 1. fázis 1–10. lépés, őr első kör~~ – kész.
-2. Az őr második köre, ebben a sorrendben:
-   1. ~~Gépek, párosítás, mappaengedélyek, rövid lejáratú agent-tokenek, `bwrap` sandbox~~ – kész.
-   2. A sandbox környezeti változói ne a `bwrap` parancssorában menjenek (a folyamatlistában látszanak).
-   3. Git worktree agentenként.
-   4. **Előnézet (preview):** az agent a worktree-jében `compose.yaml`-t ír, az őr a sandboxon kívül, ellenőrzött szabályokkal indítja (nincs `privileged`, host hálózat, Docker-socket; kötet csak az agent mappájából; erőforráskorlát; agentenkénti porttartomány), és linket küld a chatbe (Tailscale, később Cloudflare Tunnel). Agentenkénti engedély, első indításnál emberi jóváhagyás, időkorlát, leállító gomb, a vészleállító is megállítja. Részletek: terv „Előnézet”.
-   5. Futásnapló és tokenfelhasználás a szerveren; WebSocket-ébresztés lekérdezés helyett; push-értesítés.
-   6. Később: hálózati szűrés a sandboxban (csak a kliens szolgáltatója érhető el), mert a belépési token másolata a sandboxban olvasható.
+2. **Irányváltás (döntés, 2026-10-15): a saját agentek távirányítása.** Részletek: terv „Működési modell”. Ebben a sorrendben:
+   1. ~~Gépek, párosítás, mappaengedélyek, rövid lejáratú agent-tokenek, `bwrap` sandbox~~ – kész (a sandbox mostantól választható mód).
+   2. Közvetlen mód: teljes hozzáférés a gyökérkönyvtárból, a felhasználó saját beállításaival; szálanként folytatott munkamenet (`--session-id`/`--resume`); Colonyhall MCP az agentnél; agentenkénti engedélymód (alapból `auto`).
+   3. Őr a homelab szerveren.
+   4. Agent–agent együttműködés; titkok átadása a `Z:` meghajtón (`colonyhall-exchange`); közös utasítás.
+   5. Jóváhagyás a chatből (`--permission-prompt-tool`).
+   6. Később: a sandbox környezeti változói ne a parancssorban menjenek; worktree; előnézet; futásnapló a szerveren; WebSocket-ébresztés; push.
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.
 
 **Futtatás (döntés, 2026-10-15):** a szerver és a Postgres Dockerben fut, **az őr natívan, a gépen**, ugyanazokkal a bejelentkezett CLI-kkel (`claude`, `agy`), amiket a felhasználó közvetlenül is használ. Az őrt ne tedd konténerbe: ott újra telepíteni és belépni kellene.
 
-**Gépek és mappák (döntés, 2026-10-15, részletek: terv „Gépek, mappahozzáférés és sandbox”):** a gyökérmappákat csak a gépen lévő `guard.yaml` adja meg, a szerver nem bővítheti; az admin a szerveren agentenként `read`/`write` mappaengedélyt ad ezeken belül; az őr géptokennel azonosítja magát, és a hozzárendelt agentekhez rövid lejáratú agent-tokent kér; a munkafutás `bwrap` alatt fut, ahol elérhető (kötelező); első körben Linux.
+**Saját agentek (döntés, 2026-10-15, terv „Működési modell”):** teljes hozzáféréssel, sandbox nélkül futnak a gyökérkönyvtárukból, a felhasználó saját `CLAUDE.md`-jével, memóriájával és MCP-szervereivel; egy chat-szál = egy CLI-munkamenet; titok soha nem megy a chatbe, csak a `colonyhall-exchange` mappán át.
+
+**Gépek és mappák (választható sandbox mód, részletek: terv „Gépek, mappahozzáférés és sandbox”):** a gyökérmappákat csak a gépen lévő `guard.yaml` adja meg, a szerver nem bővítheti; az admin a szerveren agentenként `read`/`write` mappaengedélyt ad ezeken belül; az őr géptokennel azonosítja magát, és a hozzárendelt agentekhez rövid lejáratú agent-tokent kér; a munkafutás `bwrap` alatt fut, ahol elérhető (kötelező); első körben Linux.

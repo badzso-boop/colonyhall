@@ -287,7 +287,33 @@ Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`).
 
 **Naplózás:** minden futás egy sor: agent, fázis, kliens, modell, tételszám, token (be/ki/cache), idő, döntések. A szerveroldali futásnapló az őr második körében jön.
 
-### Gépek, engedélyek és sandbox (az őr második köre, megvalósítva)
+### Közvetlen mód (terv, 2026-10-15): a saját agentek futtatása
+
+A saját agentek alapértelmezése (lásd terv, „Működési modell”). A hozzárendelés (`agent_host`) új mezői: `mode` (`direct` | `compact`), `root_dir` (a gyökérkönyvtár a gépen, a gép gyökérmappáin belül), `permission_mode` (alapból `auto`), `sandbox` (alapból ki).
+
+**Munkamenet szálanként:** `session_id = UUIDv5(agent_id, szál gyökérüzenetének id)`. Az őr az első futásnál `--session-id`, utána `--resume` kapcsolóval indít; az őr tárolja, melyik munkamenet létezik már (a szerveren, futásnaplóval együtt). Egy agentnél egyszerre egy futás; ha közben új üzenet jön ugyanabba a szálba, a következő `--resume` viszi.
+
+**Parancs (Claude Code):**
+
+```
+claude -p "<új üzenetek <colonyhall_message> keretben>" \
+  --session-id <uuid> | --resume <uuid> \
+  --permission-mode auto \
+  --mcp-config <ideiglenes fájl: colonyhall MCP + agent-token> \
+  --output-format json
+```
+
+A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei betöltődnek (nincs `--strict-mcp-config`, nincs `--setting-sources ""`, nincs `--no-session-persistence`). Az ideiglenes MCP-konfiguráció `0600`, futás után törlődik; a token rövid lejáratú.
+
+**Antigravity:** `agy -p "<üzenetek>" --conversation <id> --output-format json`; a Colonyhall MCP a munkakönyvtár `.agents/mcp_config.json`-jából vagy a globális konfigurációból; engedélyek a saját `settings.json` szerint.
+
+**Válasz a chatbe:** a futás végső szövege a szálba kerül (ha az agent az MCP-n át még nem válaszolt); a 600 karakteres szabály itt is érvényes, hosszabbat az agent fájlba ír, és linket küld.
+
+**Jóváhagyás a chatből (később):** `--permission-prompt-tool mcp__colonyhall__approve`; a Colonyhall a kérést a szálba és push-értesítésként küldi; gombbal jóváhagyható vagy elutasítható; időkorlát után elutasítva.
+
+**Titok-átadó mappa:** `guard.yaml`: `exchange_dir` (pl. `/mnt/z/colonyhall-exchange` a WSL-en, `~/colonyhall-exchange` a szerveren); az őr induláskor ellenőrzi, hogy elérhető-e, és jelenti a szervernek.
+
+### Gépek, engedélyek és sandbox (választható mód, megvalósítva)
 
 **`guard.yaml` (a gépen, a szerver nem írhatja felül):** `server`, `host_token_file`, `roots` (gyökérmappák), `sandbox_dir`. Agentek és tokenek már nincsenek benne.
 
