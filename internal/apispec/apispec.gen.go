@@ -489,7 +489,9 @@ type HostList struct {
 
 // HostReport defines model for HostReport.
 type HostReport struct {
-	Clients []struct {
+	// AllowUnsandboxed True when guard.yaml permits agents with sandbox: false
+	AllowUnsandboxed *bool `json:"allow_unsandboxed,omitempty"`
+	Clients          []struct {
 		Name    string  `json:"name"`
 		Version *string `json:"version,omitempty"`
 	} `json:"clients"`

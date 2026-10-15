@@ -163,6 +163,15 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		s.mu.Lock()
 		m := s.agents[ha.AgentID]
 		s.mu.Unlock()
+		if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
+			reason := "unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)"
+			rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
+			s.Log.Warn("guard: unsandboxed agent refused", "agent", "@"+ha.Handle, "reason", reason)
+			if m != nil {
+				s.stop(ha.AgentID)
+			}
+			continue
+		}
 		if !ha.Sandbox || ha.Mode == "direct" || ha.RootDir != "" {
 			realRoot, reason := CheckGrant(ha.RootDir, s.roots, s.home)
 			if reason != "" {
@@ -250,6 +259,10 @@ func (s *Supervisor) agentDir(ha HostAgent) (string, error) {
 }
 
 func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, grants []Grant) {
+	if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
+		s.Log.Error("guard: agent not started: unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)", "agent", "@"+ha.Handle)
+		return
+	}
 	newAdapter := s.NewAdapter
 	if newAdapter == nil {
 		factory, ok := Adapters[ha.Client]
@@ -284,9 +297,13 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	_ = ac.defaults()
 
 	m := &managed{key: key, grants: grants, conf: ha, done: make(chan struct{})}
+	var httpClient *http.Client
+	if s.host != nil {
+		httpClient = s.host.HTTP
+	}
 	agent := &Agent{
 		Cfg:      ac,
-		Client:   &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: s.host.HTTP},
+		Client:   &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: httpClient},
 		Adapter:  newAdapter(ac),
 		Log:      s.Log,
 		Mode:     ha.Mode,
@@ -413,9 +430,13 @@ func (s *Supervisor) report(ctx context.Context) {
 	if s.sandbox != nil {
 		r.Sandbox = s.sandbox.Version
 	}
+	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
 	s.mu.Lock()
 	r.Rejected = append([]Rejected{}, s.rejected...)
 	s.mu.Unlock()
+	if s.host == nil {
+		return
+	}
 	if err := s.host.Report(ctx, r); err != nil {
 		if ctx.Err() == nil {
 			s.Log.Warn("guard: report failed", "err", err)

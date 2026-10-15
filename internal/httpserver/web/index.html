@@ -80,13 +80,15 @@ const I18N = {
         hosts: "Gépek", chat: "Chat", pair: "Párosítókód", pairHelp: "A gépen futtasd (10 percig érvényes):", revoke: "Visszavonás",
         lastSeen: "utoljára", never: "még soha", roots: "Gyökérmappák", clients: "Kliensek", sandbox: "Sandbox", none: "nincs",
         rejected: "Elutasított engedély", assign: "Agent hozzárendelése", work: "munka", grant: "Mappa engedélyezése",
-        read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép." },
+        read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép.",
+        allowUnsandboxed: "sandbox nélkül engedélyezve", yes: "igen", no: "nem" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
         lastSeen: "last seen", never: "never", roots: "Roots", clients: "Clients", sandbox: "Sandbox", none: "none",
         rejected: "Refused grant", assign: "Assign agent", work: "work", grant: "Grant folder",
-        read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet." },
+        read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet.",
+        allowUnsandboxed: "unsandboxed allowed", yes: "yes", no: "no" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -259,7 +261,7 @@ async function renderHosts() {
     const seen = h.last_seen_at ? new Date(h.last_seen_at).toLocaleString() : L.never;
     c.append(el("h3", { textContent: `${h.name} · ${h.state}` }), el("div", { className: "muted", textContent: `${L.lastSeen}: ${seen} · ${h.report.os || ""} · guard ${h.report.guard_version || "?"}` }));
     c.append(el("div", { className: "muted", textContent: `${L.roots}: ${(h.report.roots || []).join(", ") || L.none}` }));
-    c.append(el("div", { className: "muted", textContent: `${L.clients}: ${(h.report.clients || []).map(x => x.name + (x.version ? " " + x.version : "")).join(", ") || L.none} · ${L.sandbox}: ${h.report.sandbox || L.none}` }));
+    c.append(el("div", { className: "muted", textContent: `${L.clients}: ${(h.report.clients || []).map(x => x.name + (x.version ? " " + x.version : "")).join(", ") || L.none} · ${L.sandbox}: ${h.report.sandbox || L.none} · ${L.allowUnsandboxed}: ${h.report.allow_unsandboxed ? L.yes : L.no}` }));
     for (const r of h.report.rejected || []) c.append(el("div", { className: "warn grant", textContent: `${L.rejected}: @${actors[r.agent_id]?.handle || "?"} ${r.path} — ${r.reason}` }));
     if (h.state === "approved") {
       const rv = el("button", { textContent: L.revoke });

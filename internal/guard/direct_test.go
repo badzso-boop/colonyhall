@@ -2,12 +2,18 @@ package guard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -279,4 +285,94 @@ func TestDirectPrompt(t *testing.T) {
 	if !strings.Contains(p, "You were messaged in Colonyhall.") {
 		t.Fatalf("missing instructions in prompt:\n%s", p)
 	}
+}
+
+func TestSupervisorReconcileAllowUnsandboxed(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "project")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sandboxDir := filepath.Join(dir, "sandbox")
+	agentID := uuid.New().String()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/token"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "tok", "expires_at": time.Now().Add(time.Hour)})
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	sup := &Supervisor{
+		Cfg: Config{
+			Server:           ts.URL,
+			Roots:            []string{root},
+			SandboxDir:       sandboxDir,
+			AllowUnsandboxed: false,
+		},
+		host:   &Client{BaseURL: ts.URL, Token: "host-tok", HTTP: ts.Client()},
+		roots:  []string{root},
+		home:   dir,
+		agents: map[string]*managed{},
+		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NewAdapter: func(AgentConfig) Adapter {
+			return &ClaudeCode{}
+		},
+	}
+
+	cfg := HostConfig{
+		Version: "v1",
+		Agents: []HostAgent{
+			{
+				AgentID:        agentID,
+				Handle:         "bot",
+				Client:         "claude-code",
+				Mode:           "direct",
+				RootDir:        root,
+				Sandbox:        false,
+				PermissionMode: "auto",
+			},
+		},
+	}
+
+	// 1. With AllowUnsandboxed: false, agent is refused and added to rejected
+	sup.reconcile(context.Background(), cfg)
+	sup.mu.Lock()
+	numAgents := len(sup.agents)
+	numRejected := len(sup.rejected)
+	var reason string
+	if numRejected > 0 {
+		reason = sup.rejected[0].Reason
+	}
+	sup.mu.Unlock()
+
+	if numAgents != 0 {
+		t.Fatalf("expected 0 running agents, got %d", numAgents)
+	}
+	if numRejected != 1 || !strings.Contains(reason, "allow_unsandboxed") {
+		t.Fatalf("expected 1 rejected with allow_unsandboxed reason, got %d (%s)", numRejected, reason)
+	}
+
+	// 2. With AllowUnsandboxed: true, agent is started and rejected list is cleared
+	sup.Cfg.AllowUnsandboxed = true
+	cfg.Version = "v2"
+	sup.reconcile(context.Background(), cfg)
+
+	sup.mu.Lock()
+	numAgents = len(sup.agents)
+	numRejected = len(sup.rejected)
+	sup.mu.Unlock()
+
+	if numAgents != 1 {
+		t.Fatalf("expected 1 running agent, got %d", numAgents)
+	}
+	if numRejected != 0 {
+		t.Fatalf("expected 0 rejected, got %d", numRejected)
+	}
+	sup.stopAll()
 }

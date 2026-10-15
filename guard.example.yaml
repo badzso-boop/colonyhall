@@ -19,6 +19,10 @@ roots:
 # you set this to false.
 # require_sandbox: true
 
+# Allow agents with sandbox: false (e.g. direct mode) to run on this machine.
+# Default false: the server cannot turn off the sandbox unless this is true.
+# allow_unsandboxed: false
+
 # commands: { claude-code: claude, antigravity: agy }
 # defaults: { poll: 5s, debounce: 3s, batch: 10, decide_timeout: 3m, work_timeout: 15m }
 

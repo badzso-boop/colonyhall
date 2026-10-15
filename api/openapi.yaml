@@ -814,6 +814,7 @@ components:
               name: { type: string }
               version: { type: string }
         sandbox: { type: string, description: "e.g. bwrap 0.9.0; empty when none" }
+        allow_unsandboxed: { type: boolean, description: "True when guard.yaml permits agents with sandbox: false" }
         rejected:
           type: array
           items:

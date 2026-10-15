@@ -224,12 +224,13 @@ type HostConfig struct {
 
 // HostReport is what the guard tells the server about this machine.
 type HostReport struct {
-	GuardVersion string         `json:"guard_version"`
-	OS           string         `json:"os"`
-	Roots        []string       `json:"roots"`
-	Clients      []ReportClient `json:"clients"`
-	Sandbox      string         `json:"sandbox"`
-	Rejected     []Rejected     `json:"rejected"`
+	GuardVersion     string         `json:"guard_version"`
+	OS               string         `json:"os"`
+	Roots            []string       `json:"roots"`
+	Clients          []ReportClient `json:"clients"`
+	Sandbox          string         `json:"sandbox"`
+	AllowUnsandboxed bool           `json:"allow_unsandboxed"`
+	Rejected         []Rejected     `json:"rejected"`
 }
 
 // ReportClient is an AI client found on this machine.

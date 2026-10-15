@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -79,12 +80,13 @@ func TestSupervisorDirectMode(t *testing.T) {
 	off := false
 	sup := &guard.Supervisor{
 		Cfg: guard.Config{
-			Server:         e.srv.URL,
-			HostTokenFile:  tokenFile,
-			Roots:          []string{root},
-			SandboxDir:     filepath.Join(base, "sandbox"),
-			RequireSandbox: &off,
-			ConfigPoll:     20 * time.Millisecond,
+			Server:           e.srv.URL,
+			HostTokenFile:    tokenFile,
+			Roots:            []string{root},
+			SandboxDir:       filepath.Join(base, "sandbox"),
+			RequireSandbox:   &off,
+			AllowUnsandboxed: true,
+			ConfigPoll:       20 * time.Millisecond,
 			Defaults: guard.AgentConfig{
 				Poll:      20 * time.Millisecond,
 				Debounce:  time.Millisecond,
@@ -212,5 +214,112 @@ func TestSupervisorDirectMode(t *testing.T) {
 	e.do("GET", "/api/v1/agent/inbox", server.DevAgentToken, nil, &in)
 	if in.Total != 1 {
 		t.Fatalf("expected 1 pending item in inbox after emergency stop, got %d", in.Total)
+	}
+}
+
+func TestSupervisorAllowUnsandboxedE2E(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = e.app.Run(ctx) }()
+
+	base := t.TempDir()
+	root := filepath.Join(base, "project")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pair machine
+	var pc struct{ Code string }
+	e.do("POST", "/api/v1/hosts/pairing-codes", server.DevAdminToken, nil, &pc)
+	tokenFile := filepath.Join(base, "host.token")
+	if err := guard.Enroll(ctx, e.srv.URL, pc.Code, "test-box", tokenFile); err != nil {
+		t.Fatal(err)
+	}
+	var hosts struct{ Hosts []struct{ ID string } }
+	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &hosts)
+	hostID := hosts.Hosts[0].ID
+
+	agent := e.agentID()
+	// Assign in direct mode with sandbox: false
+	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{
+			"host_id":         hostID,
+			"client":          "claude-code",
+			"mode":            "direct",
+			"root_dir":        root,
+			"sandbox":         false,
+			"permission_mode": "auto",
+		}, nil)
+
+	called := false
+	ad := &scriptedAdapter{
+		direct: func(ctx context.Context, req guard.DirectRequest) (guard.RunResult, error) {
+			called = true
+			return guard.RunResult{Text: "reply"}, nil
+		},
+	}
+
+	off := false
+	// Start supervisor with default AllowUnsandboxed: false
+	sup := &guard.Supervisor{
+		Cfg: guard.Config{
+			Server:           e.srv.URL,
+			HostTokenFile:    tokenFile,
+			Roots:            []string{root},
+			SandboxDir:       filepath.Join(base, "sandbox"),
+			RequireSandbox:   &off,
+			AllowUnsandboxed: false,
+			ConfigPoll:       20 * time.Millisecond,
+			Defaults: guard.AgentConfig{
+				Poll:      20 * time.Millisecond,
+				Debounce:  time.Millisecond,
+				HaltCheck: 10 * time.Millisecond,
+			},
+		},
+		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NewAdapter: func(guard.AgentConfig) guard.Adapter { return ad },
+	}
+	if err := sup.Cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = sup.RunHost(ctx) }()
+
+	// Verify host report has allow_unsandboxed: false and agent is rejected
+	eventually(t, "unsandboxed agent refused and reported", func() bool {
+		var list struct {
+			Hosts []struct {
+				Report struct {
+					AllowUnsandboxed bool `json:"allow_unsandboxed"`
+					Rejected         []struct {
+						AgentID string `json:"agent_id"`
+						Path    string `json:"path"`
+						Reason  string `json:"reason"`
+					} `json:"rejected"`
+				} `json:"report"`
+			} `json:"hosts"`
+		}
+		e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &list)
+		if len(list.Hosts) == 0 {
+			return false
+		}
+		rep := list.Hosts[0].Report
+		if rep.AllowUnsandboxed {
+			return false
+		}
+		for _, r := range rep.Rejected {
+			if r.AgentID == agent && strings.Contains(r.Reason, "allow_unsandboxed") {
+				return true
+			}
+		}
+		return false
+	})
+
+	// Message is not answered because agent loop was refused
+	general := e.generalID()
+	e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent hello"})
+	time.Sleep(100 * time.Millisecond)
+	if called {
+		t.Fatal("agent should not have been called when allow_unsandboxed is false")
 	}
 }

@@ -423,13 +423,13 @@ func testHosts(t *testing.T, b Backend) {
 		t.Fatalf("HostByTokenHash: %+v %v", got, err)
 	}
 	rep := hosts.Report{GuardVersion: "1", Roots: []string{"/work"}, Clients: []hosts.Client{{Name: "claude-code", Version: "2"}},
-		Sandbox: "bwrap 0.9.0", Rejected: []hosts.Rejected{{AgentID: "a", Path: "/etc", Reason: "outside roots"}}}
+		Sandbox: "bwrap 0.9.0", AllowUnsandboxed: true, Rejected: []hosts.Rejected{{AgentID: "a", Path: "/etc", Reason: "outside roots"}}}
 	must(t, hs.SaveReport(ctx, h.ID, rep, t0.Add(time.Minute)))
 	must(t, hs.SetHostState(ctx, h.ID, hosts.StateRevoked))
 	list, err := hs.ListHosts(ctx, f.ws.ID)
 	must(t, err)
 	if len(list) != 1 || list[0].State != hosts.StateRevoked || list[0].LastSeenAt == nil ||
-		list[0].Report.Sandbox != "bwrap 0.9.0" || len(list[0].Report.Rejected) != 1 || list[0].Report.Clients[0].Version != "2" {
+		list[0].Report.Sandbox != "bwrap 0.9.0" || !list[0].Report.AllowUnsandboxed || len(list[0].Report.Rejected) != 1 || list[0].Report.Clients[0].Version != "2" {
 		t.Fatalf("ListHosts: %+v", list)
 	}
 

@@ -62,12 +62,13 @@ type Host struct {
 // Report is what the guard says about its machine. It is informational
 // for the admin; the guard enforces its own roots regardless.
 type Report struct {
-	GuardVersion string     `json:"guard_version,omitempty"`
-	OS           string     `json:"os,omitempty"`
-	Roots        []string   `json:"roots"`
-	Clients      []Client   `json:"clients"`
-	Sandbox      string     `json:"sandbox,omitempty"` // e.g. "bwrap 0.9.0"; empty: none
-	Rejected     []Rejected `json:"rejected"`
+	GuardVersion     string     `json:"guard_version,omitempty"`
+	OS               string     `json:"os,omitempty"`
+	Roots            []string   `json:"roots"`
+	Clients          []Client   `json:"clients"`
+	Sandbox          string     `json:"sandbox,omitempty"` // e.g. "bwrap 0.9.0"; empty: none
+	AllowUnsandboxed bool       `json:"allow_unsandboxed"`
+	Rejected         []Rejected `json:"rejected"`
 }
 
 // Client is an AI client found on the machine.
