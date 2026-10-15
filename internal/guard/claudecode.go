@@ -72,11 +72,11 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 
 func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args []string) (RunResult, claudeOutput, error) {
 	start := time.Now()
-	name, args, err := wrap.command(c.bin(), args)
+	name, args, env, err := wrap.command(c.bin(), args)
 	if err != nil {
 		return RunResult{}, claudeOutput{}, fmt.Errorf("sandbox: %w", err)
 	}
-	stdout, _, err := c.Run(ctx, dir, name, args)
+	stdout, _, err := c.Run(ctx, dir, name, args, env)
 	res := RunResult{Duration: time.Since(start)}
 	var out claudeOutput
 	if jerr := json.Unmarshal(stdout, &out); jerr == nil {

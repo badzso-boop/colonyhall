@@ -280,9 +280,9 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
 	if sb := s.sandbox; sb != nil {
 		decideDir, client := ac.Dir, ha.Client
-		agent.DecideWrap = func(name string, args []string) (string, []string, error) {
-			a, err := sb.Command(client, dir, decideDir, nil, name, args)
-			return sb.Bwrap, a, err
+		agent.DecideWrap = func(name string, args []string) (string, []string, []string, error) {
+			a, env, err := sb.Command(client, dir, decideDir, nil, name, args)
+			return sb.Bwrap, a, env, err
 		}
 	}
 	m.agent = agent
@@ -347,9 +347,9 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	p := WorkPolicy{Allowed: true, Dir: work, AddDirs: add}
 	if s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
-		p.Wrap = func(name string, args []string) (string, []string, error) {
-			a, err := sb.Command(client, agentDir, work, grants, name, args)
-			return sb.Bwrap, a, err
+		p.Wrap = func(name string, args []string) (string, []string, []string, error) {
+			a, env, err := sb.Command(client, agentDir, work, grants, name, args)
+			return sb.Bwrap, a, env, err
 		}
 	}
 	return p

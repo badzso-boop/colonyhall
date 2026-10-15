@@ -42,6 +42,8 @@ func TestSandboxForReal(t *testing.T) {
 	if sb == nil {
 		t.Skip("bwrap not available")
 	}
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "SUPER-SECRET-CLAUDE-TOKEN")
+	t.Setenv("ANTHROPIC_API_KEY", "SUPER-SECRET-ANTHROPIC-KEY")
 	script := `
 see() { if cat "$1" >/dev/null 2>&1 && [ -s "$1" ]; then echo "see:$2"; else echo "hidden:$2"; fi; }
 see ` + filepath.Join(home, ".ssh/id_ed25519") + ` ssh
@@ -60,19 +62,33 @@ touch ` + filepath.Join(ro, "new") + ` 2>/dev/null && echo "write:docs" || echo 
 touch ` + filepath.Join(rw, "new") + ` 2>/dev/null && echo "write:app" || echo "nowrite:app"
 touch ` + filepath.Join(agentDir, "new") + ` 2>/dev/null && echo "write:own" || echo "nowrite:own"
 echo "home:$HOME"
+echo "anthropic:$ANTHROPIC_API_KEY"
+echo "claudetoken:$CLAUDE_CODE_OAUTH_TOKEN"
+echo "claudeconfig:$CLAUDE_CONFIG_DIR"
 `
-	args, err := sb.Command("claude-code", agentDir, rw, []Grant{{Path: ro}, {Path: rw, Write: true}}, "/bin/sh", []string{"-c", script})
+	args, env, err := sb.Command("claude-code", agentDir, rw, []Grant{{Path: ro}, {Path: rw, Write: true}}, "/bin/sh", []string{"-c", script})
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(sb.Bwrap, args...).CombinedOutput()
+	for _, secret := range []string{"SUPER-SECRET-CLAUDE-TOKEN", "SUPER-SECRET-ANTHROPIC-KEY"} {
+		for _, arg := range args {
+			if strings.Contains(arg, secret) {
+				t.Fatalf("secret %q appeared in argv: %v", secret, args)
+			}
+		}
+	}
+	cmd := exec.Command(sb.Bwrap, args...)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("bwrap: %v\n%s", err, out)
 	}
 	got := string(out)
-	for _, want := range []string{"hidden:ssh", "hidden:gemini", "hidden:realsettings", "hidden:realstate", "see:token", "write:ownsettings",
-		"hidden:otheragent", "hidden:env",
-		"see:docs", "hidden:private", "nowrite:docs", "write:app", "write:own", "home:" + home} {
+	cfgDir := agentDir + ".config/claude"
+	for _, want := range []string{"hidden:ssh", "hidden:gemini", "hidden:realsettings", "hidden:realstate", "see:token",
+		"write:ownsettings", "hidden:otheragent", "hidden:env",
+		"see:docs", "hidden:private", "nowrite:docs", "write:app", "write:own", "home:" + home,
+		"anthropic:SUPER-SECRET-ANTHROPIC-KEY", "claudetoken:SUPER-SECRET-CLAUDE-TOKEN", "claudeconfig:" + cfgDir} {
 		if !strings.Contains(got, want+"\n") {
 			t.Errorf("want %q, got:\n%s", want, got)
 		}

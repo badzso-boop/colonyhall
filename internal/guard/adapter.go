@@ -41,11 +41,11 @@ type WorkRequest struct {
 }
 
 // Wrapper wraps a client command, e.g. in the bwrap sandbox.
-type Wrapper func(name string, args []string) (string, []string, error)
+type Wrapper func(name string, args []string) (string, []string, []string, error)
 
-func (w Wrapper) command(name string, args []string) (string, []string, error) {
+func (w Wrapper) command(name string, args []string) (string, []string, []string, error) {
 	if w == nil {
-		return name, args, nil
+		return name, args, nil, nil
 	}
 	return w(name, args)
 }
@@ -71,13 +71,16 @@ type RunResult struct {
 }
 
 // Runner executes a command; tests replace it.
-type Runner func(ctx context.Context, dir, name string, args []string) (stdout, stderr []byte, err error)
+type Runner func(ctx context.Context, dir, name string, args []string, env []string) (stdout, stderr []byte, err error)
 
 // ExecRunner runs a real process with stdin closed, killing its whole
 // process group when ctx ends (emergency stop, pause, timeout).
-func ExecRunner(ctx context.Context, dir, name string, args []string) ([]byte, []byte, error) {
+func ExecRunner(ctx context.Context, dir, name string, args []string, env []string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = env
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	setProcessGroup(cmd)

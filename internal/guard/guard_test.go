@@ -55,7 +55,7 @@ type fakeRunner struct {
 	stdout string
 }
 
-func (f *fakeRunner) run(_ context.Context, _ string, name string, args []string) ([]byte, []byte, error) {
+func (f *fakeRunner) run(_ context.Context, _ string, name string, args []string, _ []string) ([]byte, []byte, error) {
 	f.name, f.args = name, args
 	return []byte(f.stdout), nil, nil
 }

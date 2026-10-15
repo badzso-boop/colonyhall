@@ -68,11 +68,11 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 
 func (a *Antigravity) execAs(ctx context.Context, dir string, wrap Wrapper, args []string) (RunResult, agyOutput, error) {
 	start := time.Now()
-	name, args, err := wrap.command(a.bin(), args)
+	name, args, env, err := wrap.command(a.bin(), args)
 	if err != nil {
 		return RunResult{}, agyOutput{}, fmt.Errorf("sandbox: %w", err)
 	}
-	stdout, _, err := a.Run(ctx, dir, name, args)
+	stdout, _, err := a.Run(ctx, dir, name, args, env)
 	res := RunResult{Duration: time.Since(start)}
 	var out agyOutput
 	if jerr := json.Unmarshal(stdout, &out); jerr == nil {

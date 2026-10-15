@@ -55,8 +55,9 @@ var passEnv = []string{"PATH", "LANG", "LC_ALL", "TERM", "USER", "LOGNAME", "TZ"
 	"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy", "SSL_CERT_FILE"}
 
 // Command builds the bwrap command line around the client command, after
-// preparing the agent's own config folder.
-func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name string, args []string) ([]string, error) {
+// preparing the agent's own config folder, and returns the argv for bwrap
+// and the environment for the process.
+func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name string, args []string) ([]string, []string, error) {
 	a := []string{"--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
 		"--ro-bind", "/usr", "/usr", "--ro-bind", "/etc", "/etc",
 		"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/run"}
@@ -108,20 +109,24 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 		a = append(a, "--tmpfs", s.Root)
 	}
 	a = append(a, "--bind", agentDir, agentDir)
-	mounts, env, err := s.clientMounts(client, agentDir)
+	mounts, clientEnv, err := s.clientMounts(client, agentDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	a = append(a, mounts...)
-	a = append(a, "--clearenv", "--setenv", "HOME", s.Home)
+	var env []string
+	env = append(env, "HOME="+s.Home)
 	for _, k := range passEnv {
+		if k == "CLAUDE_CODE_OAUTH_TOKEN" && s.ClaudeToken != "" {
+			continue
+		}
 		if v, ok := os.LookupEnv(k); ok {
-			a = append(a, "--setenv", k, v)
+			env = append(env, k+"="+v)
 		}
 	}
-	a = append(a, env...)
+	env = append(env, clientEnv...)
 	a = append(a, "--chdir", workDir, "--", name)
-	return append(a, args...), nil
+	return append(a, args...), env, nil
 }
 
 // clientMounts prepares the agent's own config folder for the client and
@@ -149,9 +154,9 @@ func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, err
 		if err != nil {
 			return nil, nil, err
 		}
-		env := []string{"--setenv", "CLAUDE_CONFIG_DIR", dir}
+		env := []string{"CLAUDE_CONFIG_DIR=" + dir}
 		if s.ClaudeToken != "" {
-			env = append(env, "--setenv", "CLAUDE_CODE_OAUTH_TOKEN", s.ClaudeToken)
+			env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+s.ClaudeToken)
 		}
 		return []string{"--bind", dir, dir}, env, nil
 	case "antigravity":

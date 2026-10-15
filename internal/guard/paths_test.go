@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +64,9 @@ func TestSandboxArgs(t *testing.T) {
 	}
 	sb := &Sandbox{Bwrap: "bwrap", Home: home, Root: filepath.Join(home, ".local/share/colonyhall/sandbox")}
 	agentDir := filepath.Join(sb.Root, "bot")
-	args, err := sb.Command("claude-code", agentDir, rw, []Grant{{Path: ro}, {Path: rw, Write: true}}, "claude", []string{"-p", "hi"})
+	t.Setenv("ANTHROPIC_API_KEY", "secret-key")
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "secret-token")
+	args, env, err := sb.Command("claude-code", agentDir, rw, []Grant{{Path: ro}, {Path: rw, Write: true}}, "claude", []string{"-p", "hi"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,12 +81,25 @@ func TestSandboxArgs(t *testing.T) {
 		"--ro-bind /dev/null " + filepath.Join(rw, ".env"),
 		"--bind " + agentDir + " " + agentDir,
 		"--bind " + cfg + " " + cfg,
-		"--setenv CLAUDE_CONFIG_DIR " + cfg,
-		"--clearenv",
 		"--chdir " + rw + " -- claude -p hi",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in:\n%s", want, joined)
+		}
+	}
+	for _, forbidden := range []string{"--clearenv", "--setenv", "secret-token", "secret-key"} {
+		if strings.Contains(joined, forbidden) {
+			t.Errorf("forbidden %q leaked in args:\n%s", forbidden, joined)
+		}
+	}
+	for _, wantEnv := range []string{
+		"HOME=" + home,
+		"CLAUDE_CONFIG_DIR=" + cfg,
+		"CLAUDE_CODE_OAUTH_TOKEN=secret-token",
+		"ANTHROPIC_API_KEY=secret-key",
+	} {
+		if !slices.Contains(env, wantEnv) {
+			t.Errorf("missing env %q in %v", wantEnv, env)
 		}
 	}
 	if strings.Contains(joined, "--bind "+filepath.Join(home, ".claude")) {
@@ -95,6 +111,16 @@ func TestSandboxArgs(t *testing.T) {
 	// The hiding must come after the grants, or a broad grant reveals it.
 	if strings.Index(joined, "--tmpfs "+filepath.Join(home, ".ssh")) < strings.Index(joined, "--bind "+rw) {
 		t.Error("deny list must be mounted after the grants")
+	}
+
+	// When ClaudeToken is set on the Sandbox, it is passed in env instead of copying credentials.
+	sb.ClaudeToken = "explicit-token"
+	_, env2, err := sb.Command("claude-code", agentDir, rw, []Grant{{Path: ro}}, "claude", []string{"-p", "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(env2, "CLAUDE_CODE_OAUTH_TOKEN=explicit-token") {
+		t.Errorf("missing explicit token in env: %v", env2)
 	}
 }
 
@@ -143,7 +169,7 @@ func TestSandboxConfigSymlinks(t *testing.T) {
 	}
 	sb := &Sandbox{Bwrap: "bwrap", Home: home, Root: filepath.Join(base, "sandbox")}
 	agentDir := filepath.Join(sb.Root, "bot")
-	if _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
+	if _, _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
 		t.Fatal(err)
 	}
 	// A run replaces files in its config with links to the host.
@@ -152,7 +178,7 @@ func TestSandboxConfigSymlinks(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "victim"), filepath.Join(cli, "antigravity-oauth-token")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
+	if _, _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err != nil {
 		t.Fatal(err)
 	}
 	if raw, _ := os.ReadFile(filepath.Join(outside, "victim")); string(raw) != "KEEP" {
@@ -169,7 +195,7 @@ func TestSandboxConfigSymlinks(t *testing.T) {
 	if err := os.Symlink(outside, gem); err != nil {
 		t.Fatal(err)
 	}
-	if args, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err == nil {
+	if args, _, err := sb.Command("antigravity", agentDir, agentDir, nil, "agy", nil); err == nil {
 		t.Fatalf("a linked config folder must be refused, got %v", args)
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 1 {
