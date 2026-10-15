@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 
+	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -11,8 +12,9 @@ type Reader interface {
 	MessagesByIDs(ctx context.Context, idList []ids.ID) ([]Message, error)
 	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
 	ChannelByID(ctx context.Context, id ids.ID) (Channel, error)
-	// CanRead reports whether the actor may read the channel.
-	CanRead(ctx context.Context, actorID ids.ID, isAdmin bool, channelID ids.ID) (bool, error)
+	// CanRead reports whether the actor may read the channel; channels in
+	// another workspace are never readable.
+	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 }
 
 var _ Reader = (*Service)(nil)

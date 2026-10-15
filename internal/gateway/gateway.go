@@ -217,7 +217,7 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 	if cached {
 		return ok, nil
 	}
-	ok, err := c.g.Conversation.CanRead(ctx, c.actor.ID, false, e.ChannelID)
+	ok, err := c.g.Conversation.CanRead(ctx, c.actor, e.ChannelID)
 	if err != nil {
 		return false, err
 	}

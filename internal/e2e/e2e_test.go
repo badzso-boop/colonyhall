@@ -213,3 +213,30 @@ func expectFrame(t *testing.T, ctx context.Context, ws *websocket.Conn, typ stri
 		}
 	}
 }
+
+// TestWorkspaceIsolation: an admin of another workspace must not see or
+// touch this workspace's channels, even with a known channel ID.
+func TestWorkspaceIsolation(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	const otherAdmin = "col_other_workspace_admin_token"
+	if _, _, _, err := e.app.Identity.Bootstrap(context.Background(), "other", "eve", "Eve", otherAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if s := e.do("GET", "/api/v1/channels/"+general+"/messages", otherAdmin, nil, nil); s != http.StatusForbidden {
+		t.Fatalf("read foreign channel: status %d", s)
+	}
+	if s := e.do("POST", "/api/v1/channels/"+general+"/messages", otherAdmin, map[string]any{"body": "hi"}, nil); s != http.StatusNotFound {
+		t.Fatalf("write foreign channel: status %d", s)
+	}
+	var me struct{ ID string }
+	e.do("GET", "/api/v1/me", otherAdmin, nil, &me)
+	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": me.ID}, nil); s != http.StatusNotFound {
+		t.Fatalf("add foreign actor: status %d", s)
+	}
+	var list struct{ Channels []struct{ Name string } }
+	e.do("GET", "/api/v1/channels", otherAdmin, nil, &list)
+	if len(list.Channels) != 0 {
+		t.Fatalf("other admin sees foreign channels: %+v", list.Channels)
+	}
+}

@@ -89,12 +89,16 @@ func (s *Service) AddMember(ctx context.Context, by identity.Actor, channelID, a
 	}
 	var seq int64
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
-		c, err := s.Store.ChannelByID(ctx, channelID)
+		c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
 		if err != nil {
 			return err
 		}
-		if _, err := s.Directory.ActorByID(ctx, actorID); err != nil {
+		target, err := s.Directory.ActorByID(ctx, actorID)
+		if err != nil {
 			return fmt.Errorf("actor: %w", err)
+		}
+		if target.WorkspaceID != by.WorkspaceID {
+			return fmt.Errorf("actor: %w", db.ErrNotFound)
 		}
 		seq, err = s.addMember(ctx, by, c, actorID, canWrite)
 		return err
@@ -153,7 +157,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 				return err
 			}
 		}
-		c, err := s.Store.ChannelByID(ctx, in.ChannelID)
+		c, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID)
 		if err != nil {
 			return err
 		}
@@ -268,7 +272,7 @@ func (s *Service) ResolveChannel(ctx context.Context, by identity.Actor, name st
 	if err != nil {
 		return Channel{}, err
 	}
-	ok, err := s.CanRead(ctx, by.ID, by.IsAdmin(), c.ID)
+	ok, err := s.CanRead(ctx, by, c.ID)
 	if err != nil {
 		return Channel{}, err
 	}
@@ -280,7 +284,7 @@ func (s *Service) ResolveChannel(ctx context.Context, by identity.Actor, name st
 
 // ListMessages returns a page of messages, oldest first.
 func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID, before ids.ID, limit int) ([]Message, error) {
-	ok, err := s.CanRead(ctx, by.ID, by.IsAdmin(), channelID)
+	ok, err := s.CanRead(ctx, by, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +303,7 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 // MarkRead marks every message in the channel as seen by the actor.
 func (s *Service) MarkRead(ctx context.Context, by identity.Actor, channelID ids.ID) error {
 	return s.Tx.InTx(ctx, func(ctx context.Context) error {
-		c, err := s.Store.ChannelByID(ctx, channelID)
+		c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
 		if err != nil {
 			return err
 		}
@@ -310,16 +314,33 @@ func (s *Service) MarkRead(ctx context.Context, by identity.Actor, channelID ids
 	})
 }
 
-// CanRead implements Reader.
-func (s *Service) CanRead(ctx context.Context, actorID ids.ID, isAdmin bool, channelID ids.ID) (bool, error) {
-	if isAdmin {
-		return true, nil
+// channelFor loads a channel and hides it unless it belongs to the caller's
+// workspace, so IDs from another workspace behave as if they did not exist.
+func (s *Service) channelFor(ctx context.Context, workspaceID, channelID ids.ID) (Channel, error) {
+	c, err := s.Store.ChannelByID(ctx, channelID)
+	if err != nil {
+		return Channel{}, err
 	}
-	mem, err := s.membership(ctx, channelID, actorID)
+	if c.WorkspaceID != workspaceID {
+		return Channel{}, db.ErrNotFound
+	}
+	return c, nil
+}
+
+// CanRead implements Reader. Channels outside the actor's workspace are
+// never readable, not even by an admin.
+func (s *Service) CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error) {
+	if _, err := s.channelFor(ctx, by.WorkspaceID, channelID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	mem, err := s.membership(ctx, channelID, by.ID)
 	if err != nil {
 		return false, err
 	}
-	return policy.CanReadChannel(policy.Subject{IsAdmin: isAdmin}, mem), nil
+	return policy.CanReadChannel(subject(by), mem), nil
 }
 
 // MessagesByIDs implements Reader.
