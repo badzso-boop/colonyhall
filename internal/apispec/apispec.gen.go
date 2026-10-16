@@ -228,6 +228,48 @@ func (e MessageKind) Valid() bool {
 	}
 }
 
+// Defines values for ReportRunRequestPhase.
+const (
+	ReportRunRequestPhaseDecide ReportRunRequestPhase = "decide"
+	ReportRunRequestPhaseDirect ReportRunRequestPhase = "direct"
+	ReportRunRequestPhaseWork   ReportRunRequestPhase = "work"
+)
+
+// Valid indicates whether the value is a known member of the ReportRunRequestPhase enum.
+func (e ReportRunRequestPhase) Valid() bool {
+	switch e {
+	case ReportRunRequestPhaseDecide:
+		return true
+	case ReportRunRequestPhaseDirect:
+		return true
+	case ReportRunRequestPhaseWork:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportRunRequestStatus.
+const (
+	ReportRunRequestStatusError  ReportRunRequestStatus = "error"
+	ReportRunRequestStatusHalted ReportRunRequestStatus = "halted"
+	ReportRunRequestStatusOk     ReportRunRequestStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the ReportRunRequestStatus enum.
+func (e ReportRunRequestStatus) Valid() bool {
+	switch e {
+	case ReportRunRequestStatusError:
+		return true
+	case ReportRunRequestStatusHalted:
+		return true
+	case ReportRunRequestStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
 	Admin    Role = "admin"
@@ -246,6 +288,48 @@ func (e Role) Valid() bool {
 	case Observer:
 		return true
 	case Owner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunPhase.
+const (
+	RunPhaseDecide RunPhase = "decide"
+	RunPhaseDirect RunPhase = "direct"
+	RunPhaseWork   RunPhase = "work"
+)
+
+// Valid indicates whether the value is a known member of the RunPhase enum.
+func (e RunPhase) Valid() bool {
+	switch e {
+	case RunPhaseDecide:
+		return true
+	case RunPhaseDirect:
+		return true
+	case RunPhaseWork:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunStatus.
+const (
+	RunStatusError  RunStatus = "error"
+	RunStatusHalted RunStatus = "halted"
+	RunStatusOk     RunStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the RunStatus enum.
+func (e RunStatus) Valid() bool {
+	switch e {
+	case RunStatusError:
+		return true
+	case RunStatusHalted:
+		return true
+	case RunStatusOk:
 		return true
 	default:
 		return false
@@ -487,6 +571,21 @@ type CreateScheduleRequest struct {
 // CreateScheduleRequestCatchUp Missed while the server was down: run once (within 12 h) or skip
 type CreateScheduleRequestCatchUp string
 
+// DayUsage defines model for DayUsage.
+type DayUsage struct {
+	AgentId          openapi_types.UUID `json:"agent_id"`
+	CacheReadTokens  int64              `json:"cache_read_tokens"`
+	CacheWriteTokens int64              `json:"cache_write_tokens"`
+
+	// Day Example: 2026-10-16
+	Day          string `json:"day"`
+	ErrorCount   int    `json:"error_count"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	RunCount     int    `json:"run_count"`
+	TotalTokens  int64  `json:"total_tokens"`
+}
+
 // EmergencyClearRequest defines model for EmergencyClearRequest.
 type EmergencyClearRequest struct {
 	Password string `json:"password"`
@@ -709,8 +808,62 @@ type ReactionSummary struct {
 	Emoji    string               `json:"emoji"`
 }
 
+// ReportRunRequest defines model for ReportRunRequest.
+type ReportRunRequest struct {
+	CacheReadTokens  int64                  `json:"cache_read_tokens"`
+	CacheWriteTokens int64                  `json:"cache_write_tokens"`
+	ChannelId        *openapi_types.UUID    `json:"channel_id,omitempty"`
+	Client           string                 `json:"client"`
+	DurationMs       int                    `json:"duration_ms"`
+	ErrorId          *openapi_types.UUID    `json:"error_id,omitempty"`
+	HostId           *openapi_types.UUID    `json:"host_id,omitempty"`
+	InputTokens      int64                  `json:"input_tokens"`
+	Items            int                    `json:"items"`
+	Model            string                 `json:"model"`
+	OutputTokens     int64                  `json:"output_tokens"`
+	Phase            ReportRunRequestPhase  `json:"phase"`
+	SessionId        string                 `json:"session_id"`
+	Status           ReportRunRequestStatus `json:"status"`
+	ThreadRootId     *openapi_types.UUID    `json:"thread_root_id,omitempty"`
+}
+
+// ReportRunRequestPhase defines model for ReportRunRequest.Phase.
+type ReportRunRequestPhase string
+
+// ReportRunRequestStatus defines model for ReportRunRequest.Status.
+type ReportRunRequestStatus string
+
 // Role defines model for Role.
 type Role string
+
+// Run defines model for Run.
+type Run struct {
+	AgentId          openapi_types.UUID  `json:"agent_id"`
+	CacheReadTokens  int64               `json:"cache_read_tokens"`
+	CacheWriteTokens int64               `json:"cache_write_tokens"`
+	ChannelId        *openapi_types.UUID `json:"channel_id,omitempty"`
+	Client           string              `json:"client"`
+	CreatedAt        time.Time           `json:"created_at"`
+	DurationMs       int                 `json:"duration_ms"`
+	ErrorId          *openapi_types.UUID `json:"error_id,omitempty"`
+	HostId           *openapi_types.UUID `json:"host_id,omitempty"`
+	Id               openapi_types.UUID  `json:"id"`
+	InputTokens      int64               `json:"input_tokens"`
+	Items            int                 `json:"items"`
+	Model            string              `json:"model"`
+	OutputTokens     int64               `json:"output_tokens"`
+	Phase            RunPhase            `json:"phase"`
+	SessionId        string              `json:"session_id"`
+	Status           RunStatus           `json:"status"`
+	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	WorkspaceId      openapi_types.UUID  `json:"workspace_id"`
+}
+
+// RunPhase defines model for Run.Phase.
+type RunPhase string
+
+// RunStatus defines model for Run.Status.
+type RunStatus string
 
 // RunError defines model for RunError.
 type RunError struct {
@@ -734,6 +887,16 @@ type RunErrorRequest struct {
 	Detail       *string             `json:"detail,omitempty"`
 	Summary      string              `json:"summary"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// RunList defines model for RunList.
+type RunList struct {
+	Runs []Run `json:"runs"`
+}
+
+// RunRef defines model for RunRef.
+type RunRef struct {
+	Id openapi_types.UUID `json:"id"`
 }
 
 // Schedule defines model for Schedule.
@@ -834,6 +997,11 @@ type TokenList struct {
 	Tokens []Token `json:"tokens"`
 }
 
+// UsageResponse defines model for UsageResponse.
+type UsageResponse struct {
+	Usage []DayUsage `json:"usage"`
+}
+
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
 
@@ -856,6 +1024,17 @@ type ListMessagesParams struct {
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListRunsParams defines parameters for ListRuns.
+type ListRunsParams struct {
+	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetUsageParams defines parameters for GetUsage.
+type GetUsageParams struct {
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
+}
+
 // CreateActorJSONRequestBody defines body for CreateActor for application/json ContentType.
 type CreateActorJSONRequestBody = CreateActorRequest
 
@@ -876,6 +1055,9 @@ type ReportRunErrorJSONRequestBody = RunErrorRequest
 
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest
+
+// ReportRunJSONRequestBody defines body for ReportRun for application/json ContentType.
+type ReportRunJSONRequestBody = ReportRunRequest
 
 // AddGrantJSONRequestBody defines body for AddGrant for application/json ContentType.
 type AddGrantJSONRequestBody = GrantRequest

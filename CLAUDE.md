@@ -107,8 +107,8 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    4. Agent–agent együttműködés; titkok átadása a `Z:` meghajtón (`colonyhall-exchange`); közös utasítás.
    5. Jóváhagyás a chatből (`--permission-prompt-tool`).
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
-   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`, ebben a sorrendben): WebSocket-ébresztés; futásnapló és tokenfelhasználás; jóváhagyás a chatből; wiki (agent csak bővíthet, ember törölhet). Mindegyik saját ágon, átnézés után merge.
-   6. Később: worktree; előnézet; futásnapló a szerveren; WebSocket-ébresztés; push. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
+   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`, ebben a sorrendben): ~~WebSocket-ébresztés~~ (kész, `feature/ws-wake`); ~~futásnapló és tokenfelhasználás~~ (kész, `feature/run-log`); jóváhagyás a chatből; wiki (agent csak bővíthet, ember törölhet). Mindegyik saját ágon, átnézés után merge.
+   6. Később: worktree; előnézet; ~~futásnapló a szerveren~~; ~~WebSocket-ébresztés~~; push. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.
 

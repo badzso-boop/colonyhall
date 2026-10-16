@@ -40,9 +40,12 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel, #schedPanel { overflow:auto; padding:12px 16px; display:none; }
-  #schedPanel.on { display:block; }
-  #hostsPanel.on { display:block; } #feed.off { display:none; }
+  #hostsPanel, #schedPanel, #runsPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on, #hostsPanel.on, #runsPanel.on { display:block; } #feed.off { display:none; }
+  table.tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
+  table.tbl th, table.tbl td { padding:6px 8px; border:1px solid var(--line); text-align:left; }
+  table.tbl th { background:var(--bg); font-weight:600; }
+  table.tbl td.num, table.tbl th.num { text-align:right; font-variant-numeric:tabular-nums; }
   .card { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0 0 12px; background:var(--surface); }
   .card h3 { margin:0 0 4px; font-size:15px; } .muted { color:var(--muted); font-size:12px; }
   .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
@@ -64,7 +67,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="schedbtn" hidden>⏰</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -73,6 +76,7 @@
     <div id="feed"></div>
     <div id="hostsPanel"></div>
     <div id="schedPanel"></div>
+    <div id="runsPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <form id="send"><input id="text" autocomplete="off"><button></button></form>
@@ -88,14 +92,22 @@ const I18N = {
         lastSeen: "utoljára", never: "még soha", roots: "Gyökérmappák", clients: "Kliensek", sandbox: "Sandbox", none: "nincs",
         rejected: "Elutasított engedély", assign: "Agent hozzárendelése", work: "munka", grant: "Mappa engedélyezése",
         read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép.",
-        allowUnsandboxed: "sandbox nélkül engedélyezve", yes: "igen", no: "nem", errorDetails: "Hiba részletei" },
+        allowUnsandboxed: "sandbox nélkül engedélyezve", yes: "igen", no: "nem", errorDetails: "Hiba részletei",
+        runs: "Futások", today: "Ma", last7Days: "Elmúlt 7 nap", period: "Időszak", tokensIn: "In", tokensOut: "Out",
+        tokensTotal: "Összes", runsCount: "Futás", errorsCount: "Hiba", recentRuns: "Legutóbbi 20 futás", time: "Idő",
+        agent: "Agent", phase: "Fázis", model: "Modell", duration: "Időtartam", status: "Állapot", details: "Részletek",
+        noRuns: "Nincs futási adat." },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
         lastSeen: "last seen", never: "never", roots: "Roots", clients: "Clients", sandbox: "Sandbox", none: "none",
         rejected: "Refused grant", assign: "Assign agent", work: "work", grant: "Grant folder",
         read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet.",
-        allowUnsandboxed: "unsandboxed allowed", yes: "yes", no: "no", errorDetails: "Error details" },
+        allowUnsandboxed: "unsandboxed allowed", yes: "yes", no: "no", errorDetails: "Error details",
+        runs: "Runs", today: "Today", last7Days: "Last 7 days", period: "Period", tokensIn: "In", tokensOut: "Out",
+        tokensTotal: "Total", runsCount: "Runs", errorsCount: "Errors", recentRuns: "Last 20 runs", time: "Time",
+        agent: "Agent", phase: "Phase", model: "Model", duration: "Duration", status: "Status", details: "Details",
+        noRuns: "No runs recorded." },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -250,6 +262,8 @@ function connectWS() {
       await load();
     } else if (f.event_type.startsWith("host.") && hostsOpen) {
       renderHosts();
+    } else if (f.event_type === "run.reported" && runsOpen) {
+      renderRuns();
     }
   };
   ws.onclose = () => { $("status").textContent = L.reconnecting; setTimeout(connectWS, 2000); };
@@ -259,8 +273,15 @@ function connectWS() {
 const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
 let hostsOpen = false;
 $("hostsbtn").textContent = L.hosts;
-$("hostsbtn").onclick = () => { hostsOpen = !hostsOpen; $("hostsbtn").textContent = hostsOpen ? L.chat : L.hosts;
-  $("feed").className = hostsOpen ? "off" : ""; $("hostsPanel").className = hostsOpen ? "on" : ""; if (hostsOpen) renderHosts(); };
+$("hostsbtn").onclick = () => {
+  hostsOpen = !hostsOpen;
+  if (hostsOpen) {
+    schedOpen = false; $("schedPanel").className = "";
+    runsOpen = false; $("runsPanel").className = "";
+  }
+  $("hostsbtn").textContent = hostsOpen ? L.chat : L.hosts;
+  $("feed").className = hostsOpen ? "off" : ""; $("hostsPanel").className = hostsOpen ? "on" : ""; if (hostsOpen) renderHosts();
+};
 
 async function renderHosts() {
   const panel = $("hostsPanel");
@@ -360,6 +381,7 @@ async function start() {
   $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
   $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
   $("schedbtn").hidden = me.kind !== "human";
+  $("runsbtn").hidden = me.kind !== "human";
   await load(); if (!ws) connectWS();
 }
 
@@ -413,8 +435,16 @@ function note(text) {
 }
 
 let schedOpen = false;
-$("schedbtn").onclick = () => { schedOpen = !schedOpen; $("schedPanel").className = schedOpen ? "on" : "";
-  $("feed").className = schedOpen ? "off" : ""; if (schedOpen) renderSchedules(); };
+$("schedbtn").onclick = () => {
+  schedOpen = !schedOpen;
+  if (schedOpen) {
+    hostsOpen = false; $("hostsPanel").className = ""; $("hostsbtn").textContent = L.hosts;
+    runsOpen = false; $("runsPanel").className = "";
+  }
+  $("schedPanel").className = schedOpen ? "on" : "";
+  $("feed").className = schedOpen ? "off" : "";
+  if (schedOpen) renderSchedules();
+};
 
 async function renderSchedules() {
   const { schedules } = await api("/api/v1/schedules");
@@ -436,6 +466,149 @@ async function renderSchedules() {
     }
     panel.append(c);
   }
+}
+
+let runsOpen = false;
+$("runsbtn").onclick = () => {
+  runsOpen = !runsOpen;
+  if (runsOpen) {
+    hostsOpen = false; $("hostsPanel").className = ""; $("hostsbtn").textContent = L.hosts;
+    schedOpen = false; $("schedPanel").className = "";
+  }
+  $("runsPanel").className = runsOpen ? "on" : "";
+  $("feed").className = runsOpen ? "off" : "";
+  if (runsOpen) renderRuns();
+};
+
+async function renderRuns() {
+  const panel = $("runsPanel");
+  panel.innerHTML = "";
+  const [{ usage }, { runs: runList }] = await Promise.all([
+    api("/api/v1/usage?days=7"),
+    api("/api/v1/runs?limit=20")
+  ]).catch(err => {
+    panel.append(el("div", { className: "warn", textContent: err.message }));
+    return [{}, {}];
+  });
+  if (!usage || !runList) return;
+
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
+
+  const byAgent = {};
+  for (const u of usage) {
+    if (!byAgent[u.agent_id]) {
+      byAgent[u.agent_id] = {
+        today: { in: 0, out: 0, total: 0, runs: 0, errors: 0 },
+        last7: { in: 0, out: 0, total: 0, runs: 0, errors: 0 }
+      };
+    }
+    const a = byAgent[u.agent_id];
+    a.last7.in += u.input_tokens;
+    a.last7.out += u.output_tokens;
+    a.last7.total += u.total_tokens;
+    a.last7.runs += u.run_count;
+    a.last7.errors += u.error_count;
+    if (u.day === todayStr) {
+      a.today.in += u.input_tokens;
+      a.today.out += u.output_tokens;
+      a.today.total += u.total_tokens;
+      a.today.runs += u.run_count;
+      a.today.errors += u.error_count;
+    }
+  }
+
+  const agentIDs = Object.keys(byAgent);
+  if (agentIDs.length === 0) {
+    panel.append(el("div", { className: "card muted", textContent: L.noRuns }));
+  } else {
+    for (const id of agentIDs) {
+      const data = byAgent[id];
+      const card = el("div", { className: "card" });
+      const handle = actors[id]?.handle ? "@" + actors[id].handle : id;
+      card.append(el("h3", { textContent: handle }));
+
+      const table = el("table", { className: "tbl" });
+      const thead = el("thead", {},
+        el("tr", {},
+          el("th", { textContent: L.period }),
+          el("th", { textContent: L.tokensIn, className: "num" }),
+          el("th", { textContent: L.tokensOut, className: "num" }),
+          el("th", { textContent: L.tokensTotal, className: "num" }),
+          el("th", { textContent: L.runsCount, className: "num" }),
+          el("th", { textContent: L.errorsCount, className: "num" })
+        )
+      );
+      const tbody = el("tbody", {},
+        el("tr", {},
+          el("td", { textContent: L.today }),
+          el("td", { textContent: String(data.today.in), className: "num" }),
+          el("td", { textContent: String(data.today.out), className: "num" }),
+          el("td", { textContent: String(data.today.total), className: "num" }),
+          el("td", { textContent: String(data.today.runs), className: "num" }),
+          el("td", { textContent: String(data.today.errors), className: "num" })
+        ),
+        el("tr", {},
+          el("td", { textContent: L.last7Days }),
+          el("td", { textContent: String(data.last7.in), className: "num" }),
+          el("td", { textContent: String(data.last7.out), className: "num" }),
+          el("td", { textContent: String(data.last7.total), className: "num" }),
+          el("td", { textContent: String(data.last7.runs), className: "num" }),
+          el("td", { textContent: String(data.last7.errors), className: "num" })
+        )
+      );
+      table.append(thead, tbody);
+      card.append(table);
+      panel.append(card);
+    }
+  }
+
+  const runsCard = el("div", { className: "card" });
+  runsCard.append(el("h3", { textContent: L.recentRuns }));
+  if (runList.length === 0) {
+    runsCard.append(el("div", { className: "muted", textContent: L.noRuns }));
+  } else {
+    const table = el("table", { className: "tbl" });
+    const thead = el("thead", {},
+      el("tr", {},
+        el("th", { textContent: L.time }),
+        el("th", { textContent: L.agent }),
+        el("th", { textContent: L.phase }),
+        el("th", { textContent: L.model }),
+        el("th", { textContent: L.tokensTotal, className: "num" }),
+        el("th", { textContent: L.duration, className: "num" }),
+        el("th", { textContent: L.status }),
+        el("th", { textContent: L.details })
+      )
+    );
+    const tbody = el("tbody", {});
+    for (const r of runList) {
+      const handle = actors[r.agent_id]?.handle ? "@" + actors[r.agent_id].handle : r.agent_id;
+      const totalTokens = r.input_tokens + r.output_tokens + r.cache_read_tokens + r.cache_write_tokens;
+      const durSec = (r.duration_ms / 1000).toFixed(1) + "s";
+      const tr = el("tr", {},
+        el("td", { textContent: new Date(r.created_at).toLocaleString() }),
+        el("td", { textContent: handle }),
+        el("td", { textContent: r.phase }),
+        el("td", { textContent: r.model }),
+        el("td", { textContent: String(totalTokens), className: "num" }),
+        el("td", { textContent: durSec, className: "num" }),
+        el("td", { textContent: r.status })
+      );
+      const actionTd = el("td", {});
+      if (r.error_id) {
+        const btn = el("button", { textContent: L.errorDetails });
+        btn.onclick = () => showError(r.error_id);
+        actionTd.append(btn);
+      } else {
+        actionTd.append(el("span", { className: "muted", textContent: "-" }));
+      }
+      tr.append(actionTd);
+      tbody.append(tr);
+    }
+    table.append(thead, tbody);
+    runsCard.append(table);
+  }
+  panel.append(runsCard);
 }
 
 $("send").onsubmit = async (e) => {

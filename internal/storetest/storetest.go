@@ -517,6 +517,145 @@ func testRuns(t *testing.T, b Backend) {
 	if _, err := b.Runs.ErrorByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("missing: %v", err)
 	}
+
+	// Insert runs and test Budapest midnight boundary (CEST = UTC+2)
+	// 2026-10-15 21:59:59 UTC = 2026-10-15 23:59:59 CEST (day "2026-10-15")
+	tDay1 := time.Date(2026, 10, 15, 21, 59, 59, 0, time.UTC)
+	r1 := runs.Run{
+		ID:               gen.New(),
+		WorkspaceID:      f.ws.ID,
+		AgentID:          f.agent.ID,
+		Phase:            runs.PhaseWork,
+		Client:           "claude-code",
+		Model:            "claude-3-7-sonnet",
+		SessionID:        "sess-1",
+		ChannelID:        f.channel.ID,
+		Items:            1,
+		InputTokens:      100,
+		OutputTokens:     50,
+		CacheReadTokens:  10,
+		CacheWriteTokens: 5,
+		DurationMS:       1200,
+		Status:           runs.StatusOk,
+		CreatedAt:        tDay1,
+	}
+	must(t, b.Runs.InsertRun(ctx, r1))
+
+	// 2026-10-15 22:00:01 UTC = 2026-10-16 00:00:01 CEST (day "2026-10-16")
+	tDay2 := time.Date(2026, 10, 15, 22, 0, 1, 0, time.UTC)
+	r2 := runs.Run{
+		ID:               gen.New(),
+		WorkspaceID:      f.ws.ID,
+		AgentID:          f.agent.ID,
+		Phase:            runs.PhaseDecide,
+		Client:           "claude-code",
+		Model:            "claude-3-7-sonnet",
+		SessionID:        "sess-2",
+		Items:            2,
+		InputTokens:      200,
+		OutputTokens:     100,
+		CacheReadTokens:  20,
+		CacheWriteTokens: 10,
+		DurationMS:       800,
+		Status:           runs.StatusError,
+		ErrorID:          e.ID,
+		CreatedAt:        tDay2,
+	}
+	must(t, b.Runs.InsertRun(ctx, r2))
+
+	otherAgent := identity.Actor{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: identity.KindAgent, Handle: "other-agent", DisplayName: "Other Agent", Role: identity.RoleMember, State: "active", CreatedAt: t0}
+	must(t, b.Identity.CreateActor(ctx, otherAgent))
+
+	r3 := runs.Run{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		AgentID:      otherAgent.ID,
+		Phase:        runs.PhaseDirect,
+		Client:       "antigravity",
+		Model:        "claude-opus-4-6-thinking",
+		SessionID:    "sess-3",
+		Items:        1,
+		InputTokens:  500,
+		OutputTokens: 300,
+		DurationMS:   5000,
+		Status:       runs.StatusOk,
+		CreatedAt:    tDay2.Add(time.Minute),
+	}
+	must(t, b.Runs.InsertRun(ctx, r3))
+
+	// Test ListRuns
+	allRuns, err := b.Runs.ListRuns(ctx, f.ws.ID, ids.Nil, 10)
+	if err != nil || len(allRuns) != 3 {
+		t.Fatalf("ListRuns all: len=%d err=%v", len(allRuns), err)
+	}
+	if allRuns[0].ID != r3.ID || allRuns[1].ID != r2.ID || allRuns[2].ID != r1.ID {
+		t.Fatalf("ListRuns ordering: got [%s, %s, %s]", allRuns[0].ID, allRuns[1].ID, allRuns[2].ID)
+	}
+	if allRuns[1].ErrorID != e.ID {
+		t.Fatalf("ListRuns error id: got %s want %s", allRuns[1].ErrorID, e.ID)
+	}
+
+	agentRuns, err := b.Runs.ListRuns(ctx, f.ws.ID, f.agent.ID, 10)
+	if err != nil || len(agentRuns) != 2 {
+		t.Fatalf("ListRuns filtered: len=%d err=%v", len(agentRuns), err)
+	}
+	if agentRuns[0].ID != r2.ID || agentRuns[1].ID != r1.ID {
+		t.Fatalf("ListRuns filter order: got [%s, %s]", agentRuns[0].ID, agentRuns[1].ID)
+	}
+
+	limRuns, err := b.Runs.ListRuns(ctx, f.ws.ID, ids.Nil, 1)
+	if err != nil || len(limRuns) != 1 || limRuns[0].ID != r3.ID {
+		t.Fatalf("ListRuns limit: len=%d", len(limRuns))
+	}
+
+	// Test Usage with Budapest midnight boundary
+	// Query since start of 2026-10-15: should contain both days
+	usageAll, err := b.Runs.Usage(ctx, f.ws.ID, time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("Usage: %v", err)
+	}
+	// Expected 3 records:
+	// Day 2026-10-16: f.agent and otherAgent (sorted by agent_id ASC)
+	// Day 2026-10-15: f.agent
+	if len(usageAll) != 3 {
+		t.Fatalf("Usage count: got %d want 3", len(usageAll))
+	}
+	if usageAll[0].Day != "2026-10-16" || usageAll[1].Day != "2026-10-16" || usageAll[2].Day != "2026-10-15" {
+		t.Fatalf("Usage day ordering: %s, %s, %s", usageAll[0].Day, usageAll[1].Day, usageAll[2].Day)
+	}
+
+	// Check day 15 usage for f.agent
+	u15 := usageAll[2]
+	if u15.AgentID != f.agent.ID || u15.InputTokens != 100 || u15.OutputTokens != 50 || u15.TotalTokens != 165 || u15.RunCount != 1 || u15.ErrorCount != 0 {
+		t.Fatalf("u15 mismatch: %+v", u15)
+	}
+
+	// Check day 16 error count for f.agent
+	var uAgent16 runs.DayUsage
+	for _, u := range usageAll[:2] {
+		if u.AgentID == f.agent.ID {
+			uAgent16 = u
+			break
+		}
+	}
+	if uAgent16.InputTokens != 200 || uAgent16.OutputTokens != 100 || uAgent16.TotalTokens != 330 || uAgent16.RunCount != 1 || uAgent16.ErrorCount != 1 {
+		t.Fatalf("uAgent16 mismatch: %+v", uAgent16)
+	}
+
+	// Query since 2026-10-15 22:00:00 UTC (Budapest midnight of day 16): day 15 must be excluded!
+	sinceDay16 := time.Date(2026, 10, 15, 22, 0, 0, 0, time.UTC)
+	usageDay16Only, err := b.Runs.Usage(ctx, f.ws.ID, sinceDay16)
+	if err != nil {
+		t.Fatalf("Usage sinceDay16: %v", err)
+	}
+	if len(usageDay16Only) != 2 {
+		t.Fatalf("Usage sinceDay16 count: got %d want 2", len(usageDay16Only))
+	}
+	for _, u := range usageDay16Only {
+		if u.Day != "2026-10-16" {
+			t.Fatalf("Usage sinceDay16 day: got %s want 2026-10-16", u.Day)
+		}
+	}
 }
 
 func testSchedule(t *testing.T, b Backend) {

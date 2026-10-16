@@ -310,3 +310,31 @@ func (c *Client) ReportError(ctx context.Context, channelID, threadRootID, summa
 	err := c.do(ctx, http.MethodPost, "/api/v1/agent/errors", in, &r)
 	return r.ID, err
 }
+
+// ReportRunInput is the payload sent when reporting an agent run.
+type ReportRunInput struct {
+	HostID           string `json:"host_id,omitempty"`
+	Phase            string `json:"phase"`
+	Client           string `json:"client"`
+	Model            string `json:"model"`
+	SessionID        string `json:"session_id"`
+	ChannelID        string `json:"channel_id,omitempty"`
+	ThreadRootID     string `json:"thread_root_id,omitempty"`
+	Items            int    `json:"items"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	DurationMS       int    `json:"duration_ms"`
+	Status           string `json:"status"`
+	ErrorID          string `json:"error_id,omitempty"`
+}
+
+// ReportRun reports a finished run with token counts and duration to the server.
+func (c *Client) ReportRun(ctx context.Context, in ReportRunInput) (string, error) {
+	var r struct {
+		ID string `json:"id"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/v1/agent/runs", in, &r)
+	return r.ID, err
+}

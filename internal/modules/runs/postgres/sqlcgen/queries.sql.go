@@ -61,3 +61,178 @@ func (q *Queries) InsertError(ctx context.Context, arg InsertErrorParams) error 
 	)
 	return err
 }
+
+const insertRun = `-- name: InsertRun :exec
+INSERT INTO agent_run (
+    id, workspace_id, agent_id, host_id, phase, client, model, session_id,
+    channel_id, thread_root_id, items, input_tokens, output_tokens,
+    cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at
+) VALUES (
+    $1, $2, $3, $16, $4, $5, $6, $7,
+    $17, $18, $8, $9, $10,
+    $11, $12, $13, $14, $19, $15
+)
+`
+
+type InsertRunParams struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	AgentID          uuid.UUID
+	Phase            string
+	Client           string
+	Model            string
+	SessionID        string
+	Items            int32
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	DurationMs       int32
+	Status           string
+	CreatedAt        time.Time
+	HostID           *uuid.UUID
+	ChannelID        *uuid.UUID
+	ThreadRootID     *uuid.UUID
+	ErrorID          *uuid.UUID
+}
+
+func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
+	_, err := q.db.Exec(ctx, insertRun,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.AgentID,
+		arg.Phase,
+		arg.Client,
+		arg.Model,
+		arg.SessionID,
+		arg.Items,
+		arg.InputTokens,
+		arg.OutputTokens,
+		arg.CacheReadTokens,
+		arg.CacheWriteTokens,
+		arg.DurationMs,
+		arg.Status,
+		arg.CreatedAt,
+		arg.HostID,
+		arg.ChannelID,
+		arg.ThreadRootID,
+		arg.ErrorID,
+	)
+	return err
+}
+
+const listRuns = `-- name: ListRuns :many
+SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at FROM agent_run
+WHERE workspace_id = $1
+  AND ($3::uuid IS NULL OR agent_id = $3::uuid)
+ORDER BY created_at DESC
+LIMIT $2
+`
+
+type ListRunsParams struct {
+	WorkspaceID uuid.UUID
+	Limit       int32
+	AgentID     *uuid.UUID
+}
+
+func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]AgentRun, error) {
+	rows, err := q.db.Query(ctx, listRuns, arg.WorkspaceID, arg.Limit, arg.AgentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentRun
+	for rows.Next() {
+		var i AgentRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.AgentID,
+			&i.HostID,
+			&i.Phase,
+			&i.Client,
+			&i.Model,
+			&i.SessionID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.Items,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.DurationMs,
+			&i.Status,
+			&i.ErrorID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const usage = `-- name: Usage :many
+SELECT
+    agent_id,
+    TO_CHAR(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD')::text AS day,
+    COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
+    COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    COALESCE(SUM(cache_write_tokens), 0)::bigint AS cache_write_tokens,
+    COUNT(*)::int AS run_count,
+    COUNT(*) FILTER (WHERE status = 'error')::int AS error_count
+FROM agent_run
+WHERE workspace_id = $1
+  AND created_at >= $2
+GROUP BY agent_id, day
+ORDER BY day DESC, agent_id ASC
+`
+
+type UsageParams struct {
+	WorkspaceID uuid.UUID
+	CreatedAt   time.Time
+}
+
+type UsageRow struct {
+	AgentID          uuid.UUID
+	Day              string
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	RunCount         int32
+	ErrorCount       int32
+}
+
+func (q *Queries) Usage(ctx context.Context, arg UsageParams) ([]UsageRow, error) {
+	rows, err := q.db.Query(ctx, usage, arg.WorkspaceID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UsageRow
+	for rows.Next() {
+		var i UsageRow
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.Day,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.RunCount,
+			&i.ErrorCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

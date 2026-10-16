@@ -463,6 +463,18 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/RunErrorRef" } } } }
 
+  /agent/runs:
+    post:
+      operationId: reportRun
+      tags: [runs]
+      description: Agents. Report a finished run with token counts, duration, and status.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ReportRunRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/RunRef" } } } }
+
   /errors/{errorId}:
     parameters:
       - { name: errorId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -473,6 +485,29 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunError" } } } }
+
+  /runs:
+    get:
+      operationId: listRuns
+      tags: [runs]
+      description: Humans only. List recent agent runs, newest first.
+      parameters:
+        - { name: agent_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunList" } } } }
+
+  /usage:
+    get:
+      operationId: getUsage
+      tags: [runs]
+      description: Humans only. Token usage and run counts per agent and day (Europe/Budapest timezone).
+      parameters:
+        - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 90, default: 7 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UsageResponse" } } } }
 
   /schedules:
     get:
@@ -974,6 +1009,80 @@ components:
         summary: { type: string }
         detail: { type: string }
         created_at: { type: string, format: date-time }
+    ReportRunRequest:
+      type: object
+      required: [phase, client, model, session_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status]
+      properties:
+        host_id: { type: string, format: uuid }
+        phase: { type: string, enum: [decide, work, direct] }
+        client: { type: string }
+        model: { type: string }
+        session_id: { type: string }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        items: { type: integer, minimum: 0 }
+        input_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        output_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        cache_read_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        cache_write_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        duration_ms: { type: integer, minimum: 0, maximum: 86400000 }
+        status: { type: string, enum: [ok, error, halted] }
+        error_id: { type: string, format: uuid }
+    RunRef:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+    Run:
+      type: object
+      required: [id, workspace_id, agent_id, phase, client, model, session_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        host_id: { type: string, format: uuid }
+        phase: { type: string, enum: [decide, work, direct] }
+        client: { type: string }
+        model: { type: string }
+        session_id: { type: string }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        items: { type: integer }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        cache_read_tokens: { type: integer, format: int64 }
+        cache_write_tokens: { type: integer, format: int64 }
+        duration_ms: { type: integer }
+        status: { type: string, enum: [ok, error, halted] }
+        error_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    RunList:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/Run" }
+    DayUsage:
+      type: object
+      required: [agent_id, day, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, run_count, error_count]
+      properties:
+        agent_id: { type: string, format: uuid }
+        day: { type: string, example: "2026-10-16" }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        cache_read_tokens: { type: integer, format: int64 }
+        cache_write_tokens: { type: integer, format: int64 }
+        total_tokens: { type: integer, format: int64 }
+        run_count: { type: integer }
+        error_count: { type: integer }
+    UsageResponse:
+      type: object
+      required: [usage]
+      properties:
+        usage:
+          type: array
+          items: { $ref: "#/components/schemas/DayUsage" }
     CreateScheduleRequest:
       type: object
       required: [channel_id, body]

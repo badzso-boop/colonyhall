@@ -37,6 +37,28 @@ type AgentHost struct {
 	Sandbox        bool
 }
 
+type AgentRun struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	AgentID          uuid.UUID
+	HostID           *uuid.UUID
+	Phase            string
+	Client           string
+	Model            string
+	SessionID        string
+	ChannelID        *uuid.UUID
+	ThreadRootID     *uuid.UUID
+	Items            int32
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	DurationMs       int32
+	Status           string
+	ErrorID          *uuid.UUID
+	CreatedAt        time.Time
+}
+
 type ApiToken struct {
 	ID        uuid.UUID
 	ActorID   uuid.UUID

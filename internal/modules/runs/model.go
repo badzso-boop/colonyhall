@@ -30,11 +30,78 @@ type Error struct {
 	CreatedAt    time.Time
 }
 
+// Phase of an agent run.
+const (
+	PhaseDecide = "decide"
+	PhaseWork   = "work"
+	PhaseDirect = "direct"
+)
+
+// Status of an agent run.
+const (
+	StatusOk     = "ok"
+	StatusError  = "error"
+	StatusHalted = "halted"
+)
+
+// Max values from spec.
+const (
+	MaxTokens     = 1_000_000_000
+	MaxDurationMS = 24 * 60 * 60 * 1000 // 24 hours in ms
+)
+
+// Run is one recorded agent run.
+type Run struct {
+	ID               ids.ID
+	WorkspaceID      ids.ID
+	AgentID          ids.ID
+	HostID           ids.ID
+	Phase            string
+	Client           string
+	Model            string
+	SessionID        string
+	ChannelID        ids.ID
+	ThreadRootID     ids.ID
+	Items            int
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	DurationMS       int
+	Status           string
+	ErrorID          ids.ID
+	CreatedAt        time.Time
+}
+
+// DayUsage is the daily aggregated token usage and run count for one agent in Europe/Budapest.
+type DayUsage struct {
+	AgentID          ids.ID
+	Day              string
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	TotalTokens      int64
+	RunCount         int
+	ErrorCount       int
+}
+
 // Errors.
 var (
-	ErrForbidden = errors.New("not allowed")
-	ErrEmpty     = errors.New("summary is required")
+	ErrForbidden   = errors.New("not allowed")
+	ErrEmpty       = errors.New("summary is required")
+	ErrInvalidRun  = errors.New("invalid run data")
+	ErrInvalidDays = errors.New("days must be between 1 and 90")
 )
+
+// Budapest timezone used for daily aggregations.
+var Budapest = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Budapest")
+	if err != nil {
+		panic("failed to load Europe/Budapest timezone: " + err.Error())
+	}
+	return loc
+}()
 
 // secretPattern matches Colonyhall and common provider tokens, so a client
 // that echoes one in its error output does not leak it into the store.
