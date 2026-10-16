@@ -39,6 +39,12 @@ import (
 	delmcp "colonyhall/internal/modules/delivery/mcptools"
 	delmem "colonyhall/internal/modules/delivery/memory"
 	delpg "colonyhall/internal/modules/delivery/postgres"
+	"colonyhall/internal/modules/files"
+	fileshttp "colonyhall/internal/modules/files/httpapi"
+	filesmcp "colonyhall/internal/modules/files/mcptools"
+	filesmem "colonyhall/internal/modules/files/memory"
+	filespg "colonyhall/internal/modules/files/postgres"
+	filesstorage "colonyhall/internal/modules/files/storage"
 	"colonyhall/internal/modules/hosts"
 	hosthttp "colonyhall/internal/modules/hosts/httpapi"
 	hostmem "colonyhall/internal/modules/hosts/memory"
@@ -81,6 +87,14 @@ type Options struct {
 	OriginPatterns []string
 	// SecureCookies marks the session cookie HTTPS-only.
 	SecureCookies bool
+	// FilesDir is the root directory for uploaded files (default: "./data/files").
+	FilesDir string
+	// MaxUploadMB is the maximum upload size in megabytes (default: 25).
+	MaxUploadMB int
+	// StorageBackend overrides the default file storage adapter.
+	StorageBackend files.StorageBackend
+	// FilesStore overrides the default files metadata store.
+	FilesStore files.Store
 }
 
 // App is a wired-up Colonyhall server.
@@ -94,6 +108,7 @@ type App struct {
 	Schedule     *schedule.Service
 	Approval     *approval.Service
 	Wiki         *wiki.Service
+	Files        *files.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -115,19 +130,21 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	b := bus.NewInProc()
 
 	var (
-		tx       db.TxRunner
-		events   eventlog.Store
-		idStore  identity.Store
-		cvStore  conversation.Store
-		dlStore  delivery.Store
-		auStore  audit.Store
-		hoStore  hosts.Store
-		ruStore  runs.Store
-		scStore  schedule.Store
-		apStore  approval.Store
-		wiStore  wiki.Store
-		ready    = func(context.Context) error { return nil }
-		closeAll = func() {}
+		tx             db.TxRunner
+		events         eventlog.Store
+		idStore        identity.Store
+		cvStore        conversation.Store
+		dlStore        delivery.Store
+		auStore        audit.Store
+		hoStore        hosts.Store
+		ruStore        runs.Store
+		scStore        schedule.Store
+		apStore        approval.Store
+		wiStore        wiki.Store
+		fiStore        files.Store
+		storageBackend files.StorageBackend
+		ready          = func(context.Context) error { return nil }
+		closeAll       = func() {}
 	)
 	switch opt.Store {
 	case "memory":
@@ -138,6 +155,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore = schedmem.New()
 		apStore = appmem.New()
 		wiStore = wikimem.New()
+		fiStore = filesmem.NewStore()
+		storageBackend = filesmem.NewStorage()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -155,10 +174,27 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore = &schedpg.Store{DB: pg}
 		apStore = &apppg.Store{DB: pg}
 		wiStore = &wikipg.Store{DB: pg}
+		fiStore = &filespg.Store{DB: pg}
+		filesDir := opt.FilesDir
+		if filesDir == "" {
+			filesDir = "./data/files"
+		}
+		storageBackend, err = filesstorage.NewFS(filesDir)
+		if err != nil {
+			pg.Pool.Close()
+			return nil, err
+		}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
 		return nil, fmt.Errorf("server: unknown store %q", opt.Store)
+	}
+
+	if opt.StorageBackend != nil {
+		storageBackend = opt.StorageBackend
+	}
+	if opt.FilesStore != nil {
+		fiStore = opt.FilesStore
 	}
 
 	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
@@ -169,6 +205,19 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	apSvc := &approval.Service{Store: apStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	wiSvc := &wiki.Service{Store: wiStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	fiSvc := &files.Service{
+		Store:        fiStore,
+		Storage:      storageBackend,
+		Conversation: cvSvc,
+		Events:       events,
+		Bus:          b,
+		Clock:        opt.Clock,
+		IDs:          opt.IDs,
+		Tx:           tx,
+		MaxUploadMB:  opt.MaxUploadMB,
+		DetectMime:   http.DetectContentType,
+	}
+	cvSvc.Attachments = fiSvc
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -185,12 +234,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	schedhttp.Register(mux, scSvc, idSvc)
 	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
 	apphttp.Register(mux, apSvc, idSvc)
+	fileshttp.Register(mux, fiSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
 		convmcp.Register(s, cvSvc, idSvc, current)
 		appmcp.Register(s, apSvc, current, r.Header)
 		wikimcp.Register(s, wiSvc, current)
+		filesmcp.Register(s, fiSvc, cvSvc, current)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -208,6 +259,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Schedule:     scSvc,
 		Approval:     apSvc,
 		Wiki:         wiSvc,
+		Files:        fiSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

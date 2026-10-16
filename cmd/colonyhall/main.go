@@ -66,7 +66,12 @@ func setPassword(args []string) error {
 	}
 	pw = strings.TrimRight(pw, "\r\n")
 	ctx := context.Background()
-	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL})
+	app, err := server.New(ctx, server.Options{
+		Store:       cfg.Store,
+		DatabaseURL: cfg.DatabaseURL,
+		FilesDir:    cfg.FilesDir,
+		MaxUploadMB: cfg.MaxUploadMB,
+	})
 	if err != nil {
 		return err
 	}
@@ -90,8 +95,14 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, Logger: logger,
-		SecureCookies: cfg.SecureCookies})
+	app, err := server.New(ctx, server.Options{
+		Store:         cfg.Store,
+		DatabaseURL:   cfg.DatabaseURL,
+		Logger:        logger,
+		SecureCookies: cfg.SecureCookies,
+		FilesDir:      cfg.FilesDir,
+		MaxUploadMB:   cfg.MaxUploadMB,
+	})
 	if err != nil {
 		return err
 	}
