@@ -15,6 +15,7 @@ import (
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
+	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/runs"
@@ -37,6 +38,7 @@ type Backend struct {
 	Schedule     schedule.Store
 	Approval     approval.Store
 	Wiki         wiki.Store
+	Git          git.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -51,6 +53,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
 	t.Run("approval", func(t *testing.T) { testApproval(t, newBackend(t)) })
 	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
+	t.Run("git", func(t *testing.T) { testGit(t, newBackend(t)) })
 }
 
 var (
@@ -937,5 +940,123 @@ func testWiki(t *testing.T, b Backend) {
 	}
 	if _, err := st.ListRevisions(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("ListRevisions non-existent: %v", err)
+	}
+}
+
+func testGit(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Git
+
+	// 1. Link caching
+	card1 := git.LinkCard{
+		URL:       "https://gitea.local/owner/repo/pulls/1",
+		Kind:      git.KindPull,
+		Title:     "#1 Initial PR",
+		State:     "open",
+		Author:    "alice",
+		FetchedAt: t0,
+	}
+	card2 := git.LinkCard{
+		URL:       "https://gitea.local/owner/repo/issues/2",
+		Kind:      git.KindIssue,
+		Title:     "#2 Bug report",
+		State:     "closed",
+		Author:    "bob",
+		FetchedAt: t0.Add(time.Minute),
+	}
+
+	must(t, st.SaveLink(ctx, card1))
+	must(t, st.SaveLink(ctx, card2))
+
+	got1, err := st.GetLink(ctx, card1.URL)
+	must(t, err)
+	if got1.Title != card1.Title || got1.State != card1.State || got1.Author != card1.Author || got1.Kind != card1.Kind {
+		t.Fatalf("GetLink(card1) = %+v, want %+v", got1, card1)
+	}
+
+	// Non-existent link
+	if _, err := st.GetLink(ctx, "https://gitea.local/not/found"); !errors.Is(err, git.ErrLinkNotFound) {
+		t.Fatalf("expected ErrLinkNotFound, got %v", err)
+	}
+
+	// Batch GetLinks
+	batch, err := st.GetLinks(ctx, []string{card1.URL, "https://gitea.local/not/found", card2.URL})
+	must(t, err)
+	if len(batch) != 2 {
+		t.Fatalf("GetLinks len = %d, want 2", len(batch))
+	}
+
+	// Update existing link
+	card1.Title = "#1 Updated Title"
+	card1.State = "merged"
+	must(t, st.SaveLink(ctx, card1))
+	gotUpdated, err := st.GetLink(ctx, card1.URL)
+	must(t, err)
+	if gotUpdated.Title != "#1 Updated Title" || gotUpdated.State != "merged" {
+		t.Fatalf("GetLink updated = %+v", gotUpdated)
+	}
+
+	// 2. Repo-Channel mappings
+	chID := f.channel.ID
+	m1 := git.RepoChannel{
+		WorkspaceID: f.ws.ID,
+		Repo:        "owner/repo1",
+		ChannelID:   chID,
+		CreatedAt:   t0,
+	}
+	m2 := git.RepoChannel{
+		WorkspaceID: f.ws.ID,
+		Repo:        "owner/repo2",
+		ChannelID:   chID,
+		CreatedAt:   t0.Add(time.Minute),
+	}
+
+	must(t, st.SetRepoChannel(ctx, m1))
+	must(t, st.SetRepoChannel(ctx, m2))
+
+	gotM1, err := st.GetRepoChannel(ctx, f.ws.ID, "owner/repo1")
+	must(t, err)
+	if gotM1.ChannelID != chID || gotM1.Repo != "owner/repo1" {
+		t.Fatalf("GetRepoChannel(m1) = %+v", gotM1)
+	}
+
+	// List mappings
+	list, err := st.ListRepoChannels(ctx, f.ws.ID)
+	must(t, err)
+	if len(list) != 2 || list[0].Repo != "owner/repo1" || list[1].Repo != "owner/repo2" {
+		t.Fatalf("ListRepoChannels = %+v", list)
+	}
+
+	// Non-existent mapping
+	if _, err := st.GetRepoChannel(ctx, f.ws.ID, "owner/nonexistent"); !errors.Is(err, git.ErrMappingNotFound) {
+		t.Fatalf("expected ErrMappingNotFound, got %v", err)
+	}
+
+	// Delete mapping
+	must(t, st.DeleteRepoChannel(ctx, f.ws.ID, "owner/repo1"))
+	list, err = st.ListRepoChannels(ctx, f.ws.ID)
+	must(t, err)
+	if len(list) != 1 || list[0].Repo != "owner/repo2" {
+		t.Fatalf("ListRepoChannels after delete = %+v", list)
+	}
+
+	// 3. Webhook delivery idempotency
+	isNew, err := st.RecordDelivery(ctx, "delivery-123", t0)
+	must(t, err)
+	if !isNew {
+		t.Fatalf("expected delivery-123 to be new")
+	}
+
+	isNewAgain, err := st.RecordDelivery(ctx, "delivery-123", t0.Add(time.Second))
+	must(t, err)
+	if isNewAgain {
+		t.Fatalf("expected delivery-123 to NOT be new (duplicate)")
+	}
+
+	isNew2, err := st.RecordDelivery(ctx, "delivery-456", t0)
+	must(t, err)
+	if !isNew2 {
+		t.Fatalf("expected delivery-456 to be new")
 	}
 }
