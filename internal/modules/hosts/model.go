@@ -110,8 +110,21 @@ type Assignment struct {
 	RootDir        string
 	Sandbox        bool
 	Approvals      string
+	AllowPreview   bool
 	CreatedBy      ids.ID
 	CreatedAt      time.Time
+}
+
+// HostPreview is what a guard needs to know about an active/requested preview.
+type HostPreview struct {
+	ID          ids.ID    `json:"id"`
+	AgentID     ids.ID    `json:"agent_id"`
+	Name        string    `json:"name"`
+	ComposePath string    `json:"compose_path"`
+	State       string    `json:"state"`
+	URL         string    `json:"url,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 // Grant lets an agent use a folder on its host.

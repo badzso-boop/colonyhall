@@ -19,6 +19,11 @@ import (
 	"colonyhall/internal/platform/ids"
 )
 
+// PreviewProvider supplies previews for a host config.
+type PreviewProvider interface {
+	HostPreviews(ctx context.Context, hostID ids.ID) ([]HostPreview, error)
+}
+
 // Service holds the hosts use cases.
 type Service struct {
 	Store     Store
@@ -29,6 +34,7 @@ type Service struct {
 	Tx        db.TxRunner
 	IDs       ids.Generator
 	Clock     clock.Clock
+	Previews  PreviewProvider
 }
 
 // admin checks that by may manage hosts: a human admin who is not halted.
@@ -215,6 +221,7 @@ type AssignInput struct {
 	RootDir        string
 	Sandbox        *bool
 	Approvals      string
+	AllowPreview   bool
 }
 
 // Assign puts an agent on a host (moving it if it was elsewhere; grants on
@@ -276,13 +283,14 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	a := Assignment{
 		AgentID: agent.ID, HostID: h.ID, WorkspaceID: by.WorkspaceID, Client: in.Client, Model: clip(in.Model, 100),
 		WorkModel: clip(in.WorkModel, 100), AllowWork: in.AllowWork, PermissionMode: clip(in.PermissionMode, 40),
-		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), Sandbox: sandbox, Approvals: approvals,
+		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), Sandbox: sandbox, Approvals: approvals, AllowPreview: in.AllowPreview,
 		CreatedBy: by.ID, CreatedAt: s.Clock.Now(),
 	}
 	err = s.record(ctx, by.WorkspaceID, by.ID, EventAgentAssigned, h.ID,
 		AssignmentEvent{
 			AgentID: agent.ID.String(), HostID: h.ID.String(), Client: a.Client, Model: a.Model,
 			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: a.Approvals,
+			AllowPreview: a.AllowPreview,
 		},
 		func(ctx context.Context) error {
 			old, err := s.Store.AssignmentByAgent(ctx, agent.ID)
@@ -437,8 +445,9 @@ func (s *Service) SaveReport(ctx context.Context, h Host, r Report) error {
 // Config is what a guard needs to run its agents. Version changes whenever
 // anything in it changes, so the guard can poll cheaply (ETag).
 type Config struct {
-	Version string
-	Agents  []AgentConfig
+	Version  string
+	Agents   []AgentConfig
+	Previews []HostPreview
 }
 
 // Config returns the host's current config.
@@ -447,12 +456,26 @@ func (s *Service) Config(ctx context.Context, h Host) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	raw, err := json.Marshal(agents)
+	var previews []HostPreview
+	if s.Previews != nil {
+		ps, err := s.Previews.HostPreviews(ctx, h.ID)
+		if err != nil {
+			return Config{}, err
+		}
+		previews = ps
+	}
+	if previews == nil {
+		previews = []HostPreview{}
+	}
+	raw, err := json.Marshal(struct {
+		Agents   []AgentConfig `json:"agents"`
+		Previews []HostPreview `json:"previews"`
+	}{Agents: agents, Previews: previews})
 	if err != nil {
 		return Config{}, err
 	}
 	sum := sha256.Sum256(raw)
-	return Config{Version: hex.EncodeToString(sum[:8]), Agents: agents}, nil
+	return Config{Version: hex.EncodeToString(sum[:8]), Agents: agents, Previews: previews}, nil
 }
 
 func (s *Service) agentConfigs(ctx context.Context, hostID ids.ID) ([]AgentConfig, error) {

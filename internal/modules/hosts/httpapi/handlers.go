@@ -67,7 +67,8 @@ func agentOut(a hosts.AgentConfig) apispec.HostAgent {
 	out := apispec.HostAgent{AgentId: a.AgentID, Handle: a.Handle, HostId: a.HostID, Client: apispec.HostAgentClient(a.Client),
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
 		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: apispec.HostAgentApprovals(approvals),
-		Grants: make([]apispec.FolderGrant, 0, len(a.Grants))}
+		AllowPreview: &a.AllowPreview,
+		Grants:       make([]apispec.FolderGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, grantOut(g, nil))
 	}
@@ -168,6 +169,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			Model: httpx.Deref(in.Model, ""), WorkModel: httpx.Deref(in.WorkModel, ""), AllowWork: httpx.Deref(in.AllowWork, false),
 			PermissionMode: httpx.Deref(in.PermissionMode, ""),
 			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), Sandbox: in.Sandbox, Approvals: approvals,
+			AllowPreview: httpx.Deref(in.AllowPreview, false),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -248,6 +250,27 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 		for _, a := range cfg.Agents {
 			out.Agents = append(out.Agents, agentOut(a))
 		}
+		previews := make([]apispec.HostPreview, 0, len(cfg.Previews))
+		for _, p := range cfg.Previews {
+			var urlPtr, errPtr *string
+			if p.URL != "" {
+				urlPtr = &p.URL
+			}
+			if p.Error != "" {
+				errPtr = &p.Error
+			}
+			previews = append(previews, apispec.HostPreview{
+				Id:          p.ID,
+				AgentId:     p.AgentID,
+				Name:        p.Name,
+				ComposePath: p.ComposePath,
+				State:       apispec.HostPreviewState(p.State),
+				Url:         urlPtr,
+				Error:       errPtr,
+				ExpiresAt:   p.ExpiresAt,
+			})
+		}
+		out.Previews = &previews
 		httpx.JSON(w, http.StatusOK, out)
 	}))
 
