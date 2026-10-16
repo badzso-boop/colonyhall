@@ -165,3 +165,18 @@ func (s *Service) ActorsByIDs(ctx context.Context, idList []ids.ID) ([]Actor, er
 func (s *Service) ListActors(ctx context.Context, by Actor) ([]Actor, error) {
 	return s.Store.ListActors(ctx, by.WorkspaceID)
 }
+
+// Admins implements Directory.
+func (s *Service) Admins(ctx context.Context, workspaceID ids.ID) ([]Actor, error) {
+	actors, err := s.Store.ListActors(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var admins []Actor
+	for _, a := range actors {
+		if a.IsAdmin() && !a.Halted {
+			admins = append(admins, a)
+		}
+	}
+	return admins, nil
+}

@@ -661,6 +661,31 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Revisions, content: { application/json: { schema: { $ref: "#/components/schemas/WikiRevisionList" } } } }
 
+  /questions:
+    get:
+      operationId: listQuestions
+      tags: [question]
+      description: List questions in the workspace, optionally filtered by state.
+      parameters:
+        - { name: state, in: query, required: false, schema: { type: string }, description: "Filter by state: open, answered, escalated, withdrawn, expired" }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Questions, content: { application/json: { schema: { $ref: "#/components/schemas/QuestionList" } } } }
+
+  /questions/{questionId}/answer:
+    parameters:
+      - { name: questionId, in: path, required: true, schema: { type: string }, description: "Question ID (UUID) or number (e.g. Q-12)" }
+    post:
+      operationId: answerQuestion
+      tags: [question]
+      description: Answer an open or escalated question.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AnswerQuestionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Answered question, content: { application/json: { schema: { $ref: "#/components/schemas/Question" } } } }
+
 
 components:
   securitySchemes:
@@ -1353,4 +1378,47 @@ components:
         body: { type: string, maxLength: 50000 }
         title: { type: string, maxLength: 120 }
         tags: { type: array, items: { type: string } }
+    QuestionState:
+      type: string
+      enum: [open, answered, escalated, withdrawn, expired]
+    Question:
+      type: object
+      required: [id, number, formatted_number, workspace_id, asked_by, asked_by_handle, channel_id, channel_name, thread_root_id, text, options, state, to_human, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer }
+        formatted_number: { type: string, example: "Q-12" }
+        workspace_id: { type: string, format: uuid }
+        asked_by: { type: string, format: uuid }
+        asked_by_handle: { type: string }
+        to_actor_id: { type: string, format: uuid, nullable: true }
+        to_actor_handle: { type: string, nullable: true }
+        to_human: { type: boolean }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        thread_root_id: { type: string, format: uuid }
+        text: { type: string }
+        options: { type: array, items: { type: string } }
+        default_option: { type: string, nullable: true }
+        deadline: { type: string, format: date-time, nullable: true }
+        state: { $ref: "#/components/schemas/QuestionState" }
+        answer: { type: string, nullable: true }
+        answered_by: { type: string, format: uuid, nullable: true }
+        answered_by_handle: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        answered_at: { type: string, format: date-time, nullable: true }
+        escalated_at: { type: string, format: date-time, nullable: true }
+        withdrawn_at: { type: string, format: date-time, nullable: true }
+        expired_at: { type: string, format: date-time, nullable: true }
+    QuestionList:
+      type: object
+      required: [questions]
+      properties:
+        questions: { type: array, items: { $ref: "#/components/schemas/Question" } }
+    AnswerQuestionRequest:
+      type: object
+      required: [answer]
+      properties:
+        answer: { type: string, minLength: 1, maxLength: 8000 }
+
 

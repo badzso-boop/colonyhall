@@ -539,3 +539,15 @@ func clipList(list []string, maxItems, maxLen int) []string {
 	}
 	return out
 }
+
+// IsFullAccess reports whether the agent is assigned in direct mode without sandbox.
+func (s *Service) IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error) {
+	a, err := s.Store.AssignmentByAgent(ctx, agentID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return a.Mode == AgentModeDirect && !a.Sandbox, nil
+}
