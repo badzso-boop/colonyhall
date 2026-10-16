@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuildPromptEscapesAndNumbers(t *testing.T) {
@@ -126,5 +127,18 @@ func TestAntigravityDecide(t *testing.T) {
 	f.stdout = `{"status":"ERROR","response":""}`
 	if _, err := a.Decide(context.Background(), DecideRequest{Handle: "bot", Items: []PromptItem{{}}}); err == nil {
 		t.Fatal("a failed run must be an error")
+	}
+}
+
+func TestAgentConfigDefaults(t *testing.T) {
+	cfg := AgentConfig{Client: "claude-code"}
+	if err := cfg.defaults(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Poll != 5*time.Second {
+		t.Errorf("poll = %v, want 5s", cfg.Poll)
+	}
+	if cfg.FallbackPoll != 60*time.Second {
+		t.Errorf("fallback_poll = %v, want 60s", cfg.FallbackPoll)
 	}
 }

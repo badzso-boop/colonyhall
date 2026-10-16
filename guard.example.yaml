@@ -24,7 +24,7 @@ roots:
 # allow_unsandboxed: false
 
 # commands: { claude-code: claude, antigravity: agy }
-# defaults: { poll: 5s, debounce: 3s, batch: 10, decide_timeout: 3m, work_timeout: 15m }
+# defaults: { poll: 5s, fallback_poll: 60s, debounce: 3s, batch: 10, decide_timeout: 3m, work_timeout: 15m }
 
 # --- Agents mode (quick single-machine setup, no pairing) ---------------
 # Instead of host_token_file/roots, list agents with their own tokens:

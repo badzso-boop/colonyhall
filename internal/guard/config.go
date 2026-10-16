@@ -52,6 +52,8 @@ type AgentConfig struct {
 	Mode           string        `yaml:"mode"`       // compact | direct
 	RootDir        string        `yaml:"root_dir"`   // direct mode root directory
 	Poll           time.Duration `yaml:"poll"`
+	FallbackPoll   time.Duration `yaml:"fallback_poll"`
+	DisableWS      bool          `yaml:"disable_ws"`
 	Debounce       time.Duration `yaml:"debounce"`
 	Batch          int           `yaml:"batch"`
 	DecideTimeout  time.Duration `yaml:"decide_timeout"`
@@ -140,6 +142,7 @@ func (a *AgentConfig) defaults() error {
 		}
 	}
 	def(&a.Poll, 5*time.Second)
+	def(&a.FallbackPoll, 60*time.Second)
 	def(&a.Debounce, 3*time.Second)
 	def(&a.DecideTimeout, 3*time.Minute)
 	def(&a.WorkTimeout, 15*time.Minute)
