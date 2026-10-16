@@ -341,3 +341,18 @@ func (c *Client) ReportRun(ctx context.Context, in ReportRunInput) (string, erro
 	err := c.do(ctx, http.MethodPost, "/api/v1/agent/runs", in, &r)
 	return r.ID, err
 }
+
+// AgentBudget represents the agent's daily token budget.
+type AgentBudget struct {
+	Limit     int64     `json:"limit"`
+	UsedToday int64     `json:"used_today"`
+	Remaining int64     `json:"remaining"`
+	ResetsAt  time.Time `json:"resets_at"`
+}
+
+// Budget fetches the agent's daily token budget from the server.
+func (c *Client) Budget(ctx context.Context) (AgentBudget, error) {
+	var b AgentBudget
+	err := c.do(ctx, http.MethodGet, "/api/v1/agent/budget", nil, &b)
+	return b, err
+}

@@ -46,6 +46,12 @@ type Agent struct {
 	TokenCheckInterval time.Duration
 	WSDialHook         func(ctx context.Context, u string, opts *websocket.DialOptions) (*websocket.Conn, *http.Response, error)
 
+	// Now returns the current time. If nil, time.Now is used.
+	Now func() time.Time
+
+	budgetExhaustedUntil time.Time
+	budgetNoticeDay      string
+
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
 
@@ -59,8 +65,12 @@ type Agent struct {
 // burn tokens forever. After that the items are acknowledged and logged.
 const maxAttempts = 3
 
-// errHalted means the agent must stop writing (paused, stopped, emergency).
-var errHalted = errors.New("agent is halted")
+var (
+	// errHalted means the agent must stop writing (paused, stopped, emergency).
+	errHalted = errors.New("agent is halted")
+	// errBudgetExceeded means the agent reached its daily token budget limit.
+	errBudgetExceeded = errors.New("daily token budget exceeded")
+)
 
 // Run loops until ctx ends.
 func (a *Agent) Run(ctx context.Context) error {
@@ -105,10 +115,50 @@ func (a *Agent) Run(ctx context.Context) error {
 }
 
 func (a *Agent) waitInterval() time.Duration {
+	if !a.budgetExhaustedUntil.IsZero() && a.now().Before(a.budgetExhaustedUntil) {
+		d := a.until(a.budgetExhaustedUntil)
+		if d > 0 {
+			return d
+		}
+	}
 	if a.DisableWS || a.Cfg.DisableWS {
 		return a.pause()
 	}
 	return a.fallbackPause()
+}
+
+func (a *Agent) now() time.Time {
+	if a.Now != nil {
+		return a.Now()
+	}
+	return time.Now()
+}
+
+func (a *Agent) until(t time.Time) time.Duration {
+	return t.Sub(a.now())
+}
+
+func (a *Agent) checkBudget(ctx context.Context, sample Item) (bool, error) {
+	b, err := a.Client.Budget(ctx)
+	if err != nil {
+		return false, err
+	}
+	if b.Limit > 0 && b.Remaining <= 0 {
+		a.budgetExhaustedUntil = b.ResetsAt
+		dayKey := b.ResetsAt.Format(time.RFC3339)
+		if a.budgetNoticeDay != dayKey {
+			resetTime := "tomorrow"
+			if !b.ResetsAt.IsZero() {
+				resetTime = b.ResetsAt.Local().Format("15:04")
+			}
+			msg := fmt.Sprintf("⏳ My daily token budget is used up; I continue after %s.", resetTime)
+			_ = a.reply(ctx, sample, msg, "budget-"+sample.ID)
+			a.budgetNoticeDay = dayKey
+		}
+		return false, nil
+	}
+	a.budgetExhaustedUntil = time.Time{}
+	return true, nil
 }
 
 // pause is the poll interval, backing off after failures (max 5 minutes).
@@ -168,6 +218,16 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 	runCtx, stop := a.watchHalt(ctx)
 	defer stop()
 
+	if len(items) > 0 {
+		ok, err := a.checkBudget(runCtx, items[0])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+	}
+
 	pitems := make([]PromptItem, 0, len(items))
 	for _, it := range items {
 		pitems = append(pitems, PromptItem{Item: it, Context: a.threadContext(runCtx, it)})
@@ -215,6 +275,9 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 			_ = a.Client.Ack(ctx, acked)
 			if errors.Is(err, errHalted) || runCtx.Err() != nil {
 				a.Log.Warn("guard: stopped mid-run, agent halted", "agent", "@"+a.me.Handle)
+				return nil
+			}
+			if errors.Is(err, errBudgetExceeded) {
 				return nil
 			}
 			return err
@@ -317,6 +380,13 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	if !p.Allowed {
 		return a.reply(ctx, it.Item, p.Reason, "g-"+it.ID)
 	}
+	ok, err := a.checkBudget(ctx, it.Item)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errBudgetExceeded
+	}
 	if strings.TrimSpace(task) == "" {
 		task = it.Body
 	}
@@ -367,6 +437,9 @@ func (a *Agent) reportError(ctx context.Context, it Item, summary, detail, clien
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
 		thread = it.ItemID
+		if thread == "" {
+			thread = it.ID
+		}
 	}
 	msg := "⚠️ I ran into an error."
 	id, err := a.Client.ReportError(ctx, it.ChannelID, thread, summary, detail)
@@ -383,6 +456,9 @@ func (a *Agent) reply(ctx context.Context, it Item, text, clientID string) error
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
 		thread = it.ItemID
+		if thread == "" {
+			thread = it.ID
+		}
 	}
 	return halted(a.Client.Send(ctx, it.ChannelID, thread, clip(strings.TrimSpace(text), MaxReplyLen), clientID))
 }
@@ -401,6 +477,9 @@ func (a *Agent) replyLong(ctx context.Context, it Item, text, clientID string) e
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
 		thread = it.ItemID
+		if thread == "" {
+			thread = it.ID
+		}
 	}
 	return halted(a.Client.SendLong(ctx, it.ChannelID, thread, clip(text, MaxLongReply), clientID, true))
 }
@@ -460,9 +539,13 @@ func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
 	runCtx, cancel := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Add(1)
+	interval := a.Cfg.HaltCheck
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
 	go func() {
 		defer wg.Done()
-		t := time.NewTicker(a.Cfg.HaltCheck)
+		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
 			select {

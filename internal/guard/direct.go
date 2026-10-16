@@ -267,6 +267,9 @@ func (a *Agent) handleDirect(ctx context.Context, items []Item) error {
 			return nil
 		}
 		if err := a.runDirectGroup(runCtx, stateDir, stateFile, state, group); err != nil {
+			if errors.Is(err, errBudgetExceeded) {
+				return nil
+			}
 			if runCtx.Err() != nil && ctx.Err() == nil {
 				a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
 				return nil
@@ -281,8 +284,16 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	if len(group) == 0 {
 		return nil
 	}
+	ok, err := a.checkBudget(ctx, group[0])
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errBudgetExceeded
+	}
 	threadRoot := ThreadRoot(group[0])
 	agentID := a.me.ID
+
 	if agentID == "" {
 		agentID = a.Cfg.Name
 	}
