@@ -31,6 +31,10 @@ services:
       COLONY_HTTP_ADDR: ":8080"
       COLONY_DEV_SEED: "1"
       COLONY_SECURE_COOKIES: "0"   # plain HTTP on localhost
+      COLONY_FILES_DIR: /data/files
+      COLONY_MAX_UPLOAD_MB: "25"
+    volumes:
+      - filesdata:/data/files
     ports:
       # COLONY_BIND=0.0.0.0 also exposes it on other interfaces (e.g. Tailscale).
       - "${COLONY_BIND:-127.0.0.1}:8080:8080"
@@ -40,3 +44,4 @@ services:
 
 volumes:
   pgdata:
+  filesdata:
