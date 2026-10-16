@@ -288,6 +288,30 @@ func (e InboxItemAuthorKind) Valid() bool {
 	}
 }
 
+// Defines values for LinkCardKind.
+const (
+	Commit LinkCardKind = "commit"
+	Issue  LinkCardKind = "issue"
+	Pull   LinkCardKind = "pull"
+	Repo   LinkCardKind = "repo"
+)
+
+// Valid indicates whether the value is a known member of the LinkCardKind enum.
+func (e LinkCardKind) Valid() bool {
+	switch e {
+	case Commit:
+		return true
+	case Issue:
+		return true
+	case Pull:
+		return true
+	case Repo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageKind.
 const (
 	System MessageKind = "system"
@@ -801,6 +825,20 @@ type FolderGrant struct {
 // FolderGrantMode defines model for FolderGrant.Mode.
 type FolderGrantMode string
 
+// GitRepoMapping defines model for GitRepoMapping.
+type GitRepoMapping struct {
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	CreatedAt time.Time          `json:"created_at"`
+
+	// Repo Full repository name, e.g. owner/repo
+	Repo string `json:"repo"`
+}
+
+// GitRepoMappingList defines model for GitRepoMappingList.
+type GitRepoMappingList struct {
+	Mappings []GitRepoMapping `json:"mappings"`
+}
+
 // GrantRequest defines model for GrantRequest.
 type GrantRequest struct {
 	Mode GrantRequestMode `json:"mode"`
@@ -921,6 +959,18 @@ type IssueTokenResponse struct {
 	Token  Token  `json:"token"`
 }
 
+// LinkCard defines model for LinkCard.
+type LinkCard struct {
+	Author *string      `json:"author,omitempty"`
+	Kind   LinkCardKind `json:"kind"`
+	State  string       `json:"state"`
+	Title  string       `json:"title"`
+	Url    string       `json:"url"`
+}
+
+// LinkCardKind defines model for LinkCard.Kind.
+type LinkCardKind string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Handle   string `json:"handle"`
@@ -940,6 +990,7 @@ type Message struct {
 	Id           openapi_types.UUID   `json:"id"`
 	Kind         MessageKind          `json:"kind"`
 	LastReplyAt  *time.Time           `json:"last_reply_at,omitempty"`
+	LinkCards    *[]LinkCard          `json:"link_cards,omitempty"`
 	Mentions     []openapi_types.UUID `json:"mentions"`
 	Reactions    *[]ReactionSummary   `json:"reactions,omitempty"`
 	ReplyCount   int                  `json:"reply_count"`
@@ -1134,6 +1185,14 @@ type SessionInfo struct {
 	CsrfToken string `json:"csrf_token"`
 }
 
+// SetGitRepoMappingRequest defines model for SetGitRepoMappingRequest.
+type SetGitRepoMappingRequest struct {
+	ChannelId openapi_types.UUID `json:"channel_id"`
+
+	// Repo Full repository name, e.g. owner/repo
+	Repo string `json:"repo"`
+}
+
 // SetHostStateRequest defines model for SetHostStateRequest.
 type SetHostStateRequest struct {
 	State SetHostStateRequestState `json:"state"`
@@ -1318,6 +1377,9 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // OpenDMJSONRequestBody defines body for OpenDM for application/json ContentType.
 type OpenDMJSONRequestBody = OpenDMRequest
+
+// SetGitMappingJSONRequestBody defines body for SetGitMapping for application/json ContentType.
+type SetGitMappingJSONRequestBody = SetGitRepoMappingRequest
 
 // HostReportJSONRequestBody defines body for HostReport for application/json ContentType.
 type HostReportJSONRequestBody = HostReport

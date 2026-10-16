@@ -171,6 +171,27 @@ type FolderGrant struct {
 	RevokedAt   *time.Time
 }
 
+type GitLink struct {
+	Url       string
+	Kind      string
+	Title     string
+	State     string
+	Author    string
+	FetchedAt time.Time
+}
+
+type GitRepoChannel struct {
+	WorkspaceID uuid.UUID
+	Repo        string
+	ChannelID   uuid.UUID
+	CreatedAt   time.Time
+}
+
+type GitWebhookDelivery struct {
+	DeliveryID string
+	ReceivedAt time.Time
+}
+
 type Host struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

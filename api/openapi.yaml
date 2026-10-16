@@ -652,6 +652,50 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Revisions, content: { application/json: { schema: { $ref: "#/components/schemas/WikiRevisionList" } } } }
 
+  /git/mappings:
+    get:
+      operationId: listGitMappings
+      tags: [git]
+      description: Lists repository-to-channel notification mappings. Admins only.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/GitRepoMappingList" } } }
+    post:
+      operationId: setGitMapping
+      tags: [git]
+      description: Sets or updates a repository-to-channel mapping. Admins only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetGitRepoMappingRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/GitRepoMapping" } } }
+
+  /git/mappings/{owner}/{repo}:
+    parameters:
+      - { name: owner, in: path, required: true, schema: { type: string } }
+      - { name: repo, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteGitMapping
+      tags: [git]
+      description: Deletes a repository-to-channel mapping. Admins only.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+
+  /hooks/gitea:
+    post:
+      operationId: handleGiteaWebhook
+      tags: [git]
+      description: Receives incoming webhooks from Gitea. Verified with X-Gitea-Signature HMAC.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Processed or ignored }
+        "401": { description: Invalid signature }
 
 components:
   securitySchemes:
@@ -862,6 +906,7 @@ components:
         last_reply_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
         reactions: { type: array, items: { $ref: "#/components/schemas/ReactionSummary" } }
+        link_cards: { type: array, items: { $ref: "#/components/schemas/LinkCard" } }
     MessageList:
       type: object
       required: [messages]
@@ -1330,4 +1375,36 @@ components:
         body: { type: string, maxLength: 50000 }
         title: { type: string, maxLength: 120 }
         tags: { type: array, items: { type: string } }
+
+    LinkCard:
+      type: object
+      required: [url, kind, title, state]
+      properties:
+        url: { type: string }
+        kind: { type: string, enum: [repo, pull, issue, commit] }
+        title: { type: string }
+        state: { type: string }
+        author: { type: string }
+
+    GitRepoMapping:
+      type: object
+      required: [repo, channel_id, created_at]
+      properties:
+        repo: { type: string, description: "Full repository name, e.g. owner/repo" }
+        channel_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+
+    GitRepoMappingList:
+      type: object
+      required: [mappings]
+      properties:
+        mappings: { type: array, items: { $ref: "#/components/schemas/GitRepoMapping" } }
+
+    SetGitRepoMappingRequest:
+      type: object
+      required: [repo, channel_id]
+      properties:
+        repo: { type: string, description: "Full repository name, e.g. owner/repo" }
+        channel_id: { type: string, format: uuid }
+
 
