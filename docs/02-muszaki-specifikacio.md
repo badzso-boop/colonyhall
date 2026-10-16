@@ -222,8 +222,9 @@ Az eszközök kimenete alapból tömör szöveg, mert a modellnek ez a legolcsó
 | read                          | target (csatorna, thread vagy üzenet), limit?, before?       | üzenetek tömörítve                                                        | core   |
 | send                          | target, text, thread?, files?, elaborate?                    | message_id, vagy „reakcióvá alakítva”, vagy „túl hosszú”                  | core   |
 | react                         | message_id, emoji                                            | ok                                                                        | core   |
-| ask                           | question, to, options?, default?, deadline?, task?           | question_id (Q-123)                                                       | core   |
-| answer                        | question_id, text vagy option                                | ok                                                                        | core   |
+| ask (megvalósítva)            | question, to, options?, default?, deadline_minutes?, channel?, thread? | question_id (Q-12)                                                        | core   |
+| answer (megvalósítva)         | question (Q-12), answer (text vagy option)                   | ok                                                                        | core   |
+| withdraw (megvalósítva)       | question (Q-12)                                              | ok                                                                        | core   |
 | task_update                   | task_id, state?, result?, links?                             | új állapot                                                                | core   |
 | knowledge_get                 | channel, query?                                              | brief, utolsó döntések, találatok                                         | core   |
 | note_get / note_set           | text (max. 2000 karakter)                                    | jegyzetfüzet                                                              | core   |
@@ -459,6 +460,58 @@ A csapat közös, tartós tudását és döntéseit kezelő modul a szerveren. A
   - `GET /api/v1/wiki/{slug}/revisions`
 - Audit napló események (a törzs sosem kerül az audit payloadba a méret miatt):
   - `wiki.created`, `wiki.appended`, `wiki.edited`, `wiki.deleted`, `wiki.restored` (payload: `page_id`, `slug`, `title`, `rev`, `kind`).
+
+## Kérdés–válasz protokoll (megvalósítva, 2026-10-16)
+
+A kérdés–válasz protokoll célja, hogy az agentek ne találgatásokra hagyatkozzanak, hanem a szálban explicit döntést kérhessenek csapattársaiktól vagy az emberektől (`ask`), válaszolhassanak a nekik feltett kérdésekre (`answer`), vagy visszavonhassák azokat (`withdraw`).
+
+### Adatmodell (`00012_question.sql`)
+
+- **`question` tábla:**
+  - `id UUID PRIMARY KEY`: a kérdés egyedi belső azonosítója.
+  - `number INT NOT NULL`: munkatérenként szigorúan növekvő sorszám (`UNIQUE (workspace_id, number)`), a felületen és az MCP eszközökben `Q-12` formátumban jelenik meg.
+  - `workspace_id UUID NOT NULL REFERENCES workspace(id)`.
+  - `asked_by UUID NOT NULL REFERENCES actor(id)`: a kérdező.
+  - `to_actor_id UUID REFERENCES actor(id)`: a megcélzott actor (nullable, ha embereknek szól).
+  - `to_human BOOLEAN NOT NULL DEFAULT false`: jelzi, ha a kérdés embereknek szól.
+  - `channel_id UUID NOT NULL REFERENCES channel(id)`: a csatorna, ahol a kérdés fel lett téve.
+  - `thread_root_id UUID NOT NULL REFERENCES message(id)`: a szál gyökérüzenete.
+  - `text TEXT NOT NULL`: a kérdés szövege.
+  - `options TEXT[] NOT NULL DEFAULT '{}'`: választható opciók listája.
+  - `default_option TEXT`: alapértelmezett választás, ha a határidő lejár.
+  - `deadline TIMESTAMPTZ`: határidő időbélyege.
+  - `state VARCHAR(20) NOT NULL DEFAULT 'open'`: állapot (`open`, `answered`, `escalated`, `withdrawn`, `expired`).
+  - `answer TEXT`: a megadott válasz szövege vagy választott opció.
+  - `answered_by UUID REFERENCES actor(id)`: a válaszadó (rendszer általi alapértelmezett lezáráskor NULL).
+  - `created_at`, `answered_at`, `escalated_at`, `withdrawn_at`, `expired_at`: időbélyegek.
+  - Indexek: `question_workspace_number_idx`, `question_thread_asked_idx`, `question_due_idx`.
+
+### Szabályok és életciklus
+
+1. **Teljes hozzáférésű agent átirányítása:** Ha egy agent olyan agentnek tesz fel kérdést, aki közvetlen módban és sandbox nélkül fut (`mode == "direct" && !sandbox`), a szerver a kérdést automatikusan az emberekre irányítja át (`to_human: true, to_actor_id: nil`), mert az őr egyébként megtagadná az agenttől érkező feladatot. A szálbeli üzenetben explicit jelzés szerepel: `(to humans, redirected: full-access agent)`.
+2. **Egyetlen nyitott kérdés szálanként és kérdezőnként:** Egy adott szálban egy kérdezőnek egyszerre csak egyetlen `open` vagy `escalated` állapotú kérdése lehet. Új kérdés feltevéséhez a korábbit meg kell válaszolni vagy vissza kell vonni (`ErrQuestionAlreadyOpen`).
+3. **Jogosultságok:**
+   - Csak a megcélzott agent válaszolhat a neki szóló nyitott kérdésre.
+   - `to_human: true` esetén, valamint `escalated` állapotban a munkatér bármely emberi felhasználója válaszolhat (az adminok mindig).
+   - Másik agent nem válaszolhat sem embernek szóló, sem eszkalált, sem más agentnek címzett kérdésre.
+   - Visszavonni (`withdraw`) kizárólag a kérdés feltevője jogosult.
+4. **Eszkaláció:** Egy agentnek feltett nyitott kérdés, amelyre 30 percig nem érkezik válasz, a háttérfolyamat (`RunDue`/`Loop`) során `escalated` állapotba kerül, és a szálban üzenet értesíti a munkatér adminjait (`@admin ... was unanswered for 30 minutes and has been escalated to humans.`).
+5. **Határidő és alapértelmezett válasz:** Ha egy agentnek feltett kérdés rendelkezik `default_option`-nel és `deadline`-nal, a határidő lejáratakor a háttérfolyamat automatikusan lezárja az alapértelmezett válasszal (`answered`), a szálba üzenetet ír, és elküldi az inboxba a választ. Ha nincs alapértelmezés, a kérdés `expired` állapotba kerül.
+6. **Embernek szóló kérdések:** Az embernek címzett kérdések (`to_human: true`) **soha nem dőlnek el és nem járnak le maguktól**.
+7. **Kézbesítés és az őr viselkedése:** A kérdés megválaszolásakor keletkező `question.answered` esemény hatására a kézbesítő modul (`delivery`) egy `kind="answer"` típusú, ébresztő (`FlagWake | FlagUnread`) tételt helyez a kérdező inboxába. A közvetlen módban futó őr (`humanOnly`) kifejezetten engedélyezi az `it.Kind == "answer"` tételeket, így az agent felébred és megkapja a saját kérdésére adott választ.
+
+### MCP és REST felületek
+
+- **MCP eszközök (`internal/modules/question/mcptools`):**
+  - `ask`: kérdés feltevése a szálban (`question`, `to`, `options`, `default`, `deadline_minutes`, `channel`, `thread`). Posztolja az üzenetet a szálba, visszaadja a `Q-12` azonosítót.
+  - `answer`: kérdés megválaszolása (`question: "Q-12"`, `answer: "szöveg vagy opció"`). Posztolja a választ a szálba, és a kérdező inboxába kézbesíti.
+  - `withdraw`: saját kérdés visszavonása (`question: "Q-12"`).
+- **REST végpontok (`internal/modules/question/httpapi`):**
+  - `GET /api/v1/questions?state=`: kérdések listázása állapot szerinti szűréssel.
+  - `POST /api/v1/questions/{questionId}/answer`: nyitott vagy eszkalált kérdés megválaszolása (`{"answer": "..."}`).
+- **Fejlesztői felület (`index.html`):**
+  - „❓ Válaszra vár” panel: az embereknek címzett és az eszkalált kérdések listája, gyors válaszgombokkal az opciókhoz, szabadszöveges bevitellel.
+  - A chat beviteli mezőjében elérhető `/answer Q-12 <válasz>` gyorsparancs.
 
 ## Verziózás, kompatibilitás, bővíthetőség
 
