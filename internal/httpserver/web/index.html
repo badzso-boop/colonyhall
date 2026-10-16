@@ -100,7 +100,8 @@ const I18N = {
         agent: "Agent", phase: "Fázis", model: "Modell", duration: "Időtartam", status: "Állapot", details: "Részletek",
         noRuns: "Nincs futási adat.",
         approvalDetails: "Részletek", approvalAllow: "Engedélyezem", approvalDeny: "Elutasítom",
-        approvalPending: "jóváhagyásra vár", approvalAllowed: "engedélyezve", approvalDenied: "elutasítva", approvalExpired: "lejárt" },
+        approvalPending: "jóváhagyásra vár", approvalAllowed: "engedélyezve", approvalDenied: "elutasítva", approvalExpired: "lejárt",
+        previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -113,7 +114,8 @@ const I18N = {
         agent: "Agent", phase: "Phase", model: "Model", duration: "Duration", status: "Status", details: "Details",
         noRuns: "No runs recorded.",
         approvalDetails: "Details", approvalAllow: "Allow", approvalDeny: "Deny",
-        approvalPending: "pending", approvalAllowed: "allowed", approvalDenied: "denied", approvalExpired: "expired" },
+        approvalPending: "pending", approvalAllowed: "allowed", approvalDenied: "denied", approvalExpired: "expired",
+        previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -404,6 +406,7 @@ async function renderHosts() {
         a.mode || "compact",
         a.root_dir || "",
         a.sandbox ? "sandbox" : "no-sandbox",
+        a.allow_preview ? "preview" : "",
         a.approvals ? "approvals: " + a.approvals : "",
         a.permission_mode || "",
         a.model || "-",
@@ -446,19 +449,72 @@ async function renderHosts() {
       const model = el("input", { placeholder: "model (haiku)", size: 14 });
       const wmodel = el("input", { placeholder: "work model", size: 12 });
       const work = el("input", { type: "checkbox" });
+      const allowPreview = el("input", { type: "checkbox" });
       const go = el("button", { textContent: L.assign });
       go.onclick = async () => {
         await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({
           host_id: h.id, client: client.value, mode: mode.value, root_dir: rootDir.value.trim(),
           sandbox: sandbox.checked, permission_mode: permMode.value, approvals: approvals.value,
-          model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked
+          model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked,
+          allow_preview: allowPreview.checked
         }) }).catch(e => alert(e.message));
         renderHosts();
       };
-      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), go));
+      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), el("label", {}, allowPreview, " preview"), go));
     }
     panel.append(c);
   }
+
+  const { previews } = await api("/api/v1/previews").catch(() => ({ previews: [] }));
+  const prevBox = el("div", { className: "card" });
+  prevBox.append(el("h3", { textContent: L.previews }));
+  if (!previews || !previews.length) {
+    prevBox.append(el("p", { className: "muted", textContent: L.noPreviews }));
+  } else {
+    const tbl = el("table", { className: "tbl" });
+    const thead = el("tr", {},
+      el("th", { textContent: L.agent }),
+      el("th", { textContent: "Név" }),
+      el("th", { textContent: "Link" }),
+      el("th", { textContent: L.status }),
+      el("th", { textContent: L.expires }),
+      el("th", { textContent: "" })
+    );
+    tbl.append(thead);
+    for (const p of previews) {
+      const tr = el("tr");
+      const agentHandle = actors[p.agent_id]?.handle || p.agent_id.slice(0, 8);
+      const linkCell = el("td");
+      if (p.url && p.state === "running") {
+        linkCell.append(el("a", { href: p.url, target: "_blank", textContent: p.url }));
+      } else if (p.error) {
+        linkCell.append(el("span", { className: "warn", textContent: p.error }));
+      } else {
+        linkCell.textContent = "-";
+      }
+      const exp = p.expires_at ? new Date(p.expires_at).toLocaleTimeString() : "-";
+      const actCell = el("td");
+      if (p.state === "requested" || p.state === "running") {
+        const stopBtn = el("button", { textContent: L.stop });
+        stopBtn.onclick = async () => {
+          await api(`/api/v1/previews/${p.id}/stop`, { method: "POST" }).catch(e => alert(e.message));
+          renderHosts();
+        };
+        actCell.append(stopBtn);
+      }
+      tr.append(
+        el("td", { textContent: "@" + agentHandle }),
+        el("td", { textContent: p.name }),
+        linkCell,
+        el("td", { textContent: p.state }),
+        el("td", { textContent: exp }),
+        actCell
+      );
+      tbl.append(tr);
+    }
+    prevBox.append(tbl);
+  }
+  panel.append(prevBox);
 }
 
 async function start() {
