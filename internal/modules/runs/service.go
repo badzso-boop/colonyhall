@@ -152,7 +152,7 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 	if in.DurationMS < 0 || in.DurationMS > MaxDurationMS {
 		return Run{}, ErrInvalidRun
 	}
-	if strings.TrimSpace(in.Client) == "" || strings.TrimSpace(in.Model) == "" {
+	if strings.TrimSpace(in.Client) == "" {
 		return Run{}, ErrInvalidRun
 	}
 
