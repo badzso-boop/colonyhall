@@ -226,13 +226,27 @@ type HostAgent struct {
 	RootDir        string  `json:"root_dir"`
 	Sandbox        bool    `json:"sandbox"`
 	Approvals      string  `json:"approvals"`
+	AllowPreview   bool    `json:"allow_preview"`
 	Grants         []Grant `json:"grants"`
+}
+
+// HostPreview is one preview the guard needs to run or stop.
+type HostPreview struct {
+	ID          string    `json:"id"`
+	AgentID     string    `json:"agent_id"`
+	Name        string    `json:"name"`
+	ComposePath string    `json:"compose_path"`
+	State       string    `json:"state"`
+	URL         string    `json:"url,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 // HostConfig is what the server says this machine runs.
 type HostConfig struct {
-	Version string      `json:"version"`
-	Agents  []HostAgent `json:"agents"`
+	Version  string        `json:"version"`
+	Agents   []HostAgent   `json:"agents"`
+	Previews []HostPreview `json:"previews"`
 }
 
 // HostReport is what the guard tells the server about this machine.
@@ -338,4 +352,16 @@ func (c *Client) ReportRun(ctx context.Context, in ReportRunInput) (string, erro
 	}
 	err := c.do(ctx, http.MethodPost, "/api/v1/agent/runs", in, &r)
 	return r.ID, err
+}
+
+// ReportPreview sends the preview status to the server.
+func (c *Client) ReportPreview(ctx context.Context, previewID, state, url, errStr string) error {
+	in := map[string]any{"state": state}
+	if url != "" {
+		in["url"] = url
+	}
+	if errStr != "" {
+		in["error"] = errStr
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/host/previews/"+previewID, in, nil)
 }

@@ -36,6 +36,7 @@ type AgentHost struct {
 	RootDir        string
 	Sandbox        bool
 	Approvals      string
+	AllowPreview   bool
 }
 
 type AgentRun struct {
@@ -207,6 +208,23 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	DeletedAt    *time.Time
+}
+
+type Preview struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	AgentID      uuid.UUID
+	HostID       uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Name         string
+	ComposePath  string
+	State        string
+	Url          string
+	Error        string
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Reaction struct {

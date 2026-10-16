@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -49,10 +50,16 @@ type Agent struct {
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
 
+	halted   atomic.Bool
 	me       Me
 	handles  map[string]string
 	failures int
 	attempts map[string]int // item id → failed decision runs
+}
+
+// IsHalted reports whether the agent is known to be paused/halted.
+func (a *Agent) IsHalted() bool {
+	return a.halted.Load()
 }
 
 // maxAttempts bounds retries of the same items, so a broken client does not
@@ -72,6 +79,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		return fmt.Errorf("guard %s: cannot reach the server: %w", a.Cfg.Name, err)
 	}
 	a.me = me
+	a.halted.Store(me.Halted)
 	a.Log.Info("guard: watching", "agent", "@"+me.Handle, "client", a.Cfg.Client, "model", a.Cfg.Model)
 
 	wakeCh := make(chan struct{}, 1)
@@ -136,6 +144,7 @@ func (a *Agent) Tick(ctx context.Context) error {
 		return err
 	}
 	a.me = me
+	a.halted.Store(me.Halted)
 	if me.Halted {
 		return nil
 	}
@@ -475,6 +484,7 @@ func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
 					me.Halted, me.State = true, "stopped" // a stopped agent's token stops working
 				}
 				if me.Halted {
+					a.halted.Store(true)
 					a.Log.Warn("guard: halt detected, stopping the client", "agent", "@"+a.me.Handle, "state", me.State)
 					cancel()
 					return
