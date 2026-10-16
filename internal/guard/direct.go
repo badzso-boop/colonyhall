@@ -349,10 +349,14 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		}
 	}
 
+	last := group[len(group)-1]
+
 	if ctx.Err() != nil {
+		a.reportRun(context.Background(), "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "halted", "")
 		return errHalted
 	}
 	if err != nil {
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", "")
 		return err
 	}
 
@@ -371,20 +375,22 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 
 	// Never stay silent: an empty answer means the run got stuck, and the
 	// person who asked would otherwise think the agent never saw it.
-	last := group[len(group)-1]
 	if strings.TrimSpace(res.Text) == "" {
 		detail := "The run ended without an answer."
 		if len(res.Denied) > 0 {
 			detail = "The client refused: " + strings.Join(res.Denied, ", ") +
 				". A run without a terminal cannot ask for permission; change the agent's permission mode on the Machines page."
 		}
-		if err := a.reportError(ctx, last, "run ended without an answer", detail, "gd-"+last.ID); err != nil {
-			if errors.Is(err, errHalted) || ctx.Err() != nil {
+		errID, rerr := a.reportError(ctx, last, "run ended without an answer", detail, "gd-"+last.ID)
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", errID)
+		if rerr != nil {
+			if errors.Is(rerr, errHalted) || ctx.Err() != nil {
 				return errHalted
 			}
-			return err
+			return rerr
 		}
 	} else {
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "ok", "")
 		if err := a.replyLong(ctx, last, res.Text, "gd-"+last.ID); err != nil {
 			if errors.Is(err, errHalted) || ctx.Err() != nil {
 				return errHalted

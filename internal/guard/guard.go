@@ -131,6 +131,15 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.me.Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir, Wrap: a.DecideWrap})
 	cancel()
 	a.logRun("decide", a.Cfg.Model, len(items), res, err)
+	decideStatus := "ok"
+	if err != nil {
+		if runCtx.Err() != nil && ctx.Err() == nil {
+			decideStatus = "halted"
+		} else {
+			decideStatus = "error"
+		}
+	}
+	a.reportRun(ctx, "decide", a.Cfg.Model, "", "", "", len(items), res, decideStatus, "")
 	if err != nil {
 		if runCtx.Err() != nil && ctx.Err() == nil {
 			a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
@@ -195,7 +204,7 @@ func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause erro
 		for _, it := range items {
 			if dropped[it.ID] {
 				summary := fmt.Sprintf("gave up after %d attempts", maxAttempts)
-				if err := a.reportError(ctx, it, summary, cause.Error(), "gx-"+it.ID); err != nil {
+				if _, err := a.reportError(ctx, it, summary, cause.Error(), "gx-"+it.ID); err != nil {
 					a.Log.Warn("guard: could not report the failure", "err", err)
 				}
 			}
@@ -284,14 +293,20 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	a.workMu.Unlock()
 	a.logRun("work", a.Cfg.WorkModel, 1, res, err)
 	if ctx.Err() != nil {
+		a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
 		return errHalted
 	}
 	text := res.Text
 	if err != nil && !stopped {
-		return a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
+		errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
+		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID)
+		return rerr
 	}
 	if stopped {
+		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
 		text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
+	} else {
+		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "")
 	}
 	if strings.TrimSpace(text) == "" {
 		text = "Done."
@@ -302,19 +317,20 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 // reportError keeps an error's details out of the chat: they go to the
 // server (humans only) and the guard's log; the thread gets a short note
 // with a reference the web page turns into a "details" button.
-func (a *Agent) reportError(ctx context.Context, it Item, summary, detail, clientID string) error {
+func (a *Agent) reportError(ctx context.Context, it Item, summary, detail, clientID string) (string, error) {
 	a.Log.Error("guard: run error", "agent", "@"+a.me.Handle, "summary", summary, "detail", detail)
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
 		thread = it.ItemID
 	}
 	msg := "⚠️ I ran into an error."
-	if id, err := a.Client.ReportError(ctx, it.ChannelID, thread, summary, detail); err == nil && id != "" {
+	id, err := a.Client.ReportError(ctx, it.ChannelID, thread, summary, detail)
+	if err == nil && id != "" {
 		msg += " [error:" + id + "]"
 	} else if err != nil {
 		a.Log.Warn("guard: could not store the error details", "err", err)
 	}
-	return a.reply(ctx, it, msg, clientID)
+	return id, a.reply(ctx, it, msg, clientID)
 }
 
 // reply answers in the item's thread (top level in a DM without a thread).
@@ -436,6 +452,39 @@ func (a *Agent) logRun(phase, model string, items int, res RunResult, err error)
 		return
 	}
 	a.Log.Info("guard: run", attrs...)
+}
+
+func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelID, threadRootID string, items int, res RunResult, status, errorID string) {
+	rctx := ctx
+	if rctx.Err() != nil {
+		rctx = context.Background()
+	}
+	rctx, cancel := context.WithTimeout(rctx, 5*time.Second)
+	defer cancel()
+
+	dur := int(res.Duration.Milliseconds())
+	if dur < 0 {
+		dur = 0
+	}
+	_, err := a.Client.ReportRun(rctx, ReportRunInput{
+		Phase:            phase,
+		Client:           a.Cfg.Client,
+		Model:            model,
+		SessionID:        sessionID,
+		ChannelID:        channelID,
+		ThreadRootID:     threadRootID,
+		Items:            items,
+		InputTokens:      int64(res.Usage.Input),
+		OutputTokens:     int64(res.Usage.Output),
+		CacheReadTokens:  int64(res.Usage.CacheRead),
+		CacheWriteTokens: int64(res.Usage.CacheWrite),
+		DurationMS:       dur,
+		Status:           status,
+		ErrorID:          errorID,
+	})
+	if err != nil {
+		a.Log.Warn("guard: could not report run", "phase", phase, "err", err)
+	}
 }
 
 func summarize(d Decision) string {
