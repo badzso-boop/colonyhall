@@ -231,6 +231,28 @@ func (g *GiteaProvider) FetchResource(ctx context.Context, ref ResourceRef) (Res
 	if err != nil {
 		return ResourceCard{}, fmt.Errorf("%w: %w", ErrFetchFailed, err)
 	}
+
+	if resp.StatusCode == http.StatusNotFound && ref.Kind == ResourceIssue {
+		_ = resp.Body.Close()
+		pullEndpoint := fmt.Sprintf("%s/api/v1/repos/%s/%s/pulls/%s", g.baseURL.String(), ref.Owner, ref.Repo, ref.ID)
+		pullReq, pErr := http.NewRequestWithContext(ctx, http.MethodGet, pullEndpoint, nil)
+		if pErr == nil {
+			pullReq.Header.Set("Accept", "application/json")
+			if g.token != "" {
+				pullReq.Header.Set("Authorization", "token "+g.token)
+			}
+			if pullResp, pullErr := g.client.Do(pullReq); pullErr == nil {
+				if pullResp.StatusCode >= 200 && pullResp.StatusCode < 300 {
+					ref.Kind = ResourcePull
+					ref.URL = fmt.Sprintf("%s/%s/%s/pulls/%s", g.baseURL.String(), ref.Owner, ref.Repo, ref.ID)
+					resp = pullResp
+					endpoint = pullEndpoint
+				} else {
+					_ = pullResp.Body.Close()
+				}
+			}
+		}
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -263,7 +285,11 @@ func (g *GiteaProvider) FetchResource(ctx context.Context, ref ResourceRef) (Res
 		card.Title = fmt.Sprintf("#%s %s", ref.ID, title)
 		card.State = state
 		if u, ok := data["user"].(map[string]any); ok {
-			card.Author, _ = u["login"].(string)
+			author, _ := u["login"].(string)
+			if author == "" {
+				author, _ = u["username"].(string)
+			}
+			card.Author = author
 		}
 
 	case ResourceIssue:
@@ -275,7 +301,11 @@ func (g *GiteaProvider) FetchResource(ctx context.Context, ref ResourceRef) (Res
 		card.Title = fmt.Sprintf("#%s %s", ref.ID, title)
 		card.State = state
 		if u, ok := data["user"].(map[string]any); ok {
-			card.Author, _ = u["login"].(string)
+			author, _ := u["login"].(string)
+			if author == "" {
+				author, _ = u["username"].(string)
+			}
+			card.Author = author
 		}
 
 	case ResourceCommit:
@@ -392,10 +422,16 @@ func (g *GiteaProvider) ParseWebhook(r *http.Request, secret string) (WebhookEve
 		var user string
 		if u, ok := prObj["user"].(map[string]any); ok {
 			user, _ = u["login"].(string)
+			if user == "" {
+				user, _ = u["username"].(string)
+			}
 		}
 		if user == "" {
 			if s, ok := payload["sender"].(map[string]any); ok {
 				user, _ = s["login"].(string)
+				if user == "" {
+					user, _ = s["username"].(string)
+				}
 			}
 		}
 
@@ -423,10 +459,16 @@ func (g *GiteaProvider) ParseWebhook(r *http.Request, secret string) (WebhookEve
 			if pusher == "" {
 				pusher, _ = p["login"].(string)
 			}
+			if pusher == "" {
+				pusher, _ = p["username"].(string)
+			}
 		}
 		if pusher == "" {
 			if s, ok := payload["sender"].(map[string]any); ok {
 				pusher, _ = s["login"].(string)
+				if pusher == "" {
+					pusher, _ = s["username"].(string)
+				}
 			}
 		}
 		summary = fmt.Sprintf("📦 Push to %s by @%s (%d commit(s))", branch, pusher, commitCount)
