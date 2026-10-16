@@ -184,7 +184,7 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 			}
 			ha.RootDir = realRoot
 		}
-		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, fmt.Sprint(ha.Sandbox), ha.Approvals}, "|")
+		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, fmt.Sprint(ha.Sandbox), ha.Approvals, fmt.Sprint(ha.MaxSessionTokens), fmt.Sprint(ha.DailyTokenLimit)}, "|")
 		switch {
 		case m != nil && m.key == key:
 			s.mu.Lock()
@@ -306,6 +306,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	ac.AllowWork, ac.PermissionMode, ac.Command = ha.AllowWork, ha.PermissionMode, s.Cfg.Commands[ha.Client]
 	ac.Mode, ac.RootDir = ha.Mode, ha.RootDir
 	ac.Approvals = ha.Approvals
+	ac.MaxSessionTokens, ac.DailyTokenLimit = ha.MaxSessionTokens, ha.DailyTokenLimit
 	ac.Dir = filepath.Join(dir, "decide") // decision runs: an empty folder, no tools
 	_ = ac.defaults()
 

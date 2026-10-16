@@ -39,27 +39,29 @@ func (c *Config) HostMode() bool { return c.HostTokenFile != "" }
 
 // AgentConfig describes one agent the guard runs.
 type AgentConfig struct {
-	Name           string        `yaml:"name"`      // label for logs; defaults to the client name
-	TokenEnv       string        `yaml:"token_env"` // env var holding the agent's API token
-	TokenFile      string        `yaml:"token_file"`
-	Client         string        `yaml:"client"`  // adapter: claude-code, antigravity
-	Command        string        `yaml:"command"` // client binary; default per adapter
-	Model          string        `yaml:"model"`   // model of the cheap decision run
-	WorkModel      string        `yaml:"work_model"`
-	Dir            string        `yaml:"dir"` // work directory (its own git worktree)
-	PermissionMode string        `yaml:"permission_mode"`
-	AllowWork      bool          `yaml:"allow_work"` // false: work requests are declined
-	Mode           string        `yaml:"mode"`       // compact | direct
-	RootDir        string        `yaml:"root_dir"`   // direct mode root directory
-	Approvals      string        `yaml:"approvals"`  // none | chat
-	Poll           time.Duration `yaml:"poll"`
-	FallbackPoll   time.Duration `yaml:"fallback_poll"`
-	DisableWS      bool          `yaml:"disable_ws"`
-	Debounce       time.Duration `yaml:"debounce"`
-	Batch          int           `yaml:"batch"`
-	DecideTimeout  time.Duration `yaml:"decide_timeout"`
-	WorkTimeout    time.Duration `yaml:"work_timeout"`
-	HaltCheck      time.Duration `yaml:"halt_check"`
+	Name             string        `yaml:"name"`      // label for logs; defaults to the client name
+	TokenEnv         string        `yaml:"token_env"` // env var holding the agent's API token
+	TokenFile        string        `yaml:"token_file"`
+	Client           string        `yaml:"client"`  // adapter: claude-code, antigravity
+	Command          string        `yaml:"command"` // client binary; default per adapter
+	Model            string        `yaml:"model"`   // model of the cheap decision run
+	WorkModel        string        `yaml:"work_model"`
+	Dir              string        `yaml:"dir"` // work directory (its own git worktree)
+	PermissionMode   string        `yaml:"permission_mode"`
+	AllowWork        bool          `yaml:"allow_work"` // false: work requests are declined
+	Mode             string        `yaml:"mode"`       // compact | direct
+	RootDir          string        `yaml:"root_dir"`   // direct mode root directory
+	Approvals        string        `yaml:"approvals"`  // none | chat
+	MaxSessionTokens int           `yaml:"max_session_tokens"`
+	DailyTokenLimit  int64         `yaml:"daily_token_limit"`
+	Poll             time.Duration `yaml:"poll"`
+	FallbackPoll     time.Duration `yaml:"fallback_poll"`
+	DisableWS        bool          `yaml:"disable_ws"`
+	Debounce         time.Duration `yaml:"debounce"`
+	Batch            int           `yaml:"batch"`
+	DecideTimeout    time.Duration `yaml:"decide_timeout"`
+	WorkTimeout      time.Duration `yaml:"work_timeout"`
+	HaltCheck        time.Duration `yaml:"halt_check"`
 }
 
 // LoadConfig reads and validates a config file.

@@ -823,3 +823,292 @@ func TestClaudeDirectApprovalsExecutionFlow(t *testing.T) {
 		t.Errorf("expected X-Colonyhall-Thread header thread-root-99, got %q", colonyServer.Headers["X-Colonyhall-Thread"])
 	}
 }
+
+func TestDirectSessionRotationClaude(t *testing.T) {
+	stateDir, root := t.TempDir(), t.TempDir()
+	agentID := uuid.New().String()
+
+	var postedReplies []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		case strings.HasSuffix(r.URL.Path, "/actors"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"actors": []map[string]any{
+					{"id": "u1", "handle": "alice"},
+					{"id": "u2", "handle": "bob"},
+				},
+			})
+		case strings.Contains(r.URL.Path, "/messages/m1/thread"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"root": map[string]any{"id": "m1", "author_id": "u1", "body": "first message"},
+				"replies": []map[string]any{
+					{"id": "m2", "author_id": "u2", "body": "second message"},
+					{"id": "m3", "author_id": "u1", "body": "third message"},
+				},
+			})
+		case strings.HasSuffix(r.URL.Path, "/messages"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if txt, ok := body["body"].(string); ok {
+				postedReplies = append(postedReplies, txt)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "reply-1"})
+		case strings.HasSuffix(r.URL.Path, "/budget"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"limit":      0,
+				"used_today": 0,
+				"remaining":  0,
+				"resets_at":  time.Now().Add(time.Hour).Format(time.RFC3339),
+			})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer ts.Close()
+
+	var requests []DirectRequest
+	var nextUsage Usage
+
+	ad := &directTestAdapter{}
+	ad.impl = func(_ context.Context, req DirectRequest) (RunResult, error) {
+		requests = append(requests, req)
+		return RunResult{Text: "answer", Usage: nextUsage, SessionID: req.SessionID}, nil
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:           "claude-code",
+			MaxSessionTokens: 1000,
+			HaltCheck:        time.Hour,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		RootDir:  root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+		me:       Me{ID: agentID, Handle: "bot"},
+	}
+
+	threadRoot := "m1"
+	expectedGen0ID, _ := DirectSessionID(agentID, threadRoot)
+	expectedGen1ID, _ := DirectSessionID(agentID, threadRoot+"#1")
+
+	// Run 1: initial run in thread
+	nextUsage = Usage{Input: 1200, Output: 50} // 1200 context tokens >= threshold 1000
+	item1 := []Item{{ID: "it-1", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "do step 1"}}
+	if err := agent.handleDirect(context.Background(), item1); err != nil {
+		t.Fatalf("run 1 failed: %v", err)
+	}
+
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+	if requests[0].SessionID != expectedGen0ID {
+		t.Fatalf("run 1 session id: got %s want %s", requests[0].SessionID, expectedGen0ID)
+	}
+	if requests[0].Resume {
+		t.Fatalf("run 1 should not resume")
+	}
+
+	// Verify state file persistence after run 1
+	st, err := LoadDirectState(filepath.Join(stateDir, "direct_state.json"))
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if st.LastRunTokens[threadRoot] != 1200 {
+		t.Fatalf("expected LastRunTokens 1200, got %d", st.LastRunTokens[threadRoot])
+	}
+	if st.Generations[threadRoot] != 0 {
+		t.Fatalf("expected Generation 0, got %d", st.Generations[threadRoot])
+	}
+
+	// Run 2: threshold was reached (1200 >= 1000) -> must rotate!
+	nextUsage = Usage{Input: 300, Output: 50} // 300 < 1000
+	item2 := []Item{{ID: "it-2", AuthorKind: "human", ItemID: "m4", ChannelID: "c1", ThreadRootID: "m1", Body: "do step 2"}}
+	if err := agent.handleDirect(context.Background(), item2); err != nil {
+		t.Fatalf("run 2 failed: %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("expected 2 requests, got %d", len(requests))
+	}
+	req2 := requests[1]
+	if req2.SessionID != expectedGen1ID {
+		t.Fatalf("run 2 session id: got %s want %s", req2.SessionID, expectedGen1ID)
+	}
+	if req2.Resume {
+		t.Fatalf("run 2 should start fresh session (Resume=false)")
+	}
+
+	// Verify recap content in req2.Prompt
+	if !strings.Contains(req2.Prompt, `@alice">first message</m>`) ||
+		!strings.Contains(req2.Prompt, `@bob">second message</m>`) ||
+		!strings.Contains(req2.Prompt, `@alice">third message</m>`) {
+		t.Fatalf("run 2 prompt missing recap: %s", req2.Prompt)
+	}
+
+	// Verify rotation notice posted to thread
+	wantNotice := "🔄 Started a fresh session (the previous one reached 1200 tokens)."
+	foundNotice := false
+	for _, p := range postedReplies {
+		if strings.Contains(p, wantNotice) {
+			foundNotice = true
+			break
+		}
+	}
+	if !foundNotice {
+		t.Fatalf("did not find rotation notice %q in replies: %v", wantNotice, postedReplies)
+	}
+
+	// Verify state file persistence after run 2
+	st2, err := LoadDirectState(filepath.Join(stateDir, "direct_state.json"))
+	if err != nil {
+		t.Fatalf("load state 2: %v", err)
+	}
+	if st2.Generations[threadRoot] != 1 {
+		t.Fatalf("expected Generation 1, got %d", st2.Generations[threadRoot])
+	}
+	if st2.LastRunTokens[threadRoot] != 300 {
+		t.Fatalf("expected LastRunTokens 300, got %d", st2.LastRunTokens[threadRoot])
+	}
+
+	// Run 3: 300 < 1000 -> does NOT rotate, continues in Gen 1 session
+	item3 := []Item{{ID: "it-3", AuthorKind: "human", ItemID: "m5", ChannelID: "c1", ThreadRootID: "m1", Body: "do step 3"}}
+	postedReplies = nil
+	if err := agent.handleDirect(context.Background(), item3); err != nil {
+		t.Fatalf("run 3 failed: %v", err)
+	}
+
+	if len(requests) != 3 {
+		t.Fatalf("expected 3 requests, got %d", len(requests))
+	}
+	req3 := requests[2]
+	if req3.SessionID != expectedGen1ID {
+		t.Fatalf("run 3 session id: got %s want %s", req3.SessionID, expectedGen1ID)
+	}
+	if !req3.Resume {
+		t.Fatalf("run 3 should resume session (Resume=true)")
+	}
+	for _, p := range postedReplies {
+		if strings.Contains(p, "Started a fresh session") {
+			t.Fatalf("unexpected rotation notice on run 3: %s", p)
+		}
+	}
+}
+
+func TestDirectSessionRotationAntigravity(t *testing.T) {
+	stateDir, root := t.TempDir(), t.TempDir()
+	agentID := uuid.New().String()
+
+	var postedReplies []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		case strings.HasSuffix(r.URL.Path, "/actors"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"actors": []map[string]any{{"id": "u1", "handle": "alice"}}})
+		case strings.Contains(r.URL.Path, "/messages/m1/thread"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"root":    map[string]any{"id": "m1", "author_id": "u1", "body": "initial"},
+				"replies": []map[string]any{},
+			})
+		case strings.HasSuffix(r.URL.Path, "/messages"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if txt, ok := body["body"].(string); ok {
+				postedReplies = append(postedReplies, txt)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "reply-1"})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer ts.Close()
+
+	var requests []DirectRequest
+	var nextConvID string
+	var nextUsage Usage
+
+	ad := &directTestAdapter{}
+	ad.impl = func(_ context.Context, req DirectRequest) (RunResult, error) {
+		requests = append(requests, req)
+		return RunResult{Text: "agy answer", Usage: nextUsage, ConversationID: nextConvID}, nil
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:           "antigravity",
+			MaxSessionTokens: 2000,
+			HaltCheck:        time.Hour,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "tok-agy", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		RootDir:  root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+		me:       Me{ID: agentID, Handle: "bot"},
+	}
+
+	threadRoot := "m1"
+
+	// Run 1: initial run
+	nextUsage = Usage{Input: 2500, Output: 100} // 2500 >= 2000
+	nextConvID = "agy-conv-1"
+	item1 := []Item{{ID: "it-1", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "start agy"}}
+	if err := agent.handleDirect(context.Background(), item1); err != nil {
+		t.Fatalf("run 1 failed: %v", err)
+	}
+
+	if requests[0].ConversationID != "" {
+		t.Fatalf("run 1 should have empty ConversationID, got %s", requests[0].ConversationID)
+	}
+
+	st, err := LoadDirectState(filepath.Join(stateDir, "direct_state.json"))
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if st.Conversations[threadRoot] != "agy-conv-1" {
+		t.Fatalf("expected conversation agy-conv-1, got %s", st.Conversations[threadRoot])
+	}
+	if st.LastRunTokens[threadRoot] != 2500 {
+		t.Fatalf("expected LastRunTokens 2500, got %d", st.LastRunTokens[threadRoot])
+	}
+
+	// Run 2: threshold exceeded (2500 >= 2000) -> rotates!
+	nextUsage = Usage{Input: 500, Output: 50}
+	nextConvID = "agy-conv-2"
+	item2 := []Item{{ID: "it-2", AuthorKind: "human", ItemID: "m2", ChannelID: "c1", ThreadRootID: "m1", Body: "next agy"}}
+	if err := agent.handleDirect(context.Background(), item2); err != nil {
+		t.Fatalf("run 2 failed: %v", err)
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("expected 2 requests, got %d", len(requests))
+	}
+	req2 := requests[1]
+	// Antigravity rotation: no --conversation (ConversationID == "")
+	if req2.ConversationID != "" {
+		t.Fatalf("rotated agy run should have empty ConversationID, got %s", req2.ConversationID)
+	}
+	if !strings.Contains(req2.Prompt, `@alice">initial</m>`) {
+		t.Fatalf("rotated agy prompt missing recap: %s", req2.Prompt)
+	}
+
+	wantNotice := "🔄 Started a fresh session (the previous one reached 2500 tokens)."
+	foundNotice := false
+	for _, p := range postedReplies {
+		if strings.Contains(p, wantNotice) {
+			foundNotice = true
+			break
+		}
+	}
+	if !foundNotice {
+		t.Fatalf("missing rotation notice %q in replies: %v", wantNotice, postedReplies)
+	}
+}

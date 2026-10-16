@@ -215,18 +215,20 @@ func (c *Client) Handles(ctx context.Context) (map[string]string, error) {
 
 // HostAgent is one agent of the host config.
 type HostAgent struct {
-	AgentID        string  `json:"agent_id"`
-	Handle         string  `json:"handle"`
-	Client         string  `json:"client"`
-	Model          string  `json:"model"`
-	WorkModel      string  `json:"work_model"`
-	AllowWork      bool    `json:"allow_work"`
-	PermissionMode string  `json:"permission_mode"`
-	Mode           string  `json:"mode"`
-	RootDir        string  `json:"root_dir"`
-	Sandbox        bool    `json:"sandbox"`
-	Approvals      string  `json:"approvals"`
-	Grants         []Grant `json:"grants"`
+	AgentID          string  `json:"agent_id"`
+	Handle           string  `json:"handle"`
+	Client           string  `json:"client"`
+	Model            string  `json:"model"`
+	WorkModel        string  `json:"work_model"`
+	AllowWork        bool    `json:"allow_work"`
+	PermissionMode   string  `json:"permission_mode"`
+	Mode             string  `json:"mode"`
+	RootDir          string  `json:"root_dir"`
+	Sandbox          bool    `json:"sandbox"`
+	Approvals        string  `json:"approvals"`
+	MaxSessionTokens int     `json:"max_session_tokens"`
+	DailyTokenLimit  int64   `json:"daily_token_limit"`
+	Grants           []Grant `json:"grants"`
 }
 
 // HostConfig is what the server says this machine runs.
