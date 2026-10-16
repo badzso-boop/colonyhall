@@ -40,9 +40,8 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel, #schedPanel { overflow:auto; padding:12px 16px; display:none; }
-  #schedPanel.on { display:block; }
-  #hostsPanel.on { display:block; } #feed.off { display:none; }
+  #hostsPanel, #schedPanel, #wikiPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on, #hostsPanel.on, #wikiPanel.on { display:block; } #feed.off { display:none; }
   .card { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0 0 12px; background:var(--surface); }
   .card h3 { margin:0 0 4px; font-size:15px; } .muted { color:var(--muted); font-size:12px; }
   .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
@@ -64,7 +63,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="schedbtn" hidden>⏰</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><button id="schedbtn" hidden>⏰</button><button id="wikibtn" hidden>📖 Wiki</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -73,6 +72,7 @@
     <div id="feed"></div>
     <div id="hostsPanel"></div>
     <div id="schedPanel"></div>
+    <div id="wikiPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <form id="send"><input id="text" autocomplete="off"><button></button></form>
@@ -259,7 +259,9 @@ function connectWS() {
 const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
 let hostsOpen = false;
 $("hostsbtn").textContent = L.hosts;
-$("hostsbtn").onclick = () => { hostsOpen = !hostsOpen; $("hostsbtn").textContent = hostsOpen ? L.chat : L.hosts;
+$("hostsbtn").onclick = () => { hostsOpen = !hostsOpen; wikiOpen = false; schedOpen = false;
+  $("wikiPanel").className = ""; $("schedPanel").className = ""; $("wikibtn").textContent = "📖 Wiki";
+  $("hostsbtn").textContent = hostsOpen ? L.chat : L.hosts;
   $("feed").className = hostsOpen ? "off" : ""; $("hostsPanel").className = hostsOpen ? "on" : ""; if (hostsOpen) renderHosts(); };
 
 async function renderHosts() {
@@ -360,6 +362,7 @@ async function start() {
   $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
   $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
   $("schedbtn").hidden = me.kind !== "human";
+  $("wikibtn").hidden = false;
   await load(); if (!ws) connectWS();
 }
 
@@ -413,8 +416,9 @@ function note(text) {
 }
 
 let schedOpen = false;
-$("schedbtn").onclick = () => { schedOpen = !schedOpen; $("schedPanel").className = schedOpen ? "on" : "";
-  $("feed").className = schedOpen ? "off" : ""; if (schedOpen) renderSchedules(); };
+$("schedbtn").onclick = () => { schedOpen = !schedOpen; wikiOpen = false; hostsOpen = false;
+  $("wikiPanel").className = ""; $("hostsPanel").className = ""; $("wikibtn").textContent = "📖 Wiki"; $("hostsbtn").textContent = L.hosts;
+  $("schedPanel").className = schedOpen ? "on" : ""; $("feed").className = schedOpen ? "off" : ""; if (schedOpen) renderSchedules(); };
 
 async function renderSchedules() {
   const { schedules } = await api("/api/v1/schedules");
@@ -436,6 +440,192 @@ async function renderSchedules() {
     }
     panel.append(c);
   }
+}
+
+// --- Wiki -------------------------------------------------------------------
+let wikiOpen = false, wikiQuery = "";
+$("wikibtn").onclick = () => {
+  wikiOpen = !wikiOpen;
+  hostsOpen = false; schedOpen = false;
+  $("hostsPanel").className = ""; $("schedPanel").className = "";
+  $("hostsbtn").textContent = L.hosts;
+  $("feed").className = wikiOpen ? "off" : "";
+  $("wikiPanel").className = wikiOpen ? "on" : "";
+  $("wikibtn").textContent = wikiOpen ? "💬 Chat" : "📖 Wiki";
+  if (wikiOpen) renderWikiIndex();
+};
+
+async function renderWikiIndex(q = wikiQuery) {
+  wikiQuery = q;
+  const panel = $("wikiPanel");
+  panel.innerHTML = "";
+
+  const top = el("div", { className: "card" });
+  const searchInput = el("input", { placeholder: "Keresés / Search…", value: q, size: 28 });
+  const searchBtn = el("button", { textContent: "🔍" });
+  searchBtn.onclick = () => renderWikiIndex(searchInput.value.trim());
+  searchInput.onkeydown = (e) => { if (e.key === "Enter") renderWikiIndex(searchInput.value.trim()); };
+
+  const newBtn = el("button", { textContent: "+ Új oldal / New page" });
+  const newForm = el("div", { style: "display:none; margin-top:8px;" });
+  const newTitle = el("input", { placeholder: "Cím (Title)", style: "width:100%; margin-bottom:6px;" });
+  const newTags = el("input", { placeholder: "Címkék vesszővel (tags, comma-separated)", style: "width:100%; margin-bottom:6px;" });
+  const newBody = el("textarea", { placeholder: "Törzs (Body)...", style: "width:100%; height:120px; font-family:inherit; margin-bottom:6px;" });
+  const saveNew = el("button", { textContent: "Létrehozás (Create)" });
+  saveNew.onclick = async () => {
+    const title = newTitle.value.trim();
+    const body = newBody.value.trim();
+    if (!title || !body) { alert("Title and body are required"); return; }
+    const tags = newTags.value.split(",").map(t => t.trim()).filter(Boolean);
+    const p = await api("/api/v1/wiki", {
+      method: "POST",
+      body: JSON.stringify({ title, body, tags })
+    }).catch(err => { alert(err.message); return null; });
+    if (p) renderWikiPage(p.slug);
+  };
+  newForm.append(newTitle, newTags, newBody, saveNew);
+  newBtn.onclick = () => {
+    newForm.style.display = newForm.style.display === "none" ? "block" : "none";
+  };
+
+  top.append(el("div", { className: "row" }, searchInput, searchBtn, newBtn), newForm);
+  panel.append(top);
+
+  const res = await api(`/api/v1/wiki?q=${encodeURIComponent(q)}&deleted=1`).catch(err => {
+    panel.append(el("div", { className: "warn", textContent: err.message }));
+    return null;
+  });
+  if (!res) return;
+
+  if (!res.pages || res.pages.length === 0) {
+    panel.append(el("p", { className: "muted", textContent: "Nincs megjeleníthető wiki oldal (no pages found)." }));
+    return;
+  }
+
+  for (const p of res.pages) {
+    const card = el("div", { className: "card", style: "cursor:pointer;" });
+    const title = el("h3", { textContent: p.title });
+    let metaText = `slug: ${p.slug} · frissítve: ${new Date(p.updated_at).toLocaleString()}`;
+    if (p.deleted_at) {
+      metaText += " · [TÖRÖLT/DELETED]";
+    }
+    if (p.tags && p.tags.length > 0) {
+      metaText += " · címkék: " + p.tags.join(", ");
+    }
+    const meta = el("div", { className: "muted", textContent: metaText });
+    const exc = el("div", { className: "body", style: "color:var(--muted); margin-top:4px;", textContent: p.excerpt });
+    card.append(title, meta, exc);
+    card.onclick = () => renderWikiPage(p.slug);
+    panel.append(card);
+  }
+}
+
+async function renderWikiPage(slug) {
+  const panel = $("wikiPanel");
+  panel.innerHTML = "";
+
+  const page = await api(`/api/v1/wiki/${encodeURIComponent(slug)}`).catch(err => {
+    panel.append(el("div", { className: "warn", textContent: err.message }));
+    const back = el("button", { textContent: "← Vissza az indexhez (Back)" });
+    back.onclick = () => renderWikiIndex();
+    panel.append(back);
+    return null;
+  });
+  if (!page) return;
+
+  const top = el("div", { className: "row" });
+  const back = el("button", { textContent: "← Index" });
+  back.onclick = () => renderWikiIndex();
+  top.append(back);
+
+  if (me.kind === "human") {
+    if (page.deleted_at) {
+      const restBtn = el("button", { textContent: "♻ Visszaállítás (Restore)" });
+      restBtn.onclick = async () => {
+        const res = await api(`/api/v1/wiki/${encodeURIComponent(slug)}/restore`, { method: "POST" }).catch(e => alert(e.message));
+        if (res) renderWikiPage(slug);
+      };
+      top.append(restBtn);
+    } else {
+      const delBtn = el("button", { textContent: "🗑 Törlés (Delete)" });
+      delBtn.onclick = async () => {
+        if (confirm(`Biztosan törlöd a(z) "${page.title}" oldalt?`)) {
+          await api(`/api/v1/wiki/${encodeURIComponent(slug)}`, { method: "DELETE" }).catch(e => alert(e.message));
+          renderWikiIndex();
+        }
+      };
+      top.append(delBtn);
+    }
+  }
+
+  const card = el("div", { className: "card" });
+  card.append(top);
+  card.append(el("h2", { textContent: page.title, style: "margin:8px 0 4px;" }));
+  const creator = actors[page.created_by]?.handle || "?";
+  let metaText = `slug: ${page.slug} · rev: ${page.rev} · szerző: @${creator} · módosítva: ${new Date(page.updated_at).toLocaleString()}`;
+  if (page.tags && page.tags.length > 0) {
+    metaText += " · címkék: " + page.tags.join(", ");
+  }
+  if (page.deleted_at) {
+    metaText += ` · [TÖRÖLVE: ${new Date(page.deleted_at).toLocaleString()}]`;
+  }
+  card.append(el("div", { className: "muted", style: "margin-bottom:12px;", textContent: metaText }));
+
+  // Plain-text renderelés sortörésekkel
+  const bodyEl = el("div", {
+    style: "white-space:pre-wrap; font-family:inherit; padding:10px; background:var(--bg); border-radius:6px; margin-bottom:16px; overflow-wrap:anywhere;",
+    textContent: page.body
+  });
+  card.append(bodyEl);
+
+  // Append box (everyone)
+  if (!page.deleted_at) {
+    const appBox = el("details", { className: "card", style: "margin-top:12px;" });
+    const appSummary = el("summary", { textContent: "Hozzáfűzés (Append)" });
+    const appArea = el("textarea", { placeholder: "Hozzáfűzendő markdown szöveg...", style: "width:100%; height:80px; font-family:inherit; margin:8px 0;" });
+    const appBtn = el("button", { textContent: "Hozzáfűzés küldése (Append)" });
+    appBtn.onclick = async () => {
+      const text = appArea.value.trim();
+      if (!text) return;
+      const res = await api(`/api/v1/wiki/${encodeURIComponent(slug)}/append`, {
+        method: "POST",
+        body: JSON.stringify({ text })
+      }).catch(e => alert(e.message));
+      if (res) renderWikiPage(slug);
+    };
+    appBox.append(appSummary, appArea, appBtn);
+    card.append(appBox);
+  }
+
+  // Human edit box
+  if (me.kind === "human" && !page.deleted_at) {
+    const editBox = el("details", { className: "card", style: "margin-top:12px;" });
+    const editSummary = el("summary", { textContent: "Oldal szerkesztése (Edit - humans only)" });
+    const editTitle = el("input", { value: page.title, placeholder: "Cím", style: "width:100%; margin:8px 0 4px;" });
+    const editTags = el("input", { value: page.tags ? page.tags.join(", ") : "", placeholder: "Címkék", style: "width:100%; margin-bottom:4px;" });
+    const editArea = el("textarea", { value: page.body, style: "width:100%; height:150px; font-family:inherit; margin-bottom:8px;" });
+    const editBtn = el("button", { textContent: "Mentés (Save revision)" });
+    editBtn.onclick = async () => {
+      const newTitle = editTitle.value.trim();
+      const newBody = editArea.value.trim();
+      if (!newBody) { alert("Body cannot be empty"); return; }
+      const tags = editTags.value.split(",").map(t => t.trim()).filter(Boolean);
+      const res = await api(`/api/v1/wiki/${encodeURIComponent(slug)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          base_rev: page.rev,
+          body: newBody,
+          title: newTitle || page.title,
+          tags: tags
+        })
+      }).catch(e => alert(e.message));
+      if (res) renderWikiPage(res.slug);
+    };
+    editBox.append(editSummary, editTitle, editTags, editArea, editBtn);
+    card.append(editBox);
+  }
+
+  panel.append(card);
 }
 
 $("send").onsubmit = async (e) => {
