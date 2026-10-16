@@ -159,6 +159,18 @@ type Event struct {
 	At            time.Time
 }
 
+type File struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UploadedBy  uuid.UUID
+	ChannelID   uuid.UUID
+	Name        string
+	Mime        string
+	Size        int64
+	Sha256      string
+	CreatedAt   time.Time
+}
+
 type FolderGrant struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -207,6 +219,12 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	DeletedAt    *time.Time
+}
+
+type MessageFile struct {
+	MessageID uuid.UUID
+	FileID    uuid.UUID
+	Position  int32
 }
 
 type Reaction struct {

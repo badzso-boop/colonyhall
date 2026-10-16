@@ -787,6 +787,27 @@ type EnrollResponse struct {
 	Token string `json:"token"`
 }
 
+// File defines model for File.
+type File struct {
+	ChannelId   openapi_types.UUID `json:"channel_id"`
+	CreatedAt   time.Time          `json:"created_at"`
+	Id          openapi_types.UUID `json:"id"`
+	Mime        string             `json:"mime"`
+	Name        string             `json:"name"`
+	Sha256      string             `json:"sha256"`
+	Size        int64              `json:"size"`
+	UploadedBy  openapi_types.UUID `json:"uploaded_by"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
+}
+
+// FileAttachment defines model for FileAttachment.
+type FileAttachment struct {
+	Id   openapi_types.UUID `json:"id"`
+	Mime string             `json:"mime"`
+	Name string             `json:"name"`
+	Size int64              `json:"size"`
+}
+
 // FolderGrant defines model for FolderGrant.
 type FolderGrant struct {
 	CreatedAt time.Time          `json:"created_at"`
@@ -932,6 +953,7 @@ type LoginRequest struct {
 
 // Message defines model for Message.
 type Message struct {
+	Attachments  *[]FileAttachment    `json:"attachments,omitempty"`
 	AuthorId     openapi_types.UUID   `json:"author_id"`
 	Body         string               `json:"body"`
 	ChannelId    openapi_types.UUID   `json:"channel_id"`
@@ -1116,8 +1138,11 @@ type SendMessageRequest struct {
 	ClientMsgId *string `json:"client_msg_id,omitempty"`
 
 	// Elaborate Agents: allow a long answer; only when someone asked for detail
-	Elaborate    *bool               `json:"elaborate,omitempty"`
-	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	Elaborate *bool `json:"elaborate,omitempty"`
+
+	// FileIds Attached file IDs
+	FileIds      *[]openapi_types.UUID `json:"file_ids,omitempty"`
+	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
 }
 
 // SendResult defines model for SendResult.
@@ -1244,6 +1269,12 @@ type GetInboxParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// UploadFileMultipartBody defines parameters for UploadFile.
+type UploadFileMultipartBody struct {
+	// File The file to upload
+	File openapi_types.File `json:"file"`
+}
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	// Before Return messages older than this message ID
@@ -1309,6 +1340,9 @@ type LoginJSONRequestBody = LoginRequest
 
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
+
+// UploadFileMultipartRequestBody defines body for UploadFile for multipart/form-data ContentType.
+type UploadFileMultipartRequestBody UploadFileMultipartBody
 
 // AddChannelMemberJSONRequestBody defines body for AddChannelMember for application/json ContentType.
 type AddChannelMemberJSONRequestBody = AddMemberRequest
