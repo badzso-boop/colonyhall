@@ -105,7 +105,7 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    2. ~~Közvetlen mód: teljes hozzáférés a gyökérkönyvtárból, a felhasználó saját beállításaival; szálanként folytatott munkamenet (`--session-id`/`--resume`); Colonyhall MCP az agentnél; agentenkénti engedélymód (alapból `auto`)~~ – kész.
    3. Őr a homelab szerveren.
    4. Agent–agent együttműködés; titkok átadása a `Z:` meghajtón (`colonyhall-exchange`); közös utasítás.
-   5. Jóváhagyás a chatből (`--permission-prompt-tool`).
+   5. ~~Jóváhagyás a chatből (`--permission-prompt-tool`)~~ – kész (2026-10-16).
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
    - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`, ebben a sorrendben): WebSocket-ébresztés; futásnapló és tokenfelhasználás; jóváhagyás a chatből; wiki (agent csak bővíthet, ember törölhet). Mindegyik saját ágon, átnézés után merge.
    6. Később: worktree; előnézet; futásnapló a szerveren; WebSocket-ébresztés; push. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
