@@ -87,7 +87,7 @@ Kiadva az Antigravitynek, ebben a sorrendben (`docs/handoff/07`–`13`), mindegy
 3. **Kérdés–válasz** (09): MCP `ask` (kérdés, címzett: `@handle` vagy `human`, opciók, alapértelmezett, határidő) → `Q-12` azonosító, a címzett inboxába kerül; `answer` (Q-azonosító, szöveg vagy opció) → a kérdező inboxába kerül. Agentnek szóló kérdés válasz nélkül (alapból 30 perc) emberhez eszkalálódik. Teljes hozzáférésű agentnek agent nem tehet fel kérdést (a feladatadási szabály miatt): ilyenkor emberhez megy. Embernek szóló kérdés soha nem dől el magától. Felületen „Válaszra vár” lista és válasz gombokkal.
 4. **Fájlmegosztás** (10): feltöltés a chatbe (fájl a szerver tárhelyén, `StorageBackend` port, első adapter: helyi fájlrendszer), üzenethez csatolva, letöltés jogosultsággal (aki a csatornát látja); MCP `upload`/`download` az agenteknek; méretkorlát, típus szerinti előnézet (kép, szöveg) a felületen.
 5. **Git és Gitea** (11): a chatben a Gitea-linkek (repó, PR, issue, commit) kártyát kapnak (cím, állapot) a Gitea API-ból; Gitea webhook (aláírás ellenőrzéssel) → esemény a beállított csatornába (PR nyitás/merge, push, CI eredmény). A Gitea-token csak a szerveren él.
-6. **Worktree** (12): teljes hozzáférésű agentnek a hozzárendelésben `worktree_repo` adható: az őr létrehozza a `<repo>-worktrees/<agent>` worktree-t a `colony/<agent>/work` ágon (hookok kikapcsolva az őr git-hívásainál), és az agent ott dolgozik, nem a fő munkakönyvtárban. A sandboxos agentek worktree-je később.
+6. **Worktree** (12, megvalósítva 2026-10-16): teljes hozzáférésű agentnek a hozzárendelésben `worktree_repo` adható: az őr létrehozza a `<repo>-worktrees/<agent>` worktree-t a `colony/<agent>/work` ágon (hookok kikapcsolva az őr git-hívásainál), és az agent ott dolgozik, nem a fő munkakönyvtárban. A sandboxos agentek worktree-je később.
 7. **Előnézet** (13): MCP `preview_start` (compose-fájl az agent gyökérkönyvtárában, név) és `preview_stop`. Az őr a sandboxon kívül, szabályok szerint indítja (nincs `privileged`, host hálózat, Docker-socket; kötet csak az agent mappájából; erőforráskorlát; portot az őr oszt agentenkénti tartományból), és a szálba linket küld (Tailscale-cím). A felületen „Előnézetek” lista leállító gombbal; időkorlát után magától leáll; a vészleállító és az agent szüneteltetése is leállítja.
 
 **Nyitott kérdés:** mi történjen, ha egy szálban két agentet is megszólítanak (közös szál, két külön munkamenet; ki válaszol először; ne pörgessék egymást).
@@ -769,6 +769,8 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 **Ütemezés:** később (lásd „Működési modell” ütemezését); a saját agentek teljes hozzáféréssel maguk is el tudnak indítani egy Docker-alkalmazást.
 
 ## Munkaterület: git worktree agentenként
+
+**Megvalósítva (2026-10-16, 12. prompt):** Teljes hozzáférésű közvetlen agenteknél működik. Az őr létrehozza és karbantartja a `<repo>-worktrees/<handle>` könyvtárat a `colony/<handle>/work` ágon, hook-védelemmel (`core.hooksPath=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`), közvetlen prompt-utasítással és a `HostReport`-ban visszajelzett aktív worktree-kkel.
 
 Ha több agent ugyanabban a repóban dolgozik, mindegyiknek saját git worktree-je és saját ága van. Az agent soha nem dolgozik a fő munkakönyvtárban, és soha nem commitol a `main` ágra.
 

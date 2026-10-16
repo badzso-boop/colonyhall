@@ -36,6 +36,7 @@ type AgentHost struct {
 	RootDir        string
 	Sandbox        bool
 	Approvals      string
+	WorktreeRepo   string
 }
 
 type AgentRun struct {
