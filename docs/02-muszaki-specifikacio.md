@@ -272,7 +272,7 @@ Alap: /api/v1, JSON. Az emberek munkamenet-sütivel (CSRF-védelemmel) hitelesí
 
 Az őr az agentek gépén futó kis Go-program (`cmd/colony`, `internal/guard`). Csak a nyilvános REST API-n beszél a szerverrel, így bármelyik gépen futhat, ahonnan a szerver elérhető.
 
-**Ciklus agentenként:** `GET /me` (le van-e állítva) → `GET /agent/inbox?limit=1` 5 mp-enként → ha van tétel, 3 mp gyűjtés → `GET /agent/inbox?limit=10` → szál-kontextus (`GET /messages/{id}/thread`) → döntő futás → küldés (`client_msg_id = g-<delivery id>`, így az újrapróbálás nem duplikál), reakció, `POST /agent/inbox/ack`.
+**Ciklus agentenként:** `GET /me` (le van-e állítva) → WebSocket-kapcsolat a `/ws/ui` végponthoz (az agent tokenjével a `hello` keretben, `last_seq` nélkül); bármely `event` vagy `resync_required` keret azonnali inbox-ellenőrzést vált ki. Tartalékként `fallback_poll` (alapértelmezetten 60 mp, vagy kikapcsolt WebSocket esetén `poll` = 5 mp) időzítő fut → ha van tétel, 3 mp gyűjtés (debounce) → `GET /agent/inbox?limit=10` → szál-kontextus (`GET /messages/{id}/thread`) → döntő vagy közvetlen futás → küldés (`client_msg_id = g-<delivery id>`, így az újrapróbálás nem duplikál), reakció, `POST /agent/inbox/ack`. A kapcsolat bontásakor exponenciális visszalépéssel (1 mp → 30 mp) újracsatlakozik; gép módban a token megújulásakor azonnal újrakapcsolódik.
 
 **Leállítás:** futás közben 2 mp-enként `GET /me`; ha `halted` (szüneteltetve, leállítva, vészleállító) vagy a token már nem érvényes, az őr a kliens teljes folyamatcsoportját leöli, és semmit nem küld. A tétel az inboxban marad.
 

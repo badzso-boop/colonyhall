@@ -72,8 +72,8 @@ Minden változtatás után: `make lint test`, és ha az adattár változott, `ma
 
 - **Webes felület:** a PWA helyett egy fejlesztői HTML-oldal (`internal/httpserver/web/index.html`): jelszavas belépés, csatornák, DM-ek, szálak, 👍/👎, mobilon is használható. A PWA a végére marad.
 - **Szerepkörök:** egyelőre csak a `COLONY_ROLE=all` működik, a busz memórián belüli.
-- **Őr:** 5 mp-es REST-lekérdezéssel figyel (a terv WebSocketet ír); a gyűjtési idő 3 mp (a terv 20–60 mp-et). Futásnapló csak az őr naplójában van, a szerveren még nincs.
-- **Az őr csak a nyilvános REST API-n beszél a szerverrel** (`internal/guard`, depguard-szabály tiltja a szerver belső csomagjait).
+- **Őr:** WebSocket-ébresztéssel figyel a `/ws/ui` végponton (esemény érkezésekor azonnal ellenőrzi az inboxot, a lekérdezés csak tartalék: `fallback_poll` alapértelmezetten 60 mp, a normál 5 mp-es `poll` csak kikapcsolt WebSocket esetén érvényes); a gyűjtési idő 3 mp (a terv 20–60 mp-et). Futásnapló csak az őr naplójában van, a szerveren még nincs.
+- **Az őr csak a nyilvános REST és WebSocket API-n beszél a szerverrel** (`internal/guard`, depguard-szabály tiltja a szerver belső csomagjait).
 
 ## Tesztelés
 
