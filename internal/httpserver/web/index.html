@@ -392,6 +392,7 @@ async function renderHosts() {
     c.append(el("div", { className: "muted", textContent: `${L.roots}: ${(h.report.roots || []).join(", ") || L.none}` }));
     c.append(el("div", { className: "muted", textContent: `${L.clients}: ${(h.report.clients || []).map(x => x.name + (x.version ? " " + x.version : "")).join(", ") || L.none} · ${L.sandbox}: ${h.report.sandbox || L.none} · ${L.allowUnsandboxed}: ${h.report.allow_unsandboxed ? L.yes : L.no}` }));
     for (const r of h.report.rejected || []) c.append(el("div", { className: "warn grant", textContent: `${L.rejected}: @${actors[r.agent_id]?.handle || "?"} ${r.path} — ${r.reason}` }));
+    for (const w of h.report.worktrees || []) c.append(el("div", { className: "muted grant", textContent: `worktree: @${actors[w.agent_id]?.handle || "?"} ${w.path} (${w.branch})` }));
     if (h.state === "approved") {
       const rv = el("button", { textContent: L.revoke });
       rv.onclick = async () => { if (confirm(h.name + ": " + L.revoke + "?")) { await api(`/api/v1/hosts/${h.id}/state`, { method: "PUT", body: JSON.stringify({ state: "revoked" }) }).catch(e => alert(e.message)); renderHosts(); } };
@@ -399,10 +400,12 @@ async function renderHosts() {
     }
     for (const a of h.agents) {
       const box = el("div", { className: "card" });
+      const wt = (h.report.worktrees || []).find(w => w.agent_id === a.agent_id);
       const details = [
         a.client,
         a.mode || "compact",
         a.root_dir || "",
+        a.worktree_repo ? "repo: " + a.worktree_repo : "",
         a.sandbox ? "sandbox" : "no-sandbox",
         a.approvals ? "approvals: " + a.approvals : "",
         a.permission_mode || "",
@@ -410,6 +413,9 @@ async function renderHosts() {
         a.allow_work ? L.work + ": " + (a.work_model || "-") : ""
       ].filter(Boolean).join(" · ");
       box.append(el("b", { textContent: `@${a.handle}` }), el("span", { className: "muted", textContent: ` · ${details}` }));
+      if (wt) {
+        box.append(el("div", { className: "muted grant", textContent: `worktree: ${wt.path} (${wt.branch})` }));
+      }
       const un = el("button", { textContent: L.unassign });
       un.onclick = async () => { await api(`/api/v1/agents/${a.agent_id}/host`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
       box.append(" ", un);
@@ -433,7 +439,8 @@ async function renderHosts() {
       const sel = el("select", {}, ...agents.map(a => el("option", { value: a.id, textContent: "@" + a.handle })));
       const client = el("select", {}, el("option", { value: "claude-code", textContent: "claude-code" }), el("option", { value: "antigravity", textContent: "antigravity" }));
       const mode = el("select", {}, el("option", { value: "direct", textContent: "direct" }), el("option", { value: "compact", textContent: "compact" }));
-      const rootDir = el("input", { placeholder: "root dir (/path)", size: 16 });
+      const rootDir = el("input", { placeholder: "root dir (/path)", size: 14 });
+      const worktreeRepo = el("input", { placeholder: "worktree repo (/path)", size: 16 });
       const approvals = el("select", {}, el("option", { value: "none", textContent: "approvals: none" }), el("option", { value: "chat", textContent: "approvals: chat" }));
       const permMode = el("select", {},
         el("option", { value: "auto", textContent: "auto" }),
@@ -450,12 +457,13 @@ async function renderHosts() {
       go.onclick = async () => {
         await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({
           host_id: h.id, client: client.value, mode: mode.value, root_dir: rootDir.value.trim(),
+          worktree_repo: worktreeRepo.value.trim(),
           sandbox: sandbox.checked, permission_mode: permMode.value, approvals: approvals.value,
           model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked
         }) }).catch(e => alert(e.message));
         renderHosts();
       };
-      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), go));
+      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, worktreeRepo, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), go));
     }
     panel.append(c);
   }
