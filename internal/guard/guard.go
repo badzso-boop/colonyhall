@@ -35,9 +35,11 @@ type Agent struct {
 	DecideWrap Wrapper
 
 	// Mode is "direct" or "compact" (empty defaults to compact).
-	Mode     string
-	RootDir  string
-	StateDir string
+	Mode           string
+	RootDir        string
+	StateDir       string
+	WorktreeRepo   string
+	WorktreeBranch string
 
 	ExchangeDir string
 	ExchangeOK  bool

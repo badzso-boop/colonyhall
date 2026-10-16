@@ -444,7 +444,8 @@ func testHosts(t *testing.T, b Backend) {
 		t.Fatalf("HostByTokenHash: %+v %v", got, err)
 	}
 	rep := hosts.Report{GuardVersion: "1", Roots: []string{"/work"}, Clients: []hosts.Client{{Name: "claude-code", Version: "2"}},
-		Sandbox: "bwrap 0.9.0", AllowUnsandboxed: true, ExchangeDir: "/mnt/z/exchange", ExchangeOK: true, Rejected: []hosts.Rejected{{AgentID: "a", Path: "/etc", Reason: "outside roots"}}}
+		Sandbox: "bwrap 0.9.0", AllowUnsandboxed: true, ExchangeDir: "/mnt/z/exchange", ExchangeOK: true, Rejected: []hosts.Rejected{{AgentID: "a", Path: "/etc", Reason: "outside roots"}},
+		Worktrees: []hosts.Worktree{{AgentID: f.agent.ID.String(), Path: "/work/repo-worktrees/agent", Branch: "colony/agent/work"}}}
 	must(t, hs.SaveReport(ctx, h.ID, rep, t0.Add(time.Minute)))
 	must(t, hs.SetHostState(ctx, h.ID, hosts.StateRevoked))
 	list, err := hs.ListHosts(ctx, f.ws.ID)
@@ -452,33 +453,35 @@ func testHosts(t *testing.T, b Backend) {
 	if len(list) != 1 || list[0].State != hosts.StateRevoked || list[0].LastSeenAt == nil ||
 		list[0].Report.Sandbox != "bwrap 0.9.0" || !list[0].Report.AllowUnsandboxed ||
 		list[0].Report.ExchangeDir != "/mnt/z/exchange" || !list[0].Report.ExchangeOK ||
-		len(list[0].Report.Rejected) != 1 || list[0].Report.Clients[0].Version != "2" {
+		len(list[0].Report.Rejected) != 1 || list[0].Report.Clients[0].Version != "2" ||
+		len(list[0].Report.Worktrees) != 1 || list[0].Report.Worktrees[0].Branch != "colony/agent/work" {
 		t.Fatalf("ListHosts: %+v", list)
 	}
 
 	a := hosts.Assignment{
 		AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
-		WorkModel: "sonnet", AllowWork: true, Mode: hosts.AgentModeDirect, RootDir: "/work", Sandbox: false,
+		WorkModel: "sonnet", AllowWork: true, Mode: hosts.AgentModeDirect, RootDir: "/work", WorktreeRepo: "/work/repo", Sandbox: false,
 		Approvals: hosts.ApprovalsChat, MaxSessionTokens: 120000, DailyTokenLimit: 500000, CreatedBy: f.human.ID, CreatedAt: t0,
 	}
 	must(t, hs.SetAssignment(ctx, a))
 	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 {
-		t.Fatalf("approvals / limits: %+v %v", ga, err)
+	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 || ga.WorktreeRepo != "/work/repo" {
+		t.Fatalf("approvals / limits / worktree: %+v %v", ga, err)
 	}
 	a.Model = "opus"
 	a.Mode = hosts.AgentModeCompact
+	a.WorktreeRepo = "/work/repo2"
 	a.Sandbox = true
 	a.Approvals = hosts.ApprovalsNone
 	a.MaxSessionTokens = 80000
 	a.DailyTokenLimit = 250000
 	must(t, hs.SetAssignment(ctx, a)) // replaces
 	ga, err = hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone || ga.MaxSessionTokens != 80000 || ga.DailyTokenLimit != 250000 {
+	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || ga.WorktreeRepo != "/work/repo2" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone || ga.MaxSessionTokens != 80000 || ga.DailyTokenLimit != 250000 {
 		t.Fatalf("AssignmentByAgent: %+v %v", ga, err)
 	}
 	as, err := hs.AssignmentsForHost(ctx, h.ID)
-	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone || as[0].MaxSessionTokens != 80000 || as[0].DailyTokenLimit != 250000 {
+	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone || as[0].WorktreeRepo != "/work/repo2" || as[0].MaxSessionTokens != 80000 || as[0].DailyTokenLimit != 250000 {
 		t.Fatalf("AssignmentsForHost: %+v %v", as, err)
 	}
 

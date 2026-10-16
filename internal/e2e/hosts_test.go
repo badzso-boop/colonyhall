@@ -21,6 +21,7 @@ type hostAgent struct {
 	Sandbox          bool   `json:"sandbox"`
 	MaxSessionTokens int    `json:"max_session_tokens"`
 	DailyTokenLimit  int64  `json:"daily_token_limit"`
+	WorktreeRepo     string `json:"worktree_repo"`
 	Grants           []struct {
 		ID           string `json:"id"`
 		Path         string `json:"path"`
@@ -253,5 +254,91 @@ func TestHostConfigAndGrants(t *testing.T) {
 		if !seen[want] {
 			t.Errorf("audit misses %s", want)
 		}
+	}
+}
+
+func TestWorktreeAssignmentAndReport(t *testing.T) {
+	e := newEnv(t)
+	agent := e.agentID()
+	host, hostToken := e.enroll("worktree-box")
+
+	// 1. Invalid assignment: worktree_repo is only allowed in direct mode
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "worktree_repo": "/repo"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("worktree_repo in compact mode allowed: %d", s)
+	}
+
+	// 2. Invalid assignment: bad path for worktree_repo
+	for _, bad := range []string{"repo", "/repo/../etc", "/repo/", "/a//b"} {
+		if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+			map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "worktree_repo": bad}, nil); s != http.StatusBadRequest {
+			t.Fatalf("bad worktree_repo path %q allowed: %d", bad, s)
+		}
+	}
+
+	// 3. Valid assignment in direct mode: root_dir defaults to worktree_repo if not provided
+	var assigned hostAgent
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "worktree_repo": "/repo"}, &assigned); s != http.StatusOK {
+		t.Fatalf("assign with worktree_repo: %d", s)
+	}
+	if assigned.WorktreeRepo != "/repo" || assigned.RootDir != "/repo" || assigned.Mode != "direct" {
+		t.Fatalf("unexpected assignment: %+v", assigned)
+	}
+
+	// 4. Host config returns worktree_repo
+	var cfg struct {
+		Version string
+		Agents  []hostAgent
+	}
+	if s := e.do("GET", "/api/v1/host/config", hostToken, nil, &cfg); s != http.StatusOK {
+		t.Fatalf("config: %d", s)
+	}
+	if len(cfg.Agents) != 1 || cfg.Agents[0].WorktreeRepo != "/repo" {
+		t.Fatalf("config worktree_repo mismatch: %+v", cfg)
+	}
+
+	// 5. Host report with worktrees
+	report := map[string]any{
+		"roots":             []string{"/repo"},
+		"clients":           []any{map[string]any{"name": "claude-code"}},
+		"sandbox":           "bwrap 0.9.0",
+		"allow_unsandboxed": true,
+		"rejected":          []any{},
+		"worktrees": []any{
+			map[string]any{
+				"agent_id": agent,
+				"path":     "/repo-worktrees/fake-agent",
+				"branch":   "colony/fake-agent/work",
+			},
+		},
+	}
+	if s := e.do("POST", "/api/v1/host/report", hostToken, report, nil); s != http.StatusNoContent {
+		t.Fatalf("report with worktrees: %d", s)
+	}
+
+	// 6. Admin GET /api/v1/hosts shows reported worktrees
+	var list struct {
+		Hosts []struct {
+			Name   string
+			Report struct {
+				Worktrees []struct {
+					AgentID string `json:"agent_id"`
+					Path    string `json:"path"`
+					Branch  string `json:"branch"`
+				} `json:"worktrees"`
+			} `json:"report"`
+			Agents []hostAgent
+		}
+	}
+	if s := e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &list); s != http.StatusOK {
+		t.Fatalf("get hosts: %d", s)
+	}
+	if len(list.Hosts) != 1 || len(list.Hosts[0].Report.Worktrees) != 1 {
+		t.Fatalf("reported worktrees missing: %+v", list)
+	}
+	wt := list.Hosts[0].Report.Worktrees[0]
+	if wt.AgentID != agent || wt.Path != "/repo-worktrees/fake-agent" || wt.Branch != "colony/fake-agent/work" {
+		t.Fatalf("worktree entry mismatch: %+v", wt)
 	}
 }

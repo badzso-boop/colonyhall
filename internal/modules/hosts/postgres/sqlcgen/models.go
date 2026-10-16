@@ -38,6 +38,7 @@ type AgentHost struct {
 	Approvals        string
 	MaxSessionTokens int32
 	DailyTokenLimit  int64
+	WorktreeRepo     string
 }
 
 type AgentRun struct {

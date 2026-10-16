@@ -774,6 +774,8 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 
 ## Munkaterület: git worktree agentenként
 
+**Megvalósítva (2026-10-16, 12. prompt):** Teljes hozzáférésű közvetlen agenteknél működik. Az őr létrehozza és karbantartja a `<repo>-worktrees/<handle>` könyvtárat a `colony/<handle>/work` ágon, hook-védelemmel (`core.hooksPath=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`), közvetlen prompt-utasítással és a `HostReport`-ban visszajelzett aktív worktree-kkel.
+
 Ha több agent ugyanabban a repóban dolgozik, mindegyiknek saját git worktree-je és saját ága van. Az agent soha nem dolgozik a fő munkakönyvtárban, és soha nem commitol a `main` ágra.
 
 **Elnevezés (a gazdagépen):**

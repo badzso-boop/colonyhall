@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -59,15 +60,17 @@ type Supervisor struct {
 	rejected   []Rejected
 	reported   time.Time
 	exchangeOK bool
+	worktrees  []Worktree
 }
 
 type managed struct {
-	agent  *Agent
-	cancel context.CancelFunc
-	done   chan struct{}
-	key    string
-	grants []Grant // checked against this machine
-	conf   HostAgent
+	agent    *Agent
+	cancel   context.CancelFunc
+	done     chan struct{}
+	key      string
+	grants   []Grant // checked against this machine
+	conf     HostAgent
+	worktree *Worktree
 }
 
 // Start prepares the machine: token, roots, sandbox.
@@ -181,7 +184,30 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 			}
 			continue
 		}
-		if !ha.Sandbox || ha.Mode == "direct" || ha.RootDir != "" {
+		var wt *Worktree
+		if ha.WorktreeRepo != "" {
+			realRepo, reason := CheckGrant(ha.WorktreeRepo, s.roots, s.home)
+			if reason != "" {
+				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.WorktreeRepo, Reason: reason})
+				s.Log.Warn("guard: worktree_repo refused", "agent", "@"+ha.Handle, "path", ha.WorktreeRepo, "reason", reason)
+				if m != nil {
+					s.stop(ha.AgentID)
+				}
+				continue
+			}
+			ha.WorktreeRepo = realRepo
+			wtPath, branch, err := EnsureWorktree(ctx, ha.WorktreeRepo, ha.Handle)
+			if err != nil {
+				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.WorktreeRepo, Reason: err.Error()})
+				s.Log.Warn("guard: worktree setup failed", "agent", "@"+ha.Handle, "path", ha.WorktreeRepo, "err", err)
+				if m != nil {
+					s.stop(ha.AgentID)
+				}
+				continue
+			}
+			wt = &Worktree{AgentID: ha.AgentID, Path: wtPath, Branch: branch}
+			ha.RootDir = wtPath
+		} else if !ha.Sandbox || ha.Mode == "direct" || ha.RootDir != "" {
 			realRoot, reason := CheckGrant(ha.RootDir, s.roots, s.home)
 			if reason != "" {
 				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
@@ -193,12 +219,13 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 			}
 			ha.RootDir = realRoot
 		}
-		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, fmt.Sprint(ha.Sandbox), ha.Approvals, fmt.Sprint(ha.MaxSessionTokens), fmt.Sprint(ha.DailyTokenLimit)}, "|")
+		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, ha.WorktreeRepo, fmt.Sprint(ha.Sandbox), ha.Approvals, fmt.Sprint(ha.MaxSessionTokens), fmt.Sprint(ha.DailyTokenLimit)}, "|")
 		switch {
 		case m != nil && m.key == key:
 			s.mu.Lock()
 			changedGrants := !slices.Equal(m.grants, grants)
 			m.grants, m.conf = grants, ha
+			m.worktree = wt
 			s.mu.Unlock()
 			if changedGrants {
 				s.Log.Info("guard: folder access changed", "agent", "@"+ha.Handle, "grants", len(grants))
@@ -208,7 +235,7 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 			if m != nil {
 				s.stop(ha.AgentID)
 			}
-			s.startAgent(ctx, ha, key, grants)
+			s.startAgent(ctx, ha, key, grants, wt)
 		}
 	}
 	s.mu.Lock()
@@ -219,13 +246,21 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		}
 	}
 	s.version = cfg.Version
-	changed := !slices.Equal(s.rejected, rejected)
+	var curWT []Worktree
+	for _, m := range s.agents {
+		if m.worktree != nil {
+			curWT = append(curWT, *m.worktree)
+		}
+	}
+	sort.Slice(curWT, func(i, j int) bool { return curWT[i].AgentID < curWT[j].AgentID })
+	changed := !slices.Equal(s.rejected, rejected) || !slices.Equal(s.worktrees, curWT)
 	s.rejected = rejected
+	s.worktrees = curWT
 	s.mu.Unlock()
 	for _, id := range gone {
 		s.stop(id)
 	}
-	if changed {
+	if changed || len(gone) > 0 {
 		s.report(ctx)
 	}
 }
@@ -277,7 +312,7 @@ func cleanStaleMCPConfigs(dir string) {
 	}
 }
 
-func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, grants []Grant) {
+func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, grants []Grant, wt *Worktree) {
 	if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
 		s.Log.Error("guard: agent not started: unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)", "agent", "@"+ha.Handle)
 		return
@@ -319,21 +354,25 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	ac.Dir = filepath.Join(dir, "decide") // decision runs: an empty folder, no tools
 	_ = ac.defaults()
 
-	m := &managed{key: key, grants: grants, conf: ha, done: make(chan struct{})}
+	m := &managed{key: key, grants: grants, conf: ha, worktree: wt, done: make(chan struct{})}
 	var httpClient *http.Client
 	if s.host != nil {
 		httpClient = s.host.HTTP
 	}
 	agent := &Agent{
-		Cfg:         ac,
-		Client:      &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: httpClient},
-		Adapter:     newAdapter(ac),
-		Log:         s.Log,
-		Mode:        ha.Mode,
-		RootDir:     ha.RootDir,
-		StateDir:    dir,
-		ExchangeDir: s.Cfg.ExchangeDir,
-		ExchangeOK:  s.exchangeOK,
+		Cfg:          ac,
+		Client:       &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: httpClient},
+		Adapter:      newAdapter(ac),
+		Log:          s.Log,
+		Mode:         ha.Mode,
+		RootDir:      ha.RootDir,
+		StateDir:     dir,
+		ExchangeDir:  s.Cfg.ExchangeDir,
+		ExchangeOK:   s.exchangeOK,
+		WorktreeRepo: ha.WorktreeRepo,
+	}
+	if wt != nil {
+		agent.WorktreeBranch = wt.Branch
 	}
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
 	if ha.Sandbox && s.sandbox != nil {
@@ -463,6 +502,7 @@ func (s *Supervisor) report(ctx context.Context) {
 	r.ExchangeOK = s.exchangeOK
 	s.mu.Lock()
 	r.Rejected = append([]Rejected{}, s.rejected...)
+	r.Worktrees = append([]Worktree{}, s.worktrees...)
 	s.mu.Unlock()
 	if s.host == nil {
 		return

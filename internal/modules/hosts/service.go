@@ -217,6 +217,7 @@ type AssignInput struct {
 	Approvals        string
 	MaxSessionTokens *int
 	DailyTokenLimit  *int64
+	WorktreeRepo     string
 }
 
 // Assign puts an agent on a host (moving it if it was elsewhere; grants on
@@ -244,6 +245,17 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	}
 	if in.Mode != AgentModeDirect && in.Mode != AgentModeCompact {
 		return AgentConfig{}, ErrBadAgentMode
+	}
+	if in.WorktreeRepo != "" {
+		if in.Mode != AgentModeDirect {
+			return AgentConfig{}, ErrWorktreeDirectOnly
+		}
+		if err := ValidatePath(in.WorktreeRepo); err != nil {
+			return AgentConfig{}, err
+		}
+		if in.RootDir == "" {
+			in.RootDir = in.WorktreeRepo
+		}
 	}
 	if in.RootDir != "" {
 		if err := ValidatePath(in.RootDir); err != nil {
@@ -292,14 +304,14 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	a := Assignment{
 		AgentID: agent.ID, HostID: h.ID, WorkspaceID: by.WorkspaceID, Client: in.Client, Model: clip(in.Model, 100),
 		WorkModel: clip(in.WorkModel, 100), AllowWork: in.AllowWork, PermissionMode: clip(in.PermissionMode, 40),
-		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), Sandbox: sandbox, Approvals: approvals,
+		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), WorktreeRepo: clip(in.WorktreeRepo, 1024), Sandbox: sandbox, Approvals: approvals,
 		MaxSessionTokens: maxSessionTokens, DailyTokenLimit: dailyTokenLimit,
 		CreatedBy: by.ID, CreatedAt: s.Clock.Now(),
 	}
 	err = s.record(ctx, by.WorkspaceID, by.ID, EventAgentAssigned, h.ID,
 		AssignmentEvent{
 			AgentID: agent.ID.String(), HostID: h.ID.String(), Client: a.Client, Model: a.Model,
-			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: a.Approvals,
+			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: a.Approvals,
 			MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
 		},
 		func(ctx context.Context) error {

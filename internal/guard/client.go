@@ -229,6 +229,7 @@ type HostAgent struct {
 	MaxSessionTokens int     `json:"max_session_tokens"`
 	DailyTokenLimit  int64   `json:"daily_token_limit"`
 	Grants           []Grant `json:"grants"`
+	WorktreeRepo     string  `json:"worktree_repo"`
 }
 
 // HostConfig is what the server says this machine runs.
@@ -248,6 +249,14 @@ type HostReport struct {
 	ExchangeDir      string         `json:"exchange_dir,omitempty"`
 	ExchangeOK       bool           `json:"exchange_ok"`
 	Rejected         []Rejected     `json:"rejected"`
+	Worktrees        []Worktree     `json:"worktrees,omitempty"`
+}
+
+// Worktree is an active git worktree on this machine.
+type Worktree struct {
+	AgentID string `json:"agent_id"`
+	Path    string `json:"path"`
+	Branch  string `json:"branch"`
 }
 
 // ReportClient is an AI client found on this machine.

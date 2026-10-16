@@ -111,8 +111,8 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    5. ~~Jóváhagyás a chatből (`--permission-prompt-tool`)~~ – kész (2026-10-16).
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
    - ~~Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`): WebSocket-ébresztés, futásnapló és tokenfelhasználás, jóváhagyás a chatből, wiki (agent csak bővíthet, ember törölhet)~~ – mind kész, átnézve és beolvasztva (2026-10-16).
-   - ~~Mindennapi használat (07)~~, ~~költséghatár (08)~~, ~~kérdés–válasz (09)~~, ~~fájlmegosztás (10)~~, ~~Gitea (11; `COLONY_GITEA_URL`, `COLONY_GITEA_TOKEN`, `COLONY_GITEA_WEBHOOK_SECRET`)~~ – kész, beolvasztva (2026-10-16).
-   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/12`–`13`): worktree; előnézet.
+   - ~~Mindennapi használat (07)~~, ~~költséghatár (08)~~, ~~kérdés–válasz (09)~~, ~~fájlmegosztás (10)~~, ~~Gitea (11; `COLONY_GITEA_URL`, `COLONY_GITEA_TOKEN`, `COLONY_GITEA_WEBHOOK_SECRET`)~~, ~~worktree (12)~~ – kész, beolvasztva (2026-10-16).
+   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/13`): előnézet.
    6. Később: push-értesítés; sandboxos agentek worktree-je; hálózati szűrés a sandboxban. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.

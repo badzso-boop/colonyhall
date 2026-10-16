@@ -31,6 +31,7 @@ type AssignmentEvent struct {
 	Approvals        string `json:"approvals,omitempty"`
 	MaxSessionTokens int    `json:"max_session_tokens,omitempty"`
 	DailyTokenLimit  int64  `json:"daily_token_limit,omitempty"`
+	WorktreeRepo     string `json:"worktree_repo,omitempty"`
 }
 
 // GrantEvent is the payload of grant events.

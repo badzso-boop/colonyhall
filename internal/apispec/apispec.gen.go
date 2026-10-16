@@ -698,6 +698,7 @@ type AssignRequest struct {
 	RootDir          *string                 `json:"root_dir,omitempty"`
 	Sandbox          *bool                   `json:"sandbox,omitempty"`
 	WorkModel        *string                 `json:"work_model,omitempty"`
+	WorktreeRepo     *string                 `json:"worktree_repo,omitempty"`
 }
 
 // AssignRequestApprovals defines model for AssignRequest.Approvals.
@@ -953,6 +954,7 @@ type HostAgent struct {
 	RootDir          string        `json:"root_dir"`
 	Sandbox          bool          `json:"sandbox"`
 	WorkModel        string        `json:"work_model"`
+	WorktreeRepo     string        `json:"worktree_repo"`
 }
 
 // HostAgentApprovals defines model for HostAgent.Approvals.
@@ -999,7 +1001,12 @@ type HostReport struct {
 	Roots []string `json:"roots"`
 
 	// Sandbox e.g. bwrap 0.9.0; empty when none
-	Sandbox *string `json:"sandbox,omitempty"`
+	Sandbox   *string `json:"sandbox,omitempty"`
+	Worktrees *[]struct {
+		AgentId string `json:"agent_id"`
+		Branch  string `json:"branch"`
+		Path    string `json:"path"`
+	} `json:"worktrees,omitempty"`
 }
 
 // Inbox defines model for Inbox.

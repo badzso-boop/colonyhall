@@ -415,6 +415,17 @@ A `colony guard install -config <guard.yaml>` parancs validálja a konfiguráci�
 A `guard.yaml`-ban opcionálisan beállítható az `exchange_dir` könyvtárútvonal (a `~` automatikusan a felhasználó home mappájára fejtődik ki). Az őr induláskor ellenőrzi, hogy a mappa létezik-e, könyvtár-e, és írható-e (ideiglenes fájl létrehozásával és azonnali törlésével). Az állapotot (`exchange_dir`, `exchange_ok`) jelenti a szervernek a `HostReport`-ban, ami a fejlesztői felület „Gépek” paneljén is megjelenik. Ha nem használható, figyelmeztetést naplóz (pl. Z: meghajtó nincs csatolva: `mount -t drvfs Z: /mnt/z`).
 Amikor az `exchange_dir` elérhető és írható (`exchange_ok=true`), a közvetlen módú rendszerutasítás (`DirectPrompt`) kiegészül egy bekezdéssel: a titkok átadása a `<exchange_dir>/<project>/` mappán keresztül, 0600-as jogosultsággal történik, a chatbe kizárólag a fájl elérési útja kerül, a fogadó fél átmásolja és törli a csere mappából, a mappát pedig tilos a repóba commitolni.
 
+### Munkaterület: git worktree agentenként (`internal/guard/worktree.go`)
+
+Közvetlen módú, teljes hozzáférésű agenteknél a hozzárendelésben megadható a `worktree_repo` (egy git repó útvonala a gazdagépen).
+
+- **Validáció és biztonság:** Az őr induláskor ellenőrzi az útvonalat (`CheckGrant`), meggyőződik róla, hogy valódi git repó (`git -C <repo> rev-parse --git-dir`), és a gép engedélyezett gyökérmappáin belül van. Minden belső git hívást hookok nélkül (`-c core.hooksPath=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) hajt végre időkorláttal, így kártékony repó-hookok nem futhatnak le.
+- **Worktree felépítése:** Az őr létrehozza a `<repo>-worktrees/<handle>` könyvtárat a `colony/<handle>/work` ágon a repó alapértelmezett ágából kiindulva. Ha a worktree könyvtár már létezik és a megfelelő ágon van, újrahasználja. A fő munkakönyvtárhoz és a `main` ághoz nem nyúl.
+- **Futtatás és jelentés:** A munkafutás a worktree könyvtárában indul (Claude Code esetén `cwd`, Antigravity esetén `--add-dir`). A közvetlen prompt tájékoztatja az agentet a saját ágról és szabályokról:
+  `You work in your own worktree on branch colony/<handle>/work; commit there; never commit to the main branch; deliver through a PR when asked.`
+  A létrejött worktree-ket (`agent_id`, `path`, `branch`) az őr a `HostReport`-ban visszajelenti a szervernek, és a fejlesztői felület Gépek paneljén megjelenik.
+- **Hibakezelés:** Ha a worktree létrehozása nem sikerül (pl. nem git repó, vagy nem sikerül létrehozni), az agent nem indul el, és a hiba oka bekerül a `rejected` listába (hasonlóan az elutasított gyökérmappákhoz).
+
 ## Wiki (megvalósítva, 2026-10-16)
 
 A csapat közös, tartós tudását és döntéseit kezelő modul a szerveren. A wiki oldalak revíziói append-only módon tárolódnak, megőrizve a teljes előzményt.

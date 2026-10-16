@@ -1177,6 +1177,15 @@ components:
               agent_id: { type: string }
               path: { type: string }
               reason: { type: string }
+        worktrees:
+          type: array
+          items:
+            type: object
+            required: [agent_id, path, branch]
+            properties:
+              agent_id: { type: string }
+              path: { type: string }
+              branch: { type: string }
     FolderGrant:
       type: object
       required: [id, path, mode, created_at]
@@ -1188,7 +1197,7 @@ components:
         outside_roots: { type: boolean, description: "Only when created: the path is outside the roots the host reported" }
     HostAgent:
       type: object
-      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, grants]
+      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, worktree_repo, sandbox, approvals, max_session_tokens, daily_token_limit, grants]
       properties:
         agent_id: { type: string, format: uuid }
         handle: { type: string }
@@ -1200,6 +1209,7 @@ components:
         permission_mode: { type: string }
         mode: { type: string, enum: [direct, compact] }
         root_dir: { type: string }
+        worktree_repo: { type: string }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
         max_session_tokens: { type: integer, default: 150000, description: "Max context tokens before starting a fresh session (0 = no limit)" }
@@ -1217,6 +1227,7 @@ components:
         permission_mode: { type: string, maxLength: 40 }
         mode: { type: string, enum: [direct, compact] }
         root_dir: { type: string, maxLength: 1024 }
+        worktree_repo: { type: string, maxLength: 1024 }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
         max_session_tokens: { type: integer, minimum: 0, default: 150000 }

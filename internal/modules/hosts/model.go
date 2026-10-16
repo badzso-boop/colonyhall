@@ -71,6 +71,14 @@ type Report struct {
 	ExchangeDir      string     `json:"exchange_dir,omitempty"`
 	ExchangeOK       bool       `json:"exchange_ok"`
 	Rejected         []Rejected `json:"rejected"`
+	Worktrees        []Worktree `json:"worktrees,omitempty"`
+}
+
+// Worktree describes a git worktree reported by the guard.
+type Worktree struct {
+	AgentID string `json:"agent_id"`
+	Path    string `json:"path"`
+	Branch  string `json:"branch"`
 }
 
 // Client is an AI client found on the machine.
@@ -116,6 +124,7 @@ type Assignment struct {
 	DailyTokenLimit  int64
 	CreatedBy        ids.ID
 	CreatedAt        time.Time
+	WorktreeRepo     string
 }
 
 // Grant lets an agent use a folder on its host.
@@ -147,6 +156,7 @@ var (
 	ErrBadMode             = errors.New("mode must be read or write")
 	ErrBadAgentMode        = errors.New("mode must be direct or compact")
 	ErrBadRootDir          = errors.New("direct mode requires a root_dir")
+	ErrWorktreeDirectOnly  = errors.New("worktree_repo is only supported in direct mode")
 	ErrBadClient           = errors.New("client must be claude-code or antigravity")
 	ErrBadApprovals        = errors.New("approvals must be none or chat")
 	ErrApprovalsChatClient = errors.New("approvals=chat requires client claude-code")

@@ -200,6 +200,12 @@ func writeMCPConfig(dir, serverURL, token string, extra ...map[string]string) (s
 // DirectPrompt builds the user prompt for a direct run. When exchangeDir is
 // non-empty, instructions for the shared secrets exchange folder are included.
 func DirectPrompt(items []Item, exchangeDir ...string) string {
+	return DirectPromptWithBranch(items, "", exchangeDir...)
+}
+
+// DirectPromptWithBranch is DirectPrompt for an agent that works in its own
+// git worktree: it adds the branch rules.
+func DirectPromptWithBranch(items []Item, branch string, exchangeDir ...string) string {
 	var b strings.Builder
 	answers := false
 	for _, it := range items {
@@ -252,6 +258,9 @@ func DirectPrompt(items []Item, exchangeDir ...string) string {
 	if len(exchangeDir) > 0 && exchangeDir[0] != "" {
 		ed := strings.TrimRight(exchangeDir[0], "/")
 		b.WriteString("\n\nSecrets go through " + ed + "/<project>/ with mode 600, the chat gets only the path, the receiver copies and deletes it, never commit the exchange folder.")
+	}
+	if branch != "" {
+		b.WriteString("\nYou work in your own worktree on branch " + branch + "; commit there; never commit to the main branch; deliver through a PR when asked.")
 	}
 	return b.String()
 }
@@ -358,7 +367,7 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		exchangeDir = a.ExchangeDir
 	}
 
-	prompt := DirectPrompt(group, exchangeDir)
+	prompt := DirectPromptWithBranch(group, a.WorktreeBranch, exchangeDir)
 	if rotated {
 		recap := a.threadRecap(ctx, threadRoot)
 		if recap != "" {
