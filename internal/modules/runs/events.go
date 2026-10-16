@@ -9,3 +9,19 @@ type ErrorReported struct {
 	AgentID string `json:"agent_id"`
 	Summary string `json:"summary"`
 }
+
+// EventRunReported is recorded for the audit log when an agent run finishes.
+const EventRunReported = "run.reported"
+
+// RunReported is the payload of EventRunReported.
+type RunReported struct {
+	RunID       string `json:"run_id"`
+	AgentID     string `json:"agent_id"`
+	Phase       string `json:"phase"`
+	Client      string `json:"client"`
+	Model       string `json:"model"`
+	Items       int    `json:"items"`
+	TotalTokens int64  `json:"total_tokens"`
+	DurationMS  int    `json:"duration_ms"`
+	Status      string `json:"status"`
+}
