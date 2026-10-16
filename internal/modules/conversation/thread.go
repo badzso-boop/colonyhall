@@ -33,6 +33,10 @@ func (s *Service) Thread(ctx context.Context, by identity.Actor, messageID ids.I
 	if err != nil {
 		return Message{}, nil, err
 	}
+	all, err = s.withAttachments(ctx, all)
+	if err != nil {
+		return Message{}, nil, err
+	}
 	var root Message
 	var replies []Message
 	for _, x := range all {

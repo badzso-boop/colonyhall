@@ -1,4 +1,4 @@
-package storage_test
+package storage
 
 import (
 	"bytes"
@@ -7,13 +7,11 @@ import (
 	"encoding/hex"
 	"io"
 	"testing"
-
-	"colonyhall/internal/modules/files/storage"
 )
 
 func TestFSStorage(t *testing.T) {
 	dir := t.TempDir()
-	fs, err := storage.NewFS(dir)
+	fs, err := NewFS(dir)
 	if err != nil {
 		t.Fatalf("NewFS failed: %v", err)
 	}

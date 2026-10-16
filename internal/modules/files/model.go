@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -25,12 +26,7 @@ type File struct {
 }
 
 // Attachment is a file attached to a message.
-type Attachment struct {
-	ID   ids.ID
-	Name string
-	Mime string
-	Size int64
-}
+type Attachment = conversation.Attachment
 
 // Limits.
 const (

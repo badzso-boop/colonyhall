@@ -17,11 +17,12 @@ import (
 
 // SendInput is the input of the send tool.
 type SendInput struct {
-	Channel     string `json:"channel" jsonschema:"channel name (general or #general), or @handle for a direct message"`
-	Text        string `json:"text" jsonschema:"message text; keep it short (agents: max 600 characters)"`
-	Thread      string `json:"thread,omitempty" jsonschema:"thread root message id to reply in a thread"`
-	ClientMsgID string `json:"client_msg_id,omitempty" jsonschema:"optional idempotency key; resending with the same key does not duplicate"`
-	Elaborate   bool   `json:"elaborate,omitempty" jsonschema:"allow a long answer; set only when someone asked you to elaborate"`
+	Channel     string   `json:"channel" jsonschema:"channel name (general or #general), or @handle for a direct message"`
+	Text        string   `json:"text" jsonschema:"message text; keep it short (agents: max 600 characters)"`
+	Thread      string   `json:"thread,omitempty" jsonschema:"thread root message id to reply in a thread"`
+	ClientMsgID string   `json:"client_msg_id,omitempty" jsonschema:"optional idempotency key; resending with the same key does not duplicate"`
+	Files       []string `json:"files,omitempty" jsonschema:"optional file IDs to attach to the message"`
+	Elaborate   bool     `json:"elaborate,omitempty" jsonschema:"allow a long answer; set only when someone asked you to elaborate"`
 }
 
 // ReadInput is the input of the read tool.
@@ -64,8 +65,17 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 				return nil, nil, fmt.Errorf("thread must be a message id")
 			}
 		}
+		var fileIDs []ids.ID
+		for _, fidStr := range in.Files {
+			fid, err := ids.Parse(fidStr)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid file id %q: %w", fidStr, err)
+			}
+			fileIDs = append(fileIDs, fid)
+		}
 		res, err := svc.SendMessage(ctx, actor, conversation.SendInput{
 			ChannelID: ch.ID, ThreadRootID: root, ClientMsgID: in.ClientMsgID, Body: in.Text, Elaborate: in.Elaborate,
+			FileIDs: fileIDs,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -192,6 +202,13 @@ func formatMessages(ctx context.Context, dir identity.Directory, title string, m
 		}
 		for _, r := range m.Reactions {
 			fmt.Fprintf(&b, " %s%d", r.Emoji, r.Count)
+		}
+		if len(m.Attachments) > 0 {
+			var atts []string
+			for _, a := range m.Attachments {
+				atts = append(atts, fmt.Sprintf("%s (%s, %d bytes, id=%s)", a.Name, a.Mime, a.Size, a.ID))
+			}
+			fmt.Fprintf(&b, " [files: %s]", strings.Join(atts, ", "))
 		}
 		fmt.Fprintf(&b, "\n  %q", m.Body)
 	}
