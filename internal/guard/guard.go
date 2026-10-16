@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/coder/websocket"
 )
 
 // Agent runs the guard loop for one agent.
@@ -36,6 +38,13 @@ type Agent struct {
 	Mode     string
 	RootDir  string
 	StateDir string
+
+	// WebSocket options and test hooks
+	DisableWS          bool
+	WSTokenHook        func(ctx context.Context) (string, error)
+	WSBackoff          func(attempt int) time.Duration
+	TokenCheckInterval time.Duration
+	WSDialHook         func(ctx context.Context, u string, opts *websocket.DialOptions) (*websocket.Conn, *http.Response, error)
 
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
@@ -64,20 +73,56 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 	a.me = me
 	a.Log.Info("guard: watching", "agent", "@"+me.Handle, "client", a.Cfg.Client, "model", a.Cfg.Model)
+
+	wakeCh := make(chan struct{}, 1)
+	if !a.DisableWS && !a.Cfg.DisableWS {
+		wakeCh <- struct{}{} // initial inbox check on startup
+		go a.watchWS(ctx, wakeCh)
+	}
+
+	timer := time.NewTimer(a.waitInterval())
+	defer timer.Stop()
+
 	for {
-		if err := sleep(ctx, a.pause()); err != nil {
+		select {
+		case <-ctx.Done():
 			return nil
+		case <-wakeCh:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		case <-timer.C:
 		}
 		if err := a.Tick(ctx); err != nil && ctx.Err() == nil {
 			a.failures++
 			a.Log.Warn("guard: tick failed", "agent", "@"+a.me.Handle, "err", err, "failures", a.failures)
 		}
+		timer.Reset(a.waitInterval())
 	}
+}
+
+func (a *Agent) waitInterval() time.Duration {
+	if a.DisableWS || a.Cfg.DisableWS {
+		return a.pause()
+	}
+	return a.fallbackPause()
 }
 
 // pause is the poll interval, backing off after failures (max 5 minutes).
 func (a *Agent) pause() time.Duration {
 	d := a.Cfg.Poll
+	for i := 0; i < a.failures && d < 5*time.Minute; i++ {
+		d *= 2
+	}
+	return min(d, 5*time.Minute)
+}
+
+// fallbackPause is the fallback poll interval when WebSocket is active, backing off after failures.
+func (a *Agent) fallbackPause() time.Duration {
+	d := a.Cfg.FallbackPoll
 	for i := 0; i < a.failures && d < 5*time.Minute; i++ {
 		d *= 2
 	}

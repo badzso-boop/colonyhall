@@ -1,0 +1,240 @@
+package guard
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
+)
+
+var errTokenChanged = errors.New("guard: agent token changed")
+
+// wsBackoff computes exponential backoff (1s -> 30s) for WebSocket reconnects.
+func wsBackoff(attempt int) time.Duration {
+	if attempt <= 0 {
+		return 1 * time.Second
+	}
+	d := (1 * time.Second) * time.Duration(1<<attempt)
+	if d > 30*time.Second || d <= 0 {
+		return 30 * time.Second
+	}
+	return d
+}
+
+// wsURL converts a base server URL (http:// or https://) into a WebSocket URL for /ws/ui.
+func wsURL(baseURL string) (string, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("guard: invalid server URL: %w", err)
+	}
+	switch u.Scheme {
+	case "http":
+		u.Scheme = "ws"
+	case "https":
+		u.Scheme = "wss"
+	case "ws", "wss":
+		// already ws scheme
+	default:
+		return "", fmt.Errorf("guard: unsupported URL scheme %q for websocket", u.Scheme)
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/ws/ui"
+	return u.String(), nil
+}
+
+func (a *Agent) logName() string {
+	if a.me.Handle != "" {
+		return "@" + a.me.Handle
+	}
+	if a.Cfg.Name != "" {
+		return a.Cfg.Name
+	}
+	return "agent"
+}
+
+// wsDialClient returns an http.Client without Timeout, reusing Transport and Jar.
+func (a *Agent) wsDialClient() *http.Client {
+	if a.Client != nil && a.Client.HTTP != nil {
+		return &http.Client{
+			Transport: a.Client.HTTP.Transport,
+			Jar:       a.Client.HTTP.Jar,
+		}
+	}
+	return nil
+}
+
+func (a *Agent) currentToken(ctx context.Context) (string, error) {
+	if a.WSTokenHook != nil {
+		return a.WSTokenHook(ctx)
+	}
+	if a.Client != nil && a.Client.WSTokenHook != nil {
+		return a.Client.WSTokenHook(ctx)
+	}
+	if a.Client != nil {
+		return a.Client.CurrentToken(ctx)
+	}
+	return "", errors.New("guard: no client configured")
+}
+
+// watchWS maintains a persistent WebSocket connection to /ws/ui, reconnecting
+// with backoff when the socket closes, or immediately when the token changes.
+func (a *Agent) watchWS(ctx context.Context, wakeCh chan<- struct{}) {
+	agentName := a.logName()
+	var attempt int
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		connected, err := a.runWSConn(ctx, agentName, wakeCh)
+		if ctx.Err() != nil {
+			return
+		}
+
+		if errors.Is(err, errTokenChanged) {
+			attempt = 0
+			continue
+		}
+
+		if connected {
+			// Once a connection was established and lasted until disconnect,
+			// reset the backoff sequence for subsequent retries.
+			attempt = 0
+		}
+
+		backoffFn := a.WSBackoff
+		if backoffFn == nil {
+			backoffFn = wsBackoff
+		}
+		d := backoffFn(attempt)
+		attempt++
+
+		a.Log.Debug("guard: websocket reconnecting", "agent", agentName, "backoff", d)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(d):
+		}
+	}
+}
+
+// runWSConn dials /ws/ui, sends the hello handshake, starts the token rotation
+// monitor, and reads event frames until disconnection.
+func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- struct{}) (bool, error) {
+	token, err := a.currentToken(ctx)
+	if err != nil {
+		a.Log.Debug("guard: cannot get agent token for websocket", "agent", agentName, "err", err)
+		return false, err
+	}
+
+	u, err := wsURL(a.Client.BaseURL)
+	if err != nil {
+		return false, err
+	}
+
+	opts := &websocket.DialOptions{
+		HTTPClient: a.wsDialClient(),
+	}
+
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+
+	var conn *websocket.Conn
+	var resp *http.Response
+	if a.WSDialHook != nil {
+		conn, resp, err = a.WSDialHook(connCtx, u, opts)
+	} else {
+		conn, resp, err = websocket.Dial(connCtx, u, opts)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		a.Log.Debug("guard: websocket dial failed", "agent", agentName, "err", err)
+		return false, err
+	}
+	defer func() {
+		_ = conn.CloseNow()
+	}()
+
+	helloCtx, helloCancel := context.WithTimeout(connCtx, 10*time.Second)
+	err = wsjson.Write(helloCtx, conn, map[string]any{
+		"type":  "hello",
+		"token": token,
+	})
+	helloCancel()
+	if err != nil {
+		a.Log.Debug("guard: websocket hello failed", "agent", agentName, "err", err)
+		return false, err
+	}
+
+	a.Log.Debug("guard: websocket connected", "agent", agentName)
+
+	tokenInterval := a.TokenCheckInterval
+	if tokenInterval <= 0 {
+		tokenInterval = 5 * time.Second
+	}
+
+	var tokenChanged atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(tokenInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-connCtx.Done():
+				return
+			case <-t.C:
+				current, err := a.currentToken(connCtx)
+				if err == nil && current != "" && current != token {
+					tokenChanged.Store(true)
+					a.Log.Debug("guard: agent token changed, reconnecting websocket", "agent", agentName)
+					_ = conn.Close(websocket.StatusNormalClosure, "token changed")
+					return
+				}
+			}
+		}
+	}()
+
+	for {
+		var frame struct {
+			Type string `json:"type"`
+		}
+		err := wsjson.Read(connCtx, conn, &frame)
+		if err != nil {
+			connCancel()
+			wg.Wait()
+			if tokenChanged.Load() {
+				return true, errTokenChanged
+			}
+			if connCtx.Err() == nil {
+				a.Log.Debug("guard: websocket disconnected", "agent", agentName, "err", err)
+			}
+			return true, err
+		}
+
+		switch frame.Type {
+		case "event", "resync_required":
+			select {
+			case wakeCh <- struct{}{}:
+			default:
+			}
+		case "welcome", "replay_done":
+			// Ignored as per spec
+		default:
+			// Ignored
+		}
+	}
+}

@@ -22,6 +22,8 @@ type Client struct {
 	// short-lived agent tokens the guard requests and renews).
 	Tokens TokenSource
 	HTTP   *http.Client
+	// WSTokenHook, when set, overrides the token used in the WebSocket hello frame (test hook).
+	WSTokenHook func(ctx context.Context) (string, error)
 }
 
 // CurrentToken returns the agent's current bearer token.
