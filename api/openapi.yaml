@@ -560,6 +560,99 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Canceled }
 
+  /wiki:
+    get:
+      operationId: listWikiPages
+      tags: [wiki]
+      description: Any actor. The index of wiki pages.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: deleted
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Index, content: { application/json: { schema: { $ref: "#/components/schemas/WikiPageIndexList" } } } }
+    post:
+      operationId: createWikiPage
+      tags: [wiki]
+      description: Any actor. Create a new wiki page.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateWikiPageRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/WikiPage" } } } }
+
+  /wiki/{slug}:
+    parameters:
+      - { name: slug, in: path, required: true, schema: { type: string, maxLength: 80 } }
+    get:
+      operationId: getWikiPage
+      tags: [wiki]
+      description: Any actor. Get current revision of a wiki page.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Page, content: { application/json: { schema: { $ref: "#/components/schemas/WikiPage" } } } }
+    put:
+      operationId: editWikiPage
+      tags: [wiki]
+      description: Humans only. Edit/replace page body and metadata.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EditWikiPageRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/WikiPage" } } } }
+    delete:
+      operationId: deleteWikiPage
+      tags: [wiki]
+      description: Humans only. Soft-delete a wiki page.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+
+  /wiki/{slug}/append:
+    parameters:
+      - { name: slug, in: path, required: true, schema: { type: string, maxLength: 80 } }
+    post:
+      operationId: appendWikiPage
+      tags: [wiki]
+      description: Any actor. Append a section to an existing wiki page.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AppendWikiPageRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Appended, content: { application/json: { schema: { $ref: "#/components/schemas/WikiPage" } } } }
+
+  /wiki/{slug}/restore:
+    parameters:
+      - { name: slug, in: path, required: true, schema: { type: string, maxLength: 80 } }
+    post:
+      operationId: restoreWikiPage
+      tags: [wiki]
+      description: Humans only. Restore a soft-deleted wiki page.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Restored, content: { application/json: { schema: { $ref: "#/components/schemas/WikiPage" } } } }
+
+  /wiki/{slug}/revisions:
+    parameters:
+      - { name: slug, in: path, required: true, schema: { type: string, maxLength: 80 } }
+    get:
+      operationId: listWikiRevisions
+      tags: [wiki]
+      description: Any actor. List all revisions of a wiki page.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Revisions, content: { application/json: { schema: { $ref: "#/components/schemas/WikiRevisionList" } } } }
+
+
 components:
   securitySchemes:
     bearer:
@@ -1169,3 +1262,72 @@ components:
         created_at: { type: string, format: date-time }
         decided_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
+    WikiPage:
+      type: object
+      required: [id, slug, title, tags, body, rev, created_by, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, maxLength: 80 }
+        title: { type: string, maxLength: 120 }
+        tags: { type: array, items: { type: string } }
+        body: { type: string }
+        rev: { type: integer }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time, nullable: true }
+    WikiPageIndex:
+      type: object
+      required: [slug, title, tags, excerpt, created_at, updated_at]
+      properties:
+        slug: { type: string, maxLength: 80 }
+        title: { type: string, maxLength: 120 }
+        tags: { type: array, items: { type: string } }
+        excerpt: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time, nullable: true }
+    WikiPageIndexList:
+      type: object
+      required: [pages]
+      properties:
+        pages: { type: array, items: { $ref: "#/components/schemas/WikiPageIndex" } }
+    WikiRevisionKind:
+      type: string
+      enum: [create, append, edit, delete, restore]
+    WikiRevision:
+      type: object
+      required: [page_id, rev, body, kind, author_id, created_at]
+      properties:
+        page_id: { type: string, format: uuid }
+        rev: { type: integer }
+        body: { type: string }
+        kind: { $ref: "#/components/schemas/WikiRevisionKind" }
+        author_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    WikiRevisionList:
+      type: object
+      required: [revisions]
+      properties:
+        revisions: { type: array, items: { $ref: "#/components/schemas/WikiRevision" } }
+    CreateWikiPageRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string, maxLength: 120 }
+        body: { type: string, maxLength: 50000 }
+        tags: { type: array, items: { type: string } }
+    AppendWikiPageRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, maxLength: 8000 }
+    EditWikiPageRequest:
+      type: object
+      required: [base_rev, body]
+      properties:
+        base_rev: { type: integer }
+        body: { type: string, maxLength: 50000 }
+        title: { type: string, maxLength: 120 }
+        tags: { type: array, items: { type: string } }
+

@@ -492,6 +492,51 @@ func (e SetStateRequestState) Valid() bool {
 	}
 }
 
+// Defines values for WikiRevisionKind.
+const (
+	Append  WikiRevisionKind = "append"
+	Create  WikiRevisionKind = "create"
+	Delete  WikiRevisionKind = "delete"
+	Edit    WikiRevisionKind = "edit"
+	Restore WikiRevisionKind = "restore"
+)
+
+// Valid indicates whether the value is a known member of the WikiRevisionKind enum.
+func (e WikiRevisionKind) Valid() bool {
+	switch e {
+	case Append:
+		return true
+	case Create:
+		return true
+	case Delete:
+		return true
+	case Edit:
+		return true
+	case Restore:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListWikiPagesParamsDeleted.
+const (
+	N0 ListWikiPagesParamsDeleted = 0
+	N1 ListWikiPagesParamsDeleted = 1
+)
+
+// Valid indicates whether the value is a known member of the ListWikiPagesParamsDeleted enum.
+func (e ListWikiPagesParamsDeleted) Valid() bool {
+	switch e {
+	case N0:
+		return true
+	case N1:
+		return true
+	default:
+		return false
+	}
+}
+
 // AckRequest defines model for AckRequest.
 type AckRequest struct {
 	Ids []openapi_types.UUID `json:"ids"`
@@ -539,6 +584,11 @@ type AdminStatus struct {
 type AgentToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	Token     string    `json:"token"`
+}
+
+// AppendWikiPageRequest defines model for AppendWikiPageRequest.
+type AppendWikiPageRequest struct {
+	Text string `json:"text"`
 }
 
 // ApprovalDecision defines model for ApprovalDecision.
@@ -675,6 +725,13 @@ type CreateScheduleRequest struct {
 // CreateScheduleRequestCatchUp Missed while the server was down: run once (within 12 h) or skip
 type CreateScheduleRequestCatchUp string
 
+// CreateWikiPageRequest defines model for CreateWikiPageRequest.
+type CreateWikiPageRequest struct {
+	Body  string    `json:"body"`
+	Tags  *[]string `json:"tags,omitempty"`
+	Title string    `json:"title"`
+}
+
 // DayUsage defines model for DayUsage.
 type DayUsage struct {
 	AgentId          openapi_types.UUID `json:"agent_id"`
@@ -694,6 +751,14 @@ type DayUsage struct {
 type DecideApprovalRequest struct {
 	Decision ApprovalDecision `json:"decision"`
 	Message  *string          `json:"message,omitempty"`
+}
+
+// EditWikiPageRequest defines model for EditWikiPageRequest.
+type EditWikiPageRequest struct {
+	BaseRev int       `json:"base_rev"`
+	Body    string    `json:"body"`
+	Tags    *[]string `json:"tags,omitempty"`
+	Title   *string   `json:"title,omitempty"`
 }
 
 // EmergencyClearRequest defines model for EmergencyClearRequest.
@@ -1116,6 +1181,54 @@ type UsageResponse struct {
 	Usage []DayUsage `json:"usage"`
 }
 
+// WikiPage defines model for WikiPage.
+type WikiPage struct {
+	Body      string             `json:"body"`
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy openapi_types.UUID `json:"created_by"`
+	DeletedAt *time.Time         `json:"deleted_at,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Rev       int                `json:"rev"`
+	Slug      string             `json:"slug"`
+	Tags      []string           `json:"tags"`
+	Title     string             `json:"title"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// WikiPageIndex defines model for WikiPageIndex.
+type WikiPageIndex struct {
+	CreatedAt time.Time  `json:"created_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	Excerpt   string     `json:"excerpt"`
+	Slug      string     `json:"slug"`
+	Tags      []string   `json:"tags"`
+	Title     string     `json:"title"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// WikiPageIndexList defines model for WikiPageIndexList.
+type WikiPageIndexList struct {
+	Pages []WikiPageIndex `json:"pages"`
+}
+
+// WikiRevision defines model for WikiRevision.
+type WikiRevision struct {
+	AuthorId  openapi_types.UUID `json:"author_id"`
+	Body      string             `json:"body"`
+	CreatedAt time.Time          `json:"created_at"`
+	Kind      WikiRevisionKind   `json:"kind"`
+	PageId    openapi_types.UUID `json:"page_id"`
+	Rev       int                `json:"rev"`
+}
+
+// WikiRevisionKind defines model for WikiRevisionKind.
+type WikiRevisionKind string
+
+// WikiRevisionList defines model for WikiRevisionList.
+type WikiRevisionList struct {
+	Revisions []WikiRevision `json:"revisions"`
+}
+
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
 
@@ -1148,6 +1261,15 @@ type ListRunsParams struct {
 type GetUsageParams struct {
 	Days *int `form:"days,omitempty" json:"days,omitempty"`
 }
+
+// ListWikiPagesParams defines parameters for ListWikiPages.
+type ListWikiPagesParams struct {
+	Q       *string                     `form:"q,omitempty" json:"q,omitempty"`
+	Deleted *ListWikiPagesParamsDeleted `form:"deleted,omitempty" json:"deleted,omitempty"`
+}
+
+// ListWikiPagesParamsDeleted defines parameters for ListWikiPages.
+type ListWikiPagesParamsDeleted int
 
 // CreateActorJSONRequestBody defines body for CreateActor for application/json ContentType.
 type CreateActorJSONRequestBody = CreateActorRequest
@@ -1208,3 +1330,12 @@ type SetHostStateJSONRequestBody = SetHostStateRequest
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest
+
+// CreateWikiPageJSONRequestBody defines body for CreateWikiPage for application/json ContentType.
+type CreateWikiPageJSONRequestBody = CreateWikiPageRequest
+
+// EditWikiPageJSONRequestBody defines body for EditWikiPage for application/json ContentType.
+type EditWikiPageJSONRequestBody = EditWikiPageRequest
+
+// AppendWikiPageJSONRequestBody defines body for AppendWikiPage for application/json ContentType.
+type AppendWikiPageJSONRequestBody = AppendWikiPageRequest

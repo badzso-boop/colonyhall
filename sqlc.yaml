@@ -55,3 +55,7 @@ sql:
     schema: migrations
     queries: internal/modules/approval/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/approval/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/wiki/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/wiki/postgres/sqlcgen } }

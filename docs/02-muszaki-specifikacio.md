@@ -391,7 +391,74 @@ A hálózat nyitva marad (a kliensnek el kell érnie a szolgáltatóját). A kli
 
 **Megvalósítás (`internal/guard`):** `host.go` (felügyelő: jelentés, konfiguráció ETaggel 10 mp-enként, agent-ciklusok indítása/leállítása, tokenmegújítás 10 perccel lejárat előtt), `paths.go` (útellenőrzés, tiltólista), `sandbox.go` (`bwrap` parancssor). A mountok sorrendje: rendszer csak olvashatóan → üres home → `~/.local` csak olvashatóan → engedélyezett mappák → tiltólista, **minden kliens valódi beállítása** (`~/.claude`, `~/.claude.json`, `~/.gemini`, `~/.config/antigravity`) és más agentek sandboxa elrejtve → saját agent-mappa → az agent **saját beállítási mappája** (Claude: `CLAUDE_CONFIG_DIR`; Antigravity: agentenkénti `~/.gemini`, a beállítások egyszer átmásolva, a segédprogramok csak olvashatóan). A saját beállítási mappa az agent írható mappáján **kívül** van (`<agent>.config`), így egy futás nem cserélheti symlinkre; az őr csak `os.Root`-on át ír bele (symlinken nem lép ki). A belépési token (`.credentials.json`, `antigravity-oauth-token`) **futásonként friss másolat**, ami soha nem íródik vissza: a futás nem írhat hookot, engedélyt vagy hamis belépést a felhasználó valódi beállításaiba. Claude-hoz ajánlott a `claude setup-token` tartós tokenje (`claude_token_file`), mert egy másolatból végzett tokenmegújítás elvben kiléptetheti a felhasználó saját CLI-jét. Az engedélyezett mappákat az őr minden futás előtt újra feloldja; ami azóta symlinkre cserélődött, kimarad. A döntő futás is sandboxban fut (az `agy` eszközei nem kapcsolhatók ki); `bwrap` nélkül Antigravity-agent nem indul, ha a sandbox kötelező. A környezet törlődik, csak egy engedélyezett lista marad (PATH, nyelv, proxy, kliens API-kulcsok). Az őr a szervertől kapott agent-nevet és -azonosítót szigorú mintához köti, mert mappanév és URL lesz belőlük.
 
-**`guard.yaml` gépes módban:** `server`, `host_token_file`, `roots`, `sandbox_dir`, `require_sandbox` (alapból igaz: `bwrap` nélkül nincs munkafutás), `config_poll`, `commands`, `defaults` (poll, debounce, batch, időkorlátok). Minta: `guard.example.yaml`.
+## Wiki (megvalósítva, 2026-10-16)
+
+A csapat közös, tartós tudását és döntéseit kezelő modul a szerveren. A wiki oldalak revíziói append-only módon tárolódnak, megőrizve a teljes előzményt.
+
+### Adatmodell és táblák
+
+- **`wiki_page`**:
+  - `id UUID PRIMARY KEY`: az oldal egyedi azonosítója.
+  - `workspace_id UUID NOT NULL REFERENCES workspace(id)`: a munkatér azonosítója.
+  - `slug VARCHAR(80) NOT NULL`: URL-barát azonosító (munkatéren belül egyedi: `UNIQUE (workspace_id, slug)`).
+  - `title VARCHAR(120) NOT NULL`: az oldal címe (max. 120 karakter).
+  - `tags TEXT[] NOT NULL DEFAULT '{}'`: címkék listája.
+  - `created_by UUID NOT NULL REFERENCES actor(id)`: a létrehozó azonosítója.
+  - `created_at TIMESTAMPTZ NOT NULL`: létrehozás időbélyege.
+  - `deleted_at TIMESTAMPTZ`: soft delete időbélyege (vagy `NULL`, ha aktív).
+  - Indexek: `wiki_page_workspace_idx` (`workspace_id`), `wiki_page_slug_idx` (`slug`).
+
+- **`wiki_revision`**:
+  - `page_id UUID NOT NULL REFERENCES wiki_page(id)`: a kapcsolódó oldal.
+  - `rev INT NOT NULL`: szigorúan növekvő verziószám (1-től indul).
+  - `body TEXT NOT NULL`: a revízió teljes markdown tartalma (max. 50 000 karakter).
+  - `kind VARCHAR(20) NOT NULL`: revízió típusa (`create`, `append`, `edit`, `delete`, `restore`).
+  - `author_id UUID NOT NULL REFERENCES actor(id)`: a revízió szerzője.
+  - `created_at TIMESTAMPTZ NOT NULL`: revízió időbélyege.
+  - Elsődleges kulcs: `PRIMARY KEY (page_id, rev)`.
+  - Index: `wiki_revision_page_id_rev_desc` (`page_id, rev DESC`).
+
+### Jogosultsági mátrix
+
+| Művelet | Ember | Agent | Szabály / Megjegyzés |
+|---|:---:|:---:|---|
+| Index listázása (`GET /wiki`) | Igen | Igen | Bárki a munkatérből. Törölt oldalt csak ember láthat `?deleted=1` esetén. |
+| Oldal olvasása (`GET /wiki/{slug}`) | Igen | Igen | Aktív oldalt bárki. Törölt oldalt agent nem érhet el (404). |
+| Revíziók listázása (`GET /wiki/{slug}/revisions`) | Igen | Igen | Teljes verziótörténet lekérése. |
+| Oldal létrehozása (`POST /wiki`, `wiki_create`) | Igen | Igen | Cím (≤120), törzs (≤50 000). Kezdő rev: 1. Halted actor nem írhat (403). |
+| Hozzáfűzés (`POST /wiki/{slug}/append`, `wiki_append`) | Igen | Igen | Hozzáfűzött szöveg ≤8 000. Automatikus fejléc: `\n\n---\n*@handle, YYYY-MM-DD HH:MM:*\n\n`. |
+| Teljes szerkesztés (`PUT /wiki/{slug}`) | Igen | **Nem** (403) | Concurrency védelem: `base_rev` megadása kötelező; ha eltér a legfrissebbtől: 409 Conflict. |
+| Törlés (`DELETE /wiki/{slug}`) | Igen | **Nem** (403) | Soft delete (`deleted_at = now()`, rev növelés `kind='delete'`). |
+| Visszaállítás (`POST /wiki/{slug}/restore`) | Igen | **Nem** (403) | Visszaállítás (`deleted_at = NULL`, rev növelés `kind='restore'`). |
+
+### Slug képzés és ütközéskezelés
+
+- **Ékezetmentesítés**: a magyar és gyakori ékezetes karakterek ASCII alakra konvertálódnak (pl. `á`→`a`, `ő`→`o`, `ű`→`u`).
+- **Formátum**: kisbetűsítés, nem alfanumerikus karakterek helyett `-`, levágva a felesleges elválasztókat.
+- **Hosszkorlát**: a slug legfeljebb 80 karakter.
+- **Ütközésfeloldás**: ha a munkatérben már létezik az adott slug, `-2`, `-3` stb. sorszámot kap. Ha az utótag miatt a teljes hossz meghaladná a 80 karaktert, a törzs levágásra kerül úgy, hogy a slug a sorszámmal együtt se haladja meg a 80 karaktert.
+
+### MCP eszközök (`internal/modules/wiki/mcptools`)
+
+- `wiki_index`: oldalak keresése és listázása (opcionális `q` paraméterrel szűrve címre, slugra, címkékre vagy tartalomra).
+- `wiki_read`: oldal tartalmának és metaadatainak olvasása slug alapján. Ha a törzs >8000 karakter, 8000 karakterre csonkolódik figyelmeztetéssel.
+- `wiki_create`: új oldal létrehozása cím, kezdeti törzs és opcionális vesszővel elválasztott címkék megadásával.
+- `wiki_append`: hozzáfűzés létező oldalhoz (az agent handle-jével és időbélyegével automatikusan elláttva).
+- *Megjegyzés:* `wiki_edit`, `wiki_delete`, `wiki_restore` szándékosan **nem létezik** MCP toolként.
+
+### REST végpontok és audit események
+
+- Végpontok:
+  - `GET /api/v1/wiki?q=&deleted=`
+  - `POST /api/v1/wiki`
+  - `GET /api/v1/wiki/{slug}`
+  - `PUT /api/v1/wiki/{slug}`
+  - `DELETE /api/v1/wiki/{slug}`
+  - `POST /api/v1/wiki/{slug}/append`
+  - `POST /api/v1/wiki/{slug}/restore`
+  - `GET /api/v1/wiki/{slug}/revisions`
+- Audit napló események (a törzs sosem kerül az audit payloadba a méret miatt):
+  - `wiki.created`, `wiki.appended`, `wiki.edited`, `wiki.deleted`, `wiki.restored` (payload: `page_id`, `slug`, `title`, `rev`, `kind`).
 
 ## Verziózás, kompatibilitás, bővíthetőség
 

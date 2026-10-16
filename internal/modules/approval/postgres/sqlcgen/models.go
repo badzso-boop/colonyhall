@@ -258,6 +258,26 @@ type Session struct {
 	RevokedAt *time.Time
 }
 
+type WikiPage struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Slug        string
+	Title       string
+	Tags        []string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+	DeletedAt   *time.Time
+}
+
+type WikiRevision struct {
+	PageID    uuid.UUID
+	Rev       int32
+	Body      string
+	Kind      string
+	AuthorID  uuid.UUID
+	CreatedAt time.Time
+}
+
 type Workspace struct {
 	ID              uuid.UUID
 	Name            string
