@@ -47,22 +47,22 @@ func (e ApprovalDecision) Valid() bool {
 
 // Defines values for ApprovalState.
 const (
-	Allowed ApprovalState = "allowed"
-	Denied  ApprovalState = "denied"
-	Expired ApprovalState = "expired"
-	Pending ApprovalState = "pending"
+	ApprovalStateAllowed ApprovalState = "allowed"
+	ApprovalStateDenied  ApprovalState = "denied"
+	ApprovalStateExpired ApprovalState = "expired"
+	ApprovalStatePending ApprovalState = "pending"
 )
 
 // Valid indicates whether the value is a known member of the ApprovalState enum.
 func (e ApprovalState) Valid() bool {
 	switch e {
-	case Allowed:
+	case ApprovalStateAllowed:
 		return true
-	case Denied:
+	case ApprovalStateDenied:
 		return true
-	case Expired:
+	case ApprovalStateExpired:
 		return true
-	case Pending:
+	case ApprovalStatePending:
 		return true
 	default:
 		return false
@@ -300,6 +300,33 @@ func (e MessageKind) Valid() bool {
 	case System:
 		return true
 	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for QuestionState.
+const (
+	QuestionStateAnswered  QuestionState = "answered"
+	QuestionStateEscalated QuestionState = "escalated"
+	QuestionStateExpired   QuestionState = "expired"
+	QuestionStateOpen      QuestionState = "open"
+	QuestionStateWithdrawn QuestionState = "withdrawn"
+)
+
+// Valid indicates whether the value is a known member of the QuestionState enum.
+func (e QuestionState) Valid() bool {
+	switch e {
+	case QuestionStateAnswered:
+		return true
+	case QuestionStateEscalated:
+		return true
+	case QuestionStateExpired:
+		return true
+	case QuestionStateOpen:
+		return true
+	case QuestionStateWithdrawn:
 		return true
 	default:
 		return false
@@ -584,6 +611,11 @@ type AdminStatus struct {
 type AgentToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	Token     string    `json:"token"`
+}
+
+// AnswerQuestionRequest defines model for AnswerQuestionRequest.
+type AnswerQuestionRequest struct {
+	Answer string `json:"answer"`
 }
 
 // AppendWikiPageRequest defines model for AppendWikiPageRequest.
@@ -973,6 +1005,45 @@ type Problem struct {
 	Type   string  `json:"type"`
 }
 
+// Question defines model for Question.
+type Question struct {
+	Answer           *string             `json:"answer,omitempty"`
+	AnsweredAt       *time.Time          `json:"answered_at,omitempty"`
+	AnsweredBy       *openapi_types.UUID `json:"answered_by,omitempty"`
+	AnsweredByHandle *string             `json:"answered_by_handle,omitempty"`
+	AskedBy          openapi_types.UUID  `json:"asked_by"`
+	AskedByHandle    string              `json:"asked_by_handle"`
+	ChannelId        openapi_types.UUID  `json:"channel_id"`
+	ChannelName      string              `json:"channel_name"`
+	CreatedAt        time.Time           `json:"created_at"`
+	Deadline         *time.Time          `json:"deadline,omitempty"`
+	DefaultOption    *string             `json:"default_option,omitempty"`
+	EscalatedAt      *time.Time          `json:"escalated_at,omitempty"`
+	ExpiredAt        *time.Time          `json:"expired_at,omitempty"`
+
+	// FormattedNumber Example: Q-12
+	FormattedNumber string              `json:"formatted_number"`
+	Id              openapi_types.UUID  `json:"id"`
+	Number          int                 `json:"number"`
+	Options         []string            `json:"options"`
+	State           QuestionState       `json:"state"`
+	Text            string              `json:"text"`
+	ThreadRootId    openapi_types.UUID  `json:"thread_root_id"`
+	ToActorHandle   *string             `json:"to_actor_handle,omitempty"`
+	ToActorId       *openapi_types.UUID `json:"to_actor_id,omitempty"`
+	ToHuman         bool                `json:"to_human"`
+	WithdrawnAt     *time.Time          `json:"withdrawn_at,omitempty"`
+	WorkspaceId     openapi_types.UUID  `json:"workspace_id"`
+}
+
+// QuestionList defines model for QuestionList.
+type QuestionList struct {
+	Questions []Question `json:"questions"`
+}
+
+// QuestionState defines model for QuestionState.
+type QuestionState string
+
 // Reaction defines model for Reaction.
 type Reaction struct {
 	ActorId   openapi_types.UUID `json:"actor_id"`
@@ -1251,6 +1322,12 @@ type ListMessagesParams struct {
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListQuestionsParams defines parameters for ListQuestions.
+type ListQuestionsParams struct {
+	// State Filter by state: open, answered, escalated, withdrawn, expired
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
@@ -1327,6 +1404,9 @@ type EnrollHostJSONRequestBody = EnrollRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
+
+// AnswerQuestionJSONRequestBody defines body for AnswerQuestion for application/json ContentType.
+type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest

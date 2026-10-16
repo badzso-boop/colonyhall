@@ -209,6 +209,29 @@ type Message struct {
 	DeletedAt    *time.Time
 }
 
+type Question struct {
+	ID            uuid.UUID
+	Number        int32
+	WorkspaceID   uuid.UUID
+	AskedBy       uuid.UUID
+	ToActorID     *uuid.UUID
+	ToHuman       bool
+	ChannelID     uuid.UUID
+	ThreadRootID  uuid.UUID
+	Text          string
+	Options       []string
+	DefaultOption *string
+	Deadline      *time.Time
+	State         string
+	Answer        *string
+	AnsweredBy    *uuid.UUID
+	CreatedAt     time.Time
+	AnsweredAt    *time.Time
+	EscalatedAt   *time.Time
+	WithdrawnAt   *time.Time
+	ExpiredAt     *time.Time
+}
+
 type Reaction struct {
 	MessageID uuid.UUID
 	ActorID   uuid.UUID
