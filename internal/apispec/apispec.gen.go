@@ -580,6 +580,21 @@ type AdminStatus struct {
 	EmergencyStop EmergencyStop `json:"emergency_stop"`
 }
 
+// AgentBudget defines model for AgentBudget.
+type AgentBudget struct {
+	// Limit Daily limit in tokens (0 = no limit)
+	Limit int64 `json:"limit"`
+
+	// Remaining Remaining tokens today (0 if limit is 0 or exceeded)
+	Remaining int64 `json:"remaining"`
+
+	// ResetsAt When the budget resets (next midnight in Europe/Budapest)
+	ResetsAt time.Time `json:"resets_at"`
+
+	// UsedToday Total tokens consumed today (input + output + cache_read + cache_write)
+	UsedToday int64 `json:"used_today"`
+}
+
 // AgentToken defines model for AgentToken.
 type AgentToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -615,16 +630,18 @@ type ApprovalState string
 
 // AssignRequest defines model for AssignRequest.
 type AssignRequest struct {
-	AllowWork      *bool                   `json:"allow_work,omitempty"`
-	Approvals      *AssignRequestApprovals `json:"approvals,omitempty"`
-	Client         AssignRequestClient     `json:"client"`
-	HostId         openapi_types.UUID      `json:"host_id"`
-	Mode           *AssignRequestMode      `json:"mode,omitempty"`
-	Model          *string                 `json:"model,omitempty"`
-	PermissionMode *string                 `json:"permission_mode,omitempty"`
-	RootDir        *string                 `json:"root_dir,omitempty"`
-	Sandbox        *bool                   `json:"sandbox,omitempty"`
-	WorkModel      *string                 `json:"work_model,omitempty"`
+	AllowWork        *bool                   `json:"allow_work,omitempty"`
+	Approvals        *AssignRequestApprovals `json:"approvals,omitempty"`
+	Client           AssignRequestClient     `json:"client"`
+	DailyTokenLimit  *int64                  `json:"daily_token_limit,omitempty"`
+	HostId           openapi_types.UUID      `json:"host_id"`
+	MaxSessionTokens *int                    `json:"max_session_tokens,omitempty"`
+	Mode             *AssignRequestMode      `json:"mode,omitempty"`
+	Model            *string                 `json:"model,omitempty"`
+	PermissionMode   *string                 `json:"permission_mode,omitempty"`
+	RootDir          *string                 `json:"root_dir,omitempty"`
+	Sandbox          *bool                   `json:"sandbox,omitempty"`
+	WorkModel        *string                 `json:"work_model,omitempty"`
 }
 
 // AssignRequestApprovals defines model for AssignRequest.Approvals.
@@ -826,19 +843,25 @@ type HostState string
 
 // HostAgent defines model for HostAgent.
 type HostAgent struct {
-	AgentId        openapi_types.UUID `json:"agent_id"`
-	AllowWork      bool               `json:"allow_work"`
-	Approvals      HostAgentApprovals `json:"approvals"`
-	Client         HostAgentClient    `json:"client"`
-	Grants         []FolderGrant      `json:"grants"`
-	Handle         string             `json:"handle"`
-	HostId         openapi_types.UUID `json:"host_id"`
-	Mode           HostAgentMode      `json:"mode"`
-	Model          string             `json:"model"`
-	PermissionMode string             `json:"permission_mode"`
-	RootDir        string             `json:"root_dir"`
-	Sandbox        bool               `json:"sandbox"`
-	WorkModel      string             `json:"work_model"`
+	AgentId   openapi_types.UUID `json:"agent_id"`
+	AllowWork bool               `json:"allow_work"`
+	Approvals HostAgentApprovals `json:"approvals"`
+	Client    HostAgentClient    `json:"client"`
+
+	// DailyTokenLimit Max tokens per Budapest calendar day (0 = none)
+	DailyTokenLimit int64              `json:"daily_token_limit"`
+	Grants          []FolderGrant      `json:"grants"`
+	Handle          string             `json:"handle"`
+	HostId          openapi_types.UUID `json:"host_id"`
+
+	// MaxSessionTokens Max context tokens before starting a fresh session (0 = no limit)
+	MaxSessionTokens int           `json:"max_session_tokens"`
+	Mode             HostAgentMode `json:"mode"`
+	Model            string        `json:"model"`
+	PermissionMode   string        `json:"permission_mode"`
+	RootDir          string        `json:"root_dir"`
+	Sandbox          bool          `json:"sandbox"`
+	WorkModel        string        `json:"work_model"`
 }
 
 // HostAgentApprovals defines model for HostAgent.Approvals.

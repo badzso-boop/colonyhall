@@ -22,20 +22,22 @@ type Actor struct {
 }
 
 type AgentHost struct {
-	AgentID        uuid.UUID
-	HostID         uuid.UUID
-	WorkspaceID    uuid.UUID
-	Client         string
-	Model          string
-	WorkModel      string
-	AllowWork      bool
-	PermissionMode string
-	CreatedBy      uuid.UUID
-	CreatedAt      time.Time
-	Mode           string
-	RootDir        string
-	Sandbox        bool
-	Approvals      string
+	AgentID          uuid.UUID
+	HostID           uuid.UUID
+	WorkspaceID      uuid.UUID
+	Client           string
+	Model            string
+	WorkModel        string
+	AllowWork        bool
+	PermissionMode   string
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
+	Mode             string
+	RootDir          string
+	Sandbox          bool
+	Approvals        string
+	MaxSessionTokens int32
+	DailyTokenLimit  int64
 }
 
 type AgentRun struct {

@@ -20,15 +20,17 @@ type HostEvent struct {
 
 // AssignmentEvent is the payload of agent assignment events.
 type AssignmentEvent struct {
-	AgentID   string `json:"agent_id"`
-	HostID    string `json:"host_id,omitempty"`
-	Client    string `json:"client,omitempty"`
-	Model     string `json:"model,omitempty"`
-	AllowWork bool   `json:"allow_work"`
-	Mode      string `json:"mode,omitempty"`
-	RootDir   string `json:"root_dir,omitempty"`
-	Sandbox   bool   `json:"sandbox"`
-	Approvals string `json:"approvals,omitempty"`
+	AgentID          string `json:"agent_id"`
+	HostID           string `json:"host_id,omitempty"`
+	Client           string `json:"client,omitempty"`
+	Model            string `json:"model,omitempty"`
+	AllowWork        bool   `json:"allow_work"`
+	Mode             string `json:"mode,omitempty"`
+	RootDir          string `json:"root_dir,omitempty"`
+	Sandbox          bool   `json:"sandbox"`
+	Approvals        string `json:"approvals,omitempty"`
+	MaxSessionTokens int    `json:"max_session_tokens,omitempty"`
+	DailyTokenLimit  int64  `json:"daily_token_limit,omitempty"`
 }
 
 // GrantEvent is the payload of grant events.

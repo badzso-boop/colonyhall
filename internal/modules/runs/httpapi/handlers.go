@@ -86,6 +86,20 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 		httpx.JSON(w, http.StatusCreated, apispec.RunRef{Id: run.ID})
 	}))
 
+	mux.Handle("GET /api/v1/agent/budget", wrap(func(w http.ResponseWriter, r *http.Request) {
+		b, err := svc.AgentBudget(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.AgentBudget{
+			Limit:     b.Limit,
+			UsedToday: b.UsedToday,
+			Remaining: b.Remaining,
+			ResetsAt:  b.ResetsAt,
+		})
+	}))
+
 	mux.Handle("GET /api/v1/runs", wrap(func(w http.ResponseWriter, r *http.Request) {
 		var agentID ids.ID
 		if raw := r.URL.Query().Get("agent_id"); raw != "" {

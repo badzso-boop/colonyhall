@@ -161,3 +161,12 @@ func (s *Store) Usage(ctx context.Context, workspaceID ids.ID, since time.Time) 
 	}
 	return out, nil
 }
+
+// TokensSince returns the sum of all tokens consumed by the agent since the given timestamp.
+func (s *Store) TokensSince(ctx context.Context, workspaceID, agentID ids.ID, since time.Time) (int64, error) {
+	return s.q(ctx).AgentTokensSince(ctx, sqlcgen.AgentTokensSinceParams{
+		WorkspaceID: workspaceID,
+		AgentID:     agentID,
+		CreatedAt:   since,
+	})
+}

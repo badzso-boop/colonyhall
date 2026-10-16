@@ -148,3 +148,17 @@ func (s *Store) Usage(_ context.Context, workspaceID ids.ID, since time.Time) ([
 
 	return out, nil
 }
+
+// TokensSince returns the sum of all tokens consumed by the agent since the given timestamp.
+func (s *Store) TokensSince(_ context.Context, workspaceID, agentID ids.ID, since time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var total int64
+	for _, r := range s.runs {
+		if r.WorkspaceID == workspaceID && r.AgentID == agentID && !r.CreatedAt.Before(since) {
+			total += r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
+		}
+	}
+	return total, nil
+}

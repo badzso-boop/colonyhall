@@ -205,16 +205,18 @@ func (s *Service) hostIn(ctx context.Context, workspaceID, hostID ids.ID) (Host,
 
 // AssignInput configures how an agent runs on a host.
 type AssignInput struct {
-	HostID         ids.ID
-	Client         string
-	Model          string
-	WorkModel      string
-	AllowWork      bool
-	PermissionMode string
-	Mode           string
-	RootDir        string
-	Sandbox        *bool
-	Approvals      string
+	HostID           ids.ID
+	Client           string
+	Model            string
+	WorkModel        string
+	AllowWork        bool
+	PermissionMode   string
+	Mode             string
+	RootDir          string
+	Sandbox          *bool
+	Approvals        string
+	MaxSessionTokens *int
+	DailyTokenLimit  *int64
 }
 
 // Assign puts an agent on a host (moving it if it was elsewhere; grants on
@@ -273,16 +275,32 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	if approvals == ApprovalsChat && in.Client != "claude-code" {
 		return AgentConfig{}, ErrApprovalsChatClient
 	}
+	maxSessionTokens := 150000
+	if in.MaxSessionTokens != nil {
+		maxSessionTokens = *in.MaxSessionTokens
+	}
+	if maxSessionTokens < 0 {
+		return AgentConfig{}, ErrBadMaxSessionTokens
+	}
+	var dailyTokenLimit int64
+	if in.DailyTokenLimit != nil {
+		dailyTokenLimit = *in.DailyTokenLimit
+	}
+	if dailyTokenLimit < 0 {
+		return AgentConfig{}, ErrBadDailyTokenLimit
+	}
 	a := Assignment{
 		AgentID: agent.ID, HostID: h.ID, WorkspaceID: by.WorkspaceID, Client: in.Client, Model: clip(in.Model, 100),
 		WorkModel: clip(in.WorkModel, 100), AllowWork: in.AllowWork, PermissionMode: clip(in.PermissionMode, 40),
 		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), Sandbox: sandbox, Approvals: approvals,
+		MaxSessionTokens: maxSessionTokens, DailyTokenLimit: dailyTokenLimit,
 		CreatedBy: by.ID, CreatedAt: s.Clock.Now(),
 	}
 	err = s.record(ctx, by.WorkspaceID, by.ID, EventAgentAssigned, h.ID,
 		AssignmentEvent{
 			AgentID: agent.ID.String(), HostID: h.ID.String(), Client: a.Client, Model: a.Model,
 			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: a.Approvals,
+			MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
 		},
 		func(ctx context.Context) error {
 			old, err := s.Store.AssignmentByAgent(ctx, agent.ID)
@@ -299,6 +317,11 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 			return s.Store.SetAssignment(ctx, a)
 		})
 	return AgentConfig{Assignment: a, Handle: agent.Handle, Grants: []Grant{}}, err
+}
+
+// AssignmentByAgent returns an agent's current host assignment, or db.ErrNotFound if not assigned.
+func (s *Service) AssignmentByAgent(ctx context.Context, agentID ids.ID) (Assignment, error) {
+	return s.Store.AssignmentByAgent(ctx, agentID)
 }
 
 // Unassign takes an agent off its host: its grants and host tokens end.

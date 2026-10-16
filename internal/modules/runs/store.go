@@ -16,4 +16,5 @@ type Store interface {
 	InsertRun(ctx context.Context, r Run) error
 	ListRuns(ctx context.Context, workspaceID ids.ID, agentID ids.ID, limit int) ([]Run, error)
 	Usage(ctx context.Context, workspaceID ids.ID, since time.Time) ([]DayUsage, error)
+	TokensSince(ctx context.Context, workspaceID, agentID ids.ID, since time.Time) (int64, error)
 }

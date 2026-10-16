@@ -475,6 +475,15 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/RunRef" } } } }
 
+  /agent/budget:
+    get:
+      operationId: getAgentBudget
+      tags: [runs]
+      description: Agents only. Token budget and usage for the calling agent for the current day (Europe/Budapest timezone).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentBudget" } } } }
+
   /errors/{errorId}:
     parameters:
       - { name: errorId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1038,7 +1047,7 @@ components:
         outside_roots: { type: boolean, description: "Only when created: the path is outside the roots the host reported" }
     HostAgent:
       type: object
-      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, grants]
+      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, grants]
       properties:
         agent_id: { type: string, format: uuid }
         handle: { type: string }
@@ -1052,6 +1061,8 @@ components:
         root_dir: { type: string }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
+        max_session_tokens: { type: integer, default: 150000, description: "Max context tokens before starting a fresh session (0 = no limit)" }
+        daily_token_limit: { type: integer, format: int64, default: 0, description: "Max tokens per Budapest calendar day (0 = none)" }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -1067,6 +1078,8 @@ components:
         root_dir: { type: string, maxLength: 1024 }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
+        max_session_tokens: { type: integer, minimum: 0, default: 150000 }
+        daily_token_limit: { type: integer, format: int64, minimum: 0, default: 0 }
     GrantRequest:
       type: object
       required: [path, mode]
@@ -1199,6 +1212,14 @@ components:
         usage:
           type: array
           items: { $ref: "#/components/schemas/DayUsage" }
+    AgentBudget:
+      type: object
+      required: [limit, used_today, remaining, resets_at]
+      properties:
+        limit: { type: integer, format: int64, description: "Daily limit in tokens (0 = no limit)" }
+        used_today: { type: integer, format: int64, description: "Total tokens consumed today (input + output + cache_read + cache_write)" }
+        remaining: { type: integer, format: int64, description: "Remaining tokens today (0 if limit is 0 or exceeded)" }
+        resets_at: { type: string, format: date-time, description: "When the budget resets (next midnight in Europe/Budapest)" }
     CreateScheduleRequest:
       type: object
       required: [channel_id, body]

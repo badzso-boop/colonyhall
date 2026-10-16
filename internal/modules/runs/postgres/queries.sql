@@ -38,3 +38,11 @@ WHERE workspace_id = $1
   AND created_at >= $2
 GROUP BY agent_id, day
 ORDER BY day DESC, agent_id ASC;
+
+-- name: AgentTokensSince :one
+SELECT COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0)::bigint AS total_tokens
+FROM agent_run
+WHERE workspace_id = $1
+  AND agent_id = $2
+  AND created_at >= $3;
+

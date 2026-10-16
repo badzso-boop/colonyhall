@@ -183,7 +183,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	hosthttp.Register(mux, hoSvc, idSvc)
 	wikihttp.Register(mux, wiSvc, idSvc)
 	schedhttp.Register(mux, scSvc, idSvc)
-	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
+	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
 	apphttp.Register(mux, apSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }

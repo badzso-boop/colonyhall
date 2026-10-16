@@ -98,20 +98,22 @@ const (
 
 // Assignment says which host runs an agent, and how.
 type Assignment struct {
-	AgentID        ids.ID
-	HostID         ids.ID
-	WorkspaceID    ids.ID
-	Client         string
-	Model          string
-	WorkModel      string
-	AllowWork      bool
-	PermissionMode string
-	Mode           string
-	RootDir        string
-	Sandbox        bool
-	Approvals      string
-	CreatedBy      ids.ID
-	CreatedAt      time.Time
+	AgentID          ids.ID
+	HostID           ids.ID
+	WorkspaceID      ids.ID
+	Client           string
+	Model            string
+	WorkModel        string
+	AllowWork        bool
+	PermissionMode   string
+	Mode             string
+	RootDir          string
+	Sandbox          bool
+	Approvals        string
+	MaxSessionTokens int
+	DailyTokenLimit  int64
+	CreatedBy        ids.ID
+	CreatedAt        time.Time
 }
 
 // Grant lets an agent use a folder on its host.
@@ -146,6 +148,8 @@ var (
 	ErrBadClient           = errors.New("client must be claude-code or antigravity")
 	ErrBadApprovals        = errors.New("approvals must be none or chat")
 	ErrApprovalsChatClient = errors.New("approvals=chat requires client claude-code")
+	ErrBadMaxSessionTokens = errors.New("max_session_tokens must be non-negative")
+	ErrBadDailyTokenLimit  = errors.New("daily_token_limit must be non-negative")
 	ErrBadName             = errors.New("host name must be 1-64 characters")
 	ErrNotAssigned         = errors.New("the agent is not assigned to this host")
 	ErrNotAgent            = errors.New("only agents can be assigned to a host")

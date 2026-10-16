@@ -315,3 +315,108 @@ func TestRunReportReferencesAreChecked(t *testing.T) {
 		t.Fatalf("long model is clipped, not rejected: %d", s)
 	}
 }
+
+func TestAgentBudgetEndpoint(t *testing.T) {
+	e := newEnv(t)
+
+	// 1. Humans are forbidden
+	if s := e.do("GET", "/api/v1/agent/budget", server.DevAdminToken, nil, nil); s != http.StatusForbidden {
+		t.Fatalf("human calling /agent/budget: got %d want 403", s)
+	}
+
+	// 2. Agent before assignment has limit 0
+	var b1 apispec.AgentBudget
+	if s := e.do("GET", "/api/v1/agent/budget", server.DevAgentToken, nil, &b1); s != http.StatusOK {
+		t.Fatalf("agent calling /agent/budget: got %d want 200", s)
+	}
+	if b1.Limit != 0 || b1.UsedToday != 0 || b1.Remaining != 0 {
+		t.Fatalf("initial budget: %+v", b1)
+	}
+	// Resets at should be 2026-10-15 22:00:00 UTC (which is 2026-10-16 00:00:00 CEST)
+	wantReset := time.Date(2026, 10, 15, 22, 0, 0, 0, time.UTC)
+	if !b1.ResetsAt.Equal(wantReset) {
+		t.Fatalf("resets_at: got %s want %s", b1.ResetsAt, wantReset)
+	}
+
+	// 3. Enroll host and assign agent with daily limit 100,000
+	host, _ := e.enroll("box")
+	agentID := e.agentID()
+	var assigned hostAgent
+	if s := e.do("PUT", "/api/v1/agents/"+agentID+"/host", server.DevAdminToken, map[string]any{
+		"host_id":            host,
+		"client":             "claude-code",
+		"model":              "haiku",
+		"mode":               "direct",
+		"root_dir":           "/app",
+		"max_session_tokens": 120000,
+		"daily_token_limit":  100000,
+	}, &assigned); s != http.StatusOK {
+		t.Fatalf("assign host: %d", s)
+	}
+	if assigned.DailyTokenLimit != 100000 || assigned.MaxSessionTokens != 120000 {
+		t.Fatalf("assigned limits: %+v", assigned)
+	}
+
+	// 4. Query budget with limit set
+	var b2 apispec.AgentBudget
+	if s := e.do("GET", "/api/v1/agent/budget", server.DevAgentToken, nil, &b2); s != http.StatusOK {
+		t.Fatalf("GET /agent/budget: %d", s)
+	}
+	if b2.Limit != 100000 || b2.UsedToday != 0 || b2.Remaining != 100000 {
+		t.Fatalf("b2 budget: %+v", b2)
+	}
+
+	// 5. Agent reports run with 40,000 tokens
+	if s := e.do("POST", "/api/v1/agent/runs", server.DevAgentToken, map[string]any{
+		"phase":              "direct",
+		"client":             "claude-code",
+		"status":             "ok",
+		"items":              1,
+		"input_tokens":       25000,
+		"output_tokens":      10000,
+		"cache_read_tokens":  3000,
+		"cache_write_tokens": 2000,
+		"duration_ms":        500,
+	}, nil); s != http.StatusCreated {
+		t.Fatalf("report run: %d", s)
+	}
+
+	var b3 apispec.AgentBudget
+	e.do("GET", "/api/v1/agent/budget", server.DevAgentToken, nil, &b3)
+	if b3.Limit != 100000 || b3.UsedToday != 40000 || b3.Remaining != 60000 {
+		t.Fatalf("b3 budget: %+v", b3)
+	}
+
+	// 6. Agent reports another run with 70,000 tokens -> total used 110,000 > limit 100,000
+	if s := e.do("POST", "/api/v1/agent/runs", server.DevAgentToken, map[string]any{
+		"phase":              "direct",
+		"client":             "claude-code",
+		"status":             "ok",
+		"items":              1,
+		"input_tokens":       50000,
+		"output_tokens":      15000,
+		"cache_read_tokens":  3000,
+		"cache_write_tokens": 2000,
+		"duration_ms":        800,
+	}, nil); s != http.StatusCreated {
+		t.Fatalf("report run 2: %d", s)
+	}
+
+	var b4 apispec.AgentBudget
+	e.do("GET", "/api/v1/agent/budget", server.DevAgentToken, nil, &b4)
+	if b4.Limit != 100000 || b4.UsedToday != 110000 || b4.Remaining != 0 {
+		t.Fatalf("b4 budget (exceeded): %+v", b4)
+	}
+
+	// 7. Midnight boundary: advance clock across midnight (by 24 hours)
+	e.clock.Advance(24 * time.Hour)
+	var b5 apispec.AgentBudget
+	e.do("GET", "/api/v1/agent/budget", server.DevAgentToken, nil, &b5)
+	if b5.Limit != 100000 || b5.UsedToday != 0 || b5.Remaining != 100000 {
+		t.Fatalf("b5 budget (after midnight): %+v", b5)
+	}
+	wantResetNext := wantReset.Add(24 * time.Hour)
+	if !b5.ResetsAt.Equal(wantResetNext) {
+		t.Fatalf("resets_at next: got %s want %s", b5.ResetsAt, wantResetNext)
+	}
+}

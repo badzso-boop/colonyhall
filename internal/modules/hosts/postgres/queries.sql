@@ -30,11 +30,12 @@ UPDATE host SET report = $2, last_seen_at = $3 WHERE id = $1;
 UPDATE host SET last_seen_at = $2 WHERE id = $1;
 
 -- name: SetAssignment :exec
-INSERT INTO agent_host (agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO agent_host (agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (agent_id) DO UPDATE SET host_id = EXCLUDED.host_id, client = EXCLUDED.client, model = EXCLUDED.model,
   work_model = EXCLUDED.work_model, allow_work = EXCLUDED.allow_work, permission_mode = EXCLUDED.permission_mode,
   mode = EXCLUDED.mode, root_dir = EXCLUDED.root_dir, sandbox = EXCLUDED.sandbox, approvals = EXCLUDED.approvals,
+  max_session_tokens = EXCLUDED.max_session_tokens, daily_token_limit = EXCLUDED.daily_token_limit,
   created_by = EXCLUDED.created_by, created_at = EXCLUDED.created_at;
 
 -- name: DeleteAssignment :exec

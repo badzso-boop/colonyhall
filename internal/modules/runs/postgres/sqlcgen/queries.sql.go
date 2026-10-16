@@ -12,6 +12,27 @@ import (
 	"github.com/google/uuid"
 )
 
+const agentTokensSince = `-- name: AgentTokensSince :one
+SELECT COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0)::bigint AS total_tokens
+FROM agent_run
+WHERE workspace_id = $1
+  AND agent_id = $2
+  AND created_at >= $3
+`
+
+type AgentTokensSinceParams struct {
+	WorkspaceID uuid.UUID
+	AgentID     uuid.UUID
+	CreatedAt   time.Time
+}
+
+func (q *Queries) AgentTokensSince(ctx context.Context, arg AgentTokensSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, agentTokensSince, arg.WorkspaceID, arg.AgentID, arg.CreatedAt)
+	var total_tokens int64
+	err := row.Scan(&total_tokens)
+	return total_tokens, err
+}
+
 const errorByID = `-- name: ErrorByID :one
 SELECT id, workspace_id, agent_id, channel_id, thread_root_id, summary, detail, created_at FROM run_error WHERE id = $1
 `
