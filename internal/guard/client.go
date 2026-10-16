@@ -215,18 +215,20 @@ func (c *Client) Handles(ctx context.Context) (map[string]string, error) {
 
 // HostAgent is one agent of the host config.
 type HostAgent struct {
-	AgentID        string  `json:"agent_id"`
-	Handle         string  `json:"handle"`
-	Client         string  `json:"client"`
-	Model          string  `json:"model"`
-	WorkModel      string  `json:"work_model"`
-	AllowWork      bool    `json:"allow_work"`
-	PermissionMode string  `json:"permission_mode"`
-	Mode           string  `json:"mode"`
-	RootDir        string  `json:"root_dir"`
-	Sandbox        bool    `json:"sandbox"`
-	Approvals      string  `json:"approvals"`
-	Grants         []Grant `json:"grants"`
+	AgentID          string  `json:"agent_id"`
+	Handle           string  `json:"handle"`
+	Client           string  `json:"client"`
+	Model            string  `json:"model"`
+	WorkModel        string  `json:"work_model"`
+	AllowWork        bool    `json:"allow_work"`
+	PermissionMode   string  `json:"permission_mode"`
+	Mode             string  `json:"mode"`
+	RootDir          string  `json:"root_dir"`
+	Sandbox          bool    `json:"sandbox"`
+	Approvals        string  `json:"approvals"`
+	MaxSessionTokens int     `json:"max_session_tokens"`
+	DailyTokenLimit  int64   `json:"daily_token_limit"`
+	Grants           []Grant `json:"grants"`
 }
 
 // HostConfig is what the server says this machine runs.
@@ -340,4 +342,19 @@ func (c *Client) ReportRun(ctx context.Context, in ReportRunInput) (string, erro
 	}
 	err := c.do(ctx, http.MethodPost, "/api/v1/agent/runs", in, &r)
 	return r.ID, err
+}
+
+// AgentBudget represents the agent's daily token budget.
+type AgentBudget struct {
+	Limit     int64     `json:"limit"`
+	UsedToday int64     `json:"used_today"`
+	Remaining int64     `json:"remaining"`
+	ResetsAt  time.Time `json:"resets_at"`
+}
+
+// Budget fetches the agent's daily token budget from the server.
+func (c *Client) Budget(ctx context.Context) (AgentBudget, error) {
+	var b AgentBudget
+	err := c.do(ctx, http.MethodGet, "/api/v1/agent/budget", nil, &b)
+	return b, err
 }

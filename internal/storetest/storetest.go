@@ -450,24 +450,26 @@ func testHosts(t *testing.T, b Backend) {
 	a := hosts.Assignment{
 		AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
 		WorkModel: "sonnet", AllowWork: true, Mode: hosts.AgentModeDirect, RootDir: "/work", Sandbox: false,
-		Approvals: hosts.ApprovalsChat, CreatedBy: f.human.ID, CreatedAt: t0,
+		Approvals: hosts.ApprovalsChat, MaxSessionTokens: 120000, DailyTokenLimit: 500000, CreatedBy: f.human.ID, CreatedAt: t0,
 	}
 	must(t, hs.SetAssignment(ctx, a))
 	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Approvals != hosts.ApprovalsChat {
-		t.Fatalf("approvals: %+v %v", ga, err)
+	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 {
+		t.Fatalf("approvals / limits: %+v %v", ga, err)
 	}
 	a.Model = "opus"
 	a.Mode = hosts.AgentModeCompact
 	a.Sandbox = true
 	a.Approvals = hosts.ApprovalsNone
+	a.MaxSessionTokens = 80000
+	a.DailyTokenLimit = 250000
 	must(t, hs.SetAssignment(ctx, a)) // replaces
 	ga, err = hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone {
+	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone || ga.MaxSessionTokens != 80000 || ga.DailyTokenLimit != 250000 {
 		t.Fatalf("AssignmentByAgent: %+v %v", ga, err)
 	}
 	as, err := hs.AssignmentsForHost(ctx, h.ID)
-	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone {
+	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone || as[0].MaxSessionTokens != 80000 || as[0].DailyTokenLimit != 250000 {
 		t.Fatalf("AssignmentsForHost: %+v %v", as, err)
 	}
 
@@ -668,6 +670,28 @@ func testRuns(t *testing.T, b Backend) {
 		if u.Day != "2026-10-16" {
 			t.Fatalf("Usage sinceDay16 day: got %s want 2026-10-16", u.Day)
 		}
+	}
+
+	// Test TokensSince:
+	// f.agent on day 16 (sinceDay16): r2 had 200 + 100 + 20 + 10 = 330 tokens
+	tokDay16, err := b.Runs.TokensSince(ctx, f.ws.ID, f.agent.ID, sinceDay16)
+	if err != nil || tokDay16 != 330 {
+		t.Fatalf("TokensSince f.agent day16: got %d want 330 err=%v", tokDay16, err)
+	}
+	// otherAgent on day 16: r3 had 500 + 300 = 800 tokens
+	tokOther, err := b.Runs.TokensSince(ctx, f.ws.ID, otherAgent.ID, sinceDay16)
+	if err != nil || tokOther != 800 {
+		t.Fatalf("TokensSince otherAgent day16: got %d want 800 err=%v", tokOther, err)
+	}
+	// f.agent since tDay1: r1 (165) + r2 (330) = 495 tokens
+	tokAll, err := b.Runs.TokensSince(ctx, f.ws.ID, f.agent.ID, tDay1)
+	if err != nil || tokAll != 495 {
+		t.Fatalf("TokensSince f.agent all: got %d want 495 err=%v", tokAll, err)
+	}
+	// Unused agent returns 0
+	tokNone, err := b.Runs.TokensSince(ctx, f.ws.ID, gen.New(), tDay1)
+	if err != nil || tokNone != 0 {
+		t.Fatalf("TokensSince unused: got %d want 0 err=%v", tokNone, err)
 	}
 }
 

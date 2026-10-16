@@ -104,7 +104,8 @@ const I18N = {
         newAgent: "Új agent", createAgent: "Agent létrehozása", joinChannels: "Csatornák:",
         noHostAssign: "gép hozzárendelése később",
         hostModeTokenNote: "Megjegyzés: az agent tokenje gépes (host) módban nem szükséges — az őr automatikusan saját rövid lejáratú tokeneket kér a szervertől.",
-        exchange: "Titokcsere", exchangeNotOk: "nem írható" },
+        exchange: "Titokcsere", exchangeNotOk: "nem írható",
+        dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -121,7 +122,8 @@ const I18N = {
         newAgent: "New agent", createAgent: "Create agent", joinChannels: "Channels:",
         noHostAssign: "assign host later",
         hostModeTokenNote: "Note: the agent token is not needed in host mode — the guard requests its own short-lived tokens from the server.",
-        exchange: "Secrets exchange", exchangeNotOk: "unwritable" },
+        exchange: "Secrets exchange", exchangeNotOk: "unwritable",
+        dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -544,12 +546,32 @@ async function renderHosts() {
         a.approvals ? "approvals: " + a.approvals : "",
         a.permission_mode || "",
         a.model || "-",
-        a.allow_work ? L.work + ": " + (a.work_model || "-") : ""
+        a.allow_work ? L.work + ": " + (a.work_model || "-") : "",
+        "max session: " + (a.max_session_tokens || 150000),
+        "daily limit: " + (a.daily_token_limit ? a.daily_token_limit : L.none)
       ].filter(Boolean).join(" · ");
       box.append(el("b", { textContent: `@${a.handle}` }), el("span", { className: "muted", textContent: ` · ${details}` }));
+      const editLim = el("button", { textContent: L.editLimit });
+      editLim.onclick = async () => {
+        const val = prompt(L.enterDailyLimit, a.daily_token_limit || 0);
+        if (val === null) return;
+        const lim = parseInt(val, 10);
+        if (isNaN(lim) || lim < 0) { alert("Invalid limit"); return; }
+        await api(`/api/v1/agents/${a.agent_id}/host`, {
+          method: "PUT",
+          body: JSON.stringify({
+            host_id: h.id, client: a.client, mode: a.mode, root_dir: a.root_dir,
+            sandbox: a.sandbox, permission_mode: a.permission_mode, approvals: a.approvals,
+            model: a.model, work_model: a.work_model, allow_work: a.allow_work,
+            max_session_tokens: a.max_session_tokens || 150000,
+            daily_token_limit: lim
+          })
+        }).catch(e => alert(e.message));
+        renderHosts();
+      };
       const un = el("button", { textContent: L.unassign });
       un.onclick = async () => { await api(`/api/v1/agents/${a.agent_id}/host`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
-      box.append(" ", un);
+      box.append(" ", editLim, " ", un);
       for (const g of a.grants) {
         const x = el("button", { textContent: "✕" });
         x.onclick = async () => { await api(`/api/v1/grants/${g.id}`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
@@ -583,16 +605,20 @@ async function renderHosts() {
       const model = el("input", { placeholder: "model (haiku)", size: 14 });
       const wmodel = el("input", { placeholder: "work model", size: 12 });
       const work = el("input", { type: "checkbox" });
+      const maxSess = el("input", { placeholder: "max session (150000)", size: 14, value: "150000" });
+      const dailyLim = el("input", { placeholder: "daily limit (0 = none)", size: 14, value: "0" });
       const go = el("button", { textContent: L.assign });
       go.onclick = async () => {
         await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({
           host_id: h.id, client: client.value, mode: mode.value, root_dir: rootDir.value.trim(),
           sandbox: sandbox.checked, permission_mode: permMode.value, approvals: approvals.value,
-          model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked
+          model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked,
+          max_session_tokens: parseInt(maxSess.value, 10) || 0,
+          daily_token_limit: parseInt(dailyLim.value, 10) || 0
         }) }).catch(e => alert(e.message));
         renderHosts();
       };
-      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), go));
+      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), maxSess, dailyLim, go));
     }
     panel.append(c);
   }
@@ -688,14 +714,25 @@ $("runsbtn").onclick = () => { if (!togglePanel("runs")) return; renderRuns(); }
 async function renderRuns() {
   const panel = $("runsPanel");
   panel.innerHTML = "";
-  const [{ usage }, { runs: runList }] = await Promise.all([
+  const [{ usage }, { runs: runList }, hostsRes] = await Promise.all([
     api("/api/v1/usage?days=7"),
-    api("/api/v1/runs?limit=20")
+    api("/api/v1/runs?limit=20"),
+    api("/api/v1/hosts").catch(() => ({ hosts: [] }))
   ]).catch(err => {
     panel.append(el("div", { className: "warn", textContent: err.message }));
-    return [{}, {}];
+    return [{}, {}, {}];
   });
   if (!usage || !runList) return;
+
+  const agentLimits = {};
+  for (const h of hostsRes?.hosts || []) {
+    for (const a of h.agents || []) {
+      agentLimits[a.agent_id] = {
+        limit: a.daily_token_limit || 0,
+        maxSession: a.max_session_tokens || 150000
+      };
+    }
+  }
 
   const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
 
@@ -722,6 +759,15 @@ async function renderRuns() {
     }
   }
 
+  for (const id in agentLimits) {
+    if (!byAgent[id]) {
+      byAgent[id] = {
+        today: { in: 0, out: 0, total: 0, runs: 0, errors: 0 },
+        last7: { in: 0, out: 0, total: 0, runs: 0, errors: 0 }
+      };
+    }
+  }
+
   const agentIDs = Object.keys(byAgent);
   if (agentIDs.length === 0) {
     panel.append(el("div", { className: "card muted", textContent: L.noRuns }));
@@ -731,6 +777,19 @@ async function renderRuns() {
       const card = el("div", { className: "card" });
       const handle = actors[id]?.handle ? "@" + actors[id].handle : id;
       card.append(el("h3", { textContent: handle }));
+
+      const limInfo = agentLimits[id];
+      if (limInfo && limInfo.limit > 0) {
+        const used = data.today.total;
+        const remaining = Math.max(0, limInfo.limit - used);
+        card.append(el("div", { className: "muted grant" },
+          `${L.dailyBudget}: ${limInfo.limit.toLocaleString()} · ${L.today}: ${used.toLocaleString()} · ${L.remaining}: ${remaining.toLocaleString()} · ${L.resetsAt}: 00:00 (Europe/Budapest)`
+        ));
+      } else if (limInfo) {
+        card.append(el("div", { className: "muted grant" },
+          `${L.dailyBudget}: ${L.noLimit}`
+        ));
+      }
 
       const table = el("table", { className: "tbl" });
       const thead = el("thead", {},

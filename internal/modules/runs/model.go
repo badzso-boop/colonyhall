@@ -86,6 +86,14 @@ type DayUsage struct {
 	ErrorCount       int
 }
 
+// AgentBudget is the daily token budget status for one agent in Europe/Budapest.
+type AgentBudget struct {
+	Limit     int64
+	UsedToday int64
+	Remaining int64
+	ResetsAt  time.Time
+}
+
 // Errors.
 var (
 	ErrForbidden   = errors.New("not allowed")

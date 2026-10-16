@@ -9,17 +9,19 @@ import (
 )
 
 type hostAgent struct {
-	AgentID        string `json:"agent_id"`
-	Handle         string `json:"handle"`
-	Client         string `json:"client"`
-	Model          string `json:"model"`
-	WorkModel      string `json:"work_model"`
-	AllowWork      bool   `json:"allow_work"`
-	PermissionMode string `json:"permission_mode"`
-	Mode           string `json:"mode"`
-	RootDir        string `json:"root_dir"`
-	Sandbox        bool   `json:"sandbox"`
-	Grants         []struct {
+	AgentID          string `json:"agent_id"`
+	Handle           string `json:"handle"`
+	Client           string `json:"client"`
+	Model            string `json:"model"`
+	WorkModel        string `json:"work_model"`
+	AllowWork        bool   `json:"allow_work"`
+	PermissionMode   string `json:"permission_mode"`
+	Mode             string `json:"mode"`
+	RootDir          string `json:"root_dir"`
+	Sandbox          bool   `json:"sandbox"`
+	MaxSessionTokens int    `json:"max_session_tokens"`
+	DailyTokenLimit  int64  `json:"daily_token_limit"`
+	Grants           []struct {
 		ID           string `json:"id"`
 		Path         string `json:"path"`
 		Mode         string `json:"mode"`
@@ -84,7 +86,7 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 		map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "allow_work": true, "root_dir": "/app"}, &assigned); s != http.StatusOK {
 		t.Fatalf("assign: %d", s)
 	}
-	if assigned.Handle != "fake-agent" || assigned.Model != "haiku" || assigned.Mode != "direct" || assigned.RootDir != "/app" || assigned.Sandbox != false || assigned.PermissionMode != "auto" {
+	if assigned.Handle != "fake-agent" || assigned.Model != "haiku" || assigned.Mode != "direct" || assigned.RootDir != "/app" || assigned.Sandbox != false || assigned.PermissionMode != "auto" || assigned.MaxSessionTokens != 150000 || assigned.DailyTokenLimit != 0 {
 		t.Fatalf("assigned: %+v", assigned)
 	}
 

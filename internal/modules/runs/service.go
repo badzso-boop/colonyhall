@@ -2,11 +2,13 @@ package runs
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
@@ -14,10 +16,16 @@ import (
 	"colonyhall/internal/platform/ids"
 )
 
+// Hosts provides host assignment info for agents.
+type Hosts interface {
+	AssignmentByAgent(ctx context.Context, agentID ids.ID) (hosts.Assignment, error)
+}
+
 // Service holds the runs use cases.
 type Service struct {
 	Store        Store
 	Conversation conversation.Reader
+	Hosts        Hosts
 	Events       eventlog.Store
 	Bus          bus.Bus
 	Tx           db.TxRunner
@@ -263,4 +271,44 @@ func (s *Service) Usage(ctx context.Context, by identity.Actor, days int) ([]Day
 	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Budapest)
 	since := todayMidnight.AddDate(0, 0, -(days - 1))
 	return s.Store.Usage(ctx, by.WorkspaceID, since)
+}
+
+// AgentBudget returns the daily token budget and usage for the calling agent.
+// Only agents may call this; humans get ErrForbidden.
+func (s *Service) AgentBudget(ctx context.Context, by identity.Actor) (AgentBudget, error) {
+	if by.Kind != identity.KindAgent {
+		return AgentBudget{}, ErrForbidden
+	}
+	var limit int64
+	if s.Hosts != nil {
+		a, err := s.Hosts.AssignmentByAgent(ctx, by.ID)
+		if err == nil {
+			limit = a.DailyTokenLimit
+		} else if !errors.Is(err, db.ErrNotFound) {
+			return AgentBudget{}, err
+		}
+	}
+	now := s.Clock.Now().In(Budapest)
+	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Budapest)
+	resetsAt := todayMidnight.AddDate(0, 0, 1)
+
+	usedToday, err := s.Store.TokensSince(ctx, by.WorkspaceID, by.ID, todayMidnight)
+	if err != nil {
+		return AgentBudget{}, err
+	}
+
+	var remaining int64
+	if limit > 0 {
+		remaining = limit - usedToday
+		if remaining < 0 {
+			remaining = 0
+		}
+	}
+
+	return AgentBudget{
+		Limit:     limit,
+		UsedToday: usedToday,
+		Remaining: remaining,
+		ResetsAt:  resetsAt,
+	}, nil
 }

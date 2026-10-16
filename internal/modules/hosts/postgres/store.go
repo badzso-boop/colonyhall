@@ -129,6 +129,7 @@ func (s *Store) SetAssignment(ctx context.Context, a hosts.Assignment) error {
 		AgentID: a.AgentID, HostID: a.HostID, WorkspaceID: a.WorkspaceID, Client: a.Client,
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
 		Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: approvals,
+		MaxSessionTokens: int32(a.MaxSessionTokens), DailyTokenLimit: a.DailyTokenLimit,
 		CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt,
 	})
 }
@@ -147,6 +148,7 @@ func toAssignment(r sqlcgen.AgentHost) hosts.Assignment {
 		AgentID: r.AgentID, HostID: r.HostID, WorkspaceID: r.WorkspaceID, Client: r.Client,
 		Model: r.Model, WorkModel: r.WorkModel, AllowWork: r.AllowWork, PermissionMode: r.PermissionMode,
 		Mode: r.Mode, RootDir: r.RootDir, Sandbox: r.Sandbox, Approvals: approvals,
+		MaxSessionTokens: int(r.MaxSessionTokens), DailyTokenLimit: r.DailyTokenLimit,
 		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
 	}
 }

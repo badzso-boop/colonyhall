@@ -58,10 +58,13 @@ func DirectSessionID(agentID, threadRootID string) (string, error) {
 }
 
 // DirectState records local state per agent: which Claude session IDs already
-// exist and the thread -> conversation ID mapping for Antigravity.
+// exist, the thread -> conversation ID mapping for Antigravity, last run token counts,
+// and session generations for thread rotation.
 type DirectState struct {
 	ClaudeSessions map[string]bool   `json:"claude_sessions"`
 	Conversations  map[string]string `json:"conversations"`
+	LastRunTokens  map[string]int    `json:"last_run_tokens"`
+	Generations    map[string]int    `json:"generations"`
 }
 
 // LoadDirectState loads the state file, returning an empty state if not found.
@@ -69,6 +72,8 @@ func LoadDirectState(path string) (*DirectState, error) {
 	st := &DirectState{
 		ClaudeSessions: make(map[string]bool),
 		Conversations:  make(map[string]string),
+		LastRunTokens:  make(map[string]int),
+		Generations:    make(map[string]int),
 	}
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -85,6 +90,12 @@ func LoadDirectState(path string) (*DirectState, error) {
 	}
 	if st.Conversations == nil {
 		st.Conversations = make(map[string]string)
+	}
+	if st.LastRunTokens == nil {
+		st.LastRunTokens = make(map[string]int)
+	}
+	if st.Generations == nil {
+		st.Generations = make(map[string]int)
 	}
 	return st, nil
 }
@@ -261,6 +272,9 @@ func (a *Agent) handleDirect(ctx context.Context, items []Item) error {
 			return nil
 		}
 		if err := a.runDirectGroup(runCtx, stateDir, stateFile, state, group); err != nil {
+			if errors.Is(err, errBudgetExceeded) {
+				return nil
+			}
 			if runCtx.Err() != nil && ctx.Err() == nil {
 				a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
 				return nil
@@ -275,12 +289,42 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	if len(group) == 0 {
 		return nil
 	}
+	ok, err := a.checkBudget(ctx, group[0])
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errBudgetExceeded
+	}
 	threadRoot := ThreadRoot(group[0])
 	agentID := a.me.ID
+
 	if agentID == "" {
 		agentID = a.Cfg.Name
 	}
-	sessionID, _ := DirectSessionID(agentID, threadRoot)
+
+	gen := state.Generations[threadRoot]
+	maxSessionTokens := a.Cfg.MaxSessionTokens
+	rotated := false
+	var rotTokens int
+	if maxSessionTokens > 0 {
+		lastTokens := state.LastRunTokens[threadRoot]
+		if lastTokens >= maxSessionTokens {
+			rotTokens = lastTokens
+			rotated = true
+			gen++
+			state.Generations[threadRoot] = gen
+			state.LastRunTokens[threadRoot] = 0
+			delete(state.Conversations, threadRoot)
+			_ = state.Save(stateFile)
+		}
+	}
+
+	sessionKey := threadRoot
+	if gen > 0 {
+		sessionKey = fmt.Sprintf("%s#%d", threadRoot, gen)
+	}
+	sessionID, _ := DirectSessionID(agentID, sessionKey)
 
 	rootDir := a.RootDir
 	if rootDir == "" {
@@ -299,8 +343,17 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		exchangeDir = a.ExchangeDir
 	}
 
+	prompt := DirectPrompt(group, exchangeDir)
+	if rotated {
+		recap := a.threadRecap(ctx, threadRoot)
+		if recap != "" {
+			prompt = recap + "\n\n" + prompt
+		}
+		_ = a.reply(ctx, group[0], fmt.Sprintf("🔄 Started a fresh session (the previous one reached %d tokens).", rotTokens), "rot-"+group[0].ID)
+	}
+
 	req := DirectRequest{
-		Prompt:         DirectPrompt(group, exchangeDir),
+		Prompt:         prompt,
 		Dir:            rootDir,
 		Model:          model,
 		PermissionMode: a.Cfg.PermissionMode,
@@ -413,6 +466,8 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 			state.Conversations[threadRoot] = res.ConversationID
 		}
 	}
+	contextTokens := res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
+	state.LastRunTokens[threadRoot] = contextTokens
 	if serr := state.Save(stateFile); serr != nil {
 		a.Log.Warn("guard: direct state save", "err", serr)
 	}
@@ -549,4 +604,27 @@ func writeAgyMCPConfig(ws, serverURL, token string) (func(), error) {
 		return nil, err
 	}
 	return func() { _ = os.Remove(path) }, nil
+}
+
+func (a *Agent) threadRecap(ctx context.Context, threadRootID string) string {
+	if threadRootID == "" {
+		return ""
+	}
+	root, replies, err := a.Client.Thread(ctx, threadRootID)
+	if err != nil {
+		return ""
+	}
+	allMsgs := append([]Message{root}, replies...)
+	if len(allMsgs) > 3 {
+		allMsgs = allMsgs[len(allMsgs)-3:]
+	}
+	var b strings.Builder
+	for _, m := range allMsgs {
+		author := a.handleOf(ctx, m.AuthorID)
+		if !strings.HasPrefix(author, "@") {
+			author = "@" + author
+		}
+		fmt.Fprintf(&b, "<m ctx from=%q>%s</m>\n", attr(author), text(m.Body, maxContextBody))
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
