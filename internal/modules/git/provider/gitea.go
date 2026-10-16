@@ -18,9 +18,8 @@ import (
 )
 
 var (
-	ErrUnauthorizedWebhook = errors.New("invalid webhook signature")
-	ErrUnsupportedURL      = errors.New("url does not belong to this gitea instance")
-	ErrFetchFailed         = errors.New("failed to fetch resource from gitea")
+	ErrUnsupportedURL = errors.New("url does not belong to this gitea instance")
+	ErrFetchFailed    = errors.New("failed to fetch resource from gitea")
 )
 
 // GiteaProvider implements GitProvider for Gitea installations.

@@ -39,6 +39,12 @@ import (
 	delmcp "colonyhall/internal/modules/delivery/mcptools"
 	delmem "colonyhall/internal/modules/delivery/memory"
 	delpg "colonyhall/internal/modules/delivery/postgres"
+	"colonyhall/internal/modules/git"
+	githttp "colonyhall/internal/modules/git/httpapi"
+	gitmcp "colonyhall/internal/modules/git/mcptools"
+	gitmem "colonyhall/internal/modules/git/memory"
+	gitpg "colonyhall/internal/modules/git/postgres"
+	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/modules/hosts"
 	hosthttp "colonyhall/internal/modules/hosts/httpapi"
 	hostmem "colonyhall/internal/modules/hosts/memory"
@@ -81,6 +87,12 @@ type Options struct {
 	OriginPatterns []string
 	// SecureCookies marks the session cookie HTTPS-only.
 	SecureCookies bool
+
+	// Gitea integration options (optional: if omitted, git module is inactive)
+	GiteaURL           string
+	GiteaToken         string
+	GiteaWebhookSecret string
+	GitProvider        provider.GitProvider
 }
 
 // App is a wired-up Colonyhall server.
@@ -94,6 +106,7 @@ type App struct {
 	Schedule     *schedule.Service
 	Approval     *approval.Service
 	Wiki         *wiki.Service
+	Git          *git.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -126,6 +139,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore  schedule.Store
 		apStore  approval.Store
 		wiStore  wiki.Store
+		giStore  git.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
@@ -138,6 +152,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore = schedmem.New()
 		apStore = appmem.New()
 		wiStore = wikimem.New()
+		giStore = gitmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -155,6 +170,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore = &schedpg.Store{DB: pg}
 		apStore = &apppg.Store{DB: pg}
 		wiStore = &wikipg.Store{DB: pg}
+		giStore = &gitpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -169,10 +185,30 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	apSvc := &approval.Service{Store: apStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	wiSvc := &wiki.Service{Store: wiStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+
+	gitProv := opt.GitProvider
+	if gitProv == nil && opt.GiteaURL != "" {
+		p, err := provider.NewGitea(opt.GiteaURL, opt.GiteaToken)
+		if err != nil {
+			return nil, fmt.Errorf("server: gitea config: %w", err)
+		}
+		gitProv = p
+	}
+	gitSvc := &git.Service{
+		Store:         giStore,
+		Provider:      gitProv,
+		Conversation:  cvSvc,
+		Identity:      idSvc,
+		Clock:         opt.Clock,
+		WebhookSecret: opt.GiteaWebhookSecret,
+	}
+	cvSvc.LinkCards = gitSvc
+
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
 		{Name: approval.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: apSvc.HandleEvent, Logger: opt.Logger},
+		{Name: git.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: gitSvc.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -185,12 +221,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	schedhttp.Register(mux, scSvc, idSvc)
 	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
 	apphttp.Register(mux, apSvc, idSvc)
+	githttp.Register(mux, gitSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
 		convmcp.Register(s, cvSvc, idSvc, current)
 		appmcp.Register(s, apSvc, current, r.Header)
 		wikimcp.Register(s, wiSvc, current)
+		gitmcp.Register(s, gitSvc, current)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -208,6 +246,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Schedule:     scSvc,
 		Approval:     apSvc,
 		Wiki:         wiSvc,
+		Git:          gitSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

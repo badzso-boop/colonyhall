@@ -2,8 +2,12 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"net/http"
 )
+
+// ErrUnauthorizedWebhook is returned when the webhook signature verification fails.
+var ErrUnauthorizedWebhook = errors.New("invalid webhook signature")
 
 // ResourceKind indicates the type of Git resource.
 type ResourceKind string

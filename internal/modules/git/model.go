@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -14,7 +15,7 @@ var (
 	ErrInvalidRepo         = errors.New("invalid repository name; expected owner/repo")
 	ErrMappingNotFound     = errors.New("repository mapping not found")
 	ErrInvalidWebhook      = errors.New("invalid webhook payload")
-	ErrUnauthorizedWebhook = errors.New("invalid webhook signature")
+	ErrUnauthorizedWebhook = provider.ErrUnauthorizedWebhook
 	ErrDisabled            = errors.New("git integration is not configured")
 	ErrLinkNotFound        = errors.New("git link not found")
 )
