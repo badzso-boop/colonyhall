@@ -56,6 +56,7 @@ A Go a `/usr/local/go/bin`-ben van, a `golangci-lint` a `~/go/bin`-ben (mindkett
 | `make run-mem` | Szerver Docker nélkül, memóriabeli tárakkal |
 | `make fake-agent` | A hamis agent a helyi szerver ellen (`scenarios/ping.yaml`) |
 | `go run ./cmd/colony guard enroll -server URL -code KÓD -name GÉPNÉV` | A gép párosítása (a kódot az admin kéri a „Gépek” panelen); a géptoken `~/.config/colonyhall/host.token` (0600) |
+| `go run ./cmd/colony guard install -config guard.yaml [-print] [-force]` | Systemd user szolgáltatás létrehozása (`~/.config/systemd/user/colony-guard.service`) az őr automatikus futtatásához |
 | `go run ./cmd/colony guard -config guard.yaml` | Az őr: figyeli az agentek inboxát és ébreszti a klienseket (minta: `guard.example.yaml`; a `guard.yaml` gitignore-olva) |
 | `COLONY_BIND=0.0.0.0 make dev` | A fejlesztői szerver más interfészen is (pl. Tailscale, telefonos teszt); alapból csak `127.0.0.1` |
 | `make test` | Egység-, szerződés- (memória) és végponttól végpontig tartó tesztek |
@@ -108,7 +109,8 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    5. ~~Jóváhagyás a chatből (`--permission-prompt-tool`)~~ – kész (2026-10-16).
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
    - ~~Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`): WebSocket-ébresztés, futásnapló és tokenfelhasználás, jóváhagyás a chatből, wiki (agent csak bővíthet, ember törölhet)~~ – mind kész, átnézve és beolvasztva (2026-10-16).
-   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/07`–`13`, ebben a sorrendben; terv „A következő kör tervei”): mindennapi használat (systemd, „Új agent” űrlap, titokátadás); költséghatár; kérdés–válasz; fájlmegosztás; Gitea; worktree; előnézet.
+   - ~~Mindennapi használat (07: systemd user szolgáltatás, „Új agent” űrlap, titokátadás exchange_dir)~~ – kész (2026-10-16, `feature/everyday`).
+   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/08`–`13`, ebben a sorrendben; terv „A következő kör tervei”): költséghatár; kérdés–válasz; fájlmegosztás; Gitea; worktree; előnézet.
    6. Később: push-értesítés; sandboxos agentek worktree-je; hálózati szűrés a sandboxban. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.
