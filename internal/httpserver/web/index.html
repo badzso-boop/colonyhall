@@ -40,8 +40,8 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel { overflow:auto; padding:12px 16px; display:none; }
-  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on { display:block; } #feed.off { display:none; }
+  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on { display:block; } #feed.off { display:none; }
   table.tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
   table.tbl th, table.tbl td { padding:6px 8px; border:1px solid var(--line); text-align:left; }
   table.tbl th { background:var(--bg); font-weight:600; }
@@ -67,7 +67,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="wikibtn" hidden>📖 Wiki</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="questionsbtn" hidden>❓ Válaszra vár</button><button id="wikibtn" hidden>📖 Wiki</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -78,6 +78,7 @@
     <div id="schedPanel"></div>
     <div id="runsPanel"></div>
     <div id="wikiPanel"></div>
+    <div id="questionsPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <form id="send"><input id="text" autocomplete="off"><button></button></form>
@@ -357,10 +358,11 @@ $("hostsbtn").textContent = L.hosts;
 let openPanel = null;
 function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
-  for (const p of ["hosts", "sched", "runs", "wiki"]) $(p + "Panel").className = openPanel === p ? "on" : "";
+  for (const p of ["hosts", "sched", "runs", "wiki", "questions"]) $(p + "Panel").className = openPanel === p ? "on" : "";
   $("feed").className = openPanel ? "off" : "";
   $("hostsbtn").textContent = openPanel === "hosts" ? L.chat : L.hosts;
   $("wikibtn").textContent = openPanel === "wiki" ? "💬 Chat" : "📖 Wiki";
+  $("questionsbtn").textContent = openPanel === "questions" ? "💬 Chat" : "❓ Válaszra vár";
   hostsOpen = openPanel === "hosts"; schedOpen = openPanel === "sched";
   return openPanel === name;
 }
@@ -467,6 +469,7 @@ async function start() {
   $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
   $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
   $("schedbtn").hidden = me.kind !== "human";
+  $("questionsbtn").hidden = me.kind !== "human";
   $("runsbtn").hidden = me.kind !== "human";
   $("wikibtn").hidden = false;
   await load(); if (!ws) connectWS();
@@ -529,6 +532,9 @@ async function renderSchedules() {
   const panel = $("schedPanel");
   panel.innerHTML = "";
   panel.append(el("div", { className: "muted", textContent: '/schedule 2026-10-16 01:00 … · /daily 01:00 … · /cron "0 1 * * 1-5" …' }));
+  const qBox = el("div", { style: "margin-bottom: 16px;" });
+  panel.append(qBox);
+  renderQuestions(qBox);
   for (const s of schedules) {
     const c = el("div", { className: "card" });
     const ch = channels.find(x => x.id === s.channel_id);
@@ -542,6 +548,99 @@ async function renderSchedules() {
       x.onclick = async () => { await api(`/api/v1/schedules/${s.id}`, { method: "DELETE" }).catch(e => alert(e.message)); renderSchedules(); };
       c.append(x);
     }
+    panel.append(c);
+  }
+}
+
+$("questionsbtn").onclick = () => { if (!togglePanel("questions")) return; renderQuestions($("questionsPanel")); };
+
+async function renderQuestions(panel) {
+  panel.innerHTML = "";
+  panel.append(el("h3", { textContent: "❓ Válaszra vár (Open Questions)" }));
+
+  let list = [];
+  try {
+    const [resOpen, resEsc] = await Promise.all([
+      api("/api/v1/questions?state=open"),
+      api("/api/v1/questions?state=escalated"),
+    ]);
+    const seen = new Set();
+    for (const q of (resOpen.questions || []).concat(resEsc.questions || [])) {
+      if (!seen.has(q.id) && (q.to_human || q.state === "escalated")) {
+        seen.add(q.id);
+        list.push(q);
+      }
+    }
+  } catch (err) {
+    panel.append(el("div", { className: "warn", textContent: err.message }));
+    return;
+  }
+
+  if (!list.length) {
+    panel.append(el("p", { className: "muted", textContent: "Nincs válaszra váró kérdés." }));
+    return;
+  }
+
+  for (const q of list) {
+    const c = el("div", { className: "card" });
+    const badge = el("span", {
+      className: q.state === "escalated" ? "warn" : "muted",
+      textContent: ` [${q.state.toUpperCase()}]`
+    });
+    const ch = channels.find(x => x.id === q.channel_id);
+    const header = el("div", {},
+      el("b", { textContent: q.formatted_number }),
+      badge,
+      el("span", { className: "muted", textContent: ` · @${q.asked_by_handle} · ${ch ? chanLabel(ch) : "?"} · ${new Date(q.created_at).toLocaleString()}` })
+    );
+    c.append(header);
+
+    const targetDesc = q.state === "escalated" ? "Eszkalálva embereknek (Escalated to humans)" : (q.to_actor_handle ? `@${q.to_actor_handle}` : "Emberek (Humans)");
+    c.append(el("div", { className: "muted", textContent: `Címzett: ${targetDesc}` }));
+    c.append(el("div", { className: "body", style: "font-weight: 500; margin: 8px 0;", textContent: q.text }));
+
+    if (q.options && q.options.length > 0) {
+      const optRow = el("div", { style: "display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;" });
+      for (const opt of q.options) {
+        const btn = el("button", { textContent: opt });
+        btn.onclick = async () => {
+          try {
+            await api(`/api/v1/questions/${encodeURIComponent(q.id)}/answer`, {
+              method: "POST",
+              body: JSON.stringify({ answer: opt }),
+            });
+            renderQuestions(panel);
+            await load();
+          } catch (e) {
+            alert(e.message);
+          }
+        };
+        optRow.append(btn);
+      }
+      c.append(optRow);
+    }
+
+    const form = el("form", { style: "display: flex; gap: 8px; margin-top: 6px;" });
+    const input = el("input", { placeholder: "Szöveges válasz...", style: "flex: 1;" });
+    const sendBtn = el("button", { type: "submit", textContent: "Válasz" });
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const ans = input.value.trim();
+      if (!ans) return;
+      try {
+        await api(`/api/v1/questions/${encodeURIComponent(q.id)}/answer`, {
+          method: "POST",
+          body: JSON.stringify({ answer: ans }),
+        });
+        renderQuestions(panel);
+        await load();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+    form.append(input, sendBtn);
+    c.append(form);
+
     panel.append(c);
   }
 }
@@ -868,6 +967,20 @@ $("send").onsubmit = async (e) => {
     if (replyRoot) req.thread_root_id = replyRoot;
     const s = await api("/api/v1/schedules", { method: "POST", body: JSON.stringify(req) }).catch(err => { note("⏰ " + err.message); return null; });
     if (s) note(`⏰ ${new Date(s.next_run_at).toLocaleString()}${s.cron ? " (" + s.cron + ")" : ""}: ${s.body}`);
+    return;
+  }
+  const ansMatch = /^\/answer\s+([a-zA-Z0-9_-]+)\s+([\s\S]+)$/.exec(body);
+  if (ansMatch) {
+    const qRef = ansMatch[1];
+    const ansText = ansMatch[2].trim();
+    const res = await api(`/api/v1/questions/${encodeURIComponent(qRef)}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ answer: ansText }),
+    }).catch(err => { note("❓ " + err.message); return null; });
+    if (res) {
+      note(`❓ ${res.formatted_number} válasz elküldve: ${res.answer}`);
+      await load();
+    }
     return;
   }
   const req = { body, client_msg_id: uid() };
