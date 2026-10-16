@@ -270,6 +270,51 @@ func (e HostAgentMode) Valid() bool {
 	}
 }
 
+// Defines values for HostPreviewState.
+const (
+	HostPreviewStateFailed    HostPreviewState = "failed"
+	HostPreviewStateRequested HostPreviewState = "requested"
+	HostPreviewStateRunning   HostPreviewState = "running"
+	HostPreviewStateStopped   HostPreviewState = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the HostPreviewState enum.
+func (e HostPreviewState) Valid() bool {
+	switch e {
+	case HostPreviewStateFailed:
+		return true
+	case HostPreviewStateRequested:
+		return true
+	case HostPreviewStateRunning:
+		return true
+	case HostPreviewStateStopped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostPreviewReportState.
+const (
+	HostPreviewReportStateFailed  HostPreviewReportState = "failed"
+	HostPreviewReportStateRunning HostPreviewReportState = "running"
+	HostPreviewReportStateStopped HostPreviewReportState = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the HostPreviewReportState enum.
+func (e HostPreviewReportState) Valid() bool {
+	switch e {
+	case HostPreviewReportStateFailed:
+		return true
+	case HostPreviewReportStateRunning:
+		return true
+	case HostPreviewReportStateStopped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InboxItemAuthorKind.
 const (
 	InboxItemAuthorKindAgent InboxItemAuthorKind = "agent"
@@ -300,6 +345,30 @@ func (e MessageKind) Valid() bool {
 	case System:
 		return true
 	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PreviewState.
+const (
+	PreviewStateFailed    PreviewState = "failed"
+	PreviewStateRequested PreviewState = "requested"
+	PreviewStateRunning   PreviewState = "running"
+	PreviewStateStopped   PreviewState = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the PreviewState enum.
+func (e PreviewState) Valid() bool {
+	switch e {
+	case PreviewStateFailed:
+		return true
+	case PreviewStateRequested:
+		return true
+	case PreviewStateRunning:
+		return true
+	case PreviewStateStopped:
 		return true
 	default:
 		return false
@@ -615,6 +684,7 @@ type ApprovalState string
 
 // AssignRequest defines model for AssignRequest.
 type AssignRequest struct {
+	AllowPreview   *bool                   `json:"allow_preview,omitempty"`
 	AllowWork      *bool                   `json:"allow_work,omitempty"`
 	Approvals      *AssignRequestApprovals `json:"approvals,omitempty"`
 	Client         AssignRequestClient     `json:"client"`
@@ -827,6 +897,7 @@ type HostState string
 // HostAgent defines model for HostAgent.
 type HostAgent struct {
 	AgentId        openapi_types.UUID `json:"agent_id"`
+	AllowPreview   *bool              `json:"allow_preview,omitempty"`
 	AllowWork      bool               `json:"allow_work"`
 	Approvals      HostAgentApprovals `json:"approvals"`
 	Client         HostAgentClient    `json:"client"`
@@ -852,14 +923,40 @@ type HostAgentMode string
 
 // HostConfig defines model for HostConfig.
 type HostConfig struct {
-	Agents  []HostAgent `json:"agents"`
-	Version string      `json:"version"`
+	Agents   []HostAgent    `json:"agents"`
+	Previews *[]HostPreview `json:"previews,omitempty"`
+	Version  string         `json:"version"`
 }
 
 // HostList defines model for HostList.
 type HostList struct {
 	Hosts []Host `json:"hosts"`
 }
+
+// HostPreview defines model for HostPreview.
+type HostPreview struct {
+	AgentId     openapi_types.UUID `json:"agent_id"`
+	ComposePath string             `json:"compose_path"`
+	Error       *string            `json:"error,omitempty"`
+	ExpiresAt   time.Time          `json:"expires_at"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+	State       HostPreviewState   `json:"state"`
+	Url         *string            `json:"url,omitempty"`
+}
+
+// HostPreviewState defines model for HostPreview.State.
+type HostPreviewState string
+
+// HostPreviewReport defines model for HostPreviewReport.
+type HostPreviewReport struct {
+	Error *string                `json:"error,omitempty"`
+	State HostPreviewReportState `json:"state"`
+	Url   *string                `json:"url,omitempty"`
+}
+
+// HostPreviewReportState defines model for HostPreviewReport.State.
+type HostPreviewReportState string
 
 // HostReport defines model for HostReport.
 type HostReport struct {
@@ -963,6 +1060,32 @@ type OpenDMRequest struct {
 type PairingCode struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// Preview defines model for Preview.
+type Preview struct {
+	AgentId      openapi_types.UUID  `json:"agent_id"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ComposePath  string              `json:"compose_path"`
+	CreatedAt    time.Time           `json:"created_at"`
+	Error        *string             `json:"error,omitempty"`
+	ExpiresAt    time.Time           `json:"expires_at"`
+	HostId       openapi_types.UUID  `json:"host_id"`
+	Id           openapi_types.UUID  `json:"id"`
+	Name         string              `json:"name"`
+	State        PreviewState        `json:"state"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+	Url          *string             `json:"url,omitempty"`
+	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
+}
+
+// PreviewState defines model for Preview.State.
+type PreviewState string
+
+// PreviewList defines model for PreviewList.
+type PreviewList struct {
+	Previews []Preview `json:"previews"`
 }
 
 // Problem defines model for Problem.
@@ -1251,6 +1374,11 @@ type ListMessagesParams struct {
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListPreviewsParams defines parameters for ListPreviews.
+type ListPreviewsParams struct {
+	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
@@ -1318,6 +1446,9 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // OpenDMJSONRequestBody defines body for OpenDM for application/json ContentType.
 type OpenDMJSONRequestBody = OpenDMRequest
+
+// HostReportPreviewJSONRequestBody defines body for HostReportPreview for application/json ContentType.
+type HostReportPreviewJSONRequestBody = HostPreviewReport
 
 // HostReportJSONRequestBody defines body for HostReport for application/json ContentType.
 type HostReportJSONRequestBody = HostReport

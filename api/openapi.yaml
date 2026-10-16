@@ -451,6 +451,20 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Issued, content: { application/json: { schema: { $ref: "#/components/schemas/AgentToken" } } } }
 
+  /host/previews/{previewId}:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: hostReportPreview
+      tags: [previews]
+      description: Guard (host token). Report preview state (running with url, failed with error, or stopped).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HostPreviewReport" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Stored }
+
   /agent/errors:
     post:
       operationId: reportRunError
@@ -651,6 +665,39 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Revisions, content: { application/json: { schema: { $ref: "#/components/schemas/WikiRevisionList" } } } }
+
+  /previews:
+    get:
+      operationId: listPreviews
+      tags: [previews]
+      description: Humans. List previews in the workspace.
+      parameters:
+        - { name: agent_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PreviewList" } } } }
+
+  /previews/{previewId}:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getPreview
+      tags: [previews]
+      description: Humans. Get a preview by ID.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
+
+  /previews/{previewId}/stop:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: stopPreview
+      tags: [previews]
+      description: Humans. Stop a running preview.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
 
 
 components:
@@ -1052,6 +1099,7 @@ components:
         root_dir: { type: string }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
+        allow_preview: { type: boolean }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -1067,6 +1115,7 @@ components:
         root_dir: { type: string, maxLength: 1024 }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
+        allow_preview: { type: boolean }
     GrantRequest:
       type: object
       required: [path, mode]
@@ -1095,6 +1144,7 @@ components:
       properties:
         version: { type: string }
         agents: { type: array, items: { $ref: "#/components/schemas/HostAgent" } }
+        previews: { type: array, items: { $ref: "#/components/schemas/HostPreview" } }
     AgentToken:
       type: object
       required: [token, expires_at]
@@ -1330,4 +1380,46 @@ components:
         body: { type: string, maxLength: 50000 }
         title: { type: string, maxLength: 120 }
         tags: { type: array, items: { type: string } }
+    HostPreview:
+      type: object
+      required: [id, agent_id, name, compose_path, state, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        name: { type: string }
+        compose_path: { type: string }
+        state: { type: string, enum: [requested, running, stopped, failed] }
+        url: { type: string }
+        error: { type: string }
+        expires_at: { type: string, format: date-time }
+    HostPreviewReport:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string, enum: [running, stopped, failed] }
+        url: { type: string }
+        error: { type: string }
+    Preview:
+      type: object
+      required: [id, workspace_id, agent_id, host_id, channel_id, name, compose_path, state, expires_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        host_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        name: { type: string }
+        compose_path: { type: string }
+        state: { type: string, enum: [requested, running, stopped, failed] }
+        url: { type: string }
+        error: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PreviewList:
+      type: object
+      required: [previews]
+      properties:
+        previews: { type: array, items: { $ref: "#/components/schemas/Preview" } }
 
