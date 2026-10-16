@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,4 +278,40 @@ func copyMap(m map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// TestRunReportReferencesAreChecked: a run can only point at the caller's
+// own error and a channel it can read; text fields are bounded. Before,
+// a foreign or unknown id was stored or broke the insert (500).
+func TestRunReportReferencesAreChecked(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	_, otherToken := e.createActor("agent", "other-bot", "member")
+	var me struct{ ID string }
+	e.do("GET", "/api/v1/me", otherToken, nil, &me)
+	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": me.ID}, nil)
+	var foreignErr struct{ ID string }
+	e.do("POST", "/api/v1/agent/errors", otherToken, map[string]any{"channel_id": general, "summary": "x"}, &foreignErr)
+	base := map[string]any{"phase": "direct", "client": "claude-code", "status": "error", "items": 1,
+		"input_tokens": 1, "output_tokens": 1, "cache_read_tokens": 0, "cache_write_tokens": 0, "duration_ms": 1}
+	with := func(k string, v any) map[string]any {
+		m := map[string]any{}
+		for kk, vv := range base {
+			m[kk] = vv
+		}
+		m[k] = v
+		return m
+	}
+	for name, body := range map[string]map[string]any{
+		"another agent's error": with("error_id", foreignErr.ID),
+		"unknown error":         with("error_id", "00000000-0000-0000-0000-0000000000ff"),
+		"unknown channel":       with("channel_id", "00000000-0000-0000-0000-0000000000fe"),
+	} {
+		if s := e.do("POST", "/api/v1/agent/runs", server.DevAgentToken, body, nil); s != http.StatusBadRequest {
+			t.Errorf("%s: %d", name, s)
+		}
+	}
+	if s := e.do("POST", "/api/v1/agent/runs", server.DevAgentToken, with("model", strings.Repeat("m", 5000)), nil); s != http.StatusCreated {
+		t.Fatalf("long model is clipped, not rejected: %d", s)
+	}
 }

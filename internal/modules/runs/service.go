@@ -155,6 +155,22 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 	if strings.TrimSpace(in.Client) == "" {
 		return Run{}, ErrInvalidRun
 	}
+	// References must point at the caller's own things: an error it
+	// reported, a channel it can read. The host is not taken from the
+	// request at all (this module cannot verify it).
+	if in.ErrorID != ids.Nil {
+		e, err := s.Store.ErrorByID(ctx, in.ErrorID)
+		if err != nil || e.AgentID != by.ID {
+			return Run{}, ErrInvalidRun
+		}
+	}
+	if in.ChannelID != ids.Nil {
+		if ok, err := s.Conversation.CanRead(ctx, by, in.ChannelID); err != nil || !ok {
+			return Run{}, ErrInvalidRun
+		}
+	}
+	in.HostID = ids.Nil
+	in.Client, in.Model, in.SessionID = clip(strings.TrimSpace(in.Client), 40), clip(strings.TrimSpace(in.Model), 100), clip(strings.TrimSpace(in.SessionID), 100)
 
 	r := Run{
 		ID:               s.IDs.New(),
