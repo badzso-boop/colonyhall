@@ -17,6 +17,7 @@ import (
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/modules/schedule"
 	"colonyhall/internal/modules/wiki"
@@ -37,6 +38,7 @@ type Backend struct {
 	Schedule     schedule.Store
 	Approval     approval.Store
 	Wiki         wiki.Store
+	Question     question.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -51,6 +53,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
 	t.Run("approval", func(t *testing.T) { testApproval(t, newBackend(t)) })
 	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
+	t.Run("question", func(t *testing.T) { testQuestion(t, newBackend(t)) })
 }
 
 var (
@@ -937,5 +940,310 @@ func testWiki(t *testing.T, b Backend) {
 	}
 	if _, err := st.ListRevisions(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("ListRevisions non-existent: %v", err)
+	}
+}
+
+func testQuestion(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Question
+
+	// We need a root message in conversation so foreign key constraint passes in Postgres
+	rootMsg := conversation.Message{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		ChannelID:   f.channel.ID,
+		AuthorID:    f.human.ID,
+		Kind:        "text",
+		Body:        "Thread start",
+		CreatedAt:   t0,
+	}
+	must(t, b.Conversation.InsertMessage(ctx, rootMsg))
+
+	// NextNumber on empty workspace
+	n, err := st.NextNumber(ctx, f.ws.ID)
+	must(t, err)
+	if n != 1 {
+		t.Fatalf("expected next number 1, got %d", n)
+	}
+
+	// Insert q1
+	q1ID := gen.New()
+	yes := "yes"
+	dl1 := t0.Add(time.Hour)
+	q1 := question.Question{
+		ID:            q1ID,
+		Number:        1,
+		WorkspaceID:   f.ws.ID,
+		AskedBy:       f.agent.ID,
+		ToActorID:     &f.human.ID,
+		ToHuman:       true,
+		ChannelID:     f.channel.ID,
+		ThreadRootID:  rootMsg.ID,
+		Text:          "Should we deploy to prod?",
+		Options:       []string{"yes", "no"},
+		DefaultOption: &yes,
+		Deadline:      &dl1,
+		State:         question.StateOpen,
+		CreatedAt:     t0,
+	}
+	must(t, st.Insert(ctx, q1))
+
+	// NextNumber after q1
+	n, err = st.NextNumber(ctx, f.ws.ID)
+	must(t, err)
+	if n != 2 {
+		t.Fatalf("expected next number 2, got %d", n)
+	}
+
+	// Duplicate number in same workspace returns ErrConflict
+	dup := q1
+	dup.ID = gen.New()
+	if err := st.Insert(ctx, dup); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("expected ErrConflict for duplicate number, got %v", err)
+	}
+
+	// Duplicate ID returns ErrConflict
+	dupID := q1
+	dupID.Number = 99
+	if err := st.Insert(ctx, dupID); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("expected ErrConflict for duplicate ID, got %v", err)
+	}
+
+	// GetByID
+	got, err := st.GetByID(ctx, q1ID)
+	must(t, err)
+	if got.Number != 1 || got.Text != "Should we deploy to prod?" || len(got.Options) != 2 || got.State != question.StateOpen {
+		t.Fatalf("unexpected GetByID: %+v", got)
+	}
+
+	// GetByNumber
+	gotNum, err := st.GetByNumber(ctx, f.ws.ID, 1)
+	must(t, err)
+	if gotNum.ID != q1ID || gotNum.Number != 1 {
+		t.Fatalf("unexpected GetByNumber: %+v", gotNum)
+	}
+
+	// CountOpenByThreadAsker
+	cnt, err := st.CountOpenByThreadAsker(ctx, rootMsg.ID, f.agent.ID)
+	must(t, err)
+	if cnt != 1 {
+		t.Fatalf("expected open count 1, got %d", cnt)
+	}
+	cntOther, err := st.CountOpenByThreadAsker(ctx, rootMsg.ID, f.human.ID)
+	must(t, err)
+	if cntOther != 0 {
+		t.Fatalf("expected open count 0 for other asker, got %d", cntOther)
+	}
+
+	// List questions
+	list, err := st.List(ctx, f.ws.ID, nil)
+	must(t, err)
+	if len(list) != 1 || list[0].ID != q1ID {
+		t.Fatalf("unexpected List: %+v", list)
+	}
+	openState := question.StateOpen
+	listOpen, err := st.List(ctx, f.ws.ID, &openState)
+	must(t, err)
+	if len(listOpen) != 1 {
+		t.Fatalf("expected 1 open question, got %d", len(listOpen))
+	}
+	ansState := question.StateAnswered
+	listAns, err := st.List(ctx, f.ws.ID, &ansState)
+	must(t, err)
+	if len(listAns) != 0 {
+		t.Fatalf("expected 0 answered questions, got %d", len(listAns))
+	}
+
+	// Answer q1
+	ansTime := t0.Add(5 * time.Minute)
+	ansQ, ok, err := st.Answer(ctx, q1ID, "yes", &f.human.ID, ansTime)
+	must(t, err)
+	if !ok || ansQ.State != question.StateAnswered || ansQ.Answer == nil || *ansQ.Answer != "yes" || ansQ.AnsweredBy == nil || *ansQ.AnsweredBy != f.human.ID {
+		t.Fatalf("unexpected Answer result: ok=%v, ansQ=%+v", ok, ansQ)
+	}
+
+	// Answering again returns ok=false
+	_, ok, err = st.Answer(ctx, q1ID, "no", &f.human.ID, ansTime)
+	must(t, err)
+	if ok {
+		t.Fatal("expected ok=false when answering already answered question")
+	}
+
+	// CountOpenByThreadAsker after answer
+	cnt, err = st.CountOpenByThreadAsker(ctx, rootMsg.ID, f.agent.ID)
+	must(t, err)
+	if cnt != 0 {
+		t.Fatalf("expected open count 0 after answering, got %d", cnt)
+	}
+
+	// Withdraw test with q2
+	q2ID := gen.New()
+	q2 := question.Question{
+		ID:           q2ID,
+		Number:       2,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.agent.ID,
+		ToHuman:      true,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "Second question?",
+		Options:      []string{},
+		State:        question.StateOpen,
+		CreatedAt:    t0.Add(10 * time.Minute),
+	}
+	must(t, st.Insert(ctx, q2))
+
+	wTime := t0.Add(15 * time.Minute)
+	withdrawnQ, ok, err := st.Withdraw(ctx, q2ID, wTime)
+	must(t, err)
+	if !ok || withdrawnQ.State != question.StateWithdrawn || withdrawnQ.WithdrawnAt == nil {
+		t.Fatalf("unexpected Withdraw result: ok=%v, withdrawnQ=%+v", ok, withdrawnQ)
+	}
+
+	// Withdrawing again returns ok=false
+	_, ok, err = st.Withdraw(ctx, q2ID, wTime)
+	must(t, err)
+	if ok {
+		t.Fatal("expected ok=false when withdrawing already withdrawn question")
+	}
+
+	// Escalate test with q3 (to agent)
+	q3ID := gen.New()
+	q3 := question.Question{
+		ID:           q3ID,
+		Number:       3,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.human.ID,
+		ToActorID:    &f.agent.ID,
+		ToHuman:      false,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "Agent question to escalate?",
+		Options:      []string{},
+		State:        question.StateOpen,
+		CreatedAt:    t0.Add(20 * time.Minute),
+	}
+	must(t, st.Insert(ctx, q3))
+
+	escTime := t0.Add(50 * time.Minute)
+	escQ, ok, err := st.Escalate(ctx, q3ID, escTime)
+	must(t, err)
+	if !ok || escQ.State != question.StateEscalated || escQ.EscalatedAt == nil {
+		t.Fatalf("unexpected Escalate result: ok=%v, escQ=%+v", ok, escQ)
+	}
+
+	// Escalating again returns ok=false
+	_, ok, err = st.Escalate(ctx, q3ID, escTime)
+	must(t, err)
+	if ok {
+		t.Fatal("expected ok=false when escalating already escalated question")
+	}
+
+	// An escalated question can be answered
+	ansEscQ, ok, err := st.Answer(ctx, q3ID, "escalated answer", &f.human.ID, escTime.Add(time.Minute))
+	must(t, err)
+	if !ok || ansEscQ.State != question.StateAnswered {
+		t.Fatalf("unexpected Answer after Escalate: ok=%v, ansEscQ=%+v", ok, ansEscQ)
+	}
+
+	// Expire test with q4
+	q4ID := gen.New()
+	q4 := question.Question{
+		ID:           q4ID,
+		Number:       4,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.agent.ID,
+		ToActorID:    &f.agent.ID,
+		ToHuman:      false,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "Will expire?",
+		Options:      []string{},
+		State:        question.StateOpen,
+		CreatedAt:    t0.Add(60 * time.Minute),
+	}
+	must(t, st.Insert(ctx, q4))
+
+	expTime := t0.Add(70 * time.Minute)
+	expQ, ok, err := st.Expire(ctx, q4ID, expTime)
+	must(t, err)
+	if !ok || expQ.State != question.StateExpired || expQ.ExpiredAt == nil {
+		t.Fatalf("unexpected Expire result: ok=%v, expQ=%+v", ok, expQ)
+	}
+
+	// Due test:
+	// q5: to agent, created at t0 (old, no deadline) -> due for escalation
+	q5ID := gen.New()
+	q5 := question.Question{
+		ID:           q5ID,
+		Number:       5,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.human.ID,
+		ToActorID:    &f.agent.ID,
+		ToHuman:      false,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "Due for escalation?",
+		Options:      []string{},
+		State:        question.StateOpen,
+		CreatedAt:    t0,
+	}
+	must(t, st.Insert(ctx, q5))
+
+	// q6: to agent, created recently, but deadline is past -> due for deadline
+	dl6 := t0.Add(10 * time.Minute)
+	q6ID := gen.New()
+	q6 := question.Question{
+		ID:           q6ID,
+		Number:       6,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.human.ID,
+		ToActorID:    &f.agent.ID,
+		ToHuman:      false,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "Due for deadline?",
+		Options:      []string{"a", "b"},
+		Deadline:     &dl6,
+		State:        question.StateOpen,
+		CreatedAt:    t0.Add(5 * time.Minute),
+	}
+	must(t, st.Insert(ctx, q6))
+
+	// q7: to human (should never be returned by Due)
+	dl7 := t0.Add(10 * time.Minute)
+	q7ID := gen.New()
+	q7 := question.Question{
+		ID:           q7ID,
+		Number:       7,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.agent.ID,
+		ToHuman:      true,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "To human, should not be due",
+		Options:      []string{},
+		Deadline:     &dl7,
+		State:        question.StateOpen,
+		CreatedAt:    t0,
+	}
+	must(t, st.Insert(ctx, q7))
+
+	dueList, err := st.Due(ctx, t0.Add(30*time.Minute), t0.Add(15*time.Minute), 10)
+	must(t, err)
+	if len(dueList) != 2 {
+		t.Fatalf("expected 2 due questions (q5 and q6), got %d: %+v", len(dueList), dueList)
+	}
+	if dueList[0].ID != q5ID || dueList[1].ID != q6ID {
+		t.Fatalf("expected [q5, q6], got %+v", dueList)
+	}
+
+	// Non-existent lookups return db.ErrNotFound
+	if _, err := st.GetByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("GetByID non-existent: %v", err)
+	}
+	if _, err := st.GetByNumber(ctx, f.ws.ID, 9999); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("GetByNumber non-existent: %v", err)
 	}
 }
