@@ -18,6 +18,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/modules/schedule"
+	"colonyhall/internal/modules/wiki"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
@@ -33,6 +34,7 @@ type Backend struct {
 	Hosts        hosts.Store
 	Runs         runs.Store
 	Schedule     schedule.Store
+	Wiki         wiki.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -45,6 +47,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("hosts", func(t *testing.T) { testHosts(t, newBackend(t)) })
 	t.Run("runs", func(t *testing.T) { testRuns(t, newBackend(t)) })
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
+	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
 }
 
 var (
@@ -560,5 +563,157 @@ func testSchedule(t *testing.T, b Backend) {
 	}
 	if _, err := st.ByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("missing: %v", err)
+	}
+}
+
+func testWiki(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Wiki
+
+	pID := gen.New()
+	page := wiki.Page{
+		ID:          pID,
+		WorkspaceID: f.ws.ID,
+		Slug:        "welcome",
+		Title:       "Welcome Page",
+		Tags:        []string{"intro", "general"},
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0,
+	}
+	rev1 := wiki.Revision{
+		PageID:    pID,
+		Rev:       1,
+		Body:      "Initial content",
+		Kind:      wiki.RevisionCreate,
+		AuthorID:  f.human.ID,
+		CreatedAt: t0,
+	}
+	must(t, st.CreatePage(ctx, page, rev1))
+
+	// Duplicate slug in workspace returns ErrConflict
+	dup := page
+	dup.ID = gen.New()
+	if err := st.CreatePage(ctx, dup, rev1); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("expected ErrConflict for duplicate slug, got: %v", err)
+	}
+
+	// PageBySlug
+	got, err := st.PageBySlug(ctx, f.ws.ID, "welcome")
+	must(t, err)
+	if got.ID != pID || got.Rev != 1 || got.Body != "Initial content" || len(got.Tags) != 2 {
+		t.Fatalf("PageBySlug: %+v", got)
+	}
+
+	// PageByID
+	gotByID, err := st.PageByID(ctx, pID)
+	must(t, err)
+	if gotByID.Slug != "welcome" || gotByID.Rev != 1 || gotByID.Body != "Initial content" {
+		t.Fatalf("PageByID: %+v", gotByID)
+	}
+
+	// SlugExists
+	exists, err := st.SlugExists(ctx, f.ws.ID, "welcome")
+	must(t, err)
+	if !exists {
+		t.Fatal("expected SlugExists to be true for 'welcome'")
+	}
+	exists, err = st.SlugExists(ctx, f.ws.ID, "nonexistent")
+	must(t, err)
+	if exists {
+		t.Fatal("expected SlugExists to be false for 'nonexistent'")
+	}
+
+	// AddRevision
+	t1 := t0.Add(time.Hour)
+	rev2 := wiki.Revision{
+		PageID:    pID,
+		Rev:       2,
+		Body:      "Initial content\n\n---\n*@norbi, 2026-10-15 10:00:*\n\nSecond note",
+		Kind:      wiki.RevisionAppend,
+		AuthorID:  f.human.ID,
+		CreatedAt: t1,
+	}
+	must(t, st.AddRevision(ctx, rev2))
+
+	// PageBySlug reflects latest revision
+	got, err = st.PageBySlug(ctx, f.ws.ID, "welcome")
+	must(t, err)
+	if got.Rev != 2 || got.Body != rev2.Body || !got.UpdatedAt.Equal(t1) {
+		t.Fatalf("PageBySlug after rev2: rev=%d, updatedAt=%v", got.Rev, got.UpdatedAt)
+	}
+
+	// ListRevisions
+	revs, err := st.ListRevisions(ctx, pID)
+	must(t, err)
+	if len(revs) != 2 || revs[0].Rev != 1 || revs[1].Rev != 2 {
+		t.Fatalf("ListRevisions: %+v", revs)
+	}
+
+	// UpdatePageMeta
+	must(t, st.UpdatePageMeta(ctx, pID, "Welcome Home", "welcome-home", []string{"intro", "updated"}))
+	got, err = st.PageBySlug(ctx, f.ws.ID, "welcome-home")
+	must(t, err)
+	if got.Title != "Welcome Home" || got.Slug != "welcome-home" || len(got.Tags) != 2 || got.Tags[1] != "updated" {
+		t.Fatalf("Page after UpdatePageMeta: %+v", got)
+	}
+
+	// ListPages
+	pID2 := gen.New()
+	page2 := wiki.Page{
+		ID:          pID2,
+		WorkspaceID: f.ws.ID,
+		Slug:        "alpha",
+		Title:       "Alpha Page",
+		Tags:        []string{"a"},
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0,
+	}
+	rev2_1 := wiki.Revision{
+		PageID:    pID2,
+		Rev:       1,
+		Body:      "Alpha body",
+		Kind:      wiki.RevisionCreate,
+		AuthorID:  f.human.ID,
+		CreatedAt: t0,
+	}
+	must(t, st.CreatePage(ctx, page2, rev2_1))
+
+	pages, err := st.ListPages(ctx, f.ws.ID, false)
+	must(t, err)
+	if len(pages) != 2 || pages[0].Slug != "alpha" || pages[1].Slug != "welcome-home" {
+		t.Fatalf("ListPages ordering: %+v", pages)
+	}
+
+	// SoftDelete
+	must(t, st.SoftDelete(ctx, pID2, t1))
+	pages, err = st.ListPages(ctx, f.ws.ID, false)
+	must(t, err)
+	if len(pages) != 1 || pages[0].Slug != "welcome-home" {
+		t.Fatalf("ListPages without deleted: %+v", pages)
+	}
+	pages, err = st.ListPages(ctx, f.ws.ID, true)
+	must(t, err)
+	if len(pages) != 2 {
+		t.Fatalf("ListPages with deleted: %+v", pages)
+	}
+
+	// Restore
+	must(t, st.Restore(ctx, pID2))
+	pages, err = st.ListPages(ctx, f.ws.ID, false)
+	must(t, err)
+	if len(pages) != 2 {
+		t.Fatalf("ListPages after restore: %+v", pages)
+	}
+
+	// Non-existent lookups return db.ErrNotFound
+	if _, err := st.PageBySlug(ctx, f.ws.ID, "does-not-exist"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("PageBySlug non-existent: %v", err)
+	}
+	if _, err := st.PageByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("PageByID non-existent: %v", err)
+	}
+	if _, err := st.ListRevisions(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("ListRevisions non-existent: %v", err)
 	}
 }

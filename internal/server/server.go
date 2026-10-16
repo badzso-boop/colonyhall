@@ -50,6 +50,11 @@ import (
 	schedhttp "colonyhall/internal/modules/schedule/httpapi"
 	schedmem "colonyhall/internal/modules/schedule/memory"
 	schedpg "colonyhall/internal/modules/schedule/postgres"
+	"colonyhall/internal/modules/wiki"
+	wikihttp "colonyhall/internal/modules/wiki/httpapi"
+	wikimcp "colonyhall/internal/modules/wiki/mcptools"
+	wikimem "colonyhall/internal/modules/wiki/memory"
+	wikipg "colonyhall/internal/modules/wiki/postgres"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
@@ -82,6 +87,7 @@ type App struct {
 	Audit        *audit.Service
 	Hosts        *hosts.Service
 	Schedule     *schedule.Service
+	Wiki         *wiki.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -112,6 +118,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		hoStore  hosts.Store
 		ruStore  runs.Store
 		scStore  schedule.Store
+		wiStore  wiki.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
@@ -122,6 +129,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		hoStore = hostmem.New()
 		ruStore = runmem.New()
 		scStore = schedmem.New()
+		wiStore = wikimem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -137,6 +145,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		hoStore = &hostpg.Store{DB: pg}
 		ruStore = &runpg.Store{DB: pg}
 		scStore = &schedpg.Store{DB: pg}
+		wiStore = &wikipg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -148,6 +157,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
 	auSvc := &audit.Service{Store: auStore}
 	hoSvc := &hosts.Service{Store: hoStore, Directory: idSvc, Tokens: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	wiSvc := &wiki.Service{Store: wiStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -159,6 +169,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	delhttp.Register(mux, dlSvc, idSvc)
 	audhttp.Register(mux, auSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
+	wikihttp.Register(mux, wiSvc, idSvc)
 	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	schedhttp.Register(mux, scSvc, idSvc)
 	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
@@ -166,6 +177,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
 		convmcp.Register(s, cvSvc, idSvc, current)
+		wikimcp.Register(s, wiSvc, current)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -181,6 +193,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Audit:        auSvc,
 		Hosts:        hoSvc,
 		Schedule:     scSvc,
+		Wiki:         wiSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,
