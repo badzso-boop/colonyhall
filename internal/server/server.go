@@ -48,6 +48,8 @@ import (
 	idmem "colonyhall/internal/modules/identity/memory"
 	idpg "colonyhall/internal/modules/identity/postgres"
 	"colonyhall/internal/modules/question"
+	qhttp "colonyhall/internal/modules/question/httpapi"
+	qmcp "colonyhall/internal/modules/question/mcptools"
 	qmem "colonyhall/internal/modules/question/memory"
 	qpg "colonyhall/internal/modules/question/postgres"
 	"colonyhall/internal/modules/runs"
@@ -193,12 +195,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	schedhttp.Register(mux, scSvc, idSvc)
 	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
 	apphttp.Register(mux, apSvc, idSvc)
+	qhttp.Register(mux, qSvc, idSvc, cvSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
 		convmcp.Register(s, cvSvc, idSvc, current)
 		appmcp.Register(s, apSvc, current, r.Header)
 		wikimcp.Register(s, wiSvc, current)
+		qmcp.Register(s, qSvc, cvSvc, current)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
