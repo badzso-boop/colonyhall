@@ -69,6 +69,14 @@ type Report struct {
 	Sandbox          string     `json:"sandbox,omitempty"` // e.g. "bwrap 0.9.0"; empty: none
 	AllowUnsandboxed bool       `json:"allow_unsandboxed"`
 	Rejected         []Rejected `json:"rejected"`
+	Worktrees        []Worktree `json:"worktrees,omitempty"`
+}
+
+// Worktree describes a git worktree reported by the guard.
+type Worktree struct {
+	AgentID string `json:"agent_id"`
+	Path    string `json:"path"`
+	Branch  string `json:"branch"`
 }
 
 // Client is an AI client found on the machine.
@@ -108,6 +116,7 @@ type Assignment struct {
 	PermissionMode string
 	Mode           string
 	RootDir        string
+	WorktreeRepo   string
 	Sandbox        bool
 	Approvals      string
 	CreatedBy      ids.ID
@@ -143,6 +152,7 @@ var (
 	ErrBadMode             = errors.New("mode must be read or write")
 	ErrBadAgentMode        = errors.New("mode must be direct or compact")
 	ErrBadRootDir          = errors.New("direct mode requires a root_dir")
+	ErrWorktreeDirectOnly  = errors.New("worktree_repo is only supported in direct mode")
 	ErrBadClient           = errors.New("client must be claude-code or antigravity")
 	ErrBadApprovals        = errors.New("approvals must be none or chat")
 	ErrApprovalsChatClient = errors.New("approvals=chat requires client claude-code")

@@ -66,7 +66,7 @@ func agentOut(a hosts.AgentConfig) apispec.HostAgent {
 	}
 	out := apispec.HostAgent{AgentId: a.AgentID, Handle: a.Handle, HostId: a.HostID, Client: apispec.HostAgentClient(a.Client),
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
-		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: apispec.HostAgentApprovals(approvals),
+		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: apispec.HostAgentApprovals(approvals),
 		Grants: make([]apispec.FolderGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, grantOut(g, nil))
@@ -167,7 +167,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			HostID: in.HostId, Client: string(in.Client),
 			Model: httpx.Deref(in.Model, ""), WorkModel: httpx.Deref(in.WorkModel, ""), AllowWork: httpx.Deref(in.AllowWork, false),
 			PermissionMode: httpx.Deref(in.PermissionMode, ""),
-			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), Sandbox: in.Sandbox, Approvals: approvals,
+			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), WorktreeRepo: httpx.Deref(in.WorktreeRepo, ""), Sandbox: in.Sandbox, Approvals: approvals,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
