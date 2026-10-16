@@ -103,6 +103,37 @@ func (q *Queries) GetGitRepoChannel(ctx context.Context, arg GetGitRepoChannelPa
 	return i, err
 }
 
+const getGitRepoChannelsByRepo = `-- name: GetGitRepoChannelsByRepo :many
+SELECT workspace_id, repo, channel_id, created_at
+FROM git_repo_channel
+WHERE repo = $1
+`
+
+func (q *Queries) GetGitRepoChannelsByRepo(ctx context.Context, repo string) ([]GitRepoChannel, error) {
+	rows, err := q.db.Query(ctx, getGitRepoChannelsByRepo, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GitRepoChannel
+	for rows.Next() {
+		var i GitRepoChannel
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.Repo,
+			&i.ChannelID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWebhookDelivery = `-- name: GetWebhookDelivery :one
 SELECT delivery_id, received_at
 FROM git_webhook_delivery

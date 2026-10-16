@@ -84,6 +84,21 @@ func (s *Store) GetRepoChannel(_ context.Context, workspaceID ids.ID, repo strin
 	return m, nil
 }
 
+func (s *Store) FindRepoChannels(_ context.Context, repo string) ([]git.RepoChannel, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var list []git.RepoChannel
+	for _, m := range s.repoChannels {
+		if m.Repo == repo {
+			list = append(list, m)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].WorkspaceID.String() < list[j].WorkspaceID.String()
+	})
+	return list, nil
+}
+
 func (s *Store) SetRepoChannel(_ context.Context, mapping git.RepoChannel) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

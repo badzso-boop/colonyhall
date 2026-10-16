@@ -1028,6 +1028,13 @@ func testGit(t *testing.T, b Backend) {
 		t.Fatalf("ListRepoChannels = %+v", list)
 	}
 
+	// FindRepoChannels by repo
+	found, err := st.FindRepoChannels(ctx, "owner/repo1")
+	must(t, err)
+	if len(found) != 1 || found[0].ChannelID != chID {
+		t.Fatalf("FindRepoChannels = %+v", found)
+	}
+
 	// Non-existent mapping
 	if _, err := st.GetRepoChannel(ctx, f.ws.ID, "owner/nonexistent"); !errors.Is(err, git.ErrMappingNotFound) {
 		t.Fatalf("expected ErrMappingNotFound, got %v", err)

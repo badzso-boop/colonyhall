@@ -109,6 +109,23 @@ func (s *Store) GetRepoChannel(ctx context.Context, workspaceID ids.ID, repo str
 	}, nil
 }
 
+func (s *Store) FindRepoChannels(ctx context.Context, repo string) ([]git.RepoChannel, error) {
+	rows, err := s.q(ctx).GetGitRepoChannelsByRepo(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]git.RepoChannel, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, git.RepoChannel{
+			WorkspaceID: r.WorkspaceID,
+			Repo:        r.Repo,
+			ChannelID:   r.ChannelID,
+			CreatedAt:   r.CreatedAt,
+		})
+	}
+	return out, nil
+}
+
 func (s *Store) SetRepoChannel(ctx context.Context, mapping git.RepoChannel) error {
 	return s.q(ctx).UpsertGitRepoChannel(ctx, sqlcgen.UpsertGitRepoChannelParams{
 		WorkspaceID: mapping.WorkspaceID,

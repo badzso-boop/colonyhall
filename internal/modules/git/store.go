@@ -24,6 +24,9 @@ type Store interface {
 	// GetRepoChannel returns the mapping for a repo, or ErrMappingNotFound.
 	GetRepoChannel(ctx context.Context, workspaceID ids.ID, repo string) (RepoChannel, error)
 
+	// FindRepoChannels returns mappings for a repository across workspaces (used by webhooks).
+	FindRepoChannels(ctx context.Context, repo string) ([]RepoChannel, error)
+
 	// SetRepoChannel creates or updates a mapping.
 	SetRepoChannel(ctx context.Context, mapping RepoChannel) error
 

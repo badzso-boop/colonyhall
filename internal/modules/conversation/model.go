@@ -2,6 +2,7 @@
 package conversation
 
 import (
+	"context"
 	"errors"
 	"regexp"
 	"strings"
@@ -83,6 +84,21 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	Reactions    []ReactionSummary // filled on reads
+	LinkCards    []LinkCard        // filled on reads
+}
+
+// LinkCard is unfurled metadata for a link in a message.
+type LinkCard struct {
+	URL    string
+	Kind   string
+	Title  string
+	State  string
+	Author string
+}
+
+// LinkCardProvider provides link cards for messages.
+type LinkCardProvider interface {
+	LinkCardsForMessages(ctx context.Context, messages []Message) (map[ids.ID][]LinkCard, error)
 }
 
 // Limits.

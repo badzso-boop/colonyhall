@@ -49,3 +49,9 @@ ON CONFLICT (delivery_id) DO NOTHING;
 SELECT delivery_id, received_at
 FROM git_webhook_delivery
 WHERE delivery_id = $1;
+
+-- name: GetGitRepoChannelsByRepo :many
+SELECT workspace_id, repo, channel_id, created_at
+FROM git_repo_channel
+WHERE repo = $1;
+

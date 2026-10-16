@@ -131,6 +131,56 @@ func (s *Service) createActor(ctx context.Context, byID ids.ID, in NewActorInput
 	return a, secret, ev.Seq, nil
 }
 
+// EnsureSystemActor returns the actor with handle in workspaceID, or creates an active agent actor with no token.
+func (s *Service) EnsureSystemActor(ctx context.Context, workspaceID ids.ID, handle, displayName string) (Actor, error) {
+	a, err := s.Store.ActorByHandle(ctx, workspaceID, handle)
+	if err == nil {
+		return a, nil
+	}
+	if !errors.Is(err, db.ErrNotFound) {
+		return Actor{}, err
+	}
+	if displayName == "" {
+		displayName = handle
+	}
+	a = Actor{
+		ID:          s.IDs.New(),
+		WorkspaceID: workspaceID,
+		Kind:        KindAgent,
+		Handle:      handle,
+		DisplayName: displayName,
+		Role:        RoleMember,
+		State:       StateActive,
+		CreatedAt:   s.Clock.Now(),
+	}
+	var seq int64
+	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.CreateActor(ctx, a); err != nil {
+			if errors.Is(err, db.ErrConflict) {
+				return nil
+			}
+			return err
+		}
+		ev, err := eventlog.NewEvent(s.IDs.New(), a.WorkspaceID, EventActorCreated, a.ID, ids.Nil,
+			"actor", a.ID, ActorCreated{ActorID: a.ID.String(), Kind: a.Kind, Handle: a.Handle, Role: a.Role}, s.Clock.Now())
+		if err != nil {
+			return err
+		}
+		if err := s.Events.Append(ctx, &ev); err != nil {
+			return err
+		}
+		seq = ev.Seq
+		return nil
+	})
+	if err != nil {
+		return Actor{}, err
+	}
+	if seq > 0 {
+		s.Bus.Notify(seq)
+	}
+	return s.Store.ActorByHandle(ctx, workspaceID, handle)
+}
+
 // Authenticate resolves a bearer token to an active actor.
 func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error) {
 	if secret == "" {

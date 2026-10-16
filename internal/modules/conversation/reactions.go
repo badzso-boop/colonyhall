@@ -141,5 +141,6 @@ func (s *Service) withReactions(ctx context.Context, msgs []Message) ([]Message,
 	for i := range msgs {
 		msgs[i].Reactions = byMsg[msgs[i].ID]
 	}
+	s.enrichLinkCards(ctx, msgs)
 	return msgs, nil
 }
