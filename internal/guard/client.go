@@ -224,6 +224,7 @@ type HostAgent struct {
 	PermissionMode string  `json:"permission_mode"`
 	Mode           string  `json:"mode"`
 	RootDir        string  `json:"root_dir"`
+	WorktreeRepo   string  `json:"worktree_repo"`
 	Sandbox        bool    `json:"sandbox"`
 	Approvals      string  `json:"approvals"`
 	Grants         []Grant `json:"grants"`
@@ -244,6 +245,14 @@ type HostReport struct {
 	Sandbox          string         `json:"sandbox"`
 	AllowUnsandboxed bool           `json:"allow_unsandboxed"`
 	Rejected         []Rejected     `json:"rejected"`
+	Worktrees        []Worktree     `json:"worktrees,omitempty"`
+}
+
+// Worktree is an active git worktree on this machine.
+type Worktree struct {
+	AgentID string `json:"agent_id"`
+	Path    string `json:"path"`
+	Branch  string `json:"branch"`
 }
 
 // ReportClient is an AI client found on this machine.
