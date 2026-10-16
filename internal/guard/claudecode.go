@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -49,7 +50,7 @@ func (c *ClaudeCode) Decide(ctx context.Context, req DecideRequest) (RunResult, 
 		"--json-schema", DecisionSchema,
 	}
 	args = withModel(args, req.Model)
-	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args)
+	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args, nil)
 	if err != nil {
 		return res, err
 	}
@@ -73,7 +74,7 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 		args = append(args, "--tools", ClaudeFileTools, "--disallowedTools", "Bash")
 	}
 	args = withModel(args, req.Model)
-	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args)
+	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args, nil)
 	res.Text = out.Result
 	return res, err
 }
@@ -92,11 +93,14 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	if req.MCPConfigPath != "" {
 		args = append(args, "--mcp-config", req.MCPConfigPath)
 	}
+	if req.PermissionPromptTool != "" {
+		args = append(args, "--permission-prompt-tool", req.PermissionPromptTool)
+	}
 	args = append(args, "--output-format", "json")
 	if req.Model != "" {
 		args = withModel(args, req.Model)
 	}
-	res, out, err := c.execAs(ctx, req.Dir, nil, args)
+	res, out, err := c.execAs(ctx, req.Dir, nil, args, req.Env)
 	res.Text = out.Result
 	if out.SessionID != "" {
 		res.SessionID = out.SessionID
@@ -104,11 +108,26 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	return res, err
 }
 
-func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args []string) (RunResult, claudeOutput, error) {
+func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args []string, extraEnv []string) (RunResult, claudeOutput, error) {
 	start := time.Now()
-	name, args, env, err := wrap.command(c.bin(), args)
-	if err != nil {
-		return RunResult{}, claudeOutput{}, fmt.Errorf("sandbox: %w", err)
+	var (
+		name string
+		env  []string
+		err  error
+	)
+	if wrap != nil {
+		name, args, env, err = wrap.command(c.bin(), args)
+		if err != nil {
+			return RunResult{}, claudeOutput{}, fmt.Errorf("sandbox: %w", err)
+		}
+	} else {
+		name = c.bin()
+		if len(extraEnv) > 0 {
+			env = os.Environ()
+		}
+	}
+	if len(extraEnv) > 0 {
+		env = append(env, extraEnv...)
 	}
 	stdout, _, err := c.Run(ctx, dir, name, args, env)
 	res := RunResult{Duration: time.Since(start)}

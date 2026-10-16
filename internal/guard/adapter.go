@@ -48,15 +48,17 @@ type WorkRequest struct {
 // DirectRequest is the input of a direct mode run: a full interactive session
 // in the agent's root directory.
 type DirectRequest struct {
-	Prompt         string
-	Model          string
-	Dir            string
-	SessionID      string
-	Resume         bool
-	ConversationID string
-	PermissionMode string
-	MCPConfigPath  string
-	AddDirs        []string
+	Prompt               string
+	Model                string
+	Dir                  string
+	SessionID            string
+	Resume               bool
+	ConversationID       string
+	PermissionMode       string
+	MCPConfigPath        string
+	PermissionPromptTool string
+	Env                  []string
+	AddDirs              []string
 }
 
 // Wrapper wraps a client command, e.g. in the bwrap sandbox.

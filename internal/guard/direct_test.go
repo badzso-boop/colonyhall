@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -682,4 +683,140 @@ func TestAntigravityDirectMCPOutsideProject(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+func TestClaudeDirectApprovalsArgsAndEnv(t *testing.T) {
+	var f fakeRunner
+	c := &ClaudeCode{Run: f.run}
+
+	dir := t.TempDir()
+	mcpPath, cleanup, err := writeMCPConfig(dir, "http://localhost:8080", "agent-token-xyz", map[string]string{
+		"X-Colonyhall-Channel": "chan-123",
+		"X-Colonyhall-Thread":  "thread-456",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Verify headers in MCP config
+	rawMCP, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc mcpConfigDoc
+	if err := json.Unmarshal(rawMCP, &doc); err != nil {
+		t.Fatal(err)
+	}
+	serverDoc := doc.MCPServers["colonyhall"]
+	if serverDoc.Headers["Authorization"] != "Bearer agent-token-xyz" {
+		t.Errorf("expected Auth header, got %v", serverDoc.Headers)
+	}
+	if serverDoc.Headers["X-Colonyhall-Channel"] != "chan-123" {
+		t.Errorf("expected channel header chan-123, got %s", serverDoc.Headers["X-Colonyhall-Channel"])
+	}
+	if serverDoc.Headers["X-Colonyhall-Thread"] != "thread-456" {
+		t.Errorf("expected thread header thread-456, got %s", serverDoc.Headers["X-Colonyhall-Thread"])
+	}
+
+	// Run without permission prompt tool
+	f.stdout = `{"result":"ok"}`
+	_, err = c.Direct(context.Background(), DirectRequest{
+		Prompt:        "test",
+		Dir:           dir,
+		SessionID:     "s1",
+		MCPConfigPath: mcpPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(f.args, "--permission-prompt-tool") {
+		t.Errorf("expected no --permission-prompt-tool when not specified: %v", f.args)
+	}
+
+	// Run with permission prompt tool and Env
+	_, err = c.Direct(context.Background(), DirectRequest{
+		Prompt:               "test",
+		Dir:                  dir,
+		SessionID:            "s1",
+		MCPConfigPath:        mcpPath,
+		PermissionPromptTool: "mcp__colonyhall__approve",
+		Env:                  []string{"MCP_TOOL_TIMEOUT=660000"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(f.args, "--permission-prompt-tool") {
+		t.Errorf("expected --permission-prompt-tool flag in args: %v", f.args)
+	}
+	if v, _ := flagValue(f.args, "--permission-prompt-tool"); v != "mcp__colonyhall__approve" {
+		t.Errorf("expected mcp__colonyhall__approve, got %s", v)
+	}
+	if !slices.Contains(f.env, "MCP_TOOL_TIMEOUT=660000") {
+		t.Errorf("expected MCP_TOOL_TIMEOUT=660000 in env: %v", f.env)
+	}
+}
+
+func TestClaudeDirectApprovalsExecutionFlow(t *testing.T) {
+	stateDir, root := t.TempDir(), t.TempDir()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer ts.Close()
+
+	var seen DirectRequest
+	var capturedMCPDoc mcpConfigDoc
+	ad := &directTestAdapter{}
+	ad.impl = func(_ context.Context, req DirectRequest) (RunResult, error) {
+		seen = req
+		if raw, err := os.ReadFile(req.MCPConfigPath); err == nil {
+			_ = json.Unmarshal(raw, &capturedMCPDoc)
+		}
+		return RunResult{Text: "all done", SessionID: "sess-10"}, nil
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:    "claude-code",
+			Approvals: "chat",
+			HaltCheck: time.Hour,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "test-token-123", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		RootDir:  root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+	}
+
+	items := []Item{{
+		ID:           "it-10",
+		AuthorKind:   "human",
+		ItemID:       "m10",
+		Channel:      "engineering",
+		ChannelID:    "chan-eng-1",
+		ThreadRootID: "thread-root-99",
+		Body:         "please deploy",
+	}}
+
+	if err := agent.handleDirect(context.Background(), items); err != nil {
+		t.Fatal(err)
+	}
+
+	if seen.PermissionPromptTool != "mcp__colonyhall__approve" {
+		t.Errorf("expected PermissionPromptTool mcp__colonyhall__approve, got %q", seen.PermissionPromptTool)
+	}
+	expectedEnv := fmt.Sprintf("MCP_TOOL_TIMEOUT=%d", (DefaultApprovalTimeout + 60*time.Second).Milliseconds())
+	if !slices.Contains(seen.Env, expectedEnv) {
+		t.Errorf("expected env %s in %+v", expectedEnv, seen.Env)
+	}
+
+	colonyServer := capturedMCPDoc.MCPServers["colonyhall"]
+	if colonyServer.Headers["X-Colonyhall-Channel"] != "chan-eng-1" {
+		t.Errorf("expected X-Colonyhall-Channel header chan-eng-1, got %q", colonyServer.Headers["X-Colonyhall-Channel"])
+	}
+	if colonyServer.Headers["X-Colonyhall-Thread"] != "thread-root-99" {
+		t.Errorf("expected X-Colonyhall-Thread header thread-root-99, got %q", colonyServer.Headers["X-Colonyhall-Thread"])
+	}
 }

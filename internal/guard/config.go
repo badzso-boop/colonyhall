@@ -51,6 +51,7 @@ type AgentConfig struct {
 	AllowWork      bool          `yaml:"allow_work"` // false: work requests are declined
 	Mode           string        `yaml:"mode"`       // compact | direct
 	RootDir        string        `yaml:"root_dir"`   // direct mode root directory
+	Approvals      string        `yaml:"approvals"`  // none | chat
 	Poll           time.Duration `yaml:"poll"`
 	Debounce       time.Duration `yaml:"debounce"`
 	Batch          int           `yaml:"batch"`
@@ -149,6 +150,12 @@ func (a *AgentConfig) defaults() error {
 	}
 	if a.WorkModel == "" {
 		a.WorkModel = a.Model
+	}
+	if a.Approvals == "" {
+		a.Approvals = "none"
+	}
+	if a.Approvals != "none" && a.Approvals != "chat" {
+		return fmt.Errorf("invalid approvals %q (must be none or chat)", a.Approvals)
 	}
 	return nil
 }
