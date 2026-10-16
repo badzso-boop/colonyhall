@@ -15,6 +15,7 @@ import (
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
+	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/runs"
@@ -37,6 +38,7 @@ type Backend struct {
 	Schedule     schedule.Store
 	Approval     approval.Store
 	Wiki         wiki.Store
+	Files        files.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -51,6 +53,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
 	t.Run("approval", func(t *testing.T) { testApproval(t, newBackend(t)) })
 	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
+	t.Run("files", func(t *testing.T) { testFiles(t, newBackend(t)) })
 }
 
 var (
@@ -937,5 +940,121 @@ func testWiki(t *testing.T, b Backend) {
 	}
 	if _, err := st.ListRevisions(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("ListRevisions non-existent: %v", err)
+	}
+}
+
+func testFiles(t *testing.T, b Backend) {
+	ctx := context.Background()
+	ws := gen.New()
+	u1 := gen.New()
+	ch1 := gen.New()
+	ch2 := gen.New()
+
+	// Seed workspace, actor, channels
+	must(t, b.Identity.CreateWorkspace(ctx, identity.Workspace{ID: ws, Name: "acme", CreatedAt: t0}))
+	must(t, b.Identity.CreateActor(ctx, identity.Actor{ID: u1, WorkspaceID: ws, Kind: identity.KindHuman, Handle: "alice", DisplayName: "Alice", State: "active", Role: identity.RoleOwner, CreatedAt: t0}))
+	must(t, b.Conversation.CreateChannel(ctx, conversation.Channel{ID: ch1, WorkspaceID: ws, Kind: conversation.KindPublic, Name: "general", CreatedBy: u1, CreatedAt: t0}))
+	must(t, b.Conversation.CreateChannel(ctx, conversation.Channel{ID: ch2, WorkspaceID: ws, Kind: conversation.KindPublic, Name: "random", CreatedBy: u1, CreatedAt: t0}))
+
+	// 1. Insert & ByID
+	f1ID := gen.New()
+	f1 := files.File{
+		ID:          f1ID,
+		WorkspaceID: ws,
+		UploadedBy:  u1,
+		ChannelID:   ch1,
+		Name:        "report.pdf",
+		Mime:        "application/pdf",
+		Size:        1024,
+		SHA256:      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		CreatedAt:   t0,
+	}
+	must(t, b.Files.Insert(ctx, f1))
+
+	got, err := b.Files.ByID(ctx, f1ID)
+	must(t, err)
+	if got.ID != f1ID || got.Name != "report.pdf" || got.Mime != "application/pdf" || got.Size != 1024 {
+		t.Fatalf("unexpected file: %+v", got)
+	}
+
+	// Not found
+	_, err = b.Files.ByID(ctx, gen.New())
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected db.ErrNotFound, got %v", err)
+	}
+
+	// 2. ByIDs
+	f2ID := gen.New()
+	f2 := files.File{
+		ID:          f2ID,
+		WorkspaceID: ws,
+		UploadedBy:  u1,
+		ChannelID:   ch1,
+		Name:        "notes.txt",
+		Mime:        "text/plain",
+		Size:        50,
+		SHA256:      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+		CreatedAt:   t0.Add(time.Minute),
+	}
+	must(t, b.Files.Insert(ctx, f2))
+
+	byIDs, err := b.Files.ByIDs(ctx, []ids.ID{f1ID, f2ID, gen.New()})
+	must(t, err)
+	if len(byIDs) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(byIDs))
+	}
+
+	// 3. ListByChannel
+	chList, err := b.Files.ListByChannel(ctx, ch1)
+	must(t, err)
+	if len(chList) != 2 || chList[0].ID != f2ID || chList[1].ID != f1ID {
+		t.Fatalf("expected 2 files newest first, got %+v", chList)
+	}
+
+	emptyList, err := b.Files.ListByChannel(ctx, ch2)
+	must(t, err)
+	if len(emptyList) != 0 {
+		t.Fatalf("expected 0 files, got %d", len(emptyList))
+	}
+
+	// 4. AttachToMessage & AttachmentsForMessage & AttachmentsForMessages
+	msg1ID := gen.New()
+	msg1 := conversation.Message{
+		ID:          msg1ID,
+		WorkspaceID: ws,
+		ChannelID:   ch1,
+		AuthorID:    u1,
+		Kind:        "text",
+		Body:        "here are the files",
+		CreatedAt:   t0,
+	}
+	must(t, b.Conversation.InsertMessage(ctx, msg1))
+
+	must(t, b.Files.AttachToMessage(ctx, msg1ID, f1ID, 0))
+	must(t, b.Files.AttachToMessage(ctx, msg1ID, f2ID, 1))
+
+	atts, err := b.Files.AttachmentsForMessage(ctx, msg1ID)
+	must(t, err)
+	if len(atts) != 2 || atts[0].ID != f1ID || atts[1].ID != f2ID {
+		t.Fatalf("unexpected attachments for message: %+v", atts)
+	}
+
+	msg2ID := gen.New()
+	msg2 := conversation.Message{
+		ID:          msg2ID,
+		WorkspaceID: ws,
+		ChannelID:   ch1,
+		AuthorID:    u1,
+		Kind:        "text",
+		Body:        "another message with one file",
+		CreatedAt:   t0.Add(time.Second),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, msg2))
+	must(t, b.Files.AttachToMessage(ctx, msg2ID, f2ID, 0))
+
+	batchAtts, err := b.Files.AttachmentsForMessages(ctx, []ids.ID{msg1ID, msg2ID, gen.New()})
+	must(t, err)
+	if len(batchAtts[msg1ID]) != 2 || len(batchAtts[msg2ID]) != 1 || len(batchAtts[gen.New()]) != 0 {
+		t.Fatalf("unexpected batch attachments: %+v", batchAtts)
 	}
 }
