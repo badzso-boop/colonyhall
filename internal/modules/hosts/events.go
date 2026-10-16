@@ -28,6 +28,7 @@ type AssignmentEvent struct {
 	Mode      string `json:"mode,omitempty"`
 	RootDir   string `json:"root_dir,omitempty"`
 	Sandbox   bool   `json:"sandbox"`
+	Approvals string `json:"approvals,omitempty"`
 }
 
 // GrantEvent is the payload of grant events.

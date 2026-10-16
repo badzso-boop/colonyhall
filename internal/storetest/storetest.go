@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
@@ -33,6 +34,7 @@ type Backend struct {
 	Hosts        hosts.Store
 	Runs         runs.Store
 	Schedule     schedule.Store
+	Approval     approval.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -45,6 +47,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("hosts", func(t *testing.T) { testHosts(t, newBackend(t)) })
 	t.Run("runs", func(t *testing.T) { testRuns(t, newBackend(t)) })
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
+	t.Run("approval", func(t *testing.T) { testApproval(t, newBackend(t)) })
 }
 
 var (
@@ -442,19 +445,24 @@ func testHosts(t *testing.T, b Backend) {
 	a := hosts.Assignment{
 		AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
 		WorkModel: "sonnet", AllowWork: true, Mode: hosts.AgentModeDirect, RootDir: "/work", Sandbox: false,
-		CreatedBy: f.human.ID, CreatedAt: t0,
+		Approvals: hosts.ApprovalsChat, CreatedBy: f.human.ID, CreatedAt: t0,
 	}
 	must(t, hs.SetAssignment(ctx, a))
+	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
+	if err != nil || ga.Approvals != hosts.ApprovalsChat {
+		t.Fatalf("approvals: %+v %v", ga, err)
+	}
 	a.Model = "opus"
 	a.Mode = hosts.AgentModeCompact
 	a.Sandbox = true
+	a.Approvals = hosts.ApprovalsNone
 	must(t, hs.SetAssignment(ctx, a)) // replaces
-	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || !ga.Sandbox {
+	ga, err = hs.AssignmentByAgent(ctx, f.agent.ID)
+	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone {
 		t.Fatalf("AssignmentByAgent: %+v %v", ga, err)
 	}
 	as, err := hs.AssignmentsForHost(ctx, h.ID)
-	if err != nil || len(as) != 1 {
+	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone {
 		t.Fatalf("AssignmentsForHost: %+v %v", as, err)
 	}
 
@@ -560,5 +568,80 @@ func testSchedule(t *testing.T, b Backend) {
 	}
 	if _, err := st.ByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("missing: %v", err)
+	}
+}
+
+func testApproval(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Approval
+
+	now := t0
+	req := approval.ApprovalRequest{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		AgentID:     f.agent.ID,
+		ChannelID:   f.channel.ID,
+		ToolName:    "Bash",
+		Input:       `{"command":"ls"}`,
+		State:       approval.StatePending,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(10 * time.Minute),
+	}
+	must(t, st.Create(ctx, req))
+
+	// ByID
+	got, err := st.ByID(ctx, req.ID)
+	if err != nil || got.ToolName != "Bash" || got.State != approval.StatePending || got.ThreadRootID != ids.Nil {
+		t.Fatalf("ByID: %+v %v", got, err)
+	}
+
+	// ListPendingByWorkspace
+	pending, err := st.ListPendingByWorkspace(ctx, f.ws.ID)
+	if err != nil || len(pending) != 1 || pending[0].ID != req.ID {
+		t.Fatalf("ListPendingByWorkspace: %+v %v", pending, err)
+	}
+
+	// Decide allow
+	decAt := now.Add(time.Minute)
+	must(t, st.Decide(ctx, req.ID, approval.StateAllowed, f.human.ID, "ok", decAt))
+
+	got, err = st.ByID(ctx, req.ID)
+	if err != nil || got.State != approval.StateAllowed || got.DecidedBy != f.human.ID || got.DecisionMessage != "ok" || got.DecidedAt == nil {
+		t.Fatalf("after allow: %+v %v", got, err)
+	}
+
+	// Deciding again fails with ErrAlreadyDecided
+	if err := st.Decide(ctx, req.ID, approval.StateDenied, f.human.ID, "no", decAt); !errors.Is(err, approval.ErrAlreadyDecided) {
+		t.Fatalf("expected ErrAlreadyDecided, got %v", err)
+	}
+
+	// Now list pending should be empty
+	pending, err = st.ListPendingByWorkspace(ctx, f.ws.ID)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("expected 0 pending, got %d", len(pending))
+	}
+
+	// With thread_root_id and emergency stop expire
+	rootID := gen.New()
+	req2 := req
+	req2.ID = gen.New()
+	req2.ThreadRootID = rootID
+	req2.State = approval.StatePending
+	must(t, st.Create(ctx, req2))
+
+	got2, err := st.ByID(ctx, req2.ID)
+	if err != nil || got2.ThreadRootID != rootID {
+		t.Fatalf("thread root ID: %+v", got2)
+	}
+
+	// ExpirePendingByWorkspace
+	n, err := st.ExpirePendingByWorkspace(ctx, f.ws.ID, decAt)
+	if err != nil || n != 1 {
+		t.Fatalf("ExpirePendingByWorkspace: %d %v", n, err)
+	}
+	got2, err = st.ByID(ctx, req2.ID)
+	if err != nil || got2.State != approval.StateExpired || got2.DecisionMessage != "emergency stop" {
+		t.Fatalf("after expire: %+v", got2)
 	}
 }

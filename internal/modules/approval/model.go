@@ -1,0 +1,68 @@
+package approval
+
+import (
+	"errors"
+	"time"
+	"unicode/utf8"
+
+	"colonyhall/internal/modules/runs"
+	"colonyhall/internal/platform/ids"
+)
+
+// Limits.
+const (
+	MaxInput       = 8000
+	DefaultTimeout = 10 * time.Minute
+)
+
+// Approval states.
+const (
+	StatePending = "pending"
+	StateAllowed = "allowed"
+	StateDenied  = "denied"
+	StateExpired = "expired"
+)
+
+// Decisions.
+const (
+	DecisionAllow = "allow"
+	DecisionDeny  = "deny"
+)
+
+// ApprovalRequest is one tool approval request from an agent.
+type ApprovalRequest struct {
+	ID              ids.ID
+	WorkspaceID     ids.ID
+	AgentID         ids.ID
+	ChannelID       ids.ID
+	ThreadRootID    ids.ID
+	ToolName        string
+	Input           string
+	State           string
+	DecidedBy       ids.ID
+	DecisionMessage string
+	CreatedAt       time.Time
+	DecidedAt       *time.Time
+	ExpiresAt       time.Time
+}
+
+// Errors.
+var (
+	ErrForbidden      = errors.New("not allowed")
+	ErrAlreadyDecided = errors.New("approval request is not pending")
+	ErrBadDecision    = errors.New("decision must be allow or deny")
+	ErrExpired        = errors.New("approval request has expired")
+	ErrBadToolName    = errors.New("tool name is required")
+)
+
+// Redact masks secrets in s using the same patterns as the runs module.
+func Redact(s string) string {
+	return runs.Redact(s)
+}
+
+func clip(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n]) + "…"
+}
