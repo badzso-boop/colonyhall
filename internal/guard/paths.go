@@ -102,3 +102,26 @@ func deniedInside(grant, home string) []string {
 	}
 	return out
 }
+
+// CheckExchangeDir verifies that dir exists, is a directory, and is writable
+// by creating and removing a temporary test file.
+func CheckExchangeDir(dir string) error {
+	if dir == "" {
+		return fmt.Errorf("exchange_dir is empty")
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	f, err := os.CreateTemp(dir, ".colony-exchange-check-*")
+	if err != nil {
+		return fmt.Errorf("exchange_dir is not writable: %w", err)
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return nil
+}

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -295,6 +296,15 @@ func TestDirectPrompt(t *testing.T) {
 	}
 	if !strings.Contains(p, "wiki_index") || !strings.Contains(p, "wiki_append") || !strings.Contains(p, "wiki_create") {
 		t.Fatalf("missing wiki instructions in prompt:\n%s", p)
+	}
+	if strings.Contains(p, "Secrets go through") {
+		t.Fatalf("prompt without exchangeDir should not contain secrets exchange paragraph:\n%s", p)
+	}
+
+	pWithExchange := DirectPrompt(items, "/mnt/z/colonyhall-exchange/")
+	wantExchange := "Secrets go through /mnt/z/colonyhall-exchange/<project>/ with mode 600, the chat gets only the path, the receiver copies and deletes it, never commit the exchange folder."
+	if !strings.Contains(pWithExchange, wantExchange) {
+		t.Fatalf("missing secrets exchange paragraph in prompt:\n%s", pWithExchange)
 	}
 }
 
@@ -822,4 +832,101 @@ func TestClaudeDirectApprovalsExecutionFlow(t *testing.T) {
 	if colonyServer.Headers["X-Colonyhall-Thread"] != "thread-root-99" {
 		t.Errorf("expected X-Colonyhall-Thread header thread-root-99, got %q", colonyServer.Headers["X-Colonyhall-Thread"])
 	}
+}
+
+func TestSupervisorExchangeDirReport(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "project")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sandboxDir := filepath.Join(dir, "sandbox")
+	hostTokenFile := filepath.Join(dir, "host.token")
+	if err := os.WriteFile(hostTokenFile, []byte("tok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	validExchange := filepath.Join(dir, "exchange")
+	if err := os.MkdirAll(validExchange, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	var lastReport HostReport
+	var reportMu sync.Mutex
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/report"):
+			var rep HostReport
+			if err := json.NewDecoder(r.Body).Decode(&rep); err != nil {
+				http.Error(w, err.Error(), 400)
+				return
+			}
+			reportMu.Lock()
+			lastReport = rep
+			reportMu.Unlock()
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	t.Run("writable exchange folder reports ok", func(t *testing.T) {
+		sup := &Supervisor{
+			Cfg: Config{
+				Server:        ts.URL,
+				HostTokenFile: hostTokenFile,
+				Roots:         []string{root},
+				SandboxDir:    sandboxDir,
+				ExchangeDir:   validExchange,
+			},
+			Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}
+		if err := sup.start(context.Background()); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		if !sup.exchangeOK {
+			t.Errorf("expected exchangeOK true for valid dir")
+		}
+		sup.report(context.Background())
+		reportMu.Lock()
+		got := lastReport
+		reportMu.Unlock()
+		if got.ExchangeDir != validExchange {
+			t.Errorf("reported ExchangeDir = %q, want %q", got.ExchangeDir, validExchange)
+		}
+		if !got.ExchangeOK {
+			t.Errorf("reported ExchangeOK = false, want true")
+		}
+	})
+
+	t.Run("non-existent exchange folder reports not ok", func(t *testing.T) {
+		missingExchange := filepath.Join(dir, "missing-exchange")
+		sup := &Supervisor{
+			Cfg: Config{
+				Server:        ts.URL,
+				HostTokenFile: hostTokenFile,
+				Roots:         []string{root},
+				SandboxDir:    sandboxDir,
+				ExchangeDir:   missingExchange,
+			},
+			Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		}
+		if err := sup.start(context.Background()); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		if sup.exchangeOK {
+			t.Errorf("expected exchangeOK false for missing dir")
+		}
+		sup.report(context.Background())
+		reportMu.Lock()
+		got := lastReport
+		reportMu.Unlock()
+		if got.ExchangeDir != missingExchange {
+			t.Errorf("reported ExchangeDir = %q, want %q", got.ExchangeDir, missingExchange)
+		}
+		if got.ExchangeOK {
+			t.Errorf("reported ExchangeOK = true, want false")
+		}
+	})
 }

@@ -306,3 +306,48 @@ func TestSandboxedRunsCannotExecute(t *testing.T) {
 		t.Errorf("the user's own agy settings must not change: %s", raw)
 	}
 }
+
+func TestCheckExchangeDir(t *testing.T) {
+	dir := t.TempDir()
+
+	// 1. Valid writable directory.
+	validDir := filepath.Join(dir, "exchange")
+	if err := os.MkdirAll(validDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckExchangeDir(validDir); err != nil {
+		t.Errorf("CheckExchangeDir on valid dir: %v", err)
+	}
+
+	// 2. Non-existent directory.
+	missingDir := filepath.Join(dir, "missing")
+	if err := CheckExchangeDir(missingDir); err == nil {
+		t.Error("expected error for non-existent directory")
+	}
+
+	// 3. Regular file instead of directory.
+	filePath := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(filePath, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckExchangeDir(filePath); err == nil {
+		t.Error("expected error when path is a file")
+	}
+
+	// 4. Empty string.
+	if err := CheckExchangeDir(""); err == nil {
+		t.Error("expected error for empty exchange dir")
+	}
+
+	// 5. Unwritable directory.
+	roDir := filepath.Join(dir, "ro")
+	if err := os.MkdirAll(roDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	// Note: If running as root, permissions might be bypassed, so check if euid == 0
+	if os.Geteuid() != 0 {
+		if err := CheckExchangeDir(roDir); err == nil {
+			t.Error("expected error for read-only directory")
+		}
+	}
+}

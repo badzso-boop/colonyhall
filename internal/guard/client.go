@@ -243,6 +243,8 @@ type HostReport struct {
 	Clients          []ReportClient `json:"clients"`
 	Sandbox          string         `json:"sandbox"`
 	AllowUnsandboxed bool           `json:"allow_unsandboxed"`
+	ExchangeDir      string         `json:"exchange_dir,omitempty"`
+	ExchangeOK       bool           `json:"exchange_ok"`
 	Rejected         []Rejected     `json:"rejected"`
 }
 

@@ -163,8 +163,22 @@ func TestHostConfigAndGrants(t *testing.T) {
 		t.Fatal("no roots reported yet: the grant must be flagged")
 	}
 	if s := e.do("POST", "/api/v1/host/report", hostToken, map[string]any{"roots": []string{"/work"}, "clients": []any{map[string]any{"name": "claude-code"}},
-		"sandbox": "bwrap 0.9.0", "rejected": []any{}}, nil); s != http.StatusNoContent {
+		"sandbox": "bwrap 0.9.0", "exchange_dir": "/mnt/z/exchange", "exchange_ok": true, "rejected": []any{}}, nil); s != http.StatusNoContent {
 		t.Fatalf("report: %d", s)
+	}
+	var hl struct {
+		Hosts []struct {
+			Report struct {
+				ExchangeDir string `json:"exchange_dir"`
+				ExchangeOK  bool   `json:"exchange_ok"`
+			} `json:"report"`
+		} `json:"hosts"`
+	}
+	if s := e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &hl); s != http.StatusOK {
+		t.Fatalf("list hosts: %d", s)
+	}
+	if len(hl.Hosts) != 1 || hl.Hosts[0].Report.ExchangeDir != "/mnt/z/exchange" || !hl.Hosts[0].Report.ExchangeOK {
+		t.Fatalf("unexpected host report in list: %+v", hl)
 	}
 	e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": "/work/docs", "mode": "read"}, &g)
 	if g.OutsideRoots {

@@ -869,6 +869,12 @@ type HostReport struct {
 		Name    string  `json:"name"`
 		Version *string `json:"version,omitempty"`
 	} `json:"clients"`
+
+	// ExchangeDir Path to the secrets exchange folder (optional)
+	ExchangeDir *string `json:"exchange_dir,omitempty"`
+
+	// ExchangeOk True when exchange_dir exists and is writable
+	ExchangeOk   *bool   `json:"exchange_ok,omitempty"`
 	GuardVersion *string `json:"guard_version,omitempty"`
 	Os           *string `json:"os,omitempty"`
 	Rejected     []struct {

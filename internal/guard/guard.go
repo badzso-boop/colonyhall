@@ -39,6 +39,9 @@ type Agent struct {
 	RootDir  string
 	StateDir string
 
+	ExchangeDir string
+	ExchangeOK  bool
+
 	// WebSocket options and test hooks
 	DisableWS          bool
 	WSTokenHook        func(ctx context.Context) (string, error)
@@ -559,6 +562,14 @@ func sleep(ctx context.Context, d time.Duration) error {
 
 // RunAll starts one loop per configured agent and blocks until ctx ends.
 func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error {
+	var exchangeOK bool
+	if cfg.ExchangeDir != "" {
+		if err := CheckExchangeDir(cfg.ExchangeDir); err != nil {
+			log.Warn("guard: secrets exchange folder not usable", "dir", cfg.ExchangeDir, "err", err)
+		} else {
+			exchangeOK = true
+		}
+	}
 	var wg sync.WaitGroup
 	errs := make(chan error, len(cfg.Agents))
 	for _, ac := range cfg.Agents {
@@ -567,10 +578,12 @@ func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error
 			return err
 		}
 		agent := &Agent{
-			Cfg:     ac,
-			Client:  &Client{BaseURL: cfg.Server, Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}},
-			Adapter: Adapters[ac.Client](ac, run),
-			Log:     log,
+			Cfg:         ac,
+			Client:      &Client{BaseURL: cfg.Server, Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}},
+			Adapter:     Adapters[ac.Client](ac, run),
+			Log:         log,
+			ExchangeDir: cfg.ExchangeDir,
+			ExchangeOK:  exchangeOK,
 		}
 		wg.Add(1)
 		go func() {

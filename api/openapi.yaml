@@ -1018,6 +1018,8 @@ components:
               version: { type: string }
         sandbox: { type: string, description: "e.g. bwrap 0.9.0; empty when none" }
         allow_unsandboxed: { type: boolean, description: "True when guard.yaml permits agents with sandbox: false" }
+        exchange_dir: { type: string, description: "Path to the secrets exchange folder (optional)" }
+        exchange_ok: { type: boolean, description: "True when exchange_dir exists and is writable" }
         rejected:
           type: array
           items:

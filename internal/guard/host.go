@@ -52,12 +52,13 @@ type Supervisor struct {
 	home    string
 	sandbox *Sandbox
 
-	mu       sync.Mutex
-	lastOK   time.Time
-	version  string
-	agents   map[string]*managed
-	rejected []Rejected
-	reported time.Time
+	mu         sync.Mutex
+	lastOK     time.Time
+	version    string
+	agents     map[string]*managed
+	rejected   []Rejected
+	reported   time.Time
+	exchangeOK bool
 }
 
 type managed struct {
@@ -93,6 +94,14 @@ func (s *Supervisor) start(ctx context.Context) error {
 	}
 	if s.sandbox == nil && *s.Cfg.RequireSandbox {
 		s.Log.Warn("guard: no working bwrap; work runs are disabled (install bubblewrap or set require_sandbox: false)")
+	}
+	if s.Cfg.ExchangeDir != "" {
+		if err := CheckExchangeDir(s.Cfg.ExchangeDir); err != nil {
+			s.exchangeOK = false
+			s.Log.Warn("guard: secrets exchange folder not usable (e.g. Z: drive is not mounted: mount -t drvfs Z: /mnt/z)", "dir", s.Cfg.ExchangeDir, "err", err)
+		} else {
+			s.exchangeOK = true
+		}
 	}
 	s.agents = map[string]*managed{}
 	return nil
@@ -315,13 +324,15 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		httpClient = s.host.HTTP
 	}
 	agent := &Agent{
-		Cfg:      ac,
-		Client:   &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: httpClient},
-		Adapter:  newAdapter(ac),
-		Log:      s.Log,
-		Mode:     ha.Mode,
-		RootDir:  ha.RootDir,
-		StateDir: dir,
+		Cfg:         ac,
+		Client:      &Client{BaseURL: s.Cfg.Server, Tokens: &hostTokens{host: s.host, agentID: ha.AgentID}, HTTP: httpClient},
+		Adapter:     newAdapter(ac),
+		Log:         s.Log,
+		Mode:        ha.Mode,
+		RootDir:     ha.RootDir,
+		StateDir:    dir,
+		ExchangeDir: s.Cfg.ExchangeDir,
+		ExchangeOK:  s.exchangeOK,
 	}
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
 	if ha.Sandbox && s.sandbox != nil {
@@ -447,6 +458,8 @@ func (s *Supervisor) report(ctx context.Context) {
 		r.Sandbox = s.sandbox.Version
 	}
 	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
+	r.ExchangeDir = s.Cfg.ExchangeDir
+	r.ExchangeOK = s.exchangeOK
 	s.mu.Lock()
 	r.Rejected = append([]Rejected{}, s.rejected...)
 	s.mu.Unlock()

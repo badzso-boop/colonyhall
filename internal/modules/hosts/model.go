@@ -68,6 +68,8 @@ type Report struct {
 	Clients          []Client   `json:"clients"`
 	Sandbox          string     `json:"sandbox,omitempty"` // e.g. "bwrap 0.9.0"; empty: none
 	AllowUnsandboxed bool       `json:"allow_unsandboxed"`
+	ExchangeDir      string     `json:"exchange_dir,omitempty"`
+	ExchangeOK       bool       `json:"exchange_ok"`
 	Rejected         []Rejected `json:"rejected"`
 }
 

@@ -31,7 +31,8 @@ type Config struct {
 	// ClaudeTokenFile holds a token from `claude setup-token`; sandboxed
 	// Claude runs use it instead of a copy of the user's login file.
 	ClaudeTokenFile string      `yaml:"claude_token_file"`
-	Defaults        AgentConfig `yaml:"defaults"` // poll, debounce, batch, timeouts for host-mode agents
+	ExchangeDir     string      `yaml:"exchange_dir"` // shared secrets exchange folder
+	Defaults        AgentConfig `yaml:"defaults"`     // poll, debounce, batch, timeouts for host-mode agents
 }
 
 // HostMode reports whether the server manages this machine's agents.
@@ -109,8 +110,10 @@ func (c *Config) validateHost() error {
 	if c.SandboxDir == "" {
 		c.SandboxDir = filepath.Join(home, ".local", "share", "colonyhall", "sandbox")
 	}
-	for _, p := range []*string{&c.HostTokenFile, &c.ClaudeTokenFile, &c.SandboxDir} {
-		if strings.HasPrefix(*p, "~/") {
+	for _, p := range []*string{&c.HostTokenFile, &c.ClaudeTokenFile, &c.SandboxDir, &c.ExchangeDir} {
+		if *p == "~" {
+			*p = home
+		} else if strings.HasPrefix(*p, "~/") {
 			*p = filepath.Join(home, (*p)[2:])
 		}
 	}
