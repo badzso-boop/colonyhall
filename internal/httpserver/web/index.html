@@ -60,6 +60,11 @@
   .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
   .grant { font-family:ui-monospace, monospace; font-size:12px; }
   .warn { color:#b3261e; } code.code { font-size:16px; letter-spacing:1px; }
+  .link-cards { display:flex; flex-direction:column; gap:4px; margin-top:4px; }
+  .link-card { display:inline-flex; gap:6px; align-items:center; background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:3px 8px; font-size:12px; width:fit-content; }
+  .link-card a { color:var(--accent); text-decoration:none; font-weight:500; }
+  .link-card a:hover { text-decoration:underline; }
+  .link-card .badge { border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:11px; background:var(--bg); }
   #errModal, #appModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
   #errModal.on, #appModal.on { display:flex; }
   #errModal .card, #appModal .card { max-width:720px; width:100%; max-height:80vh; overflow:auto; }
@@ -121,7 +126,8 @@ const I18N = {
         noHostAssign: "gép hozzárendelése később",
         hostModeTokenNote: "Megjegyzés: az agent tokenje gépes (host) módban nem szükséges — az őr automatikusan saját rövid lejáratú tokeneket kér a szervertől.",
         exchange: "Titokcsere", exchangeNotOk: "nem írható",
-        dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):" },
+        dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):",
+        giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -139,7 +145,8 @@ const I18N = {
         noHostAssign: "assign host later",
         hostModeTokenNote: "Note: the agent token is not needed in host mode — the guard requests its own short-lived tokens from the server.",
         exchange: "Secrets exchange", exchangeNotOk: "unwritable",
-        dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):" },
+        dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):",
+        giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -262,6 +269,30 @@ function renderMsg(m) {
         attDiv.append(link);
       }
     }
+  }
+  if (m.link_cards && m.link_cards.length > 0) {
+    const cardsDiv = el("div", { className: "link-cards" });
+    for (const card of m.link_cards) {
+      let icon = "🔗";
+      if (card.kind === "pull") icon = "🔀";
+      else if (card.kind === "issue") icon = "🟢";
+      else if (card.kind === "repo") icon = "📦";
+      else if (card.kind === "commit") icon = "📝";
+
+      const cardEl = el("div", { className: "link-card" });
+      const a = el("a", { href: card.url, target: "_blank", rel: "noopener noreferrer" });
+      a.textContent = `${icon} ${card.title || card.url}`;
+      cardEl.append(a);
+
+      if (card.state) {
+        cardEl.append(el("span", { className: "badge", textContent: card.state }));
+      }
+      if (card.author) {
+        cardEl.append(el("span", { className: "muted", textContent: `@${card.author}` }));
+      }
+      cardsDiv.append(cardEl);
+    }
+    div.append(cardsDiv);
   }
   for (const r of m.reactions || []) {
     const chip = document.createElement("button");
@@ -667,6 +698,48 @@ async function renderHosts() {
     }
     panel.append(c);
   }
+
+  // Gitea repository mappings (admins)
+  const giteaCard = el("div", { className: "card" });
+  giteaCard.append(el("h3", { textContent: L.giteaMappings || "Gitea" }));
+  const mapData = await api("/api/v1/git/mappings").catch(() => null);
+  if (mapData && mapData.mappings) {
+    if (!mapData.mappings.length) {
+      giteaCard.append(el("div", { className: "muted", textContent: L.noGiteaMappings || "Még nincs Gitea tár hozzárendelve." }));
+    } else {
+      for (const m of mapData.mappings) {
+        const row = el("div", { className: "row" });
+        const ch = channels.find(c => c.id === m.channel_id);
+        const chName = ch ? chanLabel(ch) : m.channel_id;
+        row.append(el("b", { textContent: m.repo }), el("span", { className: "muted", textContent: ` → ${chName}` }));
+        const delBtn = el("button", { textContent: "✕" });
+        delBtn.onclick = async () => {
+          const parts = m.repo.split("/");
+          if (parts.length === 2) {
+            await api(`/api/v1/git/mappings/${encodeURIComponent(parts[0])}/${encodeURIComponent(parts[1])}`, { method: "DELETE" }).catch(e => alert(e.message));
+            renderHosts();
+          }
+        };
+        row.append(" ", delBtn);
+        giteaCard.append(row);
+      }
+    }
+  }
+
+  const repoInput = el("input", { placeholder: "owner/repo", size: 20 });
+  const chSelect = el("select", {}, ...channels.filter(c => c.kind !== "dm").map(c => el("option", { value: c.id, textContent: chanLabel(c) })));
+  const addMapBtn = el("button", { textContent: L.addMapping || "Hozzáadás" });
+  addMapBtn.onclick = async () => {
+    const rVal = repoInput.value.trim();
+    if (!rVal || !chSelect.value) return;
+    await api("/api/v1/git/mappings", {
+      method: "POST",
+      body: JSON.stringify({ repo: rVal, channel_id: chSelect.value })
+    }).catch(e => alert(e.message));
+    renderHosts();
+  };
+  giteaCard.append(el("div", { className: "row", style: "margin-top:8px;" }, repoInput, chSelect, addMapBtn));
+  panel.append(giteaCard);
 }
 
 async function start() {

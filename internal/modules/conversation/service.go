@@ -30,6 +30,7 @@ type Service struct {
 	IDs         ids.Generator
 	Clock       clock.Clock
 	Attachments Attachments
+	LinkCards   LinkCardProvider
 }
 
 func subject(a identity.Actor) policy.Subject {
@@ -131,6 +132,28 @@ func (s *Service) addMember(ctx context.Context, by identity.Actor, c Channel, a
 	}
 	return s.appendEvent(ctx, by, c.ID, EventMemberAdded, "channel", c.ID,
 		MemberAdded{ChannelID: c.ID.String(), ActorID: actorID.String(), CanWrite: canWrite})
+}
+
+// EnsureMember ensures that actorID is a member of channelID with write permission.
+func (s *Service) EnsureMember(ctx context.Context, channelID, actorID ids.ID) error {
+	m, err := s.Store.Member(ctx, channelID, actorID)
+	if err == nil {
+		if !m.CanWrite {
+			// already a member, write is permitted
+			return nil
+		}
+		return nil
+	}
+	if !errors.Is(err, db.ErrNotFound) {
+		return err
+	}
+	mem := Member{
+		ChannelID: channelID,
+		ActorID:   actorID,
+		CanWrite:  true,
+		JoinedAt:  s.Clock.Now(),
+	}
+	return s.Store.AddMember(ctx, mem)
 }
 
 // SendInput is a message to send.
@@ -263,7 +286,23 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	if seq > 0 {
 		s.Bus.Notify(seq)
 	}
+	msgs := []Message{msg}
+	s.enrichLinkCards(ctx, msgs)
+	msg = msgs[0]
 	return SendResult{Message: &msg}, nil
+}
+
+func (s *Service) enrichLinkCards(ctx context.Context, msgs []Message) {
+	if s.LinkCards == nil || len(msgs) == 0 {
+		return
+	}
+	cardsMap, err := s.LinkCards.LinkCardsForMessages(ctx, msgs)
+	if err != nil {
+		return
+	}
+	for i := range msgs {
+		msgs[i].LinkCards = cardsMap[msgs[i].ID]
+	}
 }
 
 // ackAsReaction turns an agent's "ok"/"thanks" into a 👍 on the message it

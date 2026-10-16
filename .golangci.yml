@@ -92,6 +92,10 @@ linters:
             - pkg: colonyhall/internal/modules/files/httpapi
             - pkg: colonyhall/internal/modules/files/mcptools
             - pkg: colonyhall/internal/modules/files/storage
+            - pkg: colonyhall/internal/modules/git/postgres
+            - pkg: colonyhall/internal/modules/git/memory
+            - pkg: colonyhall/internal/modules/git/httpapi
+            - pkg: colonyhall/internal/modules/git/mcptools
             - pkg: colonyhall/internal/server
               desc: only cmd/ may use the composition root
 

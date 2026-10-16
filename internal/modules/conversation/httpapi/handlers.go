@@ -49,6 +49,19 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 		}
 		out.Attachments = &atts
 	}
+	if len(m.LinkCards) > 0 {
+		lcs := make([]apispec.LinkCard, 0, len(m.LinkCards))
+		for _, lc := range m.LinkCards {
+			lcs = append(lcs, apispec.LinkCard{
+				Url:    lc.URL,
+				Kind:   apispec.LinkCardKind(lc.Kind),
+				Title:  lc.Title,
+				State:  lc.State,
+				Author: httpx.Ptr(lc.Author),
+			})
+		}
+		out.LinkCards = &lcs
+	}
 	return out
 }
 

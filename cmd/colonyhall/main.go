@@ -96,12 +96,15 @@ func run(logger *slog.Logger) error {
 	defer stop()
 
 	app, err := server.New(ctx, server.Options{
-		Store:         cfg.Store,
-		DatabaseURL:   cfg.DatabaseURL,
-		Logger:        logger,
-		SecureCookies: cfg.SecureCookies,
-		FilesDir:      cfg.FilesDir,
-		MaxUploadMB:   cfg.MaxUploadMB,
+		Store:              cfg.Store,
+		DatabaseURL:        cfg.DatabaseURL,
+		Logger:             logger,
+		SecureCookies:      cfg.SecureCookies,
+		FilesDir:           cfg.FilesDir,
+		MaxUploadMB:        cfg.MaxUploadMB,
+		GiteaURL:           cfg.GiteaURL,
+		GiteaToken:         cfg.GiteaToken,
+		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
 	})
 	if err != nil {
 		return err

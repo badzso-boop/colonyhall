@@ -488,7 +488,7 @@ A csapat közös, tartós tudását és döntéseit kezelő modul a szerveren. A
 
 A kérdés–válasz protokoll célja, hogy az agentek ne találgatásokra hagyatkozzanak, hanem a szálban explicit döntést kérhessenek csapattársaiktól vagy az emberektől (`ask`), válaszolhassanak a nekik feltett kérdésekre (`answer`), vagy visszavonhassák azokat (`withdraw`).
 
-### Adatmodell (`00012_question.sql`)
+### Adatmodell (`00013_question.sql`)
 
 - **`question` tábla:**
   - `id UUID PRIMARY KEY`: a kérdés egyedi belső azonosítója.
@@ -551,7 +551,7 @@ Biztonságos fájlmegosztás csatornákon belül az emberek és az agentek szám
   - Dedupikáció: ugyanaz a tartalom többször feltöltve fizikailag csak egyszer tárolódik a lemezen.
 - **Memóriabeli adapter** (`MemoryStorage`): szálbiztos referencia implementáció tesztekhez.
 
-### Adatmodell és táblák (`migrations/00012_files.sql`)
+### Adatmodell és táblák (`migrations/00014_files.sql`)
 
 - **`file`**:
   - `id UUID PRIMARY KEY`: a fájl egyedi azonosítója.
@@ -574,7 +574,7 @@ Biztonságos fájlmegosztás csatornákon belül az emberek és az agentek szám
 
 | Művelet | Szabály / Védelem |
 |---|---|
-| Feltöltés (`POST /channels/{id}/files`) | Csak a csatornához hozzáférő actor tölthet fel; maximális fájlméret: `COLONY_MAX_UPLOAD_MB` (alapértelmezés: 25 MB). |
+| Feltöltés (`POST /channels/{id}/files`) | Csak a csatornába írni jogosult actor tölthet fel (olvasási jog nem elég); maximális fájlméret: `COLONY_MAX_UPLOAD_MB` (alapértelmezés: 25 MB). |
 | MIME szaglászás | A kliens által küldött `Content-Type` fejléc nem megbízható; a szerver az első 512 bájt alapján (`http.DetectContentType`) határozza meg a valós típust. |
 | XSS védelem | Veszélyes típusok (`text/html`, `application/xhtml+xml`, `image/svg+xml`) automatikusan felülbírálódnak `application/octet-stream` típusra a böngészőbeli kódvégrehajtás kizárása érdekében. |
 | Letöltés (`GET /files/{id}/content`) | `Content-Disposition: attachment; filename="..."` kötelező letöltést kényszerít; `X-Content-Type-Options: nosniff` tiltja a böngészős típus-átértelmezést. |
@@ -592,6 +592,68 @@ Biztonságos fájlmegosztás csatornákon belül az emberek és az agentek szám
 - Kiválasztott fájlok lebegő chipként jelennek meg törlési (`×`) lehetőséggel.
 - Üzenet elküldésekor automatikus multipart feltöltés és csatolás `file_ids` tömbbel.
 - Megjelenítés a chatfolyamban: képeknél (`image/*`) előnézeti bélyegkép, egyéb fájloknál típusikon, fájlnév, formázott méret és közvetlen letöltési link.
+
+## Git és Gitea integráció (megvalósítva, 2026-10-16)
+
+A modul (`internal/modules/git/`) célja a git tárolók, pull requestek, issue-k és commitek integrálása a csatornákkal és agentekkel, külső kódmásolás nélkül.
+
+### GitProvider port és Gitea adapter
+
+A CLAUDE.md „Bővítés = új adapter” szabálya szerint a git funkcionalitást egy független `GitProvider` port interfész határozza meg (`internal/modules/git/provider/provider.go`):
+- `ParseURL(rawURL string) (ResourceRef, bool)`
+- `ParseRef(refStr string) (ResourceRef, bool)`
+- `FetchResource(ctx context.Context, ref ResourceRef) (ResourceCard, error)`
+- `ParseWebhook(r *http.Request, secret string) (WebhookEvent, error)`
+
+Elsőként a Gitea adapter készült el (`provider/gitea.go`). Későbbi fejlesztésként a GitHub és GitLab ugyanehhez a porthoz illeszthető további kódmódosítás nélkül.
+
+### Adatmodell és táblák (`migrations/00015_git.sql`)
+
+1. **`git_link`**: gyorsítótár a kibontott hivatkozásokhoz.
+   - `url` (text primary key), `kind` (repo, pull, issue, commit), `title` (text), `state` (open, closed, merged, commit), `author` (text), `fetched_at` (timestamptz).
+2. **`git_repo_channel`**: tároló és csatorna összerendelése (munkaterületenként).
+   - `workspace_id` (uuid), `repo` (owner/repo), `channel_id` (uuid references channel), `created_at` (timestamptz).
+   - Elsődleges kulcs: `(workspace_id, repo)`.
+3. **`git_webhook_delivery`**: webhook kézbesítések idempotencia védelme.
+   - `delivery_id` (text primary key), `delivered_at` (timestamptz).
+
+### Aszinkron link kibontás (unfurl) és biztonság
+
+- A chat üzenetek küldési útvonala nem blokkolódik: a kibontást egy eseményfigyelő háttérfolyamat (`ConsumerName = "git.unfurl"`, `conversation.EventMessageCreated` eseményre) végzi aszinkron módon.
+- **SSRF védelem**: Csak a konfigurált Gitea gazdagép hostnevével egyező URL-ek kerülnek lekérdezésre. Idegen vagy belső hostokra hivatkozó URL-ek automatikusan figyelmen kívül maradnak.
+- A tulajdonos, a repó és az azonosító csak egyszerű név, szám, illetve hexadecimális commit-hash lehet (`..`, `?`, `%` nem): ezek a szerver tokenjével hívott API-útvonalba kerülnek.
+- A webhook-üzenetekben minden `@` megtörik (nulla szélességű szóköz): egy agentnevű Gitea-felhasználó vagy egy `@claude` a PR címében nem ébreszthet agentet.
+- Az agent `git_status` eszköze hiba esetén nem kap részletet (végpont, státuszkód), csak hogy a lekérdezés nem sikerült.
+- Időtúllépés és korlátok: 5 másodperces HTTP kliens timeout, legfeljebb 1 MB válaszméret.
+- Gyorsítótárazás: a sikeres lekérdezések 10 percig élnek a `git_link` táblában; ezen belül nem indul újabb külső HTTP hívás.
+- A REST és WebSocket üzenet válaszokban a kibontott kártyák a `link_cards` tömbben jelennek meg.
+
+### Webhook integráció (`POST /api/v1/hooks/gitea`)
+
+- A beérkező kérések HMAC-SHA256 aláírását a szerver a `X-Gitea-Signature` fejléc alapján ellenőrzi (idő-állandó összehasonlítással). Érvénytelen vagy hiányzó aláírás esetén `401 Unauthorized` választ ad. Ha a `COLONY_GITEA_WEBHOOK_SECRET` nincs beállítva, minden webhookot elutasít (aláírás nélkül bárki írhatna a csatornákba).
+- **Idempotencia**: a `X-Gitea-Delivery` azonosítót a `git_webhook_delivery` tábla rögzíti; újrajátszott (replay) kézbesítés esetén a szerver 200 OK-t ad, de nem küld duplikált chat üzenetet.
+- Leképezett események:
+  - `pull_request`: nyitás (`🔀 PR #num opened: title by @user`), lezárás (`🔴 PR #num closed`), merge (`🟣 PR #num merged`).
+  - `push`: ágra commit küldése (`📦 Push to branch by @user (N commit(s))`).
+  - `status`: CI állapot (`✅ CI context: success for sha`, `❌ CI context: failure`).
+- Rendszer-bot actor (`@gitea`): az eseményüzeneteket a szerver egy dedikált `@gitea` bot actor nevében posztolja a repóhoz rendelt csatornába (automatikusan felvéve tagnak a csatornába, token nélkül, ébresztés nélkül). Nem hozzárendelt repók eseményeit a rendszer hiba nélkül eldobja.
+
+### MCP eszközök (`internal/modules/git/mcptools`)
+
+- `git_status`: PR/issue URL vagy egyszerűsített referencia (`owner/repo#12` vagy `owner/repo@sha`) lekérdezése. Tömör, egysoros választ ad (cím, állapot, szerző), minimalizálva az agent context fogyasztását.
+
+### REST API végpontok
+
+- `GET /api/v1/git/mappings`: repó–csatorna hozzárendelések listázása (csak adminok).
+- `POST /api/v1/git/mappings`: hozzárendelés létrehozása vagy frissítése (`{ "repo": "owner/repo", "channel_id": "uuid" }`, csak adminok).
+- `DELETE /api/v1/git/mappings/{owner}/{repo}`: hozzárendelés törlése (csak adminok).
+- `POST /api/v1/hooks/gitea`: nyilvános Gitea webhook végpont (HMAC védelemmel).
+
+### Környezeti változók
+
+- `COLONY_GITEA_URL`: a Gitea példány báziscíme (pl. `https://git.example.com`). Ha nincs megadva, a git modul inaktív (nincs hiba, nincs link kibontás).
+- `COLONY_GITEA_TOKEN`: írásvédett API token a tárolók és PR-ek metaadatainak lekérdezéséhez.
+- `COLONY_GITEA_WEBHOOK_SECRET`: HMAC titkos kulcs a beérkező webhookok hitelesítéséhez.
 
 ## Verziózás, kompatibilitás, bővíthetőség
 

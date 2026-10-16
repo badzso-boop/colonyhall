@@ -19,6 +19,8 @@ import (
 	delpg "colonyhall/internal/modules/delivery/postgres"
 	filesmem "colonyhall/internal/modules/files/memory"
 	filespg "colonyhall/internal/modules/files/postgres"
+	gitmem "colonyhall/internal/modules/git/memory"
+	gitpg "colonyhall/internal/modules/git/postgres"
 	hostmem "colonyhall/internal/modules/hosts/memory"
 	hostpg "colonyhall/internal/modules/hosts/postgres"
 	idmem "colonyhall/internal/modules/identity/memory"
@@ -38,7 +40,7 @@ func TestMemory(t *testing.T) {
 		return Backend{Tx: &db.Memory{}, Events: evmem.New(), Identity: idmem.New(),
 			Conversation: convmem.New(), Delivery: delmem.New(), Audit: audmem.New(), Hosts: hostmem.New(),
 			Runs: runmem.New(), Schedule: schedmem.New(), Approval: appmem.New(), Wiki: wikimem.New(),
-			Question: qmem.New(), Files: filesmem.NewStore()}
+			Question: qmem.New(), Files: filesmem.NewStore(), Git: gitmem.New()}
 	})
 }
 
@@ -59,7 +61,7 @@ func TestPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	Run(t, func(t *testing.T) Backend {
-		_, err := pg.Pool.Exec(ctx, `TRUNCATE question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
+		_, err := pg.Pool.Exec(ctx, `TRUNCATE git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
 			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)
@@ -67,6 +69,6 @@ func TestPostgres(t *testing.T) {
 		return Backend{Tx: pg, Events: &evpg.Store{DB: pg}, Identity: &idpg.Store{DB: pg},
 			Conversation: &convpg.Store{DB: pg}, Delivery: &delpg.Store{DB: pg}, Audit: &audpg.Store{DB: pg},
 			Hosts: &hostpg.Store{DB: pg}, Runs: &runpg.Store{DB: pg}, Schedule: &schedpg.Store{DB: pg},
-			Approval: &apppg.Store{DB: pg}, Wiki: &wikipg.Store{DB: pg}, Question: &qpg.Store{DB: pg}, Files: &filespg.Store{DB: pg}}
+			Approval: &apppg.Store{DB: pg}, Wiki: &wikipg.Store{DB: pg}, Question: &qpg.Store{DB: pg}, Files: &filespg.Store{DB: pg}, Git: &gitpg.Store{DB: pg}}
 	})
 }

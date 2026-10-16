@@ -45,6 +45,12 @@ import (
 	filesmem "colonyhall/internal/modules/files/memory"
 	filespg "colonyhall/internal/modules/files/postgres"
 	filesstorage "colonyhall/internal/modules/files/storage"
+	"colonyhall/internal/modules/git"
+	githttp "colonyhall/internal/modules/git/httpapi"
+	gitmcp "colonyhall/internal/modules/git/mcptools"
+	gitmem "colonyhall/internal/modules/git/memory"
+	gitpg "colonyhall/internal/modules/git/postgres"
+	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/modules/hosts"
 	hosthttp "colonyhall/internal/modules/hosts/httpapi"
 	hostmem "colonyhall/internal/modules/hosts/memory"
@@ -100,6 +106,12 @@ type Options struct {
 	StorageBackend files.StorageBackend
 	// FilesStore overrides the default files metadata store.
 	FilesStore files.Store
+
+	// Gitea integration options (optional: if omitted, git module is inactive)
+	GiteaURL           string
+	GiteaToken         string
+	GiteaWebhookSecret string
+	GitProvider        provider.GitProvider
 }
 
 // App is a wired-up Colonyhall server.
@@ -115,6 +127,7 @@ type App struct {
 	Wiki         *wiki.Service
 	Question     *question.Service
 	Files        *files.Service
+	Git          *git.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -152,6 +165,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		storageBackend files.StorageBackend
 		ready          = func(context.Context) error { return nil }
 		closeAll       = func() {}
+		giStore        git.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -165,6 +179,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		qStore = qmem.New()
 		fiStore = filesmem.NewStore()
 		storageBackend = filesmem.NewStorage()
+		giStore = gitmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -193,6 +208,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			pg.Pool.Close()
 			return nil, err
 		}
+		giStore = &gitpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -228,10 +244,30 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		DetectMime:   http.DetectContentType,
 	}
 	cvSvc.Attachments = fiSvc
+
+	gitProv := opt.GitProvider
+	if gitProv == nil && opt.GiteaURL != "" {
+		p, err := provider.NewGitea(opt.GiteaURL, opt.GiteaToken)
+		if err != nil {
+			return nil, fmt.Errorf("server: gitea config: %w", err)
+		}
+		gitProv = p
+	}
+	gitSvc := &git.Service{
+		Store:         giStore,
+		Provider:      gitProv,
+		Conversation:  cvSvc,
+		Identity:      idSvc,
+		Clock:         opt.Clock,
+		WebhookSecret: opt.GiteaWebhookSecret,
+	}
+	cvSvc.LinkCards = gitSvc
+
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
 		{Name: approval.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: apSvc.HandleEvent, Logger: opt.Logger},
+		{Name: git.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: gitSvc.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -246,6 +282,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	apphttp.Register(mux, apSvc, idSvc)
 	qhttp.Register(mux, qSvc, idSvc, cvSvc, idSvc)
 	fileshttp.Register(mux, fiSvc, idSvc)
+	githttp.Register(mux, gitSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -254,6 +291,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		wikimcp.Register(s, wiSvc, current)
 		qmcp.Register(s, qSvc, cvSvc, current)
 		filesmcp.Register(s, fiSvc, cvSvc, current)
+		gitmcp.Register(s, gitSvc, current)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -273,6 +311,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Wiki:         wiSvc,
 		Question:     qSvc,
 		Files:        fiSvc,
+		Git:          gitSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,
