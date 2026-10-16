@@ -336,6 +336,22 @@ A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei be
 - `GET /api/v1/usage?days=7` (csak ember): napi bontású tokenösszesítés, futás- és hibaszám agentenként `Europe/Budapest` időzónában (days ≤ 90).
 - Fejlesztői felület: a fejlécben a 📊 gomb nyitja meg a futáspanelt (`runsPanel`), amely agentenként mutatja a mai és az elmúlt 7 nap összesítését, valamint a legutóbbi 20 futást (hibás futásnál a „Hiba részletei” gomb közvetlenül megnyitja a hibamodált).
 
+**Munkamenet-rotáció és napi tokenkeret (megvalósítva, 2026-10-16):**
+- **Adatmodell és migráció (`00012_cost_limits.sql`):** Az `agent_host` tábla új mezői: `max_session_tokens` (int, alapértelmezett 150 000, 0 = nincs korlát) és `daily_token_limit` (bigint, alapértelmezett 0, 0 = nincs korlát).
+- **Munkamenet-rotáció (`internal/guard/direct.go`):** Az őr közvetlen módban a helyi `direct_state.json` fájlban szálanként tárolja az utolsó futás tokenfogyasztását (`last_run_tokens`: input + cache read + cache write) és az aktuális munkamenet-generációt (`generations`). Ha az utolsó futás tokenjei elérik a `max_session_tokens` értéket:
+  - A szálban a következő futás új munkamenet-generációt indít: új determinisztikus session ID (`UUIDv5(agent, thread + "#" + generation)`), Antigravity esetén a korábbi `conversation_id` törlődik.
+  - Az agent rövid kivonatot kap a prompt elejére illesztve: a szál utolsó 3 üzenetét (`GET /api/v1/messages/{id}/thread`, legfeljebb 300 rúnára vágva a tömör mód tagjeivel).
+  - Az őr egy soros értesítést küld a szálba: `"🔄 Started a fresh session (the previous one reached N tokens)."`.
+- **Napi tokenkeret és költséghatár:**
+  - `GET /api/v1/agent/budget` (csak agent token, embernek 403): kiszámítja a napi keretet (`limit`), a mai napon (`Europe/Budapest` éjféltől éjfélig) felhasznált tokeneket (`used_today`), a fennmaradó keretet (`remaining`) és a következő reset időpontját (`resets_at`: budapesti éjfél UTC-ben).
+  - Az őr minden futás (`decide`, `work`, `direct`) előtt megkérdezi a szervert (`Client.Budget`). Ha `limit > 0 && remaining <= 0`:
+    - A futás nem indul el, az inbox elemek nem kerülnek nyugtázásra (a sorban maradnak).
+    - Az őr naponta legfeljebb egyszer bejegyzést tesz a szálba: `"⏳ My daily token budget is used up; I continue after <resets_at helyi idő>."`.
+    - Az őr a budapesti éjfélig (`resets_at`) várakozik (`waitInterval`), megelőzve a lekérdezési vihart. Ha a gépkonfigurációban a határérték emelkedik, a felügyelő újraindítja az agentet és az azonnal folytatja a munkát.
+- **Fejlesztői felület (`index.html`):**
+  - A „Gépek” panelen a hozzárendelési űrlapon megadható a `max_session_tokens` és a `daily_token_limit`. A hozzárendelt agent kártyáján mindkettő látható, és a `✏️ limit` gombbal a napi limit közvetlenül módosítható.
+  - A 📊 futáspanelen minden agent kártyáján megjelenik a napi keret állapota (keret, ma felhasznált, hátralévő, újraindulás).
+
 **Sandboxban nincs parancsfuttatás (megvalósítva):** Claude munkafutás `--tools Read,Write,Edit,Glob,Grep --disallowedTools Bash`, és az engedélykihagyó módok nem érvényesek; Antigravity: az agent saját beállításaiban minden futáskor üres `allow` lista és `deny: ["command(*)"]`, mód `accept-edits`.
 
 **Antigravity MCP (megvalósítva):** az `agy`-nak nincs `--mcp-config` kapcsolója, és a konfigurációjában nem helyettesít környezeti változót (élesben kipróbálva), ezért a token fájlba kerül, de **soha nem a felhasználó projektjébe**: az `agy` az őr agentenkénti mappájából indul (`agy-workspace/.agents/mcp_config.json`, 0600, csak a futás idejére), a projektet `--add-dir` adja hozzá. Előfeltétel: a felhasználó `agy`-beállításában `mcp(colonyhall/*)` engedély.
