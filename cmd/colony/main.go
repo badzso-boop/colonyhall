@@ -19,6 +19,8 @@ import (
 const usage = `usage:
   colony guard enroll -server URL -code CODE -name NAME [-token-file PATH]
       pair this machine (the admin creates the code); stores the host token
+  colony guard install -config PATH [-print] [-force]
+      install a systemd user unit to ~/.config/systemd/user/colony-guard.service
   colony guard [-config guard.yaml]
       run the guard (host mode when host_token_file is set)
 
@@ -36,6 +38,13 @@ func main() {
 	if len(os.Args) > 2 && os.Args[2] == "enroll" {
 		if err := enroll(ctx, os.Args[3:]); err != nil {
 			log.Error("colony guard enroll", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 2 && os.Args[2] == "install" {
+		if err := install(os.Args[3:]); err != nil {
+			log.Error("colony guard install", "err", err)
 			os.Exit(1)
 		}
 		return
@@ -76,4 +85,16 @@ func enroll(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("Enrolled as %q. Host token saved to %s.\nIn guard.yaml set: host_token_file: %s\n", *name, *tokenFile, *tokenFile)
 	return nil
+}
+
+func install(args []string) error {
+	fs := flag.NewFlagSet("install", flag.ExitOnError)
+	config := fs.String("config", "", "path to guard config file")
+	printOnly := fs.Bool("print", false, "write unit to stdout instead of installing")
+	force := fs.Bool("force", false, "overwrite existing unit file")
+	_ = fs.Parse(args)
+	if *config == "" {
+		return fmt.Errorf("-config is required")
+	}
+	return guard.Install(*config, *printOnly, *force, os.Stdout)
 }

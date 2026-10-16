@@ -1,8 +1,10 @@
 # colony guard config. Copy to guard.yaml (gitignored).
 #
-# Host mode (normal): pair the machine once, then the server decides which
-# agents run here and which folders they may use, within the roots below.
-#   colony guard enroll -server http://localhost:8080 -code XXXX-XXXX-XXXX -name my-laptop
+# Host mode (normal): pair the machine once, install the systemd service,
+# then the server decides which agents run here and which folders they may
+# use, within the roots below.
+#   colony guard enroll -server http://localhost:8080 -code XXXX-XXXX-XXXX -name my-machine
+#   colony guard install -config guard.yaml
 #   colony guard -config guard.yaml
 server: http://localhost:8080
 host_token_file: ~/.config/colonyhall/host.token
@@ -10,7 +12,13 @@ host_token_file: ~/.config/colonyhall/host.token
 # The ONLY folders agents on this machine can ever be given. The server
 # cannot extend this list; every granted path is checked against it.
 roots:
-  - /home/me/projects
+  - /mnt/g/Projects
+
+# Shared secrets exchange directory (optional).
+# The guard checks on start that this folder exists and is writable.
+# When usable, direct-mode agents receive secrets through <exchange_dir>/<project>/
+# with mode 0600 instead of in chat.
+# exchange_dir: ~/colonyhall-exchange
 
 # Each agent gets its own folder here (work dir, empty dir for wake-ups).
 # sandbox_dir: ~/.local/share/colonyhall/sandbox
@@ -21,7 +29,9 @@ roots:
 
 # Allow agents with sandbox: false (e.g. direct mode) to run on this machine.
 # Default false: the server cannot turn off the sandbox unless this is true.
-# allow_unsandboxed: false
+# Set to true if you run your own trusted agents directly against your code tree
+# without bubblewrap isolation.
+# allow_unsandboxed: true
 
 # commands: { claude-code: claude, antigravity: agy }
 # defaults: { poll: 5s, fallback_poll: 60s, debounce: 3s, batch: 10, decide_timeout: 3m, work_timeout: 15m }
