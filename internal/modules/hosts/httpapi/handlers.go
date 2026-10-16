@@ -18,7 +18,7 @@ func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
 	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName,
 		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
-		hosts.ErrWorktreeDirectOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
+		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)
 }
 
@@ -68,7 +68,8 @@ func agentOut(a hosts.AgentConfig) apispec.HostAgent {
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
 		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: apispec.HostAgentApprovals(approvals),
 		MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
-		Grants: make([]apispec.FolderGrant, 0, len(a.Grants))}
+		AllowPreview: &a.AllowPreview,
+		Grants:       make([]apispec.FolderGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, grantOut(g, nil))
 	}
@@ -170,6 +171,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			PermissionMode: httpx.Deref(in.PermissionMode, ""),
 			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), WorktreeRepo: httpx.Deref(in.WorktreeRepo, ""), Sandbox: in.Sandbox, Approvals: approvals,
 			MaxSessionTokens: in.MaxSessionTokens, DailyTokenLimit: in.DailyTokenLimit,
+			AllowPreview: httpx.Deref(in.AllowPreview, false),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -250,6 +252,27 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 		for _, a := range cfg.Agents {
 			out.Agents = append(out.Agents, agentOut(a))
 		}
+		previews := make([]apispec.HostPreview, 0, len(cfg.Previews))
+		for _, p := range cfg.Previews {
+			var urlPtr, errPtr *string
+			if p.URL != "" {
+				urlPtr = &p.URL
+			}
+			if p.Error != "" {
+				errPtr = &p.Error
+			}
+			previews = append(previews, apispec.HostPreview{
+				Id:          p.ID,
+				AgentId:     p.AgentID,
+				Name:        p.Name,
+				ComposePath: p.ComposePath,
+				State:       apispec.HostPreviewState(p.State),
+				Url:         urlPtr,
+				Error:       errPtr,
+				ExpiresAt:   p.ExpiresAt,
+			})
+		}
+		out.Previews = &previews
 		httpx.JSON(w, http.StatusOK, out)
 	}))
 

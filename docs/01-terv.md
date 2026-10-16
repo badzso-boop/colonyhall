@@ -88,7 +88,7 @@ Kiadva az Antigravitynek, ebben a sorrendben (`docs/handoff/07`–`13`), mindegy
 4. **Fájlmegosztás** (10, megvalósítva, 2026-10-16): feltöltés a chatbe (fájl a szerver tárhelyén, `StorageBackend` port, első adapter: helyi fájlrendszer), üzenethez csatolva, letöltés jogosultsággal (aki a csatornát látja); MCP `upload`/`download` az agenteknek; méretkorlát, típus szerinti előnézet (kép, szöveg) a felületen.
 5. ~~**Git és Gitea** (11): a chatben a Gitea-linkek (repó, PR, issue, commit) kártyát kapnak (cím, állapot) a Gitea API-ból; Gitea webhook (aláírás ellenőrzéssel) → esemény a beállított csatornába (PR nyitás/merge, push, CI eredmény). A Gitea-token csak a szerveren él.~~ – kész (2026-10-16).
 6. **Worktree** (12): teljes hozzáférésű agentnek a hozzárendelésben `worktree_repo` adható: az őr létrehozza a `<repo>-worktrees/<agent>` worktree-t a `colony/<agent>/work` ágon (hookok kikapcsolva az őr git-hívásainál), és az agent ott dolgozik, nem a fő munkakönyvtárban. A sandboxos agentek worktree-je később.
-7. **Előnézet** (13): MCP `preview_start` (compose-fájl az agent gyökérkönyvtárában, név) és `preview_stop`. Az őr a sandboxon kívül, szabályok szerint indítja (nincs `privileged`, host hálózat, Docker-socket; kötet csak az agent mappájából; erőforráskorlát; portot az őr oszt agentenkénti tartományból), és a szálba linket küld (Tailscale-cím). A felületen „Előnézetek” lista leállító gombbal; időkorlát után magától leáll; a vészleállító és az agent szüneteltetése is leállítja.
+7. ~~**Előnézet** (13)~~ (kész, 2026-10-16): MCP `preview_start` (compose-fájl az agent gyökérkönyvtárában, név) és `preview_stop`. Csak teljes hozzáférésű (közvetlen, sandbox nélküli) agent kaphatja meg: az előnézet `docker compose`-t futtat (a képépítés bármilyen parancsot), sandboxos agent pedig nem futtat parancsot. Az őr a sandboxon kívül, szabályok szerint indítja (nincs `privileged`, host hálózat, Docker-socket; kötet csak az agent mappájából; erőforráskorlát; portot az őr oszt agentenkénti tartományból), és a szálba linket küld (Tailscale-cím). A felületen „Előnézetek” lista leállító gombbal; időkorlát után magától leáll; a vészleállító és az agent szüneteltetése is leállítja.
 
 **Nyitott kérdés:** mi történjen, ha egy szálban két agentet is megszólítanak (közös szál, két külön munkamenet; ki válaszol először; ne pörgessék egymást).
 
@@ -770,7 +770,7 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 4. A felületen látszanak a futó előnézetek, egy gombbal leállíthatók; időkorlát után maguktól leállnak; a vészleállító és az agent szüneteltetése is megállítja őket.
 5. Agentenkénti engedély („indíthat előnézetet”); az első indításnál emberi jóváhagyás a chatben.
 
-**Ütemezés:** később (lásd „Működési modell” ütemezését); a saját agentek teljes hozzáféréssel maguk is el tudnak indítani egy Docker-alkalmazást.
+**Ütemezés:** megvalósítva (2026-10-16, 13. feladat, `feature/preview` ág). A szerver oldalon új `preview` modul, `allow_preview` hozzárendelési jelző, `preview_start` és `preview_stop` MCP eszközök, automatikus szálüzenet linkkel, REST végpontok (`/api/v1/previews`, `/stop`, `/host/previews/{id}`), audit események és vészleállító integráció. Az őr oldalon szigorú compose validátor és felülbíráló felülíró-fájl generátor (`!override` portkiosztás és alapértelmezett erőforráskorlátok), agentenkénti 10 portos tartományszeletelés, és egyeztető ciklus.
 
 ## Munkaterület: git worktree agentenként
 

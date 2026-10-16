@@ -47,11 +47,14 @@ type Supervisor struct {
 	Log *slog.Logger
 	// NewAdapter overrides the adapter registry (tests).
 	NewAdapter func(ac AgentConfig) Adapter
+	// DockerRunner overrides the docker compose runner (tests).
+	DockerRunner DockerRunner
 
-	host    *Client
-	roots   []string
-	home    string
-	sandbox *Sandbox
+	host     *Client
+	roots    []string
+	home     string
+	sandbox  *Sandbox
+	previews *PreviewSupervisor
 
 	mu         sync.Mutex
 	lastOK     time.Time
@@ -107,6 +110,15 @@ func (s *Supervisor) start(ctx context.Context) error {
 		}
 	}
 	s.agents = map[string]*managed{}
+	runner := s.DockerRunner
+	if runner == nil {
+		runner = &ExecDockerRunner{}
+	}
+	ps, err := NewPreviewSupervisor(s.host, runner, s.roots, s.Cfg.PreviewHost, s.Cfg.PreviewPorts, s.Log)
+	if err != nil {
+		return fmt.Errorf("guard: preview supervisor: %w", err)
+	}
+	s.previews = ps
 	return nil
 }
 
@@ -156,6 +168,17 @@ func (s *Supervisor) sync(ctx context.Context) {
 	s.mu.Unlock()
 	if changed {
 		s.reconcile(ctx, cfg)
+	} else if s.previews != nil {
+		s.previews.CheckExpired(ctx)
+		halted := make(map[string]bool)
+		s.mu.Lock()
+		for id, m := range s.agents {
+			if m.agent != nil && m.agent.IsHalted() {
+				halted[id] = true
+			}
+		}
+		s.mu.Unlock()
+		s.previews.CheckHalted(ctx, halted)
 	}
 	s.mu.Lock()
 	stale := time.Since(s.reported) > 10*time.Minute
@@ -262,6 +285,17 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 	}
 	if changed || len(gone) > 0 {
 		s.report(ctx)
+	}
+	if s.previews != nil {
+		halted := make(map[string]bool)
+		s.mu.Lock()
+		for id, m := range s.agents {
+			if m.agent != nil && m.agent.IsHalted() {
+				halted[id] = true
+			}
+		}
+		s.mu.Unlock()
+		s.previews.Reconcile(ctx, cfg.Previews, cfg.Agents, halted)
 	}
 }
 
@@ -479,6 +513,9 @@ func (s *Supervisor) stopAll() {
 	s.mu.Unlock()
 	for _, id := range ids {
 		s.stop(id)
+	}
+	if s.previews != nil {
+		s.previews.StopAll(context.Background())
 	}
 }
 

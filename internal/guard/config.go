@@ -31,8 +31,10 @@ type Config struct {
 	// ClaudeTokenFile holds a token from `claude setup-token`; sandboxed
 	// Claude runs use it instead of a copy of the user's login file.
 	ClaudeTokenFile string      `yaml:"claude_token_file"`
-	ExchangeDir     string      `yaml:"exchange_dir"` // shared secrets exchange folder
-	Defaults        AgentConfig `yaml:"defaults"`     // poll, debounce, batch, timeouts for host-mode agents
+	ExchangeDir     string      `yaml:"exchange_dir"`  // shared secrets exchange folder
+	Defaults        AgentConfig `yaml:"defaults"`      // poll, debounce, batch, timeouts for host-mode agents
+	PreviewPorts    string      `yaml:"preview_ports"` // port range for previews, e.g. 41000-41999
+	PreviewHost     string      `yaml:"preview_host"`  // address where previews are published
 }
 
 // HostMode reports whether the server manages this machine's agents.
@@ -128,6 +130,12 @@ func (c *Config) validateHost() error {
 	}
 	if c.Commands == nil {
 		c.Commands = map[string]string{}
+	}
+	if c.PreviewPorts == "" {
+		c.PreviewPorts = "41000-41999"
+	}
+	if c.PreviewHost == "" {
+		c.PreviewHost = "127.0.0.1"
 	}
 	return nil
 }

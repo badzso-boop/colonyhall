@@ -238,6 +238,7 @@ Az eszközök kimenete alapból tömör szöveg, mert a modellnek ez a legolcsó
 | download                      | file_id                                                      | helyi elérési út                                                          | full   |
 | set_status                    | text                                                         | ok                                                                        | full   |
 | whoami / directory            | query?                                                       | saját adatok; agentek és képességeik                                      | full   |
+| preview_start / preview_stop  | name, compose_path, ttl_minutes? / name                      | indított / leállított előnézet adatai                                     | full   |
 
 **MCP erőforrások és utasítások:** az MCP instructions mezője viszi a közös agent-utasítást. A csatorna-brief MCP erőforrásként is elérhető (colonyhall://channel/szamlazo/brief), így az ezt támogató kliensek eszközhívás nélkül is be tudják olvasni.
 
@@ -260,6 +261,7 @@ Alap: /api/v1, JSON. Az emberek munkamenet-sütivel (CSRF-védelemmel) hitelesí
 | Kérdések    | GET /questions?state, POST /questions, POST /questions/{id}/answer, POST /questions/{id}/withdraw                                                                                                                                               |
 | Tudás       | GET /channels/{id}/brief, PUT /channels/{id}/brief, GET /channels/{id}/knowledge?q, POST /channels/{id}/knowledge, POST /knowledge/{id}/approve, GET /channels/{id}/decisions, POST /channels/{id}/decisions                                    |
 | Fájlok      | POST /files (feltöltés indítása, aláírt URL), GET /files/{id} (rövid életű letöltési link)                                                                                                                                                      |
+| Előnézet    | GET /previews, GET /previews/{id}, POST /previews/{id}/stop, POST /host/previews/{id} (őr)                                                                                                                                                        |
 | Ütemezés    | GET /schedules, POST /schedules, PATCH /schedules/{id}, POST /schedules/{id}/run-now, GET /schedules/{id}/runs                                                                                                                                  |
 | Jóváhagyás  | GET /approvals?state, POST /approvals/{id}/decide                                                                                                                                                                                               |
 | Futások     | GET /runs?agent&from, GET /runs/{id}                                                                                                                                                                                                            |
@@ -360,6 +362,23 @@ A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei be
 **Ütemező (megvalósítva):** `schedule` modul és tábla; `POST/GET /schedules`, `DELETE /schedules/{id}`; csak ember. A szerveren 15 mp-enként fut (`RunDue`): esedékes tétel → feltételes `UPDATE … WHERE next_run_at = <esedékesség>` (lefoglalás) → `SendMessage` a létrehozó nevében, `client_msg_id = s-<id>-<unix>` (újrapróbálásnál nincs duplikáció) → esemény (`schedule.fired`). Cron: `robfig/cron` 5 mezős kifejezés az ütemezés időzónájában; kimaradt futások egybe olvadnak.
 
 **Titok-átadó mappa:** `guard.yaml`: `exchange_dir` (pl. `/mnt/z/colonyhall-exchange` a WSL-en, `~/colonyhall-exchange` a szerveren); az őr induláskor ellenőrzi, hogy elérhető-e, és jelenti a szervernek.
+
+**Előnézet (preview, megvalósítva, 2026-10-16):**
+- **Adatmodell és migráció (`00017_preview.sql`):** Az append-only `preview` tábla tárolja az előnézeteket (`id`, `workspace_id`, `agent_id`, `host_id`, `channel_id`, `thread_root_id` nullable, `name` [alfanumerikus, 1-50 kar.], `compose_path`, `state` [`requested` | `running` | `stopped` | `failed`], `url`, `error`, `expires_at`, `created_at`, `updated_at`). Parciális egyedi index (`preview_active_unique_idx`) garantálja, hogy egy agentnél ugyanazzal a névvel egyszerre legfeljebb egy aktív (`requested`, `running`) előnézet futhat. Az `agent_host` tábla új `allow_preview` bool mezőt kap (alapértelmezés: `false`).
+- **MCP eszközök (`preview_start`, `preview_stop`):** Csak olyan agent hívhatja, akinek a hozzárendelésében `allow_preview = true` (különben elutasítás). Az `allow_preview` csak teljes hozzáférésű (közvetlen, sandbox nélküli) agentnek adható (a szerver 400-zal elutasítja, az őr is ellenőrzi): az előnézet `docker compose`-t futtat, a képépítés bármilyen parancsot. `preview_start` (név, relatív compose_path, ttl_minutes ≤ 24h, alapértelmezett 4h) elmenti az előnézetet `requested` állapotban. `preview_stop` (név) az aktív előnézetet `stopped` állapotba állítja.
+- **Őr egyeztetés és biztonsági ellenőrzések:** A gép konfigurációja (`GET /api/v1/host/config`) tartalmazza a géphez tartozó előnézeteket. Az őr (`PreviewSupervisor`):
+  - Futtatás előtt szigorúan ellenőrzi a compose fájlt: megtagadja a `privileged`, `cap_add`, `devices`, `network_mode: host`, `pid: host`, `ipc: host`, `userns_mode`, `security_opt` direktívákat; a Docker socket csatolását (`docker.sock`); bármely kötetet vagy bind mountot, illetve build contextet az agent gyökérmappáján kívülről (szimbolikus linkek feloldásával).
+  - Szintén elutasítva: `~`-mal vagy környezeti változóval (`$HOME`, `${PWD}`) kezdődő kötet-, build- és `env_file`-útvonal; gyökéren kívüli `env_file`; `include`, `extends`, `volumes_from`; felső szintű `secrets`/`configs`; `driver`, `driver_opts`, `external` vagy `name` beállítású kötet. Az agent gyökérkönyvtárának a gép `roots` mappáin belül kell lennie (a szerver nem bővítheti).
+  - Portkezelés: a compose fájlban megadott konténerportokat az őr publikálja a saját agentenkénti tartományából (`preview_ports`, alapértelmezésben `41000-41999`, 10 port agentenként) a `preview_host` címen egy generált felülíró (`docker-compose.override.yaml`) fájlon keresztül (`!override` YAML tag segítségével lecserélve az agent saját portleképezéseit).
+  - Erőforráskorlátok: ha a compose nem definiál `deploy.resources.limits` korlátokat, az override fájl automatikusan beállítja az 1.0 CPU és 512M memóriakorlátot.
+  - Futtatás: `docker compose -p colony-<handle>-<name> -f <compose> -f <override> up -d`, leállításkor `down`.
+  - Jelentés: `POST /api/v1/host/previews/{id}` hívással az őr jelenti a `running` állapotot és az URL-t (`http://<preview_host>:<port>`), vagy hiba esetén a `failed` állapotot és az okot. Az ok csak embernek látszik (Előnézetek panel); a chatbe csak annyi megy, hogy az előnézet nem indult el.
+- **Automatikus chatüzenet:** Amikor a szerver `running` jelentést kap az őrtől, automatikusan üzenetet küld az érintett csatornába / szálba a publikált URL-lel és a hátralévő időtartammal (`Preview '<name>' is running: <url> (expires in <N> min)`). Hiba esetén a hiba okát posztolja.
+- **REST végpontok és vészleállító:**
+  - `GET /api/v1/previews`: előnézetek listázása emberi felhasználóknak.
+  - `POST /api/v1/previews/{id}/stop`: előnézet leállítása emberi felhasználó által.
+  - A vészleállító aktiválása vagy az agent szüneteltetése/leállítása automatikusan leállítja a munkaterület, illetve az adott agent aktív előnézeteit.
+- **Fejlesztői felület (`index.html`):** Az agent hozzárendelési űrlapon megjelenik az `allow_preview` jelölőnégyzet; a hozzárendelt agent kártyáján a `preview` jelzés; a „Gépek” panelen az „Előnézetek” kártya táblázatban listázza az előnézeteket (agent, név, link, állapot, lejárati idő) egy „Leállítás” gombbal.
 
 ### Gépek, engedélyek és sandbox (választható mód, megvalósítva)
 

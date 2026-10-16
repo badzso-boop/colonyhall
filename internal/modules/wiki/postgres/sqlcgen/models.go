@@ -39,6 +39,7 @@ type AgentHost struct {
 	MaxSessionTokens int32
 	DailyTokenLimit  int64
 	WorktreeRepo     string
+	AllowPreview     bool
 }
 
 type AgentRun struct {
@@ -249,6 +250,23 @@ type MessageFile struct {
 	MessageID uuid.UUID
 	FileID    uuid.UUID
 	Position  int32
+}
+
+type Preview struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	AgentID      uuid.UUID
+	HostID       uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Name         string
+	ComposePath  string
+	State        string
+	Url          string
+	Error        string
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Question struct {

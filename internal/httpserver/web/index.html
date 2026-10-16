@@ -127,7 +127,8 @@ const I18N = {
         hostModeTokenNote: "Megjegyzés: az agent tokenje gépes (host) módban nem szükséges — az őr automatikusan saját rövid lejáratú tokeneket kér a szervertől.",
         exchange: "Titokcsere", exchangeNotOk: "nem írható",
         dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):",
-        giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás" },
+        giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás",
+        previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -146,7 +147,8 @@ const I18N = {
         hostModeTokenNote: "Note: the agent token is not needed in host mode — the guard requests its own short-lived tokens from the server.",
         exchange: "Secrets exchange", exchangeNotOk: "unwritable",
         dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):",
-        giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add" },
+        giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add",
+        previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -622,6 +624,7 @@ async function renderHosts() {
         a.root_dir || "",
         a.worktree_repo ? "repo: " + a.worktree_repo : "",
         a.sandbox ? "sandbox" : "no-sandbox",
+        a.allow_preview ? "preview" : "",
         a.approvals ? "approvals: " + a.approvals : "",
         a.permission_mode || "",
         a.model || "-",
@@ -639,7 +642,7 @@ async function renderHosts() {
         await api(`/api/v1/agents/${a.agent_id}/host`, {
           method: "PUT",
           body: JSON.stringify({
-            host_id: h.id, client: a.client, mode: a.mode, root_dir: a.root_dir, worktree_repo: a.worktree_repo,
+            host_id: h.id, client: a.client, mode: a.mode, root_dir: a.root_dir, worktree_repo: a.worktree_repo, allow_preview: !!a.allow_preview,
             sandbox: a.sandbox, permission_mode: a.permission_mode, approvals: a.approvals,
             model: a.model, work_model: a.work_model, allow_work: a.allow_work,
             max_session_tokens: a.max_session_tokens || 150000,
@@ -690,6 +693,7 @@ async function renderHosts() {
       const work = el("input", { type: "checkbox" });
       const maxSess = el("input", { placeholder: "max session (150000)", size: 14, value: "150000" });
       const dailyLim = el("input", { placeholder: "daily limit (0 = none)", size: 14, value: "0" });
+      const allowPreview = el("input", { type: "checkbox" });
       const go = el("button", { textContent: L.assign });
       go.onclick = async () => {
         await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({
@@ -698,11 +702,12 @@ async function renderHosts() {
           sandbox: sandbox.checked, permission_mode: permMode.value, approvals: approvals.value,
           model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked,
           max_session_tokens: parseInt(maxSess.value, 10) || 0,
-          daily_token_limit: parseInt(dailyLim.value, 10) || 0
+          daily_token_limit: parseInt(dailyLim.value, 10) || 0,
+          allow_preview: allowPreview.checked
         }) }).catch(e => alert(e.message));
         renderHosts();
       };
-      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, worktreeRepo, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), maxSess, dailyLim, go));
+      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, worktreeRepo, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), maxSess, dailyLim, el("label", {}, allowPreview, " preview"), go));
     }
     panel.append(c);
   }
@@ -748,6 +753,57 @@ async function renderHosts() {
   };
   giteaCard.append(el("div", { className: "row", style: "margin-top:8px;" }, repoInput, chSelect, addMapBtn));
   panel.append(giteaCard);
+
+  const { previews } = await api("/api/v1/previews").catch(() => ({ previews: [] }));
+  const prevBox = el("div", { className: "card" });
+  prevBox.append(el("h3", { textContent: L.previews }));
+  if (!previews || !previews.length) {
+    prevBox.append(el("p", { className: "muted", textContent: L.noPreviews }));
+  } else {
+    const tbl = el("table", { className: "tbl" });
+    const thead = el("tr", {},
+      el("th", { textContent: L.agent }),
+      el("th", { textContent: "Név" }),
+      el("th", { textContent: "Link" }),
+      el("th", { textContent: L.status }),
+      el("th", { textContent: L.expires }),
+      el("th", { textContent: "" })
+    );
+    tbl.append(thead);
+    for (const p of previews) {
+      const tr = el("tr");
+      const agentHandle = actors[p.agent_id]?.handle || p.agent_id.slice(0, 8);
+      const linkCell = el("td");
+      if (p.url && p.state === "running") {
+        linkCell.append(el("a", { href: p.url, target: "_blank", textContent: p.url }));
+      } else if (p.error) {
+        linkCell.append(el("span", { className: "warn", textContent: p.error }));
+      } else {
+        linkCell.textContent = "-";
+      }
+      const exp = p.expires_at ? new Date(p.expires_at).toLocaleTimeString() : "-";
+      const actCell = el("td");
+      if (p.state === "requested" || p.state === "running") {
+        const stopBtn = el("button", { textContent: L.stop });
+        stopBtn.onclick = async () => {
+          await api(`/api/v1/previews/${p.id}/stop`, { method: "POST" }).catch(e => alert(e.message));
+          renderHosts();
+        };
+        actCell.append(stopBtn);
+      }
+      tr.append(
+        el("td", { textContent: "@" + agentHandle }),
+        el("td", { textContent: p.name }),
+        linkCell,
+        el("td", { textContent: p.state }),
+        el("td", { textContent: exp }),
+        actCell
+      );
+      tbl.append(tr);
+    }
+    prevBox.append(tbl);
+  }
+  panel.append(prevBox);
 }
 
 async function start() {

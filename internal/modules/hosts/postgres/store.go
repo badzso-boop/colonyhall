@@ -128,7 +128,7 @@ func (s *Store) SetAssignment(ctx context.Context, a hosts.Assignment) error {
 	return s.q(ctx).SetAssignment(ctx, sqlcgen.SetAssignmentParams{
 		AgentID: a.AgentID, HostID: a.HostID, WorkspaceID: a.WorkspaceID, Client: a.Client,
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
-		Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: approvals,
+		Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: approvals, AllowPreview: a.AllowPreview,
 		MaxSessionTokens: int32(a.MaxSessionTokens), DailyTokenLimit: a.DailyTokenLimit,
 		CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt,
 	})
@@ -147,7 +147,7 @@ func toAssignment(r sqlcgen.AgentHost) hosts.Assignment {
 	return hosts.Assignment{
 		AgentID: r.AgentID, HostID: r.HostID, WorkspaceID: r.WorkspaceID, Client: r.Client,
 		Model: r.Model, WorkModel: r.WorkModel, AllowWork: r.AllowWork, PermissionMode: r.PermissionMode,
-		Mode: r.Mode, RootDir: r.RootDir, WorktreeRepo: r.WorktreeRepo, Sandbox: r.Sandbox, Approvals: approvals,
+		Mode: r.Mode, RootDir: r.RootDir, WorktreeRepo: r.WorktreeRepo, Sandbox: r.Sandbox, Approvals: approvals, AllowPreview: r.AllowPreview,
 		MaxSessionTokens: int(r.MaxSessionTokens), DailyTokenLimit: r.DailyTokenLimit,
 		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
 	}
