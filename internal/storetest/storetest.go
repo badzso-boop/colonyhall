@@ -17,6 +17,7 @@ import (
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/modules/schedule"
 	"colonyhall/internal/modules/wiki"
@@ -37,6 +38,7 @@ type Backend struct {
 	Schedule     schedule.Store
 	Approval     approval.Store
 	Wiki         wiki.Store
+	Preview      preview.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -51,6 +53,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
 	t.Run("approval", func(t *testing.T) { testApproval(t, newBackend(t)) })
 	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
+	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
 }
 
 var (
@@ -938,5 +941,134 @@ func testWiki(t *testing.T, b Backend) {
 	}
 	if _, err := st.ListRevisions(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("ListRevisions non-existent: %v", err)
+	}
+}
+
+func testPreview(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Preview
+
+	// Host fixture
+	hostID := gen.New()
+	must(t, b.Hosts.CreateHost(ctx, hosts.Host{
+		ID:          hostID,
+		WorkspaceID: f.ws.ID,
+		Name:        "preview-host",
+		TokenHash:   hosts.Hash("tok1"),
+		State:       hosts.StateApproved,
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0,
+	}))
+
+	p1 := preview.Preview{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		AgentID:     f.agent.ID,
+		HostID:      hostID,
+		ChannelID:   f.channel.ID,
+		Name:        "web",
+		ComposePath: "docker-compose.yaml",
+		State:       preview.StateRequested,
+		ExpiresAt:   t0.Add(4 * time.Hour),
+		CreatedAt:   t0,
+		UpdatedAt:   t0,
+	}
+	must(t, st.Create(ctx, p1))
+
+	got, err := st.ByID(ctx, p1.ID)
+	must(t, err)
+	if got.Name != "web" || got.State != preview.StateRequested || got.HostID != hostID {
+		t.Fatalf("ByID: %+v", got)
+	}
+
+	active, err := st.ActiveByAgentAndName(ctx, f.agent.ID, "web")
+	must(t, err)
+	if active.ID != p1.ID {
+		t.Fatalf("ActiveByAgentAndName: %+v", active)
+	}
+
+	byHost, err := st.ActiveByHost(ctx, hostID)
+	must(t, err)
+	if len(byHost) != 1 || byHost[0].ID != p1.ID {
+		t.Fatalf("ActiveByHost: %+v", byHost)
+	}
+
+	// UpdateStatus
+	must(t, st.UpdateStatus(ctx, p1.ID, preview.StateRunning, "http://127.0.0.1:41000", "", t0.Add(time.Minute)))
+	got, err = st.ByID(ctx, p1.ID)
+	must(t, err)
+	if got.State != preview.StateRunning || got.URL != "http://127.0.0.1:41000" {
+		t.Fatalf("UpdateStatus: %+v", got)
+	}
+
+	// List
+	listWs, err := st.ListByWorkspace(ctx, f.ws.ID)
+	must(t, err)
+	if len(listWs) != 1 {
+		t.Fatalf("ListByWorkspace: %+v", listWs)
+	}
+
+	listAg, err := st.ListByAgent(ctx, f.ws.ID, f.agent.ID)
+	must(t, err)
+	if len(listAg) != 1 {
+		t.Fatalf("ListByAgent: %+v", listAg)
+	}
+
+	// StopActive
+	must(t, st.StopActive(ctx, p1.ID, t0.Add(2*time.Minute)))
+	got, err = st.ByID(ctx, p1.ID)
+	must(t, err)
+	if got.State != preview.StateStopped {
+		t.Fatalf("StopActive: %+v", got)
+	}
+
+	// Now ActiveByAgentAndName should return db.ErrNotFound
+	if _, err := st.ActiveByAgentAndName(ctx, f.agent.ID, "web"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after stop, got: %v", err)
+	}
+
+	// Create second preview and test StopActiveByAgent
+	p2 := preview.Preview{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		AgentID:     f.agent.ID,
+		HostID:      hostID,
+		ChannelID:   f.channel.ID,
+		Name:        "api",
+		ComposePath: "compose.yml",
+		State:       preview.StateRunning,
+		ExpiresAt:   t0.Add(4 * time.Hour),
+		CreatedAt:   t0.Add(3 * time.Minute),
+		UpdatedAt:   t0.Add(3 * time.Minute),
+	}
+	must(t, st.Create(ctx, p2))
+	must(t, st.StopActiveByAgent(ctx, f.agent.ID, t0.Add(4*time.Minute)))
+	got2, err := st.ByID(ctx, p2.ID)
+	must(t, err)
+	if got2.State != preview.StateStopped {
+		t.Fatalf("StopActiveByAgent: %+v", got2)
+	}
+
+	// Create third preview and test StopActiveByWorkspace
+	p3 := preview.Preview{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		AgentID:     f.agent.ID,
+		HostID:      hostID,
+		ChannelID:   f.channel.ID,
+		Name:        "worker",
+		ComposePath: "compose.yml",
+		State:       preview.StateRequested,
+		ExpiresAt:   t0.Add(4 * time.Hour),
+		CreatedAt:   t0.Add(5 * time.Minute),
+		UpdatedAt:   t0.Add(5 * time.Minute),
+	}
+	must(t, st.Create(ctx, p3))
+	must(t, st.StopActiveByWorkspace(ctx, f.ws.ID, t0.Add(6*time.Minute)))
+	got3, err := st.ByID(ctx, p3.ID)
+	must(t, err)
+	if got3.State != preview.StateStopped {
+		t.Fatalf("StopActiveByWorkspace: %+v", got3)
 	}
 }

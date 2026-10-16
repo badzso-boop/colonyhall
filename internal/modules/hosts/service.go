@@ -519,6 +519,11 @@ func (s *Service) AgentToken(ctx context.Context, h Host, agentID ids.ID) (strin
 	return s.Tokens.IssueHostToken(ctx, agentID, h.ID, AgentTokenTTL)
 }
 
+// Assignment returns an agent's current assignment, or db.ErrNotFound.
+func (s *Service) Assignment(ctx context.Context, agentID ids.ID) (Assignment, error) {
+	return s.Store.AssignmentByAgent(ctx, agentID)
+}
+
 func clip(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s
