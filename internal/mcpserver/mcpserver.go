@@ -21,7 +21,7 @@ Never send acknowledgements, thanks or "OK" messages. Keep replies short: result
 When woken up: call inbox, handle each item, reply in the same thread with send, then ack the items.`
 
 // RegisterTools adds every module's tools for one actor.
-type RegisterTools func(s *mcp.Server, actor identity.Actor)
+type RegisterTools func(s *mcp.Server, actor identity.Actor, r *http.Request)
 
 // Handler returns the HTTP handler for the MCP endpoint.
 func Handler(auth identity.Authenticator, version string, register RegisterTools, logger *slog.Logger) http.Handler {
@@ -32,7 +32,7 @@ func Handler(auth identity.Authenticator, version string, register RegisterTools
 		}
 		s := mcp.NewServer(&mcp.Implementation{Name: "colonyhall", Version: version},
 			&mcp.ServerOptions{Instructions: Instructions, Logger: logger})
-		register(s, actor)
+		register(s, actor, r)
 		return s
 	}, nil)
 	// Reject unauthenticated requests with 401 before the MCP layer sees them.

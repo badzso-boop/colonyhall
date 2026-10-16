@@ -90,6 +90,12 @@ const (
 	AgentModeCompact = "compact"
 )
 
+// Approval modes for an agent on a host.
+const (
+	ApprovalsNone = "none"
+	ApprovalsChat = "chat"
+)
+
 // Assignment says which host runs an agent, and how.
 type Assignment struct {
 	AgentID        ids.ID
@@ -103,6 +109,7 @@ type Assignment struct {
 	Mode           string
 	RootDir        string
 	Sandbox        bool
+	Approvals      string
 	CreatedBy      ids.ID
 	CreatedAt      time.Time
 }
@@ -129,19 +136,21 @@ type AgentConfig struct {
 
 // Errors.
 var (
-	ErrForbidden    = errors.New("not allowed")
-	ErrBadCode      = errors.New("invalid or expired pairing code")
-	ErrBadHostToken = errors.New("invalid or revoked host token")
-	ErrBadPath      = errors.New("path must be absolute and clean (no '..'), at most 1024 characters")
-	ErrBadMode      = errors.New("mode must be read or write")
-	ErrBadAgentMode = errors.New("mode must be direct or compact")
-	ErrBadRootDir   = errors.New("direct mode requires a root_dir")
-	ErrBadClient    = errors.New("client must be claude-code or antigravity")
-	ErrBadName      = errors.New("host name must be 1-64 characters")
-	ErrNotAssigned  = errors.New("the agent is not assigned to this host")
-	ErrNotAgent     = errors.New("only agents can be assigned to a host")
-	ErrHostRevoked  = errors.New("the host is revoked")
-	ErrBadState     = errors.New("state must be approved or revoked")
+	ErrForbidden           = errors.New("not allowed")
+	ErrBadCode             = errors.New("invalid or expired pairing code")
+	ErrBadHostToken        = errors.New("invalid or revoked host token")
+	ErrBadPath             = errors.New("path must be absolute and clean (no '..'), at most 1024 characters")
+	ErrBadMode             = errors.New("mode must be read or write")
+	ErrBadAgentMode        = errors.New("mode must be direct or compact")
+	ErrBadRootDir          = errors.New("direct mode requires a root_dir")
+	ErrBadClient           = errors.New("client must be claude-code or antigravity")
+	ErrBadApprovals        = errors.New("approvals must be none or chat")
+	ErrApprovalsChatClient = errors.New("approvals=chat requires client claude-code")
+	ErrBadName             = errors.New("host name must be 1-64 characters")
+	ErrNotAssigned         = errors.New("the agent is not assigned to this host")
+	ErrNotAgent            = errors.New("only agents can be assigned to a host")
+	ErrHostRevoked         = errors.New("the host is revoked")
+	ErrBadState            = errors.New("state must be approved or revoked")
 )
 
 // Clients the guard knows.

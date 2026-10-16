@@ -51,10 +51,10 @@
   .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
   .grant { font-family:ui-monospace, monospace; font-size:12px; }
   .warn { color:#b3261e; } code.code { font-size:16px; letter-spacing:1px; }
-  #errModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
-  #errModal.on { display:flex; }
-  #errModal .card { max-width:720px; width:100%; max-height:80vh; overflow:auto; }
-  #errModal pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+  #errModal, #appModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
+  #errModal.on, #appModal.on { display:flex; }
+  #errModal .card, #appModal .card { max-width:720px; width:100%; max-height:80vh; overflow:auto; }
+  #errModal pre, #appModal pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; min-height:calc(100vh - 54px); }
     nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; } section { height:calc(72vh - 54px); } }
 </style>
@@ -84,6 +84,7 @@
   </section>
 </main>
 <div id="errModal"><div class="card"><h3 id="errTitle"></h3><div class="muted" id="errMeta"></div><pre id="errDetail"></pre><button id="errClose">✕</button></div></div>
+<div id="appModal"><div class="card"><h3 id="appTitle"></h3><div class="muted" id="appMeta"></div><pre id="appDetail"></pre><div class="row" id="appActions"></div><button id="appClose">✕</button></div></div>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -96,7 +97,9 @@ const I18N = {
         runs: "Futások", today: "Ma", last7Days: "Elmúlt 7 nap", period: "Időszak", tokensIn: "In", tokensOut: "Out",
         tokensTotal: "Összes", runsCount: "Futás", errorsCount: "Hiba", recentRuns: "Legutóbbi 20 futás", time: "Idő",
         agent: "Agent", phase: "Fázis", model: "Modell", duration: "Időtartam", status: "Állapot", details: "Részletek",
-        noRuns: "Nincs futási adat." },
+        noRuns: "Nincs futási adat.",
+        approvalDetails: "Részletek", approvalAllow: "Engedélyezem", approvalDeny: "Elutasítom",
+        approvalPending: "jóváhagyásra vár", approvalAllowed: "engedélyezve", approvalDenied: "elutasítva", approvalExpired: "lejárt" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -107,7 +110,9 @@ const I18N = {
         runs: "Runs", today: "Today", last7Days: "Last 7 days", period: "Period", tokensIn: "In", tokensOut: "Out",
         tokensTotal: "Total", runsCount: "Runs", errorsCount: "Errors", recentRuns: "Last 20 runs", time: "Time",
         agent: "Agent", phase: "Phase", model: "Model", duration: "Duration", status: "Status", details: "Details",
-        noRuns: "No runs recorded." },
+        noRuns: "No runs recorded.",
+        approvalDetails: "Details", approvalAllow: "Allow", approvalDeny: "Deny",
+        approvalPending: "pending", approvalAllowed: "allowed", approvalDenied: "denied", approvalExpired: "expired" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -187,11 +192,20 @@ function renderMsg(m) {
   div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
   // "[error:<id>]" from the guard: details are for humans, shown on demand.
   const ref = /\[error:([0-9a-f-]{36})\]/.exec(m.body);
-  div.querySelector(".body").textContent = ref ? m.body.replace(ref[0], "").trim() : m.body;
+  const appRef = /\[approval:([0-9a-f-]{36})\]/.exec(m.body);
+  let bodyText = m.body;
+  if (ref) bodyText = bodyText.replace(ref[0], "").trim();
+  if (appRef) bodyText = bodyText.replace(appRef[0], "").trim();
+  div.querySelector(".body").textContent = bodyText;
   if (ref && me.kind === "human") {
     const btn = el("button", { textContent: L.errorDetails });
     btn.onclick = () => showError(ref[1]);
     div.querySelector(".body").append(" ", btn);
+  }
+  if (appRef && me.kind === "human") {
+    const appSpan = el("span");
+    div.querySelector(".body").append(" ", appSpan);
+    renderApprovalInline(appRef[1], appSpan);
   }
   for (const r of m.reactions || []) {
     const chip = document.createElement("button");
@@ -216,6 +230,63 @@ async function showError(id) {
 }
 $("errClose").onclick = () => { $("errModal").className = ""; };
 
+async function showApproval(id) {
+  const app = await api(`/api/v1/approvals/${id}`).catch(err => { alert(err.message); return null; });
+  if (!app) return;
+  $("appTitle").textContent = "🔐 " + app.tool_name;
+  $("appMeta").textContent = `${app.state} · ${new Date(app.created_at).toLocaleString()}`;
+  $("appDetail").textContent = app.input || "";
+  const act = $("appActions");
+  act.innerHTML = "";
+  if (app.state === "pending") {
+    const allowBtn = el("button", { textContent: L.approvalAllow, style: "color:#137333;font-weight:bold;" });
+    allowBtn.onclick = async () => {
+      await api(`/api/v1/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision: "allow" }) }).catch(e => alert(e.message));
+      $("appModal").className = "";
+      reloadCurrentFeed();
+    };
+    const denyBtn = el("button", { textContent: L.approvalDeny, style: "color:#b3261e;" });
+    denyBtn.onclick = async () => {
+      await api(`/api/v1/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision: "deny" }) }).catch(e => alert(e.message));
+      $("appModal").className = "";
+      reloadCurrentFeed();
+    };
+    act.append(allowBtn, denyBtn);
+  }
+  $("appModal").className = "on";
+}
+$("appClose").onclick = () => { $("appModal").className = ""; };
+
+async function renderApprovalInline(id, span) {
+  const app = await api(`/api/v1/approvals/${id}`).catch(() => null);
+  if (!app) return;
+  span.innerHTML = "";
+  const btn = el("button", { textContent: L.approvalDetails });
+  btn.onclick = () => showApproval(id);
+  span.append(btn);
+  if (app.state === "pending") {
+    const allowBtn = el("button", { textContent: L.approvalAllow, style: "color:#137333;font-weight:bold;margin-left:4px;" });
+    allowBtn.onclick = async () => {
+      await api(`/api/v1/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision: "allow" }) }).catch(e => alert(e.message));
+      renderApprovalInline(id, span);
+    };
+    const denyBtn = el("button", { textContent: L.approvalDeny, style: "color:#b3261e;margin-left:4px;" });
+    denyBtn.onclick = async () => {
+      await api(`/api/v1/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision: "deny" }) }).catch(e => alert(e.message));
+      renderApprovalInline(id, span);
+    };
+    span.append(" ", allowBtn, " ", denyBtn);
+  } else {
+    const labels = {
+      allowed: L.approvalAllowed,
+      denied: L.approvalDenied,
+      expired: L.approvalExpired
+    };
+    const tag = el("span", { className: "muted", style: "margin-left:6px;", textContent: labels[app.state] || app.state });
+    span.append(tag);
+  }
+}
+
 async function toggleReaction(m, emoji) {
   const mine = (m.reactions || []).some(r => r.emoji === emoji && r.actor_ids.includes(me.id));
   await api(`/api/v1/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`, { method: mine ? "DELETE" : "PUT" }).catch(e => alert(e.message));
@@ -228,12 +299,17 @@ function setReply(rootId) {
 }
 $("replycancel").onclick = () => setReply(null);
 
-async function refreshMessage(id) {
-  // Reactions changed: reload the open channel (cheap at dev-page scale).
-  if (!msgs.has(id)) return;
+async function reloadCurrentFeed() {
+  if (!current) return;
   const r = await api(`/api/v1/channels/${current}/messages?limit=100`);
   msgs = new Map(r.messages.map(m => [m.id, m]));
   const keep = $("feed").scrollTop; renderFeed(); $("feed").scrollTop = keep;
+}
+
+async function refreshMessage(id) {
+  // Reactions changed: reload the open channel (cheap at dev-page scale).
+  if (!msgs.has(id)) return;
+  await reloadCurrentFeed();
 }
 
 function connectWS() {
@@ -258,6 +334,8 @@ function connectWS() {
       }
     } else if (f.event_type.startsWith("reaction.") && d.channel_id === current) {
       await refreshMessage(d.message_id);
+    } else if (f.event_type.startsWith("approval.")) {
+      await reloadCurrentFeed();
     } else if (f.event_type === "actor.created" || f.event_type.startsWith("channel.")) {
       await load();
     } else if (f.event_type.startsWith("host.") && hostsOpen) {
@@ -320,6 +398,7 @@ async function renderHosts() {
         a.mode || "compact",
         a.root_dir || "",
         a.sandbox ? "sandbox" : "no-sandbox",
+        a.approvals ? "approvals: " + a.approvals : "",
         a.permission_mode || "",
         a.model || "-",
         a.allow_work ? L.work + ": " + (a.work_model || "-") : ""
@@ -349,6 +428,7 @@ async function renderHosts() {
       const client = el("select", {}, el("option", { value: "claude-code", textContent: "claude-code" }), el("option", { value: "antigravity", textContent: "antigravity" }));
       const mode = el("select", {}, el("option", { value: "direct", textContent: "direct" }), el("option", { value: "compact", textContent: "compact" }));
       const rootDir = el("input", { placeholder: "root dir (/path)", size: 16 });
+      const approvals = el("select", {}, el("option", { value: "none", textContent: "approvals: none" }), el("option", { value: "chat", textContent: "approvals: chat" }));
       const permMode = el("select", {},
         el("option", { value: "auto", textContent: "auto" }),
         el("option", { value: "acceptEdits", textContent: "acceptEdits" }),
@@ -364,12 +444,12 @@ async function renderHosts() {
       go.onclick = async () => {
         await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({
           host_id: h.id, client: client.value, mode: mode.value, root_dir: rootDir.value.trim(),
-          sandbox: sandbox.checked, permission_mode: permMode.value,
+          sandbox: sandbox.checked, permission_mode: permMode.value, approvals: approvals.value,
           model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked
         }) }).catch(e => alert(e.message));
         renderHosts();
       };
-      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), go));
+      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), go));
     }
     panel.append(c);
   }

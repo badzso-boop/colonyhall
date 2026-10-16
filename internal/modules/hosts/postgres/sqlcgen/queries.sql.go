@@ -82,7 +82,7 @@ func (q *Queries) AddGrant(ctx context.Context, arg AddGrantParams) error {
 }
 
 const assignmentByAgent = `-- name: AssignmentByAgent :one
-SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox FROM agent_host WHERE agent_id = $1
+SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals FROM agent_host WHERE agent_id = $1
 `
 
 func (q *Queries) AssignmentByAgent(ctx context.Context, agentID uuid.UUID) (AgentHost, error) {
@@ -102,12 +102,13 @@ func (q *Queries) AssignmentByAgent(ctx context.Context, agentID uuid.UUID) (Age
 		&i.Mode,
 		&i.RootDir,
 		&i.Sandbox,
+		&i.Approvals,
 	)
 	return i, err
 }
 
 const assignmentsForHost = `-- name: AssignmentsForHost :many
-SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox FROM agent_host WHERE host_id = $1 ORDER BY agent_id
+SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals FROM agent_host WHERE host_id = $1 ORDER BY agent_id
 `
 
 func (q *Queries) AssignmentsForHost(ctx context.Context, hostID uuid.UUID) ([]AgentHost, error) {
@@ -133,6 +134,7 @@ func (q *Queries) AssignmentsForHost(ctx context.Context, hostID uuid.UUID) ([]A
 			&i.Mode,
 			&i.RootDir,
 			&i.Sandbox,
+			&i.Approvals,
 		); err != nil {
 			return nil, err
 		}
@@ -350,11 +352,11 @@ func (q *Queries) SaveReport(ctx context.Context, arg SaveReportParams) error {
 }
 
 const setAssignment = `-- name: SetAssignment :exec
-INSERT INTO agent_host (agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+INSERT INTO agent_host (agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (agent_id) DO UPDATE SET host_id = EXCLUDED.host_id, client = EXCLUDED.client, model = EXCLUDED.model,
   work_model = EXCLUDED.work_model, allow_work = EXCLUDED.allow_work, permission_mode = EXCLUDED.permission_mode,
-  mode = EXCLUDED.mode, root_dir = EXCLUDED.root_dir, sandbox = EXCLUDED.sandbox,
+  mode = EXCLUDED.mode, root_dir = EXCLUDED.root_dir, sandbox = EXCLUDED.sandbox, approvals = EXCLUDED.approvals,
   created_by = EXCLUDED.created_by, created_at = EXCLUDED.created_at
 `
 
@@ -370,6 +372,7 @@ type SetAssignmentParams struct {
 	Mode           string
 	RootDir        string
 	Sandbox        bool
+	Approvals      string
 	CreatedBy      uuid.UUID
 	CreatedAt      time.Time
 }
@@ -387,6 +390,7 @@ func (q *Queries) SetAssignment(ctx context.Context, arg SetAssignmentParams) er
 		arg.Mode,
 		arg.RootDir,
 		arg.Sandbox,
+		arg.Approvals,
 		arg.CreatedBy,
 		arg.CreatedAt,
 	)

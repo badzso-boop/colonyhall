@@ -130,6 +130,9 @@ func (s *Store) Touch(_ context.Context, id ids.ID, at time.Time) error {
 func (s *Store) SetAssignment(_ context.Context, a hosts.Assignment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if a.Approvals == "" {
+		a.Approvals = hosts.ApprovalsNone
+	}
 	s.assigns[a.AgentID] = a
 	return nil
 }

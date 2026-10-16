@@ -17,7 +17,8 @@ import (
 func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
 	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName,
-		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir)
+		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
+		hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)
 }
 
@@ -59,9 +60,13 @@ type hostOut struct {
 }
 
 func agentOut(a hosts.AgentConfig) apispec.HostAgent {
+	approvals := a.Approvals
+	if approvals == "" {
+		approvals = hosts.ApprovalsNone
+	}
 	out := apispec.HostAgent{AgentId: a.AgentID, Handle: a.Handle, HostId: a.HostID, Client: apispec.HostAgentClient(a.Client),
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
-		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, Sandbox: a.Sandbox,
+		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: apispec.HostAgentApprovals(approvals),
 		Grants: make([]apispec.FolderGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, grantOut(g, nil))
@@ -154,11 +159,15 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 		if in.Mode != nil {
 			mode = string(*in.Mode)
 		}
+		var approvals string
+		if in.Approvals != nil {
+			approvals = string(*in.Approvals)
+		}
 		a, err := svc.Assign(r.Context(), httpx.Actor(r), id, hosts.AssignInput{
 			HostID: in.HostId, Client: string(in.Client),
 			Model: httpx.Deref(in.Model, ""), WorkModel: httpx.Deref(in.WorkModel, ""), AllowWork: httpx.Deref(in.AllowWork, false),
 			PermissionMode: httpx.Deref(in.PermissionMode, ""),
-			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), Sandbox: in.Sandbox,
+			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), Sandbox: in.Sandbox, Approvals: approvals,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)

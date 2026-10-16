@@ -121,10 +121,15 @@ func (s *Store) Touch(ctx context.Context, id ids.ID, at time.Time) error {
 
 // SetAssignment creates or replaces an agent's assignment.
 func (s *Store) SetAssignment(ctx context.Context, a hosts.Assignment) error {
+	approvals := a.Approvals
+	if approvals == "" {
+		approvals = hosts.ApprovalsNone
+	}
 	return s.q(ctx).SetAssignment(ctx, sqlcgen.SetAssignmentParams{
 		AgentID: a.AgentID, HostID: a.HostID, WorkspaceID: a.WorkspaceID, Client: a.Client,
 		Model: a.Model, WorkModel: a.WorkModel, AllowWork: a.AllowWork, PermissionMode: a.PermissionMode,
-		Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt,
+		Mode: a.Mode, RootDir: a.RootDir, Sandbox: a.Sandbox, Approvals: approvals,
+		CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt,
 	})
 }
 
@@ -134,10 +139,14 @@ func (s *Store) DeleteAssignment(ctx context.Context, agentID ids.ID) error {
 }
 
 func toAssignment(r sqlcgen.AgentHost) hosts.Assignment {
+	approvals := r.Approvals
+	if approvals == "" {
+		approvals = hosts.ApprovalsNone
+	}
 	return hosts.Assignment{
 		AgentID: r.AgentID, HostID: r.HostID, WorkspaceID: r.WorkspaceID, Client: r.Client,
 		Model: r.Model, WorkModel: r.WorkModel, AllowWork: r.AllowWork, PermissionMode: r.PermissionMode,
-		Mode: r.Mode, RootDir: r.RootDir, Sandbox: r.Sandbox,
+		Mode: r.Mode, RootDir: r.RootDir, Sandbox: r.Sandbox, Approvals: approvals,
 		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
 	}
 }

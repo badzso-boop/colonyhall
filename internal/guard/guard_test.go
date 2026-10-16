@@ -53,11 +53,12 @@ func TestParseDecision(t *testing.T) {
 type fakeRunner struct {
 	name   string
 	args   []string
+	env    []string
 	stdout string
 }
 
-func (f *fakeRunner) run(_ context.Context, _ string, name string, args []string, _ []string) ([]byte, []byte, error) {
-	f.name, f.args = name, args
+func (f *fakeRunner) run(_ context.Context, _ string, name string, args []string, env []string) ([]byte, []byte, error) {
+	f.name, f.args, f.env = name, args, env
 	return []byte(f.stdout), nil, nil
 }
 

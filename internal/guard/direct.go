@@ -130,20 +130,31 @@ type mcpServerDoc struct {
 	Headers map[string]string `json:"headers"`
 }
 
+// DefaultApprovalTimeout is the time the approve tool waits for a human decision.
+const DefaultApprovalTimeout = 10 * time.Minute
+
 // writeMCPConfig writes a temporary 0600 MCP config file with the Colonyhall
 // server and agent bearer token, returning its path and a cleanup func.
-func writeMCPConfig(dir, serverURL, token string) (string, func(), error) {
+func writeMCPConfig(dir, serverURL, token string, extra ...map[string]string) (string, func(), error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", nil, err
+	}
+	headers := map[string]string{
+		"Authorization": "Bearer " + token,
+	}
+	for _, m := range extra {
+		for k, v := range m {
+			if v != "" {
+				headers[k] = v
+			}
+		}
 	}
 	doc := mcpConfigDoc{
 		MCPServers: map[string]mcpServerDoc{
 			"colonyhall": {
-				Type: "http",
-				URL:  strings.TrimSuffix(serverURL, "/") + "/mcp",
-				Headers: map[string]string{
-					"Authorization": "Bearer " + token,
-				},
+				Type:    "http",
+				URL:     strings.TrimSuffix(serverURL, "/") + "/mcp",
+				Headers: headers,
 			},
 		},
 	}
@@ -293,7 +304,26 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		if err != nil {
 			return fmt.Errorf("guard: direct token: %w", err)
 		}
-		mcpPath, cl, err := writeMCPConfig(stateDir, a.Client.BaseURL, token)
+		var extraHeaders map[string]string
+		if a.Cfg.Approvals == "chat" {
+			req.PermissionPromptTool = "mcp__colonyhall__approve"
+			mcpTimeout := (DefaultApprovalTimeout + 60*time.Second).Milliseconds()
+			req.Env = append(req.Env, fmt.Sprintf("MCP_TOOL_TIMEOUT=%d", mcpTimeout))
+			extraHeaders = map[string]string{
+				"X-Colonyhall-Channel": group[0].ChannelID,
+			}
+			threadID := group[0].ThreadRootID
+			if threadID == "" && !group[0].DM {
+				threadID = group[0].ItemID
+				if threadID == "" {
+					threadID = group[0].ID
+				}
+			}
+			if threadID != "" {
+				extraHeaders["X-Colonyhall-Thread"] = threadID
+			}
+		}
+		mcpPath, cl, err := writeMCPConfig(stateDir, a.Client.BaseURL, token, extraHeaders)
 		if err != nil {
 			return fmt.Errorf("guard: direct mcp config: %w", err)
 		}
@@ -329,6 +359,9 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	timeout := a.Cfg.WorkTimeout
 	if timeout == 0 {
 		timeout = 10 * time.Minute
+	}
+	if a.Cfg.Approvals == "chat" {
+		timeout += DefaultApprovalTimeout + 60*time.Second
 	}
 	dctx, cancel := context.WithTimeout(ctx, timeout)
 	a.workMu.Lock()

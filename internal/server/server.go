@@ -20,6 +20,11 @@ import (
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpserver"
 	"colonyhall/internal/mcpserver"
+	"colonyhall/internal/modules/approval"
+	apphttp "colonyhall/internal/modules/approval/httpapi"
+	appmcp "colonyhall/internal/modules/approval/mcptools"
+	appmem "colonyhall/internal/modules/approval/memory"
+	apppg "colonyhall/internal/modules/approval/postgres"
 	"colonyhall/internal/modules/audit"
 	audhttp "colonyhall/internal/modules/audit/httpapi"
 	audmem "colonyhall/internal/modules/audit/memory"
@@ -82,6 +87,7 @@ type App struct {
 	Audit        *audit.Service
 	Hosts        *hosts.Service
 	Schedule     *schedule.Service
+	Approval     *approval.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -112,6 +118,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		hoStore  hosts.Store
 		ruStore  runs.Store
 		scStore  schedule.Store
+		apStore  approval.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
@@ -122,6 +129,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		hoStore = hostmem.New()
 		ruStore = runmem.New()
 		scStore = schedmem.New()
+		apStore = appmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -137,6 +145,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		hoStore = &hostpg.Store{DB: pg}
 		ruStore = &runpg.Store{DB: pg}
 		scStore = &schedpg.Store{DB: pg}
+		apStore = &apppg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -148,9 +157,12 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
 	auSvc := &audit.Service{Store: auStore}
 	hoSvc := &hosts.Service{Store: hoStore, Directory: idSvc, Tokens: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	apSvc := &approval.Service{Store: apStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
+		{Name: approval.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: apSvc.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -159,13 +171,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	delhttp.Register(mux, dlSvc, idSvc)
 	audhttp.Register(mux, auSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
-	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	schedhttp.Register(mux, scSvc, idSvc)
 	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
-	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor) {
+	apphttp.Register(mux, apSvc, idSvc)
+	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
 		convmcp.Register(s, cvSvc, idSvc, current)
+		appmcp.Register(s, apSvc, current, r.Header)
 	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -181,6 +194,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Audit:        auSvc,
 		Hosts:        hoSvc,
 		Schedule:     scSvc,
+		Approval:     apSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

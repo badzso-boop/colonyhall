@@ -225,6 +225,7 @@ type HostAgent struct {
 	Mode           string  `json:"mode"`
 	RootDir        string  `json:"root_dir"`
 	Sandbox        bool    `json:"sandbox"`
+	Approvals      string  `json:"approvals"`
 	Grants         []Grant `json:"grants"`
 }
 
