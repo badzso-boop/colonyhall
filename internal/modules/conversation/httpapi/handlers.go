@@ -37,6 +37,18 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 		}
 		out.Reactions = &rs
 	}
+	if len(m.Attachments) > 0 {
+		atts := make([]apispec.FileAttachment, 0, len(m.Attachments))
+		for _, a := range m.Attachments {
+			atts = append(atts, apispec.FileAttachment{
+				Id:   a.ID,
+				Name: a.Name,
+				Mime: a.Mime,
+				Size: a.Size,
+			})
+		}
+		out.Attachments = &atts
+	}
 	return out
 }
 
@@ -147,9 +159,14 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			httpx.Error(w, r, err)
 			return
 		}
+		var fileIDs []ids.ID
+		if in.FileIds != nil {
+			fileIDs = *in.FileIds
+		}
 		res, err := svc.SendMessage(r.Context(), httpx.Actor(r), conversation.SendInput{
 			ChannelID: channelID, ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil),
 			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body, Elaborate: httpx.Deref(in.Elaborate, false),
+			FileIDs: fileIDs,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)

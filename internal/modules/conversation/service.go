@@ -14,15 +14,22 @@ import (
 	"colonyhall/internal/policy"
 )
 
+// Attachments handles file attachment validation and loading.
+type Attachments interface {
+	ValidateAndAttach(ctx context.Context, by identity.Actor, channelID ids.ID, messageID ids.ID, fileIDs []ids.ID) error
+	AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID) (map[ids.ID][]Attachment, error)
+}
+
 // Service holds the conversation use cases.
 type Service struct {
-	Store     Store
-	Directory identity.Directory
-	Events    eventlog.Store
-	Bus       bus.Bus
-	Tx        db.TxRunner
-	IDs       ids.Generator
-	Clock     clock.Clock
+	Store       Store
+	Directory   identity.Directory
+	Events      eventlog.Store
+	Bus         bus.Bus
+	Tx          db.TxRunner
+	IDs         ids.Generator
+	Clock       clock.Clock
+	Attachments Attachments
 }
 
 func subject(a identity.Actor) policy.Subject {
@@ -132,6 +139,7 @@ type SendInput struct {
 	ThreadRootID ids.ID
 	ClientMsgID  string
 	Body         string
+	FileIDs      []ids.ID
 	// Elaborate lets an agent exceed AgentMaxBody; set only when someone
 	// asked for a detailed answer.
 	Elaborate bool
@@ -168,6 +176,12 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		if in.ClientMsgID != "" {
 			existing, err := s.Store.MessageByClientID(ctx, by.ID, in.ClientMsgID)
 			if err == nil {
+				if s.Attachments != nil {
+					atts, err := s.Attachments.AttachmentsForMessages(ctx, []ids.ID{existing.ID})
+					if err == nil {
+						existing.Attachments = atts[existing.ID]
+					}
+				}
 				msg = existing
 				return nil
 			}
@@ -209,6 +223,19 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
+		}
+		if len(in.FileIDs) > 0 {
+			if s.Attachments == nil {
+				return errors.New("file attachments not supported")
+			}
+			if err := s.Attachments.ValidateAndAttach(ctx, by, c.ID, msg.ID, in.FileIDs); err != nil {
+				return err
+			}
+			atts, err := s.Attachments.AttachmentsForMessages(ctx, []ids.ID{msg.ID})
+			if err != nil {
+				return err
+			}
+			msg.Attachments = atts[msg.ID]
 		}
 		count, err := s.Store.IncrementMsgCount(ctx, c.ID)
 		if err != nil {
@@ -303,7 +330,8 @@ func MessageCreatedPayload(m Message) MessageCreated {
 	p := MessageCreated{
 		MessageID: m.ID.String(), ChannelID: m.ChannelID.String(), AuthorID: m.AuthorID.String(),
 		ClientMsgID: m.ClientMsgID, Kind: m.Kind, Body: m.Body, CreatedAt: m.CreatedAt,
-		Mentions: make([]string, 0, len(m.Mentions)),
+		Mentions:    make([]string, 0, len(m.Mentions)),
+		Attachments: m.Attachments,
 	}
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()
@@ -368,7 +396,32 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if err != nil {
 		return nil, err
 	}
-	return s.withReactions(ctx, msgs)
+	msgs, err = s.withReactions(ctx, msgs)
+	if err != nil {
+		return nil, err
+	}
+	return s.withAttachments(ctx, msgs)
+}
+
+// withAttachments fills Message.Attachments for a slice of messages.
+func (s *Service) withAttachments(ctx context.Context, msgs []Message) ([]Message, error) {
+	if len(msgs) == 0 || s.Attachments == nil {
+		return msgs, nil
+	}
+	idList := make([]ids.ID, len(msgs))
+	for i, m := range msgs {
+		idList[i] = m.ID
+	}
+	byMsg, err := s.Attachments.AttachmentsForMessages(ctx, idList)
+	if err != nil {
+		return nil, err
+	}
+	for i := range msgs {
+		if atts, ok := byMsg[msgs[i].ID]; ok {
+			msgs[i].Attachments = atts
+		}
+	}
+	return msgs, nil
 }
 
 // MarkRead marks every message in the channel as seen by the actor.
@@ -412,6 +465,21 @@ func (s *Service) CanRead(ctx context.Context, by identity.Actor, channelID ids.
 		return false, err
 	}
 	return policy.CanReadChannel(subject(by), mem), nil
+}
+
+// CanWrite implements Reader.
+func (s *Service) CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error) {
+	if _, err := s.channelFor(ctx, by.WorkspaceID, channelID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	mem, err := s.membership(ctx, channelID, by.ID)
+	if err != nil {
+		return false, err
+	}
+	return policy.CanWriteChannel(subject(by), mem), nil
 }
 
 // MessageByID implements Reader.

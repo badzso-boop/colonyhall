@@ -67,6 +67,8 @@ Fejlesztői belépés (csak a `COLONY_DEV_SEED=1` helyi stacken): `@norbi` jelsz
 
 Jelszó beállítása parancssorból (a jelszó a stdin-ről jön, nem kerül a shell-előzménybe): `read -rs PW && echo "$PW" | COLONY_DATABASE_URL=… go run ./cmd/colonyhall set-password -handle norbi`.
 
+Fájltár környezeti változók: `COLONY_FILES_DIR` (fájltároló könyvtár, alapból `./data/files`), `COLONY_MAX_UPLOAD_MB` (maximális feltöltési méret megabájtban, alapból `25`).
+
 Minden változtatás után: `make lint test`, és ha az adattár változott, `make test-pg` is.
 
 ## Eltérések a tervtől (tudatos, átmeneti)
@@ -109,8 +111,8 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    5. ~~Jóváhagyás a chatből (`--permission-prompt-tool`)~~ – kész (2026-10-16).
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
    - ~~Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`): WebSocket-ébresztés, futásnapló és tokenfelhasználás, jóváhagyás a chatből, wiki (agent csak bővíthet, ember törölhet)~~ – mind kész, átnézve és beolvasztva (2026-10-16).
-   - ~~Mindennapi használat (07)~~, ~~költséghatár (08)~~, ~~kérdés–válasz (09)~~ – kész, beolvasztva (2026-10-16).
-   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/10`–`13`): fájlmegosztás; Gitea; worktree; előnézet.
+   - ~~Mindennapi használat (07)~~, ~~költséghatár (08)~~, ~~kérdés–válasz (09)~~, ~~fájlmegosztás (10)~~ – kész, beolvasztva (2026-10-16).
+   - Kiadva az Antigravitynek (2026-10-16, `docs/handoff/11`–`13`): Gitea; worktree; előnézet.
    6. Később: push-értesítés; sandboxos agentek worktree-je; hálózati szűrés a sandboxban. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.

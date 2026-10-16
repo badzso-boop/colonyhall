@@ -87,6 +87,11 @@ linters:
             - pkg: colonyhall/internal/modules/question/memory
             - pkg: colonyhall/internal/modules/question/httpapi
             - pkg: colonyhall/internal/modules/question/mcptools
+            - pkg: colonyhall/internal/modules/files/postgres
+            - pkg: colonyhall/internal/modules/files/memory
+            - pkg: colonyhall/internal/modules/files/httpapi
+            - pkg: colonyhall/internal/modules/files/mcptools
+            - pkg: colonyhall/internal/modules/files/storage
             - pkg: colonyhall/internal/server
               desc: only cmd/ may use the composition root
 

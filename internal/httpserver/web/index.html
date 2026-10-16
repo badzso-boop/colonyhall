@@ -36,6 +36,15 @@
   .chips { display:flex; gap:4px; margin-top:2px; flex-wrap:wrap; }
   #replybar { display:none; padding:4px 16px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); }
   #replybar.on { display:flex; gap:8px; align-items:center; }
+  .attachments { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .attachment-img { max-width:240px; max-height:180px; border-radius:6px; border:1px solid var(--line); object-fit:cover; display:block; cursor:pointer; }
+  .attachment-link { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface); text-decoration:none; color:var(--fg); font-size:12px; }
+  .attachment-link:hover { border-color:var(--accent); }
+  .file-chip { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border:1px solid var(--accent); border-radius:12px; font-size:12px; background:var(--surface); }
+  .file-chip button { border:none; background:none; padding:0 2px; cursor:pointer; font-size:11px; color:var(--muted); }
+  #attachedFiles { display:none; gap:6px; flex-wrap:wrap; padding:4px 16px; }
+  #attachedFiles.on { display:flex; }
+  #clipbtn { padding:4px 8px; font-size:14px; }
   #login { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
@@ -81,7 +90,13 @@
     <div id="questionsPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
-      <form id="send"><input id="text" autocomplete="off"><button></button></form>
+      <div id="attachedFiles"></div>
+      <form id="send">
+        <input type="file" id="fileinput" style="display:none">
+        <button type="button" id="clipbtn" title="Fájl csatolása">📎</button>
+        <input id="text" autocomplete="off">
+        <button></button>
+      </form>
     </div>
   </section>
 </main>
@@ -137,9 +152,18 @@ try { token = localStorage.getItem("colony_token") || ""; } catch {}
 
 // Plain-HTTP pages (e.g. over Tailscale) have no crypto.randomUUID.
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
+const formatBytes = (bytes) => {
+  if (!bytes || bytes < 1024) return (bytes || 0) + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+};
 
 async function api(path, opts = {}) {
-  const headers = { "Content-Type": "application/json" };
+  const headers = Object.assign({}, opts.headers);
+  if (!opts.body || !(opts.body instanceof FormData)) {
+    if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  }
   if (token) headers.Authorization = "Bearer " + token;
   else if (csrf) headers["X-CSRF-Token"] = csrf;
   const res = await fetch(path, { ...opts, headers, credentials: "same-origin" });
@@ -174,7 +198,7 @@ function renderChannels() {
 }
 
 async function open(id) {
-  current = id; setReply(null);
+  current = id; setReply(null); clearPendingFiles();
   const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
   msgs = new Map(r.messages.map(m => [m.id, m]));
   renderFeed();
@@ -195,7 +219,7 @@ function renderMsg(m) {
   div.className = "msg" + (m.thread_root_id ? " reply" : "");
   div.innerHTML = `<div class="re"></div><span class="who ${a.kind}"></span><span class="at"></span>` +
     `<span class="acts"><button data-e="👍">👍</button><button data-e="👎">👎</button><button data-r>${L.reply}</button></span>` +
-    `<div class="body"></div><div class="chips"></div>`;
+    `<div class="body"></div><div class="attachments"></div><div class="chips"></div>`;
   if (m.thread_root_id) {
     const root = msgs.get(m.thread_root_id);
     div.querySelector(".re").textContent = "↪ " + L.inThread + " " + (root ? root.body.slice(0, 60) : "…");
@@ -218,6 +242,26 @@ function renderMsg(m) {
     const appSpan = el("span");
     div.querySelector(".body").append(" ", appSpan);
     renderApprovalInline(appRef[1], appSpan);
+  }
+  if (m.attachments && m.attachments.length) {
+    const attDiv = div.querySelector(".attachments");
+    for (const att of m.attachments) {
+      const isImg = att.mime && att.mime.startsWith("image/") && !att.mime.includes("svg");
+      if (isImg) {
+        const a = el("a", { href: `/api/v1/files/${att.id}/content`, target: "_blank", title: `${att.name} (${formatBytes(att.size)})` });
+        const img = el("img", { className: "attachment-img", src: `/api/v1/files/${att.id}/content`, alt: att.name });
+        a.append(img);
+        attDiv.append(a);
+      } else {
+        const link = el("a", {
+          className: "attachment-link",
+          href: `/api/v1/files/${att.id}/content`,
+          target: "_blank",
+          title: `${att.mime}, ${formatBytes(att.size)}`
+        }, `📎 ${att.name} (${formatBytes(att.size)})`);
+        attDiv.append(link);
+      }
+    }
   }
   for (const r of m.reactions || []) {
     const chip = document.createElement("button");
@@ -337,7 +381,7 @@ function connectWS() {
     const d = f.data || {};
     if (f.event_type === "message.created") {
       if (d.channel_id === current) {
-        const m = { id: d.message_id, author_id: d.author_id, body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, reactions: [] };
+        const m = { id: d.message_id, author_id: d.author_id, body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, reactions: [], attachments: d.attachments || [] };
         msgs.set(m.id, m); $("feed").appendChild(renderMsg(m)); $("feed").scrollTop = $("feed").scrollHeight;
         api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
       } else {
@@ -360,7 +404,6 @@ function connectWS() {
 }
 
 // --- Machines (admins) ---------------------------------------------------
-const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
 let hostsOpen = false;
 $("hostsbtn").textContent = L.hosts;
 // One side panel at a time (machines, schedules, runs, wiki); the chat
@@ -1151,11 +1194,65 @@ async function renderWikiPage(slug) {
   panel.append(card);
 }
 
+let pendingFiles = [];
+
+function renderAttachedFiles() {
+  const container = $("attachedFiles");
+  container.innerHTML = "";
+  if (pendingFiles.length === 0) {
+    container.className = "";
+    return;
+  }
+  container.className = "on";
+  for (const f of pendingFiles) {
+    const chip = el("span", { className: "file-chip" });
+    chip.append(`📎 ${f.name} (${formatBytes(f.size)})`);
+    const rm = el("button", { textContent: "✕", title: "Eltávolítás" });
+    rm.onclick = () => {
+      pendingFiles = pendingFiles.filter(x => x.id !== f.id);
+      renderAttachedFiles();
+    };
+    chip.append(rm);
+    container.append(chip);
+  }
+}
+
+function clearPendingFiles() {
+  pendingFiles = [];
+  renderAttachedFiles();
+}
+
+$("clipbtn").onclick = () => {
+  if (!current) return;
+  $("fileinput").value = "";
+  $("fileinput").click();
+};
+
+$("fileinput").onchange = async () => {
+  const file = $("fileinput").files[0];
+  if (!file || !current) return;
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  try {
+    const uploaded = await api(`/api/v1/channels/${current}/files`, { method: "POST", body: fd });
+    if (uploaded) {
+      pendingFiles.push(uploaded);
+      renderAttachedFiles();
+    }
+  } catch (err) {
+    alert("Feltöltési hiba: " + err.message);
+  }
+};
+
 $("send").onsubmit = async (e) => {
   e.preventDefault();
-  const body = $("text").value.trim();
-  if (!body || !current) return;
+  let body = $("text").value.trim();
+  if (!body && pendingFiles.length === 0) return;
+  if (!current) return;
   $("text").value = "";
+  if (!body && pendingFiles.length > 0) {
+    body = pendingFiles.map(f => f.name).join(", ");
+  }
   if (/^\/(schedule|daily|cron)\b/.test(body)) {
     const cmd = parseScheduleCommand(body);
     if (!cmd) { note('⏰ ?  /schedule 2026-10-16 01:00 …  ·  /daily 01:00 …  ·  /cron "0 1 * * *" …'); return; }
@@ -1179,7 +1276,10 @@ $("send").onsubmit = async (e) => {
     }
     return;
   }
+  const fileIds = pendingFiles.map(f => f.id);
+  clearPendingFiles();
   const req = { body, client_msg_id: uid() };
+  if (fileIds.length > 0) req.file_ids = fileIds;
   if (replyRoot) req.thread_root_id = replyRoot;
   await api(`/api/v1/channels/${current}/messages`, { method: "POST", body: JSON.stringify(req) }).catch(err => alert(err.message));
 };

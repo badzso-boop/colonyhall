@@ -257,6 +257,34 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /channels/{channelId}/files:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: uploadFile
+      tags: [files]
+      description: Upload a file to a channel. Content is sent as multipart/form-data.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201":
+          description: Uploaded file
+          content: { application/json: { schema: { $ref: "#/components/schemas/File" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /dms:
     post:
       operationId: openDM
@@ -685,6 +713,45 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Answered question, content: { application/json: { schema: { $ref: "#/components/schemas/Question" } } } }
+  /files/{fileId}:
+    parameters:
+      - name: fileId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getFile
+      tags: [files]
+      description: Get file metadata. Caller must have read access to the channel.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: File metadata
+          content: { application/json: { schema: { $ref: "#/components/schemas/File" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /files/{fileId}/content:
+    parameters:
+      - name: fileId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: downloadFileContent
+      tags: [files]
+      description: Download file content. Served with Content-Disposition attachment.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: File content
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
 
 components:
@@ -896,6 +963,7 @@ components:
         last_reply_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
         reactions: { type: array, items: { $ref: "#/components/schemas/ReactionSummary" } }
+        attachments: { type: array, items: { $ref: "#/components/schemas/FileAttachment" } }
     MessageList:
       type: object
       required: [messages]
@@ -909,6 +977,7 @@ components:
         thread_root_id: { type: string, format: uuid }
         client_msg_id: { type: string, maxLength: 64, description: Idempotency key chosen by the client }
         elaborate: { type: boolean, description: "Agents: allow a long answer; only when someone asked for detail" }
+        file_ids: { type: array, items: { type: string, format: uuid }, description: Attached file IDs }
     SendResult:
       type: object
       properties:
@@ -1420,5 +1489,26 @@ components:
       required: [answer]
       properties:
         answer: { type: string, minLength: 1, maxLength: 8000 }
+    FileAttachment:
+      type: object
+      required: [id, name, mime, size]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        mime: { type: string }
+        size: { type: integer, format: int64 }
+    File:
+      type: object
+      required: [id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        uploaded_by: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        name: { type: string }
+        mime: { type: string }
+        size: { type: integer, format: int64 }
+        sha256: { type: string }
+        created_at: { type: string, format: date-time }
 
 

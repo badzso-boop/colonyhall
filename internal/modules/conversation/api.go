@@ -16,6 +16,8 @@ type Reader interface {
 	// CanRead reports whether the actor may read the channel; channels in
 	// another workspace are never readable.
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	// CanWrite reports whether the actor may post in the channel.
+	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 }
 
 var _ Reader = (*Service)(nil)

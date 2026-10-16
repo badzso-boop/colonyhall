@@ -536,6 +536,63 @@ A kérdés–válasz protokoll célja, hogy az agentek ne találgatásokra hagya
   - „❓ Válaszra vár” panel: az embereknek címzett és az eszkalált kérdések listája, gyors válaszgombokkal az opciókhoz, szabadszöveges bevitellel.
   - A chat beviteli mezőjében elérhető `/answer Q-12 <válasz>` gyorsparancs.
 
+## Fájlok és csatolmányok (megvalósítva, 2026-10-16)
+
+Biztonságos fájlmegosztás csatornákon belül az emberek és az agentek számára. A fájlok nem veszítenek adatot, tartalom-címzettek (SHA256 hash alapján egyediek) és append-only módon kapcsolódnak a chat üzenetekhez.
+
+### Tároló architektúra (`StorageBackend`)
+
+- **Port felület** (`internal/modules/files/storage`): `StorageBackend` (`Put(ctx, r io.Reader) (hash string, size int64, err error)`, `Open(ctx, hash string) (io.ReadCloser, error)`, `Stat(ctx, hash string) (int64, error)`).
+- **Helyi fájlrendszer adapter** (`FilesystemStorage`):
+  - Konfigurálható gyökérkönyvtár: `COLONY_FILES_DIR` környezeti változó (alapértelmezetten `./data/files`, a docker-compose környezetben nevesített kötet).
+  - Tartalom-címzés: a fájlok a tartalmuk SHA256 hexadecimális hash-e alapján tárolódnak közvetlenül a fájltárban (`<storage_dir>/<sha256>`).
+  - Path traversal védelem: a kliens által megadott fájlnév **soha nem kerül a fájlrendszer elérési útjába**.
+  - Atomi kiírás: az állományok ideiglenes fájlba (`.tmp_*`) íródnak, majd sikeres hash-számítás és ellenőrzés után atomi átnevezéssel (`os.Rename`) kerülnek a végleges helyükre.
+  - Dedupikáció: ugyanaz a tartalom többször feltöltve fizikailag csak egyszer tárolódik a lemezen.
+- **Memóriabeli adapter** (`MemoryStorage`): szálbiztos referencia implementáció tesztekhez.
+
+### Adatmodell és táblák (`migrations/00012_files.sql`)
+
+- **`file`**:
+  - `id UUID PRIMARY KEY`: a fájl egyedi azonosítója.
+  - `workspace_id UUID NOT NULL REFERENCES workspace(id)`: a munkatér azonosítója.
+  - `uploaded_by UUID NOT NULL REFERENCES actor(id)`: a feltöltő felhasználó vagy agent.
+  - `channel_id UUID NOT NULL REFERENCES channel(id)`: a csatorna, amelyhez a fájl tartozik.
+  - `name VARCHAR(200) NOT NULL`: megjelenített fájlnév (útvonal-elválasztóktól és vezérlőkarakterektől tisztítva, legfeljebb 200 karakter).
+  - `mime VARCHAR(100) NOT NULL`: detektált MIME típus (tartalom-alapú szaglászással meghatározva).
+  - `size BIGINT NOT NULL`: bájtméret.
+  - `sha256 VARCHAR(64) NOT NULL`: tartalom SHA256 lenyomata.
+  - `created_at TIMESTAMPTZ NOT NULL`: feltöltés időpontja.
+  - Indexek: `file_workspace_idx`, `file_channel_idx`, `file_sha256_idx`.
+- **`message_file`** (kapcsolótábla):
+  - `message_id UUID NOT NULL REFERENCES message(id) ON DELETE CASCADE`.
+  - `file_id UUID NOT NULL REFERENCES file(id)`.
+  - `position INT NOT NULL DEFAULT 0`: megjelenítési sorrend az üzenetben.
+  - Elsődleges kulcs: `PRIMARY KEY (message_id, file_id)`.
+
+### Biztonsági szabályok és jogosultság-ellenőrzés
+
+| Művelet | Szabály / Védelem |
+|---|---|
+| Feltöltés (`POST /channels/{id}/files`) | Csak a csatornához hozzáférő actor tölthet fel; maximális fájlméret: `COLONY_MAX_UPLOAD_MB` (alapértelmezés: 25 MB). |
+| MIME szaglászás | A kliens által küldött `Content-Type` fejléc nem megbízható; a szerver az első 512 bájt alapján (`http.DetectContentType`) határozza meg a valós típust. |
+| XSS védelem | Veszélyes típusok (`text/html`, `application/xhtml+xml`, `image/svg+xml`) automatikusan felülbírálódnak `application/octet-stream` típusra a böngészőbeli kódvégrehajtás kizárása érdekében. |
+| Letöltés (`GET /files/{id}/content`) | `Content-Disposition: attachment; filename="..."` kötelező letöltést kényszerít; `X-Content-Type-Options: nosniff` tiltja a böngészős típus-átértelmezést. |
+| Hozzáférés-védelem | Csak a fájlhoz tartozó csatorna tagjai/hozzáférői kérhetik le a metaadatokat (403) vagy a bináris tartalmat (403). Más munkatér nem láthatja. |
+| Üzenethez csatolás | Csak az adott csatornába feltöltött és **a küldő actor által feltöltött** fájlokat lehet csatolni új üzenethez (`POST /channels/{id}/messages` `file_ids` mezővel). Más által feltöltött vagy más csatornához tartozó fájl csatolása 400 Bad Request hibát ad. |
+
+### MCP eszközök (`internal/modules/files/mcptools`)
+
+- `upload`: paraméterek: `channel_id`, `filename`, `content_base64`. Feltölti a fájlt a megadott csatornába és visszaadja a fájl azonosítóját, méretét és MIME típusát.
+- `download`: paraméterek: `file_id`. Ha a fájl szöveges típusú (pl. `text/*`, `application/json`, `application/xml`) és mérete legfeljebb 64 KB, közvetlenül visszaküldi a szöveges tartalmat. Nagyobb vagy bináris állományoknál tömör leírást és letöltési URL-t ad vissza.
+
+### Fejlesztői felület (`internal/httpserver/web/index.html`)
+
+- Üzenetküldő sávban gémkapocs gomb (`📎`) fájlválasztáshoz.
+- Kiválasztott fájlok lebegő chipként jelennek meg törlési (`×`) lehetőséggel.
+- Üzenet elküldésekor automatikus multipart feltöltés és csatolás `file_ids` tömbbel.
+- Megjelenítés a chatfolyamban: képeknél (`image/*`) előnézeti bélyegkép, egyéb fájloknál típusikon, fájlnév, formázott méret és közvetlen letöltési link.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.

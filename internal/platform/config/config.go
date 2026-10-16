@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 // Config is the runtime configuration of the server.
@@ -22,10 +23,20 @@ type Config struct {
 	DevSeed bool
 	// SecureCookies marks the session cookie HTTPS-only (default on).
 	SecureCookies bool
+	// FilesDir is the root directory for uploaded files (default: "./data/files").
+	FilesDir string
+	// MaxUploadMB is the maximum upload size in megabytes (default: 25).
+	MaxUploadMB int
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
 func FromEnv() (Config, error) {
+	maxUpload := 25
+	if v := os.Getenv("COLONY_MAX_UPLOAD_MB"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxUpload = n
+		}
+	}
 	c := Config{
 		Role:          getenv("COLONY_ROLE", "all"),
 		HTTPAddr:      getenv("COLONY_HTTP_ADDR", ":8080"),
@@ -33,6 +44,8 @@ func FromEnv() (Config, error) {
 		DatabaseURL:   os.Getenv("COLONY_DATABASE_URL"),
 		DevSeed:       os.Getenv("COLONY_DEV_SEED") == "1",
 		SecureCookies: os.Getenv("COLONY_SECURE_COOKIES") != "0",
+		FilesDir:      getenv("COLONY_FILES_DIR", "./data/files"),
+		MaxUploadMB:   maxUpload,
 	}
 	if c.Role != "all" {
 		return c, fmt.Errorf("config: COLONY_ROLE=%q is not supported yet; use \"all\"", c.Role)

@@ -68,6 +68,14 @@ type ReactionSummary struct {
 	ActorIDs []ids.ID
 }
 
+// Attachment represents file metadata attached to a chat message.
+type Attachment struct {
+	ID   ids.ID `json:"id"`
+	Name string `json:"name"`
+	Mime string `json:"mime"`
+	Size int64  `json:"size"`
+}
+
 // Message is one chat message. Rows are append-only.
 type Message struct {
 	ID           ids.ID
@@ -83,6 +91,7 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	Reactions    []ReactionSummary // filled on reads
+	Attachments  []Attachment      // filled on reads
 }
 
 // Limits.
