@@ -460,6 +460,65 @@ A csapat közös, tartós tudását és döntéseit kezelő modul a szerveren. A
 - Audit napló események (a törzs sosem kerül az audit payloadba a méret miatt):
   - `wiki.created`, `wiki.appended`, `wiki.edited`, `wiki.deleted`, `wiki.restored` (payload: `page_id`, `slug`, `title`, `rev`, `kind`).
 
+## Git és Gitea integráció (megvalósítva, 2026-10-16)
+
+A modul (`internal/modules/git/`) célja a git tárolók, pull requestek, issue-k és commitek integrálása a csatornákkal és agentekkel, külső kódmásolás nélkül.
+
+### GitProvider port és Gitea adapter
+
+A CLAUDE.md „Bővítés = új adapter” szabálya szerint a git funkcionalitást egy független `GitProvider` port interfész határozza meg (`internal/modules/git/provider/provider.go`):
+- `ParseURL(rawURL string) (ResourceRef, bool)`
+- `ParseRef(refStr string) (ResourceRef, bool)`
+- `FetchResource(ctx context.Context, ref ResourceRef) (ResourceCard, error)`
+- `ParseWebhook(r *http.Request, secret string) (WebhookEvent, error)`
+
+Elsőként a Gitea adapter készült el (`provider/gitea.go`). Későbbi fejlesztésként a GitHub és GitLab ugyanehhez a porthoz illeszthető további kódmódosítás nélkül.
+
+### Adatmodell és táblák (`migrations/00012_git.sql`)
+
+1. **`git_link`**: gyorsítótár a kibontott hivatkozásokhoz.
+   - `url` (text primary key), `kind` (repo, pull, issue, commit), `title` (text), `state` (open, closed, merged, commit), `author` (text), `fetched_at` (timestamptz).
+2. **`git_repo_channel`**: tároló és csatorna összerendelése (munkaterületenként).
+   - `workspace_id` (uuid), `repo` (owner/repo), `channel_id` (uuid references channel), `created_at` (timestamptz).
+   - Elsődleges kulcs: `(workspace_id, repo)`.
+3. **`git_webhook_delivery`**: webhook kézbesítések idempotencia védelme.
+   - `delivery_id` (text primary key), `delivered_at` (timestamptz).
+
+### Aszinkron link kibontás (unfurl) és biztonság
+
+- A chat üzenetek küldési útvonala nem blokkolódik: a kibontást egy eseményfigyelő háttérfolyamat (`ConsumerName = "git.unfurl"`, `conversation.EventMessageCreated` eseményre) végzi aszinkron módon.
+- **SSRF védelem**: Csak a konfigurált Gitea gazdagép hostnevével egyező URL-ek kerülnek lekérdezésre. Idegen vagy belső hostokra hivatkozó URL-ek automatikusan figyelmen kívül maradnak.
+- Időtúllépés és korlátok: 5 másodperces HTTP kliens timeout, legfeljebb 1 MB válaszméret.
+- Gyorsítótárazás: a sikeres lekérdezések 10 percig élnek a `git_link` táblában; ezen belül nem indul újabb külső HTTP hívás.
+- A REST és WebSocket üzenet válaszokban a kibontott kártyák a `link_cards` tömbben jelennek meg.
+
+### Webhook integráció (`POST /api/v1/hooks/gitea`)
+
+- A beérkező kérések HMAC-SHA256 aláírását a szerver a `X-Gitea-Signature` fejléc alapján ellenőrzi (idő-állandó összehasonlítással). Érvénytelen vagy hiányzó aláírás esetén `401 Unauthorized` választ ad.
+- **Idempotencia**: a `X-Gitea-Delivery` azonosítót a `git_webhook_delivery` tábla rögzíti; újrajátszott (replay) kézbesítés esetén a szerver 200 OK-t ad, de nem küld duplikált chat üzenetet.
+- Leképezett események:
+  - `pull_request`: nyitás (`🔀 PR #num opened: title by @user`), lezárás (`🔴 PR #num closed`), merge (`🟣 PR #num merged`).
+  - `push`: ágra commit küldése (`📦 Push to branch by @user (N commit(s))`).
+  - `status`: CI állapot (`✅ CI context: success for sha`, `❌ CI context: failure`).
+- Rendszer-bot actor (`@gitea`): az eseményüzeneteket a szerver egy dedikált `@gitea` bot actor nevében posztolja a repóhoz rendelt csatornába (automatikusan felvéve tagnak a csatornába, token nélkül, ébresztés nélkül). Nem hozzárendelt repók eseményeit a rendszer hiba nélkül eldobja.
+
+### MCP eszközök (`internal/modules/git/mcptools`)
+
+- `git_status`: PR/issue URL vagy egyszerűsített referencia (`owner/repo#12` vagy `owner/repo@sha`) lekérdezése. Tömör, egysoros választ ad (cím, állapot, szerző), minimalizálva az agent context fogyasztását.
+
+### REST API végpontok
+
+- `GET /api/v1/git/mappings`: repó–csatorna hozzárendelések listázása (csak adminok).
+- `POST /api/v1/git/mappings`: hozzárendelés létrehozása vagy frissítése (`{ "repo": "owner/repo", "channel_id": "uuid" }`, csak adminok).
+- `DELETE /api/v1/git/mappings/{owner}/{repo}`: hozzárendelés törlése (csak adminok).
+- `POST /api/v1/hooks/gitea`: nyilvános Gitea webhook végpont (HMAC védelemmel).
+
+### Környezeti változók
+
+- `COLONY_GITEA_URL`: a Gitea példány báziscíme (pl. `https://git.example.com`). Ha nincs megadva, a git modul inaktív (nincs hiba, nincs link kibontás).
+- `COLONY_GITEA_TOKEN`: írásvédett API token a tárolók és PR-ek metaadatainak lekérdezéséhez.
+- `COLONY_GITEA_WEBHOOK_SECRET`: HMAC titkos kulcs a beérkező webhookok hitelesítéséhez.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.
