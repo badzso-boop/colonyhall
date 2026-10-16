@@ -9,6 +9,7 @@ import (
 
 // Reader is the narrow view other modules may use.
 type Reader interface {
+	MessageByID(ctx context.Context, id ids.ID) (Message, error)
 	MessagesByIDs(ctx context.Context, idList []ids.ID) ([]Message, error)
 	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
 	ChannelByID(ctx context.Context, id ids.ID) (Channel, error)

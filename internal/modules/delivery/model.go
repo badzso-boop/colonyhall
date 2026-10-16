@@ -27,6 +27,7 @@ func (f Flags) Has(f2 Flags) bool { return f&f2 == f2 }
 const (
 	ItemMessage      = "message"
 	ItemReactionDown = "reaction_down" // a 👎 on the recipient's message; never wakes
+	ItemAnswer       = "answer"        // answer to an agent's question; wakes
 )
 
 // Delivery is one inbox row.

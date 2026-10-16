@@ -47,6 +47,9 @@ import (
 	idhttp "colonyhall/internal/modules/identity/httpapi"
 	idmem "colonyhall/internal/modules/identity/memory"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/question"
+	qmem "colonyhall/internal/modules/question/memory"
+	qpg "colonyhall/internal/modules/question/postgres"
 	"colonyhall/internal/modules/runs"
 	runhttp "colonyhall/internal/modules/runs/httpapi"
 	runmem "colonyhall/internal/modules/runs/memory"
@@ -94,6 +97,7 @@ type App struct {
 	Schedule     *schedule.Service
 	Approval     *approval.Service
 	Wiki         *wiki.Service
+	Question     *question.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -126,6 +130,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore  schedule.Store
 		apStore  approval.Store
 		wiStore  wiki.Store
+		qStore   question.Store
 		ready    = func(context.Context) error { return nil }
 		closeAll = func() {}
 	)
@@ -138,6 +143,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore = schedmem.New()
 		apStore = appmem.New()
 		wiStore = wikimem.New()
+		qStore = qmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -155,6 +161,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		scStore = &schedpg.Store{DB: pg}
 		apStore = &apppg.Store{DB: pg}
 		wiStore = &wikipg.Store{DB: pg}
+		qStore = &qpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -169,6 +176,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	apSvc := &approval.Service{Store: apStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	wiSvc := &wiki.Service{Store: wiStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	qSvc := &question.Service{Store: qStore, Conversation: cvSvc, Directory: idSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -208,6 +216,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Schedule:     scSvc,
 		Approval:     apSvc,
 		Wiki:         wiSvc,
+		Question:     qSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,
@@ -223,6 +232,11 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		a.Schedule.Loop(ctx, 15*time.Second, a.logger.Info)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Question.Loop(ctx, 15*time.Second, a.logger.Info)
 	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)

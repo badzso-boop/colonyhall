@@ -8,6 +8,7 @@ import (
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/question"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/ids"
 )
@@ -40,6 +41,12 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
 		}
 		return s.onReaction(ctx, e, p)
+	case question.EventAnswered:
+		var p question.Event
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+		}
+		return s.onQuestionAnswered(ctx, e, p)
 	}
 	return nil
 }
@@ -69,6 +76,52 @@ func (s *Service) onReaction(ctx context.Context, e eventlog.Event, p conversati
 		ID: s.IDs.New(), WorkspaceID: e.WorkspaceID, RecipientID: author.ID, ItemKind: ItemReactionDown,
 		ItemID: msgID, ChannelID: e.ChannelID, FromActorID: e.ActorID, Flags: FlagUnread,
 		EventSeq: e.Seq, CreatedAt: s.Clock.Now(),
+	})
+	return err
+}
+
+func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p question.Event) error {
+	askerID, err := ids.Parse(p.AskedBy)
+	if err != nil {
+		return err
+	}
+	var msgID ids.ID
+	if p.AnswerMessageID != "" {
+		if parsed, err := ids.Parse(p.AnswerMessageID); err == nil {
+			msgID = parsed
+		}
+	}
+	chID := e.ChannelID
+	if chID == ids.Nil && p.ChannelID != "" {
+		if parsed, err := ids.Parse(p.ChannelID); err == nil {
+			chID = parsed
+		}
+	}
+	asker, err := s.Directory.ActorByID(ctx, askerID)
+	if err != nil {
+		return err
+	}
+	flags := FlagUnread
+	if asker.Kind == identity.KindAgent {
+		flags |= FlagWake
+	}
+	fromActorID := e.ActorID
+	if fromActorID == ids.Nil && p.AnsweredBy != "" {
+		if parsed, err := ids.Parse(p.AnsweredBy); err == nil {
+			fromActorID = parsed
+		}
+	}
+	_, err = s.Store.Insert(ctx, Delivery{
+		ID:          s.IDs.New(),
+		WorkspaceID: e.WorkspaceID,
+		RecipientID: asker.ID,
+		ItemKind:    ItemAnswer,
+		ItemID:      msgID,
+		ChannelID:   chID,
+		FromActorID: fromActorID,
+		Flags:       flags,
+		EventSeq:    e.Seq,
+		CreatedAt:   s.Clock.Now(),
 	})
 	return err
 }
@@ -137,8 +190,10 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 	}
 	msgIDs := make([]ids.ID, 0, len(ds))
 	for _, d := range ds {
-		if d.ItemKind == ItemMessage || d.ItemKind == ItemReactionDown {
-			msgIDs = append(msgIDs, d.ItemID)
+		if d.ItemKind == ItemMessage || d.ItemKind == ItemReactionDown || d.ItemKind == ItemAnswer {
+			if d.ItemID != ids.Nil {
+				msgIDs = append(msgIDs, d.ItemID)
+			}
 		}
 	}
 	msgs, err := s.Conversation.MessagesByIDs(ctx, msgIDs)
@@ -180,6 +235,10 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 		if d.FromActorID != ids.Nil {
 			item.AuthorHandle = handles[d.FromActorID]
 			item.AuthorKind = kinds[d.FromActorID]
+		}
+		if item.AuthorHandle == "" && d.ItemKind == ItemAnswer {
+			item.AuthorHandle = "system"
+			item.AuthorKind = "system"
 		}
 		if _, ok := channelNames[d.ChannelID]; !ok {
 			ch, err := s.Conversation.ChannelByID(ctx, d.ChannelID)

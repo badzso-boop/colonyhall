@@ -414,6 +414,11 @@ func (s *Service) CanRead(ctx context.Context, by identity.Actor, channelID ids.
 	return policy.CanReadChannel(subject(by), mem), nil
 }
 
+// MessageByID implements Reader.
+func (s *Service) MessageByID(ctx context.Context, id ids.ID) (Message, error) {
+	return s.Store.MessageByID(ctx, id)
+}
+
 // MessagesByIDs implements Reader.
 func (s *Service) MessagesByIDs(ctx context.Context, idList []ids.ID) ([]Message, error) {
 	return s.Store.MessagesByIDs(ctx, idList)
