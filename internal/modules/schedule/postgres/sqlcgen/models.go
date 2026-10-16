@@ -35,6 +35,7 @@ type AgentHost struct {
 	Mode           string
 	RootDir        string
 	Sandbox        bool
+	Approvals      string
 }
 
 type ApiToken struct {
@@ -46,6 +47,22 @@ type ApiToken struct {
 	RevokedAt *time.Time
 	HostID    *uuid.UUID
 	ExpiresAt *time.Time
+}
+
+type ApprovalRequest struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	AgentID         uuid.UUID
+	ChannelID       uuid.UUID
+	ThreadRootID    *uuid.UUID
+	ToolName        string
+	Input           string
+	State           string
+	DecidedBy       *uuid.UUID
+	DecisionMessage string
+	CreatedAt       time.Time
+	DecidedAt       *time.Time
+	ExpiresAt       time.Time
 }
 
 type AuditLog struct {

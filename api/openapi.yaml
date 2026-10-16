@@ -474,6 +474,27 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunError" } } } }
 
+  /approvals/{approvalId}:
+    parameters:
+      - { name: approvalId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getApproval
+      tags: [approval]
+      description: Humans only. Details of a tool approval request referenced in the chat.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ApprovalRequest" } } } }
+    post:
+      operationId: decideApproval
+      tags: [approval]
+      description: Humans only. Decide on a pending approval request (allow or deny).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DecideApprovalRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Decided, content: { application/json: { schema: { $ref: "#/components/schemas/ApprovalRequest" } } } }
+
   /schedules:
     get:
       operationId: listSchedules
@@ -889,7 +910,7 @@ components:
         outside_roots: { type: boolean, description: "Only when created: the path is outside the roots the host reported" }
     HostAgent:
       type: object
-      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, grants]
+      required: [agent_id, handle, host_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, sandbox, approvals, grants]
       properties:
         agent_id: { type: string, format: uuid }
         handle: { type: string }
@@ -902,6 +923,7 @@ components:
         mode: { type: string, enum: [direct, compact] }
         root_dir: { type: string }
         sandbox: { type: boolean }
+        approvals: { type: string, enum: [none, chat] }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -916,6 +938,7 @@ components:
         mode: { type: string, enum: [direct, compact] }
         root_dir: { type: string, maxLength: 1024 }
         sandbox: { type: boolean }
+        approvals: { type: string, enum: [none, chat] }
     GrantRequest:
       type: object
       required: [path, mode]
@@ -1009,3 +1032,31 @@ components:
       required: [schedules]
       properties:
         schedules: { type: array, items: { $ref: "#/components/schemas/Schedule" } }
+    ApprovalState:
+      type: string
+      enum: [pending, allowed, denied, expired]
+    ApprovalDecision:
+      type: string
+      enum: [allow, deny]
+    DecideApprovalRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { $ref: "#/components/schemas/ApprovalDecision" }
+        message: { type: string, maxLength: 500 }
+    ApprovalRequest:
+      type: object
+      required: [id, agent_id, channel_id, tool_name, input, state, created_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        tool_name: { type: string }
+        input: { type: string }
+        state: { $ref: "#/components/schemas/ApprovalState" }
+        decided_by: { type: string, format: uuid }
+        decision_message: { type: string }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }

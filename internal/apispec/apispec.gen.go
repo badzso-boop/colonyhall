@@ -27,6 +27,66 @@ func (e ActorKind) Valid() bool {
 	}
 }
 
+// Defines values for ApprovalDecision.
+const (
+	Allow ApprovalDecision = "allow"
+	Deny  ApprovalDecision = "deny"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalDecision enum.
+func (e ApprovalDecision) Valid() bool {
+	switch e {
+	case Allow:
+		return true
+	case Deny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApprovalState.
+const (
+	Allowed ApprovalState = "allowed"
+	Denied  ApprovalState = "denied"
+	Expired ApprovalState = "expired"
+	Pending ApprovalState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalState enum.
+func (e ApprovalState) Valid() bool {
+	switch e {
+	case Allowed:
+		return true
+	case Denied:
+		return true
+	case Expired:
+		return true
+	case Pending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AssignRequestApprovals.
+const (
+	AssignRequestApprovalsChat AssignRequestApprovals = "chat"
+	AssignRequestApprovalsNone AssignRequestApprovals = "none"
+)
+
+// Valid indicates whether the value is a known member of the AssignRequestApprovals enum.
+func (e AssignRequestApprovals) Valid() bool {
+	switch e {
+	case AssignRequestApprovalsChat:
+		return true
+	case AssignRequestApprovalsNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AssignRequestClient.
 const (
 	AssignRequestClientAntigravity AssignRequestClient = "antigravity"
@@ -150,6 +210,24 @@ func (e HostState) Valid() bool {
 	case HostStateApproved:
 		return true
 	case HostStateRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostAgentApprovals.
+const (
+	HostAgentApprovalsChat HostAgentApprovals = "chat"
+	HostAgentApprovalsNone HostAgentApprovals = "none"
+)
+
+// Valid indicates whether the value is a known member of the HostAgentApprovals enum.
+func (e HostAgentApprovals) Valid() bool {
+	switch e {
+	case HostAgentApprovalsChat:
+		return true
+	case HostAgentApprovalsNone:
 		return true
 	default:
 		return false
@@ -379,18 +457,44 @@ type AgentToken struct {
 	Token     string    `json:"token"`
 }
 
+// ApprovalDecision defines model for ApprovalDecision.
+type ApprovalDecision string
+
+// ApprovalRequest defines model for ApprovalRequest.
+type ApprovalRequest struct {
+	AgentId         openapi_types.UUID  `json:"agent_id"`
+	ChannelId       openapi_types.UUID  `json:"channel_id"`
+	CreatedAt       time.Time           `json:"created_at"`
+	DecidedAt       *time.Time          `json:"decided_at,omitempty"`
+	DecidedBy       *openapi_types.UUID `json:"decided_by,omitempty"`
+	DecisionMessage *string             `json:"decision_message,omitempty"`
+	ExpiresAt       time.Time           `json:"expires_at"`
+	Id              openapi_types.UUID  `json:"id"`
+	Input           string              `json:"input"`
+	State           ApprovalState       `json:"state"`
+	ThreadRootId    *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	ToolName        string              `json:"tool_name"`
+}
+
+// ApprovalState defines model for ApprovalState.
+type ApprovalState string
+
 // AssignRequest defines model for AssignRequest.
 type AssignRequest struct {
-	AllowWork      *bool               `json:"allow_work,omitempty"`
-	Client         AssignRequestClient `json:"client"`
-	HostId         openapi_types.UUID  `json:"host_id"`
-	Mode           *AssignRequestMode  `json:"mode,omitempty"`
-	Model          *string             `json:"model,omitempty"`
-	PermissionMode *string             `json:"permission_mode,omitempty"`
-	RootDir        *string             `json:"root_dir,omitempty"`
-	Sandbox        *bool               `json:"sandbox,omitempty"`
-	WorkModel      *string             `json:"work_model,omitempty"`
+	AllowWork      *bool                   `json:"allow_work,omitempty"`
+	Approvals      *AssignRequestApprovals `json:"approvals,omitempty"`
+	Client         AssignRequestClient     `json:"client"`
+	HostId         openapi_types.UUID      `json:"host_id"`
+	Mode           *AssignRequestMode      `json:"mode,omitempty"`
+	Model          *string                 `json:"model,omitempty"`
+	PermissionMode *string                 `json:"permission_mode,omitempty"`
+	RootDir        *string                 `json:"root_dir,omitempty"`
+	Sandbox        *bool                   `json:"sandbox,omitempty"`
+	WorkModel      *string                 `json:"work_model,omitempty"`
 }
+
+// AssignRequestApprovals defines model for AssignRequest.Approvals.
+type AssignRequestApprovals string
 
 // AssignRequestClient defines model for AssignRequest.Client.
 type AssignRequestClient string
@@ -487,6 +591,12 @@ type CreateScheduleRequest struct {
 // CreateScheduleRequestCatchUp Missed while the server was down: run once (within 12 h) or skip
 type CreateScheduleRequestCatchUp string
 
+// DecideApprovalRequest defines model for DecideApprovalRequest.
+type DecideApprovalRequest struct {
+	Decision ApprovalDecision `json:"decision"`
+	Message  *string          `json:"message,omitempty"`
+}
+
 // EmergencyClearRequest defines model for EmergencyClearRequest.
 type EmergencyClearRequest struct {
 	Password string `json:"password"`
@@ -554,6 +664,7 @@ type HostState string
 type HostAgent struct {
 	AgentId        openapi_types.UUID `json:"agent_id"`
 	AllowWork      bool               `json:"allow_work"`
+	Approvals      HostAgentApprovals `json:"approvals"`
 	Client         HostAgentClient    `json:"client"`
 	Grants         []FolderGrant      `json:"grants"`
 	Handle         string             `json:"handle"`
@@ -565,6 +676,9 @@ type HostAgent struct {
 	Sandbox        bool               `json:"sandbox"`
 	WorkModel      string             `json:"work_model"`
 }
+
+// HostAgentApprovals defines model for HostAgent.Approvals.
+type HostAgentApprovals string
 
 // HostAgentClient defines model for HostAgent.Client.
 type HostAgentClient string
@@ -882,6 +996,9 @@ type AddGrantJSONRequestBody = GrantRequest
 
 // AssignAgentJSONRequestBody defines body for AssignAgent for application/json ContentType.
 type AssignAgentJSONRequestBody = AssignRequest
+
+// DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
+type DecideApprovalJSONRequestBody = DecideApprovalRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
