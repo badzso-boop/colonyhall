@@ -47,6 +47,10 @@ WantedBy=default.target
 // systemdQuote quotes a path with double quotes if it contains spaces, tabs,
 // newlines, or quotes, escaping inner backslashes and double quotes.
 func systemdQuote(s string) string {
+	// systemd expands %-specifiers and $VARIABLES in these lines; a path
+	// containing them must be escaped or it changes meaning.
+	s = strings.ReplaceAll(s, "%", "%%")
+	s = strings.ReplaceAll(s, "$", "$$")
 	if strings.ContainsAny(s, " \t\r\n\"") {
 		escaped := strings.ReplaceAll(s, `\`, `\\`)
 		escaped = strings.ReplaceAll(escaped, `"`, `\"`)

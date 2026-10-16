@@ -154,3 +154,15 @@ roots:
 		t.Fatalf("Install with force failed: %v", err)
 	}
 }
+
+// TestUnitEscapesSystemdSpecifiers: % and $ in a path would otherwise be
+// expanded by systemd and point the service somewhere else.
+func TestUnitEscapesSystemdSpecifiers(t *testing.T) {
+	unit, err := GenerateUnit("/opt/my%happ/colony", "/home/u/$HOME/guard.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(unit, "/opt/my%%happ/colony") || !strings.Contains(unit, "/home/u/$$HOME/guard.yaml") {
+		t.Fatalf("not escaped:\n%s", unit)
+	}
+}
