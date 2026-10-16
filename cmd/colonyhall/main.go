@@ -90,8 +90,15 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, Logger: logger,
-		SecureCookies: cfg.SecureCookies})
+	app, err := server.New(ctx, server.Options{
+		Store:              cfg.Store,
+		DatabaseURL:        cfg.DatabaseURL,
+		Logger:             logger,
+		SecureCookies:      cfg.SecureCookies,
+		GiteaURL:           cfg.GiteaURL,
+		GiteaToken:         cfg.GiteaToken,
+		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
+	})
 	if err != nil {
 		return err
 	}
