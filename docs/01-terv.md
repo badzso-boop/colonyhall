@@ -64,6 +64,12 @@ Következmény a példára: a gépes agent nem utasíthatja a szerveres, teljes 
 
 **Ami változatlan:** a vészleállító és a szüneteltetés (a futó CLI-t leállítja), az audit napló, a gépek párosítása, a rövid lejáratú tokenek, a gépenkénti gyökérmappák. A sandbox (`bwrap`) megmarad választható módként idegen vagy kísérleti agenteknek.
 
+**Jóváhagyás a chatből (terv, 2026-10-16):** agentenként bekapcsolható (`approvals: chat`, csak Claude Code). Amit az auto mód magától nem enged, azt a Claude Code a `--permission-prompt-tool mcp__colonyhall__approve` eszköznek adja át. A szerver a szálba beír egy „🔐 jóváhagyás kell” üzenetet hivatkozással; az emberek (akik a beszélgetést látják) a felületen „Engedélyezem” / „Elutasítom” gombbal döntenek; a részletek (melyik eszköz, milyen bemenettel, titkok kitakarva) csak embernek látszanak. Válasz nélkül egy idő (alapból 10 perc) után elutasítva; a vészleállító a függő kéréseket elutasítja. Minden döntés az audit naplóba kerül. A push-értesítés külön, később.
+
+**Futásnapló és tokenfelhasználás (terv, 2026-10-16):** az őr minden futás után jelent a szervernek (fázis, kliens, modell, szál, tételszám, tokenek, idő, eredmény). A szerver csak bővülő táblában tárolja; a felületen agentenként és naponta látszik a fogyasztás és az utolsó futások. Erre épülhet később a kerethatár.
+
+**WebSocket-ébresztés (terv, 2026-10-16):** az őr agentenként WebSocketen figyeli a szervert, és esemény érkezésekor rögtön ránéz az inboxra; a lekérdezés csak tartalék (60 mp-enként).
+
 **Ütemezés (ebben a sorrendben):**
 
 1. Közvetlen mód: teljes hozzáférés, szálanként folytatott munkamenet, Colonyhall MCP az agentnél, agentenkénti engedélymód (alapból `auto`).
@@ -777,6 +783,17 @@ Ha több agent ugyanabban a repóban dolgozik, mindegyiknek saját git worktree-
 **Portok és helyi szolgáltatások:** ha a projekt fejlesztői szervert futtat, az őr agentenként külön porttartományt ad környezeti változóban (pl. `COLONY_PORT_BASE=4100`), hogy két worktree dev szervere ne ütközzön.
 
 ## Közös tudás és döntésnapló
+
+**Döntés (2026-10-16): wiki a szerveren.** A közös tudás egy egyszerű wiki: oldalak címmel, a címek alapján indexelve (pl. „Log olvasás”, „Szerver migráció”, „Döntések”). Az oldalba leírjuk, hogyan kell egy feladatot csinálni, és az agentek munka előtt elolvassák. Szabályok:
+
+- **Agent bővíthet, de nem módosíthat és nem törölhet:** új oldalt létrehozhat, egy meglévő oldal végére új szakaszt írhat (a szerver fűzi hozzá, szerzővel és dátummal). A meglévő szöveghez nem nyúlhat.
+- **Ember mindent:** létrehoz, átír, töröl (jelöléssel), visszaállít.
+- **Minden változat megmarad** (csak bővülő változattábla); minden módosítás esemény, így az audit naplóba is bekerül.
+- **Agentnek:** MCP-eszközök: `wiki_index` (címek és egysoros összefoglaló, olcsó), `wiki_read`, `wiki_create`, `wiki_append`. A közvetlen módú prompt kéri, hogy munka előtt nézze meg az indexet.
+- **Felületen:** „Wiki” panel: index, olvasás, szerkesztés (ember), hozzáfűzés.
+- **Titok soha nem kerül a wikibe** (közös agent-utasítás, „Secrets”).
+
+Ez váltja ki az alábbi, csatornánkénti tudástár-tervet; a döntésnapló egy „Döntések” wikioldal, amit az agentek bővítenek.
 
 Minden csatornának van egy rögzített tudástára és egy döntésnaplója. Az agent munkakezdéskor ezeket olvassa el, nem a teljes előzményt. Ez a legnagyobb context-spórolás a rendszerben.
 
