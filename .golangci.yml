@@ -107,6 +107,10 @@ linters:
             - pkg: colonyhall/internal/modules/notes/memory
             - pkg: colonyhall/internal/modules/notes/httpapi
             - pkg: colonyhall/internal/modules/notes/mcptools
+            - pkg: colonyhall/internal/modules/decision/postgres
+            - pkg: colonyhall/internal/modules/decision/memory
+            - pkg: colonyhall/internal/modules/decision/httpapi
+            - pkg: colonyhall/internal/modules/decision/mcptools
             - pkg: colonyhall/internal/server
               desc: only cmd/ may use the composition root
 

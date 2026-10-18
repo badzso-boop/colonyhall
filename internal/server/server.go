@@ -38,6 +38,11 @@ import (
 	convmcp "colonyhall/internal/modules/conversation/mcptools"
 	convmem "colonyhall/internal/modules/conversation/memory"
 	convpg "colonyhall/internal/modules/conversation/postgres"
+	"colonyhall/internal/modules/decision"
+	dechttp "colonyhall/internal/modules/decision/httpapi"
+	decmcp "colonyhall/internal/modules/decision/mcptools"
+	decmem "colonyhall/internal/modules/decision/memory"
+	decpg "colonyhall/internal/modules/decision/postgres"
 	"colonyhall/internal/modules/delivery"
 	delhttp "colonyhall/internal/modules/delivery/httpapi"
 	delmcp "colonyhall/internal/modules/delivery/mcptools"
@@ -145,6 +150,7 @@ type App struct {
 	Preview      *preview.Service
 	AgentRules   *agentrules.Service
 	Notes        *notes.Service
+	Decisions    *decision.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -186,6 +192,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore        preview.Store
 		rlStore        agentrules.Store
 		ntStore        notes.Store
+		dcStore        decision.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -203,6 +210,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = previewmem.New()
 		rlStore = rulesmem.New()
 		ntStore = notesmem.New()
+		dcStore = decmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -235,6 +243,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = &previewpg.Store{DB: pg}
 		rlStore = &rulespg.Store{DB: pg}
 		ntStore = &notespg.Store{DB: pg}
+		dcStore = &decpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -311,6 +320,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Clock:     opt.Clock,
 	}
 	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock)
+	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -335,6 +345,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	githttp.Register(mux, gitSvc, idSvc)
 	ruleshttp.Register(mux, rlSvc, idSvc)
 	noteshttp.Register(mux, ntSvc, idSvc)
+	dechttp.Register(mux, dcSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -346,6 +357,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		gitmcp.Register(s, gitSvc, current)
 		previewmcp.Register(s, prSvc, current)
 		notesmcp.Register(s, ntSvc, current, r)
+		decmcp.Register(s, dcSvc, current, r)
 	}, rlSvc.InstructionsForActor, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -369,6 +381,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Preview:      prSvc,
 		AgentRules:   rlSvc,
 		Notes:        ntSvc,
+		Decisions:    dcSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

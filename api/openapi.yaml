@@ -452,6 +452,21 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotesResponse" } } }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /decisions:
+    get:
+      operationId: listDecisions
+      tags: [decisions]
+      description: List recent decisions in the workspace (humans only).
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 20 } }
+        - { name: query, in: query, required: false, schema: { type: string } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of decisions
+          content: { application/json: { schema: { $ref: "#/components/schemas/DecisionsResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /grants/{grantId}:
     parameters:
       - { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1825,4 +1840,31 @@ components:
         thread_root_id: { type: string, format: uuid }
         text: { type: string, maxLength: 2000 }
         created_at: { type: string, format: date-time }
+
+    DecisionsResponse:
+      type: object
+      required: [decisions]
+      properties:
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Decision"
+
+    Decision:
+      type: object
+      required: [id, number, formatted_number, workspace_id, author_id, channel_id, text, rationale, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer }
+        formatted_number: { type: string, example: "D-12" }
+        workspace_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        text: { type: string, maxLength: 300 }
+        rationale: { type: string, maxLength: 500 }
+        supersedes: { type: integer, nullable: true }
+        superseded_by: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+
 

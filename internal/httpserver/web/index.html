@@ -1199,6 +1199,31 @@ async function renderWikiIndex(q = wikiQuery) {
   top.append(el("div", { className: "row" }, searchInput, searchBtn, newBtn), newForm);
   panel.append(top);
 
+  const decBox = el("div", { className: "card", style: "margin-bottom:12px;" });
+  decBox.append(
+    el("div", { className: "row", style: "justify-content:space-between; align-items:center;" },
+      el("h3", { style: "margin:0;", textContent: "⚖️ Döntések (Decisions)" }),
+      el("button", { textContent: "Döntések wiki oldal", onclick: () => renderWikiPage("dontesek") })
+    )
+  );
+  const decRes = await api("/api/v1/decisions?limit=5").catch(() => null);
+  if (decRes && decRes.decisions && decRes.decisions.length > 0) {
+    const list = el("div", { style: "margin-top:8px; display:flex; flex-direction:column; gap:6px;" });
+    for (const d of decRes.decisions) {
+      const item = el("div", { style: "font-size:13px;" },
+        el("strong", { textContent: d.formatted_number + ": " }),
+        el("span", { textContent: d.text }),
+        d.superseded_by ? el("span", { className: "badge warn", style: "margin-left:6px;", textContent: "felülírva: D-" + d.superseded_by }) : null,
+        el("div", { className: "muted", style: "font-size:11px;", textContent: "Indok: " + d.rationale })
+      );
+      list.append(item);
+    }
+    decBox.append(list);
+  } else {
+    decBox.append(el("p", { className: "muted", style: "margin-top:6px;", textContent: "Nincs még rögzített döntés." }));
+  }
+  panel.append(decBox);
+
   const res = await api(`/api/v1/wiki?q=${encodeURIComponent(q)}&deleted=1`).catch(err => {
     panel.append(el("div", { className: "warn", textContent: err.message }));
     return null;

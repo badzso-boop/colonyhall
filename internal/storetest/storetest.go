@@ -15,6 +15,7 @@ import (
 	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/decision"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/git"
@@ -49,6 +50,7 @@ type Backend struct {
 	Preview      preview.Store
 	AgentRules   agentrules.Store
 	Notes        notes.Store
+	Decisions    decision.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -69,6 +71,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
 	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })
 	t.Run("notes", func(t *testing.T) { testNotes(t, newBackend(t)) })
+	t.Run("decisions", func(t *testing.T) { testDecisions(t, newBackend(t)) })
 }
 
 var (
@@ -1816,5 +1819,113 @@ func testNotes(t *testing.T, b Backend) {
 	must(t, err)
 	if len(threadNotes) != 2 || threadNotes[0].ID != n2.ID || threadNotes[1].ID != n1.ID {
 		t.Fatalf("unexpected thread notes: %+v", threadNotes)
+	}
+}
+
+func testDecisions(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Decisions
+
+	// 1. NextNumber on empty workspace returns 1
+	n1, err := st.NextNumber(ctx, f.ws.ID)
+	must(t, err)
+	if n1 != 1 {
+		t.Fatalf("expected next number 1, got %d", n1)
+	}
+
+	// 2. Insert decision D-1
+	d1 := decision.Decision{
+		ID:          gen.New(),
+		Number:      1,
+		WorkspaceID: f.ws.ID,
+		AuthorID:    f.human.ID,
+		ChannelID:   f.channel.ID,
+		Text:        "Use PostgreSQL as primary database",
+		Rationale:   "ACID compliance and relational integrity needed",
+		CreatedAt:   t0,
+	}
+	must(t, st.Insert(ctx, d1))
+
+	// 3. NextNumber is now 2
+	n2, err := st.NextNumber(ctx, f.ws.ID)
+	must(t, err)
+	if n2 != 2 {
+		t.Fatalf("expected next number 2, got %d", n2)
+	}
+
+	// 4. Duplicate (workspace_id, number) returns conflict
+	err = st.Insert(ctx, decision.Decision{
+		ID:          gen.New(),
+		Number:      1,
+		WorkspaceID: f.ws.ID,
+		AuthorID:    f.human.ID,
+		ChannelID:   f.channel.ID,
+		Text:        "duplicate",
+		Rationale:   "duplicate",
+		CreatedAt:   t0,
+	})
+	if !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("expected conflict on duplicate number, got %v", err)
+	}
+
+	// 5. Insert decision D-2 that supersedes D-1
+	sup := 1
+	d2 := decision.Decision{
+		ID:          gen.New(),
+		Number:      2,
+		WorkspaceID: f.ws.ID,
+		AuthorID:    f.agent.ID,
+		ChannelID:   f.channel.ID,
+		Text:        "Use CockroachDB for multi-region scale",
+		Rationale:   "PostgreSQL does not support multi-region active-active out of the box",
+		Supersedes:  &sup,
+		CreatedAt:   t0.Add(time.Hour),
+	}
+	must(t, st.Insert(ctx, d2))
+
+	// 6. GetByNumber for D-1 should show SupersededBy = 2
+	got1, err := st.GetByNumber(ctx, f.ws.ID, 1)
+	must(t, err)
+	if got1.SupersededBy == nil || *got1.SupersededBy != 2 {
+		t.Fatalf("expected D-1 to be superseded by 2, got %+v", got1.SupersededBy)
+	}
+
+	// GetByNumber for D-2 should show SupersededBy == nil
+	got2, err := st.GetByNumber(ctx, f.ws.ID, 2)
+	must(t, err)
+	if got2.SupersededBy != nil {
+		t.Fatalf("expected D-2 to not be superseded, got %+v", got2.SupersededBy)
+	}
+	if got2.Supersedes == nil || *got2.Supersedes != 1 {
+		t.Fatalf("expected D-2 to supersede 1, got %+v", got2.Supersedes)
+	}
+
+	// 7. List validOnly: true -> returns only D-2
+	validList, err := st.List(ctx, f.ws.ID, 10, "", true)
+	must(t, err)
+	if len(validList) != 1 || validList[0].Number != 2 {
+		t.Fatalf("expected only D-2 in valid list, got %+v", validList)
+	}
+
+	// List validOnly: false -> returns D-2 and D-1 (newest first)
+	allList, err := st.List(ctx, f.ws.ID, 10, "", false)
+	must(t, err)
+	if len(allList) != 2 || allList[0].Number != 2 || allList[1].Number != 1 {
+		t.Fatalf("expected D-2 and D-1 in all list, got %+v", allList)
+	}
+
+	// Query filter: "PostgreSQL" matches both (D-1 text and D-2 rationale)
+	qList, err := st.List(ctx, f.ws.ID, 10, "PostgreSQL", false)
+	must(t, err)
+	if len(qList) != 2 {
+		t.Fatalf("expected 2 matches for 'PostgreSQL', got %d", len(qList))
+	}
+
+	// Query filter: "CockroachDB" matches only D-2
+	qList2, err := st.List(ctx, f.ws.ID, 10, "CockroachDB", false)
+	must(t, err)
+	if len(qList2) != 1 || qList2[0].Number != 2 {
+		t.Fatalf("expected 1 match for 'CockroachDB', got %+v", qList2)
 	}
 }

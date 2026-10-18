@@ -941,6 +941,29 @@ type DecideApprovalRequest struct {
 	Message  *string          `json:"message,omitempty"`
 }
 
+// Decision defines model for Decision.
+type Decision struct {
+	AuthorId  openapi_types.UUID `json:"author_id"`
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	CreatedAt time.Time          `json:"created_at"`
+
+	// FormattedNumber Example: D-12
+	FormattedNumber string              `json:"formatted_number"`
+	Id              openapi_types.UUID  `json:"id"`
+	Number          int                 `json:"number"`
+	Rationale       string              `json:"rationale"`
+	SupersededBy    *int                `json:"superseded_by,omitempty"`
+	Supersedes      *int                `json:"supersedes,omitempty"`
+	Text            string              `json:"text"`
+	ThreadRootId    *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	WorkspaceId     openapi_types.UUID  `json:"workspace_id"`
+}
+
+// DecisionsResponse defines model for DecisionsResponse.
+type DecisionsResponse struct {
+	Decisions []Decision `json:"decisions"`
+}
+
 // EditWikiPageRequest defines model for EditWikiPageRequest.
 type EditWikiPageRequest struct {
 	BaseRev int       `json:"base_rev"`
@@ -1623,6 +1646,12 @@ type ListMessagesParams struct {
 	// Before Return messages older than this message ID
 	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListDecisionsParams defines parameters for ListDecisions.
+type ListDecisionsParams struct {
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Query *string `form:"query,omitempty" json:"query,omitempty"`
 }
 
 // ListPreviewsParams defines parameters for ListPreviews.

@@ -152,6 +152,19 @@ type Credential struct {
 	UpdatedAt    time.Time
 }
 
+type Decision struct {
+	ID           uuid.UUID
+	Number       int32
+	WorkspaceID  uuid.UUID
+	AuthorID     uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Text         string
+	Rationale    string
+	Supersedes   *int32
+	CreatedAt    time.Time
+}
+
 type Delivery struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
