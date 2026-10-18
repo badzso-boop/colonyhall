@@ -51,13 +51,24 @@ func TestParseDecision(t *testing.T) {
 }
 
 type fakeRunner struct {
-	name   string
-	args   []string
-	env    []string
-	stdout string
+	name       string
+	args       []string
+	env        []string
+	stdout     string
+	helpStdout string
+	noHelp     bool
 }
 
 func (f *fakeRunner) run(_ context.Context, _ string, name string, args []string, env []string) ([]byte, []byte, error) {
+	if slices.Contains(args, "--help") {
+		if f.noHelp {
+			return []byte("Usage: claude [options]\n"), nil, nil
+		}
+		if f.helpStdout != "" {
+			return []byte(f.helpStdout), nil, nil
+		}
+		return []byte("Usage: claude [options]\n  --append-system-prompt <prompt>  Append system prompt\n"), nil, nil
+	}
 	f.name, f.args, f.env = name, args, env
 	return []byte(f.stdout), nil, nil
 }

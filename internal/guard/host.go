@@ -404,6 +404,11 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		ExchangeDir:  s.Cfg.ExchangeDir,
 		ExchangeOK:   s.exchangeOK,
 		WorktreeRepo: ha.WorktreeRepo,
+		HostConfigVersion: func() string {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			return s.version
+		},
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch

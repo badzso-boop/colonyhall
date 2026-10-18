@@ -54,7 +54,11 @@ func (a *Antigravity) Decide(ctx context.Context, req DecideRequest) (RunResult,
 
 // Work implements Adapter.
 func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
-	args := []string{"-p", req.Prompt, "--output-format", "json"}
+	prompt := req.Prompt
+	if req.Rules != "" {
+		prompt = fmt.Sprintf("<colonyhall_rules version=\"%d\">\n%s\n</colonyhall_rules>\n\n", req.RulesVersion, req.Rules) + prompt
+	}
+	args := []string{"-p", prompt, "--output-format", "json"}
 	mode := req.PermissionMode
 	if req.NoExec {
 		mode = "accept-edits" // sandboxed: file edits yes, nothing that bypasses permissions
@@ -71,7 +75,11 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 
 // Direct implements Adapter.
 func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult, error) {
-	args := []string{"-p", req.Prompt}
+	prompt := req.Prompt
+	if req.Rules != "" {
+		prompt = fmt.Sprintf("<colonyhall_rules version=\"%d\">\n%s\n</colonyhall_rules>\n\n", req.RulesVersion, req.Rules) + prompt
+	}
+	args := []string{"-p", prompt}
 	if req.ConversationID != "" {
 		args = append(args, "--conversation", req.ConversationID)
 	}

@@ -393,3 +393,16 @@ func (c *Client) ReportPreview(ctx context.Context, previewID, state, url, errSt
 	}
 	return c.do(ctx, http.MethodPost, "/api/v1/host/previews/"+previewID, in, nil)
 }
+
+// AgentInstructions represents the rendered instructions for the calling agent.
+type AgentInstructions struct {
+	Version int    `json:"version"`
+	Text    string `json:"text"`
+}
+
+// Instructions fetches the agent's instructions (rendered rules).
+func (c *Client) Instructions(ctx context.Context) (AgentInstructions, error) {
+	var inst AgentInstructions
+	err := c.do(ctx, http.MethodGet, "/api/v1/agent/instructions", nil, &inst)
+	return inst, err
+}

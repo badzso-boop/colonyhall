@@ -61,6 +61,15 @@ type Agent struct {
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
 
+	// HostConfigVersion, when set (host mode), returns the host config version.
+	HostConfigVersion func() string
+
+	rulesMu             sync.Mutex
+	cachedRulesVer      int
+	cachedRulesText     string
+	cachedRulesAt       time.Time
+	cachedHostConfigVer string
+
 	halted   atomic.Bool
 	me       Me
 	handles  map[string]string
@@ -389,6 +398,51 @@ func (a *Agent) StopWork() {
 	}
 }
 
+// fetchRules fetches the agent's instructions (rendered rules) from the server,
+// caching it and refetching when the host config version changes or every 10 minutes.
+// On error, the last good text is kept; if none, it runs without rules and logs a warning.
+func (a *Agent) fetchRules(ctx context.Context) (int, string) {
+	a.rulesMu.Lock()
+	defer a.rulesMu.Unlock()
+
+	var curHostVer string
+	if a.HostConfigVersion != nil {
+		curHostVer = a.HostConfigVersion()
+	}
+
+	needsFetch := a.cachedRulesAt.IsZero() ||
+		a.now().Sub(a.cachedRulesAt) >= 10*time.Minute ||
+		(curHostVer != "" && curHostVer != a.cachedHostConfigVer)
+
+	if !needsFetch {
+		return a.cachedRulesVer, a.cachedRulesText
+	}
+
+	if a.Client == nil {
+		return a.cachedRulesVer, a.cachedRulesText
+	}
+
+	inst, err := a.Client.Instructions(ctx)
+	if err != nil {
+		if a.cachedRulesText != "" || a.cachedRulesVer > 0 {
+			if a.Log != nil {
+				a.Log.Warn("guard: cannot fetch agent instructions, using cached rules", "agent", "@"+a.me.Handle, "err", err)
+			}
+			return a.cachedRulesVer, a.cachedRulesText
+		}
+		if a.Log != nil {
+			a.Log.Warn("guard: cannot fetch agent instructions, running without rules", "agent", "@"+a.me.Handle, "err", err)
+		}
+		return 0, ""
+	}
+
+	a.cachedRulesVer = inst.Version
+	a.cachedRulesText = inst.Text
+	a.cachedRulesAt = a.now()
+	a.cachedHostConfigVer = curHostVer
+	return a.cachedRulesVer, a.cachedRulesText
+}
+
 func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	p := a.policy()
 	if !p.Allowed {
@@ -407,6 +461,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	if err := halted(a.Client.React(ctx, it.ItemID, "👀")); err != nil {
 		return err
 	}
+	rulesVer, rulesText := a.fetchRules(ctx)
 	wctx, cancel := context.WithTimeout(ctx, a.Cfg.WorkTimeout)
 	a.workMu.Lock()
 	a.workCancel = cancel
@@ -414,6 +469,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	res, err := a.Adapter.Work(wctx, WorkRequest{
 		Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
 		AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
+		Rules: rulesText, RulesVersion: rulesVer,
 	})
 	stopped := errors.Is(wctx.Err(), context.Canceled)
 	cancel()
