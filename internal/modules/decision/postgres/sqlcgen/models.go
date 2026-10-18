@@ -260,6 +260,18 @@ type HostPairingCode struct {
 	UsedAt      *time.Time
 }
 
+type Lease struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Resource    string
+	HolderID    uuid.UUID
+	Note        *string
+	AcquiredAt  time.Time
+	ExpiresAt   time.Time
+	ReleasedAt  *time.Time
+	ReleasedBy  *uuid.UUID
+}
+
 type Message struct {
 	ID           uuid.UUID
 	WorkspaceID  uuid.UUID

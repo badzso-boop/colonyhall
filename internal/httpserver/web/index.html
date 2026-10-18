@@ -49,8 +49,8 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel, #rulesPanel { overflow:auto; padding:12px 16px; display:none; }
-  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on, #rulesPanel.on { display:block; } #feed.off { display:none; }
+  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel, #rulesPanel, #leasesPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on, #rulesPanel.on, #leasesPanel.on { display:block; } #feed.off { display:none; }
   table.tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
   table.tbl th, table.tbl td { padding:6px 8px; border:1px solid var(--line); text-align:left; }
   table.tbl th { background:var(--bg); font-weight:600; }
@@ -81,7 +81,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="questionsbtn" hidden>❓ Válaszra vár</button><button id="wikibtn" hidden>📖 Wiki</button><button id="rulesbtn" hidden>📜 Szabályok</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="questionsbtn" hidden>❓ Válaszra vár</button><button id="wikibtn" hidden>📖 Wiki</button><button id="rulesbtn" hidden>📜 Szabályok</button><button id="leasesbtn" hidden>🔒 Foglalások</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -94,6 +94,7 @@
     <div id="wikiPanel"></div>
     <div id="questionsPanel"></div>
     <div id="rulesPanel"></div>
+    <div id="leasesPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <div id="attachedFiles"></div>
@@ -130,7 +131,8 @@ const I18N = {
         dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):",
         giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás",
         previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
-        agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények" },
+        agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények",
+        leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -151,7 +153,8 @@ const I18N = {
         dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):",
         giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add",
         previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
-        agentRules: "Agent rules", save: "Save", version: "Version", history: "History" },
+        agentRules: "Agent rules", save: "Save", version: "Version", history: "History",
+        leases: "Leases", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -447,12 +450,13 @@ $("hostsbtn").textContent = L.hosts;
 let openPanel = null;
 function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
-  for (const p of ["hosts", "sched", "runs", "wiki", "questions", "rules"]) $(p + "Panel").className = openPanel === p ? "on" : "";
+  for (const p of ["hosts", "sched", "runs", "wiki", "questions", "rules", "leases"]) $(p + "Panel").className = openPanel === p ? "on" : "";
   $("feed").className = openPanel ? "off" : "";
   $("hostsbtn").textContent = openPanel === "hosts" ? L.chat : L.hosts;
   $("wikibtn").textContent = openPanel === "wiki" ? "💬 Chat" : "📖 Wiki";
   $("questionsbtn").textContent = openPanel === "questions" ? "💬 Chat" : "❓ Válaszra vár";
   $("rulesbtn").textContent = openPanel === "rules" ? "💬 Chat" : "📜 " + L.agentRules;
+  $("leasesbtn").textContent = openPanel === "leases" ? "💬 Chat" : "🔒 " + L.leases;
   hostsOpen = openPanel === "hosts"; schedOpen = openPanel === "sched";
   return openPanel === name;
 }
@@ -820,6 +824,7 @@ async function start() {
   $("runsbtn").hidden = me.kind !== "human";
   $("wikibtn").hidden = false;
   $("rulesbtn").hidden = me.kind !== "human";
+  $("leasesbtn").hidden = me.kind !== "human";
   await load(); if (!ws) connectWS();
 }
 
@@ -1431,6 +1436,65 @@ async function renderAgentRules() {
     card.append(histCard);
   }
 
+  panel.append(card);
+}
+
+// --- Leases ------------------------------------------------------------------
+$("leasesbtn").onclick = () => { if (!togglePanel("leases")) return; renderLeases(); };
+
+async function renderLeases() {
+  const panel = $("leasesPanel");
+  panel.innerHTML = "";
+  const card = el("div", { className: "card" });
+  card.append(el("h3", { textContent: "🔒 " + L.leases }));
+
+  let data;
+  try {
+    data = await api("/api/v1/leases");
+  } catch (err) {
+    panel.append(el("div", { className: "warn", textContent: err.message || "Error loading leases" }));
+    return;
+  }
+
+  const leases = data.leases || [];
+  if (leases.length === 0) {
+    card.append(el("p", { className: "muted", textContent: L.noLeases }));
+    panel.append(card);
+    return;
+  }
+
+  const tbl = el("table", { className: "tbl" });
+  tbl.append(el("tr", {},
+    el("th", { textContent: L.resource }),
+    el("th", { textContent: L.holder }),
+    el("th", { textContent: L.expires }),
+    el("th", { textContent: L.note }),
+    el("th", { textContent: "" })
+  ));
+
+  for (const l of leases) {
+    const relBtn = el("button", { textContent: L.release });
+    relBtn.onclick = async () => {
+      relBtn.disabled = true;
+      try {
+        await api(`/api/v1/leases/${l.id}/release`, { method: "POST" });
+        await renderLeases();
+      } catch (err) {
+        alert(err.message || "Error releasing lease");
+        relBtn.disabled = false;
+      }
+    };
+
+    tbl.append(el("tr", {},
+      el("td", { style: "font-family:monospace;font-weight:600;", textContent: l.resource }),
+      el("td", { textContent: "@" + (l.holder_handle || l.holder_id) }),
+      el("td", { textContent: l.expires_at ? new Date(l.expires_at).toLocaleTimeString() : "" }),
+      el("td", { textContent: l.note || "" }),
+      el("td", {}, relBtn)
+    ));
+  }
+
+  card.append(tbl);
   panel.append(card);
 }
 

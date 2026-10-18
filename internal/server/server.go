@@ -68,6 +68,11 @@ import (
 	idhttp "colonyhall/internal/modules/identity/httpapi"
 	idmem "colonyhall/internal/modules/identity/memory"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/lease"
+	leaseshttp "colonyhall/internal/modules/lease/httpapi"
+	leasesmcp "colonyhall/internal/modules/lease/mcptools"
+	leasesmem "colonyhall/internal/modules/lease/memory"
+	leasespg "colonyhall/internal/modules/lease/postgres"
 	"colonyhall/internal/modules/notes"
 	noteshttp "colonyhall/internal/modules/notes/httpapi"
 	notesmcp "colonyhall/internal/modules/notes/mcptools"
@@ -151,6 +156,7 @@ type App struct {
 	AgentRules   *agentrules.Service
 	Notes        *notes.Service
 	Decisions    *decision.Service
+	Leases       *lease.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -193,6 +199,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		rlStore        agentrules.Store
 		ntStore        notes.Store
 		dcStore        decision.Store
+		lsStore        lease.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -211,6 +218,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		rlStore = rulesmem.New()
 		ntStore = notesmem.New()
 		dcStore = decmem.New()
+		lsStore = leasesmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -244,6 +252,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		rlStore = &rulespg.Store{DB: pg}
 		ntStore = &notespg.Store{DB: pg}
 		dcStore = &decpg.Store{DB: pg}
+		lsStore = &leasespg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -321,12 +330,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	}
 	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock)
 	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
+	lsSvc := lease.NewService(lsStore, idSvc, events, b, tx, opt.Clock, opt.IDs)
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
 		{Name: approval.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: apSvc.HandleEvent, Logger: opt.Logger},
 		{Name: git.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: gitSvc.HandleEvent, Logger: opt.Logger},
 		{Name: preview.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: prSvc.HandleEvent, Logger: opt.Logger},
+		{Name: lease.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: lsSvc.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -346,6 +357,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	ruleshttp.Register(mux, rlSvc, idSvc)
 	noteshttp.Register(mux, ntSvc, idSvc)
 	dechttp.Register(mux, dcSvc, idSvc)
+	leaseshttp.Register(mux, lsSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -358,6 +370,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		previewmcp.Register(s, prSvc, current)
 		notesmcp.Register(s, ntSvc, current, r)
 		decmcp.Register(s, dcSvc, current, r)
+		leasesmcp.Register(s, lsSvc, current)
 	}, rlSvc.InstructionsForActor, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -382,6 +395,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		AgentRules:   rlSvc,
 		Notes:        ntSvc,
 		Decisions:    dcSvc,
+		Leases:       lsSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

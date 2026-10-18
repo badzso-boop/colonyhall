@@ -1212,6 +1212,25 @@ type IssueTokenResponse struct {
 	Token  Token  `json:"token"`
 }
 
+// Lease defines model for Lease.
+type Lease struct {
+	AcquiredAt   time.Time           `json:"acquired_at"`
+	ExpiresAt    time.Time           `json:"expires_at"`
+	HolderHandle string              `json:"holder_handle"`
+	HolderId     openapi_types.UUID  `json:"holder_id"`
+	Id           openapi_types.UUID  `json:"id"`
+	Note         *string             `json:"note,omitempty"`
+	ReleasedAt   *time.Time          `json:"released_at,omitempty"`
+	ReleasedBy   *openapi_types.UUID `json:"released_by,omitempty"`
+	Resource     string              `json:"resource"`
+	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
+}
+
+// LeasesResponse defines model for LeasesResponse.
+type LeasesResponse struct {
+	Leases []Lease `json:"leases"`
+}
+
 // LinkCard defines model for LinkCard.
 type LinkCard struct {
 	Author *string      `json:"author,omitempty"`

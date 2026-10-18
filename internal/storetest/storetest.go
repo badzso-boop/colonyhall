@@ -7,6 +7,7 @@ package storetest
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/lease"
 	"colonyhall/internal/modules/notes"
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
@@ -51,6 +53,7 @@ type Backend struct {
 	AgentRules   agentrules.Store
 	Notes        notes.Store
 	Decisions    decision.Store
+	Leases       lease.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -72,6 +75,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })
 	t.Run("notes", func(t *testing.T) { testNotes(t, newBackend(t)) })
 	t.Run("decisions", func(t *testing.T) { testDecisions(t, newBackend(t)) })
+	t.Run("leases", func(t *testing.T) { testLeases(t, newBackend(t)) })
 }
 
 var (
@@ -1927,5 +1931,137 @@ func testDecisions(t *testing.T, b Backend) {
 	must(t, err)
 	if len(qList2) != 1 || qList2[0].Number != 2 {
 		t.Fatalf("expected 1 match for 'CockroachDB', got %+v", qList2)
+	}
+}
+
+func testLeases(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Leases
+
+	// 1. GetActiveByResource on empty -> db.ErrNotFound
+	_, err := st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", t0)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-existent lease, got %v", err)
+	}
+
+	// 2. Create lease L1
+	l1 := lease.Lease{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		Resource:     "deploy:prod",
+		HolderID:     f.agent.ID,
+		HolderHandle: f.agent.Handle,
+		Note:         "deploying release 1.0",
+		AcquiredAt:   t0,
+		ExpiresAt:    t0.Add(30 * time.Minute),
+	}
+	must(t, st.Create(ctx, l1))
+
+	// 3. GetActiveByResource returns L1
+	active, err := st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", t0)
+	must(t, err)
+	if active.ID != l1.ID || active.HolderID != f.agent.ID || active.Resource != "deploy:prod" {
+		t.Fatalf("unexpected active lease: %+v", active)
+	}
+
+	// 4. Concurrently lock and test race safety on resource
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = b.Tx.InTx(ctx, func(txCtx context.Context) error {
+				if err := st.LockResource(txCtx, f.ws.ID, "deploy:prod"); err != nil {
+					return err
+				}
+				_, _ = st.GetActiveByResource(txCtx, f.ws.ID, "deploy:prod", t0)
+				return nil
+			})
+		}()
+	}
+	wg.Wait()
+
+	// 5. Extend L1
+	newExpires := t0.Add(60 * time.Minute)
+	newNote := "extended deployment"
+	must(t, st.Extend(ctx, l1.ID, newExpires, &newNote))
+
+	ext, err := st.GetByID(ctx, l1.ID)
+	must(t, err)
+	if !ext.ExpiresAt.Equal(newExpires) || ext.Note != newNote {
+		t.Fatalf("unexpected extended lease: %+v", ext)
+	}
+
+	// 6. Expired lease is not active
+	_, err = st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", t0.Add(2*time.Hour))
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for expired lease, got %v", err)
+	}
+
+	// 7. Release L1
+	nowRel := t0.Add(40 * time.Minute)
+	must(t, st.Release(ctx, l1.ID, f.agent.ID, nowRel))
+
+	_, err = st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", nowRel)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after release, got %v", err)
+	}
+
+	// 8. Create two active leases on different resources
+	l2 := lease.Lease{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		Resource:     "port:5433",
+		HolderID:     f.agent.ID,
+		HolderHandle: f.agent.Handle,
+		Note:         "testing migration",
+		AcquiredAt:   t0,
+		ExpiresAt:    t0.Add(30 * time.Minute),
+	}
+	l3 := lease.Lease{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		Resource:     "db:shared",
+		HolderID:     f.human.ID,
+		HolderHandle: f.human.Handle,
+		Note:         "schema inspection",
+		AcquiredAt:   t0,
+		ExpiresAt:    t0.Add(30 * time.Minute),
+	}
+	must(t, st.Create(ctx, l2))
+	must(t, st.Create(ctx, l3))
+
+	activeList, err := st.ListActive(ctx, f.ws.ID, t0)
+	must(t, err)
+	if len(activeList) != 2 {
+		t.Fatalf("expected 2 active leases, got %d", len(activeList))
+	}
+
+	// 9. ReleaseActiveByHolder releases agent's lease
+	relHolder, err := st.ReleaseActiveByHolder(ctx, f.ws.ID, f.agent.ID, f.human.ID, t0)
+	must(t, err)
+	if len(relHolder) != 1 || relHolder[0].Resource != "port:5433" {
+		t.Fatalf("expected 1 released lease for holder, got %+v", relHolder)
+	}
+
+	// Only l3 remains active
+	activeList, err = st.ListActive(ctx, f.ws.ID, t0)
+	must(t, err)
+	if len(activeList) != 1 || activeList[0].Resource != "db:shared" {
+		t.Fatalf("expected 1 active lease remaining, got %+v", activeList)
+	}
+
+	// 10. ReleaseActiveByWorkspace releases all remaining
+	relWs, err := st.ReleaseActiveByWorkspace(ctx, f.ws.ID, f.human.ID, t0)
+	must(t, err)
+	if len(relWs) != 1 || relWs[0].Resource != "db:shared" {
+		t.Fatalf("expected 1 released lease for workspace, got %+v", relWs)
+	}
+
+	activeList, err = st.ListActive(ctx, f.ws.ID, t0)
+	must(t, err)
+	if len(activeList) != 0 {
+		t.Fatalf("expected 0 active leases, got %d", len(activeList))
 	}
 }

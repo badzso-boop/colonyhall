@@ -1,0 +1,387 @@
+package lease
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/bus"
+	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/ids"
+)
+
+// AcquireResult contains the outcome of an acquire call.
+type AcquireResult struct {
+	Taken   bool
+	Lease   Lease
+	Message string
+}
+
+// Service implements the business logic and lifecycle rules for leases.
+type Service struct {
+	store  Store
+	actors identity.Directory
+	events eventlog.Store
+	bus    bus.Bus
+	tx     db.TxRunner
+	clock  clock.Clock
+	ids    ids.Generator
+}
+
+// NewService creates a new lease Service.
+func NewService(store Store, actors identity.Directory, events eventlog.Store, b bus.Bus, tx db.TxRunner, clk clock.Clock, gen ids.Generator) *Service {
+	if clk == nil {
+		clk = clock.System{}
+	}
+	if gen == nil {
+		gen = ids.V7{}
+	}
+	return &Service{
+		store:  store,
+		actors: actors,
+		events: events,
+		bus:    b,
+		tx:     tx,
+		clock:  clk,
+		ids:    gen,
+	}
+}
+
+// Acquire acquires a lease, extends an existing lease held by the caller, or returns taken info.
+func (s *Service) Acquire(ctx context.Context, actor identity.Actor, rawResource string, ttlMinutes int, note string) (AcquireResult, error) {
+	if actor.Halted {
+		return AcquireResult{}, identity.ErrHalted
+	}
+
+	resource, err := NormalizeAndValidateResource(rawResource)
+	if err != nil {
+		return AcquireResult{}, err
+	}
+
+	if ttlMinutes <= 0 {
+		ttlMinutes = 30
+	}
+	if ttlMinutes < 1 || ttlMinutes > 240 {
+		return AcquireResult{}, ErrInvalidTTL
+	}
+
+	trimmedNote := strings.TrimSpace(note)
+	if utf8.RuneCountInString(trimmedNote) > 200 {
+		return AcquireResult{}, ErrNoteTooLong
+	}
+
+	var res AcquireResult
+	var seq int64
+
+	err = s.tx.InTx(ctx, func(txCtx context.Context) error {
+		if err := s.store.LockResource(txCtx, actor.WorkspaceID, resource); err != nil {
+			return err
+		}
+
+		now := s.clock.Now()
+		active, err := s.store.GetActiveByResource(txCtx, actor.WorkspaceID, resource, now)
+		if err == nil {
+			// Active lease exists
+			if active.HolderID != actor.ID {
+				// Held by someone else -> return taken message, no error, no wait
+				handle := active.HolderHandle
+				if handle == "" {
+					if act, err := s.actors.ActorByID(txCtx, active.HolderID); err == nil {
+						handle = act.Handle
+					}
+				}
+				timeStr := active.ExpiresAt.UTC().Format("15:04")
+				msg := fmt.Sprintf("taken by @%s until %s", handle, timeStr)
+				if active.Note != "" {
+					msg = fmt.Sprintf("taken by @%s until %s (%s)", handle, timeStr, active.Note)
+				}
+				res = AcquireResult{
+					Taken:   true,
+					Lease:   active,
+					Message: msg,
+				}
+				return nil
+			}
+
+			// Held by caller -> extend it
+			newExpiresAt := now.Add(time.Duration(ttlMinutes) * time.Minute)
+			var notePtr *string
+			if trimmedNote != "" {
+				notePtr = &trimmedNote
+			}
+			if err := s.store.Extend(txCtx, active.ID, newExpiresAt, notePtr); err != nil {
+				return err
+			}
+
+			active.ExpiresAt = newExpiresAt
+			if notePtr != nil {
+				active.Note = *notePtr
+			}
+			msg := fmt.Sprintf("lease on %s extended until %s", resource, newExpiresAt.UTC().Format("15:04"))
+			res = AcquireResult{
+				Taken:   false,
+				Lease:   active,
+				Message: msg,
+			}
+
+			ev, err := eventlog.NewEvent(s.ids.New(), actor.WorkspaceID, EventExtended, actor.ID, ids.Nil, "lease", active.ID, ExtendedEvent{
+				LeaseID:      active.ID,
+				Resource:     resource,
+				HolderID:     actor.ID,
+				NewExpiresAt: newExpiresAt,
+			}, now)
+			if err == nil && s.events != nil {
+				if err := s.events.Append(txCtx, &ev); err == nil {
+					seq = ev.Seq
+				}
+			}
+			return nil
+		}
+
+		if !errors.Is(err, db.ErrNotFound) {
+			return err
+		}
+
+		// No active lease -> create new one
+		expiresAt := now.Add(time.Duration(ttlMinutes) * time.Minute)
+		l := Lease{
+			ID:           s.ids.New(),
+			WorkspaceID:  actor.WorkspaceID,
+			Resource:     resource,
+			HolderID:     actor.ID,
+			HolderHandle: actor.Handle,
+			Note:         trimmedNote,
+			AcquiredAt:   now,
+			ExpiresAt:    expiresAt,
+		}
+
+		if err := s.store.Create(txCtx, l); err != nil {
+			return err
+		}
+
+		msg := fmt.Sprintf("lease on %s acquired until %s", resource, expiresAt.UTC().Format("15:04"))
+		res = AcquireResult{
+			Taken:   false,
+			Lease:   l,
+			Message: msg,
+		}
+
+		ev, err := eventlog.NewEvent(s.ids.New(), actor.WorkspaceID, EventAcquired, actor.ID, ids.Nil, "lease", l.ID, AcquiredEvent{
+			LeaseID:   l.ID,
+			Resource:  resource,
+			HolderID:  actor.ID,
+			ExpiresAt: expiresAt,
+			Note:      trimmedNote,
+		}, now)
+		if err == nil && s.events != nil {
+			if err := s.events.Append(txCtx, &ev); err == nil {
+				seq = ev.Seq
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return AcquireResult{}, err
+	}
+	if seq > 0 && s.bus != nil {
+		s.bus.Notify(seq)
+	}
+	return res, nil
+}
+
+// ReleaseByResource releases a lease held by the caller on the specified resource.
+func (s *Service) ReleaseByResource(ctx context.Context, actor identity.Actor, rawResource string) (string, error) {
+	if actor.Halted {
+		return "", identity.ErrHalted
+	}
+
+	resource, err := NormalizeAndValidateResource(rawResource)
+	if err != nil {
+		return "", err
+	}
+
+	var seq int64
+	err = s.tx.InTx(ctx, func(txCtx context.Context) error {
+		if err := s.store.LockResource(txCtx, actor.WorkspaceID, resource); err != nil {
+			return err
+		}
+
+		now := s.clock.Now()
+		active, err := s.store.GetActiveByResource(txCtx, actor.WorkspaceID, resource, now)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return ErrLeaseNotFound
+			}
+			return err
+		}
+
+		if active.HolderID != actor.ID {
+			return ErrNotHolder
+		}
+
+		if err := s.store.Release(txCtx, active.ID, actor.ID, now); err != nil {
+			return err
+		}
+
+		ev, err := eventlog.NewEvent(s.ids.New(), actor.WorkspaceID, EventReleased, actor.ID, ids.Nil, "lease", active.ID, ReleasedEvent{
+			LeaseID:    active.ID,
+			Resource:   resource,
+			HolderID:   active.HolderID,
+			ReleasedBy: actor.ID,
+		}, now)
+		if err == nil && s.events != nil {
+			if err := s.events.Append(txCtx, &ev); err == nil {
+				seq = ev.Seq
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+	if seq > 0 && s.bus != nil {
+		s.bus.Notify(seq)
+	}
+	return fmt.Sprintf("lease on %s released", resource), nil
+}
+
+// ReleaseByID releases any lease by its ID (humans only).
+func (s *Service) ReleaseByID(ctx context.Context, actor identity.Actor, id ids.ID) (Lease, error) {
+	if actor.Kind != identity.KindHuman || actor.Halted {
+		return Lease{}, ErrForbidden
+	}
+
+	var l Lease
+	var seq int64
+
+	err := s.tx.InTx(ctx, func(txCtx context.Context) error {
+		existing, err := s.store.GetByID(txCtx, id)
+		if err != nil {
+			return err
+		}
+		if existing.WorkspaceID != actor.WorkspaceID {
+			return ErrLeaseNotFound
+		}
+
+		now := s.clock.Now()
+		if existing.ReleasedAt != nil || !existing.ExpiresAt.After(now) {
+			// Already released or expired
+			l = existing
+			return nil
+		}
+
+		if err := s.store.LockResource(txCtx, existing.WorkspaceID, existing.Resource); err != nil {
+			return err
+		}
+
+		if err := s.store.Release(txCtx, existing.ID, actor.ID, now); err != nil {
+			return err
+		}
+
+		existing.ReleasedAt = &now
+		existing.ReleasedBy = &actor.ID
+		l = existing
+
+		ev, err := eventlog.NewEvent(s.ids.New(), actor.WorkspaceID, EventReleased, actor.ID, ids.Nil, "lease", existing.ID, ReleasedEvent{
+			LeaseID:    existing.ID,
+			Resource:   existing.Resource,
+			HolderID:   existing.HolderID,
+			ReleasedBy: actor.ID,
+			Reason:     "human release",
+		}, now)
+		if err == nil && s.events != nil {
+			if err := s.events.Append(txCtx, &ev); err == nil {
+				seq = ev.Seq
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return Lease{}, err
+	}
+	if seq > 0 && s.bus != nil {
+		s.bus.Notify(seq)
+	}
+	return l, nil
+}
+
+// ListActive lists active leases in the workspace for humans.
+func (s *Service) ListActive(ctx context.Context, actor identity.Actor) ([]Lease, error) {
+	if actor.Kind != identity.KindHuman || actor.Halted {
+		return nil, ErrForbidden
+	}
+	return s.store.ListActive(ctx, actor.WorkspaceID, s.clock.Now())
+}
+
+// HandleEvent handles background events: agent halted/deleted or emergency stop.
+func (s *Service) HandleEvent(ctx context.Context, ev eventlog.Event) error {
+	now := s.clock.Now()
+	switch ev.Type {
+	case identity.EventEmergencyActivated:
+		var released []Lease
+		err := s.tx.InTx(ctx, func(txCtx context.Context) error {
+			var err error
+			released, err = s.store.ReleaseActiveByWorkspace(txCtx, ev.WorkspaceID, ev.ActorID, now)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		for _, l := range released {
+			_ = s.recordRelease(ctx, ev.WorkspaceID, ev.ActorID, l, "emergency stop", now)
+		}
+		return nil
+
+	case identity.EventActorStateChanged:
+		var sc identity.StateChanged
+		if err := json.Unmarshal(ev.Payload, &sc); err == nil && sc.State != identity.StateActive {
+			holderID, err := ids.Parse(sc.ActorID)
+			if err == nil {
+				var released []Lease
+				err := s.tx.InTx(ctx, func(txCtx context.Context) error {
+					var err error
+					released, err = s.store.ReleaseActiveByHolder(txCtx, ev.WorkspaceID, holderID, ev.ActorID, now)
+					return err
+				})
+				if err != nil {
+					return err
+				}
+				for _, l := range released {
+					_ = s.recordRelease(ctx, ev.WorkspaceID, ev.ActorID, l, "agent halted/deleted", now)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) recordRelease(ctx context.Context, workspaceID, actorID ids.ID, l Lease, reason string, now time.Time) error {
+	if s.events == nil {
+		return nil
+	}
+	ev, err := eventlog.NewEvent(s.ids.New(), workspaceID, EventReleased, actorID, ids.Nil, "lease", l.ID, ReleasedEvent{
+		LeaseID:    l.ID,
+		Resource:   l.Resource,
+		HolderID:   l.HolderID,
+		ReleasedBy: actorID,
+		Reason:     reason,
+	}, now)
+	if err != nil {
+		return err
+	}
+	_ = s.events.Append(ctx, &ev)
+	if s.bus != nil && ev.Seq > 0 {
+		s.bus.Notify(ev.Seq)
+	}
+	return nil
+}

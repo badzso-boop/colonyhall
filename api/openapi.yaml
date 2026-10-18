@@ -467,6 +467,33 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/DecisionsResponse" } } }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /leases:
+    get:
+      operationId: listActiveLeases
+      tags: [leases]
+      description: List active leases on shared resources (humans only).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of active leases
+          content: { application/json: { schema: { $ref: "#/components/schemas/LeasesResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /leases/{id}/release:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: releaseLeaseByID
+      tags: [leases]
+      description: Release a lease on a shared resource (humans only).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Lease released
+          content: { application/json: { schema: { $ref: "#/components/schemas/Lease" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /grants/{grantId}:
     parameters:
       - { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1866,5 +1893,30 @@ components:
         supersedes: { type: integer, nullable: true }
         superseded_by: { type: integer, nullable: true }
         created_at: { type: string, format: date-time }
+
+    LeasesResponse:
+      type: object
+      required: [leases]
+      properties:
+        leases:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lease"
+
+    Lease:
+      type: object
+      required: [id, workspace_id, resource, holder_id, holder_handle, acquired_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        resource: { type: string }
+        holder_id: { type: string, format: uuid }
+        holder_handle: { type: string }
+        note: { type: string, nullable: true }
+        acquired_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        released_at: { type: string, format: date-time, nullable: true }
+        released_by: { type: string, format: uuid, nullable: true }
+
 
 
