@@ -406,3 +406,37 @@ func (c *Client) Instructions(ctx context.Context) (AgentInstructions, error) {
 	err := c.do(ctx, http.MethodGet, "/api/v1/agent/instructions", nil, &inst)
 	return inst, err
 }
+
+// AgentNoteItem represents one note row returned by GET /api/v1/agents/{id}/notes.
+type AgentNoteItem struct {
+	ID           string    `json:"id"`
+	AgentID      string    `json:"agent_id"`
+	ThreadRootID string    `json:"thread_root_id"`
+	Text         string    `json:"text"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// AgentNotes returns notes for agentID, optionally filtered by thread.
+func (c *Client) AgentNotes(ctx context.Context, agentID, threadRootID string) ([]AgentNoteItem, error) {
+	path := "/api/v1/agents/" + agentID + "/notes"
+	if threadRootID != "" {
+		path += "?thread=" + url.QueryEscape(threadRootID)
+	}
+	var r struct {
+		Notes []AgentNoteItem `json:"notes"`
+	}
+	err := c.do(ctx, http.MethodGet, path, nil, &r)
+	return r.Notes, err
+}
+
+// LatestNote returns the newest note text for agentID in threadRootID, or "" if none.
+func (c *Client) LatestNote(ctx context.Context, agentID, threadRootID string) (string, error) {
+	notes, err := c.AgentNotes(ctx, agentID, threadRootID)
+	if err != nil {
+		return "", err
+	}
+	if len(notes) == 0 {
+		return "", nil
+	}
+	return notes[0].Text, nil
+}

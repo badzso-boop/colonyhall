@@ -20,6 +20,7 @@ import (
 	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/notes"
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
@@ -47,6 +48,7 @@ type Backend struct {
 	Git          git.Store
 	Preview      preview.Store
 	AgentRules   agentrules.Store
+	Notes        notes.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -66,6 +68,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("git", func(t *testing.T) { testGit(t, newBackend(t)) })
 	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
 	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })
+	t.Run("notes", func(t *testing.T) { testNotes(t, newBackend(t)) })
 }
 
 var (
@@ -1724,5 +1727,94 @@ func testAgentRules(t *testing.T, b Backend) {
 	must(t, err)
 	if len(history2) != 2 || history2[0].Version != 2 || history2[1].Version != 1 {
 		t.Fatalf("unexpected history order: %+v", history2)
+	}
+}
+
+func testNotes(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Notes
+
+	rootMsg := conversation.Message{
+		ID:        gen.New(),
+		ChannelID: f.channel.ID,
+		AuthorID:  f.human.ID,
+		Body:      "thread root",
+		CreatedAt: t0,
+	}
+	must(t, b.Conversation.InsertMessage(ctx, rootMsg))
+
+	otherRootMsg := conversation.Message{
+		ID:        gen.New(),
+		ChannelID: f.channel.ID,
+		AuthorID:  f.human.ID,
+		Body:      "other thread root",
+		CreatedAt: t0.Add(time.Second),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, otherRootMsg))
+
+	// Empty at first
+	_, err := st.GetLatest(ctx, f.ws.ID, f.agent.ID, rootMsg.ID)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-existing note, got %v", err)
+	}
+
+	// Create note 1
+	n1Time := t0
+	n1, err := st.Create(ctx, notes.Note{
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "note version 1",
+		CreatedAt:    n1Time,
+	})
+	must(t, err)
+
+	got, err := st.GetLatest(ctx, f.ws.ID, f.agent.ID, rootMsg.ID)
+	must(t, err)
+	if got.Text != "note version 1" || got.ID != n1.ID {
+		t.Fatalf("unexpected note: %+v", got)
+	}
+
+	// Create note 2 (newer version for same thread)
+	n2Time := n1Time.Add(time.Minute)
+	n2, err := st.Create(ctx, notes.Note{
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "note version 2",
+		CreatedAt:    n2Time,
+	})
+	must(t, err)
+
+	got2, err := st.GetLatest(ctx, f.ws.ID, f.agent.ID, rootMsg.ID)
+	must(t, err)
+	if got2.Text != "note version 2" || got2.ID != n2.ID {
+		t.Fatalf("unexpected latest note: %+v", got2)
+	}
+
+	// Create note for other thread
+	n3Time := n2Time.Add(time.Minute)
+	n3, err := st.Create(ctx, notes.Note{
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ThreadRootID: otherRootMsg.ID,
+		Text:         "note for other thread",
+		CreatedAt:    n3Time,
+	})
+	must(t, err)
+
+	// List all notes for agent (newest first: n3, n2, n1)
+	all, err := st.ListByAgent(ctx, f.ws.ID, f.agent.ID, nil)
+	must(t, err)
+	if len(all) != 3 || all[0].ID != n3.ID || all[1].ID != n2.ID || all[2].ID != n1.ID {
+		t.Fatalf("unexpected list order: %+v", all)
+	}
+
+	// List notes for specific thread rootMsg.ID (newest first: n2, n1)
+	threadNotes, err := st.ListByAgent(ctx, f.ws.ID, f.agent.ID, &rootMsg.ID)
+	must(t, err)
+	if len(threadNotes) != 2 || threadNotes[0].ID != n2.ID || threadNotes[1].ID != n1.ID {
+		t.Fatalf("unexpected thread notes: %+v", threadNotes)
 	}
 }

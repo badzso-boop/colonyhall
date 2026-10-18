@@ -63,6 +63,11 @@ import (
 	idhttp "colonyhall/internal/modules/identity/httpapi"
 	idmem "colonyhall/internal/modules/identity/memory"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/notes"
+	noteshttp "colonyhall/internal/modules/notes/httpapi"
+	notesmcp "colonyhall/internal/modules/notes/mcptools"
+	notesmem "colonyhall/internal/modules/notes/memory"
+	notespg "colonyhall/internal/modules/notes/postgres"
 	"colonyhall/internal/modules/preview"
 	previewhttp "colonyhall/internal/modules/preview/httpapi"
 	previewmcp "colonyhall/internal/modules/preview/mcptools"
@@ -139,6 +144,7 @@ type App struct {
 	Git          *git.Service
 	Preview      *preview.Service
 	AgentRules   *agentrules.Service
+	Notes        *notes.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -179,6 +185,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		giStore        git.Store
 		prStore        preview.Store
 		rlStore        agentrules.Store
+		ntStore        notes.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -195,6 +202,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		giStore = gitmem.New()
 		prStore = previewmem.New()
 		rlStore = rulesmem.New()
+		ntStore = notesmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -226,6 +234,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		giStore = &gitpg.Store{DB: pg}
 		prStore = &previewpg.Store{DB: pg}
 		rlStore = &rulespg.Store{DB: pg}
+		ntStore = &notespg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -301,6 +310,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		IDs:       opt.IDs,
 		Clock:     opt.Clock,
 	}
+	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock)
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -324,6 +334,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	fileshttp.Register(mux, fiSvc, idSvc)
 	githttp.Register(mux, gitSvc, idSvc)
 	ruleshttp.Register(mux, rlSvc, idSvc)
+	noteshttp.Register(mux, ntSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -334,6 +345,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		filesmcp.Register(s, fiSvc, cvSvc, current)
 		gitmcp.Register(s, gitSvc, current)
 		previewmcp.Register(s, prSvc, current)
+		notesmcp.Register(s, ntSvc, current, r)
 	}, rlSvc.InstructionsForActor, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
@@ -356,6 +368,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Git:          gitSvc,
 		Preview:      prSvc,
 		AgentRules:   rlSvc,
+		Notes:        ntSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

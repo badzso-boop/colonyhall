@@ -436,6 +436,22 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Granted, content: { application/json: { schema: { $ref: "#/components/schemas/FolderGrant" } } } }
 
+  /agents/{id}/notes:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listAgentNotes
+      tags: [notes]
+      description: Read an agent's notebook entries (humans only, newest first, optional ?thread=).
+      parameters:
+        - { name: thread, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of agent notes
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotesResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /grants/{grantId}:
     parameters:
       - { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1790,4 +1806,23 @@ components:
       properties:
         version: { type: integer }
         text: { type: string }
+
+    AgentNotesResponse:
+      type: object
+      required: [notes]
+      properties:
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentNote"
+
+    AgentNote:
+      type: object
+      required: [id, agent_id, thread_root_id, text, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        text: { type: string, maxLength: 2000 }
+        created_at: { type: string, format: date-time }
 

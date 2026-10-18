@@ -721,6 +721,20 @@ type AgentInstructions struct {
 	Version int    `json:"version"`
 }
 
+// AgentNote defines model for AgentNote.
+type AgentNote struct {
+	AgentId      openapi_types.UUID `json:"agent_id"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+	Text         string             `json:"text"`
+	ThreadRootId openapi_types.UUID `json:"thread_root_id"`
+}
+
+// AgentNotesResponse defines model for AgentNotesResponse.
+type AgentNotesResponse struct {
+	Notes []AgentNote `json:"notes"`
+}
+
 // AgentRules defines model for AgentRules.
 type AgentRules struct {
 	CreatedAt *time.Time          `json:"created_at,omitempty"`
@@ -1591,6 +1605,11 @@ type ListAuditParams struct {
 // GetInboxParams defines parameters for GetInbox.
 type GetInboxParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAgentNotesParams defines parameters for ListAgentNotes.
+type ListAgentNotesParams struct {
+	Thread *openapi_types.UUID `form:"thread,omitempty" json:"thread,omitempty"`
 }
 
 // UploadFileMultipartBody defines parameters for UploadFile.
