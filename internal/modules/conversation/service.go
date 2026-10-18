@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/identity"
@@ -193,6 +195,48 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	if by.Kind == identity.KindAgent && IsAcknowledgement(body) {
 		return s.ackAsReaction(ctx, by, in)
 	}
+	if in.ClientMsgID != "" {
+		existing, err := s.Store.MessageByClientID(ctx, by.ID, in.ClientMsgID)
+		if err == nil {
+			if s.Attachments != nil {
+				atts, err := s.Attachments.AttachmentsForMessages(ctx, []ids.ID{existing.ID})
+				if err == nil {
+					existing.Attachments = atts[existing.ID]
+				}
+			}
+			msgs := []Message{existing}
+			s.enrichLinkCards(ctx, msgs)
+			return SendResult{Message: &msgs[0]}, nil
+		}
+		if !errors.Is(err, db.ErrNotFound) {
+			return SendResult{}, err
+		}
+	}
+	c, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID)
+	if err != nil {
+		return SendResult{}, err
+	}
+	mem, err := s.membership(ctx, c.ID, by.ID)
+	if err != nil {
+		return SendResult{}, err
+	}
+	if !policy.CanWriteChannel(subject(by), mem) {
+		return SendResult{}, ErrForbidden
+	}
+	if in.ThreadRootID != ids.Nil {
+		root, err := s.Store.MessageByID(ctx, in.ThreadRootID)
+		if err != nil || root.ChannelID != c.ID || root.ThreadRootID != ids.Nil {
+			return SendResult{}, ErrBadThread
+		}
+	}
+	if by.Kind == identity.KindAgent {
+		if err := s.checkAndEnforceRateLimit(ctx, by, c, in.ThreadRootID); err != nil {
+			return SendResult{}, err
+		}
+		if err := checkAgentMessage(body, len(MentionedHandles(body)), in.Elaborate); err != nil {
+			return SendResult{}, err
+		}
+	}
 	var msg Message
 	var seq int64
 	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -212,31 +256,9 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 				return err
 			}
 		}
-		c, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID)
-		if err != nil {
-			return err
-		}
-		mem, err := s.membership(ctx, c.ID, by.ID)
-		if err != nil {
-			return err
-		}
-		if !policy.CanWriteChannel(subject(by), mem) {
-			return ErrForbidden
-		}
-		if in.ThreadRootID != ids.Nil {
-			root, err := s.Store.MessageByID(ctx, in.ThreadRootID)
-			if err != nil || root.ChannelID != c.ID || root.ThreadRootID != ids.Nil {
-				return ErrBadThread
-			}
-		}
 		mentions, err := s.resolveMentions(ctx, by, c.ID, body)
 		if err != nil {
 			return err
-		}
-		if by.Kind == identity.KindAgent {
-			if err := checkAgentMessage(body, len(MentionedHandles(body)), in.Elaborate); err != nil {
-				return err
-			}
 		}
 		now := s.Clock.Now()
 		msg = Message{
@@ -550,4 +572,196 @@ func (s *Service) appendEvent(ctx context.Context, by identity.Actor, channelID 
 		return 0, err
 	}
 	return ev.Seq, nil
+}
+
+func (s *Service) checkAndEnforceRateLimit(ctx context.Context, by identity.Actor, c Channel, threadRootID ids.ID) error {
+	if by.Kind != identity.KindAgent {
+		return nil
+	}
+	if threadRootID == ids.Nil && c.Kind != KindDM {
+		return nil
+	}
+
+	paused, alreadyNotified, err := s.isConversationPaused(ctx, c, threadRootID)
+	if err != nil {
+		return err
+	}
+	if !paused {
+		return nil
+	}
+
+	if !alreadyNotified {
+		if err := s.postPauseSystemNote(ctx, by, c, threadRootID); err != nil {
+			return err
+		}
+	}
+
+	return ErrConversationPaused
+}
+
+func (s *Service) isConversationPaused(ctx context.Context, c Channel, threadRootID ids.ID) (bool, bool, error) {
+	var msgs []Message
+	var err error
+	if threadRootID != ids.Nil {
+		msgs, err = s.Store.ThreadMessages(ctx, threadRootID)
+	} else {
+		msgs, err = s.Store.ListMessages(ctx, c.ID, ids.Nil, 100)
+	}
+	if err != nil {
+		return false, false, err
+	}
+
+	now := s.Clock.Now()
+	cutoff := now.Add(-AgentRateLimitWindow)
+
+	// Collect unique author IDs of non-system messages
+	authorIDs := make(map[ids.ID]bool)
+	for _, m := range msgs {
+		if m.Kind != "system" {
+			authorIDs[m.AuthorID] = true
+		}
+	}
+	actorKindMap := make(map[ids.ID]identity.Kind)
+	if s.Directory != nil && len(authorIDs) > 0 {
+		var idList []ids.ID
+		for id := range authorIDs {
+			idList = append(idList, id)
+		}
+		actors, err := s.Directory.ActorsByIDs(ctx, idList)
+		if err == nil {
+			for _, a := range actors {
+				actorKindMap[a.ID] = a.Kind
+			}
+		}
+	}
+
+	agentCount := 0
+	alreadyNotified := false
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+
+		// Check if a system pause note was already posted in this pause
+		if m.Kind == "system" && strings.Contains(strings.ToLower(m.Body), "paused") {
+			alreadyNotified = true
+			continue
+		}
+
+		kind, ok := actorKindMap[m.AuthorID]
+		if !ok && s.Directory != nil {
+			if a, err := s.Directory.ActorByID(ctx, m.AuthorID); err == nil {
+				kind = a.Kind
+				actorKindMap[m.AuthorID] = kind
+				ok = true
+			}
+		}
+
+		// Any human message lifts the pause
+		if ok && kind == identity.KindHuman {
+			break
+		}
+
+		// If message is older than the rate limit window, stop counting agent messages
+		if m.CreatedAt.Before(cutoff) {
+			break
+		}
+
+		if ok && kind == identity.KindAgent {
+			agentCount++
+		}
+	}
+
+	if agentCount >= AgentRateLimitCount {
+		return true, alreadyNotified, nil
+	}
+	return false, false, nil
+}
+
+func (s *Service) postPauseSystemNote(ctx context.Context, by identity.Actor, c Channel, threadRootID ids.ID) error {
+	var adminHandles []string
+	var adminIDs []ids.ID
+	if s.Directory != nil {
+		admins, err := s.Directory.Admins(ctx, by.WorkspaceID)
+		if err == nil {
+			for _, a := range admins {
+				if a.Kind == identity.KindHuman {
+					adminHandles = append(adminHandles, a.Handle)
+					adminIDs = append(adminIDs, a.ID)
+				}
+			}
+			sort.Strings(adminHandles)
+		}
+	}
+
+	var mentionStr string
+	if len(adminHandles) > 0 {
+		var parts []string
+		for _, h := range adminHandles {
+			parts = append(parts, "@"+h)
+		}
+		mentionStr = " " + strings.Join(parts, ", ")
+	}
+	body := fmt.Sprintf("⚠️ Conversation paused: at least %d agent messages were posted in the last 10 minutes without a human reply.%s please check in.", AgentRateLimitCount, mentionStr)
+
+	now := s.Clock.Now()
+	sysMsg := Message{
+		ID:           s.IDs.New(),
+		WorkspaceID:  by.WorkspaceID,
+		ChannelID:    c.ID,
+		ThreadRootID: threadRootID,
+		AuthorID:     by.ID,
+		Kind:         "system",
+		Body:         body,
+		Mentions:     adminIDs,
+		CreatedAt:    now,
+	}
+
+	var seq int64
+	err := s.Tx.InTx(ctx, func(txCtx context.Context) error {
+		// Double-check if another concurrent request already posted the pause note
+		if threadRootID != ids.Nil {
+			msgs, _ := s.Store.ThreadMessages(txCtx, threadRootID)
+			for i := len(msgs) - 1; i >= 0; i-- {
+				if msgs[i].Kind == "system" && strings.Contains(strings.ToLower(msgs[i].Body), "paused") {
+					return nil
+				}
+			}
+		} else {
+			msgs, _ := s.Store.ListMessages(txCtx, c.ID, ids.Nil, 20)
+			for i := len(msgs) - 1; i >= 0; i-- {
+				if msgs[i].Kind == "system" && strings.Contains(strings.ToLower(msgs[i].Body), "paused") {
+					return nil
+				}
+			}
+		}
+
+		if err := s.Store.InsertMessage(txCtx, sysMsg); err != nil {
+			return err
+		}
+		if _, err := s.Store.IncrementMsgCount(txCtx, c.ID); err != nil {
+			return err
+		}
+		if len(adminIDs) > 0 {
+			if err := s.Store.IncrementMentions(txCtx, c.ID, adminIDs); err != nil {
+				return err
+			}
+		}
+		if threadRootID != ids.Nil {
+			if err := s.Store.BumpThread(txCtx, threadRootID, now); err != nil {
+				return err
+			}
+		}
+		evSeq, err := s.appendEvent(txCtx, by, c.ID, EventMessageCreated, "message", sysMsg.ID, MessageCreatedPayload(sysMsg))
+		if err != nil {
+			return err
+		}
+		seq = evSeq
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if seq > 0 && s.Bus != nil {
+		s.Bus.Notify(seq)
+	}
+	return nil
 }

@@ -22,7 +22,7 @@
   section { display:grid; grid-template-rows:1fr auto; min-width:0; }
   #feed { overflow:auto; padding:12px 16px; }
   .msg { padding:6px 0; }
-  .who { font-weight:600; } .who.agent { color:var(--agent); }
+  .who { font-weight:600; } .who.agent { color:var(--agent); } .who.system { color:var(--accent); }
   .at { color:var(--muted); font-size:12px; margin-left:6px; }
   .body { white-space:pre-wrap; overflow-wrap:anywhere; }
   form { display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); }
@@ -239,7 +239,12 @@ function renderMsg(m) {
     const root = msgs.get(m.thread_root_id);
     div.querySelector(".re").textContent = "↪ " + L.inThread + " " + (root ? root.body.slice(0, 60) : "…");
   }
-  div.querySelector(".who").textContent = "@" + a.handle;
+  if (m.kind === "system") {
+    div.querySelector(".who").className = "who system";
+    div.querySelector(".who").textContent = "system";
+  } else {
+    div.querySelector(".who").textContent = "@" + a.handle;
+  }
   div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
   // "[error:<id>]" from the guard: details are for humans, shown on demand.
   const ref = /\[error:([0-9a-f-]{36})\]/.exec(m.body);

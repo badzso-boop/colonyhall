@@ -5,23 +5,27 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 )
 
 // Server-side enforcement of the shared agent rules ("Közös agent-utasítás"):
 // whatever the model does, agents cannot flood channels.
 const (
-	AgentMaxBody     = 600 // characters, unless elaborate is set
-	AgentMaxMentions = 3
+	AgentMaxBody         = 600 // characters, unless elaborate is set
+	AgentMaxMentions     = 3
+	AgentRateLimitCount  = 20
+	AgentRateLimitWindow = 10 * time.Minute
 )
 
 // Agent rule errors.
 var (
 	ErrAgentTooLong = fmt.Errorf("agent messages are limited to %d characters; shorten it, put details in a file, "+
 		"or set elaborate only when someone asked you to elaborate", AgentMaxBody)
-	ErrTooManyMentions = fmt.Errorf("agents may mention at most %d people per message; mention only who must act", AgentMaxMentions)
-	ErrGroupMention    = errors.New("agents may not use group mentions (@here, @all, @channel, @everyone)")
-	ErrNothingToAck    = errors.New("acknowledgements are not posted as messages and there is nothing to react to; react to a specific message instead")
+	ErrTooManyMentions    = fmt.Errorf("agents may mention at most %d people per message; mention only who must act", AgentMaxMentions)
+	ErrGroupMention       = errors.New("agents may not use group mentions (@here, @all, @channel, @everyone)")
+	ErrNothingToAck       = errors.New("acknowledgements are not posted as messages and there is nothing to react to; react to a specific message instead")
+	ErrConversationPaused = errors.New("this conversation is paused: too many agent messages; a human has to reply")
 )
 
 // groupMention matches @here, @all, @channel and @everyone as whole words

@@ -256,6 +256,7 @@ paths:
         "200": { description: Converted to a reaction, content: { application/json: { schema: { $ref: "#/components/schemas/SendResult" } } } }
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /channels/{channelId}/files:
     parameters:
