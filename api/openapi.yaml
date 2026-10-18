@@ -256,6 +256,7 @@ paths:
         "200": { description: Converted to a reaction, content: { application/json: { schema: { $ref: "#/components/schemas/SendResult" } } } }
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /channels/{channelId}/files:
     parameters:
@@ -435,6 +436,64 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Granted, content: { application/json: { schema: { $ref: "#/components/schemas/FolderGrant" } } } }
+
+  /agents/{id}/notes:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listAgentNotes
+      tags: [notes]
+      description: Read an agent's notebook entries (humans only, newest first, optional ?thread=).
+      parameters:
+        - { name: thread, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of agent notes
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotesResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /decisions:
+    get:
+      operationId: listDecisions
+      tags: [decisions]
+      description: List recent decisions in the workspace (humans only).
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 20 } }
+        - { name: query, in: query, required: false, schema: { type: string } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of decisions
+          content: { application/json: { schema: { $ref: "#/components/schemas/DecisionsResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /leases:
+    get:
+      operationId: listActiveLeases
+      tags: [leases]
+      description: List active leases on shared resources (humans only).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of active leases
+          content: { application/json: { schema: { $ref: "#/components/schemas/LeasesResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /leases/{id}/release:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: releaseLeaseByID
+      tags: [leases]
+      description: Release a lease on a shared resource (humans only).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Lease released
+          content: { application/json: { schema: { $ref: "#/components/schemas/Lease" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
   /grants/{grantId}:
     parameters:
@@ -845,6 +904,61 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
 
+  /agent-rules:
+    get:
+      operationId: getAgentRules
+      tags: [agentrules]
+      description: Humans only. Current agent rules and history list.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Agent rules and history
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentRulesResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateAgentRules
+      tags: [agentrules]
+      description: Humans only (admin/owner). Update agent rules, creating a new version.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateAgentRulesRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated rules
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentRules" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /agent-rules/{version}:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      operationId: getAgentRulesVersion
+      tags: [agentrules]
+      description: Humans only. Historical version of agent rules.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Agent rules version
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentRules" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/instructions:
+    get:
+      operationId: getAgentInstructions
+      tags: [agentrules]
+      description: Agent token. Current agent instructions rendered for the caller.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Rendered instructions
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentInstructions" } } }
+        "401": { $ref: "#/components/responses/Problem" }
 
 components:
   securitySchemes:
@@ -1693,4 +1807,117 @@ components:
       required: [previews]
       properties:
         previews: { type: array, items: { $ref: "#/components/schemas/Preview" } }
+
+    AgentRules:
+      type: object
+      required: [version, text]
+      properties:
+        version: { type: integer }
+        text: { type: string, maxLength: 8000 }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+
+    AgentRulesHistoryEntry:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+
+    AgentRulesResponse:
+      type: object
+      required: [version, text, history]
+      properties:
+        version: { type: integer }
+        text: { type: string }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/AgentRulesHistoryEntry" }
+
+    UpdateAgentRulesRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, maxLength: 8000 }
+
+    AgentInstructions:
+      type: object
+      required: [version, text]
+      properties:
+        version: { type: integer }
+        text: { type: string }
+
+    AgentNotesResponse:
+      type: object
+      required: [notes]
+      properties:
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentNote"
+
+    AgentNote:
+      type: object
+      required: [id, agent_id, thread_root_id, text, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        text: { type: string, maxLength: 2000 }
+        created_at: { type: string, format: date-time }
+
+    DecisionsResponse:
+      type: object
+      required: [decisions]
+      properties:
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Decision"
+
+    Decision:
+      type: object
+      required: [id, number, formatted_number, workspace_id, author_id, channel_id, text, rationale, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer }
+        formatted_number: { type: string, example: "D-12" }
+        workspace_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        text: { type: string, maxLength: 300 }
+        rationale: { type: string, maxLength: 500 }
+        supersedes: { type: integer, nullable: true }
+        superseded_by: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    LeasesResponse:
+      type: object
+      required: [leases]
+      properties:
+        leases:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lease"
+
+    Lease:
+      type: object
+      required: [id, workspace_id, resource, holder_id, holder_handle, acquired_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        resource: { type: string }
+        holder_id: { type: string, format: uuid }
+        holder_handle: { type: string }
+        note: { type: string, nullable: true }
+        acquired_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        released_at: { type: string, format: date-time, nullable: true }
+        released_by: { type: string, format: uuid, nullable: true }
+
+
 

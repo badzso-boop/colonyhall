@@ -715,6 +715,50 @@ type AgentBudget struct {
 	UsedToday int64 `json:"used_today"`
 }
 
+// AgentInstructions defines model for AgentInstructions.
+type AgentInstructions struct {
+	Text    string `json:"text"`
+	Version int    `json:"version"`
+}
+
+// AgentNote defines model for AgentNote.
+type AgentNote struct {
+	AgentId      openapi_types.UUID `json:"agent_id"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+	Text         string             `json:"text"`
+	ThreadRootId openapi_types.UUID `json:"thread_root_id"`
+}
+
+// AgentNotesResponse defines model for AgentNotesResponse.
+type AgentNotesResponse struct {
+	Notes []AgentNote `json:"notes"`
+}
+
+// AgentRules defines model for AgentRules.
+type AgentRules struct {
+	CreatedAt *time.Time          `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID `json:"created_by,omitempty"`
+	Text      string              `json:"text"`
+	Version   int                 `json:"version"`
+}
+
+// AgentRulesHistoryEntry defines model for AgentRulesHistoryEntry.
+type AgentRulesHistoryEntry struct {
+	CreatedAt *time.Time          `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID `json:"created_by,omitempty"`
+	Version   int                 `json:"version"`
+}
+
+// AgentRulesResponse defines model for AgentRulesResponse.
+type AgentRulesResponse struct {
+	CreatedAt *time.Time               `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID      `json:"created_by,omitempty"`
+	History   []AgentRulesHistoryEntry `json:"history"`
+	Text      string                   `json:"text"`
+	Version   int                      `json:"version"`
+}
+
 // AgentToken defines model for AgentToken.
 type AgentToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -895,6 +939,29 @@ type DayUsage struct {
 type DecideApprovalRequest struct {
 	Decision ApprovalDecision `json:"decision"`
 	Message  *string          `json:"message,omitempty"`
+}
+
+// Decision defines model for Decision.
+type Decision struct {
+	AuthorId  openapi_types.UUID `json:"author_id"`
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	CreatedAt time.Time          `json:"created_at"`
+
+	// FormattedNumber Example: D-12
+	FormattedNumber string              `json:"formatted_number"`
+	Id              openapi_types.UUID  `json:"id"`
+	Number          int                 `json:"number"`
+	Rationale       string              `json:"rationale"`
+	SupersededBy    *int                `json:"superseded_by,omitempty"`
+	Supersedes      *int                `json:"supersedes,omitempty"`
+	Text            string              `json:"text"`
+	ThreadRootId    *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	WorkspaceId     openapi_types.UUID  `json:"workspace_id"`
+}
+
+// DecisionsResponse defines model for DecisionsResponse.
+type DecisionsResponse struct {
+	Decisions []Decision `json:"decisions"`
 }
 
 // EditWikiPageRequest defines model for EditWikiPageRequest.
@@ -1143,6 +1210,25 @@ type IssueTokenResponse struct {
 	// Secret Shown once
 	Secret string `json:"secret"`
 	Token  Token  `json:"token"`
+}
+
+// Lease defines model for Lease.
+type Lease struct {
+	AcquiredAt   time.Time           `json:"acquired_at"`
+	ExpiresAt    time.Time           `json:"expires_at"`
+	HolderHandle string              `json:"holder_handle"`
+	HolderId     openapi_types.UUID  `json:"holder_id"`
+	Id           openapi_types.UUID  `json:"id"`
+	Note         *string             `json:"note,omitempty"`
+	ReleasedAt   *time.Time          `json:"released_at,omitempty"`
+	ReleasedBy   *openapi_types.UUID `json:"released_by,omitempty"`
+	Resource     string              `json:"resource"`
+	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
+}
+
+// LeasesResponse defines model for LeasesResponse.
+type LeasesResponse struct {
+	Leases []Lease `json:"leases"`
 }
 
 // LinkCard defines model for LinkCard.
@@ -1490,6 +1576,11 @@ type TokenList struct {
 	Tokens []Token `json:"tokens"`
 }
 
+// UpdateAgentRulesRequest defines model for UpdateAgentRulesRequest.
+type UpdateAgentRulesRequest struct {
+	Text string `json:"text"`
+}
+
 // UsageResponse defines model for UsageResponse.
 type UsageResponse struct {
 	Usage []DayUsage `json:"usage"`
@@ -1558,6 +1649,11 @@ type GetInboxParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListAgentNotesParams defines parameters for ListAgentNotes.
+type ListAgentNotesParams struct {
+	Thread *openapi_types.UUID `form:"thread,omitempty" json:"thread,omitempty"`
+}
+
 // UploadFileMultipartBody defines parameters for UploadFile.
 type UploadFileMultipartBody struct {
 	// File The file to upload
@@ -1569,6 +1665,12 @@ type ListMessagesParams struct {
 	// Before Return messages older than this message ID
 	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListDecisionsParams defines parameters for ListDecisions.
+type ListDecisionsParams struct {
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Query *string `form:"query,omitempty" json:"query,omitempty"`
 }
 
 // ListPreviewsParams defines parameters for ListPreviews.
@@ -1616,6 +1718,9 @@ type IssueTokenJSONRequestBody = IssueTokenRequest
 
 // EmergencyClearJSONRequestBody defines body for EmergencyClear for application/json ContentType.
 type EmergencyClearJSONRequestBody = EmergencyClearRequest
+
+// UpdateAgentRulesJSONRequestBody defines body for UpdateAgentRules for application/json ContentType.
+type UpdateAgentRulesJSONRequestBody = UpdateAgentRulesRequest
 
 // ReportRunErrorJSONRequestBody defines body for ReportRunError for application/json ContentType.
 type ReportRunErrorJSONRequestBody = RunErrorRequest

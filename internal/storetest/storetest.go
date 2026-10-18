@@ -7,18 +7,23 @@ package storetest
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/agentrules"
 	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/decision"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/lease"
+	"colonyhall/internal/modules/notes"
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
@@ -45,6 +50,10 @@ type Backend struct {
 	Files        files.Store
 	Git          git.Store
 	Preview      preview.Store
+	AgentRules   agentrules.Store
+	Notes        notes.Store
+	Decisions    decision.Store
+	Leases       lease.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -63,6 +72,10 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("files", func(t *testing.T) { testFiles(t, newBackend(t)) })
 	t.Run("git", func(t *testing.T) { testGit(t, newBackend(t)) })
 	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
+	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })
+	t.Run("notes", func(t *testing.T) { testNotes(t, newBackend(t)) })
+	t.Run("decisions", func(t *testing.T) { testDecisions(t, newBackend(t)) })
+	t.Run("leases", func(t *testing.T) { testLeases(t, newBackend(t)) })
 }
 
 var (
@@ -1654,5 +1667,405 @@ func testPreview(t *testing.T, b Backend) {
 	must(t, err)
 	if got3.State != preview.StateStopped {
 		t.Fatalf("StopActiveByWorkspace: %+v", got3)
+	}
+}
+
+func testAgentRules(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.AgentRules
+
+	// Initially empty
+	if _, err := st.GetLatest(ctx, f.ws.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for empty latest rules, got: %v", err)
+	}
+	if _, err := st.GetVersion(ctx, f.ws.ID, 1); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for empty version 1, got: %v", err)
+	}
+	history, err := st.ListHistory(ctx, f.ws.ID)
+	must(t, err)
+	if len(history) != 0 {
+		t.Fatalf("expected empty history, got: %v", history)
+	}
+
+	// Insert version 1
+	r1 := agentrules.Rules{
+		WorkspaceID: f.ws.ID,
+		Version:     1,
+		Text:        "Rule 1",
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0,
+	}
+	must(t, st.Insert(ctx, r1))
+
+	gotLatest, err := st.GetLatest(ctx, f.ws.ID)
+	must(t, err)
+	if gotLatest.Version != 1 || gotLatest.Text != "Rule 1" {
+		t.Fatalf("unexpected latest rules: %+v", gotLatest)
+	}
+
+	gotV1, err := st.GetVersion(ctx, f.ws.ID, 1)
+	must(t, err)
+	if gotV1.Version != 1 || gotV1.Text != "Rule 1" {
+		t.Fatalf("unexpected v1 rules: %+v", gotV1)
+	}
+
+	if _, err := st.GetVersion(ctx, f.ws.ID, 2); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing v2, got: %v", err)
+	}
+
+	// Insert version 2
+	r2 := agentrules.Rules{
+		WorkspaceID: f.ws.ID,
+		Version:     2,
+		Text:        "Rule 2",
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0.Add(time.Hour),
+	}
+	must(t, st.Insert(ctx, r2))
+
+	gotLatest2, err := st.GetLatest(ctx, f.ws.ID)
+	must(t, err)
+	if gotLatest2.Version != 2 || gotLatest2.Text != "Rule 2" {
+		t.Fatalf("unexpected latest rules after v2: %+v", gotLatest2)
+	}
+
+	history2, err := st.ListHistory(ctx, f.ws.ID)
+	must(t, err)
+	if len(history2) != 2 || history2[0].Version != 2 || history2[1].Version != 1 {
+		t.Fatalf("unexpected history order: %+v", history2)
+	}
+}
+
+func testNotes(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Notes
+
+	rootMsg := conversation.Message{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		ChannelID:   f.channel.ID,
+		AuthorID:    f.human.ID,
+		Kind:        "text",
+		Body:        "thread root",
+		CreatedAt:   t0,
+	}
+	must(t, b.Conversation.InsertMessage(ctx, rootMsg))
+
+	otherRootMsg := conversation.Message{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		ChannelID:   f.channel.ID,
+		AuthorID:    f.human.ID,
+		Kind:        "text",
+		Body:        "other thread root",
+		CreatedAt:   t0.Add(time.Second),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, otherRootMsg))
+
+	// Empty at first
+	_, err := st.GetLatest(ctx, f.ws.ID, f.agent.ID, rootMsg.ID)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-existing note, got %v", err)
+	}
+
+	// Create note 1
+	n1Time := t0
+	n1, err := st.Create(ctx, notes.Note{
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "note version 1",
+		CreatedAt:    n1Time,
+	})
+	must(t, err)
+
+	got, err := st.GetLatest(ctx, f.ws.ID, f.agent.ID, rootMsg.ID)
+	must(t, err)
+	if got.Text != "note version 1" || got.ID != n1.ID {
+		t.Fatalf("unexpected note: %+v", got)
+	}
+
+	// Create note 2 (newer version for same thread)
+	n2Time := n1Time.Add(time.Minute)
+	n2, err := st.Create(ctx, notes.Note{
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "note version 2",
+		CreatedAt:    n2Time,
+	})
+	must(t, err)
+
+	got2, err := st.GetLatest(ctx, f.ws.ID, f.agent.ID, rootMsg.ID)
+	must(t, err)
+	if got2.Text != "note version 2" || got2.ID != n2.ID {
+		t.Fatalf("unexpected latest note: %+v", got2)
+	}
+
+	// Create note for other thread
+	n3Time := n2Time.Add(time.Minute)
+	n3, err := st.Create(ctx, notes.Note{
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ThreadRootID: otherRootMsg.ID,
+		Text:         "note for other thread",
+		CreatedAt:    n3Time,
+	})
+	must(t, err)
+
+	// List all notes for agent (newest first: n3, n2, n1)
+	all, err := st.ListByAgent(ctx, f.ws.ID, f.agent.ID, nil)
+	must(t, err)
+	if len(all) != 3 || all[0].ID != n3.ID || all[1].ID != n2.ID || all[2].ID != n1.ID {
+		t.Fatalf("unexpected list order: %+v", all)
+	}
+
+	// List notes for specific thread rootMsg.ID (newest first: n2, n1)
+	threadNotes, err := st.ListByAgent(ctx, f.ws.ID, f.agent.ID, &rootMsg.ID)
+	must(t, err)
+	if len(threadNotes) != 2 || threadNotes[0].ID != n2.ID || threadNotes[1].ID != n1.ID {
+		t.Fatalf("unexpected thread notes: %+v", threadNotes)
+	}
+}
+
+func testDecisions(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Decisions
+
+	// 1. NextNumber on empty workspace returns 1
+	n1, err := st.NextNumber(ctx, f.ws.ID)
+	must(t, err)
+	if n1 != 1 {
+		t.Fatalf("expected next number 1, got %d", n1)
+	}
+
+	// 2. Insert decision D-1
+	d1 := decision.Decision{
+		ID:          gen.New(),
+		Number:      1,
+		WorkspaceID: f.ws.ID,
+		AuthorID:    f.human.ID,
+		ChannelID:   f.channel.ID,
+		Text:        "Use PostgreSQL as primary database",
+		Rationale:   "ACID compliance and relational integrity needed",
+		CreatedAt:   t0,
+	}
+	must(t, st.Insert(ctx, d1))
+
+	// 3. NextNumber is now 2
+	n2, err := st.NextNumber(ctx, f.ws.ID)
+	must(t, err)
+	if n2 != 2 {
+		t.Fatalf("expected next number 2, got %d", n2)
+	}
+
+	// 4. Duplicate (workspace_id, number) returns conflict
+	err = st.Insert(ctx, decision.Decision{
+		ID:          gen.New(),
+		Number:      1,
+		WorkspaceID: f.ws.ID,
+		AuthorID:    f.human.ID,
+		ChannelID:   f.channel.ID,
+		Text:        "duplicate",
+		Rationale:   "duplicate",
+		CreatedAt:   t0,
+	})
+	if !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("expected conflict on duplicate number, got %v", err)
+	}
+
+	// 5. Insert decision D-2 that supersedes D-1
+	sup := 1
+	d2 := decision.Decision{
+		ID:          gen.New(),
+		Number:      2,
+		WorkspaceID: f.ws.ID,
+		AuthorID:    f.agent.ID,
+		ChannelID:   f.channel.ID,
+		Text:        "Use CockroachDB for multi-region scale",
+		Rationale:   "PostgreSQL does not support multi-region active-active out of the box",
+		Supersedes:  &sup,
+		CreatedAt:   t0.Add(time.Hour),
+	}
+	must(t, st.Insert(ctx, d2))
+
+	// 6. GetByNumber for D-1 should show SupersededBy = 2
+	got1, err := st.GetByNumber(ctx, f.ws.ID, 1)
+	must(t, err)
+	if got1.SupersededBy == nil || *got1.SupersededBy != 2 {
+		t.Fatalf("expected D-1 to be superseded by 2, got %+v", got1.SupersededBy)
+	}
+
+	// GetByNumber for D-2 should show SupersededBy == nil
+	got2, err := st.GetByNumber(ctx, f.ws.ID, 2)
+	must(t, err)
+	if got2.SupersededBy != nil {
+		t.Fatalf("expected D-2 to not be superseded, got %+v", got2.SupersededBy)
+	}
+	if got2.Supersedes == nil || *got2.Supersedes != 1 {
+		t.Fatalf("expected D-2 to supersede 1, got %+v", got2.Supersedes)
+	}
+
+	// 7. List validOnly: true -> returns only D-2
+	validList, err := st.List(ctx, f.ws.ID, 10, "", true)
+	must(t, err)
+	if len(validList) != 1 || validList[0].Number != 2 {
+		t.Fatalf("expected only D-2 in valid list, got %+v", validList)
+	}
+
+	// List validOnly: false -> returns D-2 and D-1 (newest first)
+	allList, err := st.List(ctx, f.ws.ID, 10, "", false)
+	must(t, err)
+	if len(allList) != 2 || allList[0].Number != 2 || allList[1].Number != 1 {
+		t.Fatalf("expected D-2 and D-1 in all list, got %+v", allList)
+	}
+
+	// Query filter: "PostgreSQL" matches both (D-1 text and D-2 rationale)
+	qList, err := st.List(ctx, f.ws.ID, 10, "PostgreSQL", false)
+	must(t, err)
+	if len(qList) != 2 {
+		t.Fatalf("expected 2 matches for 'PostgreSQL', got %d", len(qList))
+	}
+
+	// Query filter: "CockroachDB" matches only D-2
+	qList2, err := st.List(ctx, f.ws.ID, 10, "CockroachDB", false)
+	must(t, err)
+	if len(qList2) != 1 || qList2[0].Number != 2 {
+		t.Fatalf("expected 1 match for 'CockroachDB', got %+v", qList2)
+	}
+}
+
+func testLeases(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Leases
+
+	// 1. GetActiveByResource on empty -> db.ErrNotFound
+	_, err := st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", t0)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for non-existent lease, got %v", err)
+	}
+
+	// 2. Create lease L1
+	l1 := lease.Lease{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		Resource:     "deploy:prod",
+		HolderID:     f.agent.ID,
+		HolderHandle: f.agent.Handle,
+		Note:         "deploying release 1.0",
+		AcquiredAt:   t0,
+		ExpiresAt:    t0.Add(30 * time.Minute),
+	}
+	must(t, st.Create(ctx, l1))
+
+	// 3. GetActiveByResource returns L1
+	active, err := st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", t0)
+	must(t, err)
+	if active.ID != l1.ID || active.HolderID != f.agent.ID || active.Resource != "deploy:prod" {
+		t.Fatalf("unexpected active lease: %+v", active)
+	}
+
+	// 4. Concurrently lock and test race safety on resource
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = b.Tx.InTx(ctx, func(txCtx context.Context) error {
+				if err := st.LockResource(txCtx, f.ws.ID, "deploy:prod"); err != nil {
+					return err
+				}
+				_, _ = st.GetActiveByResource(txCtx, f.ws.ID, "deploy:prod", t0)
+				return nil
+			})
+		}()
+	}
+	wg.Wait()
+
+	// 5. Extend L1
+	newExpires := t0.Add(60 * time.Minute)
+	newNote := "extended deployment"
+	must(t, st.Extend(ctx, l1.ID, newExpires, &newNote))
+
+	ext, err := st.GetByID(ctx, l1.ID)
+	must(t, err)
+	if !ext.ExpiresAt.Equal(newExpires) || ext.Note != newNote {
+		t.Fatalf("unexpected extended lease: %+v", ext)
+	}
+
+	// 6. Expired lease is not active
+	_, err = st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", t0.Add(2*time.Hour))
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for expired lease, got %v", err)
+	}
+
+	// 7. Release L1
+	nowRel := t0.Add(40 * time.Minute)
+	must(t, st.Release(ctx, l1.ID, f.agent.ID, nowRel))
+
+	_, err = st.GetActiveByResource(ctx, f.ws.ID, "deploy:prod", nowRel)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after release, got %v", err)
+	}
+
+	// 8. Create two active leases on different resources
+	l2 := lease.Lease{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		Resource:     "port:5433",
+		HolderID:     f.agent.ID,
+		HolderHandle: f.agent.Handle,
+		Note:         "testing migration",
+		AcquiredAt:   t0,
+		ExpiresAt:    t0.Add(30 * time.Minute),
+	}
+	l3 := lease.Lease{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		Resource:     "db:shared",
+		HolderID:     f.human.ID,
+		HolderHandle: f.human.Handle,
+		Note:         "schema inspection",
+		AcquiredAt:   t0,
+		ExpiresAt:    t0.Add(30 * time.Minute),
+	}
+	must(t, st.Create(ctx, l2))
+	must(t, st.Create(ctx, l3))
+
+	activeList, err := st.ListActive(ctx, f.ws.ID, t0)
+	must(t, err)
+	if len(activeList) != 2 {
+		t.Fatalf("expected 2 active leases, got %d", len(activeList))
+	}
+
+	// 9. ReleaseActiveByHolder releases agent's lease
+	relHolder, err := st.ReleaseActiveByHolder(ctx, f.ws.ID, f.agent.ID, f.human.ID, t0)
+	must(t, err)
+	if len(relHolder) != 1 || relHolder[0].Resource != "port:5433" {
+		t.Fatalf("expected 1 released lease for holder, got %+v", relHolder)
+	}
+
+	// Only l3 remains active
+	activeList, err = st.ListActive(ctx, f.ws.ID, t0)
+	must(t, err)
+	if len(activeList) != 1 || activeList[0].Resource != "db:shared" {
+		t.Fatalf("expected 1 active lease remaining, got %+v", activeList)
+	}
+
+	// 10. ReleaseActiveByWorkspace releases all remaining
+	relWs, err := st.ReleaseActiveByWorkspace(ctx, f.ws.ID, f.human.ID, t0)
+	must(t, err)
+	if len(relWs) != 1 || relWs[0].Resource != "db:shared" {
+		t.Fatalf("expected 1 released lease for workspace, got %+v", relWs)
+	}
+
+	activeList, err = st.ListActive(ctx, f.ws.ID, t0)
+	must(t, err)
+	if len(activeList) != 0 {
+		t.Fatalf("expected 0 active leases, got %d", len(activeList))
 	}
 }

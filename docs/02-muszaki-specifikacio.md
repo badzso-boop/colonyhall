@@ -679,11 +679,61 @@ Elsőként a Gitea adapter készült el (`provider/gitea.go`). Későbbi fejlesz
 - `DELETE /api/v1/git/mappings/{owner}/{repo}`: hozzárendelés törlése (csak adminok).
 - `POST /api/v1/hooks/gitea`: nyilvános Gitea webhook végpont (HMAC védelemmel).
 
-### Környezeti változók
+## Agent–agent együttműködés (megvalósítva, 2026-10-18)
 
-- `COLONY_GITEA_URL`: a Gitea példány báziscíme (pl. `https://git.example.com`). Ha nincs megadva, a git modul inaktív (nincs hiba, nincs link kibontás).
-- `COLONY_GITEA_TOKEN`: írásvédett API token a tárolók és PR-ek metaadatainak lekérdezéséhez.
-- `COLONY_GITEA_WEBHOOK_SECRET`: HMAC titkos kulcs a beérkező webhookok hitelesítéséhez.
+A több ágens közötti feladatmegosztást, közös szabályrendszert, memóriát, döntésnaplózást és erőforrás-koordinációt biztosító modulok összessége (`feature/collaboration`, `docs/handoff/14-collaboration-prompt.md`).
+
+### 1. Közös agent szabályok (`internal/modules/agentrules`)
+
+- **Adattábla (`00018_agent_rules.sql`):** `agent_rules` append-only tábla (`workspace_id`, `version`, `text`, `created_by`, `created_at`). Ha még nincs mentett sor, a beépített v0 (angol nyelvű, beágyazott konstans) változat érvényes.
+- **Placeholder kiértékelés:** A szerver rendereléskor kitölti a `{handle}`, `{admins}` (vesszővel elválasztva `@a, @b`), és `{workspace}` mezőket. Az ismeretlen `{...}` helyőrzők érintetlenek maradnak.
+- **REST végpontok:**
+  - `GET /api/v1/agent-rules`: emberi lekérdezés (aktuális szöveg, verzió, előzmények lista).
+  - `GET /api/v1/agent-rules/{version}`: korábbi verzió szövegének megtekintése.
+  - `PUT /api/v1/agent-rules`: admin/owner általi frissítés (új verzió, audit bejegyzés és esemény).
+  - `GET /api/v1/agent/instructions`: agent tokenes lekérdezés, az adott ágensre renderelt szöveggel és verziószámmal.
+- **MCP és dev felület:** Az MCP inicializációkor a szerver a csatlakozó ágensre kitöltött szabályokat adja át az `instructions` mezőben. A fejlesztői felületen „Szabályok” panel érhető el szerkesztési és előzmény-megtekintési funkcióval.
+
+### 2. Kézbesítés a CLI-knek (`internal/guard`)
+
+- **Őr cache:** Az őr ágensenként gyorsítótárazza a szabályokat (`GET /api/v1/agent/instructions`). 10 percenként vagy a host konfiguráció verzióváltásakor újratölti. Hiba esetén az utolsó ismert jó szöveggel fut, soha nem blokkolja az ágens futását.
+- **Claude Code közvetlen futás:** Minden futáskor megkapja a `--append-system-prompt <szöveg>` kapcsolót, ami nem módosítja a felhasználó saját `CLAUDE.md` fájlját.
+- **Antigravity közvetlen futás:** A prompt elejére illeszti `<colonyhall_rules version="N">...</colonyhall_rules>` formában az első futáskor, munkamenet-rotáció után, vagy ha a szabályverzió megváltozott az adott szál utolsó futása óta (a verzió a szál állapotfájljában tárolódik a session_id mellett).
+- **DirectPrompt egyszerűsítés:** A közvetlen futtatás promptjából eltávolításra került a szabályok duplikációja, csak a futás-specifikus instrukciók maradtak meg.
+
+### 3. Agent jegyzetfüzet (`internal/modules/notes`)
+
+- **Adattábla (`00019_agent_notes.sql`):** `agent_note` append-only tábla (`workspace_id`, `agent_id`, `thread_root_id`, `text`, `created_at`). A legfrissebb bejegyzés adja az aktuális állapotot.
+- **MCP eszközök:** `note_get(thread?)` és `note_set(text, thread?)`. A megadott üzenetazonosítót a gyökérre oldja fel. Az ágens kizárólag a saját jegyzeteit érheti el.
+- **REST az embereknek:** `GET /api/v1/agents/{id}/notes` (időrendben csökkenő, opcionális `?thread=` szűréssel).
+- **Őr injektálás:** Amikor közvetlen futás új munkamenetet indít egy szálhoz (első futás vagy rotáció után), a prompt elejére beszúrja az ágens saját korábbi jegyzetét `<colonyhall_note>...</colonyhall_note>` adatkeretben.
+
+### 4. Döntésnapló (`internal/modules/decision`)
+
+- **Adattábla (`00020_decisions.sql`):** `decision` append-only tábla (`id`, `number`, `workspace_id`, `author_id`, `channel_id`, `thread_root_id`, `text`, `rationale`, `supersedes`, `created_at`). A sorszámok munkaterületenként egyediek (`D-1`, `D-2`, ...).
+- **Atomi Wiki integráció:** A `decision_add` MCP eszköz hívásakor **ugyanabban az adatbázis-tranzakcióban** létrejön a rekord, és új szakaszként hozzáfűzésre kerül a „Döntések” wikioldalhoz (`D-NN — szöveg. Miért: indoklás...`).
+- **MCP eszközök:**
+  - `decision_add(text, rationale, supersedes?, thread?)`: új döntés rögzítése és wiki hozzáfűzés.
+  - `decision_list(limit?, query?)`: a legfrissebb érvényes (nem felülbírált) döntések listázása.
+- **REST és felület:** `GET /api/v1/decisions` az embereknek; a dev felületen a döntések listája és a wiki oldalra mutató hivatkozás érhető el.
+
+### 5. Erőforrás-foglalások (`internal/modules/lease`)
+
+- **Adattábla (`00021_leases.sql`):** `lease` tábla (`id`, `workspace_id`, `resource`, `holder_id`, `note`, `acquired_at`, `expires_at`, `released_at`, `released_by`). Az erőforrás neve normalizált kisbetűs szöveg (`[a-z0-9._:/-]`).
+- **Konkurens zárolás:** PostgreSQL-en tranzakciós advisory lock (`pg_advisory_xact_lock(hashtext(...))`) biztosítja az egyidejű foglalások versengésmentességét.
+- **MCP eszközök:**
+  - `lease_acquire(resource, ttl_minutes = 30, note?)`: ha más tartja érvényesen, nem hibát dob, hanem jelzi: `"taken by @x until HH:MM (note)"`. Ha a hívó tartja, meghosszabbítja a lejárati időt. Egyébként lefoglalja.
+  - `lease_release(resource)`: aktív foglalás feloldása (csak a birtokos által).
+- **REST és életciklus:**
+  - Emberek a `GET /api/v1/leases` végponton látják az aktív foglalásokat, és a `POST /api/v1/leases/{id}/release` hívással bármelyiket feloldhatják.
+  - Automatikus feloldás: az ágens leállítása (`stopped`/`halted`), törlése vagy a vészleállító (`emergency-stop`) aktiválása azonnal felszabadítja az érintett ágens(ek) minden aktív foglalását eseményvezérelten.
+
+### 6. Sebességkorlát és párhuzamos futás (`internal/modules/conversation`)
+
+- **20 üzenetes sebességkorlát:** Ha egy szálban vagy DM-ben 10 percen belül legalább 20 ágens által írt üzenet érkezett úgy, hogy közben nem érkezett emberi üzenet, a szerver elutasítja a 21. ágens üzenetet `429 Too Many Requests` státusszal és a `"this conversation is paused: too many agent messages; a human has to reply"` hibaüzenettel.
+- **Értesítő rendszerüzenet:** A szünet bekövetkezésekor a szerver szünetenként pontosan egyszer egy `system` típusú üzenetet szúr be a szálba/DM-be, megemlítve a munkaterület adminjait (`@admin1, @admin2 please check in`).
+- **Szünet feloldása:** Bármilyen emberi üzenet a szálban vagy DM-ben azonnal feloldja a szünetet.
+- **Párhuzamos több-ágens említés:** Ha egy üzenet egyszerre több ágenst említ meg (`@bot-1 és @bot-2`), a delivery modul mindegyik ágensnek önálló `Delivery` inbox tételt generál `FlagMentioned | FlagWake` jelzőkkel, így mindketten párhuzamosan elindulnak a saját munkamenetükben.
 
 ## Verziózás, kompatibilitás, bővíthetőség
 

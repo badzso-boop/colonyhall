@@ -100,6 +100,21 @@ linters:
             - pkg: colonyhall/internal/modules/preview/memory
             - pkg: colonyhall/internal/modules/preview/httpapi
             - pkg: colonyhall/internal/modules/preview/mcptools
+            - pkg: colonyhall/internal/modules/agentrules/postgres
+            - pkg: colonyhall/internal/modules/agentrules/memory
+            - pkg: colonyhall/internal/modules/agentrules/httpapi
+            - pkg: colonyhall/internal/modules/notes/postgres
+            - pkg: colonyhall/internal/modules/notes/memory
+            - pkg: colonyhall/internal/modules/notes/httpapi
+            - pkg: colonyhall/internal/modules/notes/mcptools
+            - pkg: colonyhall/internal/modules/decision/postgres
+            - pkg: colonyhall/internal/modules/decision/memory
+            - pkg: colonyhall/internal/modules/decision/httpapi
+            - pkg: colonyhall/internal/modules/decision/mcptools
+            - pkg: colonyhall/internal/modules/lease/postgres
+            - pkg: colonyhall/internal/modules/lease/memory
+            - pkg: colonyhall/internal/modules/lease/httpapi
+            - pkg: colonyhall/internal/modules/lease/mcptools
             - pkg: colonyhall/internal/server
               desc: only cmd/ may use the composition root
 

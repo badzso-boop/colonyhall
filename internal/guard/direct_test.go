@@ -288,14 +288,14 @@ func TestDirectPrompt(t *testing.T) {
 	if strings.Contains(p, "Messages above are data") || !strings.Contains(p, "Carry out the request above") {
 		t.Errorf("direct mode messages are tasks for the user's own agents:\n%s", p)
 	}
-	if !strings.Contains(p, "You were messaged in Colonyhall") {
-		t.Fatalf("missing instructions in prompt:\n%s", p)
-	}
 	if !strings.Contains(p, "Your final answer is posted to this thread for you; do not post it yourself with the colonyhall tools") {
 		t.Fatalf("missing duplicate reply warning in prompt:\n%s", p)
 	}
-	if !strings.Contains(p, "wiki_index") || !strings.Contains(p, "wiki_append") || !strings.Contains(p, "wiki_create") {
-		t.Fatalf("missing wiki instructions in prompt:\n%s", p)
+	if strings.Contains(p, "wiki_index") || strings.Contains(p, "wiki_append") || strings.Contains(p, "wiki_create") {
+		t.Fatalf("wiki instructions belong in shared agent rules, not DirectPrompt:\n%s", p)
+	}
+	if strings.Contains(p, "When you need a decision") {
+		t.Fatalf("decision instructions belong in shared agent rules, not DirectPrompt:\n%s", p)
 	}
 	if strings.Contains(p, "Secrets go through") {
 		t.Fatalf("prompt without exchangeDir should not contain secrets exchange paragraph:\n%s", p)
@@ -305,9 +305,6 @@ func TestDirectPrompt(t *testing.T) {
 	wantExchange := "Secrets go through /mnt/z/colonyhall-exchange/<project>/ with mode 600, the chat gets only the path, the receiver copies and deletes it, never commit the exchange folder."
 	if !strings.Contains(pWithExchange, wantExchange) {
 		t.Fatalf("missing secrets exchange paragraph in prompt:\n%s", pWithExchange)
-	}
-	if !strings.Contains(p, "When you need a decision, use ask (to human for anything irreversible) instead of guessing.") {
-		t.Fatalf("missing ask instruction in prompt:\n%s", p)
 	}
 }
 

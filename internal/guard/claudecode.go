@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,6 +16,10 @@ import (
 type ClaudeCode struct {
 	Bin string // default "claude"
 	Run Runner
+
+	helpMu                 sync.Mutex
+	hasAppendPromptChecked bool
+	hasAppendPrompt        bool
 }
 
 type claudeOutput struct {
@@ -35,6 +41,25 @@ func (c *ClaudeCode) bin() string {
 		return "claude"
 	}
 	return c.Bin
+}
+
+// SupportsAppendSystemPrompt checks if the installed claude binary supports
+// --append-system-prompt by inspecting claude --help output.
+func (c *ClaudeCode) SupportsAppendSystemPrompt(ctx context.Context) bool {
+	c.helpMu.Lock()
+	defer c.helpMu.Unlock()
+	if c.hasAppendPromptChecked {
+		return c.hasAppendPrompt
+	}
+	c.hasAppendPromptChecked = true
+	if c.Run == nil {
+		return false
+	}
+	stdout, _, err := c.Run(ctx, "", c.bin(), []string{"--help"}, nil)
+	if err == nil && strings.Contains(string(stdout), "--append-system-prompt") {
+		c.hasAppendPrompt = true
+	}
+	return c.hasAppendPrompt
 }
 
 // Decide implements Adapter.
@@ -60,6 +85,9 @@ func (c *ClaudeCode) Decide(ctx context.Context, req DecideRequest) (RunResult, 
 // Work implements Adapter.
 func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
 	args := []string{"-p", req.Prompt, "--output-format", "json", "--no-session-persistence"}
+	if req.Rules != "" && c.SupportsAppendSystemPrompt(ctx) {
+		args = append(args, "--append-system-prompt", req.Rules)
+	}
 	mode := req.PermissionMode
 	if req.NoExec && mode != "" && mode != "acceptEdits" && mode != "plan" {
 		mode = "acceptEdits" // sandboxed: no mode that skips permission checks
@@ -82,6 +110,9 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 // Direct implements Adapter.
 func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, error) {
 	args := []string{"-p", req.Prompt}
+	if req.Rules != "" && c.SupportsAppendSystemPrompt(ctx) {
+		args = append(args, "--append-system-prompt", req.Rules)
+	}
 	if req.Resume {
 		args = append(args, "--resume", req.SessionID)
 	} else {

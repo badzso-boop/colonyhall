@@ -19,6 +19,7 @@ func init() {
 		conversation.ErrAgentTooLong, conversation.ErrTooManyMentions, conversation.ErrGroupMention,
 		conversation.ErrNothingToAck)
 	httpx.RegisterForbidden(conversation.ErrForbidden)
+	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrConversationPaused)
 }
 
 // MessageToAPI converts a message to its API shape.

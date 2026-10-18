@@ -42,6 +42,23 @@ type AgentHost struct {
 	AllowPreview     bool
 }
 
+type AgentNote struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	AgentID      uuid.UUID
+	ThreadRootID uuid.UUID
+	Text         string
+	CreatedAt    time.Time
+}
+
+type AgentRule struct {
+	WorkspaceID uuid.UUID
+	Version     int32
+	Text        string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+}
+
 type AgentRun struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.UUID
@@ -133,6 +150,19 @@ type Credential struct {
 	ActorID      uuid.UUID
 	PasswordHash string
 	UpdatedAt    time.Time
+}
+
+type Decision struct {
+	ID           uuid.UUID
+	Number       int32
+	WorkspaceID  uuid.UUID
+	AuthorID     uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Text         string
+	Rationale    string
+	Supersedes   *int32
+	CreatedAt    time.Time
 }
 
 type Delivery struct {
@@ -228,6 +258,18 @@ type HostPairingCode struct {
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
 	UsedAt      *time.Time
+}
+
+type Lease struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Resource    string
+	HolderID    uuid.UUID
+	Note        *string
+	AcquiredAt  time.Time
+	ExpiresAt   time.Time
+	ReleasedAt  *time.Time
+	ReleasedBy  *uuid.UUID
 }
 
 type Message struct {

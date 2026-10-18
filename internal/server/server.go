@@ -20,6 +20,10 @@ import (
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpserver"
 	"colonyhall/internal/mcpserver"
+	"colonyhall/internal/modules/agentrules"
+	ruleshttp "colonyhall/internal/modules/agentrules/httpapi"
+	rulesmem "colonyhall/internal/modules/agentrules/memory"
+	rulespg "colonyhall/internal/modules/agentrules/postgres"
 	"colonyhall/internal/modules/approval"
 	apphttp "colonyhall/internal/modules/approval/httpapi"
 	appmcp "colonyhall/internal/modules/approval/mcptools"
@@ -34,6 +38,11 @@ import (
 	convmcp "colonyhall/internal/modules/conversation/mcptools"
 	convmem "colonyhall/internal/modules/conversation/memory"
 	convpg "colonyhall/internal/modules/conversation/postgres"
+	"colonyhall/internal/modules/decision"
+	dechttp "colonyhall/internal/modules/decision/httpapi"
+	decmcp "colonyhall/internal/modules/decision/mcptools"
+	decmem "colonyhall/internal/modules/decision/memory"
+	decpg "colonyhall/internal/modules/decision/postgres"
 	"colonyhall/internal/modules/delivery"
 	delhttp "colonyhall/internal/modules/delivery/httpapi"
 	delmcp "colonyhall/internal/modules/delivery/mcptools"
@@ -59,6 +68,16 @@ import (
 	idhttp "colonyhall/internal/modules/identity/httpapi"
 	idmem "colonyhall/internal/modules/identity/memory"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/lease"
+	leaseshttp "colonyhall/internal/modules/lease/httpapi"
+	leasesmcp "colonyhall/internal/modules/lease/mcptools"
+	leasesmem "colonyhall/internal/modules/lease/memory"
+	leasespg "colonyhall/internal/modules/lease/postgres"
+	"colonyhall/internal/modules/notes"
+	noteshttp "colonyhall/internal/modules/notes/httpapi"
+	notesmcp "colonyhall/internal/modules/notes/mcptools"
+	notesmem "colonyhall/internal/modules/notes/memory"
+	notespg "colonyhall/internal/modules/notes/postgres"
 	"colonyhall/internal/modules/preview"
 	previewhttp "colonyhall/internal/modules/preview/httpapi"
 	previewmcp "colonyhall/internal/modules/preview/mcptools"
@@ -134,6 +153,10 @@ type App struct {
 	Files        *files.Service
 	Git          *git.Service
 	Preview      *preview.Service
+	AgentRules   *agentrules.Service
+	Notes        *notes.Service
+	Decisions    *decision.Service
+	Leases       *lease.Service
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -173,6 +196,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		closeAll       = func() {}
 		giStore        git.Store
 		prStore        preview.Store
+		rlStore        agentrules.Store
+		ntStore        notes.Store
+		dcStore        decision.Store
+		lsStore        lease.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -188,6 +215,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		storageBackend = filesmem.NewStorage()
 		giStore = gitmem.New()
 		prStore = previewmem.New()
+		rlStore = rulesmem.New()
+		ntStore = notesmem.New()
+		dcStore = decmem.New()
+		lsStore = leasesmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -218,6 +249,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		}
 		giStore = &gitpg.Store{DB: pg}
 		prStore = &previewpg.Store{DB: pg}
+		rlStore = &rulespg.Store{DB: pg}
+		ntStore = &notespg.Store{DB: pg}
+		dcStore = &decpg.Store{DB: pg}
+		lsStore = &leasespg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -284,12 +319,25 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Clock:        opt.Clock,
 	}
 	hoSvc.Previews = prSvc
+	rlSvc := &agentrules.Service{
+		Store:     rlStore,
+		Directory: idSvc,
+		Events:    events,
+		Bus:       b,
+		Tx:        tx,
+		IDs:       opt.IDs,
+		Clock:     opt.Clock,
+	}
+	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock, opt.IDs)
+	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
+	lsSvc := lease.NewService(lsStore, idSvc, events, b, tx, opt.Clock, opt.IDs)
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
 		{Name: approval.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: apSvc.HandleEvent, Logger: opt.Logger},
 		{Name: git.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: gitSvc.HandleEvent, Logger: opt.Logger},
 		{Name: preview.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: prSvc.HandleEvent, Logger: opt.Logger},
+		{Name: lease.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: lsSvc.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -306,6 +354,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	qhttp.Register(mux, qSvc, idSvc, cvSvc, idSvc)
 	fileshttp.Register(mux, fiSvc, idSvc)
 	githttp.Register(mux, gitSvc, idSvc)
+	ruleshttp.Register(mux, rlSvc, idSvc)
+	noteshttp.Register(mux, ntSvc, idSvc)
+	dechttp.Register(mux, dcSvc, idSvc)
+	leaseshttp.Register(mux, lsSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -316,7 +368,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		filesmcp.Register(s, fiSvc, cvSvc, current)
 		gitmcp.Register(s, gitSvc, current)
 		previewmcp.Register(s, prSvc, current)
-	}, opt.Logger)
+		notesmcp.Register(s, ntSvc, current, r)
+		decmcp.Register(s, dcSvc, current, r)
+		leasesmcp.Register(s, lsSvc, current)
+	}, rlSvc.InstructionsForActor, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
 	}
@@ -337,6 +392,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Files:        fiSvc,
 		Git:          gitSvc,
 		Preview:      prSvc,
+		AgentRules:   rlSvc,
+		Notes:        ntSvc,
+		Decisions:    dcSvc,
+		Leases:       lsSvc,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

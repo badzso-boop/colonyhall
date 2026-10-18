@@ -75,3 +75,22 @@ sql:
     schema: migrations
     queries: internal/modules/preview/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/preview/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/agentrules/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/agentrules/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/notes/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/notes/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/decision/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/decision/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/lease/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/lease/postgres/sqlcgen } }
+
+
+

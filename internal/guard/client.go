@@ -393,3 +393,50 @@ func (c *Client) ReportPreview(ctx context.Context, previewID, state, url, errSt
 	}
 	return c.do(ctx, http.MethodPost, "/api/v1/host/previews/"+previewID, in, nil)
 }
+
+// AgentInstructions represents the rendered instructions for the calling agent.
+type AgentInstructions struct {
+	Version int    `json:"version"`
+	Text    string `json:"text"`
+}
+
+// Instructions fetches the agent's instructions (rendered rules).
+func (c *Client) Instructions(ctx context.Context) (AgentInstructions, error) {
+	var inst AgentInstructions
+	err := c.do(ctx, http.MethodGet, "/api/v1/agent/instructions", nil, &inst)
+	return inst, err
+}
+
+// AgentNoteItem represents one note row returned by GET /api/v1/agents/{id}/notes.
+type AgentNoteItem struct {
+	ID           string    `json:"id"`
+	AgentID      string    `json:"agent_id"`
+	ThreadRootID string    `json:"thread_root_id"`
+	Text         string    `json:"text"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// AgentNotes returns notes for agentID, optionally filtered by thread.
+func (c *Client) AgentNotes(ctx context.Context, agentID, threadRootID string) ([]AgentNoteItem, error) {
+	path := "/api/v1/agents/" + agentID + "/notes"
+	if threadRootID != "" {
+		path += "?thread=" + url.QueryEscape(threadRootID)
+	}
+	var r struct {
+		Notes []AgentNoteItem `json:"notes"`
+	}
+	err := c.do(ctx, http.MethodGet, path, nil, &r)
+	return r.Notes, err
+}
+
+// LatestNote returns the newest note text for agentID in threadRootID, or "" if none.
+func (c *Client) LatestNote(ctx context.Context, agentID, threadRootID string) (string, error) {
+	notes, err := c.AgentNotes(ctx, agentID, threadRootID)
+	if err != nil {
+		return "", err
+	}
+	if len(notes) == 0 {
+		return "", nil
+	}
+	return notes[0].Text, nil
+}
