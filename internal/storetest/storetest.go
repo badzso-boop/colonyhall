@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/agentrules"
 	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/conversation"
@@ -45,6 +46,7 @@ type Backend struct {
 	Files        files.Store
 	Git          git.Store
 	Preview      preview.Store
+	AgentRules   agentrules.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -63,6 +65,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("files", func(t *testing.T) { testFiles(t, newBackend(t)) })
 	t.Run("git", func(t *testing.T) { testGit(t, newBackend(t)) })
 	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
+	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })
 }
 
 var (
@@ -1654,5 +1657,72 @@ func testPreview(t *testing.T, b Backend) {
 	must(t, err)
 	if got3.State != preview.StateStopped {
 		t.Fatalf("StopActiveByWorkspace: %+v", got3)
+	}
+}
+
+func testAgentRules(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.AgentRules
+
+	// Initially empty
+	if _, err := st.GetLatest(ctx, f.ws.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for empty latest rules, got: %v", err)
+	}
+	if _, err := st.GetVersion(ctx, f.ws.ID, 1); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for empty version 1, got: %v", err)
+	}
+	history, err := st.ListHistory(ctx, f.ws.ID)
+	must(t, err)
+	if len(history) != 0 {
+		t.Fatalf("expected empty history, got: %v", history)
+	}
+
+	// Insert version 1
+	r1 := agentrules.Rules{
+		WorkspaceID: f.ws.ID,
+		Version:     1,
+		Text:        "Rule 1",
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0,
+	}
+	must(t, st.Insert(ctx, r1))
+
+	gotLatest, err := st.GetLatest(ctx, f.ws.ID)
+	must(t, err)
+	if gotLatest.Version != 1 || gotLatest.Text != "Rule 1" {
+		t.Fatalf("unexpected latest rules: %+v", gotLatest)
+	}
+
+	gotV1, err := st.GetVersion(ctx, f.ws.ID, 1)
+	must(t, err)
+	if gotV1.Version != 1 || gotV1.Text != "Rule 1" {
+		t.Fatalf("unexpected v1 rules: %+v", gotV1)
+	}
+
+	if _, err := st.GetVersion(ctx, f.ws.ID, 2); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing v2, got: %v", err)
+	}
+
+	// Insert version 2
+	r2 := agentrules.Rules{
+		WorkspaceID: f.ws.ID,
+		Version:     2,
+		Text:        "Rule 2",
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0.Add(time.Hour),
+	}
+	must(t, st.Insert(ctx, r2))
+
+	gotLatest2, err := st.GetLatest(ctx, f.ws.ID)
+	must(t, err)
+	if gotLatest2.Version != 2 || gotLatest2.Text != "Rule 2" {
+		t.Fatalf("unexpected latest rules after v2: %+v", gotLatest2)
+	}
+
+	history2, err := st.ListHistory(ctx, f.ws.ID)
+	must(t, err)
+	if len(history2) != 2 || history2[0].Version != 2 || history2[1].Version != 1 {
+		t.Fatalf("unexpected history order: %+v", history2)
 	}
 }

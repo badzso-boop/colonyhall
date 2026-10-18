@@ -42,6 +42,14 @@ type AgentHost struct {
 	AllowPreview     bool
 }
 
+type AgentRule struct {
+	WorkspaceID uuid.UUID
+	Version     int32
+	Text        string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+}
+
 type AgentRun struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.UUID

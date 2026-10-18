@@ -49,8 +49,8 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel { overflow:auto; padding:12px 16px; display:none; }
-  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on { display:block; } #feed.off { display:none; }
+  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel, #rulesPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on, #rulesPanel.on { display:block; } #feed.off { display:none; }
   table.tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
   table.tbl th, table.tbl td { padding:6px 8px; border:1px solid var(--line); text-align:left; }
   table.tbl th { background:var(--bg); font-weight:600; }
@@ -81,7 +81,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="questionsbtn" hidden>❓ Válaszra vár</button><button id="wikibtn" hidden>📖 Wiki</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="questionsbtn" hidden>❓ Válaszra vár</button><button id="wikibtn" hidden>📖 Wiki</button><button id="rulesbtn" hidden>📜 Szabályok</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -93,6 +93,7 @@
     <div id="runsPanel"></div>
     <div id="wikiPanel"></div>
     <div id="questionsPanel"></div>
+    <div id="rulesPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <div id="attachedFiles"></div>
@@ -128,7 +129,8 @@ const I18N = {
         exchange: "Titokcsere", exchangeNotOk: "nem írható",
         dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):",
         giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás",
-        previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás" },
+        previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
+        agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -148,7 +150,8 @@ const I18N = {
         exchange: "Secrets exchange", exchangeNotOk: "unwritable",
         dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):",
         giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add",
-        previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop" },
+        previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
+        agentRules: "Agent rules", save: "Save", version: "Version", history: "History" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -444,11 +447,12 @@ $("hostsbtn").textContent = L.hosts;
 let openPanel = null;
 function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
-  for (const p of ["hosts", "sched", "runs", "wiki", "questions"]) $(p + "Panel").className = openPanel === p ? "on" : "";
+  for (const p of ["hosts", "sched", "runs", "wiki", "questions", "rules"]) $(p + "Panel").className = openPanel === p ? "on" : "";
   $("feed").className = openPanel ? "off" : "";
   $("hostsbtn").textContent = openPanel === "hosts" ? L.chat : L.hosts;
   $("wikibtn").textContent = openPanel === "wiki" ? "💬 Chat" : "📖 Wiki";
   $("questionsbtn").textContent = openPanel === "questions" ? "💬 Chat" : "❓ Válaszra vár";
+  $("rulesbtn").textContent = openPanel === "rules" ? "💬 Chat" : "📜 " + L.agentRules;
   hostsOpen = openPanel === "hosts"; schedOpen = openPanel === "sched";
   return openPanel === name;
 }
@@ -815,6 +819,7 @@ async function start() {
   $("questionsbtn").hidden = me.kind !== "human";
   $("runsbtn").hidden = me.kind !== "human";
   $("wikibtn").hidden = false;
+  $("rulesbtn").hidden = me.kind !== "human";
   await load(); if (!ws) connectWS();
 }
 
@@ -1326,6 +1331,79 @@ async function renderWikiPage(slug) {
     };
     editBox.append(editSummary, editTitle, editTags, editArea, editBtn);
     card.append(editBox);
+  }
+
+  panel.append(card);
+}
+
+// --- Agent rules -------------------------------------------------------------
+$("rulesbtn").onclick = () => { if (!togglePanel("rules")) return; renderAgentRules(); };
+
+async function renderAgentRules() {
+  const panel = $("rulesPanel");
+  panel.innerHTML = "";
+  const card = el("div", { className: "card" });
+  card.append(el("h3", { textContent: L.agentRules }));
+
+  let rules;
+  try {
+    rules = await api("/api/v1/agent-rules");
+  } catch (err) {
+    panel.append(el("div", { className: "warn", textContent: err.message || "Error loading rules" }));
+    return;
+  }
+
+  const verText = rules.version === 0 ? "0 (" + (L.agentRules === "Agent szabályok" ? "beépített" : "built-in") + ")" : String(rules.version);
+  const verInfo = el("div", { className: "muted", textContent: `${L.version}: ${verText}` });
+  card.append(verInfo);
+
+  const ta = el("textarea", { style: "width:100%;height:320px;font-family:monospace;margin:8px 0;font-size:12px;box-sizing:border-box;" });
+  ta.value = rules.text;
+  card.append(ta);
+
+  if (me.kind === "human" && (me.role === "owner" || me.role === "admin")) {
+    const saveBtn = el("button", { textContent: L.save });
+    saveBtn.onclick = async () => {
+      saveBtn.disabled = true;
+      try {
+        await api("/api/v1/agent-rules", {
+          method: "PUT",
+          body: JSON.stringify({ text: ta.value })
+        });
+        await renderAgentRules();
+      } catch (err) {
+        alert(err.message || "Error saving rules");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    };
+    card.append(el("div", { className: "row" }, saveBtn));
+  }
+
+  if (rules.history && rules.history.length > 0) {
+    const histCard = el("div", { style: "margin-top:16px;" });
+    histCard.append(el("h4", { textContent: L.history }));
+    const tbl = el("table", { className: "tbl" });
+    tbl.append(el("tr", {}, el("th", { textContent: L.version }), el("th", { textContent: L.time }), el("th", { textContent: "" })));
+    for (const h of rules.history) {
+      const viewBtn = el("button", { textContent: `v${h.version}` });
+      viewBtn.onclick = async () => {
+        try {
+          const vData = await api(`/api/v1/agent-rules/${h.version}`);
+          ta.value = vData.text;
+          verInfo.textContent = `${L.version}: ${vData.version} (${new Date(vData.created_at).toLocaleString()})`;
+        } catch (err) {
+          alert(err.message || "Error loading version");
+        }
+      };
+      tbl.append(el("tr", {},
+        el("td", { textContent: `v${h.version}` }),
+        el("td", { textContent: h.created_at ? new Date(h.created_at).toLocaleString() : "" }),
+        el("td", {}, viewBtn)
+      ));
+    }
+    histCard.append(tbl);
+    card.append(histCard);
   }
 
   panel.append(card);

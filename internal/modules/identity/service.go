@@ -230,3 +230,8 @@ func (s *Service) Admins(ctx context.Context, workspaceID ids.ID) ([]Actor, erro
 	}
 	return admins, nil
 }
+
+// WorkspaceByID implements Directory.
+func (s *Service) WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error) {
+	return s.Store.WorkspaceByID(ctx, id)
+}

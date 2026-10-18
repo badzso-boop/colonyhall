@@ -13,6 +13,7 @@ type Directory interface {
 	ActorByHandle(ctx context.Context, workspaceID ids.ID, handle string) (Actor, error)
 	ActorsByIDs(ctx context.Context, idList []ids.ID) ([]Actor, error)
 	Admins(ctx context.Context, workspaceID ids.ID) ([]Actor, error)
+	WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error)
 }
 
 // Authenticator turns a bearer token into an actor.

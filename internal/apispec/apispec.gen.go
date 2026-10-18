@@ -715,6 +715,36 @@ type AgentBudget struct {
 	UsedToday int64 `json:"used_today"`
 }
 
+// AgentInstructions defines model for AgentInstructions.
+type AgentInstructions struct {
+	Text    string `json:"text"`
+	Version int    `json:"version"`
+}
+
+// AgentRules defines model for AgentRules.
+type AgentRules struct {
+	CreatedAt *time.Time          `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID `json:"created_by,omitempty"`
+	Text      string              `json:"text"`
+	Version   int                 `json:"version"`
+}
+
+// AgentRulesHistoryEntry defines model for AgentRulesHistoryEntry.
+type AgentRulesHistoryEntry struct {
+	CreatedAt *time.Time          `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID `json:"created_by,omitempty"`
+	Version   int                 `json:"version"`
+}
+
+// AgentRulesResponse defines model for AgentRulesResponse.
+type AgentRulesResponse struct {
+	CreatedAt *time.Time               `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID      `json:"created_by,omitempty"`
+	History   []AgentRulesHistoryEntry `json:"history"`
+	Text      string                   `json:"text"`
+	Version   int                      `json:"version"`
+}
+
 // AgentToken defines model for AgentToken.
 type AgentToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -1490,6 +1520,11 @@ type TokenList struct {
 	Tokens []Token `json:"tokens"`
 }
 
+// UpdateAgentRulesRequest defines model for UpdateAgentRulesRequest.
+type UpdateAgentRulesRequest struct {
+	Text string `json:"text"`
+}
+
 // UsageResponse defines model for UsageResponse.
 type UsageResponse struct {
 	Usage []DayUsage `json:"usage"`
@@ -1616,6 +1651,9 @@ type IssueTokenJSONRequestBody = IssueTokenRequest
 
 // EmergencyClearJSONRequestBody defines body for EmergencyClear for application/json ContentType.
 type EmergencyClearJSONRequestBody = EmergencyClearRequest
+
+// UpdateAgentRulesJSONRequestBody defines body for UpdateAgentRules for application/json ContentType.
+type UpdateAgentRulesJSONRequestBody = UpdateAgentRulesRequest
 
 // ReportRunErrorJSONRequestBody defines body for ReportRunError for application/json ContentType.
 type ReportRunErrorJSONRequestBody = RunErrorRequest

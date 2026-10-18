@@ -845,6 +845,61 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
 
+  /agent-rules:
+    get:
+      operationId: getAgentRules
+      tags: [agentrules]
+      description: Humans only. Current agent rules and history list.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Agent rules and history
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentRulesResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateAgentRules
+      tags: [agentrules]
+      description: Humans only (admin/owner). Update agent rules, creating a new version.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateAgentRulesRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated rules
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentRules" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /agent-rules/{version}:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      operationId: getAgentRulesVersion
+      tags: [agentrules]
+      description: Humans only. Historical version of agent rules.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Agent rules version
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentRules" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/instructions:
+    get:
+      operationId: getAgentInstructions
+      tags: [agentrules]
+      description: Agent token. Current agent instructions rendered for the caller.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Rendered instructions
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentInstructions" } } }
+        "401": { $ref: "#/components/responses/Problem" }
 
 components:
   securitySchemes:
@@ -1693,4 +1748,46 @@ components:
       required: [previews]
       properties:
         previews: { type: array, items: { $ref: "#/components/schemas/Preview" } }
+
+    AgentRules:
+      type: object
+      required: [version, text]
+      properties:
+        version: { type: integer }
+        text: { type: string, maxLength: 8000 }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+
+    AgentRulesHistoryEntry:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+
+    AgentRulesResponse:
+      type: object
+      required: [version, text, history]
+      properties:
+        version: { type: integer }
+        text: { type: string }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/AgentRulesHistoryEntry" }
+
+    UpdateAgentRulesRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, maxLength: 8000 }
+
+    AgentInstructions:
+      type: object
+      required: [version, text]
+      properties:
+        version: { type: integer }
+        text: { type: string }
 
