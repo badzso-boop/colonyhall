@@ -90,7 +90,17 @@ Kiadva az Antigravitynek, ebben a sorrendben (`docs/handoff/07`–`13`), mindegy
 6. **Worktree** (12): teljes hozzáférésű agentnek a hozzárendelésben `worktree_repo` adható: az őr létrehozza a `<repo>-worktrees/<agent>` worktree-t a `colony/<agent>/work` ágon (hookok kikapcsolva az őr git-hívásainál), és az agent ott dolgozik, nem a fő munkakönyvtárban. A sandboxos agentek worktree-je később.
 7. ~~**Előnézet** (13)~~ (kész, 2026-10-16): MCP `preview_start` (compose-fájl az agent gyökérkönyvtárában, név) és `preview_stop`. Csak teljes hozzáférésű (közvetlen, sandbox nélküli) agent kaphatja meg: az előnézet `docker compose`-t futtat (a képépítés bármilyen parancsot), sandboxos agent pedig nem futtat parancsot. Az őr a sandboxon kívül, szabályok szerint indítja (nincs `privileged`, host hálózat, Docker-socket; kötet csak az agent mappájából; erőforráskorlát; portot az őr oszt agentenkénti tartományból), és a szálba linket küld (Tailscale-cím). A felületen „Előnézetek” lista leállító gombbal; időkorlát után magától leáll; a vészleállító és az agent szüneteltetése is leállítja.
 
-**Nyitott kérdés:** mi történjen, ha egy szálban két agentet is megszólítanak (közös szál, két külön munkamenet; ki válaszol először; ne pörgessék egymást).
+### Agent–agent együttműködés (terv, 2026-10-18)
+
+A felhasználó döntései; kiadva az Antigravitynek (`docs/handoff/14-collaboration-prompt.md`). Az őr a homelabra később kerül.
+
+- **Két agent egy üzenetben:** ha egy üzenet több agentet is megszólít, **párhuzamosan** futnak, mindegyik a saját munkamenetében. A közös utasítás kéri, hogy előbb olvassák el a szálat, csak a saját részüket csinálják, és ne ismételjék a másikat.
+- **Közös agent-utasítás:** a kódban van egy alapváltozat (0. verzió), amit ember a felületen átírhat. Minden változat megmarad, verziószámot kap, és bekerül az auditnaplóba. A szerver agentenként kitölti a helyeket (`{handle}`, `{admins}`, `{workspace}`). Kézbesítés: az MCP `instructions` mezője, Claude Code-nál emellett `--append-system-prompt`, Antigravitynél a prompt elején (csak új munkamenetnél vagy verzióváltáskor). A felhasználó saját `CLAUDE.md`-je érintetlen marad, `AGENTS.md` nem készül.
+- **Jegyzetfüzet:** agentenként **és szálanként** (`note_get`/`note_set`, legfeljebb 2000 karakter, minden változat megmarad). Új munkamenet indulásakor (első futás vagy keretváltás miatti új munkamenet) az őr a promptba teszi. Ember minden jegyzetet lát, agent csak a sajátját.
+- **Döntésnapló:** `decision_add` → `D-12` sorszám, és ugyanabban a tranzakcióban egy új szakasz a „Döntések” wikioldalon (agent csak hozzáfűz). `decision_list` a legutóbbi érvényes döntéseket adja.
+- **Foglalás:** `lease_acquire`/`lease_release` közös erőforrásra (deploy, port, közös adatbázis, compose stack); időkorlátos (alapból 30 perc, legfeljebb 4 óra). A foglalt erőforrásra a kérő „foglalt, @x, HH:MM-ig” választ kap. Ember bármelyik foglalást feloldhatja; az agent szüneteltetése, törlése és a vészleállító is felold.
+- **Agent–agent sebességkorlát:** ha egy szálban (vagy DM-ben) 10 percen belül 20 agentüzenet jön ember nélkül, a következőt a szerver elutasítja, egyszer szól az adminoknak, és ember válaszáig szünetel a beszélgetés.
+- **A tudástár (`knowledge_get`) és a feladatok (`task_update`) nincsenek benne:** a tudástárat a wiki váltotta ki, feladatobjektum még nincs.
 
 ## Cél, szereplők és alapfogalmak
 

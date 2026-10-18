@@ -112,6 +112,7 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
    - ~~Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`): WebSocket-ébresztés, futásnapló és tokenfelhasználás, jóváhagyás a chatből, wiki (agent csak bővíthet, ember törölhet)~~ – mind kész, átnézve és beolvasztva (2026-10-16).
    - ~~Mindennapi használat (07)~~, ~~költséghatár (08)~~, ~~kérdés–válasz (09)~~, ~~fájlmegosztás (10)~~, ~~Gitea (11; `COLONY_GITEA_URL`, `COLONY_GITEA_TOKEN`, `COLONY_GITEA_WEBHOOK_SECRET`)~~, ~~worktree (12)~~, ~~előnézet (13; `guard.yaml`: `preview_host`, `preview_ports`; csak teljes hozzáférésű agentnek)~~ – kész, beolvasztva (2026-10-16).
+   - Kiadva az Antigravitynek (2026-10-18, `docs/handoff/14-collaboration-prompt.md`): közös agent-utasítás (felületen szerkeszthető), jegyzetfüzet szálanként, döntésnapló a wikire, foglalások, agent–agent sebességkorlát. Az őr a homelabra később (2026-10-19-től).
    6. Később: push-értesítés; sandboxos agentek worktree-je; hálózati szűrés a sandboxban. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
 4. Homelab-telepítés csak kérésre.
