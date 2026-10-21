@@ -21,6 +21,7 @@
 
 ## Kész
 
+- [x] **Fix fejléc** (2026-10-21): a fejléc gombjai eddig kapcsolók voltak, a megnyitott panel gombja „Chat”-re váltott. Most minden fül a saját nevével látszik, külön „💬 Chat” fül van, az aktív ki van emelve; csatornára kattintva visszavált a chatre; a fejléc több sorba törve sem tolja el az elrendezést; mobilon kompaktabb. Közben javítva: a belépési űrlap belépés után is látszott (egy `display:flex` szabály felülírta a `hidden`-t).
 - [x] **DM indítása `?` hibával** (2026-10-21, `5c40326`): a DM-mező a nevet kis- és nagybetűre érzékenyen, rejtett karakterekkel együtt kereste, és hiba helyett csak `?<név>`-et írt ki. Most kisbetűsít, levágja a láthatatlan karaktereket, ha nem találja, újratölti a névsort, és érthető hibát ír.
 - [x] **A sandboxos agent hosszú válasza 600 karakternél levágódott** (2026-10-21, `5c40326`): a munkafutás eredményét az őr a rövid válaszként küldte. Most a közvetlen módhoz hasonlóan 8000 karakterig mehet.
 - [x] **Agent létrehozása a felületről 500-as hibával** (2026-10-21, `7165604`): az űrlap `role: "agent"`-et küldött; most `member`, és a szerver 400-at ad érvénytelen szerepkörre.

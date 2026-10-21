@@ -9,17 +9,20 @@
   :root { --bg:#f4f5f3; --surface:#fff; --fg:#1d211f; --muted:#646b66; --line:#dcdfda; --accent:#a8670f; --agent:#3d5a80; }
   @media (prefers-color-scheme: dark) { :root { --bg:#141715; --surface:#1c201e; --fg:#e6e9e6; --muted:#9aa29c; --line:#303632; --accent:#e0a347; --agent:#93b0d8; color-scheme: dark; } }
   * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-  header { display:flex; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--surface); flex-wrap:wrap; }
+  [hidden] { display:none !important; }  /* display:flex rules must not resurrect hidden elements (the login form) */
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; height:100vh; height:100dvh; }
+  header { flex:none; display:flex; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--surface); flex-wrap:wrap; }
+  header #tabs { display:flex; gap:6px; flex-wrap:wrap; border:0; padding:0; overflow:visible; }
+  header #tabs button.on { border-color:var(--accent); color:var(--accent); font-weight:600; }
   header b { color:var(--accent); }
   input, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg); }
   button { cursor:pointer; }
-  main { display:grid; grid-template-columns:220px 1fr; height:calc(100vh - 54px); }
+  main { flex:1; min-height:0; display:grid; grid-template-columns:220px 1fr; }
   nav { border-right:1px solid var(--line); padding:10px; overflow:auto; }
   nav div { padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; }
   nav div.on { background:var(--surface); font-weight:600; }
   nav .n { color:var(--accent); font-weight:600; }
-  section { display:grid; grid-template-rows:1fr auto; min-width:0; }
+  section { display:grid; grid-template-rows:minmax(0,1fr) auto; min-width:0; min-height:0; }
   #feed { overflow:auto; padding:12px 16px; }
   .msg { padding:6px 0; }
   .who { font-weight:600; } .who.agent { color:var(--agent); } .who.system { color:var(--accent); }
@@ -69,8 +72,9 @@
   #errModal.on, #appModal.on { display:flex; }
   #errModal .card, #appModal .card { max-width:720px; width:100%; max-height:80vh; overflow:auto; }
   #errModal pre, #appModal pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
-  @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; min-height:calc(100vh - 54px); }
-    nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; } section { height:calc(72vh - 54px); } }
+  @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
+    main > nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; }
+    header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; } }
 </style>
 </head>
 <body>
@@ -81,7 +85,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><button id="runsbtn" hidden>📊</button><button id="schedbtn" hidden>⏰</button><button id="questionsbtn" hidden>❓ Válaszra vár</button><button id="wikibtn" hidden>📖 Wiki</button><button id="rulesbtn" hidden>📜 Szabályok</button><button id="leasesbtn" hidden>🔒 Foglalások</button><button id="hostsbtn" hidden></button><button id="logout" hidden></button>
+  <span id="me"></span><nav id="tabs"><button id="chatbtn" hidden></button><button id="runsbtn" hidden></button><button id="schedbtn" hidden></button><button id="questionsbtn" hidden></button><button id="wikibtn" hidden></button><button id="rulesbtn" hidden></button><button id="leasesbtn" hidden></button><button id="hostsbtn" hidden></button></nav><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -113,7 +117,7 @@
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
         online: "élő kapcsolat", offline: "nincs kapcsolat", reconnecting: "újracsatlakozás…", reply: "Válasz", replyIn: "Válasz a szálban:", inThread: "a szálban:",
-        hosts: "Gépek", chat: "Chat", pair: "Párosítókód", pairHelp: "A gépen futtasd (10 percig érvényes):", revoke: "Visszavonás",
+        hosts: "Gépek", chat: "Chat", schedules: "Ütemezés", wiki: "Wiki", questions: "Válaszra vár", pair: "Párosítókód", pairHelp: "A gépen futtasd (10 percig érvényes):", revoke: "Visszavonás",
         lastSeen: "utoljára", never: "még soha", roots: "Gyökérmappák", clients: "Kliensek", sandbox: "Sandbox", none: "nincs",
         rejected: "Elutasított engedély", assign: "Agent hozzárendelése", work: "munka", grant: "Mappa engedélyezése",
         read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép.",
@@ -135,7 +139,7 @@ const I18N = {
         leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
-        hosts: "Machines", chat: "Chat", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
+        hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
         lastSeen: "last seen", never: "never", roots: "Roots", clients: "Clients", sandbox: "Sandbox", none: "none",
         rejected: "Refused grant", assign: "Assign agent", work: "work", grant: "Grant folder",
         read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet.",
@@ -213,6 +217,7 @@ function renderChannels() {
 }
 
 async function open(id) {
+  if (openPanel) showPanel(null);
   current = id; setReply(null); clearPendingFiles();
   const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
   msgs = new Map(r.messages.map(m => [m.id, m]));
@@ -449,22 +454,30 @@ function connectWS() {
 
 // --- Machines (admins) ---------------------------------------------------
 let hostsOpen = false;
-$("hostsbtn").textContent = L.hosts;
+$("hostsbtn").textContent = "🖥️ " + L.hosts;
+$("chatbtn").textContent = "💬 " + L.chat;
+$("runsbtn").textContent = "📊 " + L.runs;
+$("schedbtn").textContent = "⏰ " + L.schedules;
+$("questionsbtn").textContent = "❓ " + L.questions;
+$("wikibtn").textContent = "📖 " + L.wiki;
+$("rulesbtn").textContent = "📜 " + L.agentRules;
+$("leasesbtn").textContent = "🔒 " + L.leases;
 // One side panel at a time (machines, schedules, runs, wiki); the chat
 // feed shows when none is open. Returns whether the panel is now open.
 let openPanel = null;
-function togglePanel(name) {
-  openPanel = openPanel === name ? null : name;
-  for (const p of ["hosts", "sched", "runs", "wiki", "questions", "rules", "leases"]) $(p + "Panel").className = openPanel === p ? "on" : "";
+// The header tabs are fixed: each button keeps its label, the active one is
+// highlighted, and "Chat" (or a channel in the sidebar) goes back to the feed.
+const panelButtons = { hosts: "hostsbtn", sched: "schedbtn", runs: "runsbtn", wiki: "wikibtn", questions: "questionsbtn", rules: "rulesbtn", leases: "leasesbtn" };
+function showPanel(name) {
+  openPanel = name;
+  for (const p of Object.keys(panelButtons)) $(p + "Panel").className = openPanel === p ? "on" : "";
   $("feed").className = openPanel ? "off" : "";
-  $("hostsbtn").textContent = openPanel === "hosts" ? L.chat : L.hosts;
-  $("wikibtn").textContent = openPanel === "wiki" ? "💬 Chat" : "📖 Wiki";
-  $("questionsbtn").textContent = openPanel === "questions" ? "💬 Chat" : "❓ Válaszra vár";
-  $("rulesbtn").textContent = openPanel === "rules" ? "💬 Chat" : "📜 " + L.agentRules;
-  $("leasesbtn").textContent = openPanel === "leases" ? "💬 Chat" : "🔒 " + L.leases;
+  for (const [p, id] of Object.entries(panelButtons)) $(id).classList.toggle("on", openPanel === p);
+  $("chatbtn").classList.toggle("on", !openPanel);
   hostsOpen = openPanel === "hosts"; schedOpen = openPanel === "sched";
-  return openPanel === name;
 }
+function togglePanel(name) { showPanel(name); return true; }
+$("chatbtn").onclick = () => showPanel(null);
 
 $("hostsbtn").onclick = () => { if (!togglePanel("hosts")) return; renderHosts(); };
 
@@ -832,7 +845,9 @@ async function renderHosts() {
 async function start() {
   const s = await api("/api/v1/auth/session");
   me = s.actor; csrf = s.csrf_token || "";
-  $("login").hidden = true; $("logout").hidden = false; $("me").textContent = "@" + me.handle;
+  $("login").hidden = true; $("logout").hidden = false; $("chatbtn").hidden = false;
+  $("me").textContent = "@" + me.handle;
+  showPanel(openPanel);  // highlight the active tab (Chat) right after login
   $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
   $("schedbtn").hidden = me.kind !== "human";
   $("questionsbtn").hidden = me.kind !== "human";
