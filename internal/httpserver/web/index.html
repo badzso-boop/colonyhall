@@ -20,6 +20,19 @@
   main { flex:1; min-height:0; display:grid; grid-template-columns:220px 1fr; }
   main > nav { border-right:1px solid var(--line); padding:10px; overflow:auto; display:flex; flex-direction:column; }
   #channels { display:flex; flex-direction:column; }
+  .sec-actions-bar { display:flex; justify-content:flex-end; padding:2px 0 6px; }
+  .sec-actions-bar button { padding:2px 8px; font-size:11px; }
+  .sec-header { display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); margin:10px 0 2px 4px; }
+  .sec-title-wrap { display:flex; align-items:center; gap:4px; cursor:pointer; flex:1; min-width:0; }
+  .sec-arrow { font-size:9px; user-select:none; }
+  .sec-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sec-acts { display:flex; gap:2px; }
+  .sec-acts button, .chan-acts button { padding:1px 4px; font-size:10px; line-height:1; border:0; background:transparent; color:var(--muted); border-radius:3px; }
+  .sec-acts button:hover, .chan-acts button:hover { background:var(--line); color:var(--fg); }
+  .chan-meta { display:flex; align-items:center; gap:4px; }
+  .chan-acts { display:none; gap:2px; }
+  .chan-item:hover .chan-acts { display:flex; }
+  .group-header { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); margin:10px 0 2px 4px; }
   .chan-item { padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
   .chan-item.on { background:var(--surface); font-weight:600; }
   nav .n { color:var(--accent); font-weight:600; }
@@ -139,7 +152,10 @@ const I18N = {
         previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
         agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények",
         leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés",
-        working: "dolgozik…" },
+        working: "dolgozik…",
+        section: "Szekció", newSectionName: "Új szekció neve:", renameSection: "Új név:",
+        channelsGroup: "Csatornák", dmsGroup: "Közvetlen üzenetek",
+        confirmDeleteSection: "Biztosan törlöd ezt a szekciót? (A csatornák nem törlődnek)" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -162,7 +178,10 @@ const I18N = {
         previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
         agentRules: "Agent rules", save: "Save", version: "Version", history: "History",
         leases: "Leases", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note",
-        working: "working…" },
+        working: "working…",
+        section: "Section", newSectionName: "New section name:", renameSection: "New name:",
+        channelsGroup: "Channels", dmsGroup: "Direct Messages",
+        confirmDeleteSection: "Delete this section? (Channels will not be deleted)" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -170,7 +189,7 @@ $("handle").placeholder = L.handle; $("password").placeholder = L.password; $("l
 $("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button").textContent = L.send;
 
 let token = "", csrf = "", me = null, channels = [], actors = {}, current = null, lastSeq = null, ws = null;
-let msgs = new Map(), replyRoot = null;
+let msgs = new Map(), replyRoot = null, sidebarSections = [];
 try { token = localStorage.getItem("colony_token") || ""; } catch {}
 
 // Plain-HTTP pages (e.g. over Tailscale) have no crypto.randomUUID.
@@ -200,25 +219,279 @@ function chanLabel(c) {
   return "✉ " + (others.join(", ") || "@" + me.handle);
 }
 
+async function loadSections() {
+  if (me?.kind === "human") {
+    try {
+      const res = await api("/api/v1/sidebar/sections");
+      sidebarSections = res.sections || [];
+    } catch {
+      sidebarSections = [];
+    }
+  } else {
+    sidebarSections = [];
+  }
+}
+
 async function load() {
   const [a, c] = await Promise.all([api("/api/v1/actors"), api("/api/v1/channels")]);
   actors = Object.fromEntries(a.actors.map(x => [x.id, x]));
   channels = c.channels.filter(x => x.is_member);
+  await loadSections();
   renderChannels();
   if (!current && channels.length) await open(channels[0].id);
 }
 
+function createChanItem(c, inSectionId, itIdx, totalItems) {
+  const d = el("div", {
+    className: "chan-item" + (c.id === current ? " on" : ""),
+    onclick: () => open(c.id),
+  });
+  const label = el("span", { textContent: chanLabel(c) });
+  const meta = el("div", { className: "chan-meta" });
+  if (c.unread > 0 && c.id !== current) {
+    meta.append(el("span", { className: "n", textContent: String(c.unread) }));
+  }
+  if (me?.kind === "human") {
+    const acts = el("div", { className: "chan-acts" });
+    if (inSectionId) {
+      if (itIdx > 0) {
+        acts.append(el("button", {
+          textContent: "↑",
+          title: "Fel",
+          onclick: async (e) => {
+            e.stopPropagation();
+            const sec = sidebarSections.find(s => s.id === inSectionId);
+            if (!sec) return;
+            const ids = (sec.items || []).map(x => x.channel_id);
+            const tmp = ids[itIdx - 1];
+            ids[itIdx - 1] = ids[itIdx];
+            ids[itIdx] = tmp;
+            try {
+              await api(`/api/v1/sidebar/sections/${inSectionId}/reorder`, {
+                method: "PUT",
+                body: JSON.stringify({ channel_ids: ids }),
+              });
+              await loadSections();
+              renderChannels();
+            } catch (err) { alert(err.message); }
+          }
+        }));
+      }
+      if (itIdx < totalItems - 1) {
+        acts.append(el("button", {
+          textContent: "↓",
+          title: "Le",
+          onclick: async (e) => {
+            e.stopPropagation();
+            const sec = sidebarSections.find(s => s.id === inSectionId);
+            if (!sec) return;
+            const ids = (sec.items || []).map(x => x.channel_id);
+            const tmp = ids[itIdx + 1];
+            ids[itIdx + 1] = ids[itIdx];
+            ids[itIdx] = tmp;
+            try {
+              await api(`/api/v1/sidebar/sections/${inSectionId}/reorder`, {
+                method: "PUT",
+                body: JSON.stringify({ channel_ids: ids }),
+              });
+              await loadSections();
+              renderChannels();
+            } catch (err) { alert(err.message); }
+          }
+        }));
+      }
+      acts.append(el("button", {
+        textContent: "✕",
+        title: "Kivétel szekcióból",
+        onclick: async (e) => {
+          e.stopPropagation();
+          try {
+            await api(`/api/v1/sidebar/sections/${inSectionId}/channels/${c.id}`, { method: "DELETE" });
+            await loadSections();
+            renderChannels();
+          } catch (err) { alert(err.message); }
+        }
+      }));
+    } else if (sidebarSections.length > 0) {
+      acts.append(el("button", {
+        textContent: "↳",
+        title: "Áthelyezés szekcióba…",
+        onclick: async (e) => {
+          e.stopPropagation();
+          const list = sidebarSections.map((s, i) => `${i + 1}: ${s.name}`).join("\n");
+          const ans = prompt(`${L.section}:\n${list}`);
+          if (!ans) return;
+          const idx = parseInt(ans, 10) - 1;
+          if (idx >= 0 && idx < sidebarSections.length) {
+            try {
+              await api(`/api/v1/sidebar/sections/${sidebarSections[idx].id}/channels/${c.id}`, {
+                method: "PUT",
+                body: JSON.stringify({}),
+              });
+              await loadSections();
+              renderChannels();
+            } catch (err) { alert(err.message); }
+          }
+        }
+      }));
+    }
+    meta.append(acts);
+  }
+  d.append(label, meta);
+  return d;
+}
+
 function renderChannels() {
-  $("channels").innerHTML = "";
-  for (const c of channels) {
-    const d = el("div", {
-      className: "chan-item" + (c.id === current ? " on" : ""),
-      onclick: () => open(c.id),
-    },
-      el("span", { textContent: chanLabel(c) }),
-      el("span", { className: "n", textContent: c.unread > 0 && c.id !== current ? String(c.unread) : "" })
-    );
-    $("channels").appendChild(d);
+  const container = $("channels");
+  container.innerHTML = "";
+
+  if (me?.kind === "human") {
+    const topBar = el("div", { className: "sec-actions-bar" });
+    topBar.append(el("button", {
+      textContent: "+ " + (L.section || "szekció"),
+      onclick: async (e) => {
+        e.stopPropagation();
+        const name = prompt(L.newSectionName || "Új szekció neve:");
+        if (!name || !name.trim()) return;
+        try {
+          await api("/api/v1/sidebar/sections", {
+            method: "POST",
+            body: JSON.stringify({ name: name.trim() })
+          });
+          await loadSections();
+          renderChannels();
+        } catch (err) { alert(err.message); }
+      }
+    }));
+    container.append(topBar);
+  }
+
+  const chanMap = new Map(channels.map(c => [c.id, c]));
+  const inSection = new Set();
+
+  for (let sIdx = 0; sIdx < sidebarSections.length; sIdx++) {
+    const s = sidebarSections[sIdx];
+    for (const it of s.items || []) inSection.add(it.channel_id);
+
+    const secEl = el("div", { className: "sec-block" });
+    const hdr = el("div", { className: "sec-header" });
+    const arrow = el("span", { className: "sec-arrow", textContent: s.collapsed ? "▶ " : "▼ " });
+    const title = el("span", { className: "sec-title", textContent: s.name });
+    const titleWrap = el("div", {
+      className: "sec-title-wrap",
+      onclick: async () => {
+        try {
+          await api(`/api/v1/sidebar/sections/${s.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ collapsed: !s.collapsed })
+          });
+          s.collapsed = !s.collapsed;
+          renderChannels();
+        } catch (err) { alert(err.message); }
+      }
+    }, arrow, title);
+
+    const acts = el("div", { className: "sec-acts" });
+    if (sIdx > 0) {
+      acts.append(el("button", {
+        textContent: "↑",
+        title: "Fel",
+        onclick: async (e) => {
+          e.stopPropagation();
+          const order = [...sidebarSections];
+          const t = order[sIdx - 1];
+          order[sIdx - 1] = order[sIdx];
+          order[sIdx] = t;
+          try {
+            await api("/api/v1/sidebar/sections/reorder", {
+              method: "PUT",
+              body: JSON.stringify({ section_ids: order.map(x => x.id) })
+            });
+            await loadSections();
+            renderChannels();
+          } catch (err) { alert(err.message); }
+        }
+      }));
+    }
+    if (sIdx < sidebarSections.length - 1) {
+      acts.append(el("button", {
+        textContent: "↓",
+        title: "Le",
+        onclick: async (e) => {
+          e.stopPropagation();
+          const order = [...sidebarSections];
+          const t = order[sIdx + 1];
+          order[sIdx + 1] = order[sIdx];
+          order[sIdx] = t;
+          try {
+            await api("/api/v1/sidebar/sections/reorder", {
+              method: "PUT",
+              body: JSON.stringify({ section_ids: order.map(x => x.id) })
+            });
+            await loadSections();
+            renderChannels();
+          } catch (err) { alert(err.message); }
+        }
+      }));
+    }
+    acts.append(el("button", {
+      textContent: "✏",
+      title: "Átnevezés",
+      onclick: async (e) => {
+        e.stopPropagation();
+        const n = prompt(L.renameSection || "Új név:", s.name);
+        if (!n || !n.trim() || n.trim() === s.name) return;
+        try {
+          await api(`/api/v1/sidebar/sections/${s.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: n.trim() })
+          });
+          await loadSections();
+          renderChannels();
+        } catch (err) { alert(err.message); }
+      }
+    }));
+    acts.append(el("button", {
+      textContent: "✕",
+      title: "Törlés",
+      onclick: async (e) => {
+        e.stopPropagation();
+        if (!confirm(L.confirmDeleteSection || "Törlöd a szekciót?")) return;
+        try {
+          await api(`/api/v1/sidebar/sections/${s.id}`, { method: "DELETE" });
+          await loadSections();
+          renderChannels();
+        } catch (err) { alert(err.message); }
+      }
+    }));
+
+    hdr.append(titleWrap, acts);
+    secEl.append(hdr);
+
+    if (!s.collapsed) {
+      const items = s.items || [];
+      for (let itIdx = 0; itIdx < items.length; itIdx++) {
+        const c = chanMap.get(items[itIdx].channel_id);
+        if (c) secEl.append(createChanItem(c, s.id, itIdx, items.length));
+      }
+    }
+    container.append(secEl);
+  }
+
+  const unassignedChans = channels.filter(c => !inSection.has(c.id) && c.kind !== "dm");
+  if (unassignedChans.length > 0 || sidebarSections.length > 0) {
+    container.append(el("div", { className: "group-header", textContent: L.channelsGroup || "Csatornák" }));
+    for (const c of unassignedChans) {
+      container.append(createChanItem(c, null, 0, 0));
+    }
+  }
+
+  const unassignedDMs = channels.filter(c => !inSection.has(c.id) && c.kind === "dm");
+  if (unassignedDMs.length > 0) {
+    container.append(el("div", { className: "group-header", textContent: L.dmsGroup || "Közvetlen üzenetek" }));
+    for (const c of unassignedDMs) {
+      container.append(createChanItem(c, null, 0, 0));
+    }
   }
 }
 

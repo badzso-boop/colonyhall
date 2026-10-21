@@ -941,6 +941,11 @@ type CreateScheduleRequest struct {
 // CreateScheduleRequestCatchUp Missed while the server was down: run once (within 12 h) or skip
 type CreateScheduleRequestCatchUp string
 
+// CreateSidebarSectionRequest defines model for CreateSidebarSectionRequest.
+type CreateSidebarSectionRequest struct {
+	Name string `json:"name"`
+}
+
 // CreateWikiPageRequest defines model for CreateWikiPageRequest.
 type CreateWikiPageRequest struct {
 	Body  string    `json:"body"`
@@ -1404,6 +1409,16 @@ type ReactionSummary struct {
 	Emoji    string               `json:"emoji"`
 }
 
+// ReorderSidebarItemsRequest defines model for ReorderSidebarItemsRequest.
+type ReorderSidebarItemsRequest struct {
+	ChannelIds []openapi_types.UUID `json:"channel_ids"`
+}
+
+// ReorderSidebarSectionsRequest defines model for ReorderSidebarSectionsRequest.
+type ReorderSidebarSectionsRequest struct {
+	SectionIds []openapi_types.UUID `json:"section_ids"`
+}
+
 // ReportRunRequest defines model for ReportRunRequest.
 type ReportRunRequest struct {
 	CacheReadTokens  int64                  `json:"cache_read_tokens"`
@@ -1576,6 +1591,11 @@ type SetPasswordRequest struct {
 	NewPassword     string  `json:"new_password"`
 }
 
+// SetSidebarItemRequest defines model for SetSidebarItemRequest.
+type SetSidebarItemRequest struct {
+	Position *int `json:"position,omitempty"`
+}
+
 // SetStateRequest defines model for SetStateRequest.
 type SetStateRequest struct {
 	State SetStateRequestState `json:"state"`
@@ -1583,6 +1603,26 @@ type SetStateRequest struct {
 
 // SetStateRequestState defines model for SetStateRequest.State.
 type SetStateRequestState string
+
+// SidebarItem defines model for SidebarItem.
+type SidebarItem struct {
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	Position  int                `json:"position"`
+}
+
+// SidebarSection defines model for SidebarSection.
+type SidebarSection struct {
+	Collapsed bool               `json:"collapsed"`
+	Id        openapi_types.UUID `json:"id"`
+	Items     []SidebarItem      `json:"items"`
+	Name      string             `json:"name"`
+	Position  int                `json:"position"`
+}
+
+// SidebarSectionList defines model for SidebarSectionList.
+type SidebarSectionList struct {
+	Sections []SidebarSection `json:"sections"`
+}
 
 // Thread defines model for Thread.
 type Thread struct {
@@ -1607,6 +1647,13 @@ type TokenList struct {
 // UpdateAgentRulesRequest defines model for UpdateAgentRulesRequest.
 type UpdateAgentRulesRequest struct {
 	Text string `json:"text"`
+}
+
+// UpdateSidebarSectionRequest defines model for UpdateSidebarSectionRequest.
+type UpdateSidebarSectionRequest struct {
+	Collapsed *bool   `json:"collapsed,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Position  *int    `json:"position,omitempty"`
 }
 
 // UsageResponse defines model for UsageResponse.
@@ -1809,6 +1856,21 @@ type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest
+
+// CreateSidebarSectionJSONRequestBody defines body for CreateSidebarSection for application/json ContentType.
+type CreateSidebarSectionJSONRequestBody = CreateSidebarSectionRequest
+
+// ReorderSidebarSectionsJSONRequestBody defines body for ReorderSidebarSections for application/json ContentType.
+type ReorderSidebarSectionsJSONRequestBody = ReorderSidebarSectionsRequest
+
+// UpdateSidebarSectionJSONRequestBody defines body for UpdateSidebarSection for application/json ContentType.
+type UpdateSidebarSectionJSONRequestBody = UpdateSidebarSectionRequest
+
+// SetSidebarItemJSONRequestBody defines body for SetSidebarItem for application/json ContentType.
+type SetSidebarItemJSONRequestBody = SetSidebarItemRequest
+
+// ReorderSidebarItemsJSONRequestBody defines body for ReorderSidebarItems for application/json ContentType.
+type ReorderSidebarItemsJSONRequestBody = ReorderSidebarItemsRequest
 
 // CreateWikiPageJSONRequestBody defines body for CreateWikiPage for application/json ContentType.
 type CreateWikiPageJSONRequestBody = CreateWikiPageRequest

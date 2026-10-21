@@ -98,6 +98,10 @@ import (
 	schedhttp "colonyhall/internal/modules/schedule/httpapi"
 	schedmem "colonyhall/internal/modules/schedule/memory"
 	schedpg "colonyhall/internal/modules/schedule/postgres"
+	"colonyhall/internal/modules/sidebar"
+	sidebarhttp "colonyhall/internal/modules/sidebar/httpapi"
+	sidebarmem "colonyhall/internal/modules/sidebar/memory"
+	sidebarpg "colonyhall/internal/modules/sidebar/postgres"
 	"colonyhall/internal/modules/wiki"
 	wikihttp "colonyhall/internal/modules/wiki/httpapi"
 	wikimcp "colonyhall/internal/modules/wiki/mcptools"
@@ -160,6 +164,7 @@ type App struct {
 	Notes        *notes.Service
 	Decisions    *decision.Service
 	Leases       *lease.Service
+	Sidebar      *sidebar.Service
 	Gateway      *gateway.Gateway
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
@@ -204,6 +209,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		ntStore        notes.Store
 		dcStore        decision.Store
 		lsStore        lease.Store
+		sbStore        sidebar.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -223,6 +229,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		ntStore = notesmem.New()
 		dcStore = decmem.New()
 		lsStore = leasesmem.New()
+		sbStore = sidebarmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -257,6 +264,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		ntStore = &notespg.Store{DB: pg}
 		dcStore = &decpg.Store{DB: pg}
 		lsStore = &leasespg.Store{DB: pg}
+		sbStore = &sidebarpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -335,6 +343,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock, opt.IDs)
 	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
 	lsSvc := lease.NewService(lsStore, idSvc, events, b, tx, opt.Clock, opt.IDs)
+	sbSvc := sidebar.NewService(sbStore, cvSvc, opt.Clock, opt.IDs)
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -362,6 +371,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	noteshttp.Register(mux, ntSvc, idSvc)
 	dechttp.Register(mux, dcSvc, idSvc)
 	leaseshttp.Register(mux, lsSvc, idSvc)
+	sidebarhttp.Register(mux, sbSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -425,6 +435,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Notes:        ntSvc,
 		Decisions:    dcSvc,
 		Leases:       lsSvc,
+		Sidebar:      sbSvc,
 		Gateway:      gw,
 		logger:       opt.Logger,
 		Consumers:    consumers,

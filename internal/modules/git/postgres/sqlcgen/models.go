@@ -383,6 +383,24 @@ type Session struct {
 	RevokedAt *time.Time
 }
 
+type SidebarItem struct {
+	SectionID uuid.UUID
+	ChannelID uuid.UUID
+	Position  int32
+}
+
+type SidebarSection struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	OwnerID     uuid.UUID
+	Name        string
+	Position    int32
+	Collapsed   bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+}
+
 type WikiPage struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

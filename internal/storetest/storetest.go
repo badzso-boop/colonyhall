@@ -28,6 +28,7 @@ import (
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/modules/schedule"
+	"colonyhall/internal/modules/sidebar"
 	"colonyhall/internal/modules/wiki"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
@@ -54,6 +55,7 @@ type Backend struct {
 	Notes        notes.Store
 	Decisions    decision.Store
 	Leases       lease.Store
+	Sidebar      sidebar.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -76,6 +78,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("notes", func(t *testing.T) { testNotes(t, newBackend(t)) })
 	t.Run("decisions", func(t *testing.T) { testDecisions(t, newBackend(t)) })
 	t.Run("leases", func(t *testing.T) { testLeases(t, newBackend(t)) })
+	t.Run("sidebar", func(t *testing.T) { testSidebar(t, newBackend(t)) })
 }
 
 var (
@@ -2067,5 +2070,95 @@ func testLeases(t *testing.T, b Backend) {
 	must(t, err)
 	if len(activeList) != 0 {
 		t.Fatalf("expected 0 active leases, got %d", len(activeList))
+	}
+}
+
+func testSidebar(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Sidebar
+
+	ch2 := conversation.Channel{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		Kind:        conversation.KindPublic,
+		Name:        "dev",
+		CreatedBy:   f.human.ID,
+		CreatedAt:   t0,
+	}
+	must(t, b.Conversation.CreateChannel(ctx, ch2))
+
+	sec1 := sidebar.Section{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		OwnerID:     f.human.ID,
+		Name:        "Section 1",
+		Position:    0,
+		Collapsed:   false,
+		CreatedAt:   t0,
+		UpdatedAt:   t0,
+	}
+	must(t, st.CreateSection(ctx, sec1))
+
+	sec2 := sidebar.Section{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		OwnerID:     f.human.ID,
+		Name:        "Section 2",
+		Position:    1,
+		Collapsed:   false,
+		CreatedAt:   t0.Add(time.Minute),
+		UpdatedAt:   t0.Add(time.Minute),
+	}
+	must(t, st.CreateSection(ctx, sec2))
+
+	list, err := st.ListSections(ctx, f.ws.ID, f.human.ID)
+	must(t, err)
+	if len(list) != 2 || list[0].Name != "Section 1" || list[1].Name != "Section 2" {
+		t.Fatalf("unexpected sections list: %+v", list)
+	}
+
+	newName := "Renamed 1"
+	collapsed := true
+	upd, err := st.UpdateSection(ctx, sec1.ID, &newName, nil, &collapsed, t0.Add(2*time.Minute))
+	must(t, err)
+	if upd.Name != "Renamed 1" || !upd.Collapsed {
+		t.Fatalf("update failed: %+v", upd)
+	}
+
+	must(t, st.SetItem(ctx, f.human.ID, sec1.ID, f.channel.ID, 0))
+	must(t, st.SetItem(ctx, f.human.ID, sec1.ID, ch2.ID, 1))
+
+	gotSec, err := st.GetSection(ctx, sec1.ID)
+	must(t, err)
+	if len(gotSec.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(gotSec.Items))
+	}
+
+	must(t, st.SetItem(ctx, f.human.ID, sec2.ID, ch2.ID, 0))
+
+	gotSec1, err := st.GetSection(ctx, sec1.ID)
+	must(t, err)
+	if len(gotSec1.Items) != 1 || gotSec1.Items[0].ChannelID != f.channel.ID {
+		t.Fatalf("channel was not removed from previous section: %+v", gotSec1.Items)
+	}
+	gotSec2, err := st.GetSection(ctx, sec2.ID)
+	must(t, err)
+	if len(gotSec2.Items) != 1 || gotSec2.Items[0].ChannelID != ch2.ID {
+		t.Fatalf("channel not added to new section: %+v", gotSec2.Items)
+	}
+
+	must(t, st.ReorderSections(ctx, f.human.ID, []ids.ID{sec2.ID, sec1.ID}))
+	list, err = st.ListSections(ctx, f.ws.ID, f.human.ID)
+	must(t, err)
+	if list[0].ID != sec2.ID || list[1].ID != sec1.ID {
+		t.Fatalf("reordering failed: %+v", list)
+	}
+
+	must(t, st.DeleteSection(ctx, sec2.ID, t0.Add(3*time.Minute)))
+	list, err = st.ListSections(ctx, f.ws.ID, f.human.ID)
+	must(t, err)
+	if len(list) != 1 || list[0].ID != sec1.ID {
+		t.Fatalf("delete section failed: %+v", list)
 	}
 }

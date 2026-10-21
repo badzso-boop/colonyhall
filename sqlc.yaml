@@ -91,6 +91,11 @@ sql:
     schema: migrations
     queries: internal/modules/lease/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/lease/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/sidebar/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/sidebar/postgres/sqlcgen } }
+
 
 
 

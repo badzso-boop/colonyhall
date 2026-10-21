@@ -337,6 +337,126 @@ paths:
         "204": { description: Marked as read }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /sidebar/sections:
+    get:
+      operationId: listSidebarSections
+      tags: [sidebar]
+      description: Humans only. List sidebar sections with their items for the calling user.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/SidebarSectionList" } } }
+    post:
+      operationId: createSidebarSection
+      tags: [sidebar]
+      description: Humans only. Create a new personal sidebar section.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateSidebarSectionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201":
+          description: Created
+          content: { application/json: { schema: { $ref: "#/components/schemas/SidebarSection" } } }
+
+  /sidebar/sections/reorder:
+    put:
+      operationId: reorderSidebarSections
+      tags: [sidebar]
+      description: Humans only. Reorder personal sidebar sections.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ReorderSidebarSectionsRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Reordered }
+
+  /sidebar/sections/{sectionId}:
+    patch:
+      operationId: updateSidebarSection
+      tags: [sidebar]
+      description: Humans only. Update section name, position, or collapsed state.
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateSidebarSectionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated
+          content: { application/json: { schema: { $ref: "#/components/schemas/SidebarSection" } } }
+    delete:
+      operationId: deleteSidebarSection
+      tags: [sidebar]
+      description: Humans only. Soft delete section (its items fall back to defaults).
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+
+  /sidebar/sections/{sectionId}/reorder:
+    put:
+      operationId: reorderSidebarItems
+      tags: [sidebar]
+      description: Humans only. Reorder items within a section.
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ReorderSidebarItemsRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Reordered }
+
+  /sidebar/sections/{sectionId}/channels/{channelId}:
+    put:
+      operationId: setSidebarItem
+      tags: [sidebar]
+      description: Humans only. Put a channel or DM into a section.
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: channelId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetSidebarItemRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Saved }
+    delete:
+      operationId: removeSidebarItem
+      tags: [sidebar]
+      description: Humans only. Remove a channel or DM from a section.
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: channelId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+
   /agent/inbox:
     get:
       operationId: getInbox
@@ -1132,6 +1252,67 @@ components:
       properties:
         actor: { $ref: "#/components/schemas/Actor" }
         token: { type: string, description: Shown once; store it securely }
+
+    SidebarItem:
+      type: object
+      required: [channel_id, position]
+      properties:
+        channel_id: { type: string, format: uuid }
+        position: { type: integer }
+
+    SidebarSection:
+      type: object
+      required: [id, name, position, collapsed, items]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 40 }
+        position: { type: integer }
+        collapsed: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SidebarItem" }
+
+    SidebarSectionList:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/SidebarSection" }
+
+    CreateSidebarSectionRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+
+    UpdateSidebarSectionRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        position: { type: integer }
+        collapsed: { type: boolean }
+
+    ReorderSidebarSectionsRequest:
+      type: object
+      required: [section_ids]
+      properties:
+        section_ids:
+          type: array
+          items: { type: string, format: uuid }
+
+    SetSidebarItemRequest:
+      type: object
+      properties:
+        position: { type: integer }
+
+    ReorderSidebarItemsRequest:
+      type: object
+      required: [channel_ids]
+      properties:
+        channel_ids:
+          type: array
+          items: { type: string, format: uuid }
 
     ChannelKind:
       type: string
