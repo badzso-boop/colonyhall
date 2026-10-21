@@ -134,6 +134,7 @@ type Options struct {
 	// Gitea integration options (optional: if omitted, git module is inactive)
 	GiteaURL           string
 	GiteaToken         string
+	GiteaPublicURL     string
 	GiteaWebhookSecret string
 	GitProvider        provider.GitProvider
 }
@@ -291,7 +292,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 
 	gitProv := opt.GitProvider
 	if gitProv == nil && opt.GiteaURL != "" {
-		p, err := provider.NewGitea(opt.GiteaURL, opt.GiteaToken)
+		p, err := provider.NewGitea(opt.GiteaURL, opt.GiteaToken, opt.GiteaPublicURL)
 		if err != nil {
 			return nil, fmt.Errorf("server: gitea config: %w", err)
 		}

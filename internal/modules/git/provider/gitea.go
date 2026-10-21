@@ -24,27 +24,70 @@ var (
 )
 
 // GiteaProvider implements GitProvider for Gitea installations.
+//
+// baseURL is where the server calls the API (e.g. the Tailscale address);
+// webURL is how people link to it (e.g. https://gitea.example.com). Links
+// with either host are recognised, and cards always point to webURL, so
+// the API is never called over the public address.
 type GiteaProvider struct {
 	baseURL *url.URL
+	webURL  *url.URL
 	token   string
 	client  *http.Client
 }
 
-// NewGitea creates a new Gitea provider.
-func NewGitea(rawBaseURL, token string) (*GiteaProvider, error) {
-	rawBaseURL = strings.TrimRight(rawBaseURL, "/")
-	if rawBaseURL == "" {
+// NewGitea creates a new Gitea provider. publicURL is optional: the address
+// people use in links when it differs from the API address.
+func NewGitea(rawBaseURL, token string, publicURL ...string) (*GiteaProvider, error) {
+	u, err := parseBase(rawBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	g := &GiteaProvider{
+		baseURL: u,
+		webURL:  u,
+		token:   token,
+		client:  &http.Client{Timeout: 5 * time.Second},
+	}
+	if len(publicURL) > 0 && strings.TrimSpace(publicURL[0]) != "" {
+		w, err := parseBase(publicURL[0])
+		if err != nil {
+			return nil, fmt.Errorf("public URL: %w", err)
+		}
+		g.webURL = w
+	}
+	return g, nil
+}
+
+func parseBase(raw string) (*url.URL, error) {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
 		return nil, errors.New("gitea base URL is required")
 	}
-	u, err := url.Parse(rawBaseURL)
+	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		return nil, fmt.Errorf("invalid gitea base URL: %w", err)
 	}
-	return &GiteaProvider{
-		baseURL: u,
-		token:   token,
-		client:  &http.Client{Timeout: 5 * time.Second},
-	}, nil
+	return u, nil
+}
+
+// pathFor returns the repository path of u (base prefix stripped) when u
+// belongs to base.
+func pathFor(u, base *url.URL) (string, bool) {
+	if !strings.EqualFold(u.Host, base.Host) {
+		return "", false
+	}
+	if u.Scheme != "" && base.Scheme != "" && !strings.EqualFold(u.Scheme, base.Scheme) {
+		return "", false
+	}
+	path := strings.Trim(u.Path, "/")
+	if prefix := strings.Trim(base.Path, "/"); prefix != "" {
+		if path != prefix && !strings.HasPrefix(path, prefix+"/") {
+			return "", false
+		}
+		path = strings.Trim(strings.TrimPrefix(path, prefix), "/")
+	}
+	return path, true
 }
 
 func (g *GiteaProvider) Name() string {
@@ -69,23 +112,11 @@ func (g *GiteaProvider) parseURL(rawURL string) (ResourceRef, bool) {
 	if err != nil {
 		return ResourceRef{}, false
 	}
-	if !strings.EqualFold(u.Host, g.baseURL.Host) {
-		return ResourceRef{}, false
-	}
-	// Check scheme if both are specified
-	if u.Scheme != "" && g.baseURL.Scheme != "" && !strings.EqualFold(u.Scheme, g.baseURL.Scheme) {
-		return ResourceRef{}, false
-	}
-
-	path := strings.Trim(u.Path, "/")
-	// If the configured base URL has a path prefix, ensure it matches and strip it.
-	basePrefix := strings.Trim(g.baseURL.Path, "/")
-	if basePrefix != "" {
-		if !strings.HasPrefix(path, basePrefix) {
+	path, ok := pathFor(u, g.webURL)
+	if !ok {
+		if path, ok = pathFor(u, g.baseURL); !ok {
 			return ResourceRef{}, false
 		}
-		path = strings.TrimPrefix(path, basePrefix)
-		path = strings.Trim(path, "/")
 	}
 
 	segments := strings.Split(path, "/")
@@ -102,7 +133,7 @@ func (g *GiteaProvider) parseURL(rawURL string) (ResourceRef, bool) {
 		return ResourceRef{}, false
 	}
 
-	cleanURL := g.baseURL.String() + "/" + owner + "/" + repo
+	cleanURL := g.webURL.String() + "/" + owner + "/" + repo
 
 	if len(segments) == 2 {
 		return ResourceRef{
@@ -185,7 +216,7 @@ func (g *GiteaProvider) parseRef(refStr string) (ResourceRef, bool) {
 		if _, err := strconv.Atoi(num); err != nil {
 			return ResourceRef{}, false
 		}
-		urlStr := g.baseURL.String() + "/" + owner + "/" + repo + "/issues/" + num
+		urlStr := g.webURL.String() + "/" + owner + "/" + repo + "/issues/" + num
 		return ResourceRef{
 			Kind:  ResourceIssue,
 			Owner: owner,
@@ -201,7 +232,7 @@ func (g *GiteaProvider) parseRef(refStr string) (ResourceRef, bool) {
 		if repo == "" || sha == "" {
 			return ResourceRef{}, false
 		}
-		urlStr := g.baseURL.String() + "/" + owner + "/" + repo + "/commit/" + sha
+		urlStr := g.webURL.String() + "/" + owner + "/" + repo + "/commit/" + sha
 		return ResourceRef{
 			Kind:  ResourceCommit,
 			Owner: owner,
@@ -211,7 +242,7 @@ func (g *GiteaProvider) parseRef(refStr string) (ResourceRef, bool) {
 		}, true
 	}
 
-	urlStr := g.baseURL.String() + "/" + owner + "/" + rest
+	urlStr := g.webURL.String() + "/" + owner + "/" + rest
 	return ResourceRef{
 		Kind:  ResourceRepo,
 		Owner: owner,
@@ -289,7 +320,7 @@ func (g *GiteaProvider) FetchResource(ctx context.Context, ref ResourceRef) (Res
 			if pullResp, pullErr := g.client.Do(pullReq); pullErr == nil {
 				if pullResp.StatusCode >= 200 && pullResp.StatusCode < 300 {
 					ref.Kind = ResourcePull
-					ref.URL = fmt.Sprintf("%s/%s/%s/pulls/%s", g.baseURL.String(), ref.Owner, ref.Repo, ref.ID)
+					ref.URL = fmt.Sprintf("%s/%s/%s/pulls/%s", g.webURL.String(), ref.Owner, ref.Repo, ref.ID)
 					resp = pullResp
 					endpoint = pullEndpoint
 				} else {

@@ -203,3 +203,51 @@ func TestGiteaProvider_FetchRefusesInvalidRef(t *testing.T) {
 		t.Fatalf("invalid ref fetched: err=%v hit=%v", err, hit)
 	}
 }
+
+// Links people paste use the public address; the API is only ever called on
+// the internal one, and every card points to the public address.
+func TestGiteaProvider_PublicURLAlias(t *testing.T) {
+	var hits []string
+	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits = append(hits, r.URL.Path)
+		_, _ = w.Write([]byte(`{"title":"Fix login","state":"open","user":{"login":"alice"}}`))
+	}))
+	defer internal.Close()
+	p, err := NewGitea(internal.URL, "tok", "https://gitea.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, link := range []string{"https://gitea.example.com/org/repo/pulls/7", internal.URL + "/org/repo/pulls/7"} {
+		ref, ok := p.ParseURL(link)
+		if !ok {
+			t.Fatalf("ParseURL(%q) not recognised", link)
+		}
+		if ref.URL != "https://gitea.example.com/org/repo/pulls/7" {
+			t.Fatalf("ParseURL(%q).URL = %q, want the public address", link, ref.URL)
+		}
+	}
+	if _, ok := p.ParseURL("https://gitea.example.com.evil.com/org/repo/pulls/7"); ok {
+		t.Fatal("look-alike host recognised")
+	}
+	if _, ok := p.ParseURL("http://gitea.example.com/org/repo/pulls/7"); ok {
+		t.Fatal("other scheme on the public host recognised")
+	}
+
+	ref, _ := p.ParseURL("https://gitea.example.com/org/repo/pulls/7")
+	card, err := p.FetchResource(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0] != "/api/v1/repos/org/repo/pulls/7" {
+		t.Fatalf("API calls: %v, want one call on the internal address", hits)
+	}
+	if card.URL != "https://gitea.example.com/org/repo/pulls/7" {
+		t.Fatalf("card URL %q, want the public address", card.URL)
+	}
+
+	// git_status shorthand links to the public address too.
+	if r, ok := p.ParseRef("org/repo#7"); !ok || r.URL != "https://gitea.example.com/org/repo/issues/7" {
+		t.Fatalf("ParseRef: %+v %v", r, ok)
+	}
+}

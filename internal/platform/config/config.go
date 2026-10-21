@@ -31,6 +31,9 @@ type Config struct {
 	GiteaURL string
 	// GiteaToken is a read-only API token for fetching git metadata.
 	GiteaToken string
+	// GiteaPublicURL is the address people use in links, when it differs from
+	// GiteaURL (e.g. GiteaURL on Tailscale, the public name for links).
+	GiteaPublicURL string
 	// GiteaWebhookSecret is the HMAC secret for verifying incoming webhooks.
 	GiteaWebhookSecret string
 }
@@ -54,6 +57,7 @@ func FromEnv() (Config, error) {
 		MaxUploadMB:        maxUpload,
 		GiteaURL:           os.Getenv("COLONY_GITEA_URL"),
 		GiteaToken:         os.Getenv("COLONY_GITEA_TOKEN"),
+		GiteaPublicURL:     os.Getenv("COLONY_GITEA_PUBLIC_URL"),
 		GiteaWebhookSecret: os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
 	}
 	if c.Role != "all" {

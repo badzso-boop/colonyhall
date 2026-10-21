@@ -37,6 +37,7 @@ services:
       # deploy/.env.example. Empty URL = the git module stays off.
       COLONY_GITEA_URL: ${COLONY_GITEA_URL:-}
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
+      COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}
     volumes:
       - filesdata:/data/files

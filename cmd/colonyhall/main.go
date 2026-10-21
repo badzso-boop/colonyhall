@@ -104,6 +104,7 @@ func run(logger *slog.Logger) error {
 		MaxUploadMB:        cfg.MaxUploadMB,
 		GiteaURL:           cfg.GiteaURL,
 		GiteaToken:         cfg.GiteaToken,
+		GiteaPublicURL:     cfg.GiteaPublicURL,
 		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
 	})
 	if err != nil {
