@@ -621,6 +621,23 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotesResponse" } } }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /agents/{id}/overview:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getAgentOverview
+      tags: [agents]
+      description: Humans only. Detailed overview of an agent or human actor for the side panel.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Agent overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOverview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /decisions:
     get:
       operationId: listDecisions
@@ -2194,6 +2211,108 @@ components:
         expires_at: { type: string, format: date-time }
         released_at: { type: string, format: date-time, nullable: true }
         released_by: { type: string, format: uuid, nullable: true }
+
+    OverviewAssignment:
+      type: object
+      required: [host_id, client, model, mode, sandbox, root_dir, worktree_repo, permission_mode, approvals, max_session_tokens, daily_token_limit, grants]
+      properties:
+        host_id: { type: string, format: uuid }
+        host_name: { type: string }
+        client: { type: string }
+        model: { type: string }
+        work_model: { type: string }
+        mode: { type: string }
+        sandbox: { type: boolean }
+        root_dir: { type: string }
+        worktree_repo: { type: string }
+        worktree_branch: { type: string, nullable: true }
+        permission_mode: { type: string }
+        approvals: { type: string }
+        max_session_tokens: { type: integer }
+        daily_token_limit: { type: integer, format: int64 }
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/FolderGrant" }
+
+    OverviewThread:
+      type: object
+      required: [channel_id, session_id, last_run_tokens, max_session_tokens]
+      properties:
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        session_id: { type: string }
+        last_run_tokens: { type: integer, format: int64 }
+        max_session_tokens: { type: integer }
+
+    OverviewRun:
+      type: object
+      required: [id, time, phase, result, tokens]
+      properties:
+        id: { type: string, format: uuid }
+        time: { type: string, format: date-time }
+        phase: { type: string }
+        result: { type: string }
+        tokens: { type: integer, format: int64 }
+        error_id: { type: string, format: uuid, nullable: true }
+
+    OverviewUsage:
+      type: object
+      required: [today_tokens, daily_token_limit, last_runs]
+      properties:
+        today_tokens: { type: integer, format: int64 }
+        daily_token_limit: { type: integer, format: int64 }
+        last_runs:
+          type: array
+          items: { $ref: "#/components/schemas/OverviewRun" }
+
+    OverviewCollaboration:
+      type: object
+      required: [notes, active_leases, open_questions]
+      properties:
+        notes:
+          type: array
+          items: { $ref: "#/components/schemas/AgentNote" }
+        active_leases:
+          type: array
+          items: { $ref: "#/components/schemas/Lease" }
+        open_questions:
+          type: array
+          items: { $ref: "#/components/schemas/Question" }
+
+    OverviewCommonChannel:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+
+    AgentOverview:
+      type: object
+      required: [actor, state]
+      properties:
+        actor: { $ref: "#/components/schemas/Actor" }
+        state: { type: string }
+        activity:
+          type: object
+          nullable: true
+          required: [working]
+          properties:
+            working: { type: boolean }
+        assignment:
+          $ref: "#/components/schemas/OverviewAssignment"
+        threads:
+          type: array
+          items: { $ref: "#/components/schemas/OverviewThread" }
+        usage:
+          $ref: "#/components/schemas/OverviewUsage"
+        collaboration:
+          $ref: "#/components/schemas/OverviewCollaboration"
+        common_channels:
+          type: array
+          items: { $ref: "#/components/schemas/OverviewCommonChannel" }
+
 
 
 

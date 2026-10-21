@@ -17,7 +17,16 @@
   header b { color:var(--accent); }
   input, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg); }
   button { cursor:pointer; }
-  main { flex:1; min-height:0; display:grid; grid-template-columns:220px 1fr; }
+  main { flex:1; min-height:0; display:grid; grid-template-columns:220px 1fr; position:relative; }
+  .overview-panel { display:none; position:absolute; top:0; right:0; bottom:0; width:380px; background:var(--surface); border-left:1px solid var(--line); overflow-y:auto; padding:16px; z-index:5; box-shadow:-2px 0 8px rgba(0,0,0,0.06); flex-direction:column; gap:16px; }
+  .overview-panel.on { display:flex; }
+  .overview-header { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; }
+  .overview-close { border:none; background:transparent; font-size:16px; cursor:pointer; color:var(--muted); }
+  .overview-close:hover { color:var(--fg); }
+  .overview-body { display:flex; flex-direction:column; gap:14px; font-size:13px; }
+  .overview-section { display:flex; flex-direction:column; gap:6px; border-bottom:1px solid var(--line); padding-bottom:12px; }
+  .overview-section h4 { margin:0 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); }
+  .overview-avatar { font-size:32px; line-height:1; }
   main > nav { border-right:1px solid var(--line); padding:10px; overflow:auto; display:flex; flex-direction:column; }
   #channels { display:flex; flex-direction:column; }
   .sec-actions-bar { display:flex; justify-content:flex-end; padding:2px 0 6px; }
@@ -96,7 +105,8 @@
   .modal-row label { display:flex; align-items:center; gap:6px; cursor:pointer; flex:1; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     main > nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; }
-    header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; } }
+    header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; }
+    .overview-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; } }
 </style>
 </head>
 <body>
@@ -142,6 +152,13 @@
       </form>
     </div>
   </section>
+  <aside id="overviewPanel" class="overview-panel">
+    <div class="overview-header">
+      <h3 id="overviewTitle" style="margin:0;">Profil</h3>
+      <button id="overviewClose" class="overview-close">✕</button>
+    </div>
+    <div id="overviewBody" class="overview-body"></div>
+  </aside>
 </main>
 <div id="errModal"><div class="card"><h3 id="errTitle"></h3><div class="muted" id="errMeta"></div><pre id="errDetail"></pre><button id="errClose">✕</button></div></div>
 <div id="appModal"><div class="card"><h3 id="appTitle"></h3><div class="muted" id="appMeta"></div><pre id="appDetail"></pre><div class="row" id="appActions"></div><button id="appClose">✕</button></div></div>
@@ -214,7 +231,12 @@ const I18N = {
         newChannel: "Új csatorna", createChannel: "Csatorna létrehozása", channelName: "Csatorna neve",
         channelDesc: "Leírás (opcionális, max 250 karakter)", publicChannel: "Nyilvános csatorna", privateChannel: "Privát csatorna",
         members: "Tagok", addMember: "Hozzáadás", selectMembers: "Tagok kiválasztása:", filterMembers: "Szűrés tagok között…",
-        removeMemberConfirm: "Biztosan eltávolítod ezt a tagot?" },
+        removeMemberConfirm: "Biztosan eltávolítod ezt a tagot?",
+        overview: "Áttekintés", profile: "Profil", editProfile: "Profil szerkesztése",
+        avatarEmoji: "Profil emoji:", statusText: "Státusz:", bio: "Leírás / Bio:",
+        timezone: "Időzóna:", pause: "Szüneteltetés", resume: "Folytatás",
+        settings: "Beállítások", commonChannels: "Közös csatornák", contextThreads: "Munkamenetek",
+        newSessionSoon: "új munkamenet hamarosan" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -244,7 +266,12 @@ const I18N = {
         newChannel: "New channel", createChannel: "Create channel", channelName: "Channel name",
         channelDesc: "Description (optional, max 250 chars)", publicChannel: "Public channel", privateChannel: "Private channel",
         members: "Members", addMember: "Add", selectMembers: "Select members:", filterMembers: "Filter members…",
-        removeMemberConfirm: "Remove this member?" },
+        removeMemberConfirm: "Remove this member?",
+        overview: "Overview", profile: "Profile", editProfile: "Edit profile",
+        avatarEmoji: "Avatar emoji:", statusText: "Status:", bio: "Bio / Description:",
+        timezone: "Timezone:", pause: "Pause", resume: "Resume",
+        settings: "Settings", commonChannels: "Common channels", contextThreads: "Session threads",
+        newSessionSoon: "new session soon" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -278,8 +305,11 @@ async function api(path, opts = {}) {
 
 function chanLabel(c) {
   if (c.kind !== "dm") return "#" + c.name;
-  const others = (c.member_ids || []).filter(id => id !== me.id).map(id => "@" + (actors[id]?.handle || "?"));
-  return "✉ " + (others.join(", ") || "@" + me.handle);
+  const others = (c.member_ids || []).filter(id => id !== me.id).map(id => {
+    const act = actors[id];
+    return (act?.avatar_emoji ? act.avatar_emoji + " " : "") + "@" + (act?.handle || "?");
+  });
+  return "✉ " + (others.join(", ") || (me?.avatar_emoji ? me.avatar_emoji + " " : "") + "@" + me.handle);
 }
 
 async function loadSections() {
@@ -612,7 +642,10 @@ function renderMsg(m) {
     div.querySelector(".who").className = "who system";
     div.querySelector(".who").textContent = "system";
   } else {
-    div.querySelector(".who").textContent = "@" + a.handle;
+    div.querySelector(".who").textContent = (a.avatar_emoji ? a.avatar_emoji + " " : "") + "@" + a.handle;
+    div.querySelector(".who").style.cursor = "pointer";
+    div.querySelector(".who").title = L.overview || "Áttekintés";
+    div.querySelector(".who").onclick = () => openOverviewPanel(m.author_id);
   }
   div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
   // "[error:<id>]" from the guard: details are for humans, shown on demand.
@@ -808,9 +841,21 @@ async function refreshMembersModal() {
   const isAdmin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
   for (const m of res.members) {
     memberActorIds.add(m.actor_id);
+    const act = actors[m.actor_id];
+    const prefix = act?.avatar_emoji ? act.avatar_emoji + " " : "";
     const row = el("div", { className: "modal-row" });
+    const whoSpan = el("span", {
+      className: `who ${m.kind}`,
+      textContent: `${prefix}@${m.handle}`,
+      style: "cursor:pointer;",
+      title: L.overview || "Áttekintés",
+      onclick: () => {
+        $("membersModal").className = "modal";
+        openOverviewPanel(m.actor_id);
+      }
+    });
     const left = el("div", { style: "display:flex;align-items:center;gap:6px;" },
-      el("span", { className: `who ${m.kind}`, textContent: `@${m.handle}` }),
+      whoSpan,
       el("span", { className: "muted", style: "font-size:11px;", textContent: `(${m.kind})` })
     );
     row.append(left);
@@ -860,6 +905,475 @@ async function refreshMembersModal() {
   } else {
     addSec.style.display = "none";
   }
+}
+
+let currentOverviewActorId = null;
+
+async function openOverviewPanel(actorId) {
+  currentOverviewActorId = actorId;
+  $("overviewPanel").classList.add("on");
+  await refreshOverviewPanel();
+}
+
+function closeOverviewPanel() {
+  $("overviewPanel").classList.remove("on");
+  currentOverviewActorId = null;
+}
+$("overviewClose").onclick = closeOverviewPanel;
+
+async function refreshOverviewPanel() {
+  const actorId = currentOverviewActorId;
+  if (!actorId) return;
+  const body = $("overviewBody");
+  body.innerHTML = "";
+
+  let ov;
+  try {
+    ov = await api(`/api/v1/agents/${actorId}/overview`);
+  } catch (err) {
+    body.append(el("p", { className: "warn", textContent: err.message }));
+    return;
+  }
+
+  const act = ov.actor;
+  $("overviewTitle").textContent = (act.kind === "agent" ? "Agent " : "Felhasználó ") + (L.overview || "áttekintés");
+
+  // Profile / Identity section
+  const idSec = el("div", { className: "overview-section" });
+  const topRow = el("div", { style: "display:flex; align-items:center; gap:12px;" });
+  if (act.avatar_emoji) {
+    topRow.append(el("span", { className: "overview-avatar", textContent: act.avatar_emoji }));
+  }
+  const nameBox = el("div", { style: "display:flex; flex-direction:column;" },
+    el("b", { style: "font-size:16px;", textContent: act.display_name || act.handle }),
+    el("span", { className: `who ${act.kind}`, textContent: "@" + act.handle })
+  );
+  topRow.append(nameBox);
+  idSec.append(topRow);
+
+  const badgeRow = el("div", { style: "display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;" },
+    el("span", { className: "badge", textContent: act.role }),
+    el("span", { className: "badge", textContent: act.state }),
+    el("span", { className: "badge", textContent: act.timezone || "Europe/Budapest" })
+  );
+  idSec.append(badgeRow);
+
+  if (act.status_text) {
+    idSec.append(el("div", { style: "font-style:italic; color:var(--muted); margin-top:4px;", textContent: act.status_text }));
+  }
+  if (act.description) {
+    idSec.append(el("div", { style: "margin-top:4px; white-space:pre-wrap;", textContent: act.description }));
+  }
+
+  const canEditProfile = me?.id === act.id || (me?.kind === "human" && (me.role === "admin" || me.role === "owner"));
+  if (canEditProfile) {
+    const editBtn = el("button", {
+      textContent: "✏️ " + (L.editProfile || "Profil szerkesztése"),
+      style: "margin-top:8px; align-self:flex-start;",
+      onclick: () => showProfileEditor(act, idSec)
+    });
+    idSec.append(editBtn);
+  }
+  body.append(idSec);
+
+  // If Human: Common channels
+  if (act.kind === "human") {
+    const chanSec = el("div", { className: "overview-section" });
+    chanSec.append(el("h4", { textContent: L.commonChannels || "Közös csatornák" }));
+    const chans = ov.common_channels || [];
+    if (chans.length === 0) {
+      chanSec.append(el("span", { className: "muted", textContent: "Nincs közös csatorna." }));
+    } else {
+      const list = el("div", { style: "display:flex; flex-direction:column; gap:4px;" });
+      for (const c of chans) {
+        const item = el("a", {
+          href: "#",
+          textContent: (c.kind === "dm" ? "✉ " : "#") + c.name,
+          style: "color:var(--accent); text-decoration:none; font-weight:500;",
+          onclick: (e) => {
+            e.preventDefault();
+            closeOverviewPanel();
+            open(c.id);
+          }
+        });
+        list.append(item);
+      }
+      chanSec.append(list);
+    }
+    body.append(chanSec);
+    return;
+  }
+
+  // If Agent:
+  // 1. Activity
+  const actSec = el("div", { className: "overview-section" });
+  actSec.append(el("h4", { textContent: "Aktivitás" }));
+  const isWorking = ov.activity?.working;
+  actSec.append(el("div", { style: "display:flex; align-items:center; gap:6px;" },
+    el("span", { style: `display:inline-block; width:10px; height:10px; border-radius:50%; background:${isWorking ? '#2ecc71' : '#95a5a6'};` }),
+    el("span", { textContent: isWorking ? (L.working || "dolgozik…") : "inaktív" })
+  ));
+  body.append(actSec);
+
+  // 2. Admin Actions
+  const isAdmin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
+  if (isAdmin) {
+    const adminSec = el("div", { className: "overview-section" });
+    adminSec.append(el("h4", { textContent: "Adminisztráció" }));
+    const btnRow = el("div", { style: "display:flex; gap:6px; flex-wrap:wrap;" });
+
+    if (act.state === "active") {
+      btnRow.append(el("button", {
+        textContent: "⏸ " + (L.pause || "Szüneteltetés"),
+        onclick: async () => {
+          try {
+            await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "paused" }) });
+            await refreshOverviewPanel();
+            await load();
+          } catch (e) { alert(e.message); }
+        }
+      }));
+      btnRow.append(el("button", {
+        textContent: "⏹ " + (L.stop || "Leállítás"),
+        onclick: async () => {
+          if (!confirm("Biztosan leállítod az agentet?")) return;
+          try {
+            await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "stopped" }) });
+            await refreshOverviewPanel();
+            await load();
+          } catch (e) { alert(e.message); }
+        }
+      }));
+    } else if (act.state === "paused") {
+      btnRow.append(el("button", {
+        textContent: "▶ " + (L.resume || "Folytatás"),
+        onclick: async () => {
+          try {
+            await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "active" }) });
+            await refreshOverviewPanel();
+            await load();
+          } catch (e) { alert(e.message); }
+        }
+      }));
+      btnRow.append(el("button", {
+        textContent: "⏹ " + (L.stop || "Leállítás"),
+        onclick: async () => {
+          if (!confirm("Biztosan leállítod az agentet?")) return;
+          try {
+            await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "stopped" }) });
+            await refreshOverviewPanel();
+            await load();
+          } catch (e) { alert(e.message); }
+        }
+      }));
+    } else {
+      btnRow.append(el("button", {
+        textContent: "▶ Újraindítás",
+        onclick: async () => {
+          try {
+            await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "active" }) });
+            await refreshOverviewPanel();
+            await load();
+          } catch (e) { alert(e.message); }
+        }
+      }));
+    }
+
+    const settingsBtn = el("button", {
+      textContent: "⚙️ " + (L.settings || "Beállítások"),
+      onclick: () => {
+        closeOverviewPanel();
+        showPanel("hosts");
+        renderHosts();
+      }
+    });
+    btnRow.append(settingsBtn);
+    adminSec.append(btnRow);
+    body.append(adminSec);
+  }
+
+  // 3. Assignment
+  const asgn = ov.assignment;
+  if (asgn) {
+    const asgnSec = el("div", { className: "overview-section" });
+    asgnSec.append(el("h4", { textContent: "Gép és konfiguráció" }));
+    const grid = el("div", { style: "display:grid; grid-template-columns:auto 1fr; gap:4px 8px; font-size:12px;" },
+      el("span", { className: "muted", textContent: "Gép:" }),
+      el("span", { textContent: asgn.host_name || asgn.host_id }),
+      el("span", { className: "muted", textContent: "Kliens / Modell:" }),
+      el("span", { textContent: `${asgn.client} (${asgn.model})` }),
+      el("span", { className: "muted", textContent: "Mód / Sandbox:" }),
+      el("span", { textContent: `${asgn.mode} / ${asgn.sandbox ? "igen" : "nem"}` }),
+      el("span", { className: "muted", textContent: "Gyökérmappa:" }),
+      el("span", { textContent: asgn.root_dir || "–" }),
+      el("span", { className: "muted", textContent: "Worktree repo:" }),
+      el("span", { textContent: asgn.worktree_repo || "–" }),
+      el("span", { className: "muted", textContent: "Worktree branch:" }),
+      el("span", { textContent: asgn.worktree_branch || "–" }),
+      el("span", { className: "muted", textContent: "Token limitek:" }),
+      el("span", { textContent: `max session: ${asgn.max_session_tokens || "–"}, napi: ${asgn.daily_token_limit || "–"}` })
+    );
+    asgnSec.append(grid);
+
+    // Folder grants
+    const grantsBox = el("div", { style: "margin-top:8px;" });
+    grantsBox.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Mappa engedélyek" }));
+    const grantsList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin-top:4px;" });
+    for (const g of asgn.grants || []) {
+      const gRow = el("div", { style: "display:flex; align-items:center; justify-content:space-between; font-size:12px; background:var(--bg); padding:2px 6px; border-radius:4px;" },
+        el("span", { textContent: `${g.path} (${g.mode})` })
+      );
+      if (isAdmin) {
+        const delGrantBtn = el("button", {
+          textContent: "✕",
+          style: "padding:0 4px; font-size:10px;",
+          onclick: async () => {
+            try {
+              await api(`/api/v1/grants/${g.id}`, { method: "DELETE" });
+              await refreshOverviewPanel();
+            } catch (e) { alert(e.message); }
+          }
+        });
+        gRow.append(delGrantBtn);
+      }
+      grantsList.append(gRow);
+    }
+    if ((asgn.grants || []).length === 0) {
+      grantsList.append(el("span", { className: "muted", style: "font-size:12px;", textContent: "Nincs mappa engedély." }));
+    }
+    grantsBox.append(grantsList);
+
+    if (isAdmin) {
+      const addGrantForm = el("div", { style: "display:flex; gap:4px; margin-top:6px;" });
+      const pathInput = el("input", { placeholder: "/path/to/folder", style: "flex:1; padding:2px 6px; font-size:12px;" });
+      const modeSelect = el("select", { style: "padding:2px; font-size:12px;" },
+        el("option", { value: "read", textContent: "read" }),
+        el("option", { value: "write", textContent: "write" })
+      );
+      const addGrantBtn = el("button", {
+        textContent: "+",
+        style: "padding:2px 6px;",
+        onclick: async () => {
+          const p = pathInput.value.trim();
+          if (!p) return;
+          try {
+            await api(`/api/v1/agents/${act.id}/grants`, {
+              method: "POST",
+              body: JSON.stringify({ path: p, mode: modeSelect.value })
+            });
+            await refreshOverviewPanel();
+          } catch (e) { alert(e.message); }
+        }
+      });
+      addGrantForm.append(pathInput, modeSelect, addGrantBtn);
+      grantsBox.append(addGrantForm);
+    }
+    asgnSec.append(grantsBox);
+    body.append(asgnSec);
+  }
+
+  // 4. Context per thread
+  const threads = ov.threads || [];
+  if (threads.length > 0) {
+    const thSec = el("div", { className: "overview-section" });
+    thSec.append(el("h4", { textContent: L.contextThreads || "Munkamenetek szálanként" }));
+    const thList = el("div", { style: "display:flex; flex-direction:column; gap:6px;" });
+    for (const t of threads) {
+      const isNearLimit = t.max_session_tokens > 0 && t.last_run_tokens >= t.max_session_tokens * 0.8;
+      const thItem = el("div", { style: "border:1px solid var(--line); border-radius:6px; padding:6px; font-size:12px;" },
+        el("div", { style: "display:flex; justify-content:space-between; align-items:center;" },
+          el("a", {
+            href: "#",
+            textContent: "#" + (t.channel_name || "csatorna"),
+            style: "color:var(--accent); font-weight:600; text-decoration:none;",
+            onclick: (e) => {
+              e.preventDefault();
+              closeOverviewPanel();
+              open(t.channel_id);
+            }
+          }),
+          el("span", {
+            className: isNearLimit ? "warn" : "muted",
+            textContent: `${Math.round(t.last_run_tokens/1000)}k / ${t.max_session_tokens ? Math.round(t.max_session_tokens/1000) + 'k' : '∞'}`
+          })
+        ),
+        el("div", { className: "muted", style: "font-size:11px; margin-top:2px;", textContent: `session: ${t.session_id}` })
+      );
+      if (isNearLimit) {
+        thItem.append(el("div", { style: "color:#e67e22; font-size:11px; font-weight:500; margin-top:2px;", textContent: "⚠️ " + (L.newSessionSoon || "új munkamenet hamarosan") }));
+      }
+      thList.append(thItem);
+    }
+    thSec.append(thList);
+    body.append(thSec);
+  }
+
+  // 5. Usage & Last runs
+  const usage = ov.usage;
+  if (usage) {
+    const useSec = el("div", { className: "overview-section" });
+    useSec.append(el("h4", { textContent: "Token felhasználás és előzmények" }));
+    useSec.append(el("div", { style: "font-size:12px; margin-bottom:6px;" },
+      el("span", { className: "muted", textContent: "Ma: " }),
+      el("b", { textContent: `${usage.today_tokens} token` }),
+      el("span", { className: "muted", textContent: ` / limit: ${usage.daily_token_limit ? usage.daily_token_limit : 'korlátlan'}` })
+    ));
+
+    const runs = usage.last_runs || [];
+    if (runs.length > 0) {
+      const runsTbl = el("table", { style: "width:100%; font-size:11px; border-collapse:collapse; margin-top:4px;" },
+        el("tr", { style: "border-bottom:1px solid var(--line); text-align:left; color:var(--muted);" },
+          el("th", { textContent: "Idő" }),
+          el("th", { textContent: "Fázis" }),
+          el("th", { textContent: "Állapot" }),
+          el("th", { textContent: "Token" })
+        )
+      );
+      for (const r of runs) {
+        const row = el("tr", { style: "border-bottom:1px solid var(--line);" },
+          el("td", { textContent: new Date(r.time).toLocaleTimeString() }),
+          el("td", { textContent: r.phase }),
+          el("td", {
+            style: `color:${r.result === 'ok' ? '#2ecc71' : '#e74c3c'}; font-weight:500;`,
+            textContent: r.result
+          }),
+          el("td", { textContent: String(r.tokens) })
+        );
+        if (r.error_id) {
+          const errBtn = el("button", {
+            textContent: "hiba",
+            style: "padding:0 3px; font-size:10px; margin-left:4px;",
+            onclick: () => showError(r.error_id)
+          });
+          row.querySelector("td:nth-child(3)").append(errBtn);
+        }
+        runsTbl.append(row);
+      }
+      useSec.append(runsTbl);
+    }
+    body.append(useSec);
+  }
+
+  // 6. Collaboration
+  const collab = ov.collaboration;
+  if (collab) {
+    const colSec = el("div", { className: "overview-section" });
+    colSec.append(el("h4", { textContent: "Együttműködés" }));
+
+    const notes = collab.notes || [];
+    if (notes.length > 0) {
+      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Jegyzetek szálanként" }));
+      const nList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin:4px 0 8px;" });
+      for (const n of notes) {
+        nList.append(el("div", { style: "background:var(--bg); padding:4px 6px; border-radius:4px; font-size:11px; white-space:pre-wrap;" },
+          el("div", { className: "muted", style: "font-size:10px;", textContent: new Date(n.created_at).toLocaleString() }),
+          el("div", { textContent: n.text })
+        ));
+      }
+      colSec.append(nList);
+    }
+
+    const leases = collab.active_leases || [];
+    if (leases.length > 0) {
+      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Aktív foglalások" }));
+      const lList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin:4px 0 8px;" });
+      for (const l of leases) {
+        lList.append(el("div", { style: "background:var(--bg); padding:4px 6px; border-radius:4px; font-size:11px;" },
+          el("b", { textContent: l.resource }),
+          el("span", { className: "muted", style: "margin-left:6px;", textContent: `lejár: ${new Date(l.expires_at).toLocaleTimeString()}` })
+        ));
+      }
+      colSec.append(lList);
+    }
+
+    const questions = collab.open_questions || [];
+    if (questions.length > 0) {
+      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Nyitott kérdések" }));
+      const qList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin-top:4px;" });
+      for (const q of questions) {
+        qList.append(el("div", { style: "background:var(--bg); padding:4px 6px; border-radius:4px; font-size:11px;" },
+          el("b", { textContent: q.formatted_number + ": " }),
+          el("span", { textContent: q.text })
+        ));
+      }
+      colSec.append(qList);
+    }
+
+    if (notes.length === 0 && leases.length === 0 && questions.length === 0) {
+      colSec.append(el("span", { className: "muted", style: "font-size:12px;", textContent: "Nincs aktív jegyzet, foglalás vagy kérdés." }));
+    }
+    body.append(colSec);
+  }
+}
+
+function showProfileEditor(act, container) {
+  const form = el("div", { style: "display:flex; flex-direction:column; gap:8px; margin-top:8px; padding:10px; background:var(--bg); border-radius:6px;" });
+
+  const emojiInput = el("input", {
+    placeholder: "🎨 (1 emoji)",
+    value: act.avatar_emoji || "",
+    maxLength: 10,
+    style: "width:100px;"
+  });
+  const statusInput = el("input", {
+    placeholder: L.statusText || "Státusz szöveg (max 80)",
+    value: act.status_text || "",
+    maxLength: 80
+  });
+  const descTextarea = el("textarea", {
+    placeholder: L.bio || "Leírás / Bio (max 300)",
+    rows: 3,
+    maxLength: 300,
+    style: "width:100%; font:inherit; padding:6px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg);"
+  });
+  descTextarea.value = act.description || "";
+  const tzInput = el("input", {
+    placeholder: "Europe/Budapest",
+    value: act.timezone || "Europe/Budapest",
+    maxLength: 64
+  });
+
+  const btnRow = el("div", { style: "display:flex; gap:6px; justify-content:flex-end;" });
+  const cancelBtn = el("button", {
+    textContent: "Mégse",
+    onclick: () => refreshOverviewPanel()
+  });
+  const saveBtn = el("button", {
+    textContent: L.save || "Mentés",
+    style: "background:var(--accent); color:#fff; border-color:var(--accent);",
+    onclick: async () => {
+      try {
+        await api(`/api/v1/actors/${act.id}/profile`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            avatar_emoji: emojiInput.value.trim(),
+            status_text: statusInput.value.trim(),
+            description: descTextarea.value.trim(),
+            timezone: tzInput.value.trim() || "Europe/Budapest"
+          })
+        });
+        await load();
+        if (me && me.id === act.id) {
+          const s = await api("/api/v1/auth/session");
+          me = s.actor;
+          $("me").textContent = (me.avatar_emoji ? me.avatar_emoji + " " : "") + "@" + me.handle;
+        }
+        await refreshOverviewPanel();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  });
+  btnRow.append(cancelBtn, saveBtn);
+
+  form.append(
+    el("label", { style: "font-size:11px; font-weight:600; color:var(--muted);", textContent: L.avatarEmoji || "Emoji:" }, emojiInput),
+    el("label", { style: "font-size:11px; font-weight:600; color:var(--muted);", textContent: L.statusText || "Státusz:" }, statusInput),
+    el("label", { style: "font-size:11px; font-weight:600; color:var(--muted);", textContent: L.bio || "Leírás:" }, descTextarea),
+    el("label", { style: "font-size:11px; font-weight:600; color:var(--muted);", textContent: L.timezone || "Időzóna:" }, tzInput),
+    btnRow
+  );
+  container.append(form);
 }
 
 async function renderApprovalInline(id, span) {
@@ -1392,7 +1906,10 @@ async function start() {
   const s = await api("/api/v1/auth/session");
   me = s.actor; csrf = s.csrf_token || "";
   $("login").hidden = true; $("logout").hidden = false; $("chatbtn").hidden = false;
-  $("me").textContent = "@" + me.handle;
+  $("me").textContent = (me.avatar_emoji ? me.avatar_emoji + " " : "") + "@" + me.handle;
+  $("me").style.cursor = "pointer";
+  $("me").title = L.profile || "Profil";
+  $("me").onclick = () => openOverviewPanel(me.id);
   showPanel(openPanel);  // highlight the active tab (Chat) right after login
   $("hostsbtn").hidden = !(me.kind === "human" && (me.role === "owner" || me.role === "admin"));
   $("schedbtn").hidden = me.kind !== "human";

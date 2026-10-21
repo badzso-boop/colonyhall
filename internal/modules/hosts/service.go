@@ -585,6 +585,16 @@ func clipList(list []string, maxItems, maxLen int) []string {
 	return out
 }
 
+// HostByID returns a host by its id.
+func (s *Service) HostByID(ctx context.Context, id ids.ID) (Host, error) {
+	return s.Store.HostByID(ctx, id)
+}
+
+// ActiveGrants returns non-revoked grants for the agent on the host.
+func (s *Service) ActiveGrants(ctx context.Context, hostID, agentID ids.ID) ([]Grant, error) {
+	return s.Store.ActiveGrants(ctx, hostID, agentID)
+}
+
 // IsFullAccess reports whether the agent is assigned in direct mode without sandbox.
 func (s *Service) IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error) {
 	a, err := s.Store.AssignmentByAgent(ctx, agentID)

@@ -767,6 +767,20 @@ type AgentNotesResponse struct {
 	Notes []AgentNote `json:"notes"`
 }
 
+// AgentOverview defines model for AgentOverview.
+type AgentOverview struct {
+	Activity *struct {
+		Working bool `json:"working"`
+	} `json:"activity,omitempty"`
+	Actor          Actor                    `json:"actor"`
+	Assignment     *OverviewAssignment      `json:"assignment,omitempty"`
+	Collaboration  *OverviewCollaboration   `json:"collaboration,omitempty"`
+	CommonChannels *[]OverviewCommonChannel `json:"common_channels,omitempty"`
+	State          string                   `json:"state"`
+	Threads        *[]OverviewThread        `json:"threads,omitempty"`
+	Usage          *OverviewUsage           `json:"usage,omitempty"`
+}
+
 // AgentRules defines model for AgentRules.
 type AgentRules struct {
 	CreatedAt *time.Time          `json:"created_at,omitempty"`
@@ -1333,6 +1347,66 @@ type MessageList struct {
 // OpenDMRequest defines model for OpenDMRequest.
 type OpenDMRequest struct {
 	ActorIds []openapi_types.UUID `json:"actor_ids"`
+}
+
+// OverviewAssignment defines model for OverviewAssignment.
+type OverviewAssignment struct {
+	Approvals        string             `json:"approvals"`
+	Client           string             `json:"client"`
+	DailyTokenLimit  int64              `json:"daily_token_limit"`
+	Grants           []FolderGrant      `json:"grants"`
+	HostId           openapi_types.UUID `json:"host_id"`
+	HostName         *string            `json:"host_name,omitempty"`
+	MaxSessionTokens int                `json:"max_session_tokens"`
+	Mode             string             `json:"mode"`
+	Model            string             `json:"model"`
+	PermissionMode   string             `json:"permission_mode"`
+	RootDir          string             `json:"root_dir"`
+	Sandbox          bool               `json:"sandbox"`
+	WorkModel        *string            `json:"work_model,omitempty"`
+	WorktreeBranch   *string            `json:"worktree_branch,omitempty"`
+	WorktreeRepo     string             `json:"worktree_repo"`
+}
+
+// OverviewCollaboration defines model for OverviewCollaboration.
+type OverviewCollaboration struct {
+	ActiveLeases  []Lease     `json:"active_leases"`
+	Notes         []AgentNote `json:"notes"`
+	OpenQuestions []Question  `json:"open_questions"`
+}
+
+// OverviewCommonChannel defines model for OverviewCommonChannel.
+type OverviewCommonChannel struct {
+	Id   openapi_types.UUID `json:"id"`
+	Kind string             `json:"kind"`
+	Name string             `json:"name"`
+}
+
+// OverviewRun defines model for OverviewRun.
+type OverviewRun struct {
+	ErrorId *openapi_types.UUID `json:"error_id,omitempty"`
+	Id      openapi_types.UUID  `json:"id"`
+	Phase   string              `json:"phase"`
+	Result  string              `json:"result"`
+	Time    time.Time           `json:"time"`
+	Tokens  int64               `json:"tokens"`
+}
+
+// OverviewThread defines model for OverviewThread.
+type OverviewThread struct {
+	ChannelId        openapi_types.UUID  `json:"channel_id"`
+	ChannelName      *string             `json:"channel_name,omitempty"`
+	LastRunTokens    int64               `json:"last_run_tokens"`
+	MaxSessionTokens int                 `json:"max_session_tokens"`
+	SessionId        string              `json:"session_id"`
+	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// OverviewUsage defines model for OverviewUsage.
+type OverviewUsage struct {
+	DailyTokenLimit int64         `json:"daily_token_limit"`
+	LastRuns        []OverviewRun `json:"last_runs"`
+	TodayTokens     int64         `json:"today_tokens"`
 }
 
 // PairingCode defines model for PairingCode.

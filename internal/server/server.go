@@ -165,6 +165,7 @@ type App struct {
 	Decisions    *decision.Service
 	Leases       *lease.Service
 	Sidebar      *sidebar.Service
+	Runs         *runs.Service
 	Gateway      *gateway.Gateway
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
@@ -362,7 +363,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	wikihttp.Register(mux, wiSvc, idSvc)
 	previewhttp.Register(mux, prSvc, idSvc, hoSvc)
 	schedhttp.Register(mux, scSvc, idSvc)
-	runhttp.Register(mux, &runs.Service{Store: ruStore, Conversation: cvSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}, idSvc)
+	ruSvc := &runs.Service{Store: ruStore, Conversation: cvSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	runhttp.Register(mux, ruSvc, idSvc)
 	apphttp.Register(mux, apSvc, idSvc)
 	qhttp.Register(mux, qSvc, idSvc, cvSvc, idSvc)
 	fileshttp.Register(mux, fiSvc, idSvc)
@@ -416,6 +418,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})))
+	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, gw, opt.Clock)
 
 	return &App{
 		Handler:      httpserver.New(mux, ready, opt.Logger),
@@ -436,6 +439,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Decisions:    dcSvc,
 		Leases:       lsSvc,
 		Sidebar:      sbSvc,
+		Runs:         ruSvc,
 		Gateway:      gw,
 		logger:       opt.Logger,
 		Consumers:    consumers,

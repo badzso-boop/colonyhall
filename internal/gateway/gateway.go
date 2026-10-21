@@ -117,6 +117,23 @@ func (g *Gateway) unregister(c *connection) {
 	delete(g.conns, c)
 }
 
+// IsWorking reports whether the agent currently has an active, unexpired working activity.
+func (g *Gateway) IsWorking(agentID ids.ID) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	now := g.now()
+	for k, exp := range g.activities {
+		if exp.Before(now) {
+			delete(g.activities, k)
+			continue
+		}
+		if k.agentID == agentID {
+			return true
+		}
+	}
+	return false
+}
+
 // ReportActivity updates the in-memory activity state for an agent and pushes
 // an ephemeral WebSocket frame to viewers who can read that channel.
 func (g *Gateway) ReportActivity(ctx context.Context, actor identity.Actor, channelID, threadRootID ids.ID, state string) error {

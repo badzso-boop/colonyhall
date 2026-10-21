@@ -312,3 +312,10 @@ func (s *Service) AgentBudget(ctx context.Context, by identity.Actor) (AgentBudg
 		ResetsAt:  resetsAt,
 	}, nil
 }
+
+// TokensToday returns the total tokens consumed by the agent today in Europe/Budapest.
+func (s *Service) TokensToday(ctx context.Context, workspaceID, agentID ids.ID) (int64, error) {
+	now := s.Clock.Now().In(Budapest)
+	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Budapest)
+	return s.Store.TokensSince(ctx, workspaceID, agentID, todayMidnight)
+}
