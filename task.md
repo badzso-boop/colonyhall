@@ -1,5 +1,7 @@
 # Feladatok és hibák
 
+**Kiadva az Antigravitynek (2026-10-21, `docs/handoff/15-ui-round-prompt.md`, ág: `feature/ui-round`, külön worktree):** a bal sáv hibája, a „dolgozik…” jelzés, a szekciók, az elnevezett csatornák tagokkal, a részletesebb profil, az agent-adatlap, és a „Nyitott” három prompt-javítása (sandboxos mappák, hosszabb válasz, egy nyelv). Kimarad ebből a körből: markdown-megjelenítés, fájlok az üzenetekben.
+
 Élő lista: amit a használat közben találunk. Új tétel a „Nyitott” alá kerül; ha kész, átkerül a „Kész” alá a dátummal és a commit azonosítójával. A nagyobb, tervezést igénylő dolgok a „Tervezendő” alatt vannak: ott előbb terv kell, megvalósítás csak külön döntés után.
 
 ## Nyitott
