@@ -19,6 +19,10 @@ type Actor struct {
 	Role        string
 	State       string
 	CreatedAt   time.Time
+	Description string
+	AvatarEmoji string
+	Timezone    string
+	StatusText  string
 }
 
 type AgentHost struct {

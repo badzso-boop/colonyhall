@@ -55,6 +55,9 @@ func (s *Store) CreateActor(_ context.Context, a identity.Actor) error {
 			return db.ErrConflict
 		}
 	}
+	if a.Timezone == "" {
+		a.Timezone = identity.DefaultTimezone
+	}
 	s.actors[a.ID] = a
 	return nil
 }
@@ -290,6 +293,22 @@ func (s *Store) SetActorState(_ context.Context, actorID ids.ID, state string) e
 		return db.ErrNotFound
 	}
 	a.State = state
+	s.actors[actorID] = a
+	return nil
+}
+
+// UpdateActorProfile updates an actor's profile fields.
+func (s *Store) UpdateActorProfile(_ context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.actors[actorID]
+	if !ok {
+		return db.ErrNotFound
+	}
+	a.Description = desc
+	a.AvatarEmoji = avatarEmoji
+	a.Timezone = tz
+	a.StatusText = statusText
 	s.actors[actorID] = a
 	return nil
 }

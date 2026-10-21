@@ -141,6 +141,92 @@ func (s *Service) SetActorState(ctx context.Context, by Actor, actorID ids.ID, s
 		})
 }
 
+// UpdateProfileInput specifies fields to update in an actor's profile.
+type UpdateProfileInput struct {
+	Description *string
+	AvatarEmoji *string
+	Timezone    *string
+	StatusText  *string
+}
+
+// UpdateProfile updates an actor's profile.
+// A human edits their own profile; admins edit anyone's (including agents); agents cannot edit profiles.
+func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, in UpdateProfileInput) (Actor, error) {
+	if by.Kind != KindHuman {
+		return Actor{}, ErrForbidden
+	}
+	target, err := s.Store.ActorByID(ctx, actorID)
+	if err != nil {
+		return Actor{}, err
+	}
+	if target.WorkspaceID != by.WorkspaceID {
+		return Actor{}, db.ErrNotFound
+	}
+	if target.ID != by.ID && !by.IsAdmin() {
+		return Actor{}, ErrForbidden
+	}
+
+	newDesc := target.Description
+	if in.Description != nil {
+		d := *in.Description
+		if len([]rune(d)) > MaxDescriptionLen {
+			return Actor{}, ErrInvalidDescription
+		}
+		newDesc = d
+	}
+
+	newStatus := target.StatusText
+	if in.StatusText != nil {
+		st := *in.StatusText
+		if len([]rune(st)) > MaxStatusTextLen {
+			return Actor{}, ErrInvalidStatusText
+		}
+		newStatus = st
+	}
+
+	newTz := target.Timezone
+	if in.Timezone != nil {
+		tz := *in.Timezone
+		if err := ValidateTimezone(tz); err != nil {
+			return Actor{}, err
+		}
+		newTz = tz
+	}
+	if newTz == "" {
+		newTz = DefaultTimezone
+	}
+
+	newEmoji := target.AvatarEmoji
+	if in.AvatarEmoji != nil {
+		em := *in.AvatarEmoji
+		if !ValidAvatarEmoji(em) {
+			return Actor{}, ErrInvalidAvatarEmoji
+		}
+		newEmoji = em
+	}
+
+	payload := ActorProfileUpdated{
+		ActorID:     target.ID.String(),
+		Description: newDesc,
+		AvatarEmoji: newEmoji,
+		Timezone:    newTz,
+		StatusText:  newStatus,
+	}
+
+	err = s.record(ctx, by, EventActorProfileUpdated, "actor", target.ID, payload, func(ctx context.Context) error {
+		return s.Store.UpdateActorProfile(ctx, target.ID, newDesc, newEmoji, newTz, newStatus)
+	})
+	if err != nil {
+		return Actor{}, err
+	}
+
+	target.Description = newDesc
+	target.AvatarEmoji = newEmoji
+	target.Timezone = newTz
+	target.StatusText = newStatus
+	return s.load(ctx, target)
+}
+
 // Workspace returns the caller's workspace (emergency-stop status).
 func (s *Service) Workspace(ctx context.Context, by Actor) (Workspace, error) {
 	return s.Store.WorkspaceByID(ctx, by.WorkspaceID)

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"regexp"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"colonyhall/internal/platform/ids"
 )
@@ -61,6 +63,11 @@ type Actor struct {
 	State       string
 	CreatedAt   time.Time
 
+	Description string
+	AvatarEmoji string
+	Timezone    string
+	StatusText  string
+
 	// Halted is computed when the actor is loaded for a request, never
 	// stored: the actor is paused, or it is an agent while the workspace's
 	// emergency stop is on. Halted actors may read but not write.
@@ -109,14 +116,60 @@ type Token struct {
 
 // Errors returned by the identity service.
 var (
-	ErrInvalidHandle = errors.New("handle must be 2-32 characters: lowercase letters, digits and '-'")
-	ErrUnauthorized  = errors.New("invalid or revoked token")
-	ErrForbidden     = errors.New("not allowed")
-	ErrInvalidKind   = errors.New("kind must be \"human\" or \"agent\"")
-	ErrInvalidRole   = errors.New("role must be owner, admin, member or observer")
-	ErrInvalidState  = errors.New("state must be active, paused or stopped")
-	ErrHalted        = errors.New("writing is paused for this actor (paused or emergency stop)")
+	ErrInvalidHandle      = errors.New("handle must be 2-32 characters: lowercase letters, digits and '-'")
+	ErrUnauthorized       = errors.New("invalid or revoked token")
+	ErrForbidden          = errors.New("not allowed")
+	ErrInvalidKind        = errors.New("kind must be \"human\" or \"agent\"")
+	ErrInvalidRole        = errors.New("role must be owner, admin, member or observer")
+	ErrInvalidState       = errors.New("state must be active, paused or stopped")
+	ErrHalted             = errors.New("writing is paused for this actor (paused or emergency stop)")
+	ErrInvalidTimezone    = errors.New("timezone must be a valid IANA timezone name")
+	ErrInvalidDescription = errors.New("description must be at most 300 characters")
+	ErrInvalidStatusText  = errors.New("status text must be at most 80 characters")
+	ErrInvalidAvatarEmoji = errors.New("avatar emoji must be a valid emoji")
 )
+
+const (
+	DefaultTimezone   = "Europe/Budapest"
+	MaxDescriptionLen = 300
+	MaxStatusTextLen  = 80
+	MaxAvatarEmojiLen = 32
+)
+
+// ValidateTimezone checks if tz is a valid IANA timezone.
+func ValidateTimezone(tz string) error {
+	if tz == "" {
+		return nil
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		return ErrInvalidTimezone
+	}
+	return nil
+}
+
+// ValidAvatarEmoji checks if e is a short emoji sequence or empty.
+func ValidAvatarEmoji(e string) bool {
+	if e == "" {
+		return true
+	}
+	if utf8.RuneCountInString(e) > MaxAvatarEmojiLen {
+		return false
+	}
+	wide := false
+	for _, r := range e {
+		switch {
+		case r == 0x200D: // ZWJ
+		case r >= 0xFE00 && r <= 0xFE0F: // variation selectors
+		case r >= 0x1F3FB && r <= 0x1F3FF: // skin tone modifiers
+		case (r >= '0' && r <= '9') || r == '#' || r == '*': // keycaps
+		case r > 127 && (unicode.Is(unicode.So, r) || unicode.Is(unicode.Sk, r) || unicode.Is(unicode.Sm, r)):
+			wide = true
+		default:
+			return false
+		}
+	}
+	return wide
+}
 
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,31}$`)
 

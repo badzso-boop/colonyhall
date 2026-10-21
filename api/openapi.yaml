@@ -94,6 +94,25 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Changed }
 
+  /actors/{actorId}/profile:
+    parameters:
+      - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateActorProfile
+      tags: [identity]
+      description: Humans edit their own profile, admins edit anyone's. Agents cannot edit profiles.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateActorProfileRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/Actor" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /admin/status:
     get:
       operationId: getAdminStatus
@@ -1174,6 +1193,17 @@ components:
         state: { type: string }
         halted: { type: boolean, description: "Only on /me: true while the actor may not write (paused, stopped or emergency stop)" }
         created_at: { type: string, format: date-time }
+        description: { type: string, maxLength: 300 }
+        avatar_emoji: { type: string, maxLength: 32 }
+        timezone: { type: string, maxLength: 64 }
+        status_text: { type: string, maxLength: 80 }
+    UpdateActorProfileRequest:
+      type: object
+      properties:
+        description: { type: string, maxLength: 300 }
+        avatar_emoji: { type: string, maxLength: 32 }
+        timezone: { type: string, maxLength: 64 }
+        status_text: { type: string, maxLength: 80 }
     ActorList:
       type: object
       required: [actors]

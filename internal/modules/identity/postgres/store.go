@@ -27,9 +27,23 @@ func (s *Store) CreateWorkspace(ctx context.Context, w identity.Workspace) error
 
 // CreateActor inserts an actor.
 func (s *Store) CreateActor(ctx context.Context, a identity.Actor) error {
+	tz := a.Timezone
+	if tz == "" {
+		tz = identity.DefaultTimezone
+	}
 	err := s.q(ctx).CreateActor(ctx, sqlcgen.CreateActorParams{
-		ID: a.ID, WorkspaceID: a.WorkspaceID, Kind: string(a.Kind), Handle: a.Handle,
-		DisplayName: a.DisplayName, Role: string(a.Role), State: a.State, CreatedAt: a.CreatedAt,
+		ID:          a.ID,
+		WorkspaceID: a.WorkspaceID,
+		Kind:        string(a.Kind),
+		Handle:      a.Handle,
+		DisplayName: a.DisplayName,
+		Role:        string(a.Role),
+		State:       a.State,
+		CreatedAt:   a.CreatedAt,
+		Description: a.Description,
+		AvatarEmoji: a.AvatarEmoji,
+		Timezone:    tz,
+		StatusText:  a.StatusText,
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -76,8 +90,20 @@ func (s *Store) RevokeHostTokens(ctx context.Context, hostID, agentID ids.ID, at
 }
 
 func toActor(r sqlcgen.Actor) identity.Actor {
-	return identity.Actor{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: identity.Kind(r.Kind), Handle: r.Handle,
-		DisplayName: r.DisplayName, Role: identity.Role(r.Role), State: r.State, CreatedAt: r.CreatedAt}
+	return identity.Actor{
+		ID:          r.ID,
+		WorkspaceID: r.WorkspaceID,
+		Kind:        identity.Kind(r.Kind),
+		Handle:      r.Handle,
+		DisplayName: r.DisplayName,
+		Role:        identity.Role(r.Role),
+		State:       r.State,
+		CreatedAt:   r.CreatedAt,
+		Description: r.Description,
+		AvatarEmoji: r.AvatarEmoji,
+		Timezone:    r.Timezone,
+		StatusText:  r.StatusText,
+	}
 }
 
 func one(r sqlcgen.Actor, err error) (identity.Actor, error) {
@@ -215,6 +241,17 @@ func (s *Store) RevokeToken(ctx context.Context, id ids.ID, at time.Time) error 
 // SetActorState changes an actor's state.
 func (s *Store) SetActorState(ctx context.Context, actorID ids.ID, state string) error {
 	return s.q(ctx).SetActorState(ctx, sqlcgen.SetActorStateParams{ID: actorID, State: state})
+}
+
+// UpdateActorProfile updates an actor's profile fields.
+func (s *Store) UpdateActorProfile(ctx context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText string) error {
+	return s.q(ctx).UpdateActorProfile(ctx, sqlcgen.UpdateActorProfileParams{
+		ID:          actorID,
+		Description: desc,
+		AvatarEmoji: avatarEmoji,
+		Timezone:    tz,
+		StatusText:  statusText,
+	})
 }
 
 // WorkspaceByID loads a workspace.

@@ -242,6 +242,13 @@ func testIdentity(t *testing.T, b Backend) {
 	if len(list) != 2 || list[0].Handle != "bot" {
 		t.Fatalf("ListActors must be sorted by handle: %+v", list)
 	}
+
+	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Lead Developer", "🚀", "Europe/Budapest", "Busy coding"))
+	updatedHuman, err := b.Identity.ActorByID(ctx, f.human.ID)
+	must(t, err)
+	if updatedHuman.Description != "Lead Developer" || updatedHuman.AvatarEmoji != "🚀" || updatedHuman.Timezone != "Europe/Budapest" || updatedHuman.StatusText != "Busy coding" {
+		t.Fatalf("UpdateActorProfile not saved: %+v", updatedHuman)
+	}
 }
 
 func testConversation(t *testing.T, b Backend) {

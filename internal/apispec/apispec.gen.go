@@ -687,16 +687,20 @@ type AckResponse struct {
 
 // Actor defines model for Actor.
 type Actor struct {
+	AvatarEmoji *string   `json:"avatar_emoji,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+	Description *string   `json:"description,omitempty"`
 	DisplayName string    `json:"display_name"`
 
 	// Halted Only on /me: true while the actor may not write (paused, stopped or emergency stop)
-	Halted *bool              `json:"halted,omitempty"`
-	Handle string             `json:"handle"`
-	Id     openapi_types.UUID `json:"id"`
-	Kind   ActorKind          `json:"kind"`
-	Role   Role               `json:"role"`
-	State  string             `json:"state"`
+	Halted     *bool              `json:"halted,omitempty"`
+	Handle     string             `json:"handle"`
+	Id         openapi_types.UUID `json:"id"`
+	Kind       ActorKind          `json:"kind"`
+	Role       Role               `json:"role"`
+	State      string             `json:"state"`
+	StatusText *string            `json:"status_text,omitempty"`
+	Timezone   *string            `json:"timezone,omitempty"`
 }
 
 // ActorKind defines model for ActorKind.
@@ -1659,6 +1663,14 @@ type TokenList struct {
 	Tokens []Token `json:"tokens"`
 }
 
+// UpdateActorProfileRequest defines model for UpdateActorProfileRequest.
+type UpdateActorProfileRequest struct {
+	AvatarEmoji *string `json:"avatar_emoji,omitempty"`
+	Description *string `json:"description,omitempty"`
+	StatusText  *string `json:"status_text,omitempty"`
+	Timezone    *string `json:"timezone,omitempty"`
+}
+
 // UpdateAgentRulesRequest defines model for UpdateAgentRulesRequest.
 type UpdateAgentRulesRequest struct {
 	Text string `json:"text"`
@@ -1799,6 +1811,9 @@ type CreateActorJSONRequestBody = CreateActorRequest
 
 // SetPasswordJSONRequestBody defines body for SetPassword for application/json ContentType.
 type SetPasswordJSONRequestBody = SetPasswordRequest
+
+// UpdateActorProfileJSONRequestBody defines body for UpdateActorProfile for application/json ContentType.
+type UpdateActorProfileJSONRequestBody = UpdateActorProfileRequest
 
 // SetActorStateJSONRequestBody defines body for SetActorState for application/json ContentType.
 type SetActorStateJSONRequestBody = SetStateRequest

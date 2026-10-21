@@ -15,10 +15,10 @@ import (
 
 func init() {
 	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
-		identity.ErrWorkspaceRequired)
+		identity.ErrWorkspaceRequired, identity.ErrInvalidState, identity.ErrInvalidTimezone,
+		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidAvatarEmoji)
 	httpx.RegisterStatus(http.StatusUnauthorized, identity.ErrBadCredentials)
 	httpx.RegisterStatus(http.StatusTooManyRequests, identity.ErrTooManyAttempts)
-	httpx.RegisterValidation(identity.ErrInvalidState)
 	httpx.RegisterForbidden(identity.ErrHalted)
 }
 
@@ -43,8 +43,32 @@ type Options struct {
 
 // ToAPI converts an actor to its API shape.
 func ToAPI(a identity.Actor) apispec.Actor {
-	return apispec.Actor{Id: a.ID, Kind: apispec.ActorKind(a.Kind), Handle: a.Handle, DisplayName: a.DisplayName,
-		Role: apispec.Role(a.Role), State: a.State, CreatedAt: a.CreatedAt}
+	var desc, emoji, tz, status *string
+	if a.Description != "" {
+		desc = &a.Description
+	}
+	if a.AvatarEmoji != "" {
+		emoji = &a.AvatarEmoji
+	}
+	if a.Timezone != "" {
+		tz = &a.Timezone
+	}
+	if a.StatusText != "" {
+		status = &a.StatusText
+	}
+	return apispec.Actor{
+		Id:          a.ID,
+		Kind:        apispec.ActorKind(a.Kind),
+		Handle:      a.Handle,
+		DisplayName: a.DisplayName,
+		Role:        apispec.Role(a.Role),
+		State:       a.State,
+		CreatedAt:   a.CreatedAt,
+		Description: desc,
+		AvatarEmoji: emoji,
+		Timezone:    tz,
+		StatusText:  status,
+	}
 }
 
 // meToAPI is ToAPI plus the computed halted flag, which is only known for
@@ -207,6 +231,29 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("PATCH /api/v1/actors/{id}/profile", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in apispec.UpdateActorProfileRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		updated, err := svc.UpdateProfile(r.Context(), httpx.Actor(r), id, identity.UpdateProfileInput{
+			Description: in.Description,
+			AvatarEmoji: in.AvatarEmoji,
+			Timezone:    in.Timezone,
+			StatusText:  in.StatusText,
+		})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, ToAPI(updated))
 	}))
 
 	mux.Handle("GET /api/v1/admin/status", auth(func(w http.ResponseWriter, r *http.Request) {

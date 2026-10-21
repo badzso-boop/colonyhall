@@ -2,8 +2,16 @@
 INSERT INTO workspace (id, name, created_at) VALUES ($1, $2, $3);
 
 -- name: CreateActor :exec
-INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+
+-- name: UpdateActorProfile :exec
+UPDATE actor
+SET description = $2,
+    avatar_emoji = $3,
+    timezone = $4,
+    status_text = $5
+WHERE id = $1;
 
 -- name: ActorByID :one
 SELECT * FROM actor WHERE id = $1;

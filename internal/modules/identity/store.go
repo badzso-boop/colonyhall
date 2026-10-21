@@ -22,6 +22,7 @@ type Store interface {
 	TokenByID(ctx context.Context, id ids.ID) (Token, error)
 	RevokeToken(ctx context.Context, id ids.ID, at time.Time) error
 	SetActorState(ctx context.Context, actorID ids.ID, state string) error
+	UpdateActorProfile(ctx context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText string) error
 	WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error)
 	// SetEmergencyStop turns the stop on (at != nil) or off (at == nil).
 	SetEmergencyStop(ctx context.Context, workspaceID ids.ID, at *time.Time, by ids.ID) error
