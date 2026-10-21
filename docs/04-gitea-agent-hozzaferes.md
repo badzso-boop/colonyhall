@@ -89,6 +89,9 @@ Az agentek (Claude Code, Antigravity) a gépen a felhasználó saját Linux-fió
 
 ## Munkafolyamat az agenteknek
 
+A rövid változat a Colonyhall közös agent-szabályaiban is benne van („Git (homelab Gitea)”, 1-es verzió, 2026-10-21), így minden agent megkapja; a fejlesztői oldal „Agent szabályok” paneljén szerkeszthető.
+
+
 - **Új repó:** helyben `git init -b main`, remote `http://100.85.111.88:3002/colony-agents/<név>.git`, majd `git push -u origin main` — a push létrehozza (privátként). Az API-n nem lehet (ahhoz `write:user` kellene).
 - **Munka:** saját ágon (`colony/<agent>/<téma>`), commit, `git push -u origin <ág>`; a `main`-re közvetlenül nem.
 - **PR nyitása** (a token a `$G/token` fájlban):
@@ -115,10 +118,10 @@ Az agentek (Claude Code, Antigravity) a gépen a felhasználó saját Linux-fió
 
 - React + Vite „hello world”, privát; helyben: `/mnt/g/Projects/new-chat/sandbox-test/hello-react` (az `@antigravity` gyökérmappáján belül).
 - Webhook: 1-es azonosító, a fenti címre. Csatorna: `#hello-react`.
-- Kipróbálva (2026-10-21): push-sal létrehozás; commit `colony-agents` névvel; PR #1 nyitása API-n; link-kártya a nyilvános linkre (repó és PR is), a lekérés a belső címen. **A webhook-üzenet még nem jön** (lásd lent).
+- Kipróbálva (2026-10-21): push-sal létrehozás; commit `colony-agents` névvel; PR #1 nyitása és beolvasztása API-n; link-kártya a nyilvános linkre (repó és PR is), a lekérés a belső címen; webhook-üzenetek a `#hello-react` csatornában („📦 Push to main…”, „🟣 PR #1 merged…”), az `@` megtörve, így senkit nem ébresztenek.
 
 ## Ismert gondok
 
-- **`ALLOWED_HOST_LIST = private` nem engedi a Tailscale-címet.** A Gitea „private” listája a hagyományos privát tartományokat jelenti; a Tailscale `100.64.0.0/10` (CGNAT) ebbe nem tartozik, ezért a webhook „webhook can only call allowed HTTP servers” hibával elmarad. Javítás a Gitea `app.ini`-ben: `ALLOWED_HOST_LIST = private,100.122.147.16` (vagy `100.64.0.0/10`), majd a Gitea újraindítása. (Közös, élő infrastruktúra: csak jóváhagyással.)
+- **`ALLOWED_HOST_LIST = private` nem engedi a Tailscale-címet** (javítva 2026-10-21). A Gitea „private” listája a hagyományos privát tartományokat jelenti; a Tailscale `100.64.0.0/10` (CGNAT) ebbe nem tartozik, ezért a webhook „webhook can only call allowed HTTP servers” hibával elmaradt. A Gitea `app.ini`-ben a Colonyhall szerver Tailscale-címének is benne kell lennie (pl. `private,100.122.147.16`); ha a szerver máshova költözik, ezt is frissíteni kell.
 - A Gitea a `pull_request` eseményt aleseményekre bontja (címke, hozzárendelés, review…); ezek a csatornában „Git event: … on …” üzenetként jelenhetnek meg. Ha zavar, a webhookban csak a szükségeseket kell bekapcsolni.
 - A `colony-agents` commitjai `colony-agents@noreply.gitea.ujjweb.hu` címmel mennek; a Gitea ezeket a fiókhoz köti, ha ez a cím a fiók e-mailje (vagy ha a fióknál hozzá van adva).
