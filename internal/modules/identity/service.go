@@ -92,6 +92,13 @@ func (s *Service) createActor(ctx context.Context, byID ids.ID, in NewActorInput
 	if in.Kind != KindHuman && in.Kind != KindAgent {
 		return Actor{}, "", 0, fmt.Errorf("%w: %q", ErrInvalidKind, in.Kind)
 	}
+	switch in.Role {
+	case RoleOwner, RoleAdmin, RoleMember, RoleObserver:
+	default:
+		// Without this the database check constraint caught it: a 500
+		// instead of a validation error.
+		return Actor{}, "", 0, fmt.Errorf("%w: %q", ErrInvalidRole, in.Role)
+	}
 	if in.DisplayName == "" {
 		in.DisplayName = in.Handle
 	}

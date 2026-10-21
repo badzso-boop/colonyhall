@@ -113,6 +113,7 @@ var (
 	ErrUnauthorized  = errors.New("invalid or revoked token")
 	ErrForbidden     = errors.New("not allowed")
 	ErrInvalidKind   = errors.New("kind must be \"human\" or \"agent\"")
+	ErrInvalidRole   = errors.New("role must be owner, admin, member or observer")
 	ErrInvalidState  = errors.New("state must be active, paused or stopped")
 	ErrHalted        = errors.New("writing is paused for this actor (paused or emergency stop)")
 )

@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrWeakPassword,
+	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
 		identity.ErrWorkspaceRequired)
 	httpx.RegisterStatus(http.StatusUnauthorized, identity.ErrBadCredentials)
 	httpx.RegisterStatus(http.StatusTooManyRequests, identity.ErrTooManyAttempts)

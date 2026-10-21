@@ -206,3 +206,17 @@ func TestPausedAdminCannotAdminister(t *testing.T) {
 		}
 	}
 }
+
+// An unknown role is a validation error (400), not a database error (500):
+// the dev page once sent role "agent", which only the DB constraint caught.
+func TestCreateActorRejectsUnknownRole(t *testing.T) {
+	e := newEnv(t)
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken,
+		map[string]any{"kind": "agent", "handle": "bad-role", "role": "agent"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("role agent: got %d, want 400", s)
+	}
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken,
+		map[string]any{"kind": "agent", "handle": "good-role", "role": "member"}, nil); s != http.StatusCreated {
+		t.Fatalf("role member: got %d, want 201", s)
+	}
+}
