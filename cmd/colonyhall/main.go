@@ -27,13 +27,17 @@ import (
 //
 //	colonyhall                                   run the server
 //	colonyhall set-password -handle norbi        set a password; reads it from stdin
+//	colonyhall bootstrap -handle norbi           first workspace + owner on an empty database; password from stdin
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 	var err error
-	if len(os.Args) > 1 && os.Args[1] == "set-password" {
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == "set-password":
 		err = setPassword(os.Args[2:])
-	} else {
+	case len(os.Args) > 1 && os.Args[1] == "bootstrap":
+		err = bootstrapCmd(os.Args[2:], os.Stdin)
+	default:
 		err = run(logger)
 	}
 	if err != nil {

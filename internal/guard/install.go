@@ -9,7 +9,10 @@ import (
 )
 
 // GenerateUnit returns the systemd user service unit definition for colony guard.
-func GenerateUnit(binPath, configPath string) (string, error) {
+// path, when given, becomes the service's PATH: systemd user services start
+// with a minimal one (no ~/.local/bin), where the claude and agy CLIs are
+// usually installed, so the guard would not find them.
+func GenerateUnit(binPath, configPath string, path ...string) (string, error) {
 	if binPath == "" {
 		return "", fmt.Errorf("colony binary path is required")
 	}
@@ -25,6 +28,10 @@ func GenerateUnit(binPath, configPath string) (string, error) {
 		return "", fmt.Errorf("resolving config path: %w", err)
 	}
 	workDir := filepath.Dir(absConfig)
+	env := ""
+	if len(path) > 0 && strings.TrimSpace(path[0]) != "" {
+		env = "Environment=" + systemdQuote("PATH="+path[0]) + "\n"
+	}
 
 	unit := fmt.Sprintf(`[Unit]
 Description=Colonyhall Guard
@@ -33,13 +40,13 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=%s
-ExecStart=%s guard -config %s
+%sExecStart=%s guard -config %s
 Restart=on-failure
 RestartSec=10
 
 [Install]
 WantedBy=default.target
-`, systemdQuote(workDir), systemdQuote(absBin), systemdQuote(absConfig))
+`, systemdQuote(workDir), env, systemdQuote(absBin), systemdQuote(absConfig))
 
 	return unit, nil
 }
@@ -78,7 +85,8 @@ func Install(configPath string, printOnly, force bool, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("resolving colony binary: %w", err)
 	}
-	unit, err := GenerateUnit(binPath, configPath)
+	// The installing shell's PATH, so the service finds the same CLIs.
+	unit, err := GenerateUnit(binPath, configPath, os.Getenv("PATH"))
 	if err != nil {
 		return err
 	}

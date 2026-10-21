@@ -166,3 +166,23 @@ func TestUnitEscapesSystemdSpecifiers(t *testing.T) {
 		t.Fatalf("not escaped:\n%s", unit)
 	}
 }
+
+// TestUnitCarriesPath: a systemd user service starts with a minimal PATH
+// without ~/.local/bin, where claude and agy live; the unit must carry the
+// installing shell's PATH or the guard cannot start the CLIs.
+func TestUnitCarriesPath(t *testing.T) {
+	unit, err := GenerateUnit("/usr/local/bin/colony", "/home/u/guard.yaml", "/home/u/.local/bin:/usr/bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(unit, "Environment=PATH=/home/u/.local/bin:/usr/bin\n") {
+		t.Fatalf("no PATH in the unit:\n%s", unit)
+	}
+	unit, _ = GenerateUnit("/usr/local/bin/colony", "/home/u/guard.yaml", "/opt/my dir/bin:/usr/$X/bin")
+	if !strings.Contains(unit, `Environment="PATH=/opt/my dir/bin:/usr/$$X/bin"`+"\n") {
+		t.Fatalf("PATH not quoted/escaped:\n%s", unit)
+	}
+	if unit, _ = GenerateUnit("/usr/local/bin/colony", "/home/u/guard.yaml"); strings.Contains(unit, "Environment=") {
+		t.Fatalf("Environment without a PATH:\n%s", unit)
+	}
+}
