@@ -468,6 +468,11 @@ function togglePanel(name) {
 
 $("hostsbtn").onclick = () => { if (!togglePanel("hosts")) return; renderHosts(); };
 
+// The last pairing code, kept until it expires: creating it sends a
+// host.pairing_created event that re-renders this panel, which would
+// otherwise wipe the code before anyone can copy it.
+let lastPairing = null;
+
 async function renderHosts() {
   const panel = $("hostsPanel");
   const [{ hosts }, { channels: allChans }] = await Promise.all([
@@ -477,15 +482,20 @@ async function renderHosts() {
   panel.innerHTML = "";
   const pairBox = el("div", { className: "card" });
   const pairBtn = el("button", { textContent: L.pair });
-  pairBtn.onclick = async () => {
-    const pc = await api("/api/v1/hosts/pairing-codes", { method: "POST" }).catch(e => alert(e.message));
-    if (!pc) return;
+  const showPairing = (pc) => {
     pairBox.querySelector(".pairout")?.remove();
     pairBox.append(el("div", { className: "pairout" }, el("div", { className: "muted", textContent: L.pairHelp }),
       el("code", { className: "code", textContent: pc.code }), el("pre", { className: "grant",
         textContent: `colony guard enroll -server ${location.origin} -code ${pc.code} -name <gép-neve>` })));
   };
+  pairBtn.onclick = async () => {
+    const pc = await api("/api/v1/hosts/pairing-codes", { method: "POST" }).catch(e => alert(e.message));
+    if (!pc) return;
+    lastPairing = pc;
+    showPairing(pc);
+  };
   pairBox.append(pairBtn);
+  if (lastPairing && new Date(lastPairing.expires_at) > new Date()) showPairing(lastPairing);
   panel.append(pairBox);
 
   // New Agent form
