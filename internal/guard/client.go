@@ -140,6 +140,18 @@ func (c *Client) doH(ctx context.Context, method, path string, hdr map[string]st
 	return res.Header, nil
 }
 
+// SetActivity reports whether the agent is currently working or idle in a channel/thread.
+func (c *Client) SetActivity(ctx context.Context, channelID, threadRootID, state string) error {
+	in := map[string]string{
+		"channel_id": channelID,
+		"state":      state,
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/activity", in, nil)
+}
+
 // Me returns the agent with its current state.
 func (c *Client) Me(ctx context.Context) (Me, error) {
 	var m Me

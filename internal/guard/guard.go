@@ -443,62 +443,95 @@ func (a *Agent) fetchRules(ctx context.Context) (int, string) {
 	return a.cachedRulesVer, a.cachedRulesText
 }
 
+func (a *Agent) withActivity(ctx context.Context, channelID, threadRootID string, run func() error) error {
+	send := func(state string) {
+		actCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.Client.SetActivity(actCtx, channelID, threadRootID, state); err != nil {
+			a.Log.Warn("guard: activity report failed", "state", state, "err", err)
+		}
+	}
+
+	send("working")
+	defer send("idle")
+
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+	stopHeartbeat := make(chan struct{})
+	defer close(stopHeartbeat)
+
+	go func() {
+		for {
+			select {
+			case <-stopHeartbeat:
+				return
+			case <-ticker.C:
+				send("working")
+			}
+		}
+	}()
+
+	return run()
+}
+
 func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
-	p := a.policy()
-	if !p.Allowed {
-		return a.reply(ctx, it.Item, p.Reason, "g-"+it.ID)
-	}
-	ok, err := a.checkBudget(ctx, it.Item)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return errBudgetExceeded
-	}
-	if strings.TrimSpace(task) == "" {
-		task = it.Body
-	}
-	if err := halted(a.Client.React(ctx, it.ItemID, "👀")); err != nil {
-		return err
-	}
-	rulesVer, rulesText := a.fetchRules(ctx)
-	wctx, cancel := context.WithTimeout(ctx, a.Cfg.WorkTimeout)
-	a.workMu.Lock()
-	a.workCancel = cancel
-	a.workMu.Unlock()
-	res, err := a.Adapter.Work(wctx, WorkRequest{
-		Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
-		AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
-		Rules: rulesText, RulesVersion: rulesVer,
+	return a.withActivity(ctx, it.ChannelID, it.ThreadRootID, func() error {
+		p := a.policy()
+		if !p.Allowed {
+			return a.reply(ctx, it.Item, p.Reason, "g-"+it.ID)
+		}
+		ok, err := a.checkBudget(ctx, it.Item)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errBudgetExceeded
+		}
+		if strings.TrimSpace(task) == "" {
+			task = it.Body
+		}
+		if err := halted(a.Client.React(ctx, it.ItemID, "👀")); err != nil {
+			return err
+		}
+		rulesVer, rulesText := a.fetchRules(ctx)
+		wctx, cancel := context.WithTimeout(ctx, a.Cfg.WorkTimeout)
+		a.workMu.Lock()
+		a.workCancel = cancel
+		a.workMu.Unlock()
+		res, err := a.Adapter.Work(wctx, WorkRequest{
+			Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
+			AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
+			Rules: rulesText, RulesVersion: rulesVer,
+		})
+		stopped := errors.Is(wctx.Err(), context.Canceled)
+		cancel()
+		a.workMu.Lock()
+		a.workCancel = nil
+		a.workMu.Unlock()
+		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
+		if ctx.Err() != nil {
+			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
+			return errHalted
+		}
+		text := res.Text
+		if err != nil && !stopped {
+			errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID)
+			return rerr
+		}
+		if stopped {
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
+			text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
+		} else {
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "")
+		}
+		if strings.TrimSpace(text) == "" {
+			text = "Done."
+		}
+		// A work run answers a request (often a summary someone asked for), so
+		// like a direct run it may go past the short-reply limit.
+		return a.replyLong(ctx, it.Item, text, "gw-"+it.ID)
 	})
-	stopped := errors.Is(wctx.Err(), context.Canceled)
-	cancel()
-	a.workMu.Lock()
-	a.workCancel = nil
-	a.workMu.Unlock()
-	a.logRun("work", a.Cfg.WorkModel, 1, res, err)
-	if ctx.Err() != nil {
-		a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
-		return errHalted
-	}
-	text := res.Text
-	if err != nil && !stopped {
-		errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
-		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID)
-		return rerr
-	}
-	if stopped {
-		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
-		text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
-	} else {
-		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "")
-	}
-	if strings.TrimSpace(text) == "" {
-		text = "Done."
-	}
-	// A work run answers a request (often a summary someone asked for), so
-	// like a direct run it may go past the short-reply limit.
-	return a.replyLong(ctx, it.Item, text, "gw-"+it.ID)
 }
 
 // reportError keeps an error's details out of the chat: they go to the

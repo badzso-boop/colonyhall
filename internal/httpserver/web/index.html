@@ -102,6 +102,7 @@
     <div id="leasesPanel"></div>
     <div>
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
+      <div id="activityBar" style="display:none; padding:4px 16px; font-size:12px; color:var(--muted); font-style:italic;"></div>
       <div id="attachedFiles"></div>
       <form id="send">
         <input type="file" id="fileinput" style="display:none">
@@ -137,7 +138,8 @@ const I18N = {
         giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás",
         previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
         agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények",
-        leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés" },
+        leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés",
+        working: "dolgozik…" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -159,7 +161,8 @@ const I18N = {
         giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add",
         previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
         agentRules: "Agent rules", save: "Save", version: "Version", history: "History",
-        leases: "Leases", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note" },
+        leases: "Leases", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note",
+        working: "working…" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -228,6 +231,7 @@ async function open(id) {
   await api(`/api/v1/channels/${id}/read`, { method: "POST" }).catch(() => {});
   const c = channels.find(x => x.id === id); if (c) c.unread = 0;
   renderChannels();
+  renderActivity();
 }
 
 function renderFeed() {
@@ -400,10 +404,52 @@ async function toggleReaction(m, emoji) {
   await api(`/api/v1/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`, { method: mine ? "DELETE" : "PUT" }).catch(e => alert(e.message));
 }
 
+const activities = new Map();
+function handleActivityFrame(f) {
+  const key = `${f.agent_id}:${f.channel_id}:${f.thread_root_id || ""}`;
+  if (f.state === "working") {
+    activities.set(key, { agent_id: f.agent_id, channel_id: f.channel_id, thread_root_id: f.thread_root_id || null, expires: Date.now() + 60000 });
+  } else {
+    activities.delete(key);
+  }
+  renderActivity();
+}
+
+function renderActivity() {
+  const bar = $("activityBar");
+  if (!bar) return;
+  const now = Date.now();
+  const active = [];
+  for (const [k, v] of activities.entries()) {
+    if (v.expires <= now) {
+      activities.delete(k);
+      continue;
+    }
+    if (v.channel_id !== current) continue;
+    if (replyRoot) {
+      if (v.thread_root_id !== replyRoot) continue;
+    } else {
+      if (v.thread_root_id) continue;
+    }
+    const h = actors[v.agent_id]?.handle;
+    const name = h ? "@" + h : "@agent";
+    if (!active.includes(name)) active.push(name);
+  }
+  if (!active.length) {
+    bar.style.display = "none";
+    bar.textContent = "";
+  } else {
+    bar.style.display = "block";
+    bar.textContent = `${active.join(", ")} ${L.working}`;
+  }
+}
+setInterval(renderActivity, 2000);
+
 function setReply(rootId) {
   replyRoot = rootId;
   $("replybar").className = rootId ? "on" : "";
   if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? r.body.slice(0, 80) : ""); $("text").focus(); }
+  renderActivity();
 }
 $("replycancel").onclick = () => setReply(null);
 
@@ -428,6 +474,10 @@ function connectWS() {
     const f = JSON.parse(ev.data);
     if (f.type === "welcome") { if (lastSeq === null) lastSeq = f.head; $("status").textContent = L.online; }
     if (f.type === "resync_required") { lastSeq = f.head; await load(); }
+    if (f.type === "agent.activity") {
+      handleActivityFrame(f);
+      return;
+    }
     if (f.type !== "event") return;
     lastSeq = f.seq;
     const d = f.data || {};

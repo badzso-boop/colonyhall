@@ -465,14 +465,22 @@ func TestClaudeSessionExists(t *testing.T) {
 }
 
 type directTestAdapter struct {
-	calls []DirectRequest
-	impl  func(ctx context.Context, req DirectRequest) (RunResult, error)
+	calls      []DirectRequest
+	impl       func(ctx context.Context, req DirectRequest) (RunResult, error)
+	workImpl   func(ctx context.Context, req WorkRequest) (RunResult, error)
+	decideImpl func(ctx context.Context, req DecideRequest) (RunResult, error)
 }
 
-func (d *directTestAdapter) Decide(context.Context, DecideRequest) (RunResult, error) {
+func (d *directTestAdapter) Decide(ctx context.Context, req DecideRequest) (RunResult, error) {
+	if d.decideImpl != nil {
+		return d.decideImpl(ctx, req)
+	}
 	return RunResult{}, nil
 }
-func (d *directTestAdapter) Work(context.Context, WorkRequest) (RunResult, error) {
+func (d *directTestAdapter) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
+	if d.workImpl != nil {
+		return d.workImpl(ctx, req)
+	}
 	return RunResult{}, nil
 }
 func (d *directTestAdapter) Direct(ctx context.Context, req DirectRequest) (RunResult, error) {

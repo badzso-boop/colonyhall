@@ -32,6 +32,7 @@ import (
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/bus"
+	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -53,9 +54,29 @@ type Gateway struct {
 	Bus          bus.Bus
 	Auth         identity.RequestAuthenticator
 	Conversation conversation.Reader
+	Clock        clock.Clock
 	Logger       *slog.Logger
 	// OriginPatterns allows cross-origin browsers (e.g. a Vite dev server).
 	OriginPatterns []string
+
+	mu         sync.Mutex
+	conns      map[*connection]struct{}
+	activities map[activityKey]time.Time
+}
+
+type activityKey struct {
+	agentID      ids.ID
+	channelID    ids.ID
+	threadRootID ids.ID
+}
+
+// ActivityFrame is pushed to WebSocket clients when an agent begins or finishes work.
+type ActivityFrame struct {
+	Type         string  `json:"type"`
+	AgentID      string  `json:"agent_id"`
+	ChannelID    string  `json:"channel_id"`
+	ThreadRootID *string `json:"thread_root_id,omitempty"`
+	State        string  `json:"state"`
 }
 
 type hello struct {
@@ -72,6 +93,107 @@ type outEvent struct {
 	ActorID   string          `json:"actor_id"`
 	At        time.Time       `json:"at"`
 	Data      json.RawMessage `json:"data"`
+}
+
+func (g *Gateway) now() time.Time {
+	if g.Clock != nil {
+		return g.Clock.Now()
+	}
+	return time.Now()
+}
+
+func (g *Gateway) register(c *connection) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.conns == nil {
+		g.conns = make(map[*connection]struct{})
+	}
+	g.conns[c] = struct{}{}
+}
+
+func (g *Gateway) unregister(c *connection) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.conns, c)
+}
+
+// ReportActivity updates the in-memory activity state for an agent and pushes
+// an ephemeral WebSocket frame to viewers who can read that channel.
+func (g *Gateway) ReportActivity(ctx context.Context, actor identity.Actor, channelID, threadRootID ids.ID, state string) error {
+	if actor.Kind != identity.KindAgent {
+		return identity.ErrForbidden
+	}
+	if actor.Halted {
+		return identity.ErrHalted
+	}
+	if state != "working" && state != "idle" {
+		return &httpx.BadRequest{Detail: "state must be working or idle"}
+	}
+	if channelID == ids.Nil {
+		return &httpx.BadRequest{Detail: "channel_id is required"}
+	}
+	canRead, err := g.Conversation.CanRead(ctx, actor, channelID)
+	if err != nil {
+		return err
+	}
+	if !canRead {
+		return identity.ErrForbidden
+	}
+
+	now := g.now()
+	key := activityKey{agentID: actor.ID, channelID: channelID, threadRootID: threadRootID}
+	g.mu.Lock()
+	if g.activities == nil {
+		g.activities = make(map[activityKey]time.Time)
+	}
+	if state == "working" {
+		g.activities[key] = now.Add(60 * time.Second)
+	} else {
+		delete(g.activities, key)
+	}
+	recipients := make([]*connection, 0, len(g.conns))
+	for c := range g.conns {
+		if c.actor.WorkspaceID == actor.WorkspaceID {
+			recipients = append(recipients, c)
+		}
+	}
+	g.mu.Unlock()
+
+	frame := ActivityFrame{
+		Type:      "agent.activity",
+		AgentID:   actor.ID.String(),
+		ChannelID: channelID.String(),
+		State:     state,
+	}
+	if threadRootID != ids.Nil {
+		tr := threadRootID.String()
+		frame.ThreadRootID = &tr
+	}
+
+	for _, c := range recipients {
+		visible, err := c.visibleChannel(ctx, channelID)
+		if err == nil && visible {
+			_ = c.writeJSON(ctx, frame)
+		}
+	}
+	return nil
+}
+
+// IsAgentWorking returns whether the agent is currently working in any channel.
+func (g *Gateway) IsAgentWorking(agentID ids.ID) bool {
+	now := g.now()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for k, exp := range g.activities {
+		if exp.Before(now) {
+			delete(g.activities, k)
+			continue
+		}
+		if k.agentID == agentID {
+			return true
+		}
+	}
+	return false
 }
 
 // ServeHTTP upgrades the request and runs the connection until it closes.
@@ -121,21 +243,24 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.LastSeq != nil {
 		cursor = *h.LastSeq
 		if head-cursor > maxReplay || cursor > head {
-			if err := g.write(ctx, c, map[string]any{"type": "resync_required", "head": head}); err != nil {
+			if err := g.writeRaw(ctx, c, map[string]any{"type": "resync_required", "head": head}); err != nil {
 				return
 			}
 			cursor = head
 		}
 	}
-	if err := g.write(ctx, c, map[string]any{"type": "welcome", "protocol": Protocol, "head": head}); err != nil {
+	if err := g.writeRaw(ctx, c, map[string]any{"type": "welcome", "protocol": Protocol, "head": head}); err != nil {
 		return
 	}
 
 	conn := &connection{g: g, ws: c, actor: actor, cursor: cursor, canRead: map[ids.ID]bool{}}
+	g.register(conn)
+	defer g.unregister(conn)
+
 	if err := conn.catchUp(ctx); err != nil {
 		return
 	}
-	if err := g.write(ctx, c, map[string]any{"type": "replay_done", "seq": conn.cursor}); err != nil {
+	if err := conn.writeJSON(ctx, map[string]any{"type": "replay_done", "seq": conn.cursor}); err != nil {
 		return
 	}
 
@@ -156,7 +281,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (g *Gateway) write(ctx context.Context, c *websocket.Conn, v any) error {
+func (g *Gateway) writeRaw(ctx context.Context, c *websocket.Conn, v any) error {
 	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()
 	return wsjson.Write(ctx, c, v)
@@ -175,8 +300,17 @@ type connection struct {
 	actor  identity.Actor
 	cursor int64
 
+	writeMu sync.Mutex
 	mu      sync.Mutex
 	canRead map[ids.ID]bool
+}
+
+func (c *connection) writeJSON(ctx context.Context, v any) error {
+	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
+	defer cancel()
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return wsjson.Write(ctx, c.ws, v)
 }
 
 // catchUp sends every visible event after the cursor.
@@ -199,13 +333,34 @@ func (c *connection) catchUp(ctx context.Context) error {
 				if e.ChannelID != ids.Nil {
 					out.ChannelID = e.ChannelID.String()
 				}
-				if err := c.g.write(ctx, c.ws, out); err != nil {
+				if err := c.writeJSON(ctx, out); err != nil {
 					return err
 				}
 			}
 			c.cursor = e.Seq
 		}
 	}
+}
+
+// visibleChannel decides whether the connection actor may read the channel.
+func (c *connection) visibleChannel(ctx context.Context, channelID ids.ID) (bool, error) {
+	if c.actor.IsAdmin() {
+		return true, nil
+	}
+	c.mu.Lock()
+	ok, cached := c.canRead[channelID]
+	c.mu.Unlock()
+	if cached {
+		return ok, nil
+	}
+	ok, err := c.g.Conversation.CanRead(ctx, c.actor, channelID)
+	if err != nil {
+		return false, err
+	}
+	c.mu.Lock()
+	c.canRead[channelID] = ok
+	c.mu.Unlock()
+	return ok, nil
 }
 
 // visible decides whether the actor may see an event.
@@ -227,18 +382,5 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 		delete(c.canRead, e.ChannelID)
 		c.mu.Unlock()
 	}
-	c.mu.Lock()
-	ok, cached := c.canRead[e.ChannelID]
-	c.mu.Unlock()
-	if cached {
-		return ok, nil
-	}
-	ok, err := c.g.Conversation.CanRead(ctx, c.actor, e.ChannelID)
-	if err != nil {
-		return false, err
-	}
-	c.mu.Lock()
-	c.canRead[e.ChannelID] = ok
-	c.mu.Unlock()
-	return ok, nil
+	return c.visibleChannel(ctx, e.ChannelID)
 }

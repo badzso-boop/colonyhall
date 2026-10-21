@@ -314,6 +314,13 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	if len(group) == 0 {
 		return nil
 	}
+	threadRoot := ThreadRoot(group[0])
+	return a.withActivity(ctx, group[0].ChannelID, threadRoot, func() error {
+		return a.doRunDirectGroup(ctx, stateDir, stateFile, state, group, threadRoot)
+	})
+}
+
+func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string, state *DirectState, group []Item, threadRoot string) error {
 	ok, err := a.checkBudget(ctx, group[0])
 	if err != nil {
 		return err
@@ -321,7 +328,6 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	if !ok {
 		return errBudgetExceeded
 	}
-	threadRoot := ThreadRoot(group[0])
 	agentID := a.me.ID
 
 	if agentID == "" {

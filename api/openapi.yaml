@@ -552,6 +552,18 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Stored }
 
+  /agent/activity:
+    post:
+      operationId: reportAgentActivity
+      tags: [agents]
+      description: Agents only. Report current working or idle state in a channel/thread.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentActivityRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Updated }
+
   /agent/errors:
     post:
       operationId: reportRunError
@@ -1455,6 +1467,13 @@ components:
         summary: { type: string }
         detail: { type: string }
         created_at: { type: string, format: date-time }
+    AgentActivityRequest:
+      type: object
+      required: [channel_id, state]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        state: { type: string, enum: [working, idle] }
     ReportRunRequest:
       type: object
       required: [phase, client, model, session_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status]

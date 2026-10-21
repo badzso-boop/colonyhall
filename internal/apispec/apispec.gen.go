@@ -27,6 +27,24 @@ func (e ActorKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentActivityRequestState.
+const (
+	Idle    AgentActivityRequestState = "idle"
+	Working AgentActivityRequestState = "working"
+)
+
+// Valid indicates whether the value is a known member of the AgentActivityRequestState enum.
+func (e AgentActivityRequestState) Valid() bool {
+	switch e {
+	case Idle:
+		return true
+	case Working:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApprovalDecision.
 const (
 	Allow ApprovalDecision = "allow"
@@ -699,6 +717,16 @@ type AddMemberRequest struct {
 type AdminStatus struct {
 	EmergencyStop EmergencyStop `json:"emergency_stop"`
 }
+
+// AgentActivityRequest defines model for AgentActivityRequest.
+type AgentActivityRequest struct {
+	ChannelId    openapi_types.UUID        `json:"channel_id"`
+	State        AgentActivityRequestState `json:"state"`
+	ThreadRootId *openapi_types.UUID       `json:"thread_root_id,omitempty"`
+}
+
+// AgentActivityRequestState defines model for AgentActivityRequest.State.
+type AgentActivityRequestState string
 
 // AgentBudget defines model for AgentBudget.
 type AgentBudget struct {
@@ -1721,6 +1749,9 @@ type EmergencyClearJSONRequestBody = EmergencyClearRequest
 
 // UpdateAgentRulesJSONRequestBody defines body for UpdateAgentRules for application/json ContentType.
 type UpdateAgentRulesJSONRequestBody = UpdateAgentRulesRequest
+
+// ReportAgentActivityJSONRequestBody defines body for ReportAgentActivity for application/json ContentType.
+type ReportAgentActivityJSONRequestBody = AgentActivityRequest
 
 // ReportRunErrorJSONRequestBody defines body for ReportRunError for application/json ContentType.
 type ReportRunErrorJSONRequestBody = RunErrorRequest

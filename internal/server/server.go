@@ -14,11 +14,13 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/eventlog"
 	evmem "colonyhall/internal/eventlog/memory"
 	evpg "colonyhall/internal/eventlog/postgres"
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpserver"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/mcpserver"
 	"colonyhall/internal/modules/agentrules"
 	ruleshttp "colonyhall/internal/modules/agentrules/httpapi"
@@ -158,6 +160,7 @@ type App struct {
 	Notes        *notes.Service
 	Decisions    *decision.Service
 	Leases       *lease.Service
+	Gateway      *gateway.Gateway
 	logger       *slog.Logger
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
@@ -376,8 +379,33 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
 	}
-	mux.Handle("GET /ws/ui", &gateway.Gateway{Events: events, Bus: b, Auth: idSvc, Conversation: cvSvc,
-		Logger: opt.Logger, OriginPatterns: opt.OriginPatterns})
+	gw := &gateway.Gateway{
+		Events:         events,
+		Bus:            b,
+		Auth:           idSvc,
+		Conversation:   cvSvc,
+		Clock:          opt.Clock,
+		Logger:         opt.Logger,
+		OriginPatterns: opt.OriginPatterns,
+	}
+	mux.Handle("GET /ws/ui", gw)
+	mux.Handle("POST /api/v1/agent/activity", httpx.RequireAuth(idSvc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.AgentActivityRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		var threadRootID ids.ID
+		if in.ThreadRootId != nil {
+			threadRootID = ids.ID(*in.ThreadRootId)
+		}
+		err := gw.ReportActivity(r.Context(), httpx.Actor(r), ids.ID(in.ChannelId), threadRootID, string(in.State))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})))
 
 	return &App{
 		Handler:      httpserver.New(mux, ready, opt.Logger),
@@ -397,6 +425,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Notes:        ntSvc,
 		Decisions:    dcSvc,
 		Leases:       lsSvc,
+		Gateway:      gw,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,
