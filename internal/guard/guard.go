@@ -496,7 +496,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 	if strings.TrimSpace(text) == "" {
 		text = "Done."
 	}
-	return a.reply(ctx, it.Item, text, "gw-"+it.ID)
+	// A work run answers a request (often a summary someone asked for), so
+	// like a direct run it may go past the short-reply limit.
+	return a.replyLong(ctx, it.Item, text, "gw-"+it.ID)
 }
 
 // reportError keeps an error's details out of the chat: they go to the

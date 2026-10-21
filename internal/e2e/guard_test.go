@@ -195,3 +195,23 @@ func TestGuardWork(t *testing.T) {
 		t.Fatalf("declined work: %+v", last)
 	}
 }
+
+// TestGuardWorkLongAnswer: a work run answers a request (often a summary
+// someone asked for), so its result is not cut at the short-reply limit.
+func TestGuardWorkLongAnswer(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent summarise the logs"})
+	long := strings.Repeat("Log line summary. ", 80) + "The end."
+	ad := &scriptedAdapter{
+		decide: func(context.Context, guard.DecideRequest) (guard.Decision, error) {
+			return guard.Decision{Actions: []guard.Action{{Ref: "1", Kind: guard.ActWork, Task: "summarise"}}}, nil
+		},
+		work: func(context.Context, guard.WorkRequest) (string, error) { return long, nil },
+	}
+	e.tick(e.guardAgent(ad, true))
+	msgs := e.messages(general)
+	if last := msgs[len(msgs)-1]; last.Body != long {
+		t.Fatalf("work answer cut: %d of %d runes, ends %q", len([]rune(last.Body)), len([]rune(long)), last.Body[len(last.Body)-20:])
+	}
+}

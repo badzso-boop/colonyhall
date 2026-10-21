@@ -866,9 +866,14 @@ $("logout").onclick = async () => {
 };
 
 $("dmbtn").onclick = async () => {
-  const h = $("dmto").value.trim().replace(/^@/, "");
-  const a = Object.values(actors).find(x => x.handle === h);
-  if (!a) { alert("?" + h); return; }
+  // Handles are lowercase; phones capitalise the first letter and pasted text
+  // can carry invisible characters, so normalise before looking it up.
+  const h = $("dmto").value.normalize("NFKC").replace(/[\s\u200b-\u200d\u2060\ufeff]/g, "").replace(/^@/, "").toLowerCase();
+  if (!h) return;
+  const find = () => Object.values(actors).find(x => x.handle.toLowerCase() === h);
+  let a = find();
+  if (!a) { await load(); a = find(); }  // created since the page loaded
+  if (!a) { alert(`Nincs ilyen felhasználó: @${h}`); return; }
   const c = await api("/api/v1/dms", { method: "POST", body: JSON.stringify({ actor_ids: [a.id] }) }).catch(e => alert(e.message));
   if (c) { $("dmto").value = ""; await load(); await open(c.id); }
 };
