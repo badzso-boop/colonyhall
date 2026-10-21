@@ -67,6 +67,8 @@ Fejlesztői belépés (csak a `COLONY_DEV_SEED=1` helyi stacken): `@norbi` jelsz
 
 Jelszó beállítása parancssorból (a jelszó a stdin-ről jön, nem kerül a shell-előzménybe): `read -rs PW && echo "$PW" | COLONY_DATABASE_URL=… go run ./cmd/colonyhall set-password -handle norbi`.
 
+Gitea a dev stacken: a `deploy/.env`-ben (gitignore-olva, minta: `deploy/.env.example`) `COLONY_GITEA_URL=https://gitea.ujjweb.hu`, a csak olvasási token, a webhook-titok és `COLONY_BIND=0.0.0.0` (a webhookok Tailscale-en érkeznek: `http://100.122.147.16:8080/api/v1/hooks/gitea`; WSL NAT módban a helyi hálózatról így sem érhető el). A Gitea a homelab közös szolgáltatása (`homelab-gitea`), nem a Colonyhall stackjéé.
+
 Fájltár környezeti változók: `COLONY_FILES_DIR` (fájltároló könyvtár, alapból `./data/files`), `COLONY_MAX_UPLOAD_MB` (maximális feltöltési méret megabájtban, alapból `25`).
 
 Minden változtatás után: `make lint test`, és ha az adattár változott, `make test-pg` is.
