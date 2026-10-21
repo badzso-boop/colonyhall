@@ -18,9 +18,10 @@
   input, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg); }
   button { cursor:pointer; }
   main { flex:1; min-height:0; display:grid; grid-template-columns:220px 1fr; }
-  nav { border-right:1px solid var(--line); padding:10px; overflow:auto; }
-  nav div { padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; }
-  nav div.on { background:var(--surface); font-weight:600; }
+  main > nav { border-right:1px solid var(--line); padding:10px; overflow:auto; display:flex; flex-direction:column; }
+  #channels { display:flex; flex-direction:column; }
+  .chan-item { padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .chan-item.on { background:var(--surface); font-weight:600; }
   nav .n { color:var(--accent); font-weight:600; }
   section { display:grid; grid-template-rows:minmax(0,1fr) auto; min-width:0; min-height:0; }
   #feed { overflow:auto; padding:12px 16px; }
@@ -207,11 +208,13 @@ async function load() {
 function renderChannels() {
   $("channels").innerHTML = "";
   for (const c of channels) {
-    const d = document.createElement("div");
-    d.className = c.id === current ? "on" : "";
-    d.innerHTML = `<span></span><span class="n">${c.unread > 0 && c.id !== current ? c.unread : ""}</span>`;
-    d.firstChild.textContent = chanLabel(c);
-    d.onclick = () => open(c.id);
+    const d = el("div", {
+      className: "chan-item" + (c.id === current ? " on" : ""),
+      onclick: () => open(c.id),
+    },
+      el("span", { textContent: chanLabel(c) }),
+      el("span", { className: "n", textContent: c.unread > 0 && c.id !== current ? String(c.unread) : "" })
+    );
     $("channels").appendChild(d);
   }
 }
