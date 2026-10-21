@@ -10,6 +10,8 @@
 - [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`): az átadó fájl törlése a homelabon, a `CLAUDE.md` „Fejlesztői környezet” részének és az élő Claude Docnak a frissítése (a szerver a homelabon fut).
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása).
 
+- [ ] **A bal oldali sávban a csatornák és a DM-ek egymás mellé kerülnek** (2026-10-21). Egymás alatt kellene lenniük, mint minden chatalkalmazásban. Ok: a sáv stílusa (`nav div { display:flex; … }`) a lista tárolójára (`#channels`) is vonatkozik, így az egy sorba rendezi az elemeit. Javítás: a szabály csak a listaelemekre vonatkozzon, a tároló legyen oszlop (`flex-direction: column`).
+
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 - [ ] **Markdown megjelenítése a felületen.** Az agentek markdownban írnak (félkövér, listák, kód, linkek), a fejlesztői oldal nyers szövegként mutatja. Terv kell: biztonságos megjelenítés (DOM-építés, nem `innerHTML`), mit támogatunk (félkövér, dőlt, kód, kódblokk, lista, link), a linkek csak `http(s)`-re, a PWA-ban ugyanez.
@@ -25,6 +27,18 @@
   - **A fejlesztői oldalon** egy egyszerű sor a beviteli mező fölött: „@trader-logs dolgozik…” (több agentnél felsorolva), abban a csatornában vagy szálban, ahol a kérés volt.
   - **A PWA-ban** később rendes animáció (pötty-animáció, agentenként), ugyanerre az eseményre.
   - Kérdések: a sandboxos döntő futásnál is jelezzen-e (rövid), vagy csak a munkafutásnál és a közvetlen módban; jogosultság: csak az láthassa, aki a csatornát látja.
+
+- [ ] **Csoportok (szekciók) a bal oldali sávban**, mint a Slack szekciói vagy a Discord kategóriái (2026-10-21). A csatornák, DM-ek és agentek saját, elnevezett csoportokba rendezhetők (pl. „Légymérnök”, „Homelab”, „Trader”), a csoport összecsukható, a sorrend állítható. Kérdések: a csoport csak a felhasználó saját nézete (személyes rendezés), vagy közös a munkatérben; egy csatorna több csoportban is lehet-e.
+- [ ] **Új, elnevezett csatorna kiválasztott tagokkal** (2026-10-21), mint egy Slack- vagy Discord-csatorna létrehozása: név, leírás, privát/nyilvános, és a felületről kiválasztható, hogy mely agentek (és emberek) legyenek tagok, akár később is hozzáadhatók vagy kivehetők. Az alapok megvannak (privát csatorna, tagkezelés az API-n), a felületről hiányzik a létrehozás és a tagok kezelése. Kérdés: agent létrehozhat-e csatornát (most nem: csak ember).
+- [ ] **Részletesebb felhasználói profil** (2026-10-21): avatar, megjelenített név, leírás/szerep, időzóna, elérhetőség; embernél és agentnél is.
+- [ ] **Agent-adatlap jobb oldali panelben**, mint a Slack profil-panelje (2026-10-21). Az agent nevére kattintva jobb oldalt egy szélesebb oszlop nyílik, ami mindent megmutat róla:
+  - alapadatok: név, kliens (Claude Code / Antigravity), modell, mód (közvetlen / sandboxos), állapot (fut / szünetel / leállítva);
+  - hol dolgozik: gép, gyökérmappa, mappaengedélyek (olvas/ír), worktree és ág;
+  - munkamenet és kontextus: a futó szálak munkamenetei, az utolsó futás tokenszáma a korláthoz (`max_session_tokens`) képest, mikor indul új munkamenet;
+  - fogyasztás: napi tokenkeret és felhasználás, az utolsó futások (idő, eredmény, hiba-azonosító);
+  - közös dolgok: a jegyzetfüzete az adott szálban, a foglalásai, a nyitott kérdései;
+  - műveletek (adminnak): szüneteltetés/leállítás, beállítások szerkesztése, mappaengedélyek.
+  - Kérdések: mi legyen mobilon (teljes képernyős lap a panel helyett); mit láthat egy nem-admin felhasználó.
 
 ## Kész
 
