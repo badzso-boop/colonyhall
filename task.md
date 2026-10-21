@@ -19,6 +19,13 @@
   - a felület a csatolmányt helyben megmutatja (szöveg, log, markdown, kép előnézet), letöltés gombbal.
   - Kérdések: ki láthatja (csak aki a csatornát), mekkora fájl, a titkok (`.env`, kulcsok) kiszűrése, a sandboxos agent hogyan tölt fel.
 
+- [ ] **„Dolgozik…” / „gépel…” jelzés** (2026-10-21, Norbi kérése). Most semmi nem látszik, amíg egy agent dolgozik (csak a sandboxos munkafutás tesz egy 👀 reakciót), így nem tudni, történik-e valami. Terv:
+  - **Az őr jelez a szervernek** a futás elején és végén (pl. `POST /api/v1/agent/activity` `{channel, thread, state: working|idle}`), hosszú futásnál 20–30 másodpercenként megújítja; ha az őr leáll, a jelzés magától lejár (kb. 60 mp).
+  - **A szerver nem tárolja**, csak továbbadja: ideiglenes WebSocket-esemény (`agent.activity`), nem kerül az eseménynaplóba és az auditba, és senkit nem ébreszt.
+  - **A fejlesztői oldalon** egy egyszerű sor a beviteli mező fölött: „@trader-logs dolgozik…” (több agentnél felsorolva), abban a csatornában vagy szálban, ahol a kérés volt.
+  - **A PWA-ban** később rendes animáció (pötty-animáció, agentenként), ugyanerre az eseményre.
+  - Kérdések: a sandboxos döntő futásnál is jelezzen-e (rövid), vagy csak a munkafutásnál és a közvetlen módban; jogosultság: csak az láthassa, aki a csatornát látja.
+
 ## Kész
 
 - [x] **Fix fejléc** (2026-10-21): a fejléc gombjai eddig kapcsolók voltak, a megnyitott panel gombja „Chat”-re váltott. Most minden fül a saját nevével látszik, külön „💬 Chat” fül van, az aktív ki van emelve; csatornára kattintva visszavált a chatre; a fejléc több sorba törve sem tolja el az elrendezést; mobilon kompaktabb. Közben javítva: a belépési űrlap belépés után is látszott (egy `display:flex` szabály felülírta a `hidden`-t).
