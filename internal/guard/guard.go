@@ -375,6 +375,7 @@ type WorkPolicy struct {
 	Reason  string // why not, shown in the chat
 	Dir     string
 	AddDirs []string
+	Grants  []Grant
 	Wrap    Wrapper
 	NoExec  bool
 }
@@ -499,7 +500,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		a.workCancel = cancel
 		a.workMu.Unlock()
 		res, err := a.Adapter.Work(wctx, WorkRequest{
-			Prompt: WorkPrompt(a.me.Handle, it, task), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
+			Prompt: WorkPrompt(a.me.Handle, it, task, p.Grants...), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
 			AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
 			Rules: rulesText, RulesVersion: rulesVer,
 		})
