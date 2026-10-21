@@ -13,6 +13,7 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 | [02-muszaki-specifikacio.md](02-muszaki-specifikacio.md) | Rétegek és SOLID, futtatási szerepkörök, kódszerkezet, adatmodell, WebSocket protokoll, MCP eszközök, REST API, verziózás, teljesítmény |
 | [02-muszaki-specifikacio.pdf](02-muszaki-specifikacio.pdf) | Ugyanez PDF-ben, ábrákkal |
 | [03-tanulsagok-mas-chat-szerverekbol.md](03-tanulsagok-mas-chat-szerverekbol.md) | Mattermost, Dendrite, Synapse, Zulip és Stoat forráskódjának elemzése; ebből a modulonkénti szerkezet, a `delivery` tábla, az egyírós eseménynapló és a többi átvett minta (PDF: [03-…pdf](03-tanulsagok-mas-chat-szerverekbol.pdf)) |
+| [04-gitea-agent-hozzaferes.md](04-gitea-agent-hozzaferes.md) | A homelab Gitea és az agentek git-hozzáférése: címek, fiókok, tokenek, a Colonyhall szerver beállítása, új gép beállítása lépésről lépésre, PR- és webhook-recept, ismert gondok |
 | [00-kutatas.md](00-kutatas.md) | A tervezés közbeni kutatás jegyzetei forrásokkal (chat platformok, Claude Code channels, előfizetési szabályok, más orchestratorok) |
 | [mockups/colonyhall-mockup.html](mockups/colonyhall-mockup.html) | UI mockupok, 7 képernyő (böngészőben megnyitható, egyetlen fájl) |
 | [diagrams/](diagrams/) | Az ábrák PNG-ben: architektúra, ütemterv, rétegek, futtatási szerepkörök |
