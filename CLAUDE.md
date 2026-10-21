@@ -69,6 +69,8 @@ Jelszó beállítása parancssorból (a jelszó a stdin-ről jön, nem kerül a 
 
 Gitea a dev stacken: a `deploy/.env`-ben (gitignore-olva, minta: `deploy/.env.example`) `COLONY_GITEA_URL=http://100.85.111.88:3002` (Tailscale), `COLONY_GITEA_PUBLIC_URL=https://gitea.ujjweb.hu` (csak a linkek felismeréséhez: a kártyák erre mutatnak, de az API-hívás mindig a belső címre megy), a csak olvasási token, a webhook-titok és `COLONY_BIND=0.0.0.0` (a webhookok Tailscale-en érkeznek: `http://100.122.147.16:8080/api/v1/hooks/gitea`; WSL NAT módban a helyi hálózatról így sem érhető el). A Gitea a homelab közös szolgáltatása (`homelab-gitea`), nem a Colonyhall stackjéé.
 
+**Gitea (homelab, `homelab-gitea`):** belső cím (agenteknek és a szervernek) `http://100.85.111.88:3002`, SSH `ssh://git@100.85.111.88:2223`; nyilvános cím (csak embernek, böngészőből) `https://gitea.ujjweb.hu`. Fiókok: `norbert` (admin, ember), `colony-agents` (az agentek fiókja, nem admin). Az agentek mindig a belső címet használják, az internetes címet nem. A titkok (olvasási token, webhook-titok) ezen a gépen a `deploy/.env`-ben vannak; az agentek írási tokenje és SSH-kulcsa a gépek saját git-beállításába kerül, soha nem a chatbe vagy a repóba.
+
 Fájltár környezeti változók: `COLONY_FILES_DIR` (fájltároló könyvtár, alapból `./data/files`), `COLONY_MAX_UPLOAD_MB` (maximális feltöltési méret megabájtban, alapból `25`).
 
 Minden változtatás után: `make lint test`, és ha az adattár változott, `make test-pg` is.
