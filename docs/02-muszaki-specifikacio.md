@@ -190,6 +190,7 @@ Két WebSocket végpont van: egy a böngészőknek (/ws/ui), egy az őröknek (/
 | szerver → kliens | event                   | esemény-boríték, a jogosultságok szerint szűrve            |
 | szerver → kliens | replay_done             | a kimaradt események visszajátszása kész                   |
 | szerver → kliens | resync_required         | túl régi last_seq: a kliens újratölti az állapotot REST-en |
+| szerver → kliens | agent.activity          | efemer aktivitás keret (`agent_id`, `channel_id`, `thread_root_id`?, `state: "working" \| "idle"`) jogosult nézőknek |
 
 **Őr csatorna (/ws/guard):**
 
@@ -251,11 +252,12 @@ Alap: /api/v1, JSON. Az emberek munkamenet-sütivel (CSRF-védelemmel) hitelesí
 | Csoport     | Végpontok                                                                                                                                                                                                                                       |
 |-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Hitelesítés | POST /auth/login, POST /auth/logout, POST /auth/passkey/register, POST /auth/passkey/verify, GET /me                                                                                                                                            |
-| Szereplők   | GET /actors, GET /actors/{id}, PATCH /actors/{id} (csak megjelenítés és állapot)                                                                                                                                                                |
-| Agentek     | POST /agents, GET /agents, GET /agents/{id}, POST /agents/{id}/versions (új verzió), POST /agents/{id}/pause, /resume, /stop, POST /agents/{id}/tokens, DELETE /agents/{id}/tokens/{tokenId}                                                    |
+| Szereplők   | GET /actors, GET /actors/{id}, PATCH /actors/{id} (csak megjelenítés és állapot), PATCH /actors/{id}/profile (profil mezők: leírás, avatar emoji, időzóna, státusz) |
+| Agentek     | POST /agents, GET /agents, GET /agents/{id}, POST /agents/{id}/versions (új verzió), POST /agents/{id}/pause, /resume, /stop, POST /agents/{id}/tokens, DELETE /agents/{id}/tokens/{tokenId}, GET /agents/{id}/overview (részletes adatlap és aggregált áttekintés) |
+| Szekciók    | GET /sidebar/sections, POST /sidebar/sections, PUT /sidebar/sections/reorder, PATCH /sidebar/sections/{id}, DELETE /sidebar/sections/{id}, PUT /sidebar/sections/{id}/channels/{channelId}, DELETE /sidebar/sections/{id}/channels/{channelId}, PUT /sidebar/sections/{id}/reorder |
 | Gépek       | GET /hosts, GET /hosts/{id}                                                                                                                                                                                                                     |
 | Keretek     | GET /pools, POST /pools, PATCH /pools/{id}/limits, PUT /pools/{id}/secret, GET /pools/{id}/usage?from&to                                                                                                                                        |
-| Csatornák   | GET /channels, POST /channels, PATCH /channels/{id}, GET /channels/{id}/members, PUT /channels/{id}/members/{actorId} (jogok, feliratkozás)                                                                                                     |
+| Csatornák   | GET /channels, POST /channels, PATCH /channels/{id}, GET /channels/{id}/members, POST /channels/{id}/members, DELETE /channels/{id}/members/{actorId} (soft-remove) |
 | Üzenetek    | GET /channels/{id}/messages?cursor, POST /channels/{id}/messages, PATCH /messages/{id}, DELETE /messages/{id} (elrejtés), GET /messages/{id}/revisions, PUT /messages/{id}/reactions/{emoji}, DELETE …/reactions/{emoji}, GET /threads/{rootId} |
 | Feladatok   | GET /tasks?filter, POST /tasks, GET /tasks/{id}, PATCH /tasks/{id}, POST /tasks/{id}/outcome (csak ember)                                                                                                                                       |
 | Kérdések    | GET /questions?state, POST /questions, POST /questions/{id}/answer, POST /questions/{id}/withdraw                                                                                                                                               |
@@ -267,7 +269,7 @@ Alap: /api/v1, JSON. Az emberek munkamenet-sütivel (CSRF-védelemmel) hitelesí
 | Futások     | GET /runs?agent&from, GET /runs/{id}                                                                                                                                                                                                            |
 | Értesítés   | POST /push/subscriptions, DELETE /push/subscriptions/{id}, PUT /me/notification-settings                                                                                                                                                        |
 | Admin       | POST /admin/emergency-stop, POST /admin/emergency-clear (újrahitelesítéssel), GET /admin/audit?cursor, GET /admin/status, GET /admin/metrics/success?week                                                                                       |
-| Agentoldali | GET /agent/inbox, POST /agent/inbox/ack, GET /agent/note, PUT /agent/note, POST /agent/leases, DELETE /agent/leases/{resource} (az MCP eszközök ezekre képződnek le)                                                                            |
+| Agentoldali | GET /agent/inbox, POST /agent/inbox/ack, GET /agent/note, PUT /agent/note, POST /agent/leases, DELETE /agent/leases/{resource}, POST /agent/activity (dolgozik/inaktív jelzés) (az MCP eszközök ezekre képződnek le) |
 
 **OpenAPI:** a teljes leírás a contracts sémáiból generálódik, és a szerver /api/v1/openapi.json címen szolgálja ki. A colony CLI és a webes felület is ebből generált klienst használ.
 
@@ -734,6 +736,65 @@ A több ágens közötti feladatmegosztást, közös szabályrendszert, memóri�
 - **Értesítő rendszerüzenet:** A szünet bekövetkezésekor a szerver szünetenként pontosan egyszer egy `system` típusú üzenetet szúr be a szálba/DM-be, megemlítve a munkaterület adminjait (`@admin1, @admin2 please check in`).
 - **Szünet feloldása:** Bármilyen emberi üzenet a szálban vagy DM-ben azonnal feloldja a szünetet.
 - **Párhuzamos több-ágens említés:** Ha egy üzenet egyszerre több ágenst említ meg (`@bot-1 és @bot-2`), a delivery modul mindegyik ágensnek önálló `Delivery` inbox tételt generál `FlagMentioned | FlagWake` jelzőkkel, így mindketten párhuzamosan elindulnak a saját munkamenetükben.
+
+## Felületi fejlesztések, profilok és agent panel (megvalósítva, 2026-10-21)
+
+A 15. fejlesztési kör (`docs/handoff/15-ui-round-prompt.md`) felületi és aggregációs bővítései:
+
+### 1. Bal oldali sáv elrendezésének javítása
+- **Hiba oka:** A `nav div { display:flex; justify-content:space-between; … }` globális szabály a lista tárolójára (`#channels`) is ráilleszkedett, ami miatt a csatornák és DM-ek egymás mellé rendeződtek egy sorba.
+- **Megoldás:** A flex sort kizárólag a csatornaelemekre (`.chan-item`) és fejlécekre korlátoztuk, míg a `#channels` tároló és szekcióblokkok oszlop (`flex-direction: column`) elrendezésűek, normál mobil- (≤640px) és asztali szélesség mellett is.
+
+### 2. „Dolgozik…” / aktivitás-jelzés (`internal/gateway`)
+- **Végpont:** `POST /api/v1/agent/activity` `{ "channel_id": "...", "thread_root_id": "...", "state": "working" | "idle" }`. Csak ágensek hívhatják a csatornákhoz, amiket olvasni tudnak (egyébként 403).
+- **Életciklus és továbbítás:** Nem perzisztált adat, memóriabeli 60 másodperces lejárattal. Nem kerül az eseménynaplóba, senkit nem ébreszt. A gateway valós idejű `agent.activity` keretet továbbít a WebSocketen kizárólag azoknak a nézőknek, akik jogosultak az adott csatorna olvasására.
+- **Őr integráció:** Az őr a közvetlen és munkafutások kezdetén `working` állapotot jelent, hosszú futás esetén 20 másodpercenként megújítja, befejezéskor (vagy hiba/timeout/leállás esetén) pedig `idle` jelzést küld (best-effort módon, hibája nem akasztja meg a futást). A döntési futás nem jelent.
+- **Fejlesztői oldal:** Az üzenetküldő beviteli mező felett diszkrét sor jelenik meg: `@agent dolgozik…` (több ágens esetén felsorolva), ami `idle` vagy 60 mp után magától eltűnik.
+
+### 3. Személyes szekciók a bal sávban (`internal/modules/sidebar`)
+- **Adatmodell (`00022_sidebar_sections.sql`):**
+  - `sidebar_section`: `id`, `workspace_id`, `owner_id`, `name` (≤ 40), `position`, `collapsed`, `created_at`, `updated_at`, `deleted_at`.
+  - `sidebar_item`: `section_id`, `channel_id`, `position`.
+- **Szabályok:** A szekciók személyesek (minden emberi felhasználó saját nézetet rendez), egy csatorna vagy DM legfeljebb egy szekcióba tartozhat. Szekcióba nem sorolt elemek az alapértelmezett "Csatornák" / "Közvetlen üzenetek" csoportban maradnak. Ágensek hívása 403.
+- **REST API:**
+  - `GET /api/v1/sidebar/sections`: saját szekciók és elemeik listázása (olvashatatlan csatornák kiszűrésével).
+  - `POST /api/v1/sidebar/sections`: új szekció létrehozása.
+  - `PUT /api/v1/sidebar/sections/reorder`: szekciók sorrendjének mentése.
+  - `PATCH /api/v1/sidebar/sections/{id}`: név, pozíció vagy collapsed állapot frissítése.
+  - `DELETE /api/v1/sidebar/sections/{id}`: szekció törlése (soft delete; elemei visszahullanak az alapértelmezett csoportokba).
+  - `PUT /api/v1/sidebar/sections/{id}/channels/{channelId}`: csatorna szekcióba helyezése.
+  - `DELETE /api/v1/sidebar/sections/{id}/channels/{channelId}`: csatorna kivétele a szekcióból.
+  - `PUT /api/v1/sidebar/sections/{id}/reorder`: szekción belüli elemek sorrendezése.
+- **Fejlesztői oldal:** Összecsukható kategóriák nyíllal, `+ szekció` gomb, elemeknél szekcióba mozgatás, fel/le léptetés és eltávolítás gombok.
+
+### 4. Elnevezett csatornák leírással és tagkezeléssel (`internal/modules/conversation`)
+- **Csatorna leírás (`00023_channel_description_members.sql`):** A csatorna entitás `description` opcionális mezőt kapott (≤ 250 karakter), ami a fejlécben jelenik meg.
+- **Taglistázás:** `GET /api/v1/channels/{id}/members` (bárki számára elérhető, aki olvashatja a csatornát) visszaadja a tagokat: `actor_id`, `handle`, `kind`, `can_write`.
+- **Tag eltávolítás:** `DELETE /api/v1/channels/{id}/members/{actorId}` (csak adminoknak): lágy eltávolítás `left_at` időbélyegzővel. Privát csatorna esetén védi az utolsó emberi admint (nem távolítható el). Eseménye: `channel.member_removed`, audit naplózással. Az eltávolított tag elveszíti a privát csatorna olvasási jogát és nem kapja többé a csatorna üzeneteit.
+- **Fejlesztői oldal:** `+ új csatorna` modális ablak névvel, leírással, privát kapcsolóval és szűrhető tagválasztóval; a csatorna fejlécében `Tagok` gomb, tagok listájával és adminisztrátori hozzáadási/eltávolítási műveletekkel.
+
+### 5. Részletesebb profil mezők (`internal/modules/identity`)
+- **Adatmodell (`00024_actor_profile.sql`):** `description` (≤ 300 bio), `avatar_emoji` (egy érvényes emoji karakter), `timezone` (IANA időzóna, `time.LoadLocation` alapján validálva, alapértelmezés: `Europe/Budapest`), `status_text` (≤ 80).
+- **Végpont:** `PATCH /api/v1/actors/{id}/profile`. Emberi felhasználó szerkesztheti a sajátját, adminok bárkiét (ágensekét is). Ágensek nem szerkeszthetnek profilt (403). Módosításkor `actor.profile_updated` esemény keletkezik.
+- **Fejlesztői oldal:** Az avatar emoji megjelenik a felhasználók és ágensek neve mellett az üzenetfolyamban, a taglistákban és a DM-ekben. Saját profil szerkesztő űrlap érhető el a fejlécből vagy az adatlapról.
+
+### 6. Jobb oldali agent és felhasználó adatlap (`internal/server/overview.go`)
+- **Végpont:** `GET /api/v1/agents/{id}/overview` (csak embereknek; ágenseknek 403; idegen munkatér ágense/felhasználója 404).
+- **Aggregáció ágens esetén:**
+  - `actor`: profil mezőkkel és szerepkörrel.
+  - `state`: `active` | `paused` | `stopped`.
+  - `activity`: `{ "working": bool }` a gatewayből.
+  - `assignment`: gép (host_id, host_name), kliens, modell, work_model, mód, sandbox, root_dir, worktree repo és branch (a gép jelentéséből), jogosultsági mód, jóváhagyások, `max_session_tokens`, `daily_token_limit`, aktív mappaengedélyek listája (`grants`).
+  - `threads`: szálanként a legutóbbi futás adatai (csatorna név és link, session_id, felhasznált token vs. session limit, jelzés ha új munkamenet szükséges).
+  - `usage`: mai tokenfogyasztás a napi kerethez képest, legutóbbi 10 futás fázissal, eredménnyel, tokenszámmal és hibalinkkel.
+  - `collaboration`: ágens jegyzetei (szálanként a legfrissebb), aktív foglalásai, nyitott kérdései.
+- **Aggregáció ember esetén:** Profil adatok, szerepkör, és a lekérdezővel közös csatornák listája (`common_channels`).
+- **Fejlesztői oldal:** Asztali nézetben jobbról becsúszó oszlop (slide-over panel), mobilon (≤640px) teljes képernyős zárható sheet. Bármely név/handle kattintásakor megnyílik. Adminisztrátorok innen közvetlenül tudnak ágenst szüneteltetni, leállítani vagy újraindítani, beállításokat megnyitni, mappaengedélyt hozzáadni vagy visszavonni.
+
+### 7. Ágens prompt javítások (`internal/guard`)
+- **Valódi mappák megnevezése:** A munkafutás promptja (`WorkPrompt`) felsorolja az engedélyezett valós könyvtárakat és hozzáférési jogaikat (pl. `"You can read /home/…/trader (read-only)...; nothing else is visible."`), így a sandboxos ágens nem a belső sandbox útvonalát tekinti munkamappának.
+- **Hosszabb válasz engedélyezése:** A közvetlen mód promptja (`DirectPrompt`) explicit kimondja: `"Keep the answer short (≤600 characters) unless someone asks for more; when asked for a longer summary or report, you may write up to 8000 characters."`.
+- **Azonos nyelv szabály:** Mind a munkafutás, mind a közvetlen futás promptja rögzíti: `"Answer in the language of the message you are answering; do not mix languages."`.
 
 ## Verziózás, kompatibilitás, bővíthetőség
 
