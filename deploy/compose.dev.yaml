@@ -6,6 +6,8 @@ name: colonyhall-dev
 services:
   postgres:
     image: postgres:17-alpine
+    # Comes back with Docker (e.g. after a WSL restart); `make down` stops it for good.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: colony
       POSTGRES_PASSWORD: colony
@@ -22,6 +24,7 @@ services:
       retries: 30
 
   server:
+    restart: unless-stopped
     build:
       context: ..
       dockerfile: deploy/Dockerfile
