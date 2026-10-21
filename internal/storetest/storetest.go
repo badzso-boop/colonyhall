@@ -307,6 +307,38 @@ func testConversation(t *testing.T, b Backend) {
 	if len(members) != 2 {
 		t.Fatalf("MemberIDs: %v", members)
 	}
+	memList, err := b.Conversation.ListMembers(ctx, f.channel.ID)
+	must(t, err)
+	if len(memList) != 2 {
+		t.Fatalf("ListMembers: %v", memList)
+	}
+	// Soft remove agent member
+	must(t, b.Conversation.RemoveMember(ctx, f.channel.ID, f.agent.ID, t0.Add(time.Hour)))
+	members, err = b.Conversation.MemberIDs(ctx, f.channel.ID)
+	must(t, err)
+	if len(members) != 1 || members[0] != f.human.ID {
+		t.Fatalf("expected only human member left: %v", members)
+	}
+	if _, err := b.Conversation.Member(ctx, f.channel.ID, f.agent.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for soft-removed member: %v", err)
+	}
+	agentViews, err := b.Conversation.ChannelsForActor(ctx, f.ws.ID, f.agent.ID, false)
+	must(t, err)
+	if len(agentViews) != 0 {
+		t.Fatalf("removed member should have 0 channels: %+v", agentViews)
+	}
+	// Re-add agent member
+	must(t, b.Conversation.AddMember(ctx, conversation.Member{
+		ChannelID: f.channel.ID,
+		ActorID:   f.agent.ID,
+		CanWrite:  true,
+		JoinedAt:  t0.Add(2 * time.Hour),
+	}))
+	members, err = b.Conversation.MemberIDs(ctx, f.channel.ID)
+	must(t, err)
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members after re-add: %v", members)
+	}
 	testThreadsAndReactions(t, b, f, msgs)
 }
 

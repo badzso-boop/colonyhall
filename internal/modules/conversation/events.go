@@ -6,6 +6,7 @@ import "time"
 const (
 	EventChannelCreated = "channel.created"
 	EventMemberAdded    = "channel.member_added"
+	EventMemberRemoved  = "channel.member_removed"
 	EventMessageCreated = "message.created"
 	EventReactionAdded  = "reaction.added"
 	EventReactionRemove = "reaction.removed"
@@ -32,6 +33,12 @@ type MemberAdded struct {
 	ChannelID string `json:"channel_id"`
 	ActorID   string `json:"actor_id"`
 	CanWrite  bool   `json:"can_write"`
+}
+
+// MemberRemoved is the payload of EventMemberRemoved.
+type MemberRemoved struct {
+	ChannelID string `json:"channel_id"`
+	ActorID   string `json:"actor_id"`
 }
 
 // MessageCreated is the payload of EventMessageCreated. It carries the whole

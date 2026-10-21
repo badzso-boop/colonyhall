@@ -82,10 +82,18 @@
   .link-card a { color:var(--accent); text-decoration:none; font-weight:500; }
   .link-card a:hover { text-decoration:underline; }
   .link-card .badge { border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:11px; background:var(--bg); }
-  #errModal, #appModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
-  #errModal.on, #appModal.on { display:flex; }
-  #errModal .card, #appModal .card { max-width:720px; width:100%; max-height:80vh; overflow:auto; }
+  #chanHeader { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid var(--line); background:var(--surface); gap:8px; }
+  #chanInfo { display:flex; align-items:baseline; gap:8px; min-width:0; overflow:hidden; }
+  #chanTitle { font-weight:700; font-size:15px; white-space:nowrap; }
+  #chanDesc { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #errModal, #appModal, .modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
+  #errModal.on, #appModal.on, .modal.on { display:flex; }
+  #errModal .card, #appModal .card, .modal .card { max-width:720px; width:100%; max-height:85vh; overflow:auto; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
   #errModal pre, #appModal pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+  .modal-list { max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:6px; padding:6px; display:flex; flex-direction:column; gap:4px; }
+  .modal-row { display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border-radius:4px; }
+  .modal-row:hover { background:var(--bg); }
+  .modal-row label { display:flex; align-items:center; gap:6px; cursor:pointer; flex:1; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     main > nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; }
     header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; } }
@@ -105,6 +113,15 @@
 <main>
   <nav><div id="channels"></div><div class="dmbox"><input id="dmto" placeholder="@handle"><button id="dmbtn">DM</button></div></nav>
   <section>
+    <div id="chanHeader">
+      <div id="chanInfo">
+        <span id="chanTitle"></span>
+        <span id="chanDesc"></span>
+      </div>
+      <div id="chanActs">
+        <button id="chanMembersBtn" style="display:none"></button>
+      </div>
+    </div>
     <div id="feed"></div>
     <div id="hostsPanel"></div>
     <div id="schedPanel"></div>
@@ -128,6 +145,44 @@
 </main>
 <div id="errModal"><div class="card"><h3 id="errTitle"></h3><div class="muted" id="errMeta"></div><pre id="errDetail"></pre><button id="errClose">✕</button></div></div>
 <div id="appModal"><div class="card"><h3 id="appTitle"></h3><div class="muted" id="appMeta"></div><pre id="appDetail"></pre><div class="row" id="appActions"></div><button id="appClose">✕</button></div></div>
+<div id="chanModal" class="modal">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0" id="chanModalTitle"></h3>
+      <button id="chanModalClose">✕</button>
+    </div>
+    <input id="newChanName" placeholder="pl. frontend-dev" autocomplete="off">
+    <input id="newChanDesc" placeholder="Leírás (opcionális, max 250 karakter)" maxlength="250" autocomplete="off">
+    <div class="row" style="gap:16px;">
+      <label><input type="radio" name="newChanKind" value="public" checked> <span id="lblPublic"></span></label>
+      <label><input type="radio" name="newChanKind" value="private"> <span id="lblPrivate"></span></label>
+    </div>
+    <div>
+      <div style="font-weight:600;margin-bottom:4px;" id="lblSelectMembers"></div>
+      <input id="newChanMemberFilter" placeholder="Szűrés..." style="width:100%;margin-bottom:6px;" autocomplete="off">
+      <div id="newChanMemberList" class="modal-list"></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;gap:8px;">
+      <button id="newChanSubmit" class="on"></button>
+    </div>
+  </div>
+</div>
+<div id="membersModal" class="modal">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0" id="membersModalTitle"></h3>
+      <button id="membersModalClose">✕</button>
+    </div>
+    <div id="membersList" class="modal-list" style="max-height:300px;"></div>
+    <div id="addMemberSection" style="display:none;border-top:1px solid var(--line);padding-top:10px;">
+      <div style="font-weight:600;margin-bottom:6px;" id="lblAddMember"></div>
+      <div class="row" style="gap:8px;">
+        <select id="addMemberSelect" style="flex:1;"></select>
+        <button id="addMemberBtn"></button>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -155,7 +210,11 @@ const I18N = {
         working: "dolgozik…",
         section: "Szekció", newSectionName: "Új szekció neve:", renameSection: "Új név:",
         channelsGroup: "Csatornák", dmsGroup: "Közvetlen üzenetek",
-        confirmDeleteSection: "Biztosan törlöd ezt a szekciót? (A csatornák nem törlődnek)" },
+        confirmDeleteSection: "Biztosan törlöd ezt a szekciót? (A csatornák nem törlődnek)",
+        newChannel: "Új csatorna", createChannel: "Csatorna létrehozása", channelName: "Csatorna neve",
+        channelDesc: "Leírás (opcionális, max 250 karakter)", publicChannel: "Nyilvános csatorna", privateChannel: "Privát csatorna",
+        members: "Tagok", addMember: "Hozzáadás", selectMembers: "Tagok kiválasztása:", filterMembers: "Szűrés tagok között…",
+        removeMemberConfirm: "Biztosan eltávolítod ezt a tagot?" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -181,7 +240,11 @@ const I18N = {
         working: "working…",
         section: "Section", newSectionName: "New section name:", renameSection: "New name:",
         channelsGroup: "Channels", dmsGroup: "Direct Messages",
-        confirmDeleteSection: "Delete this section? (Channels will not be deleted)" },
+        confirmDeleteSection: "Delete this section? (Channels will not be deleted)",
+        newChannel: "New channel", createChannel: "Create channel", channelName: "Channel name",
+        channelDesc: "Description (optional, max 250 chars)", publicChannel: "Public channel", privateChannel: "Private channel",
+        members: "Members", addMember: "Add", selectMembers: "Select members:", filterMembers: "Filter members…",
+        removeMemberConfirm: "Remove this member?" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -347,6 +410,15 @@ function renderChannels() {
 
   if (me?.kind === "human") {
     const topBar = el("div", { className: "sec-actions-bar" });
+    const addChanBtn = el("button", {
+      textContent: "+ " + (L.newChannel || "csatorna"),
+      style: "margin-right:6px;",
+      onclick: (e) => {
+        e.stopPropagation();
+        showNewChannelModal();
+      }
+    });
+    topBar.append(addChanBtn);
     topBar.append(el("button", {
       textContent: "+ " + (L.section || "szekció"),
       onclick: async (e) => {
@@ -498,11 +570,23 @@ function renderChannels() {
 async function open(id) {
   if (openPanel) showPanel(null);
   current = id; setReply(null); clearPendingFiles();
+  const c = channels.find(x => x.id === id);
+  if (c) {
+    c.unread = 0;
+    $("chanTitle").textContent = chanLabel(c);
+    $("chanDesc").textContent = c.description || "";
+    $("chanMembersBtn").style.display = "";
+    $("chanMembersBtn").textContent = "👥 " + (L.members || "Tagok");
+    $("chanMembersBtn").onclick = () => showMembersModal(c.id);
+  } else {
+    $("chanTitle").textContent = "";
+    $("chanDesc").textContent = "";
+    $("chanMembersBtn").style.display = "none";
+  }
   const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
   msgs = new Map(r.messages.map(m => [m.id, m]));
   renderFeed();
   await api(`/api/v1/channels/${id}/read`, { method: "POST" }).catch(() => {});
-  const c = channels.find(x => x.id === id); if (c) c.unread = 0;
   renderChannels();
   renderActivity();
 }
@@ -641,6 +725,142 @@ async function showApproval(id) {
   $("appModal").className = "on";
 }
 $("appClose").onclick = () => { $("appModal").className = ""; };
+
+function showNewChannelModal() {
+  $("newChanName").value = "";
+  $("newChanDesc").value = "";
+  document.querySelector("input[name='newChanKind'][value='public']").checked = true;
+  $("newChanMemberFilter").value = "";
+  renderNewChanMemberList("");
+  $("chanModalTitle").textContent = L.newChannel;
+  $("lblPublic").textContent = L.publicChannel;
+  $("lblPrivate").textContent = L.privateChannel;
+  $("lblSelectMembers").textContent = L.selectMembers;
+  $("newChanMemberFilter").placeholder = L.filterMembers;
+  $("newChanSubmit").textContent = L.createChannel;
+  $("chanModal").className = "modal on";
+}
+$("chanModalClose").onclick = () => { $("chanModal").className = "modal"; };
+$("newChanMemberFilter").oninput = (e) => {
+  renderNewChanMemberList(e.target.value.toLowerCase().trim());
+};
+function renderNewChanMemberList(filter) {
+  const container = $("newChanMemberList");
+  container.innerHTML = "";
+  const actList = Object.values(actors).filter(a => a.id !== me.id);
+  for (const a of actList) {
+    const text = `@${a.handle} (${a.kind})${a.display_name ? ' ' + a.display_name : ''}`;
+    if (filter && !text.toLowerCase().includes(filter)) continue;
+    const row = el("div", { className: "modal-row" });
+    const cb = el("input", { type: "checkbox", value: a.id });
+    const lbl = el("label", {}, cb, el("span", { className: `who ${a.kind}`, textContent: `@${a.handle}` }), el("span", { className: "muted", textContent: ` (${a.kind})` }));
+    row.append(lbl);
+    container.append(row);
+  }
+}
+$("newChanSubmit").onclick = async () => {
+  const name = $("newChanName").value.trim();
+  const desc = $("newChanDesc").value.trim();
+  const kind = document.querySelector("input[name='newChanKind']:checked").value;
+  if (!name) return;
+  const checkedBoxes = $("newChanMemberList").querySelectorAll("input[type='checkbox']:checked");
+  const memberIds = Array.from(checkedBoxes).map(cb => cb.value);
+  try {
+    const payload = { name, kind };
+    if (desc) payload.description = desc;
+    const created = await api("/api/v1/channels", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    for (const actId of memberIds) {
+      await api(`/api/v1/channels/${created.id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ actor_id: actId }),
+      }).catch(() => {});
+    }
+    $("chanModal").className = "modal";
+    await load();
+    await open(created.id);
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+let currentMembersChannelId = null;
+async function showMembersModal(channelId) {
+  currentMembersChannelId = channelId;
+  const c = channels.find(x => x.id === channelId);
+  const chName = c ? chanLabel(c) : "";
+  $("membersModalTitle").textContent = `${L.members}: ${chName}`;
+  await refreshMembersModal();
+  $("membersModal").className = "modal on";
+}
+$("membersModalClose").onclick = () => { $("membersModal").className = "modal"; };
+
+async function refreshMembersModal() {
+  const channelId = currentMembersChannelId;
+  if (!channelId) return;
+  const res = await api(`/api/v1/channels/${channelId}/members`).catch(e => { alert(e.message); return null; });
+  if (!res) return;
+  const listEl = $("membersList");
+  listEl.innerHTML = "";
+  const memberActorIds = new Set();
+  const isAdmin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
+  for (const m of res.members) {
+    memberActorIds.add(m.actor_id);
+    const row = el("div", { className: "modal-row" });
+    const left = el("div", { style: "display:flex;align-items:center;gap:6px;" },
+      el("span", { className: `who ${m.kind}`, textContent: `@${m.handle}` }),
+      el("span", { className: "muted", style: "font-size:11px;", textContent: `(${m.kind})` })
+    );
+    row.append(left);
+    if (isAdmin) {
+      const rmBtn = el("button", {
+        textContent: "✕",
+        title: "Eltávolítás",
+        onclick: async () => {
+          if (!confirm(L.removeMemberConfirm || "Biztosan eltávolítod ezt a tagot?")) return;
+          try {
+            await api(`/api/v1/channels/${channelId}/members/${m.actor_id}`, { method: "DELETE" });
+            await refreshMembersModal();
+          } catch (err) {
+            alert(err.message);
+          }
+        }
+      });
+      row.append(rmBtn);
+    }
+    listEl.append(row);
+  }
+
+  const addSec = $("addMemberSection");
+  if (isAdmin) {
+    addSec.style.display = "";
+    $("lblAddMember").textContent = (L.addMember || "Hozzáadás") + ":";
+    $("addMemberBtn").textContent = L.addMember || "Hozzáadás";
+    const sel = $("addMemberSelect");
+    sel.innerHTML = "";
+    const nonMembers = Object.values(actors).filter(a => !memberActorIds.has(a.id));
+    for (const a of nonMembers) {
+      sel.append(el("option", { value: a.id, textContent: `@${a.handle} (${a.kind})` }));
+    }
+    $("addMemberBtn").onclick = async () => {
+      const targetId = sel.value;
+      if (!targetId) return;
+      try {
+        await api(`/api/v1/channels/${channelId}/members`, {
+          method: "POST",
+          body: JSON.stringify({ actor_id: targetId }),
+        });
+        await refreshMembersModal();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+  } else {
+    addSec.style.display = "none";
+  }
+}
 
 async function renderApprovalInline(id, span) {
   const app = await api(`/api/v1/approvals/${id}`).catch(() => null);

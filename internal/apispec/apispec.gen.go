@@ -877,9 +877,10 @@ type AuditVerify struct {
 
 // Channel defines model for Channel.
 type Channel struct {
-	Id       openapi_types.UUID `json:"id"`
-	IsMember bool               `json:"is_member"`
-	Kind     ChannelKind        `json:"kind"`
+	Description *string            `json:"description,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	IsMember    bool               `json:"is_member"`
+	Kind        ChannelKind        `json:"kind"`
 
 	// MemberIds DM channels only
 	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
@@ -894,6 +895,19 @@ type ChannelKind string
 // ChannelList defines model for ChannelList.
 type ChannelList struct {
 	Channels []Channel `json:"channels"`
+}
+
+// ChannelMember defines model for ChannelMember.
+type ChannelMember struct {
+	ActorId  openapi_types.UUID `json:"actor_id"`
+	CanWrite bool               `json:"can_write"`
+	Handle   string             `json:"handle"`
+	Kind     ActorKind          `json:"kind"`
+}
+
+// ChannelMemberList defines model for ChannelMemberList.
+type ChannelMemberList struct {
+	Members []ChannelMember `json:"members"`
 }
 
 // CreateActorRequest defines model for CreateActorRequest.
@@ -916,8 +930,9 @@ type CreateActorResponse struct {
 
 // CreateChannelRequest defines model for CreateChannelRequest.
 type CreateChannelRequest struct {
-	Kind *ChannelKind `json:"kind,omitempty"`
-	Name string       `json:"name"`
+	Description *string      `json:"description,omitempty"`
+	Kind        *ChannelKind `json:"kind,omitempty"`
+	Name        string       `json:"name"`
 }
 
 // CreateScheduleRequest defines model for CreateScheduleRequest.

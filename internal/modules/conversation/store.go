@@ -18,8 +18,10 @@ type Store interface {
 	ChannelsForActor(ctx context.Context, workspaceID, actorID ids.ID, all bool) ([]ChannelView, error)
 
 	AddMember(ctx context.Context, m Member) error
+	RemoveMember(ctx context.Context, channelID, actorID ids.ID, at time.Time) error
 	Member(ctx context.Context, channelID, actorID ids.ID) (Member, error)
 	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
+	ListMembers(ctx context.Context, channelID ids.ID) ([]Member, error)
 
 	InsertMessage(ctx context.Context, m Message) error
 	MessageByID(ctx context.Context, id ids.ID) (Message, error)

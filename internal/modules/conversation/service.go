@@ -51,18 +51,29 @@ func (s *Service) membership(ctx context.Context, channelID, actorID ids.ID) (po
 }
 
 // CreateChannel creates a channel; the creator becomes its first member.
-func (s *Service) CreateChannel(ctx context.Context, by identity.Actor, name string, kind ChannelKind) (Channel, error) {
+func (s *Service) CreateChannel(ctx context.Context, by identity.Actor, name, description string, kind ChannelKind) (Channel, error) {
 	if !policy.CanCreateChannel(subject(by)) {
 		return Channel{}, ErrForbidden
 	}
 	if err := ValidateName(name); err != nil {
 		return Channel{}, err
 	}
+	if err := ValidateDescription(description); err != nil {
+		return Channel{}, err
+	}
 	if kind == "" {
 		kind = KindPublic
 	}
 	now := s.Clock.Now()
-	c := Channel{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, Kind: kind, Name: name, CreatedBy: by.ID, CreatedAt: now}
+	c := Channel{
+		ID:          s.IDs.New(),
+		WorkspaceID: by.WorkspaceID,
+		Kind:        kind,
+		Name:        name,
+		Description: description,
+		CreatedBy:   by.ID,
+		CreatedAt:   now,
+	}
 	var lastSeq int64
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
 		if err := s.Store.CreateChannel(ctx, c); err != nil {
@@ -89,6 +100,112 @@ func (s *Service) CreateChannel(ctx context.Context, by identity.Actor, name str
 	}
 	s.Bus.Notify(lastSeq)
 	return c, nil
+}
+
+// ChannelMemberView is a channel member with actor details for clients.
+type ChannelMemberView struct {
+	ActorID  ids.ID
+	Handle   string
+	Kind     identity.Kind
+	CanWrite bool
+}
+
+// ListMembers lists members of channelID. Any actor who can read the channel may list its members.
+func (s *Service) ListMembers(ctx context.Context, by identity.Actor, channelID ids.ID) ([]ChannelMemberView, error) {
+	if _, err := s.channelFor(ctx, by.WorkspaceID, channelID); err != nil {
+		return nil, err
+	}
+	canRead, err := s.CanRead(ctx, by, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !canRead {
+		return nil, ErrForbidden
+	}
+	members, err := s.Store.ListMembers(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChannelMemberView, 0, len(members))
+	for _, m := range members {
+		act, err := s.Directory.ActorByID(ctx, m.ActorID)
+		if err != nil {
+			continue
+		}
+		out = append(out, ChannelMemberView{
+			ActorID:  m.ActorID,
+			Handle:   act.Handle,
+			Kind:     act.Kind,
+			CanWrite: m.CanWrite,
+		})
+	}
+	return out, nil
+}
+
+// RemoveMember removes an actor from a channel. Only admins may do this.
+// Soft-removes the member. Removing the last human admin of a private channel is refused.
+func (s *Service) RemoveMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID) error {
+	if !policy.CanManageMembers(subject(by)) {
+		return ErrForbidden
+	}
+	var seq int64
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+		c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
+		if err != nil {
+			return err
+		}
+		target, err := s.Directory.ActorByID(ctx, actorID)
+		if err != nil {
+			return fmt.Errorf("actor: %w", err)
+		}
+		if target.WorkspaceID != by.WorkspaceID {
+			return fmt.Errorf("actor: %w", db.ErrNotFound)
+		}
+		if _, err := s.Store.Member(ctx, c.ID, actorID); err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return ErrMemberNotFound
+			}
+			return err
+		}
+		if c.Kind == KindPrivate && target.Kind == identity.KindHuman && target.IsAdmin() {
+			members, err := s.Store.ListMembers(ctx, c.ID)
+			if err != nil {
+				return err
+			}
+			hasOtherAdmin := false
+			for _, m := range members {
+				if m.ActorID == target.ID {
+					continue
+				}
+				other, err := s.Directory.ActorByID(ctx, m.ActorID)
+				if err != nil {
+					continue
+				}
+				if other.Kind == identity.KindHuman && other.IsAdmin() {
+					hasOtherAdmin = true
+					break
+				}
+			}
+			if !hasOtherAdmin {
+				return ErrLastAdmin
+			}
+		}
+
+		now := s.Clock.Now()
+		if err := s.Store.RemoveMember(ctx, c.ID, actorID, now); err != nil {
+			return err
+		}
+		seq, err = s.appendEvent(ctx, by, c.ID, EventMemberRemoved, "channel", c.ID,
+			MemberRemoved{ChannelID: c.ID.String(), ActorID: actorID.String()})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if seq > 0 {
+		s.Bus.Notify(seq)
+	}
+	return nil
 }
 
 // AddMember adds an actor to a channel. Only admins may do this.

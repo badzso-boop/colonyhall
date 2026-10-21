@@ -213,6 +213,17 @@ paths:
   /channels/{channelId}/members:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
+    get:
+      operationId: listChannelMembers
+      tags: [conversation]
+      description: Anyone who can read the channel. List channel members.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChannelMemberList" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
     post:
       operationId: addChannelMember
       tags: [conversation]
@@ -225,6 +236,24 @@ paths:
         "204": { description: Added }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/members/{actorId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+      - name: actorId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: removeChannelMember
+      tags: [conversation]
+      description: Admins only. Soft-remove a member from the channel.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /channels/{channelId}/messages:
     parameters:
@@ -1324,6 +1353,7 @@ components:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ChannelKind" }
         name: { type: string }
+        description: { type: string, maxLength: 250 }
         is_member: { type: boolean }
         unread: { type: integer, format: int64 }
         mentions: { type: integer, format: int64 }
@@ -1333,12 +1363,28 @@ components:
       required: [channels]
       properties:
         channels: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+    ChannelMember:
+      type: object
+      required: [actor_id, handle, kind, can_write]
+      properties:
+        actor_id: { type: string, format: uuid }
+        handle: { type: string }
+        kind: { $ref: "#/components/schemas/ActorKind" }
+        can_write: { type: boolean }
+    ChannelMemberList:
+      type: object
+      required: [members]
+      properties:
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/ChannelMember" }
     CreateChannelRequest:
       type: object
       required: [name]
       properties:
         name: { type: string }
         kind: { $ref: "#/components/schemas/ChannelKind" }
+        description: { type: string, maxLength: 250 }
     AddMemberRequest:
       type: object
       required: [actor_id]

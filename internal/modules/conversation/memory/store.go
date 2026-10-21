@@ -89,7 +89,8 @@ func (s *Store) ChannelsForActor(_ context.Context, workspaceID, actorID ids.ID,
 		if c.WorkspaceID != workspaceID {
 			continue
 		}
-		m, isMember := s.members[memberKey{c.ID, actorID}]
+		m, has := s.members[memberKey{c.ID, actorID}]
+		isMember := has && m.LeftAt == nil
 		if !isMember && !all {
 			continue
 		}
@@ -109,9 +110,23 @@ func (s *Store) AddMember(_ context.Context, m conversation.Member) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	k := memberKey{m.ChannelID, m.ActorID}
-	if _, ok := s.members[k]; ok {
+	if existing, ok := s.members[k]; ok && existing.LeftAt == nil {
 		return db.ErrConflict
 	}
+	s.members[k] = m
+	return nil
+}
+
+// RemoveMember soft-removes a membership.
+func (s *Store) RemoveMember(_ context.Context, channelID, actorID ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := memberKey{channelID, actorID}
+	m, ok := s.members[k]
+	if !ok || m.LeftAt != nil {
+		return db.ErrNotFound
+	}
+	m.LeftAt = &at
 	s.members[k] = m
 	return nil
 }
@@ -121,7 +136,7 @@ func (s *Store) Member(_ context.Context, channelID, actorID ids.ID) (conversati
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	m, ok := s.members[memberKey{channelID, actorID}]
-	if !ok {
+	if !ok || m.LeftAt != nil {
 		return m, db.ErrNotFound
 	}
 	return m, nil
@@ -132,12 +147,28 @@ func (s *Store) MemberIDs(_ context.Context, channelID ids.ID) ([]ids.ID, error)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []ids.ID
-	for k := range s.members {
-		if k.channel == channelID {
+	for k, m := range s.members {
+		if k.channel == channelID && m.LeftAt == nil {
 			out = append(out, k.actor)
 		}
 	}
 	sortIDs(out)
+	return out, nil
+}
+
+// ListMembers lists the channel's active members, ordered by joined_at.
+func (s *Store) ListMembers(_ context.Context, channelID ids.ID) ([]conversation.Member, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []conversation.Member
+	for k, m := range s.members {
+		if k.channel == channelID && m.LeftAt == nil {
+			out = append(out, m)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].JoinedAt.Before(out[j].JoinedAt)
+	})
 	return out, nil
 }
 
@@ -234,7 +265,7 @@ func (s *Store) SetSeen(_ context.Context, channelID, actorID ids.ID, count int6
 	defer s.mu.Unlock()
 	k := memberKey{channelID, actorID}
 	m, ok := s.members[k]
-	if !ok {
+	if !ok || m.LeftAt != nil {
 		return nil
 	}
 	if count > m.MsgCount {
@@ -251,7 +282,7 @@ func (s *Store) IncrementMentions(_ context.Context, channelID ids.ID, actorIDs 
 	defer s.mu.Unlock()
 	for _, a := range actorIDs {
 		k := memberKey{channelID, a}
-		if m, ok := s.members[k]; ok {
+		if m, ok := s.members[k]; ok && m.LeftAt == nil {
 			m.MentionCount++
 			s.members[k] = m
 		}

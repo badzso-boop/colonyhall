@@ -14,12 +14,14 @@ import (
 )
 
 func init() {
-	httpx.RegisterValidation(conversation.ErrInvalidName, conversation.ErrEmptyBody, conversation.ErrBodyTooLong,
+	httpx.RegisterValidation(conversation.ErrInvalidName, conversation.ErrInvalidDescription, conversation.ErrEmptyBody, conversation.ErrBodyTooLong,
 		conversation.ErrInvalidClientID, conversation.ErrBadThread, conversation.ErrBadEmoji, conversation.ErrBadDM,
 		conversation.ErrAgentTooLong, conversation.ErrTooManyMentions, conversation.ErrGroupMention,
 		conversation.ErrNothingToAck)
 	httpx.RegisterForbidden(conversation.ErrForbidden)
 	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrConversationPaused)
+	httpx.RegisterStatus(http.StatusConflict, conversation.ErrLastAdmin)
+	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
 }
 
 // MessageToAPI converts a message to its API shape.
@@ -67,8 +69,19 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 }
 
 func channelToAPI(c conversation.ChannelView) apispec.Channel {
-	out := apispec.Channel{Id: c.ID, Kind: apispec.ChannelKind(c.Kind), Name: c.Name,
-		IsMember: c.IsMember, Unread: c.Unread, Mentions: c.Mentions}
+	var desc *string
+	if c.Description != "" {
+		desc = &c.Description
+	}
+	out := apispec.Channel{
+		Id:          c.ID,
+		Kind:        apispec.ChannelKind(c.Kind),
+		Name:        c.Name,
+		Description: desc,
+		IsMember:    c.IsMember,
+		Unread:      c.Unread,
+		Mentions:    c.Mentions,
+	}
 	if c.MemberIDs != nil {
 		out.MemberIds = &c.MemberIDs
 	}
@@ -112,12 +125,40 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			return
 		}
 		kind := conversation.ChannelKind(httpx.Deref(in.Kind, apispec.Public))
-		c, err := svc.CreateChannel(r.Context(), httpx.Actor(r), in.Name, kind)
+		var desc string
+		if in.Description != nil {
+			desc = *in.Description
+		}
+		c, err := svc.CreateChannel(r.Context(), httpx.Actor(r), in.Name, desc, kind)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
 		httpx.JSON(w, http.StatusCreated, channelToAPI(conversation.ChannelView{Channel: c, IsMember: true}))
+	}))
+
+	mux.Handle("GET /api/v1/channels/{id}/members", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		members, err := svc.ListMembers(r.Context(), httpx.Actor(r), channelID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.ChannelMemberList{
+			Members: make([]apispec.ChannelMember, len(members)),
+		}
+		for i, m := range members {
+			out.Members[i] = apispec.ChannelMember{
+				ActorId:  m.ActorID,
+				Handle:   m.Handle,
+				Kind:     apispec.ActorKind(m.Kind),
+				CanWrite: m.CanWrite,
+			}
+		}
+		httpx.JSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("POST /api/v1/channels/{id}/members", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +172,22 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			return
 		}
 		if err := svc.AddMember(r.Context(), httpx.Actor(r), channelID, in.ActorId, httpx.Deref(in.CanWrite, true)); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("DELETE /api/v1/channels/{id}/members/{actorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		actorID, ok := pathID(w, r, "actorId")
+		if !ok {
+			return
+		}
+		if err := svc.RemoveMember(r.Context(), httpx.Actor(r), channelID, actorID); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}

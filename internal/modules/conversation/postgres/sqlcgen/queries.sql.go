@@ -13,8 +13,13 @@ import (
 )
 
 const addMember = `-- name: AddMember :exec
-INSERT INTO channel_member (channel_id, actor_id, can_write, msg_count, mention_count, joined_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO channel_member (channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at)
+VALUES ($1, $2, $3, $4, $5, $6, NULL)
+ON CONFLICT (channel_id, actor_id)
+DO UPDATE SET can_write = EXCLUDED.can_write,
+              msg_count = EXCLUDED.msg_count,
+              joined_at = EXCLUDED.joined_at,
+              left_at = NULL
 `
 
 type AddMemberParams struct {
@@ -79,7 +84,7 @@ func (q *Queries) BumpThread(ctx context.Context, arg BumpThreadParams) error {
 }
 
 const channelByID = `-- name: ChannelByID :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at FROM channel WHERE id = $1
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description FROM channel WHERE id = $1
 `
 
 func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error) {
@@ -93,12 +98,13 @@ func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error
 		&i.MsgCount,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const channelByName = `-- name: ChannelByName :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at FROM channel WHERE workspace_id = $1 AND name = $2
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description FROM channel WHERE workspace_id = $1 AND name = $2
 `
 
 type ChannelByNameParams struct {
@@ -117,18 +123,19 @@ func (q *Queries) ChannelByName(ctx context.Context, arg ChannelByNameParams) (C
 		&i.MsgCount,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const channelsForActor = `-- name: ChannelsForActor :many
-SELECT c.id, c.workspace_id, c.kind, c.name, c.msg_count, c.created_by, c.created_at,
-       (m.actor_id IS NOT NULL)::boolean AS is_member,
+SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.msg_count, c.created_by, c.created_at,
+       (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
 FROM channel c
-LEFT JOIN channel_member m ON m.channel_id = c.id AND m.actor_id = $1
-WHERE c.workspace_id = $2 AND ($3::boolean OR m.actor_id IS NOT NULL)
+LEFT JOIN channel_member m ON m.channel_id = c.id AND m.actor_id = $1 AND m.left_at IS NULL
+WHERE c.workspace_id = $2 AND ($3::boolean OR (m.actor_id IS NOT NULL AND m.left_at IS NULL))
 ORDER BY c.name
 `
 
@@ -143,6 +150,7 @@ type ChannelsForActorRow struct {
 	WorkspaceID uuid.UUID
 	Kind        string
 	Name        string
+	Description string
 	MsgCount    int64
 	CreatedBy   uuid.UUID
 	CreatedAt   time.Time
@@ -165,6 +173,7 @@ func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorPara
 			&i.WorkspaceID,
 			&i.Kind,
 			&i.Name,
+			&i.Description,
 			&i.MsgCount,
 			&i.CreatedBy,
 			&i.CreatedAt,
@@ -183,8 +192,8 @@ func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorPara
 }
 
 const createChannel = `-- name: CreateChannel :exec
-INSERT INTO channel (id, workspace_id, kind, name, msg_count, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO channel (id, workspace_id, kind, name, description, msg_count, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateChannelParams struct {
@@ -192,6 +201,7 @@ type CreateChannelParams struct {
 	WorkspaceID uuid.UUID
 	Kind        string
 	Name        string
+	Description string
 	MsgCount    int64
 	CreatedBy   uuid.UUID
 	CreatedAt   time.Time
@@ -203,6 +213,7 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) er
 		arg.WorkspaceID,
 		arg.Kind,
 		arg.Name,
+		arg.Description,
 		arg.MsgCount,
 		arg.CreatedBy,
 		arg.CreatedAt,
@@ -212,7 +223,7 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) er
 
 const incrementMentions = `-- name: IncrementMentions :exec
 UPDATE channel_member SET mention_count = mention_count + 1
-WHERE channel_id = $1 AND actor_id = ANY($2::uuid[])
+WHERE channel_id = $1 AND actor_id = ANY($2::uuid[]) AND left_at IS NULL
 `
 
 type IncrementMentionsParams struct {
@@ -305,6 +316,41 @@ func (q *Queries) LastMessageNotBy(ctx context.Context, arg LastMessageNotByPara
 	return i, err
 }
 
+const listMembers = `-- name: ListMembers :many
+SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at
+FROM channel_member
+WHERE channel_id = $1 AND left_at IS NULL
+ORDER BY joined_at ASC
+`
+
+func (q *Queries) ListMembers(ctx context.Context, channelID uuid.UUID) ([]ChannelMember, error) {
+	rows, err := q.db.Query(ctx, listMembers, channelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChannelMember
+	for rows.Next() {
+		var i ChannelMember
+		if err := rows.Scan(
+			&i.ChannelID,
+			&i.ActorID,
+			&i.CanWrite,
+			&i.MsgCount,
+			&i.MentionCount,
+			&i.JoinedAt,
+			&i.LeftAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessages = `-- name: ListMessages :many
 SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM (
     SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message
@@ -356,7 +402,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const member = `-- name: Member :one
-SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at FROM channel_member WHERE channel_id = $1 AND actor_id = $2
+SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at FROM channel_member WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL
 `
 
 type MemberParams struct {
@@ -374,12 +420,13 @@ func (q *Queries) Member(ctx context.Context, arg MemberParams) (ChannelMember, 
 		&i.MsgCount,
 		&i.MentionCount,
 		&i.JoinedAt,
+		&i.LeftAt,
 	)
 	return i, err
 }
 
 const memberIDs = `-- name: MemberIDs :many
-SELECT actor_id FROM channel_member WHERE channel_id = $1 ORDER BY actor_id
+SELECT actor_id FROM channel_member WHERE channel_id = $1 AND left_at IS NULL ORDER BY actor_id
 `
 
 func (q *Queries) MemberIDs(ctx context.Context, channelID uuid.UUID) ([]uuid.UUID, error) {
@@ -533,6 +580,23 @@ func (q *Queries) ReactionsFor(ctx context.Context, messageIds []uuid.UUID) ([]R
 	return items, nil
 }
 
+const removeMember = `-- name: RemoveMember :exec
+UPDATE channel_member
+SET left_at = $3
+WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL
+`
+
+type RemoveMemberParams struct {
+	ChannelID uuid.UUID
+	ActorID   uuid.UUID
+	LeftAt    *time.Time
+}
+
+func (q *Queries) RemoveMember(ctx context.Context, arg RemoveMemberParams) error {
+	_, err := q.db.Exec(ctx, removeMember, arg.ChannelID, arg.ActorID, arg.LeftAt)
+	return err
+}
+
 const removeReaction = `-- name: RemoveReaction :execrows
 UPDATE reaction SET removed_at = $1::timestamptz
 WHERE message_id = $2 AND actor_id = $3 AND emoji = $4 AND removed_at IS NULL
@@ -560,7 +624,7 @@ func (q *Queries) RemoveReaction(ctx context.Context, arg RemoveReactionParams) 
 
 const setSeen = `-- name: SetSeen :exec
 UPDATE channel_member SET msg_count = GREATEST(msg_count, $1::bigint), mention_count = 0
-WHERE channel_id = $2 AND actor_id = $3
+WHERE channel_id = $2 AND actor_id = $3 AND left_at IS NULL
 `
 
 type SetSeenParams struct {

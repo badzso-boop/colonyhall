@@ -129,6 +129,7 @@ type Channel struct {
 	MsgCount    int64
 	CreatedBy   uuid.UUID
 	CreatedAt   time.Time
+	Description string
 }
 
 type ChannelMember struct {
@@ -138,6 +139,7 @@ type ChannelMember struct {
 	MsgCount     int64
 	MentionCount int64
 	JoinedAt     time.Time
+	LeftAt       *time.Time
 }
 
 type ConsumerOffset struct {

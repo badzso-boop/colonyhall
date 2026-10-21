@@ -516,7 +516,7 @@ func (a *App) SeedDev(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
-	ch, err := a.Conversation.CreateChannel(ctx, owner, "general", conversation.KindPublic)
+	ch, err := a.Conversation.CreateChannel(ctx, owner, "general", "", conversation.KindPublic)
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}

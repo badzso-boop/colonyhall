@@ -1,6 +1,6 @@
 -- name: CreateChannel :exec
-INSERT INTO channel (id, workspace_id, kind, name, msg_count, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+INSERT INTO channel (id, workspace_id, kind, name, description, msg_count, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 -- name: ChannelByID :one
 SELECT * FROM channel WHERE id = $1;
@@ -9,24 +9,40 @@ SELECT * FROM channel WHERE id = $1;
 SELECT * FROM channel WHERE workspace_id = $1 AND name = $2;
 
 -- name: ChannelsForActor :many
-SELECT c.id, c.workspace_id, c.kind, c.name, c.msg_count, c.created_by, c.created_at,
-       (m.actor_id IS NOT NULL)::boolean AS is_member,
+SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.msg_count, c.created_by, c.created_at,
+       (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
 FROM channel c
-LEFT JOIN channel_member m ON m.channel_id = c.id AND m.actor_id = sqlc.arg(actor_id)
-WHERE c.workspace_id = sqlc.arg(workspace_id) AND (sqlc.arg(all_channels)::boolean OR m.actor_id IS NOT NULL)
+LEFT JOIN channel_member m ON m.channel_id = c.id AND m.actor_id = sqlc.arg(actor_id) AND m.left_at IS NULL
+WHERE c.workspace_id = sqlc.arg(workspace_id) AND (sqlc.arg(all_channels)::boolean OR (m.actor_id IS NOT NULL AND m.left_at IS NULL))
 ORDER BY c.name;
 
 -- name: AddMember :exec
-INSERT INTO channel_member (channel_id, actor_id, can_write, msg_count, mention_count, joined_at)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO channel_member (channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at)
+VALUES ($1, $2, $3, $4, $5, $6, NULL)
+ON CONFLICT (channel_id, actor_id)
+DO UPDATE SET can_write = EXCLUDED.can_write,
+              msg_count = EXCLUDED.msg_count,
+              joined_at = EXCLUDED.joined_at,
+              left_at = NULL;
 
 -- name: Member :one
-SELECT * FROM channel_member WHERE channel_id = $1 AND actor_id = $2;
+SELECT * FROM channel_member WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL;
 
 -- name: MemberIDs :many
-SELECT actor_id FROM channel_member WHERE channel_id = $1 ORDER BY actor_id;
+SELECT actor_id FROM channel_member WHERE channel_id = $1 AND left_at IS NULL ORDER BY actor_id;
+
+-- name: RemoveMember :exec
+UPDATE channel_member
+SET left_at = $3
+WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL;
+
+-- name: ListMembers :many
+SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at
+FROM channel_member
+WHERE channel_id = $1 AND left_at IS NULL
+ORDER BY joined_at ASC;
 
 -- name: InsertMessage :exec
 INSERT INTO message (id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body,
@@ -56,11 +72,11 @@ UPDATE channel SET msg_count = msg_count + 1 WHERE id = $1 RETURNING msg_count;
 
 -- name: SetSeen :exec
 UPDATE channel_member SET msg_count = GREATEST(msg_count, sqlc.arg(seen)::bigint), mention_count = 0
-WHERE channel_id = sqlc.arg(channel_id) AND actor_id = sqlc.arg(actor_id);
+WHERE channel_id = sqlc.arg(channel_id) AND actor_id = sqlc.arg(actor_id) AND left_at IS NULL;
 
 -- name: IncrementMentions :exec
 UPDATE channel_member SET mention_count = mention_count + 1
-WHERE channel_id = sqlc.arg(channel_id) AND actor_id = ANY(sqlc.arg(actor_ids)::uuid[]);
+WHERE channel_id = sqlc.arg(channel_id) AND actor_id = ANY(sqlc.arg(actor_ids)::uuid[]) AND left_at IS NULL;
 
 -- name: BumpThread :exec
 UPDATE message SET reply_count = reply_count + 1, last_reply_at = sqlc.arg(at)::timestamptz WHERE id = sqlc.arg(id);

@@ -24,7 +24,7 @@ func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.D
 func (s *Store) CreateChannel(ctx context.Context, c conversation.Channel) error {
 	err := s.q(ctx).CreateChannel(ctx, sqlcgen.CreateChannelParams{
 		ID: c.ID, WorkspaceID: c.WorkspaceID, Kind: string(c.Kind), Name: c.Name,
-		MsgCount: c.MsgCount, CreatedBy: c.CreatedBy, CreatedAt: c.CreatedAt,
+		Description: c.Description, MsgCount: c.MsgCount, CreatedBy: c.CreatedBy, CreatedAt: c.CreatedAt,
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -54,7 +54,7 @@ func (s *Store) ChannelsForActor(ctx context.Context, workspaceID, actorID ids.I
 	for _, r := range rows {
 		out = append(out, conversation.ChannelView{
 			Channel: conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
-				Name: r.Name, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt},
+				Name: r.Name, Description: r.Description, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt},
 			IsMember: r.IsMember, Unread: r.Unread, Mentions: r.Mentions,
 		})
 	}
@@ -73,6 +73,15 @@ func (s *Store) AddMember(ctx context.Context, m conversation.Member) error {
 	return err
 }
 
+// RemoveMember soft-removes a membership.
+func (s *Store) RemoveMember(ctx context.Context, channelID, actorID ids.ID, at time.Time) error {
+	return s.q(ctx).RemoveMember(ctx, sqlcgen.RemoveMemberParams{
+		ChannelID: channelID,
+		ActorID:   actorID,
+		LeftAt:    &at,
+	})
+}
+
 // Member loads a membership.
 func (s *Store) Member(ctx context.Context, channelID, actorID ids.ID) (conversation.Member, error) {
 	r, err := s.q(ctx).Member(ctx, sqlcgen.MemberParams{ChannelID: channelID, ActorID: actorID})
@@ -83,12 +92,33 @@ func (s *Store) Member(ctx context.Context, channelID, actorID ids.ID) (conversa
 		return conversation.Member{}, err
 	}
 	return conversation.Member{ChannelID: r.ChannelID, ActorID: r.ActorID, CanWrite: r.CanWrite,
-		MsgCount: r.MsgCount, MentionCount: r.MentionCount, JoinedAt: r.JoinedAt}, nil
+		MsgCount: r.MsgCount, MentionCount: r.MentionCount, JoinedAt: r.JoinedAt, LeftAt: r.LeftAt}, nil
 }
 
 // MemberIDs lists the channel's members.
 func (s *Store) MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error) {
 	return s.q(ctx).MemberIDs(ctx, channelID)
+}
+
+// ListMembers lists the channel's active members.
+func (s *Store) ListMembers(ctx context.Context, channelID ids.ID) ([]conversation.Member, error) {
+	rows, err := s.q(ctx).ListMembers(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]conversation.Member, len(rows))
+	for i, r := range rows {
+		out[i] = conversation.Member{
+			ChannelID:    r.ChannelID,
+			ActorID:      r.ActorID,
+			CanWrite:     r.CanWrite,
+			MsgCount:     r.MsgCount,
+			MentionCount: r.MentionCount,
+			JoinedAt:     r.JoinedAt,
+			LeftAt:       r.LeftAt,
+		}
+	}
+	return out, nil
 }
 
 // InsertMessage inserts a message.
@@ -161,7 +191,7 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 		return conversation.Channel{}, err
 	}
 	return conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
-		Name: r.Name, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}, nil
+		Name: r.Name, Description: r.Description, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}, nil
 }
 
 func toMessage(r sqlcgen.Message) conversation.Message {

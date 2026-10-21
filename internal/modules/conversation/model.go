@@ -27,6 +27,7 @@ type Channel struct {
 	WorkspaceID ids.ID
 	Kind        ChannelKind
 	Name        string
+	Description string
 	MsgCount    int64 // total messages, for unread badges
 	CreatedBy   ids.ID
 	CreatedAt   time.Time
@@ -42,6 +43,7 @@ type Member struct {
 	MsgCount     int64
 	MentionCount int64
 	JoinedAt     time.Time
+	LeftAt       *time.Time
 }
 
 // ChannelView is a channel as seen by one member, with unread counts.
@@ -120,15 +122,29 @@ const (
 
 // Errors returned by the conversation service.
 var (
-	ErrForbidden       = errors.New("not allowed in this channel")
-	ErrInvalidName     = errors.New("channel name must be 2-32 characters: lowercase letters, digits and '-'")
-	ErrEmptyBody       = errors.New("message is empty")
-	ErrBodyTooLong     = errors.New("message is too long")
-	ErrInvalidClientID = errors.New("client_msg_id is too long")
-	ErrBadThread       = errors.New("thread root must be a top-level message in the same channel")
-	ErrBadEmoji        = errors.New("emoji must be a short emoji sequence (1-32 characters, no text)")
-	ErrBadDM           = errors.New("a DM needs 1-8 other people from this workspace")
+	ErrForbidden          = errors.New("not allowed in this channel")
+	ErrInvalidName        = errors.New("channel name must be 2-32 characters: lowercase letters, digits and '-'")
+	ErrInvalidDescription = errors.New("channel description must be at most 250 characters")
+	ErrLastAdmin          = errors.New("cannot remove the last human admin of a private channel")
+	ErrMemberNotFound     = errors.New("member not found")
+	ErrEmptyBody          = errors.New("message is empty")
+	ErrBodyTooLong        = errors.New("message is too long")
+	ErrInvalidClientID    = errors.New("client_msg_id is too long")
+	ErrBadThread          = errors.New("thread root must be a top-level message in the same channel")
+	ErrBadEmoji           = errors.New("emoji must be a short emoji sequence (1-32 characters, no text)")
+	ErrBadDM              = errors.New("a DM needs 1-8 other people from this workspace")
 )
+
+// MaxDescriptionLen is the maximum allowed length of a channel description.
+const MaxDescriptionLen = 250
+
+// ValidateDescription checks channel description length.
+func ValidateDescription(desc string) error {
+	if len([]rune(desc)) > MaxDescriptionLen {
+		return ErrInvalidDescription
+	}
+	return nil
+}
 
 var (
 	namePattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,31}$`)
