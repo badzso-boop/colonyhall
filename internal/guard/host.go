@@ -68,13 +68,15 @@ type Supervisor struct {
 }
 
 type managed struct {
-	agent    *Agent
-	cancel   context.CancelFunc
-	done     chan struct{}
-	key      string
-	grants   []Grant // checked against this machine
-	conf     HostAgent
-	worktree *Worktree
+	agent       *Agent
+	cancel      context.CancelFunc
+	done        chan struct{}
+	key         string
+	grants      []Grant // checked against this machine
+	conf        HostAgent
+	worktree    *Worktree
+	activeProxy *SandboxProxy
+	proxyMu     sync.Mutex
 }
 
 // Start prepares the machine: token, roots, sandbox.
@@ -93,12 +95,15 @@ func (s *Supervisor) start(ctx context.Context) error {
 		return err
 	}
 	s.sandbox = DetectSandbox(ctx, s.home, s.Cfg.SandboxDir)
-	if s.sandbox != nil && s.Cfg.ClaudeTokenFile != "" {
-		raw, err := os.ReadFile(s.Cfg.ClaudeTokenFile)
-		if err != nil {
-			return fmt.Errorf("guard: claude_token_file: %w", err)
+	if s.sandbox != nil {
+		s.sandbox.NetworkMode = s.Cfg.SandboxNetwork
+		if s.Cfg.ClaudeTokenFile != "" {
+			raw, err := os.ReadFile(s.Cfg.ClaudeTokenFile)
+			if err != nil {
+				return fmt.Errorf("guard: claude_token_file: %w", err)
+			}
+			s.sandbox.ClaudeToken = strings.TrimSpace(string(raw))
 		}
-		s.sandbox.ClaudeToken = strings.TrimSpace(string(raw))
 	}
 	if s.sandbox == nil && *s.Cfg.RequireSandbox {
 		s.Log.Warn("guard: no working bwrap; work runs are disabled (install bubblewrap or set require_sandbox: false)")
@@ -133,7 +138,7 @@ func (s *Supervisor) RunHost(ctx context.Context) error {
 	if s.sandbox != nil {
 		sandbox = s.sandbox.Version
 	}
-	s.Log.Info("guard: host mode", "server", s.Cfg.Server, "roots", strings.Join(s.roots, ","), "sandbox", sandbox)
+	s.Log.Info("guard: host mode", "server", s.Cfg.Server, "roots", strings.Join(s.roots, ","), "sandbox", sandbox, "sandbox_network", s.Cfg.SandboxNetwork)
 	s.report(ctx)
 	t := time.NewTicker(s.Cfg.ConfigPoll)
 	defer t.Stop()
@@ -348,10 +353,55 @@ func cleanStaleMCPConfigs(dir string) {
 	}
 }
 
+func (s *Supervisor) startProxyForRun(m *managed, agentDir string) error {
+	if s.Cfg.SandboxNetwork == "open" {
+		return nil
+	}
+	m.proxyMu.Lock()
+	defer m.proxyMu.Unlock()
+	if m.activeProxy != nil {
+		_ = m.activeProxy.Close()
+		m.activeProxy = nil
+	}
+	allow := append([]string{}, ClientDefaultAllow[m.conf.Client]...)
+	allow = append(allow, s.Cfg.SandboxAllow...)
+	sockPath := filepath.Join(agentDir, "proxy.sock")
+	pr, err := StartSandboxProxy(ProxyConfig{
+		Mode:      s.Cfg.SandboxNetwork,
+		Allow:     allow,
+		Server:    s.Cfg.Server,
+		Client:    m.conf.Client,
+		AgentName: m.conf.Handle,
+		SockPath:  sockPath,
+		Log:       s.Log,
+	})
+	if err != nil {
+		return fmt.Errorf("guard: start sandbox proxy: %w", err)
+	}
+	m.activeProxy = pr
+	return nil
+}
+
 func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, grants []Grant, wt *Worktree) {
 	if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
 		s.Log.Error("guard: agent not started: unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)", "agent", "@"+ha.Handle)
 		return
+	}
+	m := &managed{key: key, grants: grants, conf: ha, worktree: wt, done: make(chan struct{})}
+	runner := s.Run
+	agentRunner := func(ctx context.Context, dir, name string, args []string, env []string) ([]byte, []byte, error) {
+		m.proxyMu.Lock()
+		pr := m.activeProxy
+		m.proxyMu.Unlock()
+		if pr != nil {
+			defer func() {
+				_ = pr.Close()
+				m.proxyMu.Lock()
+				m.activeProxy = nil
+				m.proxyMu.Unlock()
+			}()
+		}
+		return runner(ctx, dir, name, args, env)
 	}
 	newAdapter := s.NewAdapter
 	if newAdapter == nil {
@@ -360,12 +410,16 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			s.Log.Error("guard: unknown client", "agent", "@"+ha.Handle, "client", ha.Client)
 			return
 		}
-		newAdapter = func(ac AgentConfig) Adapter { return factory(ac, s.Run) }
+		newAdapter = func(ac AgentConfig) Adapter { return factory(ac, agentRunner) }
 	}
 	if ha.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox && ha.Client != "claude-code" {
 		// Only Claude Code can run a decision without any tools; other
 		// clients would read untrusted messages with tools, unsandboxed.
 		s.Log.Error("guard: agent not started: its client needs the sandbox even to decide", "agent", "@"+ha.Handle, "client", ha.Client)
+		return
+	}
+	if ha.Sandbox && s.sandbox != nil && !s.sandbox.HasUnshareNet && s.Cfg.SandboxNetwork != "open" && ha.Client != "claude-code" {
+		s.Log.Error("guard: agent not started: sandbox network isolation (--unshare-net) is not available", "agent", "@"+ha.Handle, "client", ha.Client)
 		return
 	}
 	dir, err := s.agentDir(ha)
@@ -390,7 +444,6 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	ac.Dir = filepath.Join(dir, "decide") // decision runs: an empty folder, no tools
 	_ = ac.defaults()
 
-	m := &managed{key: key, grants: grants, conf: ha, worktree: wt, done: make(chan struct{})}
 	var httpClient *http.Client
 	if s.host != nil {
 		httpClient = s.host.HTTP
@@ -429,6 +482,9 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		sb := s.sandbox
 		decideDir, client := ac.Dir, ha.Client
 		agent.DecideWrap = func(name string, args []string) (string, []string, []string, error) {
+			if err := s.startProxyForRun(m, dir); err != nil {
+				return "", nil, nil, err
+			}
 			a, env, err := sb.Command(client, dir, decideDir, nil, name, args)
 			return sb.Bwrap, a, env, err
 		}
@@ -464,6 +520,8 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		return WorkPolicy{Reason: "I cannot confirm my folder access with the server right now; try again later."}
 	case conf.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox:
 		return WorkPolicy{Reason: "Work is disabled on my machine: no sandbox (bwrap) is available there."}
+	case conf.Sandbox && s.sandbox != nil && !s.sandbox.HasUnshareNet && s.Cfg.SandboxNetwork != "open":
+		return WorkPolicy{Reason: "Work is disabled on my machine: sandbox network isolation (--unshare-net) is not available (update bubblewrap or set sandbox_network: open)."}
 	}
 	// Re-check every grant now: a run with write access could have swapped a
 	// granted subfolder for a symlink since the config arrived.
@@ -477,14 +535,19 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	}
 	grants = ok
 	work := filepath.Join(agentDir, "work")
-	for _, g := range grants { // prefer a writable folder, then a readable one
-		if g.Write {
-			work = g.Path
-			break
+	if m.worktree != nil {
+		work = m.worktree.Path
+		grants = append([]Grant{{Path: m.worktree.Path, Mode: "write", Write: true}}, grants...)
+	} else {
+		for _, g := range grants { // prefer a writable folder, then a readable one
+			if g.Write {
+				work = g.Path
+				break
+			}
 		}
-	}
-	if work == filepath.Join(agentDir, "work") && len(grants) > 0 {
-		work = grants[0].Path
+		if work == filepath.Join(agentDir, "work") && len(grants) > 0 {
+			work = grants[0].Path
+		}
 	}
 	var add []string
 	for _, g := range grants {
@@ -499,6 +562,9 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	if conf.Sandbox && s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
 		p.Wrap = func(name string, args []string) (string, []string, []string, error) {
+			if err := s.startProxyForRun(m, agentDir); err != nil {
+				return "", nil, nil, err
+			}
 			a, env, err := sb.Command(client, agentDir, work, grants, name, args)
 			return sb.Bwrap, a, env, err
 		}
@@ -514,6 +580,12 @@ func (s *Supervisor) stop(agentID string) {
 	if m == nil {
 		return
 	}
+	m.proxyMu.Lock()
+	if m.activeProxy != nil {
+		_ = m.activeProxy.Close()
+		m.activeProxy = nil
+	}
+	m.proxyMu.Unlock()
 	m.cancel()
 	<-m.done
 	s.Log.Info("guard: agent stopped", "agent", "@"+m.conf.Handle)

@@ -158,8 +158,16 @@ func clip(s string, max int) string {
 
 // WorkPrompt is the prompt of a work run: a real agent session with tools.
 func WorkPrompt(handle string, it PromptItem, task string, grants ...Grant) string {
+	return WorkPromptWithBranch(handle, "", it, task, grants...)
+}
+
+// WorkPromptWithBranch is the prompt of a work run, optionally naming the worktree branch.
+func WorkPromptWithBranch(handle, branch string, it PromptItem, task string, grants ...Grant) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are @%s in Colonyhall. Do this task in the current directory:\n%s\n\n", handle, task)
+	if branch != "" {
+		fmt.Fprintf(&b, "You work in a git worktree on branch %s; the guard commits your changes after the run; you cannot run git or any command.\n\n", branch)
+	}
 	if len(grants) > 0 {
 		// Named so the agent reports its real folders, not the sandbox's
 		// internal directory (task.md, 2026-10-21).

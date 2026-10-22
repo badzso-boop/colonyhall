@@ -253,8 +253,14 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	if in.Mode != AgentModeDirect && in.Mode != AgentModeCompact {
 		return AgentConfig{}, ErrBadAgentMode
 	}
+	sandbox := false
+	if in.Sandbox != nil {
+		sandbox = *in.Sandbox
+	} else if in.Mode == AgentModeCompact {
+		sandbox = true
+	}
 	if in.WorktreeRepo != "" {
-		if in.Mode != AgentModeDirect {
+		if (in.Mode == AgentModeDirect && sandbox) || (in.Mode == AgentModeCompact && !sandbox) {
 			return AgentConfig{}, ErrWorktreeDirectOnly
 		}
 		if err := ValidatePath(in.WorktreeRepo); err != nil {
@@ -268,12 +274,6 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 		if err := ValidatePath(in.RootDir); err != nil {
 			return AgentConfig{}, err
 		}
-	}
-	sandbox := false
-	if in.Sandbox != nil {
-		sandbox = *in.Sandbox
-	} else if in.Mode == AgentModeCompact {
-		sandbox = true
 	}
 	if (in.Mode == AgentModeDirect || !sandbox) && in.RootDir == "" {
 		return AgentConfig{}, ErrBadRootDir

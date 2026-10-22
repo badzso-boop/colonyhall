@@ -322,6 +322,7 @@ const I18N = {
         viewStart: "megjelenítés: eleje", viewEnd: "megjelenítés: vége",
         rawView: "Nyers", renderedView: "Formázott", download: "Letöltés",
         copy: "Másolás", copied: "Másolva!", showMore: "Több", showLess: "Kevesebb",
+        worktreeHint: "Worktree: az őr commitol az ágens helyett; semmi sem kerül pusholásra",
         errHostOffline: "A gép offline", errNotFound: "A fájl nem létezik",
         errDenied: "A fájl megosztása nem engedélyezett", errTooLarge: "A fájl túl nagy (limit felett)",
         errNotAFile: "Nem fájl (mappa vagy speciális fájl)", errTimeout: "Időtúllépés" },
@@ -373,6 +374,7 @@ const I18N = {
         viewStart: "display: start", viewEnd: "display: end",
         rawView: "Raw", renderedView: "Formatted", download: "Download",
         copy: "Copy", copied: "Copied!", showMore: "More", showLess: "Less",
+        worktreeHint: "Worktree: a guard commits for the agent; nothing is pushed",
         errHostOffline: "The machine is offline", errNotFound: "The file does not exist",
         errDenied: "Sharing this file is not allowed", errTooLarge: "The file is too large (exceeds limit)",
         errNotAFile: "Not a file (directory or special file)", errTimeout: "Request timed out" },
@@ -2230,6 +2232,7 @@ async function renderHosts() {
         renderHosts();
       };
       c.append(el("div", { className: "row" }, sel, client, mode, rootDir, worktreeRepo, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), maxSess, dailyLim, el("label", {}, allowPreview, " preview"), go));
+      c.append(el("div", { className: "muted small", style: "margin-top:2px; margin-bottom:8px;" }, L.worktreeHint));
     }
     panel.append(c);
   }

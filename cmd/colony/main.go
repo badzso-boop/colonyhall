@@ -5,10 +5,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -28,6 +30,19 @@ clients: %s
 `
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "sandbox-bridge" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := runSandboxBridge(ctx, os.Args[2:]); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				os.Exit(exitErr.ExitCode())
+			}
+			fmt.Fprintf(os.Stderr, "colony sandbox-bridge: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) < 2 || os.Args[1] != "guard" {
 		fmt.Fprintf(os.Stderr, usage, strings.Join(guard.AdapterNames(), ", "))
 		os.Exit(2)
@@ -97,4 +112,16 @@ func install(args []string) error {
 		return fmt.Errorf("-config is required")
 	}
 	return guard.Install(*config, *printOnly, *force, os.Stdout)
+}
+
+func runSandboxBridge(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("sandbox-bridge", flag.ContinueOnError)
+	sock := fs.String("sock", "", "path to unix domain socket")
+	port := fs.Int("port", 3128, "local TCP port to listen on")
+	_ = fs.Parse(args)
+	rest := fs.Args()
+	if *sock == "" || len(rest) == 0 {
+		return fmt.Errorf("usage: colony sandbox-bridge -sock <path> -port <port> -- <client> <args...>")
+	}
+	return guard.RunBridgeCommand(ctx, *sock, *port, rest[0], rest[1:])
 }

@@ -262,10 +262,25 @@ func TestWorktreeAssignmentAndReport(t *testing.T) {
 	agent := e.agentID()
 	host, hostToken := e.enroll("worktree-box")
 
-	// 1. Invalid assignment: worktree_repo is only allowed in direct mode
+	// 1. Invalid assignment: worktree_repo with mismatched sandbox modes is refused
+	// (direct with sandbox: true, or compact with sandbox: false)
 	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "worktree_repo": "/repo"}, nil); s != http.StatusBadRequest {
-		t.Fatalf("worktree_repo in compact mode allowed: %d", s)
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "sandbox": true, "worktree_repo": "/repo"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("worktree_repo in direct mode with sandbox: true should be refused: %d", s)
+	}
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": false, "worktree_repo": "/repo"}, nil); s != http.StatusBadRequest {
+		t.Fatalf("worktree_repo in compact mode with sandbox: false should be refused: %d", s)
+	}
+
+	// 1b. Valid assignment: worktree_repo in compact mode with sandbox: true
+	var compactAssigned hostAgent
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": true, "worktree_repo": "/repo"}, &compactAssigned); s != http.StatusOK {
+		t.Fatalf("worktree_repo in compact mode with sandbox: true should be allowed: %d", s)
+	}
+	if compactAssigned.WorktreeRepo != "/repo" || compactAssigned.Mode != "compact" || !compactAssigned.Sandbox {
+		t.Fatalf("unexpected compact assignment: %+v", compactAssigned)
 	}
 
 	// 2. Invalid assignment: bad path for worktree_repo

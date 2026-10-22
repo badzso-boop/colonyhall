@@ -531,8 +531,12 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		a.workMu.Lock()
 		a.workCancel = cancel
 		a.workMu.Unlock()
+		promptBranch := ""
+		if a.Sandbox && a.WorktreeBranch != "" {
+			promptBranch = a.WorktreeBranch
+		}
 		res, err := a.Adapter.Work(wctx, WorkRequest{
-			Prompt: WorkPrompt(a.getMe().Handle, it, task, p.Grants...), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
+			Prompt: WorkPromptWithBranch(a.getMe().Handle, promptBranch, it, task, p.Grants...), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
 			AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
 			Rules: rulesText, RulesVersion: rulesVer,
 		})
@@ -552,6 +556,10 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID)
 			return rerr
 		}
+		var commitLine string
+		if a.Sandbox && a.WorktreeRepo != "" {
+			commitLine = a.checkAndCommitWorktree(ctx, it, task, p.Dir)
+		}
 		if stopped {
 			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
 			text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
@@ -560,6 +568,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		}
 		if strings.TrimSpace(text) == "" {
 			text = "Done."
+		}
+		if commitLine != "" {
+			text = strings.TrimSpace(text) + "\n\n" + commitLine
 		}
 		// A work run answers a request (often a summary someone asked for), so
 		// like a direct run it may go past the short-reply limit.

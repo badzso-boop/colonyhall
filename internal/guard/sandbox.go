@@ -23,7 +23,10 @@ type Sandbox struct {
 	Root    string // the guard's sandbox folder (all agents)
 	// ClaudeToken, when set (from `claude setup-token`), is given to Claude
 	// instead of a copy of the user's login file.
-	ClaudeToken string
+	ClaudeToken   string
+	HasUnshareNet bool
+	NetworkMode   string // "filtered", "log", "open"
+	ColonyBin     string
 }
 
 // DetectSandbox finds a working bwrap, or returns nil.
@@ -38,7 +41,8 @@ func DetectSandbox(ctx context.Context, home, root string) *Sandbox {
 		return nil
 	}
 	ver, _ := exec.CommandContext(ctx, bin, "--version").Output()
-	return &Sandbox{Bwrap: bin, Version: strings.TrimSpace(string(ver)), Home: home, Root: root}
+	hasUnshareNet := exec.CommandContext(ctx, bin, "--unshare-net", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "true").Run() == nil
+	return &Sandbox{Bwrap: bin, Version: strings.TrimSpace(string(ver)), Home: home, Root: root, HasUnshareNet: hasUnshareNet}
 }
 
 // clientConfig lists every AI client's real config and login files. None
@@ -55,15 +59,47 @@ var passEnv = []string{"PATH", "LANG", "LC_ALL", "TERM", "USER", "LOGNAME", "TZ"
 	"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "GEMINI_API_KEY", "GOOGLE_API_KEY",
 	"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy", "SSL_CERT_FILE"}
 
+// colonyBinaryPath finds the path of the colony executable to mount inside the sandbox.
+func colonyBinaryPath() (string, error) {
+	if p, err := exec.LookPath("colony"); err == nil {
+		return filepath.Abs(p)
+	}
+	self, err := os.Executable()
+	if err == nil {
+		if strings.HasSuffix(self, "/colony") {
+			return filepath.EvalSymlinks(self)
+		}
+	}
+	return "", errors.New("cannot find colony binary")
+}
+
 // Command builds the bwrap command line around the client command, after
 // preparing the agent's own config folder, and returns the argv for bwrap
 // and the environment for the process.
 func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name string, args []string) ([]string, []string, error) {
-	a := []string{"--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
-		"--ro-bind", "/usr", "/usr", "--ro-bind", "/etc", "/etc",
-		"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/run"}
+	netIsolated := s.NetworkMode == "filtered" || s.NetworkMode == "log"
+	a := []string{"--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts"}
+	if netIsolated {
+		a = append(a, "--unshare-net")
+	}
+	a = append(a, "--ro-bind", "/usr", "/usr", "--ro-bind", "/etc", "/etc",
+		"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/run")
 	for _, d := range []string{"/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32", "/opt"} {
 		a = append(a, systemDir(d)...)
+	}
+	var colonyBin string
+	if netIsolated {
+		colonyBin = s.ColonyBin
+		if colonyBin == "" {
+			colonyBin, _ = colonyBinaryPath()
+		}
+		if colonyBin != "" && exists(colonyBin) {
+			a = append(a, "--ro-bind", colonyBin, colonyBin)
+		}
+		sockPath := filepath.Join(agentDir, "proxy.sock")
+		if exists(sockPath) {
+			a = append(a, "--bind", sockPath, sockPath)
+		}
 	}
 	// Machine secrets readable by root stay hidden.
 	for _, f := range []string{"/etc/shadow", "/etc/gshadow", "/etc/sudoers"} {
@@ -93,6 +129,13 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 			a = append(a, hide(d)...)
 		}
 	}
+	// Git metadata is read-only in the sandbox: the guard runs git outside it
+	// (the commit after a run), and a writable .git/config could name a
+	// filter or other command that git would run there. A worktree's .git is
+	// a pointer file (gitdir: ...); its repository's .git is protected too.
+	for _, p := range gitMetadata(append([]string{workDir}, grantPaths(grants)...)) {
+		a = append(a, "--ro-bind", p, p)
+	}
 	// Mounted after the grants, so a broad grant (e.g. the whole home)
 	// cannot reveal them: the deny list, every client's real config, the
 	// other agents' sandboxes.
@@ -121,11 +164,37 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 		if k == "CLAUDE_CODE_OAUTH_TOKEN" && s.ClaudeToken != "" {
 			continue
 		}
+		if netIsolated {
+			switch strings.ToUpper(k) {
+			case "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY":
+				continue
+			}
+		}
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
 		}
 	}
+	if netIsolated {
+		env = append(env,
+			"HTTPS_PROXY=http://127.0.0.1:3128",
+			"HTTP_PROXY=http://127.0.0.1:3128",
+			"https_proxy=http://127.0.0.1:3128",
+			"http_proxy=http://127.0.0.1:3128",
+			"NO_PROXY=",
+			"no_proxy=",
+		)
+	}
+	if client == "claude-code" {
+		env = append(env, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
+	}
 	env = append(env, clientEnv...)
+	if netIsolated && colonyBin != "" {
+		sockPath := filepath.Join(agentDir, "proxy.sock")
+		bridgeArgs := []string{"sandbox-bridge", "-sock", sockPath, "-port", "3128", "--", name}
+		bridgeArgs = append(bridgeArgs, args...)
+		a = append(a, "--chdir", workDir, "--", colonyBin)
+		return append(a, bridgeArgs...), env, nil
+	}
 	a = append(a, "--chdir", workDir, "--", name)
 	return append(a, args...), env, nil
 }
@@ -293,4 +362,58 @@ func denyCommands(r *os.Root, name string) error {
 	}
 	_ = r.Remove(name)
 	return r.WriteFile(name, raw, 0o600)
+}
+
+func grantPaths(grants []Grant) []string {
+	out := make([]string, 0, len(grants))
+	for _, g := range grants {
+		out = append(out, g.Path)
+	}
+	return out
+}
+
+// gitMetadata lists what to mount read-only for the given folders: a .git
+// pointer file and the repository's .git folder it points into, or a .git
+// folder itself.
+func gitMetadata(dirs []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if p != "" && !seen[p] && exists(p) {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	for _, d := range dirs {
+		gf := filepath.Join(d, ".git")
+		fi, err := os.Lstat(gf)
+		if err != nil {
+			continue
+		}
+		if fi.IsDir() {
+			add(gf)
+			continue
+		}
+		if !fi.Mode().IsRegular() {
+			continue
+		}
+		add(gf)
+		raw, err := os.ReadFile(gf)
+		if err != nil {
+			continue
+		}
+		gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir:")
+		if !ok {
+			continue
+		}
+		gitdir = strings.TrimSpace(gitdir)
+		if !filepath.IsAbs(gitdir) {
+			gitdir = filepath.Join(d, gitdir)
+		}
+		// <repo>/.git/worktrees/<name> → <repo>/.git
+		if parent := filepath.Dir(filepath.Clean(gitdir)); filepath.Base(parent) == "worktrees" {
+			add(filepath.Dir(parent))
+		}
+	}
+	return out
 }

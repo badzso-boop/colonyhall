@@ -24,6 +24,8 @@ type Config struct {
 	HostTokenFile    string            `yaml:"host_token_file"`
 	Roots            []string          `yaml:"roots"`             // the only folders agents can ever get
 	SandboxDir       string            `yaml:"sandbox_dir"`       // default ~/.local/share/colonyhall/sandbox
+	SandboxNetwork   string            `yaml:"sandbox_network"`   // filtered (default), log, open
+	SandboxAllow     []string          `yaml:"sandbox_allow"`     // additional machine-wide host:port allowlist entries
 	RequireSandbox   *bool             `yaml:"require_sandbox"`   // default true: no work runs without bwrap
 	AllowUnsandboxed bool              `yaml:"allow_unsandboxed"` // default false: permit agents with sandbox: false
 	ConfigPoll       time.Duration     `yaml:"config_poll"`
@@ -136,6 +138,12 @@ func (c *Config) validateHost() error {
 	}
 	if c.PreviewHost == "" {
 		c.PreviewHost = "127.0.0.1"
+	}
+	if c.SandboxNetwork == "" {
+		c.SandboxNetwork = "filtered"
+	}
+	if c.SandboxNetwork != "filtered" && c.SandboxNetwork != "log" && c.SandboxNetwork != "open" {
+		return fmt.Errorf("guard: invalid sandbox_network %q (must be filtered, log, or open)", c.SandboxNetwork)
 	}
 	return nil
 }

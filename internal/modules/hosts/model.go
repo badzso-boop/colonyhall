@@ -169,7 +169,7 @@ var (
 	ErrBadMode             = errors.New("mode must be read or write")
 	ErrBadAgentMode        = errors.New("mode must be direct or compact")
 	ErrBadRootDir          = errors.New("direct mode requires a root_dir")
-	ErrWorktreeDirectOnly  = errors.New("worktree_repo is only supported in direct mode")
+	ErrWorktreeDirectOnly  = errors.New("worktree_repo is only supported for direct agents or sandboxed compact agents")
 	ErrPreviewFullAccess   = errors.New("allow_preview needs a full-access agent (direct mode, no sandbox)")
 	ErrBadClient           = errors.New("client must be claude-code or antigravity")
 	ErrBadApprovals        = errors.New("approvals must be none or chat")

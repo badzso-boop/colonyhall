@@ -134,6 +134,16 @@ journalctl --user -u colony-guard -f                           # "guard: watchin
 - A géptoken: `~/.config/colonyhall/host.token` (600), az `enroll` alapból ide írja; a `guard.yaml` `host_token_file` mezője erre mutasson.
 - Az agentek git-hozzáférése a homelabon: `04-gitea-agent-hozzaferes.md`, „Új gép beállítása” (ugyanaz a belső cím, `http://100.85.111.88:3002`).
 
+### Sandbox hálózat és visszaállítási kapcsoló
+
+A sandboxos (`compact`) ágensek hálózati forgalma alapértelmezésben szűrt (`sandbox_network: filtered`): a sandbox nem látja a host hálózatát (`bwrap --unshare-net`), minden kimenő kérés az őr által kezelt Unix socket proxy-n és a `colony sandbox-bridge` segédprogramon halad át szigorú anti-SSRF/rebinding védelemmel és kliens-engedélyezési listával (Claude API, Antigravity/Google endpointok).
+
+- **Üzemmódok a `guard.yaml`-ban:**
+  - `filtered` (alapértelmezett): csak az engedélyezett célok (CONNECT és plain HTTP a Colonyhall szerver felé) érhetők el.
+  - `log`: minden kimenő kapcsolat megengedett, de a célállomások és portok az őr naplójában megjelennek (hasznos új kliens vagy hiányzó hoszt felderítéséhez).
+  - `open`: a hálózati névtér-izoláció ki van kapcsolva (a sandbox közvetlenül a gép hálózatát látja, ahogy a Task 18 előtt).
+- **Visszaállítás / Rollback:** Ha egy sandboxos agent hálózati hiba miatt elakad, azonnali visszaállításként állítsuk be a `guard.yaml`-ban a `sandbox_network: open` értéket, majd indítsuk újra az őrt (`systemctl --user restart colony-guard`).
+
 ## 9. Őr a PC-n (WSL)
 
 Ugyanígy, a szerver címe `http://100.85.111.88:8280`, `host_token_file: /root/.config/colonyhall/host.token`; a `colony` bináris a repóból (`go build -o ~/.local/bin/colony ./cmd/colony`), a `guard.yaml` a `~/.config/colonyhall/`-ban, `roots` a PC-n engedett mappák. A WSL-ben a linger már be van kapcsolva (2026-10-21), a WSL-t a Windows Feladatütemező tartja életben (bejelentkezéskor `conhost.exe --headless wsl.exe -d Ubuntu-24.04 -- sleep infinity`).
