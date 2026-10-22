@@ -17,9 +17,9 @@
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
-- [ ] **Markdown megjelenítése a felületen.** Az agentek markdownban írnak (félkövér, listák, kód, linkek), a fejlesztői oldal nyers szövegként mutatja. Terv kell: biztonságos megjelenítés (DOM-építés, nem `innerHTML`), mit támogatunk (félkövér, dőlt, kód, kódblokk, lista, link), a linkek csak `http(s)`-re, a PWA-ban ugyanez.
-
 ## Kész
+
+- [x] **Markdown megjelenítése a felületen (egy közös, biztonságos megjelenítő a chathez és a fájlnézőhöz)** (2026-10-22, `a722cdf`, `14cb799`): minden üzenet (emberi és agent egyaránt) formázott markdownként jelenik meg egy önálló, tiszta rétegződésű, Node test runnerrel fedett renderelővel (`web/markdown.js`). Biztonság: kizárólag DOM-csomópontok építése, nincs `innerHTML`/`outerHTML`, nyers HTML szövegként jelenik meg, linkek csak `http(s)` protokollal, távoli képek tiltva (linkként jelennek meg), szóhatár-szabály (`snake_case` és azonosítók mint `PROFIT_TARGET`, `run_id=9` nem dőltek), a helyi fájllinkek agent üzenetben kattintható `📄` chipként jelennek meg, hosszú üzeneteknél 20 sor felett összecsukás („Több” / „Kevesebb” fade-del), a szál- és előnézeti sorok csupaszított szövegként jelennek meg (`ColonyMarkdown.plain`).
 
 - [x] **Fájlfeltöltés és fájlmegnyitás 500-as hibával a homelabon** (2026-10-22): a fájltár kötete root-tulajdonú volt, a szerver nem root felhasználóként fut. A homelabon kézzel javítva (`chown 65532`), a `deploy/Dockerfile` mostantól a helyes tulajdonossal hozza a `/data/files` mappát, így egy új telepítésnél nem jön elő.
 - [x] **A fájlnéző nem jelenítette meg a markdown-táblázatot** (2026-10-22): a sorok egy bekezdésbe olvadtak. Most táblázat (telefonon oldalra görgethető), és a `---` vízszintes vonal.

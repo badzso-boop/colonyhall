@@ -666,6 +666,27 @@ Az agentek a válaszaikban gyakran hivatkoznak a gépükön lévő helyi fájlok
     - Érthető hibaüzenetek két nyelven (hu/en): gép offline, nem található, nem engedélyezett, túl nagy, nem fájl, időtúllépés.
   - Gépek panelen: "Fájlmegnyitás" doboz a két limit módosítására adminisztrátoroknak.
 
+### Biztonságos Markdown megjelenítés a felületen (2026-10-22, `feature/chat-markdown`)
+
+Minden chatüzenet (emberi és agent egyaránt) és a fájlnéző modál is egyetlen, közös, kliensoldali JavaScript modulon (`internal/httpserver/web/markdown.js`, globális `ColonyMarkdown`) keresztül jelenik meg formázottan.
+
+- **Kétrétegű architektúra:**
+  1. `ColonyMarkdown.parse(text) -> blocks`: tiszta, böngészőfüggetlen AST-elemző (Node.js beépített tesztfuttatóval `node --test` tesztelve).
+  2. `ColonyMarkdown.render(blocks, options) -> DocumentFragment`: kizárólag a DOM-ot érintő megjelenítő réteg.
+  3. `ColonyMarkdown.plain(text) -> string`: a formázásokat eltávolító, sima szöveges kivonatot előállító függvény (szál-visszautalásokhoz `↪ a szálban: …`, válaszsávhoz és értesítésekhez).
+- **Támogatott elemek:**
+  - Blokkok: bekezdések (a bekezdésen belüli egyszeres sortörések `<br>`-ként megmaradnak, ahogy a chatben elvárható), címsorok `#`…`######` (chatben félkövér, enyhén nagyobb betűméretű blokkok, a fájlnézőben valódi `<h1>`…`<h6>`), elkerített kódtömbök ` ``` ` nyelvfelirattal és „Másolás” gombbal, idézetek `>`, rendezett és rendezetlen listák egy szintű beágyazással (2+ szóközös behúzás), teendő elemek `- [ ]` / `- [x]` (nem kattintható ☐ / ☑ jelölőkkel), GitHub-stílusú táblázatok (`.md-table` konténerben, mobilon vízszintesen görgethetően), vízszintes elválasztó vonal `---`/`***`/`___`.
+  - Soron belüli (inline) formázás: `**félkövér**`, `__félkövér__`, `*dőlt*`, `_dőlt_`, `~~áthúzott~~`, `` `kód` `` (a belső tartalom nem kerül feldolgozásra), linkek `[szöveg](url)` és csupasz `http(s)://` URL-ek, helyi fájllinkek (`file://…`, `/home/…`, `~/…` stb.), visszaperjeles maszkolás (`\*`, `\_` stb.), valamint ismert kezelőnevek (`@handle`) kiemelése.
+- **Szigorú biztonsági szabályok:**
+  - **Tisztán DOM-alapú építés:** `document.createElement` és `document.createTextNode` hívások; soha nincs `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write` vagy szöveges `on*` eseményattribútum.
+  - **Nyers HTML védelme:** a szövegben érkező `<script>`, `<img onerror=…>` és egyéb HTML címkék szövegcsomópontként jelennek meg, nem tudnak lefutni.
+  - **Protokollszűrés:** linkek kizárólag `http:` és `https:` protokollal jöhetnek létre (`target="_blank"` és `rel="noopener noreferrer"` attribútumokkal); minden egyéb protokoll (`javascript:`, `data:`, `vbscript:`, relatív URL) formázatlan szövegként marad.
+  - **Távoli képek tiltása:** a markdown képhivatkozások (`![alt](url)`) nem töltenek be `<img>` elemet (ez IP- és olvasási szivárgást okozna); helyette `http(s)` esetén linkként jelennek meg, egyébként szövegként.
+  - **Szóhatár-szabály (Word-boundary):** a `snake_case` azonosítók és kódnevek (`PROFIT_TARGET`, `run_id=9`, `file_name.md`, `2*3*4`) nem dőlnek be; az `_` és `*` csak szóhatáron indíthat formázást.
+  - **Helyi fájllinkek izolációja:** agent üzenetekben interaktív `📄 <fájlnév>` chipként jelennek meg (amely kattintásra a szerveres fájlletöltést indítja); emberi üzenetekben szövegként maradnak, mivel a szerver csak agent üzenetből kér le helyi fájlt.
+  - **Hosszú üzenetek összecsukása:** mintegy 20 sor (340px) magasság felett a chatüzenet törzse összecsukódik, alul halványuló átmenetet (fade) és „Több” / „Kevesebb” kapcsolót kap.
+  - **Korlátok és linearitás:** 20 000 karakter feletti bemenetet az elemző közvetlenül sima szövegként ad vissza; a delimiter-illesztés O(N) lineáris idejű, nem érzékeny a reguláris kifejezések visszalépéses (catastrophic backtracking) túlterhelésére.
+
 ## Git és Gitea integráció (megvalósítva, 2026-10-16)
 
 A modul (`internal/modules/git/`) célja a git tárolók, pull requestek, issue-k és commitek integrálása a csatornákkal és agentekkel, külső kódmásolás nélkül.
