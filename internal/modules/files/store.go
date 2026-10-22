@@ -45,10 +45,10 @@ type Store interface {
 	// ListPendingFileFetchRequestsBefore lists pending requests created on or before a given time.
 	ListPendingFileFetchRequestsBefore(ctx context.Context, before time.Time) ([]FileFetchRequest, error)
 
-	// UpdateFileFetchRequestCompleted marks a request as done with its stored file ID.
+	// UpdateFileFetchRequestCompleted marks a pending request as done with its stored file ID; db.ErrConflict if it is not pending.
 	UpdateFileFetchRequestCompleted(ctx context.Context, id ids.ID, fileID ids.ID, completedAt time.Time) error
 
-	// UpdateFileFetchRequestFailed marks a request as failed with an error code.
+	// UpdateFileFetchRequestFailed marks a pending request as failed; db.ErrConflict if it is not pending.
 	UpdateFileFetchRequestFailed(ctx context.Context, id ids.ID, errorCode FileFetchErrorCode, completedAt time.Time) error
 
 	// GetFileFetchSettings loads workspace file fetch settings.

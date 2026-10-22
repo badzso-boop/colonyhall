@@ -1065,7 +1065,7 @@ async function openFileViewer(messageId, path, agentHandle, refresh = false) {
   $("fileViewerRefresh").onclick = () => openFileViewer(messageId, path, agentHandle, true);
   $("fileViewerControls").style.display = "none";
   $("fileViewerControls").innerHTML = "";
-  $("fileViewerBody").innerHTML = `<div class="muted" style="padding:20px;text-align:center;">${L.loadingFile}</div>`;
+  $("fileViewerBody").replaceChildren(el("div", { style: "padding:20px;text-align:center;", className: "muted", textContent: L.loadingFile }));
   $("fileViewerModal").className = "modal on";
 
   try {
@@ -1096,7 +1096,7 @@ async function openFileViewer(messageId, path, agentHandle, refresh = false) {
       }, 2000);
     }
   } catch (err) {
-    $("fileViewerBody").innerHTML = `<div style="color:var(--err);padding:20px;">${err.message}</div>`;
+    $("fileViewerBody").replaceChildren(el("div", { style: "color:var(--err);padding:20px;", textContent: err.message }));
   }
 }
 
@@ -1104,7 +1104,7 @@ async function renderFileFetchState(res, messageId, path, agentHandle) {
   $("fileViewerRefresh").style.display = "inline-block";
   if (res.state === "pending") {
     $("fileViewerStatus").textContent = L.loadingFile;
-    $("fileViewerBody").innerHTML = `<div class="muted" style="padding:20px;text-align:center;">${L.loadingFile}</div>`;
+    $("fileViewerBody").replaceChildren(el("div", { style: "padding:20px;text-align:center;", className: "muted", textContent: L.loadingFile }));
     return;
   }
   if (res.state === "failed") {
@@ -1118,7 +1118,7 @@ async function renderFileFetchState(res, messageId, path, agentHandle) {
       case "timeout": errText = L.errTimeout; break;
     }
     $("fileViewerStatus").textContent = L.statusAt + " ✕";
-    $("fileViewerBody").innerHTML = `<div style="padding:24px;text-align:center;color:var(--err);font-size:15px;"><strong>${errText}</strong></div>`;
+    $("fileViewerBody").replaceChildren(el("div", { style: "padding:24px;text-align:center;color:var(--err);font-size:15px;", textContent: errText }));
     return;
   }
   if (res.state === "done" && res.file) {
@@ -1158,7 +1158,7 @@ async function renderFetchedFileContent(f, originalPath) {
       });
       rawText = await res.text();
     } catch (e) {
-      body.innerHTML = `<div style="color:var(--err);padding:20px;">${e.message}</div>`;
+      body.replaceChildren(el("div", { style: "color:var(--err);padding:20px;", textContent: e.message }));
       return;
     }
 
@@ -1194,7 +1194,7 @@ async function renderFetchedFileContent(f, originalPath) {
       const infoSpan = el("span", { className: "muted", style: "font-size:12px;" });
 
       const loadRange = async () => {
-        body.innerHTML = `<div class="muted" style="padding:20px;text-align:center;">${L.loadingFile}</div>`;
+        body.replaceChildren(el("div", { style: "padding:20px;text-align:center;", className: "muted", textContent: L.loadingFile }));
         const oneMB = 1024 * 1024;
         let rangeHeader = "";
         if (viewMode === "start") {
@@ -1222,7 +1222,7 @@ async function renderFetchedFileContent(f, originalPath) {
             body.scrollTop = body.scrollHeight;
           }
         } catch (e) {
-          body.innerHTML = `<div style="color:var(--err);padding:20px;">${e.message}</div>`;
+          body.replaceChildren(el("div", { style: "color:var(--err);padding:20px;", textContent: e.message }));
         }
       };
 
@@ -1251,7 +1251,7 @@ async function renderFetchedFileContent(f, originalPath) {
         body.scrollTop = body.scrollHeight;
       }
     } catch (e) {
-      body.innerHTML = `<div style="color:var(--err);padding:20px;">${e.message}</div>`;
+      body.replaceChildren(el("div", { style: "color:var(--err);padding:20px;", textContent: e.message }));
     }
     return;
   }

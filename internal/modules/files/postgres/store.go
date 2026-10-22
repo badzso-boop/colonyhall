@@ -224,21 +224,34 @@ func (s *Store) ListPendingFileFetchRequestsBefore(ctx context.Context, before t
 // UpdateFileFetchRequestCompleted marks a request as done with its stored file ID.
 func (s *Store) UpdateFileFetchRequestCompleted(ctx context.Context, id ids.ID, fileID ids.ID, completedAt time.Time) error {
 	u := uuid.UUID(fileID)
-	return s.q(ctx).UpdateFileFetchRequestCompleted(ctx, sqlcgen.UpdateFileFetchRequestCompletedParams{
+	n, err := s.q(ctx).UpdateFileFetchRequestCompleted(ctx, sqlcgen.UpdateFileFetchRequestCompletedParams{
 		ID:          uuid.UUID(id),
 		FileID:      &u,
 		CompletedAt: &completedAt,
 	})
+	return notPending(n, err)
+}
+
+// notPending turns an update that matched no pending request into a conflict.
+func notPending(n int64, err error) error {
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return db.ErrConflict
+	}
+	return nil
 }
 
 // UpdateFileFetchRequestFailed marks a request as failed with an error code.
 func (s *Store) UpdateFileFetchRequestFailed(ctx context.Context, id ids.ID, errorCode files.FileFetchErrorCode, completedAt time.Time) error {
 	codeStr := string(errorCode)
-	return s.q(ctx).UpdateFileFetchRequestFailed(ctx, sqlcgen.UpdateFileFetchRequestFailedParams{
+	n, err := s.q(ctx).UpdateFileFetchRequestFailed(ctx, sqlcgen.UpdateFileFetchRequestFailedParams{
 		ID:          uuid.UUID(id),
 		ErrorCode:   &codeStr,
 		CompletedAt: &completedAt,
 	})
+	return notPending(n, err)
 }
 
 // GetFileFetchSettings loads workspace file fetch settings.

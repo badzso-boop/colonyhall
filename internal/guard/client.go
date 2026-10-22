@@ -471,6 +471,9 @@ func (c *Client) PendingFileFetches(ctx context.Context) ([]AgentPendingFileFetc
 }
 
 // UploadFetchedContent streams fetched file content to the server.
+// uploadTimeout bounds one fetched-file upload.
+const uploadTimeout = 110 * time.Second
+
 func (c *Client) UploadFetchedContent(ctx context.Context, id, contentType, filename, mtime string, content io.Reader, size int64) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, strings.TrimSuffix(c.BaseURL, "/")+"/api/v1/agent/file-fetch/"+id+"/content", content)
 	if err != nil {
@@ -493,10 +496,17 @@ func (c *Client) UploadFetchedContent(ctx context.Context, id, contentType, file
 	if size >= 0 {
 		req.ContentLength = size
 	}
-	hc := c.HTTP
-	if hc == nil {
-		hc = http.DefaultClient
+	// The client's overall timeout (30 s) would cut a large file short; the
+	// server fails an unanswered request after 2 minutes, so stop before that.
+	hc := &http.Client{}
+	if c.HTTP != nil {
+		copied := *c.HTTP
+		hc = &copied
 	}
+	hc.Timeout = 0
+	upCtx, cancel := context.WithTimeout(ctx, uploadTimeout)
+	defer cancel()
+	req = req.WithContext(upCtx)
 	res, err := hc.Do(req)
 	if err != nil {
 		return err

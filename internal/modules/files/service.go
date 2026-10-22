@@ -387,22 +387,14 @@ func (s *Service) RequestFileFetch(ctx context.Context, by identity.Actor, messa
 		CreatedAt:   now,
 	}
 
-	if err := s.Store.InsertFileFetchRequest(ctx, req); err != nil {
-		return FileFetchRequest{}, false, err
-	}
-
-	if s.Events != nil {
-		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchRequested, by.ID, msg.ChannelID, "files", req.ID, FetchRequestedPayload{
+	err = s.commit(ctx, func(ctx context.Context) error { return s.Store.InsertFileFetchRequest(ctx, req) },
+		by.WorkspaceID, EventFileFetchRequested, by.ID, msg.ChannelID, req.ID, FetchRequestedPayload{
 			RequestID: req.ID.String(),
 			AgentID:   author.ID.String(),
 			MessageID: msg.ID.String(),
 		}, now)
-		if err == nil {
-			_ = s.Events.Append(ctx, &ev)
-			if s.Bus != nil {
-				s.Bus.Notify(ev.Seq)
-			}
-		}
+	if err != nil {
+		return FileFetchRequest{}, false, err
 	}
 
 	return req, true, nil
@@ -430,26 +422,9 @@ func (s *Service) GetFileFetch(ctx context.Context, by identity.Actor, id ids.ID
 		return FileFetchRequest{}, nil, ErrForbidden
 	}
 
-	// Sweep if pending and timed out (> 2 min)
-	if req.State == FileFetchPending && s.Clock.Now().Sub(req.CreatedAt) >= 2*time.Minute {
-		now := s.Clock.Now()
-		_ = s.Store.UpdateFileFetchRequestFailed(ctx, req.ID, FileFetchErrorHostOffline, now)
-		req.State = FileFetchFailed
-		req.ErrorCode = FileFetchErrorHostOffline
-		req.CompletedAt = &now
-		if s.Events != nil {
-			ev, err := eventlog.NewEvent(s.IDs.New(), req.WorkspaceID, EventFileFetchFailed, req.AgentID, req.ChannelID, "files", req.ID, FetchFailedPayload{
-				RequestID: req.ID.String(),
-				AgentID:   req.AgentID.String(),
-				MessageID: req.MessageID.String(),
-				ErrorCode: string(FileFetchErrorHostOffline),
-			}, now)
-			if err == nil {
-				_ = s.Events.Append(ctx, &ev)
-				if s.Bus != nil {
-					s.Bus.Notify(ev.Seq)
-				}
-			}
+	if req.State == FileFetchPending && s.Clock.Now().Sub(req.CreatedAt) >= fetchTimeout {
+		if failed, err := s.expire(ctx, req); err == nil {
+			req = failed
 		}
 	}
 
@@ -498,22 +473,8 @@ func (s *Service) AgentPendingFileFetches(ctx context.Context, by identity.Actor
 	now := s.Clock.Now()
 	var out []AgentPendingFileFetch
 	for _, r := range reqs {
-		if now.Sub(r.CreatedAt) >= 2*time.Minute {
-			_ = s.Store.UpdateFileFetchRequestFailed(ctx, r.ID, FileFetchErrorHostOffline, now)
-			if s.Events != nil {
-				ev, err := eventlog.NewEvent(s.IDs.New(), r.WorkspaceID, EventFileFetchFailed, r.AgentID, r.ChannelID, "files", r.ID, FetchFailedPayload{
-					RequestID: r.ID.String(),
-					AgentID:   r.AgentID.String(),
-					MessageID: r.MessageID.String(),
-					ErrorCode: string(FileFetchErrorHostOffline),
-				}, now)
-				if err == nil {
-					_ = s.Events.Append(ctx, &ev)
-					if s.Bus != nil {
-						s.Bus.Notify(ev.Seq)
-					}
-				}
-			}
+		if now.Sub(r.CreatedAt) >= fetchTimeout {
+			_, _ = s.expire(ctx, r)
 			continue
 		}
 		out = append(out, AgentPendingFileFetch{
@@ -621,33 +582,23 @@ func (s *Service) SaveFetchedContent(ctx context.Context, by identity.Actor, req
 		HumanOnly:   true,
 	}
 
-	if err := s.Store.Insert(ctx, f); err != nil {
+	err = s.commit(ctx, func(ctx context.Context) error {
+		if err := s.Store.Insert(ctx, f); err != nil {
+			return err
+		}
+		return s.Store.UpdateFileFetchRequestCompleted(ctx, req.ID, f.ID, now)
+	}, by.WorkspaceID, EventFileFetchCompleted, by.ID, req.ChannelID, req.ID, FetchCompletedPayload{
+		RequestID: req.ID.String(),
+		AgentID:   by.ID.String(),
+		MessageID: req.MessageID.String(),
+		FileID:    f.ID.String(),
+	}, now)
+	if err != nil {
 		return FileFetchRequest{}, File{}, err
 	}
-
-	if err := s.Store.UpdateFileFetchRequestCompleted(ctx, req.ID, f.ID, now); err != nil {
-		return FileFetchRequest{}, File{}, err
-	}
-
 	req.State = FileFetchDone
 	req.FileID = f.ID
 	req.CompletedAt = &now
-
-	if s.Events != nil {
-		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchCompleted, by.ID, req.ChannelID, "files", req.ID, FetchCompletedPayload{
-			RequestID: req.ID.String(),
-			AgentID:   by.ID.String(),
-			MessageID: req.MessageID.String(),
-			FileID:    f.ID.String(),
-		}, now)
-		if err == nil {
-			_ = s.Events.Append(ctx, &ev)
-			if s.Bus != nil {
-				s.Bus.Notify(ev.Seq)
-			}
-		}
-	}
-
 	return req, f, nil
 }
 
@@ -673,58 +624,36 @@ func (s *Service) FailFileFetch(ctx context.Context, by identity.Actor, requestI
 	}
 
 	now := s.Clock.Now()
-	if err := s.Store.UpdateFileFetchRequestFailed(ctx, req.ID, errorCode, now); err != nil {
+	err = s.commit(ctx, func(ctx context.Context) error {
+		return s.Store.UpdateFileFetchRequestFailed(ctx, req.ID, errorCode, now)
+	}, by.WorkspaceID, EventFileFetchFailed, by.ID, req.ChannelID, req.ID, FetchFailedPayload{
+		RequestID: req.ID.String(),
+		AgentID:   by.ID.String(),
+		MessageID: req.MessageID.String(),
+		ErrorCode: string(errorCode),
+	}, now)
+	if err != nil {
 		return FileFetchRequest{}, err
 	}
-
 	req.State = FileFetchFailed
 	req.ErrorCode = errorCode
 	req.CompletedAt = &now
-
-	if s.Events != nil {
-		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchFailed, by.ID, req.ChannelID, "files", req.ID, FetchFailedPayload{
-			RequestID: req.ID.String(),
-			AgentID:   by.ID.String(),
-			MessageID: req.MessageID.String(),
-			ErrorCode: string(errorCode),
-		}, now)
-		if err == nil {
-			_ = s.Events.Append(ctx, &ev)
-			if s.Bus != nil {
-				s.Bus.Notify(ev.Seq)
-			}
-		}
-	}
-
 	return req, nil
 }
 
 // SweepPending marks pending requests older than 2 minutes as failed with host_offline.
 func (s *Service) SweepPending(ctx context.Context) (int, error) {
 	now := s.Clock.Now()
-	cutoff := now.Add(-2 * time.Minute)
+	cutoff := now.Add(-fetchTimeout)
 	expired, err := s.Store.ListPendingFileFetchRequestsBefore(ctx, cutoff)
 	if err != nil {
 		return 0, err
 	}
 	count := 0
 	for _, r := range expired {
-		_ = s.Store.UpdateFileFetchRequestFailed(ctx, r.ID, FileFetchErrorHostOffline, now)
-		if s.Events != nil {
-			ev, err := eventlog.NewEvent(s.IDs.New(), r.WorkspaceID, EventFileFetchFailed, r.AgentID, r.ChannelID, "files", r.ID, FetchFailedPayload{
-				RequestID: r.ID.String(),
-				AgentID:   r.AgentID.String(),
-				MessageID: r.MessageID.String(),
-				ErrorCode: string(FileFetchErrorHostOffline),
-			}, now)
-			if err == nil {
-				_ = s.Events.Append(ctx, &ev)
-				if s.Bus != nil {
-					s.Bus.Notify(ev.Seq)
-				}
-			}
+		if _, err := s.expire(ctx, r); err == nil {
+			count++
 		}
-		count++
 	}
 	return count, nil
 }
@@ -752,22 +681,69 @@ func (s *Service) UpdateFileFetchSettings(ctx context.Context, by identity.Actor
 		MaxFileMB:   maxFileMB,
 		UpdatedAt:   now,
 	}
-	if err := s.Store.UpsertFileFetchSettings(ctx, st); err != nil {
-		return FileFetchSettings{}, err
-	}
-	if s.Events != nil {
-		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchSettingsUpdated, by.ID, ids.Nil, "files", by.WorkspaceID, FetchSettingsUpdatedPayload{
+	err := s.commit(ctx, func(ctx context.Context) error { return s.Store.UpsertFileFetchSettings(ctx, st) },
+		by.WorkspaceID, EventFileFetchSettingsUpdated, by.ID, ids.Nil, by.WorkspaceID, FetchSettingsUpdatedPayload{
 			MaxImageMB: maxImageMB,
 			MaxFileMB:  maxFileMB,
 		}, now)
-		if err == nil {
-			_ = s.Events.Append(ctx, &ev)
-			if s.Bus != nil {
-				s.Bus.Notify(ev.Seq)
-			}
-		}
+	if err != nil {
+		return FileFetchSettings{}, err
 	}
 	return st, nil
+}
+
+// fetchTimeout fails a request the guard has not answered: its machine is offline.
+const fetchTimeout = 2 * time.Minute
+
+// commit applies a state change and appends its event in one transaction
+// (transactional outbox), then wakes the bus. A request that is no longer
+// pending (the store reports a conflict) yields ErrInvalidRequestState.
+func (s *Service) commit(ctx context.Context, change func(context.Context) error, workspaceID ids.ID, typ string, actorID, channelID, aggID ids.ID, payload any, at time.Time) error {
+	var seq int64
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+		if err := change(ctx); err != nil {
+			return err
+		}
+		if s.Events == nil {
+			return nil
+		}
+		ev, err := eventlog.NewEvent(s.IDs.New(), workspaceID, typ, actorID, channelID, "files", aggID, payload, at)
+		if err != nil {
+			return err
+		}
+		if err := s.Events.Append(ctx, &ev); err != nil {
+			return err
+		}
+		seq = ev.Seq
+		return nil
+	})
+	if errors.Is(err, db.ErrConflict) {
+		return ErrInvalidRequestState
+	}
+	if err == nil && seq > 0 && s.Bus != nil {
+		s.Bus.Notify(seq)
+	}
+	return err
+}
+
+// expire fails a pending request with host_offline.
+func (s *Service) expire(ctx context.Context, r FileFetchRequest) (FileFetchRequest, error) {
+	now := s.Clock.Now()
+	err := s.commit(ctx, func(ctx context.Context) error {
+		return s.Store.UpdateFileFetchRequestFailed(ctx, r.ID, FileFetchErrorHostOffline, now)
+	}, r.WorkspaceID, EventFileFetchFailed, r.AgentID, r.ChannelID, r.ID, FetchFailedPayload{
+		RequestID: r.ID.String(),
+		AgentID:   r.AgentID.String(),
+		MessageID: r.MessageID.String(),
+		ErrorCode: string(FileFetchErrorHostOffline),
+	}, now)
+	if err != nil {
+		return r, err
+	}
+	r.State = FileFetchFailed
+	r.ErrorCode = FileFetchErrorHostOffline
+	r.CompletedAt = &now
+	return r, nil
 }
 
 func isImageMime(mime, filename string) bool {

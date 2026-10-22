@@ -236,6 +236,9 @@ func (s *Store) UpdateFileFetchRequestCompleted(_ context.Context, id ids.ID, fi
 	if !ok {
 		return db.ErrNotFound
 	}
+	if req.State != files.FileFetchPending {
+		return db.ErrConflict
+	}
 	req.State = files.FileFetchDone
 	req.FileID = fileID
 	req.CompletedAt = &completedAt
@@ -250,6 +253,9 @@ func (s *Store) UpdateFileFetchRequestFailed(_ context.Context, id ids.ID, error
 	req, ok := s.requests[id]
 	if !ok {
 		return db.ErrNotFound
+	}
+	if req.State != files.FileFetchPending {
+		return db.ErrConflict
 	}
 	req.State = files.FileFetchFailed
 	req.ErrorCode = errorCode

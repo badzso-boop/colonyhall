@@ -67,15 +67,15 @@ FROM file_fetch_request
 WHERE state = 'pending' AND created_at <= $1
 ORDER BY created_at ASC;
 
--- name: UpdateFileFetchRequestCompleted :exec
+-- name: UpdateFileFetchRequestCompleted :execrows
 UPDATE file_fetch_request
 SET state = 'done', file_id = $2, completed_at = $3
-WHERE id = $1;
+WHERE id = $1 AND state = 'pending';
 
--- name: UpdateFileFetchRequestFailed :exec
+-- name: UpdateFileFetchRequestFailed :execrows
 UPDATE file_fetch_request
 SET state = 'failed', error_code = $2, completed_at = $3
-WHERE id = $1;
+WHERE id = $1 AND state = 'pending';
 
 -- name: GetFileFetchSettings :one
 SELECT workspace_id, max_image_mb, max_file_mb, updated_at

@@ -448,10 +448,10 @@ func (q *Queries) ListPendingFileFetchRequestsBefore(ctx context.Context, create
 	return items, nil
 }
 
-const updateFileFetchRequestCompleted = `-- name: UpdateFileFetchRequestCompleted :exec
+const updateFileFetchRequestCompleted = `-- name: UpdateFileFetchRequestCompleted :execrows
 UPDATE file_fetch_request
 SET state = 'done', file_id = $2, completed_at = $3
-WHERE id = $1
+WHERE id = $1 AND state = 'pending'
 `
 
 type UpdateFileFetchRequestCompletedParams struct {
@@ -460,15 +460,18 @@ type UpdateFileFetchRequestCompletedParams struct {
 	CompletedAt *time.Time
 }
 
-func (q *Queries) UpdateFileFetchRequestCompleted(ctx context.Context, arg UpdateFileFetchRequestCompletedParams) error {
-	_, err := q.db.Exec(ctx, updateFileFetchRequestCompleted, arg.ID, arg.FileID, arg.CompletedAt)
-	return err
+func (q *Queries) UpdateFileFetchRequestCompleted(ctx context.Context, arg UpdateFileFetchRequestCompletedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateFileFetchRequestCompleted, arg.ID, arg.FileID, arg.CompletedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const updateFileFetchRequestFailed = `-- name: UpdateFileFetchRequestFailed :exec
+const updateFileFetchRequestFailed = `-- name: UpdateFileFetchRequestFailed :execrows
 UPDATE file_fetch_request
 SET state = 'failed', error_code = $2, completed_at = $3
-WHERE id = $1
+WHERE id = $1 AND state = 'pending'
 `
 
 type UpdateFileFetchRequestFailedParams struct {
@@ -477,9 +480,12 @@ type UpdateFileFetchRequestFailedParams struct {
 	CompletedAt *time.Time
 }
 
-func (q *Queries) UpdateFileFetchRequestFailed(ctx context.Context, arg UpdateFileFetchRequestFailedParams) error {
-	_, err := q.db.Exec(ctx, updateFileFetchRequestFailed, arg.ID, arg.ErrorCode, arg.CompletedAt)
-	return err
+func (q *Queries) UpdateFileFetchRequestFailed(ctx context.Context, arg UpdateFileFetchRequestFailedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateFileFetchRequestFailed, arg.ID, arg.ErrorCode, arg.CompletedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertFileFetchSettings = `-- name: UpsertFileFetchSettings :exec

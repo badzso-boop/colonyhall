@@ -441,3 +441,53 @@ func TestAgent_OtherGuardAgentIgnored(t *testing.T) {
 		// Expected: no extra signal
 	}
 }
+
+// A log keeps growing while it is uploaded: the snapshot sends exactly the
+// size it had when opened, so the request's Content-Length stays true.
+func TestOpenSnapshotFixesSizeOfGrowingFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "app.log")
+	if err := os.WriteFile(p, []byte("line 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, size, err := openSnapshot(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	w, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.WriteString("line 2 written during the upload\n")
+	_ = w.Close()
+
+	got, err := io.ReadAll(io.LimitReader(f, size))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "line 1\n" || size != 7 {
+		t.Fatalf("snapshot: size %d, content %q", size, got)
+	}
+}
+
+// The checked path is re-verified after open: a path that is now a symlink
+// to somewhere else, or not a regular file, is refused.
+func TestOpenSnapshotRefusesSwappedPath(t *testing.T) {
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "outside.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checked := filepath.Join(dir, "report.txt")
+	if err := os.Symlink(secret, checked); err != nil {
+		t.Fatal(err)
+	}
+	if f, _, err := openSnapshot(checked); err == nil {
+		_ = f.Close()
+		t.Fatal("a path swapped for a symlink after the check must be refused")
+	}
+	if f, _, err := openSnapshot(dir); err == nil {
+		_ = f.Close()
+		t.Fatal("a directory must be refused")
+	}
+}

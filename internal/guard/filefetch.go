@@ -3,6 +3,7 @@ package guard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -193,6 +194,31 @@ func detectMIME(path string) (string, bool) {
 	return chosenMIME, isImage
 }
 
+// openSnapshot opens the checked path and makes sure the opened file is
+// still that regular file: between the check and the open a writable folder
+// could have swapped it for a symlink pointing elsewhere. The size is the
+// one at open time, so a growing log is sent as a consistent snapshot.
+func openSnapshot(realPath string) (*os.File, int64, error) {
+	f, err := os.Open(realPath)
+	if err != nil {
+		return nil, 0, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, 0, err
+	}
+	if !fi.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, 0, errors.New("not a regular file")
+	}
+	if opened, err := os.Readlink(fmt.Sprintf("/proc/self/fd/%d", f.Fd())); err == nil && opened != realPath {
+		_ = f.Close()
+		return nil, 0, fmt.Errorf("path changed after the check: %s", opened)
+	}
+	return f, fi.Size(), nil
+}
+
 func (a *Agent) homeDir() string {
 	home, _ := os.UserHomeDir()
 	return home
@@ -312,41 +338,42 @@ func (a *Agent) serveFileFetch(ctx context.Context, req AgentPendingFileFetch) {
 		return
 	}
 
-	fi, err := os.Stat(realPath)
+	f, size, err := openSnapshot(realPath)
 	if err != nil {
 		code := "denied"
 		if os.IsNotExist(err) {
 			code = "not_found"
 		}
+		a.Log.Warn("guard: file fetch open refused", "agent", a.logName(), "path", req.Path, "err", err, "req_id", req.ID)
 		_ = a.Client.FailFileFetch(ctx, req.ID, code)
 		return
 	}
+	defer func() { _ = f.Close() }()
 
 	limit := req.MaxFileBytes
 	if isImage {
 		limit = req.MaxImageBytes
 	}
-	if limit > 0 && fi.Size() > limit {
-		a.Log.Warn("guard: file fetch too large", "agent", a.logName(), "path", req.Path, "size", fi.Size(), "limit", limit, "req_id", req.ID)
+	if limit > 0 && size > limit {
+		a.Log.Warn("guard: file fetch too large", "agent", a.logName(), "path", req.Path, "size", size, "limit", limit, "req_id", req.ID)
 		_ = a.Client.FailFileFetch(ctx, req.ID, "too_large")
 		return
 	}
-
-	f, err := os.Open(realPath)
+	fi, err := f.Stat()
 	if err != nil {
 		_ = a.Client.FailFileFetch(ctx, req.ID, "denied")
 		return
 	}
-	defer func() { _ = f.Close() }()
 
 	filename := filepath.Base(realPath)
 	mtime := fi.ModTime().UTC().Format(time.RFC3339)
 
-	err = a.Client.UploadFetchedContent(ctx, req.ID, mimeType, filename, mtime, f, fi.Size())
+	// A log grows while it is sent: send the size it had when opened.
+	err = a.Client.UploadFetchedContent(ctx, req.ID, mimeType, filename, mtime, io.LimitReader(f, size), size)
 	if err != nil {
 		a.Log.Warn("guard: file fetch upload error", "agent", a.logName(), "path", req.Path, "err", err, "req_id", req.ID)
 		return
 	}
 
-	a.Log.Info("guard: file fetch completed", "agent", a.logName(), "path", req.Path, "size", fi.Size(), "req_id", req.ID)
+	a.Log.Info("guard: file fetch completed", "agent", a.logName(), "path", req.Path, "size", size, "req_id", req.ID)
 }

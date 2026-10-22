@@ -1544,6 +1544,14 @@ func testFiles(t *testing.T, b Backend) {
 	if failReq.State != files.FileFetchFailed || failReq.ErrorCode != files.FileFetchErrorDenied {
 		t.Fatalf("unexpected failReq: %+v", failReq)
 	}
+	// Only a pending request changes state: a late upload or a second sweep
+	// must not overwrite a finished one.
+	if err := b.Files.UpdateFileFetchRequestCompleted(ctx, req2ID, f3ID, failedAt); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("completing a failed request: want ErrConflict, got %v", err)
+	}
+	if err := b.Files.UpdateFileFetchRequestFailed(ctx, req1ID, files.FileFetchErrorHostOffline, failedAt); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("failing a done request: want ErrConflict, got %v", err)
+	}
 
 	// Sweep list
 	req3ID := gen.New()
