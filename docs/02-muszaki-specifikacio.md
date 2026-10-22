@@ -482,6 +482,62 @@ A sandboxban (`compact` mód) futó munkafutások hálózati hozzáférése izol
   - `sandbox_network`: hálózati mód (`filtered` [alapértelmezett], `log` [minden kimenő forgalom engedélyezett és naplózott], `open` [unshare-net kikapcsolva, rollback kapcsoló]).
   - `sandbox_allow`: egyedi hoszt:port listát tartalmazó kiegészítő szabályok (pl. `api.anthropic.com:443`, `*.google.com:443`). Exact match és csillaggal kezdődő wildcard (`*.domain`) támogatott.
 
+### Webolvasás sandboxos agenteknek (`web_read`, `internal/guard/webread.go`, `webread_mcp.go`)
+
+A sandboxban (`compact` mód) futó munkafutások számára biztosított, szigorúan csak olvasható weboldal-elérés.
+
+- **Jogosultság és hozzárendelési mező:**
+  - `allow_web_read` (boolean, default: `false`): az agent gép-hozzárendelésének (`AssignRequest`, `HostAgent`) mezője.
+  - Szigorú érvényesítés: kizárólag `sandbox: true` mellett engedélyezett. Teljes hozzáférésű (`sandbox: false`) agent esetén a szerver 400 Bad Request hibával elutasítja (`allow_web_read is only valid for sandboxed agents`).
+  - Felület: az adminisztrációs felületen a hozzárendelési űrlapon csak a „sandbox” bejelölésekor látható checkbox és magyar/angol magyarázó szöveg.
+- **MCP szerver és híd architektúra:**
+  - Az őr a munkafutás kezdetén elindít egy Streamable HTTP MCP szervert, amely a gazdagépen egy belső Unix domain socketen figyel (`<agent_dir>/webread.sock`).
+  - A `colony sandbox-bridge` támogatja a multi-socket továbbítást: a sandbox belső hálózatán a `127.0.0.1:3129` TCP portot közvetlenül a `webread.sock` Unix sockethez köti (a 3128-as port a proxy forgalmat viszi a `proxy.sock`-ra).
+  - A sandboxban beállításra kerül a `NO_PROXY=127.0.0.1,localhost` környezeti változó, megelőzve, hogy a kliensek HTTP könyvtárai a 3129-es helyi híd forgalmát a 3128-as külső HTTP proxy felé irányítsák (amely anti-SSRF miatt elutasítaná a loopbacket).
+  - Kliens konfiguráció:
+    - **Claude Code**: `--mcp-config <agent_dir>/config/mcp.json` (`{"mcpServers":{"colony-web":{"type":"http","url":"http://127.0.0.1:3129/mcp"}}}`), `--strict-mcp-config` és `--allowedTools mcp__colony-web__web_read`.
+    - **Antigravity**: `~/.gemini/config/mcp_config.json` konfigurációs fájl (`url: "http://127.0.0.1:3129/mcp"`), és a munkafutásonként generált `settings.json`-ban `perms["allow"] = []any{"mcp(colony-web/*)"}` engedélyezés (miközben `command(*)` tiltva marad).
+- **Az eszköz specifikációja (`web_read`):**
+  - **Bemeneti paraméterek:**
+    - `url` (string, kötelező): a letöltendő oldal címe (`http://` vagy `https://`).
+    - `offset` (int, opcionális): a szöveges tartalom kezdőpozíciója rúnákban (karakterekben), hosszú oldalak lapozásához.
+    - `max_chars` (int, opcionális, alapértelmezett: 20 000, maximum: 50 000): a kért szövegrészlet maximális hossza rúnákban.
+  - **Kimeneti struktúra:**
+    - `final_url` (string): az esetleges átirányítások utáni végleges URL.
+    - `status` (int): HTTP státuszkód (pl. 200).
+    - `content_type` (string): a válasz MIME-típusa.
+    - `title` (string): a HTML oldal címe (`<title>`), egyéb típusoknál üres.
+    - `text` (string): a lapozott, olvasható szöveges tartalom.
+    - `offset` (int): az aktuális kezdőpozíció.
+    - `next_offset` (int, opcionális): a következő lap kezdőpozíciója, amennyiben maradt még szöveg.
+    - `truncated` (bool): `true`, ha a letöltött nyers válasz elérte a testméret-korlátot.
+  - **Lapozás és gyorsítótár (cache):** a munkafutás során letöltött oldalak a munkafutás végéig memóriában maradnak a végleges URL alapján; az `offset` és `max_chars` szerinti lapozás nem indít új HTTP kérést a hálózatra.
+  - **Biztonsági keretezés (Prompt Injection védelem):** a visszakapott szöveg formátuma `<web_content url="..." fetched_at="...">...</web_content>`, a belső szövegben előforduló `</web_content>` lezárások `&lt;/web_content&gt;` formában escape-eltek. A szerszám leírása és a munkafelszólítás explicit instrukciót ad: az oldal tartalma kizárólag adat, soha nem utasítás.
+- **Letöltő motor (Fetcher) és biztonsági szabályok:**
+  - Kizárólag `GET` kérés, `http` és `https` sémával. URL hossza legfeljebb 2048 karakter. Tilos a userinfo (`user:pass@`) és a nyers IP-címek használata.
+  - **Anti-SSRF és DNS rebinding pinning:**
+    - Címfeloldás egyetlen alkalommal történik a `net.DefaultResolver` segítségével.
+    - Minden feloldott IP-cím szigorú szűrésen esik át: azonnal tiltott a loopback (127.0.0.0/8, ::1), privát címek (RFC 1918 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16, fe80::/10), CGNAT (100.64.0.0/10), IPv6 ULA (fc00::/7), multicast és unspecified címek.
+    - **Nincs szerver-kivétel:** a Colonyhall szerver és belső homelab szolgáltatások nem érhetők el a `web_read` eszközön keresztül (az agent a szervert a dedikált szerver MCP eszközökön éri el).
+    - A kapcsolatot egy egyedi `DialContext` hozza létre, amely közvetlenül a sikeresen ellenőrzött konkrét IP-címre tárcsáz (kiküszöbölve az olyan támadásokat, ahol egy második DNS kérés egy belső IP-re váltana).
+  - **Átirányítások (Redirects):** legfeljebb 5 ugrás. Minden ugrásnál az új URL és annak IP-címei az eredeti szigorú szabályok szerint újraellenőrzésre kerülnek.
+  - **Fejlécek és környezet:** fix `User-Agent: ColonyhallGuard-web_read/1 (+read-only)` és `Accept` fejléc. Nincs külső proxy (`Proxy: nil`), nincs bejelentkezési fejléc (`Authorization`), nincs süti-tár (`Jar: nil`).
+  - **Időkorlátok és mérethatárok:** kapcsolódási timeout: 10 s, teljes kérés timeout: 30 s. Választörzs legfeljebb 5 MB (felette a letöltés megszakad és `truncated: true` jelzést kap).
+  - **Tartalom feldolgozása:**
+    - `text/html`: `golang.org/x/net/html` segítségével fa-bejárás; a `script`, `style`, `noscript`, `svg`, `iframe`, `nav`, `footer`, `form` elemek eldobása; címsorok (`#`), kódblokkok (fenced blocks), táblázatok és abszolút linkek (`szöveg (url)`) megőrzése; `<title>` kinyerése.
+    - Szöveges MIME típusok (`text/plain`, `text/markdown`, `application/json`, `application/xml`, `text/csv`, stb.): nyers szövegként átadva, HTTP fejlécből vett karakterkészlet konverzióval (alapértelmezetten UTF-8, érvénytelen bájtok cseréjével).
+    - Bináris / nem szöveges állományok (PDF, képek, archívumok): a tartalom helyett rövid tájékoztató szöveg készül ("not a text page: application/pdf, 1.2 MB").
+- **Futási korlátok és gazdagép szűrés:**
+  - **Futásonkénti keret:** egyetlen munkafutás alatt legfeljebb 30 letöltés és összesen 10 MB tölthető le; túllépés esetén a hívás hibával tér vissza ("web_read limit reached for this run").
+  - **`guard.yaml` szűrők:**
+    - `web_read_allow: ["*.go.dev", "docs.python.org"]`: ha meg van adva, KIZÁRÓLAG a listán szereplő hosztok érhetők el (pontos egyezés vagy `*.` előtag).
+    - `web_read_deny: [...]`: tiltott hosztok listája, amelyet az allow lista előtt ellenőriz a rendszer.
+    - Ha egyik sincs kitöltve: bármely nyilvános internetes oldal letölthető.
+- **Láthatóság és jelentés:**
+  - **Őr napló:** minden letöltési kísérlet strukturált naplóbejegyzést kap (`guard: web_read`, agent, végleges URL, HTTP kód, méret, státusz — a letöltött tartalom soha nem kerül naplózásra).
+  - **Válaszlábléc:** ha a munkafutás során legalább egy oldal letöltése megtörtént, az agent válaszának legvégéhez az őr egy láblécet fűz (pl. `🌐 web_read: pkg.go.dev (1 page)` vagy `🌐 web_read: pkg.go.dev, react.dev (3 pages)`).
+  - **Futásjelentés és felület:** a szerver `ReportRunRequest` és `Run` modellje kibővült a `web_reads []string` mezővel (migráció: `00027_run_web_reads.sql`). Az adminisztrációs felületen az ágens áttekintő panel utolsó futásai és a futások kártya a sikeres futások mellett egy `🌐 N` badge-et jelenít meg, amelynek tooltipjében a meglátogatott konkrét URL-ek láthatók.
+
 ## Wiki (megvalósítva, 2026-10-16)
 
 A csapat közös, tartós tudását és döntéseit kezelő modul a szerveren. A wiki oldalak revíziói append-only módon tárolódnak, megőrizve a teljes előzményt.

@@ -45,6 +45,16 @@ roots:
 # without bubblewrap isolation.
 # allow_unsandboxed: true
 
+# Web-olvasás szűrők (csak allow_web_read engedélyezett sandboxos futásokhoz):
+# web_read_allow: ha be van állítva, CSAK ezek a hostok tölthetők le (pontos egyezés vagy *. előtag).
+# web_read_deny:  mindig megtagadott hostok, az allow lista előtt ellenőrizve.
+# Ha egyik sincs megadva: bármely publikus weboldal elérhető. Privát/belső IP címek sosem érhetők el.
+# web_read_allow:
+#   - "*.go.dev"
+#   - "docs.python.org"
+# web_read_deny:
+#   - "unwanted.example.com"
+
 # commands: { claude-code: claude, antigravity: agy }
 # defaults: { poll: 5s, fallback_poll: 60s, debounce: 3s, batch: 10, decide_timeout: 3m, work_timeout: 15m }
 

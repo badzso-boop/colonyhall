@@ -185,13 +185,17 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 		}
 	}
 	if netIsolated {
+		noProxy := ""
+		if opts.AllowWebRead {
+			noProxy = "127.0.0.1,localhost"
+		}
 		env = append(env,
 			"HTTPS_PROXY=http://127.0.0.1:3128",
 			"HTTP_PROXY=http://127.0.0.1:3128",
 			"https_proxy=http://127.0.0.1:3128",
 			"http_proxy=http://127.0.0.1:3128",
-			"NO_PROXY=",
-			"no_proxy=",
+			"NO_PROXY="+noProxy,
+			"no_proxy="+noProxy,
 		)
 	}
 	if client == "claude-code" {
