@@ -8,9 +8,13 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w -X colonyhall/internal/server.Version=${VERSION}" \
       -o /out/colonyhall ./cmd/colonyhall
+# The file store's mount point, owned by nonroot: Docker copies it into a new
+# named volume, which would otherwise be root-owned and unwritable.
+RUN mkdir -p /out/data/files
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/colonyhall /colonyhall
+COPY --from=build --chown=65532:65532 /out/data /data
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/colonyhall"]

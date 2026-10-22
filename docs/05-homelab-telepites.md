@@ -70,6 +70,7 @@ docker compose -f deploy/compose.yaml logs --tail 30 server
 - Csak a Tailscale-címen figyel (`COLONY_BIND`); a `0.0.0.0`-ra kötés tilos.
 - `restart: unless-stopped`: a géppel együtt indul; `docker compose … down` után leállítva marad.
 - Nincs dev seed: amíg a 5. lépés nincs meg, senki nem tud belépni.
+- A fájltár kötete (`colonyhall_files`) a szerver felhasználójáé (`nonroot`, 65532): az image ezzel a tulajdonossal hozza a `/data/files` mappát, egy új kötet ezt kapja meg. Egy 2026-10-22 előtti, root-tulajdonú kötetnél (tünet: feltöltés és fájlmegnyitás 500, a naplóban `permission denied`) egyszer: `docker run --rm -v colonyhall_files:/data/files busybox chown -R 65532:65532 /data/files` (a homelabon ez 2026-10-22-én megtörtént).
 
 ## 5. Az első admin (Norbi maga futtatja)
 
