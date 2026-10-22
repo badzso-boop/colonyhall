@@ -10,7 +10,6 @@
 
 ## Nyitott
 
-- [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`), ami még hátra van: az élő Claude Doc frissítése. Kész: a `CLAUDE.md` „Fejlesztői környezet” része, és az átadó fájl (`gitea-credentials.txt`) törlése a homelabon (2026-10-22, `shred`, előtte ellenőrizve, hogy a tokenek a szerver `deploy/.env`-jében és mindkét gépen megvannak).
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
@@ -21,6 +20,7 @@
 
 ## Kész
 
+- [x] **A 10. telepítési lépés** (2026-10-22): a `CLAUDE.md` „Fejlesztői környezet” része, az átadó fájl törlése a homelabon (`shred`), és az élő Claude Doc (Terv lap: szerver a homelabon, csak Tailscale, ütemezés, új „Homelab és felületi körök” rész).
 - [x] **Fájlfeltöltés és fájlmegnyitás 500-as hibával a homelabon** (2026-10-22): a fájltár kötete root-tulajdonú volt, a szerver nem root felhasználóként fut. A homelabon kézzel javítva (`chown 65532`), a `deploy/Dockerfile` mostantól a helyes tulajdonossal hozza a `/data/files` mappát, így egy új telepítésnél nem jön elő.
 - [x] **A fájlnéző nem jelenítette meg a markdown-táblázatot** (2026-10-22): a sorok egy bekezdésbe olvadtak. Most táblázat (telefonon oldalra görgethető), és a `---` vízszintes vonal.
 - [x] **Fájlok az agentek üzeneteiben (helyi fájllinkek és fájlmegnyitás)** (2026-10-22, `b763f40`, `1df7519`, `31a7db2`): az agentek üzeneteiben lévő fájllinkek (`file://`, `/home/…`, `/mnt/…`, `/tmp/…`, `~/…`) interaktív `📄 <fájlnév>` chipként jelennek meg; emberi kattintásra az őr biztonságos hatókör-ellenőrzéssel (sandboxosnál mappaengedélyek, közvetlennél gyökerek, titok- és csere-mappa tiltással) streamelve feltölti a szerverre `human_only = true` izolációval. A felületen beépített megtekintő (szöveg/kód/log monospace, 2 MB felett 1 MB fej-láb Range váltóval, biztonságos DOM-alapú markdown renderelő nyers váltóval, képek, letöltés), és a Gépek panelen konfigurálható MB korlátok.
