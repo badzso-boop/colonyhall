@@ -263,11 +263,11 @@ func TestProxy_AllowlistRulesAndRefusals(t *testing.T) {
 	}
 
 	// 9. Wildcard *.google.com:443 matches sub.google.com:443
-	if !pr.checkAllowed("sub.google.com", 443, true) {
+	if _, ok := pr.checkAllowed("sub.google.com", 443); !ok {
 		t.Error("expected *.google.com to allow sub.google.com:443")
 	}
 	// But not apex google.com (rule is *.google.com)
-	if pr.checkAllowed("google.com", 443, true) {
+	if _, ok := pr.checkAllowed("google.com", 443); ok {
 		t.Error("expected *.google.com to NOT match google.com apex")
 	}
 
@@ -322,26 +322,80 @@ func TestProxy_PlainHTTPOnlyToServer(t *testing.T) {
 
 func TestProxy_LogMode(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "proxy.sock")
+	res := &mockResolver{mapping: map[string][]net.IP{
+		"api.example.com":   {net.ParseIP("93.184.216.34")},
+		"homelab-db.lan":    {net.ParseIP("192.168.0.45")},
+		"tailnet-gitea.lan": {net.ParseIP("100.85.111.88")},
+	}}
 	pr, err := StartSandboxProxy(ProxyConfig{
 		Mode:     "log",
 		Allow:    nil, // empty allowlist!
 		SockPath: sockPath,
+		Resolver: res,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = pr.Close() }()
 
-	// In log mode, checkAllowed returns true and records the target in seenHosts
-	allowed := pr.checkAllowed("api.example.com", 443, true)
-	if !allowed {
-		t.Fatal("expected checkAllowed to return true in log mode")
+	// Log mode lets any public host through and records it.
+	if _, ok := pr.checkAllowed("api.example.com", 443); !ok {
+		t.Fatal("expected a public host to pass in log mode")
 	}
-
 	pr.mu.Lock()
 	seen := pr.seenHosts["api.example.com:443"]
 	pr.mu.Unlock()
 	if !seen {
 		t.Fatal("expected api.example.com:443 to be recorded in seenHosts in log mode")
+	}
+	// ...but never the machine's internal services.
+	for _, h := range []string{"homelab-db.lan", "tailnet-gitea.lan"} {
+		if _, ok := pr.checkAllowed(h, 5432); ok {
+			t.Fatalf("log mode let %s through to a private address", h)
+		}
+	}
+	if _, ok := pr.checkAllowed("10.0.0.1", 22); ok {
+		t.Fatal("log mode let an IP literal through")
+	}
+}
+
+// rebindResolver answers a public address first and a private one after.
+type rebindResolver struct{ calls int }
+
+func (r *rebindResolver) LookupIPAddr(context.Context, string) ([]net.IPAddr, error) {
+	r.calls++
+	if r.calls == 1 {
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+	}
+	return []net.IPAddr{{IP: net.ParseIP("192.168.0.45")}}, nil
+}
+
+// The proxy dials the address it checked: a name that resolves to a public
+// address for the check and to a private one afterwards must not reach the
+// private one.
+func TestProxy_DialsCheckedAddress(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "proxy.sock")
+	var dialed []string
+	pr, err := StartSandboxProxy(ProxyConfig{
+		Mode:     "filtered",
+		Allow:    []string{"docs.example.com:443"},
+		SockPath: sockPath,
+		Resolver: &rebindResolver{},
+		DialContext: func(_ context.Context, _, addr string) (net.Conn, error) {
+			dialed = append(dialed, addr)
+			return nil, errors.New("test: no real dial")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pr.Close() }()
+
+	conn := dialProxyUnix(t, sockPath)
+	_, _ = fmt.Fprintf(conn, "CONNECT docs.example.com:443 HTTP/1.1\r\nHost: docs.example.com:443\r\n\r\n")
+	_, _ = bufio.NewReader(conn).ReadString('\n')
+	_ = conn.Close()
+	if len(dialed) != 1 || dialed[0] != "93.184.216.34:443" {
+		t.Fatalf("dialed %v, want only the checked address 93.184.216.34:443", dialed)
 	}
 }
