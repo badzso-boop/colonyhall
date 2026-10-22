@@ -237,3 +237,20 @@ ok  	colonyhall/internal/storetest	2.671s
    - `buildSafeMarkdownDOM`: XSS-biztos Markdown DOM-építő, szigorú link-protokoll ellenőrzéssel.
    - HTTP Range logika (`bytes=0-1048575` és `bytes=-1048576`) 2 MB feletti fájloknál.
    - Adminisztrátori korlátok doboz a Gépek panelen.
+
+---
+
+## Átnézés (Claude Code, 2026-10-22)
+
+Ellenőrizve: `make test`, `make lint`, `make gen-check`, `make test-pg` (gyorsítótár nélkül), `go test -race ./internal/guard/ ./internal/e2e/`: mind zöld. A néző böngészőben kipróbálva (memóriás szerver, az őr szerepét egy szkript játszotta): fájlgombok az üzenetben, markdown (a `javascript:` link és a `<script>` szövegként marad), tiltott fájl hibaüzenete; asztali és telefonos méretben.
+
+Javítva:
+
+- **Tranzakciós outbox:** a lekérés állapotváltozásai és eseményei külön, tranzakció nélkül íródtak, az esemény hibáját eldobta a kód. Most egy tranzakcióban mennek (`commit` segédfüggvény), az időtúllépés is (`expire`).
+- **Állapotverseny:** a „kész” és a „hibás” frissítés feltétel nélkül írt, így az időtúllépés és egy késő feltöltés felülírhatta egymást. Most csak `pending` állapotból vált (`db.ErrConflict` különben); storetest rá.
+- **Őr, növekvő log:** a feltöltés a `stat` méretét jelentette be, egy közben írt lognál a Go HTTP kliens hibával megszakítja a küldést. Most a megnyitáskori méretű pillanatképet küldi (`openSnapshot`).
+- **Őr, ellenőrzés és megnyitás között:** megnyitás után újraellenőrzi, hogy ugyanazt a reguláris fájlt nyitotta-e meg (`/proc/self/fd`), így egy közben szimbolikus linkre cserélt fájl nem csúszik át.
+- **Őr, nagy fájl:** a 30 mp-es kliens-időkorlát egy 100–200 MB-os feltöltést lassabb kapcsolaton elvágott volna; a feltöltésnek most 110 mp jut (a szerver 2 perc után adja fel a kérést).
+- **Néző:** a hibaüzenetek `innerHTML`-lel kerültek ki (szerverszöveggel); most `textContent`.
+
+Ismert korlát: egy 2 percnél tovább tartó feltöltést a szerver „gép nem elérhető”-ként zár le (helyi hálózaton 100–200 MB ennél jóval gyorsabb).
