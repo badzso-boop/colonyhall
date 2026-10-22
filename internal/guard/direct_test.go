@@ -1289,3 +1289,140 @@ func TestAgentAnswerIsNotATask(t *testing.T) {
 		t.Fatalf("a human's answer stays a normal message:\n%s", p)
 	}
 }
+
+// TestDirectRotationUsesContextNotSummedUsage: a run with many tool calls
+// sums the same context once per call; the session must rotate on the
+// context size of the last call, not on that sum.
+func TestDirectRotationUsesContextNotSummedUsage(t *testing.T) {
+	stateDir, root := t.TempDir(), t.TempDir()
+	agentID := uuid.New().String()
+
+	var postedReplies []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		case strings.HasSuffix(r.URL.Path, "/actors"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"actors": []map[string]any{
+					{"id": "u1", "handle": "alice"},
+					{"id": "u2", "handle": "bob"},
+				},
+			})
+		case strings.Contains(r.URL.Path, "/messages/m1/thread"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"root": map[string]any{"id": "m1", "author_id": "u1", "body": "first message"},
+				"replies": []map[string]any{
+					{"id": "m2", "author_id": "u2", "body": "second message"},
+					{"id": "m3", "author_id": "u1", "body": "third message"},
+				},
+			})
+		case strings.HasSuffix(r.URL.Path, "/messages"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if txt, ok := body["body"].(string); ok {
+				postedReplies = append(postedReplies, txt)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "reply-1"})
+		case strings.HasSuffix(r.URL.Path, "/budget"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"limit":      0,
+				"used_today": 0,
+				"remaining":  0,
+				"resets_at":  time.Now().Add(time.Hour).Format(time.RFC3339),
+			})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer ts.Close()
+
+	var requests []DirectRequest
+	var nextUsage Usage
+	var nextContext int
+
+	ad := &directTestAdapter{}
+	ad.impl = func(_ context.Context, req DirectRequest) (RunResult, error) {
+		requests = append(requests, req)
+		return RunResult{Text: "answer", Usage: nextUsage, ContextTokens: nextContext, SessionID: req.SessionID}, nil
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:           "claude-code",
+			MaxSessionTokens: 1000,
+			HaltCheck:        time.Hour,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		RootDir:  root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+		me:       Me{ID: agentID, Handle: "bot"},
+	}
+
+	threadRoot := "m1"
+	expectedGen0ID, _ := DirectSessionID(agentID, threadRoot)
+	expectedGen1ID, _ := DirectSessionID(agentID, threadRoot+"#1")
+
+	// Run 1: the run's summed usage (5000) is over the limit, its context (300) is not.
+	nextUsage = Usage{Input: 1000, CacheRead: 4000, Output: 50}
+	nextContext = 300
+	item1 := []Item{{ID: "it-1", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "do step 1"}}
+	if err := agent.handleDirect(context.Background(), item1); err != nil {
+		t.Fatalf("run 1 failed: %v", err)
+	}
+	st, err := LoadDirectState(filepath.Join(stateDir, "direct_state.json"))
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if st.LastRunTokens[threadRoot] != 300 {
+		t.Fatalf("LastRunTokens: got %d, want the context size 300", st.LastRunTokens[threadRoot])
+	}
+
+	// Run 2: same session, resumed.
+	nextContext = 400
+	item2 := []Item{{ID: "it-2", AuthorKind: "human", ItemID: "m4", ChannelID: "c1", ThreadRootID: "m1", Body: "do step 2"}}
+	if err := agent.handleDirect(context.Background(), item2); err != nil {
+		t.Fatalf("run 2 failed: %v", err)
+	}
+	if len(requests) != 2 || requests[1].SessionID != expectedGen0ID || !requests[1].Resume {
+		t.Fatalf("run 2 must resume the first session %s, got %+v", expectedGen0ID, requests[1])
+	}
+	_ = expectedGen1ID
+	for _, p := range postedReplies {
+		if strings.Contains(p, "new session") || strings.Contains(p, "új munkamenet") {
+			t.Fatalf("unexpected rotation notice: %s", p)
+		}
+	}
+}
+
+func TestLastTranscriptContext(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := []string{
+		`{"type":"user","message":{"content":"hi"}}`,
+		`{"type":"assistant","message":{"usage":{"input_tokens":5,"cache_read_input_tokens":1000,"cache_creation_input_tokens":200}}}`,
+		`{"type":"user","message":{"content":"tool result"}}`,
+		`{"type":"assistant","message":{"usage":{"input_tokens":7,"cache_read_input_tokens":20000,"cache_creation_input_tokens":4505}}}`,
+		`{"type":"summary","summary":"x"}`,
+		`{"type":"assistant","message":{"usage":{"input_tok`, // a partly written last line
+	}
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := lastTranscriptContext(p); !ok || n != 24512 {
+		t.Fatalf("got %d %v, want 24512 from the last complete assistant message", n, ok)
+	}
+	if _, ok := lastTranscriptContext(filepath.Join(t.TempDir(), "missing.jsonl")); ok {
+		t.Fatal("a missing transcript must report not ok")
+	}
+	// Without a transcript: the summed usage averaged over the turns.
+	if n := claudeContextTokens("", Usage{Input: 6, CacheRead: 57565, CacheWrite: 15653}, 3); n != 24408 {
+		t.Fatalf("fallback: got %d", n)
+	}
+	if claudeSessionFile("../../etc/passwd") != "" || claudeSessionFile("*") != "" {
+		t.Fatal("a session id with path or glob characters must not match a file")
+	}
+}

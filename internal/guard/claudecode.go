@@ -28,6 +28,7 @@ type claudeOutput struct {
 	SessionID  string          `json:"session_id"`
 	IsError    bool            `json:"is_error"`
 	Subtype    string          `json:"subtype"`
+	NumTurns   int             `json:"num_turns"`
 	Usage      struct {
 		Input      int `json:"input_tokens"`
 		Output     int `json:"output_tokens"`
@@ -136,7 +137,23 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	if out.SessionID != "" {
 		res.SessionID = out.SessionID
 	}
+	res.ContextTokens = claudeContextTokens(res.SessionID, res.Usage, out.NumTurns)
 	return res, err
+}
+
+// claudeContextTokens is the context size at the run's last model call: the
+// last assistant message's usage in the session transcript. Without the
+// transcript it falls back to the run's usage averaged over its turns.
+func claudeContextTokens(sessionID string, u Usage, turns int) int {
+	if p := claudeSessionFile(sessionID); p != "" {
+		if n, ok := lastTranscriptContext(p); ok {
+			return n
+		}
+	}
+	if turns < 1 {
+		turns = 1
+	}
+	return (u.Input + u.CacheRead + u.CacheWrite) / turns
 }
 
 func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args []string, extraEnv []string) (RunResult, claudeOutput, error) {

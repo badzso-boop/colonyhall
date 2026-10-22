@@ -19,3 +19,7 @@ coverage.out
 Thumbs.db
 guard.yaml
 sandbox-test/
+
+# Local secrets (owner API keys and the like); never commit
+colonyhall_owner_api_key*
+*.secret

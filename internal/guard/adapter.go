@@ -95,6 +95,10 @@ type RunResult struct {
 	Duration       time.Duration
 	SessionID      string
 	ConversationID string
+	// ContextTokens is the size of the context at the run's last model
+	// call, when the client tells it (0 = unknown). Usage sums every call
+	// of the run, so with many tool calls it is far larger than the context.
+	ContextTokens int
 	// Denied lists actions the client refused because a headless run
 	// cannot ask for permission (Antigravity reports them).
 	Denied []string
