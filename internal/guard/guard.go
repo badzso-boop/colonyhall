@@ -566,7 +566,14 @@ func (a *Agent) reply(ctx context.Context, it Item, text, clientID string) error
 			thread = it.ID
 		}
 	}
-	return halted(a.Client.Send(ctx, it.ChannelID, thread, clip(strings.TrimSpace(text), MaxReplyLen), clientID))
+	text = strings.TrimSpace(text)
+	fullLinks := FileLinks(text)
+	clipped := clip(text, MaxReplyLen)
+	if err := halted(a.Client.Send(ctx, it.ChannelID, thread, clipped, clientID)); err != nil {
+		return err
+	}
+	a.sendLostLinks(ctx, it, thread, fullLinks, clipped, clientID)
+	return nil
 }
 
 // MaxLongReply bounds a direct-mode answer (a report someone asked for).
@@ -587,7 +594,48 @@ func (a *Agent) replyLong(ctx context.Context, it Item, text, clientID string) e
 			thread = it.ID
 		}
 	}
-	return halted(a.Client.SendLong(ctx, it.ChannelID, thread, clip(text, MaxLongReply), clientID, true))
+	fullLinks := FileLinks(text)
+	clipped := clip(text, MaxLongReply)
+	if err := halted(a.Client.SendLong(ctx, it.ChannelID, thread, clipped, clientID, true)); err != nil {
+		return err
+	}
+	a.sendLostLinks(ctx, it, thread, fullLinks, clipped, clientID)
+	return nil
+}
+
+func (a *Agent) sendLostLinks(ctx context.Context, it Item, thread string, fullLinks []string, clipped, clientID string) {
+	if len(fullLinks) == 0 {
+		return
+	}
+	clippedLinks := FileLinks(clipped)
+	clippedSet := make(map[string]bool, len(clippedLinks))
+	for _, l := range clippedLinks {
+		clippedSet[l] = true
+	}
+	var lost []string
+	for _, l := range fullLinks {
+		if !clippedSet[l] {
+			lost = append(lost, l)
+		}
+	}
+	if len(lost) == 0 {
+		return
+	}
+	body := "📎\n" + strings.Join(lost, "\n")
+	filesClientID := clientID + "-files"
+	var err error
+	if utf8.RuneCountInString(body) <= MaxReplyLen {
+		err = a.Client.Send(ctx, it.ChannelID, thread, body, filesClientID)
+	} else {
+		err = a.Client.SendLong(ctx, it.ChannelID, thread, body, filesClientID, true)
+	}
+	if err != nil && a.Log != nil {
+		agentName := a.Cfg.Name
+		if a.me.Handle != "" {
+			agentName = "@" + a.me.Handle
+		}
+		a.Log.Warn("guard: follow-up file links failed", "err", err, "agent", agentName, "channel", it.ChannelID)
+	}
 }
 
 func halted(err error) error {
