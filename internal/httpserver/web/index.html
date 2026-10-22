@@ -291,7 +291,8 @@ const I18N = {
         noHostAssign: "gép hozzárendelése később",
         hostModeTokenNote: "Megjegyzés: az agent tokenje gépes (host) módban nem szükséges — az őr automatikusan saját rövid lejáratú tokeneket kér a szervertől.",
         exchange: "Titokcsere", exchangeNotOk: "nem írható",
-        dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):",
+        dailyBudget: "Napi keret", dailyLimit: "Napi limit", remaining: "hátralévő", resetsAt: "újraindul", noLimit: "nincs korlát", maxSession: "Munkamenet token limit", editLimit: "✏️ napi limit", enterDailyLimit: "Új napi tokenkeret (0 = nincs korlát):",
+        editSessionLimit: "✏️ munkamenet limit", enterSessionLimit: "Munkamenet token limit: ha egy futás ennyi tokent használ, a szál következő üzenete új munkamenetet kezd (0 = nincs korlát, a kliens maga tömörít):", invalidLimit: "Érvénytelen szám",
         giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás",
         previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
         agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények",
@@ -341,7 +342,8 @@ const I18N = {
         noHostAssign: "assign host later",
         hostModeTokenNote: "Note: the agent token is not needed in host mode — the guard requests its own short-lived tokens from the server.",
         exchange: "Secrets exchange", exchangeNotOk: "unwritable",
-        dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ limit", enterDailyLimit: "New daily token limit (0 = no limit):",
+        dailyBudget: "Daily budget", dailyLimit: "Daily limit", remaining: "remaining", resetsAt: "resets at", noLimit: "no limit", maxSession: "Max session tokens", editLimit: "✏️ daily limit", enterDailyLimit: "New daily token limit (0 = no limit):",
+        editSessionLimit: "✏️ session limit", enterSessionLimit: "Session token limit: once a run uses this many tokens, the thread's next message starts a new session (0 = no limit, the client compacts on its own):", invalidLimit: "Invalid number",
         giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add",
         previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
         agentRules: "Agent rules", save: "Save", version: "Version", history: "History",
@@ -2134,26 +2136,41 @@ async function renderHosts() {
         a.permission_mode || "",
         a.model || "-",
         a.allow_work ? L.work + ": " + (a.work_model || "-") : "",
-        "max session: " + (a.max_session_tokens || 150000),
+        "max session: " + (a.max_session_tokens === 0 ? L.none : (a.max_session_tokens ?? 150000)),
         "daily limit: " + (a.daily_token_limit ? a.daily_token_limit : L.none)
       ].filter(Boolean).join(" · ");
       box.append(el("b", { textContent: `@${a.handle}` }), el("span", { className: "muted", textContent: ` · ${details}` }));
+      // Re-sends the whole assignment with one limit changed; 0 means "no
+      // limit" for both, so "??" keeps a 0 instead of turning it into the default.
+      const putLimits = (maxSession, daily) => api(`/api/v1/agents/${a.agent_id}/host`, {
+        method: "PUT",
+        body: JSON.stringify({
+          host_id: h.id, client: a.client, mode: a.mode, root_dir: a.root_dir, worktree_repo: a.worktree_repo, allow_preview: !!a.allow_preview,
+          sandbox: a.sandbox, permission_mode: a.permission_mode, approvals: a.approvals,
+          model: a.model, work_model: a.work_model, allow_work: a.allow_work,
+          max_session_tokens: maxSession,
+          daily_token_limit: daily
+        })
+      }).catch(e => alert(e.message));
+      const askLimit = (question, current) => {
+        const val = prompt(question, current);
+        if (val === null) return null;
+        const lim = parseInt(val.replace(/[\s_.]/g, ""), 10);
+        if (isNaN(lim) || lim < 0) { alert(L.invalidLimit); return null; }
+        return lim;
+      };
       const editLim = el("button", { textContent: L.editLimit });
       editLim.onclick = async () => {
-        const val = prompt(L.enterDailyLimit, a.daily_token_limit || 0);
-        if (val === null) return;
-        const lim = parseInt(val, 10);
-        if (isNaN(lim) || lim < 0) { alert("Invalid limit"); return; }
-        await api(`/api/v1/agents/${a.agent_id}/host`, {
-          method: "PUT",
-          body: JSON.stringify({
-            host_id: h.id, client: a.client, mode: a.mode, root_dir: a.root_dir, worktree_repo: a.worktree_repo, allow_preview: !!a.allow_preview,
-            sandbox: a.sandbox, permission_mode: a.permission_mode, approvals: a.approvals,
-            model: a.model, work_model: a.work_model, allow_work: a.allow_work,
-            max_session_tokens: a.max_session_tokens || 150000,
-            daily_token_limit: lim
-          })
-        }).catch(e => alert(e.message));
+        const lim = askLimit(L.enterDailyLimit, a.daily_token_limit || 0);
+        if (lim === null) return;
+        await putLimits(a.max_session_tokens ?? 150000, lim);
+        renderHosts();
+      };
+      const editSess = el("button", { textContent: L.editSessionLimit });
+      editSess.onclick = async () => {
+        const lim = askLimit(L.enterSessionLimit, a.max_session_tokens ?? 150000);
+        if (lim === null) return;
+        await putLimits(lim, a.daily_token_limit || 0);
         renderHosts();
       };
       if (wt) {
@@ -2161,7 +2178,7 @@ async function renderHosts() {
       }
       const un = el("button", { textContent: L.unassign });
       un.onclick = async () => { await api(`/api/v1/agents/${a.agent_id}/host`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
-      box.append(" ", editLim, " ", un);
+      box.append(" ", editLim, " ", editSess, " ", un);
       for (const g of a.grants) {
         const x = el("button", { textContent: "✕" });
         x.onclick = async () => { await api(`/api/v1/grants/${g.id}`, { method: "DELETE" }).catch(e => alert(e.message)); renderHosts(); };
@@ -2567,7 +2584,7 @@ async function renderRuns() {
     for (const a of h.agents || []) {
       agentLimits[a.agent_id] = {
         limit: a.daily_token_limit || 0,
-        maxSession: a.max_session_tokens || 150000
+        maxSession: a.max_session_tokens ?? 150000
       };
     }
   }

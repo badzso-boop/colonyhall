@@ -1,10 +1,12 @@
 package guard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -529,7 +531,12 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			state.RulesVersions[threadRoot] = rulesVer
 		}
 	}
-	contextTokens := res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
+	// The rotation compares the context size, not the run's summed usage:
+	// a run with many tool calls sums the same context once per call.
+	contextTokens := res.ContextTokens
+	if contextTokens <= 0 {
+		contextTokens = res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
+	}
 	state.LastRunTokens[threadRoot] = contextTokens
 	if serr := state.Save(stateFile); serr != nil {
 		a.Log.Warn("guard: direct state save", "err", serr)
@@ -582,8 +589,13 @@ func (a *Agent) logDirectRun(sessionID string, items int, res RunResult, err err
 }
 
 func claudeSessionExists(id string) bool {
-	if id == "" {
-		return false
+	return claudeSessionFile(id) != ""
+}
+
+// claudeSessionFile is the transcript of a Claude Code session, or "".
+func claudeSessionFile(id string) string {
+	if id == "" || strings.ContainsAny(id, "/*?[\\") {
+		return ""
 	}
 	var patterns []string
 	if cfgDir := os.Getenv("CLAUDE_CONFIG_DIR"); cfgDir != "" {
@@ -595,10 +607,56 @@ func claudeSessionExists(id string) bool {
 	for _, p := range patterns {
 		matches, err := filepath.Glob(p)
 		if err == nil && len(matches) > 0 {
-			return true
+			return matches[0]
 		}
 	}
-	return false
+	return ""
+}
+
+// transcriptTail bounds how much of a transcript is read: the last
+// assistant message is near the end, and transcripts grow large.
+const transcriptTail = 1 << 20
+
+// lastTranscriptContext reads the context size of the last model call from a
+// Claude Code transcript: input + cache read + cache write of the last
+// assistant message that carries usage.
+func lastTranscriptContext(path string) (int, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, false
+	}
+	defer func() { _ = f.Close() }()
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, false
+	}
+	off := fi.Size() - transcriptTail
+	if off < 0 {
+		off = 0
+	}
+	buf := make([]byte, fi.Size()-off)
+	if _, err := f.ReadAt(buf, off); err != nil && err != io.EOF {
+		return 0, false
+	}
+	lines := bytes.Split(buf, []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		var e struct {
+			Type    string `json:"type"`
+			Message struct {
+				Usage *struct {
+					Input      int `json:"input_tokens"`
+					CacheRead  int `json:"cache_read_input_tokens"`
+					CacheWrite int `json:"cache_creation_input_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(lines[i], &e) != nil || e.Type != "assistant" || e.Message.Usage == nil {
+			continue
+		}
+		u := e.Message.Usage
+		return u.Input + u.CacheRead + u.CacheWrite, true
+	}
+	return 0, false
 }
 
 // humanOnly keeps the items a full-access agent may act on: requests from

@@ -16,12 +16,16 @@
 
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
+- [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
+- [ ] **Antigravity munkamenet-limit:** nem ellenőrzött, hogy az `agy` JSON-kimenetének `usage` mezője összesített-e (2026-10-22, a próbafutás nem hívott eszközt). Ha az, ugyanaz a hiba ott is: egy több eszközhívásos `agy -p` futással mérni kell.
+
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 ## Kész
 
+- [x] **Új munkamenet már az első üzenet után** (2026-10-22): az őr a futás összesített tokenszámát vetette össze a munkamenet-limittel, ami eszközhívásonként újra beleszámolja a teljes kontextust (mérve: 3 hívásnál 73 224 az összeg, a tényleges kontextus 24 512). Most Claude Code-nál a munkamenet-napló utolsó hívásának mérete számít (ha nincs napló: az összeg osztva a körök számával). A felületen a „Gépek” panelen külön „✏️ munkamenet limit” gomb; a napi limit szerkesztése már nem írja vissza a 0-s (korlátlan) munkamenet-limitet 150 000-re.
 - [x] **Markdown megjelenítése a felületen (egy közös, biztonságos megjelenítő a chathez és a fájlnézőhöz)** (2026-10-22, `a722cdf`, `14cb799`): minden üzenet (emberi és agent egyaránt) formázott markdownként jelenik meg egy önálló, tiszta rétegződésű, Node test runnerrel fedett renderelővel (`web/markdown.js`). Biztonság: kizárólag DOM-csomópontok építése, nincs `innerHTML`/`outerHTML`, nyers HTML szövegként jelenik meg, linkek csak `http(s)` protokollal, távoli képek tiltva (linkként jelennek meg), szóhatár-szabály (`snake_case` és azonosítók mint `PROFIT_TARGET`, `run_id=9` nem dőltek), a helyi fájllinkek agent üzenetben kattintható `📄` chipként jelennek meg, hosszú üzeneteknél 20 sor felett összecsukás („Több” / „Kevesebb” fade-del), a szál- és előnézeti sorok csupaszított szövegként jelennek meg (`ColonyMarkdown.plain`).
 - [x] **A 10. telepítési lépés** (2026-10-22): a `CLAUDE.md` „Fejlesztői környezet” része, az átadó fájl törlése a homelabon (`shred`), és az élő Claude Doc (Terv lap: szerver a homelabon, csak Tailscale, ütemezés, új „Homelab és felületi körök” rész).
 - [x] **Fájlfeltöltés és fájlmegnyitás 500-as hibával a homelabon** (2026-10-22): a fájltár kötete root-tulajdonú volt, a szerver nem root felhasználóként fut. A homelabon kézzel javítva (`chown 65532`), a `deploy/Dockerfile` mostantól a helyes tulajdonossal hozza a `/data/files` mappát, így egy új telepítésnél nem jön elő.
