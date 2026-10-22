@@ -19,9 +19,14 @@ func TestWorkPromptGrantedFoldersAndLanguage(t *testing.T) {
 		{Path: "/data/trader-data", Mode: "read"},
 	}
 	pRO := WorkPrompt("trader-logs", it, "report your folders", grantsRO...)
-	expectedRO := "You can read /home/user/trader (read-only) and /data/trader-data (read-only); nothing else is visible."
+	expectedRO := "Your folders: /home/user/trader (read-only), /data/trader-data (read-only). Work only in these"
 	if !strings.Contains(pRO, expectedRO) {
 		t.Fatalf("expected WorkPrompt to contain %q, got:\n%s", expectedRO, pRO)
+	}
+
+	// A requested longer report may go past the short-reply limit.
+	if !strings.Contains(pRO, "you may write up to 8000 characters") {
+		t.Fatalf("expected WorkPrompt to allow a longer answer when asked, got:\n%s", pRO)
 	}
 
 	// 2. Language rule in WorkPrompt
@@ -36,7 +41,7 @@ func TestWorkPromptGrantedFoldersAndLanguage(t *testing.T) {
 		{Path: "/data/trader-data", Mode: "read"},
 	}
 	pMixed := WorkPrompt("trader-logs", it, "check files", grantsMixed...)
-	expectedMixed := "You can access /home/user/trader (read-write) and /data/trader-data (read-only); nothing else is visible."
+	expectedMixed := "Your folders: /home/user/trader (read-write), /data/trader-data (read-only). Work only in these"
 	if !strings.Contains(pMixed, expectedMixed) {
 		t.Fatalf("expected WorkPrompt to contain %q, got:\n%s", expectedMixed, pMixed)
 	}
@@ -46,7 +51,7 @@ func TestWorkPromptGrantedFoldersAndLanguage(t *testing.T) {
 		{Path: "/home/user/trader", Mode: "write", Write: true},
 	}
 	pW := WorkPrompt("trader-logs", it, "write files", grantsW...)
-	expectedW := "You can write /home/user/trader (read-write); nothing else is visible."
+	expectedW := "Your folders: /home/user/trader (read-write). Work only in these"
 	if !strings.Contains(pW, expectedW) {
 		t.Fatalf("expected WorkPrompt to contain %q, got:\n%s", expectedW, pW)
 	}

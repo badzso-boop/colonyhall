@@ -210,3 +210,20 @@ A fejlesztés során minden réteg ellenőrzésre került:
 4. **`internal/modules/conversation/`:** Csatorna leírás mező, tagok listázása és a soft-remove megvalósítása az utolsó emberi adminisztrátor védelmével.
 5. **`internal/guard/guard.go`, `direct.go` és `prompt_test.go`:** A munkafutás mappajogosultságainak formázása, a 8000 karakteres válaszhossz kérésre, valamint a nyelvi egyezési szabály.
 6. **`internal/httpserver/web/index.html`:** A megújult dev felület a bal oldali sáv elrendezésével, a szekciókkal, a tagkezeléssel és a jobb oldali áttekintő panellel.
+---
+
+## 8. Átnézés (Claude Code, 2026-10-22)
+
+Ellenőrizve: `make test`, `make lint`, `make gen-check`, `make test-pg` (gyorsítótár nélkül, `-count=1`), `go test -race` (guard, e2e, gateway): mind zöld. A felület Playwrighttal kipróbálva asztali (1280 px, magyar) és telefonos (390 px, angol) méretben.
+
+Javítva:
+
+- **Biztonság: a csatornából kivett tag nyitott WebSocket-kapcsolata tovább kapta a privát csatorna eseményeit.** A kapcsolat csatornánként gyorsítótárazza az olvasási jogot, és csak `channel.member_added`-re ürítette; most `channel.member_removed`-re is. Teszt: `TestRemovedMemberStopsReceivingLiveEvents` (a javítás nélkül elbukik).
+- **A „dolgozik…” sor a csatornanézetben szinte soha nem jelent meg:** az agentek szálban válaszolnak, a sor viszont csak a szál nélküli futást mutatta. Most a csatornanézet a csatorna minden futását mutatja, a szál csak a sajátját.
+- **A munkafutás promptja** továbbra is „max 500 characters”-t írt, így a sandboxos agentnél a „hosszabbat kérek” nem működött volna: most ugyanúgy mehet 8000 karakterig, mint a közvetlen módban. A mappák mondata egyszerűsödött („Your folders: … Work only in these; when asked where you work, name these folders.”), és a „nothing else is visible” kimaradt, mert sandbox nélküli tömör módban nem igaz.
+- **Felület:** a csatornafejléc a lap közepére csúszott (a rácsban a fejléc kapta a nyújtható sort); panel megnyitásakor a csatornafejléc elrejtve, a beviteli sor telefonon is alul marad; a bal sáv telefonon görgethető (a DM-mező nem nyomódik össze); kb. 35 beégetett magyar szöveg i18n-kulcs lett (hu/en). A `main`-ből örökölt hiba: a „Küldés” felirat a 📎 gombra került, a küldés gomb üres volt.
+
+Nem javítva, későbbre:
+
+- Az adatlap (`/agents/{id}/overview`) minden embernek megmutatja az agent futásait, jegyzeteit és kérdéseit, privát csatornából is (ugyanígy, mint a meglévő futásnapló és jegyzet-API). Egy embernél (Norbi) ez nem gond; több felhasználónál a nem-adminoknak csatornajog szerint kell szűrni.
+- Az `agent.activity` keret a jelentő HTTP-kérésen belül, sorban megy ki a kapcsolatokra; sok lassú néző esetén ez lassíthatja az őr hívását (egyenként legfeljebb az írási időkorlátig).

@@ -1,9 +1,15 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/server"
@@ -145,5 +151,83 @@ func TestChannelsAndMembersE2E(t *testing.T) {
 	delStatus = e.do("DELETE", fmt.Sprintf("/api/v1/channels/%s/members/%s", createdChan.Id, meAdmin.Id), server.DevAdminToken, nil, nil)
 	if delStatus != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict when removing the last human admin of a private channel, got %d", delStatus)
+	}
+}
+
+// TestRemovedMemberStopsReceivingLiveEvents: a member removed from a private
+// channel must not keep getting its events over an open WebSocket (the
+// connection caches read access per channel).
+func TestRemovedMemberStopsReceivingLiveEvents(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	general := e.generalID()
+
+	var priv struct{ ID string }
+	if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": "secret", "kind": "private"}, &priv); s != http.StatusCreated {
+		t.Fatalf("create private channel: %d", s)
+	}
+	memberRole := apispec.Member
+	var alice apispec.CreateActorResponse
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, apispec.CreateActorRequest{
+		Kind: apispec.ActorKindHuman, Handle: "alice", Role: &memberRole,
+	}, &alice); s != http.StatusCreated {
+		t.Fatalf("create alice: %d", s)
+	}
+	for _, ch := range []string{priv.ID, general} {
+		if s := e.do("POST", "/api/v1/channels/"+ch+"/members", server.DevAdminToken, map[string]any{"actor_id": alice.Actor.Id}, nil); s != http.StatusNoContent {
+			t.Fatalf("add alice: %d", s)
+		}
+	}
+
+	ws, res, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(e.srv.URL, "http")+"/ws/ui", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Body != nil {
+		_ = res.Body.Close()
+	}
+	defer func() { _ = ws.CloseNow() }()
+	if err := wsjson.Write(ctx, ws, map[string]any{"type": "hello", "token": alice.Token}); err != nil {
+		t.Fatal(err)
+	}
+	expectFrame(t, ctx, ws, "welcome")
+	expectFrame(t, ctx, ws, "replay_done")
+
+	// While a member, alice sees the private channel live (and the
+	// connection caches her read access).
+	if _, s := e.send(server.DevAdminToken, priv.ID, map[string]any{"body": "before", "client_msg_id": "p1"}); s != http.StatusCreated {
+		t.Fatalf("send before: %d", s)
+	}
+	if f := nextMessageFrame(t, ctx, ws); f["channel_id"] != priv.ID {
+		t.Fatalf("want the private message first, got %v", f)
+	}
+
+	if s := e.do("DELETE", "/api/v1/channels/"+priv.ID+"/members/"+alice.Actor.Id.String(), server.DevAdminToken, nil, nil); s != http.StatusNoContent {
+		t.Fatalf("remove alice: %d", s)
+	}
+	if _, s := e.send(server.DevAdminToken, priv.ID, map[string]any{"body": "after", "client_msg_id": "p2"}); s != http.StatusCreated {
+		t.Fatalf("send after: %d", s)
+	}
+	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "public", "client_msg_id": "g1"}); s != http.StatusCreated {
+		t.Fatalf("send public: %d", s)
+	}
+	// The next message alice sees must be the public one.
+	if f := nextMessageFrame(t, ctx, ws); f["channel_id"] != general {
+		t.Fatalf("removed member still got a private event: %v", f)
+	}
+}
+
+// nextMessageFrame skips to the next message.created event frame.
+func nextMessageFrame(t *testing.T, ctx context.Context, ws *websocket.Conn) map[string]any {
+	t.Helper()
+	for {
+		var f map[string]any
+		if err := wsjson.Read(ctx, ws, &f); err != nil {
+			t.Fatalf("waiting for a message event: %v", err)
+		}
+		if f["type"] == "event" && f["event_type"] == "message.created" {
+			return f
+		}
 	}
 }

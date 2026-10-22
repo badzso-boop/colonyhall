@@ -28,6 +28,7 @@
   .overview-section h4 { margin:0 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); }
   .overview-avatar { font-size:32px; line-height:1; }
   main > nav { border-right:1px solid var(--line); padding:10px; overflow:auto; display:flex; flex-direction:column; }
+  main > nav > * { flex-shrink:0; }
   #channels { display:flex; flex-direction:column; }
   .sec-actions-bar { display:flex; justify-content:flex-end; padding:2px 0 6px; }
   .sec-actions-bar button { padding:2px 8px; font-size:11px; }
@@ -45,7 +46,9 @@
   .chan-item { padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
   .chan-item.on { background:var(--surface); font-weight:600; }
   nav .n { color:var(--accent); font-weight:600; }
-  section { display:grid; grid-template-rows:minmax(0,1fr) auto; min-width:0; min-height:0; }
+  section { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-width:0; min-height:0; }
+  /* Fixed rows: the channel header is hidden on panels, the feed or the open panel fills the middle. */
+  #chanHeader { grid-row:1; } section > div:not(#chanHeader):not(:last-child) { grid-row:2; } section > div:last-child { grid-row:3; }
   #feed { overflow:auto; padding:12px 16px; }
   .msg { padding:6px 0; }
   .who { font-weight:600; } .who.agent { color:var(--agent); } .who.system { color:var(--accent); }
@@ -168,15 +171,15 @@
       <h3 style="margin:0" id="chanModalTitle"></h3>
       <button id="chanModalClose">✕</button>
     </div>
-    <input id="newChanName" placeholder="pl. frontend-dev" autocomplete="off">
-    <input id="newChanDesc" placeholder="Leírás (opcionális, max 250 karakter)" maxlength="250" autocomplete="off">
+    <input id="newChanName" autocomplete="off">
+    <input id="newChanDesc" maxlength="250" autocomplete="off">
     <div class="row" style="gap:16px;">
       <label><input type="radio" name="newChanKind" value="public" checked> <span id="lblPublic"></span></label>
       <label><input type="radio" name="newChanKind" value="private"> <span id="lblPrivate"></span></label>
     </div>
     <div>
       <div style="font-weight:600;margin-bottom:4px;" id="lblSelectMembers"></div>
-      <input id="newChanMemberFilter" placeholder="Szűrés..." style="width:100%;margin-bottom:6px;" autocomplete="off">
+      <input id="newChanMemberFilter" style="width:100%;margin-bottom:6px;" autocomplete="off">
       <div id="newChanMemberList" class="modal-list"></div>
     </div>
     <div class="row" style="justify-content:flex-end;gap:8px;">
@@ -224,6 +227,13 @@ const I18N = {
         previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
         agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények",
         leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés",
+        removeFromSection: "Kivétel szekcióból", moveToSection: "Áthelyezés szekcióba…", rename: "Átnevezés", deleteLabel: "Törlés", removeLabel: "Eltávolítás",
+        agentOverview: "Agent adatlap", userOverview: "Felhasználó adatlap", noCommonChannels: "Nincs közös csatorna.", activity: "Aktivitás", idle: "tétlen",
+        administration: "Adminisztráció", confirmStopAgent: "Biztosan leállítod az agentet?", restart: "Újraindítás",
+        machineConfig: "Gép és beállítások", machineLabel: "Gép:", modeSandbox: "Mód / sandbox:", rootDir: "Gyökérmappa:",
+        folderGrants: "Mappaengedélyek", noFolderGrants: "Nincs mappaengedély.", tokenUsage: "Tokenfelhasználás és futások",
+        collaboration: "Együttműködés", notesPerThread: "Jegyzetek szálanként", activeLeases: "Aktív foglalások", openQuestions: "Nyitott kérdések",
+        noCollab: "Nincs aktív jegyzet, foglalás vagy kérdés.", cancel: "Mégse",
         working: "dolgozik…",
         section: "Szekció", newSectionName: "Új szekció neve:", renameSection: "Új név:",
         channelsGroup: "Csatornák", dmsGroup: "Közvetlen üzenetek",
@@ -259,6 +269,13 @@ const I18N = {
         previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
         agentRules: "Agent rules", save: "Save", version: "Version", history: "History",
         leases: "Leases", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note",
+        removeFromSection: "Remove from section", moveToSection: "Move to section…", rename: "Rename", deleteLabel: "Delete", removeLabel: "Remove",
+        agentOverview: "Agent overview", userOverview: "User overview", noCommonChannels: "No channels in common.", activity: "Activity", idle: "idle",
+        administration: "Administration", confirmStopAgent: "Stop this agent?", restart: "Restart",
+        machineConfig: "Machine and settings", machineLabel: "Machine:", modeSandbox: "Mode / sandbox:", rootDir: "Root folder:",
+        folderGrants: "Folder grants", noFolderGrants: "No folder grants.", tokenUsage: "Token usage and runs",
+        collaboration: "Collaboration", notesPerThread: "Notes per thread", activeLeases: "Active leases", openQuestions: "Open questions",
+        noCollab: "No active notes, leases or questions.", cancel: "Cancel",
         working: "working…",
         section: "Section", newSectionName: "New section name:", renameSection: "New name:",
         channelsGroup: "Channels", dmsGroup: "Direct Messages",
@@ -276,7 +293,7 @@ const I18N = {
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
 $("handle").placeholder = L.handle; $("password").placeholder = L.password; $("loginbtn").textContent = L.login;
-$("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button").textContent = L.send;
+$("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button:last-of-type").textContent = L.send;
 
 let token = "", csrf = "", me = null, channels = [], actors = {}, current = null, lastSeq = null, ws = null;
 let msgs = new Map(), replyRoot = null, sidebarSections = [];
@@ -395,7 +412,7 @@ function createChanItem(c, inSectionId, itIdx, totalItems) {
       }
       acts.append(el("button", {
         textContent: "✕",
-        title: "Kivétel szekcióból",
+        title: L.removeFromSection,
         onclick: async (e) => {
           e.stopPropagation();
           try {
@@ -408,7 +425,7 @@ function createChanItem(c, inSectionId, itIdx, totalItems) {
     } else if (sidebarSections.length > 0) {
       acts.append(el("button", {
         textContent: "↳",
-        title: "Áthelyezés szekcióba…",
+        title: L.moveToSection,
         onclick: async (e) => {
           e.stopPropagation();
           const list = sidebarSections.map((s, i) => `${i + 1}: ${s.name}`).join("\n");
@@ -538,7 +555,7 @@ function renderChannels() {
     }
     acts.append(el("button", {
       textContent: "✏",
-      title: "Átnevezés",
+      title: L.rename,
       onclick: async (e) => {
         e.stopPropagation();
         const n = prompt(L.renameSection || "Új név:", s.name);
@@ -555,7 +572,7 @@ function renderChannels() {
     }));
     acts.append(el("button", {
       textContent: "✕",
-      title: "Törlés",
+      title: L.deleteLabel,
       onclick: async (e) => {
         e.stopPropagation();
         if (!confirm(L.confirmDeleteSection || "Törlöd a szekciót?")) return;
@@ -770,6 +787,8 @@ function showNewChannelModal() {
   $("lblPrivate").textContent = L.privateChannel;
   $("lblSelectMembers").textContent = L.selectMembers;
   $("newChanMemberFilter").placeholder = L.filterMembers;
+  $("newChanName").placeholder = L.channelName;
+  $("newChanDesc").placeholder = L.channelDesc;
   $("newChanSubmit").textContent = L.createChannel;
   $("chanModal").className = "modal on";
 }
@@ -862,7 +881,7 @@ async function refreshMembersModal() {
     if (isAdmin) {
       const rmBtn = el("button", {
         textContent: "✕",
-        title: "Eltávolítás",
+        title: L.removeLabel,
         onclick: async () => {
           if (!confirm(L.removeMemberConfirm || "Biztosan eltávolítod ezt a tagot?")) return;
           try {
@@ -936,7 +955,7 @@ async function refreshOverviewPanel() {
   }
 
   const act = ov.actor;
-  $("overviewTitle").textContent = (act.kind === "agent" ? "Agent " : "Felhasználó ") + (L.overview || "áttekintés");
+  $("overviewTitle").textContent = act.kind === "agent" ? L.agentOverview : L.userOverview;
 
   // Profile / Identity section
   const idSec = el("div", { className: "overview-section" });
@@ -982,7 +1001,7 @@ async function refreshOverviewPanel() {
     chanSec.append(el("h4", { textContent: L.commonChannels || "Közös csatornák" }));
     const chans = ov.common_channels || [];
     if (chans.length === 0) {
-      chanSec.append(el("span", { className: "muted", textContent: "Nincs közös csatorna." }));
+      chanSec.append(el("span", { className: "muted", textContent: L.noCommonChannels }));
     } else {
       const list = el("div", { style: "display:flex; flex-direction:column; gap:4px;" });
       for (const c of chans) {
@@ -1007,11 +1026,11 @@ async function refreshOverviewPanel() {
   // If Agent:
   // 1. Activity
   const actSec = el("div", { className: "overview-section" });
-  actSec.append(el("h4", { textContent: "Aktivitás" }));
+  actSec.append(el("h4", { textContent: L.activity }));
   const isWorking = ov.activity?.working;
   actSec.append(el("div", { style: "display:flex; align-items:center; gap:6px;" },
     el("span", { style: `display:inline-block; width:10px; height:10px; border-radius:50%; background:${isWorking ? '#2ecc71' : '#95a5a6'};` }),
-    el("span", { textContent: isWorking ? (L.working || "dolgozik…") : "inaktív" })
+    el("span", { textContent: isWorking ? (L.working || "dolgozik…") : L.idle })
   ));
   body.append(actSec);
 
@@ -1019,7 +1038,7 @@ async function refreshOverviewPanel() {
   const isAdmin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
   if (isAdmin) {
     const adminSec = el("div", { className: "overview-section" });
-    adminSec.append(el("h4", { textContent: "Adminisztráció" }));
+    adminSec.append(el("h4", { textContent: L.administration }));
     const btnRow = el("div", { style: "display:flex; gap:6px; flex-wrap:wrap;" });
 
     if (act.state === "active") {
@@ -1036,7 +1055,7 @@ async function refreshOverviewPanel() {
       btnRow.append(el("button", {
         textContent: "⏹ " + (L.stop || "Leállítás"),
         onclick: async () => {
-          if (!confirm("Biztosan leállítod az agentet?")) return;
+          if (!confirm(L.confirmStopAgent)) return;
           try {
             await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "stopped" }) });
             await refreshOverviewPanel();
@@ -1058,7 +1077,7 @@ async function refreshOverviewPanel() {
       btnRow.append(el("button", {
         textContent: "⏹ " + (L.stop || "Leállítás"),
         onclick: async () => {
-          if (!confirm("Biztosan leállítod az agentet?")) return;
+          if (!confirm(L.confirmStopAgent)) return;
           try {
             await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "stopped" }) });
             await refreshOverviewPanel();
@@ -1068,7 +1087,7 @@ async function refreshOverviewPanel() {
       }));
     } else {
       btnRow.append(el("button", {
-        textContent: "▶ Újraindítás",
+        textContent: "▶ " + L.restart,
         onclick: async () => {
           try {
             await api(`/api/v1/actors/${act.id}/state`, { method: "PUT", body: JSON.stringify({ state: "active" }) });
@@ -1096,15 +1115,15 @@ async function refreshOverviewPanel() {
   const asgn = ov.assignment;
   if (asgn) {
     const asgnSec = el("div", { className: "overview-section" });
-    asgnSec.append(el("h4", { textContent: "Gép és konfiguráció" }));
+    asgnSec.append(el("h4", { textContent: L.machineConfig }));
     const grid = el("div", { style: "display:grid; grid-template-columns:auto 1fr; gap:4px 8px; font-size:12px;" },
-      el("span", { className: "muted", textContent: "Gép:" }),
+      el("span", { className: "muted", textContent: L.machineLabel }),
       el("span", { textContent: asgn.host_name || asgn.host_id }),
       el("span", { className: "muted", textContent: "Kliens / Modell:" }),
       el("span", { textContent: `${asgn.client} (${asgn.model})` }),
-      el("span", { className: "muted", textContent: "Mód / Sandbox:" }),
+      el("span", { className: "muted", textContent: L.modeSandbox }),
       el("span", { textContent: `${asgn.mode} / ${asgn.sandbox ? "igen" : "nem"}` }),
-      el("span", { className: "muted", textContent: "Gyökérmappa:" }),
+      el("span", { className: "muted", textContent: L.rootDir }),
       el("span", { textContent: asgn.root_dir || "–" }),
       el("span", { className: "muted", textContent: "Worktree repo:" }),
       el("span", { textContent: asgn.worktree_repo || "–" }),
@@ -1117,7 +1136,7 @@ async function refreshOverviewPanel() {
 
     // Folder grants
     const grantsBox = el("div", { style: "margin-top:8px;" });
-    grantsBox.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Mappa engedélyek" }));
+    grantsBox.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: L.folderGrants }));
     const grantsList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin-top:4px;" });
     for (const g of asgn.grants || []) {
       const gRow = el("div", { style: "display:flex; align-items:center; justify-content:space-between; font-size:12px; background:var(--bg); padding:2px 6px; border-radius:4px;" },
@@ -1139,7 +1158,7 @@ async function refreshOverviewPanel() {
       grantsList.append(gRow);
     }
     if ((asgn.grants || []).length === 0) {
-      grantsList.append(el("span", { className: "muted", style: "font-size:12px;", textContent: "Nincs mappa engedély." }));
+      grantsList.append(el("span", { className: "muted", style: "font-size:12px;", textContent: L.noFolderGrants }));
     }
     grantsBox.append(grantsList);
 
@@ -1212,20 +1231,20 @@ async function refreshOverviewPanel() {
   const usage = ov.usage;
   if (usage) {
     const useSec = el("div", { className: "overview-section" });
-    useSec.append(el("h4", { textContent: "Token felhasználás és előzmények" }));
+    useSec.append(el("h4", { textContent: L.tokenUsage }));
     useSec.append(el("div", { style: "font-size:12px; margin-bottom:6px;" },
-      el("span", { className: "muted", textContent: "Ma: " }),
+      el("span", { className: "muted", textContent: L.today + ": " }),
       el("b", { textContent: `${usage.today_tokens} token` }),
-      el("span", { className: "muted", textContent: ` / limit: ${usage.daily_token_limit ? usage.daily_token_limit : 'korlátlan'}` })
+      el("span", { className: "muted", textContent: ` / limit: ${usage.daily_token_limit ? usage.daily_token_limit : L.noLimit}` })
     ));
 
     const runs = usage.last_runs || [];
     if (runs.length > 0) {
       const runsTbl = el("table", { style: "width:100%; font-size:11px; border-collapse:collapse; margin-top:4px;" },
         el("tr", { style: "border-bottom:1px solid var(--line); text-align:left; color:var(--muted);" },
-          el("th", { textContent: "Idő" }),
-          el("th", { textContent: "Fázis" }),
-          el("th", { textContent: "Állapot" }),
+          el("th", { textContent: L.time }),
+          el("th", { textContent: L.phase }),
+          el("th", { textContent: L.status }),
           el("th", { textContent: "Token" })
         )
       );
@@ -1258,11 +1277,11 @@ async function refreshOverviewPanel() {
   const collab = ov.collaboration;
   if (collab) {
     const colSec = el("div", { className: "overview-section" });
-    colSec.append(el("h4", { textContent: "Együttműködés" }));
+    colSec.append(el("h4", { textContent: L.collaboration }));
 
     const notes = collab.notes || [];
     if (notes.length > 0) {
-      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Jegyzetek szálanként" }));
+      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: L.notesPerThread }));
       const nList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin:4px 0 8px;" });
       for (const n of notes) {
         nList.append(el("div", { style: "background:var(--bg); padding:4px 6px; border-radius:4px; font-size:11px; white-space:pre-wrap;" },
@@ -1275,12 +1294,12 @@ async function refreshOverviewPanel() {
 
     const leases = collab.active_leases || [];
     if (leases.length > 0) {
-      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Aktív foglalások" }));
+      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: L.activeLeases }));
       const lList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin:4px 0 8px;" });
       for (const l of leases) {
         lList.append(el("div", { style: "background:var(--bg); padding:4px 6px; border-radius:4px; font-size:11px;" },
           el("b", { textContent: l.resource }),
-          el("span", { className: "muted", style: "margin-left:6px;", textContent: `lejár: ${new Date(l.expires_at).toLocaleTimeString()}` })
+          el("span", { className: "muted", style: "margin-left:6px;", textContent: `${L.expires}: ${new Date(l.expires_at).toLocaleTimeString()}` })
         ));
       }
       colSec.append(lList);
@@ -1288,7 +1307,7 @@ async function refreshOverviewPanel() {
 
     const questions = collab.open_questions || [];
     if (questions.length > 0) {
-      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: "Nyitott kérdések" }));
+      colSec.append(el("b", { style: "font-size:11px; text-transform:uppercase; color:var(--muted);", textContent: L.openQuestions }));
       const qList = el("div", { style: "display:flex; flex-direction:column; gap:4px; margin-top:4px;" });
       for (const q of questions) {
         qList.append(el("div", { style: "background:var(--bg); padding:4px 6px; border-radius:4px; font-size:11px;" },
@@ -1300,7 +1319,7 @@ async function refreshOverviewPanel() {
     }
 
     if (notes.length === 0 && leases.length === 0 && questions.length === 0) {
-      colSec.append(el("span", { className: "muted", style: "font-size:12px;", textContent: "Nincs aktív jegyzet, foglalás vagy kérdés." }));
+      colSec.append(el("span", { className: "muted", style: "font-size:12px;", textContent: L.noCollab }));
     }
     body.append(colSec);
   }
@@ -1335,7 +1354,7 @@ function showProfileEditor(act, container) {
 
   const btnRow = el("div", { style: "display:flex; gap:6px; justify-content:flex-end;" });
   const cancelBtn = el("button", {
-    textContent: "Mégse",
+    textContent: L.cancel,
     onclick: () => refreshOverviewPanel()
   });
   const saveBtn = el("button", {
@@ -1433,11 +1452,9 @@ function renderActivity() {
       continue;
     }
     if (v.channel_id !== current) continue;
-    if (replyRoot) {
-      if (v.thread_root_id !== replyRoot) continue;
-    } else {
-      if (v.thread_root_id) continue;
-    }
+    // Agents mostly answer in a thread: the channel view shows every run in
+    // the channel, a thread only its own.
+    if (replyRoot && v.thread_root_id !== replyRoot) continue;
     const h = actors[v.agent_id]?.handle;
     const name = h ? "@" + h : "@agent";
     if (!active.includes(name)) active.push(name);
@@ -1532,6 +1549,7 @@ function showPanel(name) {
   openPanel = name;
   for (const p of Object.keys(panelButtons)) $(p + "Panel").className = openPanel === p ? "on" : "";
   $("feed").className = openPanel ? "off" : "";
+  $("chanHeader").hidden = !!openPanel;
   for (const [p, id] of Object.entries(panelButtons)) $(id).classList.toggle("on", openPanel === p);
   $("chatbtn").classList.toggle("on", !openPanel);
   hostsOpen = openPanel === "hosts"; schedOpen = openPanel === "sched";
@@ -2609,7 +2627,7 @@ function renderAttachedFiles() {
   for (const f of pendingFiles) {
     const chip = el("span", { className: "file-chip" });
     chip.append(`📎 ${f.name} (${formatBytes(f.size)})`);
-    const rm = el("button", { textContent: "✕", title: "Eltávolítás" });
+    const rm = el("button", { textContent: "✕", title: L.removeLabel });
     rm.onclick = () => {
       pendingFiles = pendingFiles.filter(x => x.id !== f.id);
       renderAttachedFiles();

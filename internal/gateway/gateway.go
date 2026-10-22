@@ -394,7 +394,7 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 		return strings.HasPrefix(e.Type, "workspace."), nil
 	}
 	// A membership change for this actor invalidates the cached answer.
-	if e.Type == conversation.EventMemberAdded {
+	if e.Type == conversation.EventMemberAdded || e.Type == conversation.EventMemberRemoved {
 		c.mu.Lock()
 		delete(c.canRead, e.ChannelID)
 		c.mu.Unlock()
