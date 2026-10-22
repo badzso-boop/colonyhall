@@ -10,7 +10,7 @@
 
 ## Nyitott
 
-- [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`), ami még hátra van: az átadó fájl (`~/colonyhall-exchange/colonyhall/gitea-credentials.txt`, a homelabon, 2026-10-22-én még megvan) törlése Norbi szavára, és az élő Claude Doc frissítése. A `CLAUDE.md` „Fejlesztői környezet” része kész (2026-10-22).
+- [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`), ami még hátra van: az élő Claude Doc frissítése. Kész: a `CLAUDE.md` „Fejlesztői környezet” része, és az átadó fájl (`gitea-credentials.txt`) törlése a homelabon (2026-10-22, `shred`, előtte ellenőrizve, hogy a tokenek a szerver `deploy/.env`-jében és mindkét gépen megvannak).
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
