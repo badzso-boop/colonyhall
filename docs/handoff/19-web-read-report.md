@@ -222,3 +222,14 @@ A tesztek futtatása a gazdagépen, valódi `bwrap` izolációban és sandbox k�
    - `internal/modules/hosts/` (`allow_web_read` validáció és perzisztencia).
    - `internal/modules/runs/` (`web_reads` tömb mentése és visszaadása).
    - `internal/httpserver/web/index.html` (beállítási űrlap, futáslista és áttekintő panel `🌐 N` badge tooltip listával).
+
+---
+
+## Átnézés (Claude Code, 2026-10-22)
+
+Ellenőrizve: `make test`, `make lint`, `make gen-check`, `make test-pg` (gyorsítótár nélkül; a dev szerver-image ezen a gépen most nem épült — a Docker-build nem érte el a Go modultárat a Tailscale DNS miatt —, ezért csak a Postgres-konténer futott, a tárteszteknek ennyi kell), `go test -race ./internal/guard/ ./internal/e2e/`: mind zöld. A letöltő rendben: minden átirányítási lépés a transport-rétegben ugyanazon az ellenőrzésen megy át, a kapcsolat az ellenőrzött IP-re megy, nincs környezeti proxy, nincs süti, a válasz mérete korlátos.
+
+Javítva:
+
+- **`open` hálózati módban** a kliens akkor is megkapta a `web_read` MCP-beállítást (`127.0.0.1:3129`), pedig ott nincs sandboxon belüli híd: a cím a gép saját loopbackje lett volna, bármi, ami ott figyel. Most `open` módban a `web_read` nem kapcsol be (a sandbox és a prompt sem ígéri). Teszt: `TestWebReadOffWithoutNetworkIsolation` (a javítás nélkül elbukik).
+- **A `<web_content>` keret lezárása** csak a pontos kisbetűs alakban volt kiszűrve; most kis-/nagybetűtől és szóközöktől függetlenül. Teszt: `TestWebContentCloseVariantsEscaped`.

@@ -88,6 +88,9 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 // CommandWithOptions builds the bwrap command line with additional sandbox options.
 func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []Grant, name string, args []string, opts SandboxOptions) ([]string, []string, error) {
 	netIsolated := s.NetworkMode == "filtered" || s.NetworkMode == "log"
+	// web_read reaches the guard only through the in-sandbox bridge; without
+	// network isolation 127.0.0.1:3129 would be the machine's own loopback.
+	webRead := opts.AllowWebRead && netIsolated
 	a := []string{"--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts"}
 	if netIsolated {
 		a = append(a, "--unshare-net")
@@ -163,7 +166,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 		a = append(a, "--tmpfs", s.Root)
 	}
 	a = append(a, "--bind", agentDir, agentDir)
-	mounts, clientEnv, err := s.clientMounts(client, agentDir, opts.AllowWebRead)
+	mounts, clientEnv, err := s.clientMounts(client, agentDir, webRead)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -186,7 +189,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 	}
 	if netIsolated {
 		noProxy := ""
-		if opts.AllowWebRead {
+		if webRead {
 			noProxy = "127.0.0.1,localhost"
 		}
 		env = append(env,
@@ -205,7 +208,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 	if netIsolated && colonyBin != "" {
 		sockPath := filepath.Join(agentDir, "proxy.sock")
 		bridgeArgs := []string{"sandbox-bridge", "-sock", sockPath, "-port", "3128"}
-		if opts.AllowWebRead {
+		if webRead {
 			webreadSock := filepath.Join(agentDir, "webread.sock")
 			bridgeArgs = append(bridgeArgs, "-webread-sock", webreadSock, "-webread-port", "3129")
 		}

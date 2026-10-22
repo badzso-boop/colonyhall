@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -357,4 +358,40 @@ func TestWebReadMCP_PagingRunes(t *testing.T) {
 	if strings.Contains(text2, `"next_offset"`) {
 		t.Errorf("expected no next_offset at end of text, got: %s", text2)
 	}
+}
+
+func TestWebContentCloseVariantsEscaped(t *testing.T) {
+	for _, s := range []string{"</web_content>", "</WEB_CONTENT>", "</web_content >", "< /Web_Content>", "</ web_content\t>"} {
+		if got := webContentClose.ReplaceAllString("a"+s+"b", "&lt;/web_content&gt;"); got != "a&lt;/web_content&gt;b" {
+			t.Errorf("%q not escaped: %q", s, got)
+		}
+	}
+}
+
+// Without network isolation there is no bridge: the client must not be
+// pointed at 127.0.0.1:3129, which would be the machine's own loopback.
+func TestWebReadOffWithoutNetworkIsolation(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(t.TempDir(), "sb")
+	agentDir := filepath.Join(root, "agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sb := &Sandbox{Bwrap: "bwrap", Home: home, Root: root, NetworkMode: "open"}
+	args, env, err := sb.CommandWithOptions("claude-code", agentDir, agentDir, nil, "claude", []string{"-p", "x"}, SandboxOptions{AllowWebRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := strings.Join(append(args, env...), " ")
+	if strings.Contains(all, "3129") || strings.Contains(all, "webread") {
+		t.Fatalf("open mode must not wire web_read: %s", all)
+	}
+	_ = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			if raw, rerr := os.ReadFile(p); rerr == nil && strings.Contains(string(raw), "3129") {
+				t.Errorf("open mode wrote a web_read MCP config: %s", p)
+			}
+		}
+		return nil
+	})
 }

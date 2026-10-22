@@ -564,7 +564,7 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		AddDirs:      add,
 		Grants:       grants,
 		AgentDir:     agentDir,
-		AllowWebRead: conf.Sandbox && conf.AllowWebRead,
+		AllowWebRead: conf.Sandbox && conf.AllowWebRead && s.Cfg.SandboxNetwork != "open",
 	}
 	// Sandboxed agents may read and write their folders but not run
 	// commands (decision, 2026-10-15); full-access agents run as in a terminal.

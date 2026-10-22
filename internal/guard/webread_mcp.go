@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -167,7 +168,7 @@ func (ws *WebReadServer) handleWebRead(ctx context.Context, _ *mcp.CallToolReque
 		}
 	}
 
-	escaped := strings.ReplaceAll(sliced, "</web_content>", "&lt;/web_content&gt;")
+	escaped := webContentClose.ReplaceAllString(sliced, "&lt;/web_content&gt;")
 	wrapped := fmt.Sprintf("<web_content url=%q fetched_at=%q>%s</web_content>", cp.page.FinalURL, cp.fetchedAt.Format(time.RFC3339), escaped)
 
 	out := WebReadOutput{
@@ -202,3 +203,7 @@ func (ws *WebReadServer) VisitedURLs() []string {
 	defer ws.mu.Unlock()
 	return append([]string(nil), ws.visitedURLs...)
 }
+
+// webContentClose matches any spelling of the closing tag (case, spaces), so
+// page text cannot end the <web_content> frame early.
+var webContentClose = regexp.MustCompile(`(?i)<\s*/\s*web_content\s*>`)
