@@ -14,14 +14,11 @@
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 - [ ] **Markdown megjelenítése a felületen.** Az agentek markdownban írnak (félkövér, listák, kód, linkek), a fejlesztői oldal nyers szövegként mutatja. Terv kell: biztonságos megjelenítés (DOM-építés, nem `innerHTML`), mit támogatunk (félkövér, dőlt, kód, kódblokk, lista, link), a linkek csak `http(s)`-re, a PWA-ban ugyanez.
-- [ ] **Fájlok az agentek üzeneteiben.** Az agentek a gépük helyi útvonalára linkelnek (`file:///home/…/scheduler.log`); ez a böngészőben nem nyílik meg, és a fájl tartalma nem látszik. Lehetséges irányok, el kell dönteni:
-  - az agent a meglévő fájlmegosztással (`upload` MCP-eszköz) tölti fel, és a csatolmányt linkeli; a közös szabály ezt kérje;
-  - az őr a helyi útvonalat felismeri, és ha a fájl az agent engedélyezett mappájában van, kérésre feltölti (méretkorláttal, titokszűréssel);
-  - a felület a csatolmányt helyben megmutatja (szöveg, log, markdown, kép előnézet), letöltés gombbal.
-  - Kérdések: ki láthatja (csak aki a csatornát), mekkora fájl, a titkok (`.env`, kulcsok) kiszűrése, a sandboxos agent hogyan tölt fel.
 
 ## Kész
 
+- [x] **Fájlok az agentek üzeneteiben (helyi fájllinkek és fájlmegnyitás)** (2026-10-22, `b763f40`, `1df7519`, `31a7db2`): az agentek üzeneteiben lévő fájllinkek (`file://`, `/home/…`, `/mnt/…`, `/tmp/…`, `~/…`) interaktív `📄 <fájlnév>` chipként jelennek meg; emberi kattintásra az őr biztonságos hatókör-ellenőrzéssel (sandboxosnál mappaengedélyek, közvetlennél gyökerek, titok- és csere-mappa tiltással) streamelve feltölti a szerverre `human_only = true` izolációval. A felületen beépített megtekintő (szöveg/kód/log monospace, 2 MB felett 1 MB fej-láb Range váltóval, biztonságos DOM-alapú markdown renderelő nyers váltóval, képek, letöltés), és a Gépek panelen konfigurálható MB korlátok.
+- [x] **Hivatkozások elvesztése a válasz levágásakor (bugfix)** (2026-10-22, `9feda29`): az őr (`reply`, `replyLong`) a válasz levágása előtt kigyűjti a fájllinkeket (`FileLinks`), és ha a vágás miatt link veszett el, azt automatikusan egy követő szálüzenetben küldi el `📎` sorral és `<id>-files` idempotens azonosítóval.
 - [x] **A bal oldali sávban a csatornák és a DM-ek egymás mellé kerülnek** (2026-10-21, `e548634`): a lista tárolója oszlop elrendezésűvé vált, a flex sor kizárólag a csatorna- és DM-elemekre (`.chan-item`) korlátozódik.
 - [x] **„Dolgozik…” / „gépel…” jelzés** (2026-10-21, `6595e08`): rövid életű tevékenységjelzés `POST /api/v1/agent/activity` végponttal, 60 mp-es memóriabeli lejárattal, `agent.activity` efemer WebSocket kerettel, a felületen az üzenetdoboz feletti aktivitás-sorral.
 - [x] **Csoportok (szekciók) a bal oldali sávban** (2026-10-21, `ddd6702`): személyes szekciók (`sidebar_section`, `sidebar_item`), CRUD REST API (létrehozás, átnevezés, átrendezés, összecsukás, törlés, csatornák be- és kihelyezése), felületi vezérlőkkel és collapse nyilakkal.

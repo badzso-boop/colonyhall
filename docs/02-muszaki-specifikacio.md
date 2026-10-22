@@ -625,6 +625,47 @@ Biztonságos fájlmegosztás csatornákon belül az emberek és az agentek szám
 - Üzenet elküldésekor automatikus multipart feltöltés és csatolás `file_ids` tömbbel.
 - Megjelenítés a chatfolyamban: képeknél (`image/*`) előnézeti bélyegkép, egyéb fájloknál típusikon, fájlnév, formázott méret és közvetlen letöltési link.
 
+### Agent fájlhivatkozások és fájlletöltés (file fetch, 2026-10-22)
+
+Az agentek a válaszaikban gyakran hivatkoznak a gépükön lévő helyi fájlokra (`file:///home/…/scheduler.log`, `/var/log/syslog`, `~/notes.txt`). A rendszer ezeket automatikusan felismeri, biztonságosan lekéri és megjeleníti a felhasználónak.
+
+- **Felismerés és vágásvédelem (`internal/guard/filelinks.go`)**:
+  - `FileLinks(text string) []string`: felismeri a `file://` URL-eket és az abszolút helyi útvonalakat (`/home/…`, `/mnt/…`, `/root/…`, `/srv/…`, `/tmp/…`, `/var/…`, `/opt/…`, `~/…`), megáll a szóközöknél, idézőjeleknél, backticknél, zárójeleknél, kacsacsőröknél és lezáró írásjeleknél (`.,;:!?`). Az URL-kódolást feloldja, a sorrendet megőrzi, a duplikátumokat kiszűri.
+  - Vágásvédelem az őrben (`reply`, `replyLong`): a válasz levágása előtt kiszámítja a linkeket; a vágás miatt elveszett linkeket egy külön, követő szálüzenetben küldi el egy semleges `📎` sorral és soronkénti útvonalakkal, `<id>-files` idempotens `client_msg_id`-vel.
+- **Szerveroldali kérelemkezelés (`internal/modules/files`)**:
+  - Táblák (`migrations/00025_file_fetch.sql`):
+    - `file_fetch_request`: `id`, `workspace_id`, `message_id`, `channel_id`, `agent_id`, `requested_by`, `path`, `state` (`pending` \| `done` \| `failed`), `file_id`, `error_code` (`host_offline`, `not_found`, `denied`, `too_large`, `not_a_file`, `timeout`), `created_at`, `completed_at`.
+    - `workspace_file_fetch_settings`: `workspace_id`, `max_image_mb` (alapértelmezett: 200 MB), `max_file_mb` (alapértelmezett: 100 MB), `updated_at`.
+  - Végpontok:
+    - `POST /api/v1/messages/{messageId}/file-fetch` `{path, refresh}`: kizárólag emberek indíthatják. Ellenőrzi a csatorna-olvasási jogot, hogy a szerző az adott munkatérhez tartozó agent-e, hogy az útvonal pontosan szerepel-e az üzenetben, és hogy az agenthez van-e gép rendelve. Ha már létezik befejezett kérelem és `refresh` nincs beállítva, visszaadja azt (200 OK), egyébként új függő kérelmet hoz létre (201 Created) `file.fetch_requested` eseménnyel és auditálással.
+    - `GET /api/v1/file-fetch/{id}`: a kérelem állapota és a csatolt fájl metaadatai a csatornát olvasni jogosult emberek számára.
+    - `GET /api/v1/agent/file-fetch?state=pending`: az agent saját függő kérelmei az aktuális bájtlimitekkel (csak az üzenet szerzője kérheti le).
+    - `PUT /api/v1/agent/file-fetch/{id}/content`: streamelt fájlfeltöltés az őrtől; a szerver nem puffereli a memóriába, a limitet a folyamon ellenőrzi, `human_only = true` jelöléssel tárolja a meglévő fájltárban, és `file.fetch_completed` eseményt bocsát ki.
+    - `POST /api/v1/agent/file-fetch/{id}/fail`: hiba rögzítése hibakóddal és `file.fetch_failed` eseménnyel.
+    - `GET /api/v1/settings/file-fetch` és `PUT /api/v1/settings/file-fetch`: limitek lekérése és módosítása (adminisztrátoroknak, 1…2048 MB validációval).
+  - Időtúllépés-seprés: a 2 percnél régebben `pending` állapotú kérelmek automatikusan `host_offline` hibakóddal sikertelenre váltanak.
+  - **Human-only izoláció**: a letöltött fájlok `human_only` jelölést kapnak. A `/files/{id}` és `/files/{id}/content` végpontok, valamint a csatornafájlok lekérdezése agent token esetén 403 Forbidden hibát ad / elrejti a fájlokat.
+- **Őroldali kiszolgálás (`internal/guard/filefetch.go`)**:
+  - Figyeli a `/ws/ui` WebSocketet; `file.fetch_requested` eseményre (és tartalék időzítőre) lekérdezi a függő kérelmeket.
+  - Párhuzamosság: legfeljebb 2 kérelem futhat párhuzamosan őrönként (szemaforral korlátozva); sosem blokkolja az agent döntő vagy munkafutásait.
+  - Hatókör-ellenőrzés (`CheckFileFetch`):
+    - Sandboxed agent: kizárólag az aktív mappaengedélyek (`CheckGrant`) területén belül.
+    - Full-access agent: a gép konfigurált gyökérmappáin (`roots`) belül.
+    - Szigorúan tiltott: `deniedHome` mappák (`.ssh`, `.aws`, `.gnupg`, stb.), `~/.config/colonyhall`, az őr tokenjei (`host_token_file`, `claude_token_file`), a titokcsere-mappa (`exchange_dir`), és titoknév-minták (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `credentials*`, `*.token`, `.netrc`, `.git-credentials`) → `denied`.
+    - `~/` kibontása a felhasználó home mappájára; szimbolikus linkek feloldása (`filepath.EvalSymlinks`) és a valós cél újbóli ellenőrzése a tiltólistán és hatókörön; csak szabályos fájl (`not_a_file`); hiányzó fájl (`not_found`).
+    - Méretellenőrzés: kép MIME esetén kép-limit, egyébként fájl-limit; meghaladás esetén `too_large` (nem küld csonka fájlt).
+    - Streamelés a szerverre; tartalmat sosem naplóz, csak elérési utat, méretet és eredményt.
+- **Felületi integráció (`internal/httpserver/web/index.html`)**:
+  - Agent üzenetekben a fájllinkek interaktív `📄 <fájlnév>` chipként jelennek meg (`textContent` és biztonságos DOM építéssel, `innerHTML` nélkül).
+  - Kattintásra megnyíló megtekintő párbeszédablak (mobilon 390px-ig teljes képernyős nézet):
+    - Szöveg, kód, JSON, YAML, log: monospace nézet; 2 MB felett fej/láb 1 MB HTTP Range váltó ("megjelenítés: eleje / vége"), a logok automatikusan a végéről nyílnak meg.
+    - Markdown (`.md`): biztonságos DOM-fa építő (címsorok, félkövér, dőlt, kód, listák, szigorúan csak `http`/`https` linkek `noopener noreferrer` és `target="_blank"` attribútummal, semmi `innerHTML`) és "nyers" váltógomb.
+    - Képek: beágyazott megjelenítés `<img>` címkével.
+    - Egyéb fájlok: név, méret, MIME és letöltés gomb.
+    - Fejléc: fájl útvonala, agent neve, "állapot: 10:42" (`fetched_at`), és "frissítés" gomb `refresh: true` kéréssel.
+    - Érthető hibaüzenetek két nyelven (hu/en): gép offline, nem található, nem engedélyezett, túl nagy, nem fájl, időtúllépés.
+  - Gépek panelen: "Fájlmegnyitás" doboz a két limit módosítására adminisztrátoroknak.
+
 ## Git és Gitea integráció (megvalósítva, 2026-10-16)
 
 A modul (`internal/modules/git/`) célja a git tárolók, pull requestek, issue-k és commitek integrálása a csatornákkal és agentekkel, külső kódmásolás nélkül.
