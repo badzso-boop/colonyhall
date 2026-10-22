@@ -374,6 +374,43 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Removed }
 
+  /messages/{messageId}/file-fetch:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: requestFileFetch
+      tags: [files]
+      description: Humans only. Request the guard to fetch a file linked in an agent message.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateFileFetchRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Existing done request returned
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "201":
+          description: Pending request created
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /file-fetch/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getFileFetchRequest
+      tags: [files]
+      description: Humans only. Get status and result of a file fetch request.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: File fetch request
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /channels/{channelId}/read:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
@@ -1156,6 +1193,89 @@ paths:
           description: Rendered instructions
           content: { application/json: { schema: { $ref: "#/components/schemas/AgentInstructions" } } }
         "401": { $ref: "#/components/responses/Problem" }
+
+  /agent/file-fetch:
+    get:
+      operationId: getAgentPendingFileFetches
+      tags: [files]
+      description: Agents only. Get pending file fetch requests for this agent.
+      parameters:
+        - { name: state, in: query, required: false, schema: { type: string, default: pending } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: List of pending file fetches
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentPendingFileFetch" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /agent/file-fetch/{id}/content:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: uploadFetchedFileContent
+      tags: [files]
+      description: Agents only. Upload the streamed content of a requested file.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+          "*/*":
+            schema: { type: string, format: binary }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Stored file fetch request
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+
+  /agent/file-fetch/{id}/fail:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: failFileFetchRequest
+      tags: [files]
+      description: Agents only. Report failure to fetch a requested file.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/FailFileFetchRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Failed file fetch request
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /settings/file-fetch:
+    get:
+      operationId: getFileFetchSettings
+      tags: [files]
+      description: Humans only. Get workspace file fetch limits.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: File fetch settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchSettings" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateFileFetchSettings
+      tags: [files]
+      description: Admins only. Update workspace file fetch limits.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateFileFetchSettingsRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated file fetch settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchSettings" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
 components:
   securitySchemes:
@@ -2024,6 +2144,73 @@ components:
         size: { type: integer, format: int64 }
         sha256: { type: string }
         created_at: { type: string, format: date-time }
+        human_only: { type: boolean }
+
+    CreateFileFetchRequest:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1 }
+        refresh: { type: boolean }
+
+    FileAttachmentWithFetchedAt:
+      type: object
+      required: [id, name, mime, size, fetched_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        mime: { type: string }
+        size: { type: integer, format: int64 }
+        fetched_at: { type: string, format: date-time }
+
+    FileFetchRequest:
+      type: object
+      required: [id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        requested_by: { type: string, format: uuid }
+        path: { type: string }
+        state: { type: string, enum: [pending, done, failed] }
+        file_id: { type: string, format: uuid }
+        error_code: { type: string, enum: [host_offline, not_found, denied, too_large, not_a_file, timeout] }
+        file: { $ref: "#/components/schemas/FileAttachmentWithFetchedAt" }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+
+    AgentPendingFileFetch:
+      type: object
+      required: [id, message_id, channel_id, path, max_image_bytes, max_file_bytes]
+      properties:
+        id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        path: { type: string }
+        max_image_bytes: { type: integer, format: int64 }
+        max_file_bytes: { type: integer, format: int64 }
+
+    FailFileFetchRequest:
+      type: object
+      required: [error_code]
+      properties:
+        error_code: { type: string, enum: [host_offline, not_found, denied, too_large, not_a_file, timeout] }
+
+    FileFetchSettings:
+      type: object
+      required: [max_image_mb, max_file_mb]
+      properties:
+        max_image_mb: { type: integer, minimum: 1, maximum: 2048 }
+        max_file_mb: { type: integer, minimum: 1, maximum: 2048 }
+
+    UpdateFileFetchSettingsRequest:
+      type: object
+      required: [max_image_mb, max_file_mb]
+      properties:
+        max_image_mb: { type: integer, minimum: 1, maximum: 2048 }
+        max_file_mb: { type: integer, minimum: 1, maximum: 2048 }
 
 
     LinkCard:

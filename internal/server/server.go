@@ -292,6 +292,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Store:        fiStore,
 		Storage:      storageBackend,
 		Conversation: cvSvc,
+		Actors:       idSvc,
+		Hosts:        hoSvc,
 		Events:       events,
 		Bus:          b,
 		Clock:        opt.Clock,
@@ -461,6 +463,22 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		a.Question.Loop(ctx, 15*time.Second, a.logger.Info)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(10 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if a.Files != nil {
+					_, _ = a.Files.SweepPending(ctx)
+				}
+			}
+		}
 	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)

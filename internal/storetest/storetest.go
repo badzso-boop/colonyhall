@@ -1456,6 +1456,134 @@ func testFiles(t *testing.T, b Backend) {
 	if len(batchAtts[msg1ID]) != 2 || len(batchAtts[msg2ID]) != 1 || len(batchAtts[gen.New()]) != 0 {
 		t.Fatalf("unexpected batch attachments: %+v", batchAtts)
 	}
+
+	// 5. HumanOnly file
+	f3ID := gen.New()
+	f3 := files.File{
+		ID:          f3ID,
+		WorkspaceID: ws,
+		UploadedBy:  u1,
+		ChannelID:   ch1,
+		Name:        "secret.log",
+		Mime:        "text/plain",
+		Size:        100,
+		SHA256:      "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+		CreatedAt:   t0.Add(2 * time.Minute),
+		HumanOnly:   true,
+	}
+	must(t, b.Files.Insert(ctx, f3))
+	gotF3, err := b.Files.ByID(ctx, f3ID)
+	must(t, err)
+	if !gotF3.HumanOnly {
+		t.Fatalf("expected f3.HumanOnly=true")
+	}
+
+	// 6. FileFetchRequest lifecycle
+	ag1 := gen.New()
+	must(t, b.Identity.CreateActor(ctx, identity.Actor{ID: ag1, WorkspaceID: ws, Kind: identity.KindAgent, Handle: "bot", DisplayName: "Bot", State: "active", Role: identity.RoleMember, CreatedAt: t0}))
+
+	req1ID := gen.New()
+	req1 := files.FileFetchRequest{
+		ID:          req1ID,
+		WorkspaceID: ws,
+		MessageID:   msg1ID,
+		ChannelID:   ch1,
+		AgentID:     ag1,
+		RequestedBy: u1,
+		Path:        "/home/bot/app.log",
+		State:       files.FileFetchPending,
+		CreatedAt:   t0,
+	}
+	must(t, b.Files.InsertFileFetchRequest(ctx, req1))
+
+	gotReq1, err := b.Files.FileFetchRequestByID(ctx, req1ID)
+	must(t, err)
+	if gotReq1.ID != req1ID || gotReq1.State != files.FileFetchPending || gotReq1.Path != "/home/bot/app.log" {
+		t.Fatalf("unexpected req1: %+v", gotReq1)
+	}
+
+	byMsgPath, err := b.Files.FileFetchRequestByMessageAndPath(ctx, ws, msg1ID, "/home/bot/app.log")
+	must(t, err)
+	if byMsgPath.ID != req1ID {
+		t.Fatalf("unexpected byMsgPath: %+v", byMsgPath)
+	}
+
+	agentPending, err := b.Files.ListFileFetchRequestsByAgent(ctx, ws, ag1, files.FileFetchPending)
+	must(t, err)
+	if len(agentPending) != 1 || agentPending[0].ID != req1ID {
+		t.Fatalf("unexpected agentPending: %+v", agentPending)
+	}
+
+	// Complete request
+	completedAt := t0.Add(10 * time.Second)
+	must(t, b.Files.UpdateFileFetchRequestCompleted(ctx, req1ID, f3ID, completedAt))
+	doneReq, err := b.Files.FileFetchRequestByID(ctx, req1ID)
+	must(t, err)
+	if doneReq.State != files.FileFetchDone || doneReq.FileID != f3ID || doneReq.CompletedAt == nil || !doneReq.CompletedAt.Equal(completedAt) {
+		t.Fatalf("unexpected doneReq: %+v", doneReq)
+	}
+
+	// Failed request
+	req2ID := gen.New()
+	req2 := files.FileFetchRequest{
+		ID:          req2ID,
+		WorkspaceID: ws,
+		MessageID:   msg1ID,
+		ChannelID:   ch1,
+		AgentID:     ag1,
+		RequestedBy: u1,
+		Path:        "/home/bot/secret.key",
+		State:       files.FileFetchPending,
+		CreatedAt:   t0.Add(time.Second),
+	}
+	must(t, b.Files.InsertFileFetchRequest(ctx, req2))
+	failedAt := t0.Add(15 * time.Second)
+	must(t, b.Files.UpdateFileFetchRequestFailed(ctx, req2ID, files.FileFetchErrorDenied, failedAt))
+	failReq, err := b.Files.FileFetchRequestByID(ctx, req2ID)
+	must(t, err)
+	if failReq.State != files.FileFetchFailed || failReq.ErrorCode != files.FileFetchErrorDenied {
+		t.Fatalf("unexpected failReq: %+v", failReq)
+	}
+
+	// Sweep list
+	req3ID := gen.New()
+	req3 := files.FileFetchRequest{
+		ID:          req3ID,
+		WorkspaceID: ws,
+		MessageID:   msg1ID,
+		ChannelID:   ch1,
+		AgentID:     ag1,
+		RequestedBy: u1,
+		Path:        "/home/bot/timeout.log",
+		State:       files.FileFetchPending,
+		CreatedAt:   t0.Add(-5 * time.Minute),
+	}
+	must(t, b.Files.InsertFileFetchRequest(ctx, req3))
+	expired, err := b.Files.ListPendingFileFetchRequestsBefore(ctx, t0.Add(-2*time.Minute))
+	must(t, err)
+	if len(expired) != 1 || expired[0].ID != req3ID {
+		t.Fatalf("unexpected expired requests: %+v", expired)
+	}
+
+	// 7. Settings
+	stDefault, err := b.Files.GetFileFetchSettings(ctx, ws)
+	must(t, err)
+	if stDefault.MaxImageMB != files.DefaultMaxImageMB || stDefault.MaxFileMB != files.DefaultMaxFileMB {
+		t.Fatalf("unexpected default settings: %+v", stDefault)
+	}
+
+	newSt := files.FileFetchSettings{
+		WorkspaceID: ws,
+		MaxImageMB:  500,
+		MaxFileMB:   300,
+		UpdatedAt:   t0.Add(time.Hour),
+	}
+	must(t, b.Files.UpsertFileFetchSettings(ctx, newSt))
+	gotSt, err := b.Files.GetFileFetchSettings(ctx, ws)
+	must(t, err)
+	if gotSt.MaxImageMB != 500 || gotSt.MaxFileMB != 300 {
+		t.Fatalf("unexpected updated settings: %+v", gotSt)
+	}
 }
 
 func testGit(t *testing.T, b Backend) {

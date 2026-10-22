@@ -111,7 +111,7 @@ func (q *Queries) AttachmentsForMessages(ctx context.Context, dollar_1 []uuid.UU
 }
 
 const fileByID = `-- name: FileByID :one
-SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at
+SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only
 FROM file
 WHERE id = $1
 `
@@ -129,12 +129,73 @@ func (q *Queries) FileByID(ctx context.Context, id uuid.UUID) (File, error) {
 		&i.Size,
 		&i.Sha256,
 		&i.CreatedAt,
+		&i.HumanOnly,
+	)
+	return i, err
+}
+
+const fileFetchRequestByID = `-- name: FileFetchRequestByID :one
+SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+FROM file_fetch_request
+WHERE id = $1
+`
+
+func (q *Queries) FileFetchRequestByID(ctx context.Context, id uuid.UUID) (FileFetchRequest, error) {
+	row := q.db.QueryRow(ctx, fileFetchRequestByID, id)
+	var i FileFetchRequest
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.MessageID,
+		&i.ChannelID,
+		&i.AgentID,
+		&i.RequestedBy,
+		&i.Path,
+		&i.State,
+		&i.FileID,
+		&i.ErrorCode,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
+const fileFetchRequestByMessageAndPath = `-- name: FileFetchRequestByMessageAndPath :one
+SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+FROM file_fetch_request
+WHERE workspace_id = $1 AND message_id = $2 AND path = $3
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type FileFetchRequestByMessageAndPathParams struct {
+	WorkspaceID uuid.UUID
+	MessageID   uuid.UUID
+	Path        string
+}
+
+func (q *Queries) FileFetchRequestByMessageAndPath(ctx context.Context, arg FileFetchRequestByMessageAndPathParams) (FileFetchRequest, error) {
+	row := q.db.QueryRow(ctx, fileFetchRequestByMessageAndPath, arg.WorkspaceID, arg.MessageID, arg.Path)
+	var i FileFetchRequest
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.MessageID,
+		&i.ChannelID,
+		&i.AgentID,
+		&i.RequestedBy,
+		&i.Path,
+		&i.State,
+		&i.FileID,
+		&i.ErrorCode,
+		&i.CreatedAt,
+		&i.CompletedAt,
 	)
 	return i, err
 }
 
 const filesByIDs = `-- name: FilesByIDs :many
-SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at
+SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only
 FROM file
 WHERE id = ANY($1::uuid[])
 `
@@ -158,6 +219,7 @@ func (q *Queries) FilesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]File,
 			&i.Size,
 			&i.Sha256,
 			&i.CreatedAt,
+			&i.HumanOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -169,9 +231,27 @@ func (q *Queries) FilesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]File,
 	return items, nil
 }
 
+const getFileFetchSettings = `-- name: GetFileFetchSettings :one
+SELECT workspace_id, max_image_mb, max_file_mb, updated_at
+FROM workspace_file_fetch_settings
+WHERE workspace_id = $1
+`
+
+func (q *Queries) GetFileFetchSettings(ctx context.Context, workspaceID uuid.UUID) (WorkspaceFileFetchSetting, error) {
+	row := q.db.QueryRow(ctx, getFileFetchSettings, workspaceID)
+	var i WorkspaceFileFetchSetting
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.MaxImageMb,
+		&i.MaxFileMb,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertFile = `-- name: InsertFile :exec
-INSERT INTO file (id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO file (id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type InsertFileParams struct {
@@ -184,6 +264,7 @@ type InsertFileParams struct {
 	Size        int64
 	Sha256      string
 	CreatedAt   time.Time
+	HumanOnly   bool
 }
 
 func (q *Queries) InsertFile(ctx context.Context, arg InsertFileParams) error {
@@ -197,12 +278,100 @@ func (q *Queries) InsertFile(ctx context.Context, arg InsertFileParams) error {
 		arg.Size,
 		arg.Sha256,
 		arg.CreatedAt,
+		arg.HumanOnly,
 	)
 	return err
 }
 
+const insertFileFetchRequest = `-- name: InsertFileFetchRequest :exec
+INSERT INTO file_fetch_request (
+    id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+)
+`
+
+type InsertFileFetchRequestParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	MessageID   uuid.UUID
+	ChannelID   uuid.UUID
+	AgentID     uuid.UUID
+	RequestedBy uuid.UUID
+	Path        string
+	State       string
+	FileID      *uuid.UUID
+	ErrorCode   *string
+	CreatedAt   time.Time
+	CompletedAt *time.Time
+}
+
+func (q *Queries) InsertFileFetchRequest(ctx context.Context, arg InsertFileFetchRequestParams) error {
+	_, err := q.db.Exec(ctx, insertFileFetchRequest,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.MessageID,
+		arg.ChannelID,
+		arg.AgentID,
+		arg.RequestedBy,
+		arg.Path,
+		arg.State,
+		arg.FileID,
+		arg.ErrorCode,
+		arg.CreatedAt,
+		arg.CompletedAt,
+	)
+	return err
+}
+
+const listFileFetchRequestsByAgent = `-- name: ListFileFetchRequestsByAgent :many
+SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+FROM file_fetch_request
+WHERE workspace_id = $1 AND agent_id = $2 AND state = $3
+ORDER BY created_at ASC
+`
+
+type ListFileFetchRequestsByAgentParams struct {
+	WorkspaceID uuid.UUID
+	AgentID     uuid.UUID
+	State       string
+}
+
+func (q *Queries) ListFileFetchRequestsByAgent(ctx context.Context, arg ListFileFetchRequestsByAgentParams) ([]FileFetchRequest, error) {
+	rows, err := q.db.Query(ctx, listFileFetchRequestsByAgent, arg.WorkspaceID, arg.AgentID, arg.State)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FileFetchRequest
+	for rows.Next() {
+		var i FileFetchRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.MessageID,
+			&i.ChannelID,
+			&i.AgentID,
+			&i.RequestedBy,
+			&i.Path,
+			&i.State,
+			&i.FileID,
+			&i.ErrorCode,
+			&i.CreatedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFilesByChannel = `-- name: ListFilesByChannel :many
-SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at
+SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only
 FROM file
 WHERE channel_id = $1
 ORDER BY created_at DESC
@@ -227,6 +396,7 @@ func (q *Queries) ListFilesByChannel(ctx context.Context, channelID uuid.UUID) (
 			&i.Size,
 			&i.Sha256,
 			&i.CreatedAt,
+			&i.HumanOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -236,4 +406,104 @@ func (q *Queries) ListFilesByChannel(ctx context.Context, channelID uuid.UUID) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const listPendingFileFetchRequestsBefore = `-- name: ListPendingFileFetchRequestsBefore :many
+SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+FROM file_fetch_request
+WHERE state = 'pending' AND created_at <= $1
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListPendingFileFetchRequestsBefore(ctx context.Context, createdAt time.Time) ([]FileFetchRequest, error) {
+	rows, err := q.db.Query(ctx, listPendingFileFetchRequestsBefore, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FileFetchRequest
+	for rows.Next() {
+		var i FileFetchRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.MessageID,
+			&i.ChannelID,
+			&i.AgentID,
+			&i.RequestedBy,
+			&i.Path,
+			&i.State,
+			&i.FileID,
+			&i.ErrorCode,
+			&i.CreatedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateFileFetchRequestCompleted = `-- name: UpdateFileFetchRequestCompleted :exec
+UPDATE file_fetch_request
+SET state = 'done', file_id = $2, completed_at = $3
+WHERE id = $1
+`
+
+type UpdateFileFetchRequestCompletedParams struct {
+	ID          uuid.UUID
+	FileID      *uuid.UUID
+	CompletedAt *time.Time
+}
+
+func (q *Queries) UpdateFileFetchRequestCompleted(ctx context.Context, arg UpdateFileFetchRequestCompletedParams) error {
+	_, err := q.db.Exec(ctx, updateFileFetchRequestCompleted, arg.ID, arg.FileID, arg.CompletedAt)
+	return err
+}
+
+const updateFileFetchRequestFailed = `-- name: UpdateFileFetchRequestFailed :exec
+UPDATE file_fetch_request
+SET state = 'failed', error_code = $2, completed_at = $3
+WHERE id = $1
+`
+
+type UpdateFileFetchRequestFailedParams struct {
+	ID          uuid.UUID
+	ErrorCode   *string
+	CompletedAt *time.Time
+}
+
+func (q *Queries) UpdateFileFetchRequestFailed(ctx context.Context, arg UpdateFileFetchRequestFailedParams) error {
+	_, err := q.db.Exec(ctx, updateFileFetchRequestFailed, arg.ID, arg.ErrorCode, arg.CompletedAt)
+	return err
+}
+
+const upsertFileFetchSettings = `-- name: UpsertFileFetchSettings :exec
+INSERT INTO workspace_file_fetch_settings (workspace_id, max_image_mb, max_file_mb, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id) DO UPDATE SET
+    max_image_mb = EXCLUDED.max_image_mb,
+    max_file_mb = EXCLUDED.max_file_mb,
+    updated_at = EXCLUDED.updated_at
+`
+
+type UpsertFileFetchSettingsParams struct {
+	WorkspaceID uuid.UUID
+	MaxImageMb  int32
+	MaxFileMb   int32
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) UpsertFileFetchSettings(ctx context.Context, arg UpsertFileFetchSettingsParams) error {
+	_, err := q.db.Exec(ctx, upsertFileFetchSettings,
+		arg.WorkspaceID,
+		arg.MaxImageMb,
+		arg.MaxFileMb,
+		arg.UpdatedAt,
+	)
+	return err
 }

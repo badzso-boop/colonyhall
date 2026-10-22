@@ -180,6 +180,87 @@ func (e CreateScheduleRequestCatchUp) Valid() bool {
 	}
 }
 
+// Defines values for FailFileFetchRequestErrorCode.
+const (
+	FailFileFetchRequestErrorCodeDenied      FailFileFetchRequestErrorCode = "denied"
+	FailFileFetchRequestErrorCodeHostOffline FailFileFetchRequestErrorCode = "host_offline"
+	FailFileFetchRequestErrorCodeNotAFile    FailFileFetchRequestErrorCode = "not_a_file"
+	FailFileFetchRequestErrorCodeNotFound    FailFileFetchRequestErrorCode = "not_found"
+	FailFileFetchRequestErrorCodeTimeout     FailFileFetchRequestErrorCode = "timeout"
+	FailFileFetchRequestErrorCodeTooLarge    FailFileFetchRequestErrorCode = "too_large"
+)
+
+// Valid indicates whether the value is a known member of the FailFileFetchRequestErrorCode enum.
+func (e FailFileFetchRequestErrorCode) Valid() bool {
+	switch e {
+	case FailFileFetchRequestErrorCodeDenied:
+		return true
+	case FailFileFetchRequestErrorCodeHostOffline:
+		return true
+	case FailFileFetchRequestErrorCodeNotAFile:
+		return true
+	case FailFileFetchRequestErrorCodeNotFound:
+		return true
+	case FailFileFetchRequestErrorCodeTimeout:
+		return true
+	case FailFileFetchRequestErrorCodeTooLarge:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileFetchRequestErrorCode.
+const (
+	FileFetchRequestErrorCodeDenied      FileFetchRequestErrorCode = "denied"
+	FileFetchRequestErrorCodeHostOffline FileFetchRequestErrorCode = "host_offline"
+	FileFetchRequestErrorCodeNotAFile    FileFetchRequestErrorCode = "not_a_file"
+	FileFetchRequestErrorCodeNotFound    FileFetchRequestErrorCode = "not_found"
+	FileFetchRequestErrorCodeTimeout     FileFetchRequestErrorCode = "timeout"
+	FileFetchRequestErrorCodeTooLarge    FileFetchRequestErrorCode = "too_large"
+)
+
+// Valid indicates whether the value is a known member of the FileFetchRequestErrorCode enum.
+func (e FileFetchRequestErrorCode) Valid() bool {
+	switch e {
+	case FileFetchRequestErrorCodeDenied:
+		return true
+	case FileFetchRequestErrorCodeHostOffline:
+		return true
+	case FileFetchRequestErrorCodeNotAFile:
+		return true
+	case FileFetchRequestErrorCodeNotFound:
+		return true
+	case FileFetchRequestErrorCodeTimeout:
+		return true
+	case FileFetchRequestErrorCodeTooLarge:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileFetchRequestState.
+const (
+	FileFetchRequestStateDone    FileFetchRequestState = "done"
+	FileFetchRequestStateFailed  FileFetchRequestState = "failed"
+	FileFetchRequestStatePending FileFetchRequestState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the FileFetchRequestState enum.
+func (e FileFetchRequestState) Valid() bool {
+	switch e {
+	case FileFetchRequestStateDone:
+		return true
+	case FileFetchRequestStateFailed:
+		return true
+	case FileFetchRequestStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FolderGrantMode.
 const (
 	FolderGrantModeRead  FolderGrantMode = "read"
@@ -781,6 +862,16 @@ type AgentOverview struct {
 	Usage          *OverviewUsage           `json:"usage,omitempty"`
 }
 
+// AgentPendingFileFetch defines model for AgentPendingFileFetch.
+type AgentPendingFileFetch struct {
+	ChannelId     openapi_types.UUID `json:"channel_id"`
+	Id            openapi_types.UUID `json:"id"`
+	MaxFileBytes  int64              `json:"max_file_bytes"`
+	MaxImageBytes int64              `json:"max_image_bytes"`
+	MessageId     openapi_types.UUID `json:"message_id"`
+	Path          string             `json:"path"`
+}
+
 // AgentRules defines model for AgentRules.
 type AgentRules struct {
 	CreatedAt *time.Time          `json:"created_at,omitempty"`
@@ -953,6 +1044,12 @@ type CreateChannelRequest struct {
 	Name        string       `json:"name"`
 }
 
+// CreateFileFetchRequest defines model for CreateFileFetchRequest.
+type CreateFileFetchRequest struct {
+	Path    string `json:"path"`
+	Refresh *bool  `json:"refresh,omitempty"`
+}
+
 // CreateScheduleRequest defines model for CreateScheduleRequest.
 type CreateScheduleRequest struct {
 	// At One-off: RFC 3339, or local time in `timezone` as YYYY-MM-DD HH:MM
@@ -1064,10 +1161,19 @@ type EnrollResponse struct {
 	Token string `json:"token"`
 }
 
+// FailFileFetchRequest defines model for FailFileFetchRequest.
+type FailFileFetchRequest struct {
+	ErrorCode FailFileFetchRequestErrorCode `json:"error_code"`
+}
+
+// FailFileFetchRequestErrorCode defines model for FailFileFetchRequest.ErrorCode.
+type FailFileFetchRequestErrorCode string
+
 // File defines model for File.
 type File struct {
 	ChannelId   openapi_types.UUID `json:"channel_id"`
 	CreatedAt   time.Time          `json:"created_at"`
+	HumanOnly   *bool              `json:"human_only,omitempty"`
 	Id          openapi_types.UUID `json:"id"`
 	Mime        string             `json:"mime"`
 	Name        string             `json:"name"`
@@ -1083,6 +1189,44 @@ type FileAttachment struct {
 	Mime string             `json:"mime"`
 	Name string             `json:"name"`
 	Size int64              `json:"size"`
+}
+
+// FileAttachmentWithFetchedAt defines model for FileAttachmentWithFetchedAt.
+type FileAttachmentWithFetchedAt struct {
+	FetchedAt time.Time          `json:"fetched_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Mime      string             `json:"mime"`
+	Name      string             `json:"name"`
+	Size      int64              `json:"size"`
+}
+
+// FileFetchRequest defines model for FileFetchRequest.
+type FileFetchRequest struct {
+	AgentId     openapi_types.UUID           `json:"agent_id"`
+	ChannelId   openapi_types.UUID           `json:"channel_id"`
+	CompletedAt *time.Time                   `json:"completed_at,omitempty"`
+	CreatedAt   time.Time                    `json:"created_at"`
+	ErrorCode   *FileFetchRequestErrorCode   `json:"error_code,omitempty"`
+	File        *FileAttachmentWithFetchedAt `json:"file,omitempty"`
+	FileId      *openapi_types.UUID          `json:"file_id,omitempty"`
+	Id          openapi_types.UUID           `json:"id"`
+	MessageId   openapi_types.UUID           `json:"message_id"`
+	Path        string                       `json:"path"`
+	RequestedBy openapi_types.UUID           `json:"requested_by"`
+	State       FileFetchRequestState        `json:"state"`
+	WorkspaceId openapi_types.UUID           `json:"workspace_id"`
+}
+
+// FileFetchRequestErrorCode defines model for FileFetchRequest.ErrorCode.
+type FileFetchRequestErrorCode string
+
+// FileFetchRequestState defines model for FileFetchRequest.State.
+type FileFetchRequestState string
+
+// FileFetchSettings defines model for FileFetchSettings.
+type FileFetchSettings struct {
+	MaxFileMb  int `json:"max_file_mb"`
+	MaxImageMb int `json:"max_image_mb"`
 }
 
 // FolderGrant defines model for FolderGrant.
@@ -1750,6 +1894,12 @@ type UpdateAgentRulesRequest struct {
 	Text string `json:"text"`
 }
 
+// UpdateFileFetchSettingsRequest defines model for UpdateFileFetchSettingsRequest.
+type UpdateFileFetchSettingsRequest struct {
+	MaxFileMb  int `json:"max_file_mb"`
+	MaxImageMb int `json:"max_image_mb"`
+}
+
 // UpdateSidebarSectionRequest defines model for UpdateSidebarSectionRequest.
 type UpdateSidebarSectionRequest struct {
 	Collapsed *bool   `json:"collapsed,omitempty"`
@@ -1818,6 +1968,11 @@ type ListAuditParams struct {
 	// Before Return entries older than this seq
 	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetAgentPendingFileFetchesParams defines parameters for GetAgentPendingFileFetches.
+type GetAgentPendingFileFetchesParams struct {
+	State *string `form:"state,omitempty" json:"state,omitempty"`
 }
 
 // GetInboxParams defines parameters for GetInbox.
@@ -1907,6 +2062,9 @@ type ReportAgentActivityJSONRequestBody = AgentActivityRequest
 // ReportRunErrorJSONRequestBody defines body for ReportRunError for application/json ContentType.
 type ReportRunErrorJSONRequestBody = RunErrorRequest
 
+// FailFileFetchRequestJSONRequestBody defines body for FailFileFetchRequest for application/json ContentType.
+type FailFileFetchRequestJSONRequestBody = FailFileFetchRequest
+
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest
 
@@ -1955,11 +2113,17 @@ type EnrollHostJSONRequestBody = EnrollRequest
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
 
+// RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
+type RequestFileFetchJSONRequestBody = CreateFileFetchRequest
+
 // AnswerQuestionJSONRequestBody defines body for AnswerQuestion for application/json ContentType.
 type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest
+
+// UpdateFileFetchSettingsJSONRequestBody defines body for UpdateFileFetchSettings for application/json ContentType.
+type UpdateFileFetchSettingsJSONRequestBody = UpdateFileFetchSettingsRequest
 
 // CreateSidebarSectionJSONRequestBody defines body for CreateSidebarSection for application/json ContentType.
 type CreateSidebarSectionJSONRequestBody = CreateSidebarSectionRequest

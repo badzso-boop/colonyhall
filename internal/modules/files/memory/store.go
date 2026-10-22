@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/platform/db"
@@ -20,6 +21,8 @@ type Store struct {
 	mu           sync.RWMutex
 	files        map[ids.ID]files.File
 	messageFiles map[ids.ID][]msgFileLink // messageID -> []msgFileLink
+	requests     map[ids.ID]files.FileFetchRequest
+	settings     map[ids.ID]files.FileFetchSettings
 }
 
 // NewStore creates a new in-memory file store.
@@ -27,6 +30,8 @@ func NewStore() *Store {
 	return &Store{
 		files:        make(map[ids.ID]files.File),
 		messageFiles: make(map[ids.ID][]msgFileLink),
+		requests:     make(map[ids.ID]files.FileFetchRequest),
+		settings:     make(map[ids.ID]files.FileFetchSettings),
 	}
 }
 
@@ -151,6 +156,129 @@ func (s *Store) AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID)
 		res[mID] = atts
 	}
 	return res, nil
+}
+
+// InsertFileFetchRequest creates a new file fetch request.
+func (s *Store) InsertFileFetchRequest(_ context.Context, req files.FileFetchRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requests[req.ID] = req
+	return nil
+}
+
+// FileFetchRequestByID loads a file fetch request by ID.
+func (s *Store) FileFetchRequestByID(_ context.Context, id ids.ID) (files.FileFetchRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	req, ok := s.requests[id]
+	if !ok {
+		return files.FileFetchRequest{}, db.ErrNotFound
+	}
+	return req, nil
+}
+
+// FileFetchRequestByMessageAndPath loads the most recent request for a message and path.
+func (s *Store) FileFetchRequestByMessageAndPath(_ context.Context, workspaceID, messageID ids.ID, path string) (files.FileFetchRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var matches []files.FileFetchRequest
+	for _, r := range s.requests {
+		if r.WorkspaceID == workspaceID && r.MessageID == messageID && r.Path == path {
+			matches = append(matches, r)
+		}
+	}
+	if len(matches) == 0 {
+		return files.FileFetchRequest{}, db.ErrNotFound
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].CreatedAt.After(matches[j].CreatedAt)
+	})
+	return matches[0], nil
+}
+
+// ListFileFetchRequestsByAgent lists requests for an agent with a given state.
+func (s *Store) ListFileFetchRequestsByAgent(_ context.Context, workspaceID, agentID ids.ID, state files.FileFetchState) ([]files.FileFetchRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []files.FileFetchRequest
+	for _, r := range s.requests {
+		if r.WorkspaceID == workspaceID && r.AgentID == agentID && r.State == state {
+			out = append(out, r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
+// ListPendingFileFetchRequestsBefore lists pending requests created on or before a given time.
+func (s *Store) ListPendingFileFetchRequestsBefore(_ context.Context, before time.Time) ([]files.FileFetchRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []files.FileFetchRequest
+	for _, r := range s.requests {
+		if r.State == files.FileFetchPending && (r.CreatedAt.Before(before) || r.CreatedAt.Equal(before)) {
+			out = append(out, r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
+// UpdateFileFetchRequestCompleted marks a request as done with its stored file ID.
+func (s *Store) UpdateFileFetchRequestCompleted(_ context.Context, id ids.ID, fileID ids.ID, completedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req, ok := s.requests[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	req.State = files.FileFetchDone
+	req.FileID = fileID
+	req.CompletedAt = &completedAt
+	s.requests[id] = req
+	return nil
+}
+
+// UpdateFileFetchRequestFailed marks a request as failed with an error code.
+func (s *Store) UpdateFileFetchRequestFailed(_ context.Context, id ids.ID, errorCode files.FileFetchErrorCode, completedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req, ok := s.requests[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	req.State = files.FileFetchFailed
+	req.ErrorCode = errorCode
+	req.CompletedAt = &completedAt
+	s.requests[id] = req
+	return nil
+}
+
+// GetFileFetchSettings loads workspace file fetch settings.
+func (s *Store) GetFileFetchSettings(_ context.Context, workspaceID ids.ID) (files.FileFetchSettings, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st, ok := s.settings[workspaceID]
+	if !ok {
+		return files.FileFetchSettings{
+			WorkspaceID: workspaceID,
+			MaxImageMB:  files.DefaultMaxImageMB,
+			MaxFileMB:   files.DefaultMaxFileMB,
+		}, nil
+	}
+	return st, nil
+}
+
+// UpsertFileFetchSettings creates or updates workspace file fetch settings.
+func (s *Store) UpsertFileFetchSettings(_ context.Context, st files.FileFetchSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.settings[st.WorkspaceID] = st
+	return nil
 }
 
 var _ files.Store = (*Store)(nil)

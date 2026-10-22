@@ -2,11 +2,12 @@ package files
 
 import (
 	"context"
+	"time"
 
 	"colonyhall/internal/platform/ids"
 )
 
-// Store persists file metadata and message attachments.
+// Store persists file metadata, message attachments, and file fetch requests.
 type Store interface {
 	// Insert saves a new file's metadata.
 	Insert(ctx context.Context, f File) error
@@ -28,4 +29,31 @@ type Store interface {
 
 	// AttachmentsForMessages returns attachments grouped by message ID.
 	AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID) (map[ids.ID][]Attachment, error)
+
+	// InsertFileFetchRequest creates a new file fetch request.
+	InsertFileFetchRequest(ctx context.Context, req FileFetchRequest) error
+
+	// FileFetchRequestByID loads a file fetch request by ID.
+	FileFetchRequestByID(ctx context.Context, id ids.ID) (FileFetchRequest, error)
+
+	// FileFetchRequestByMessageAndPath loads the most recent request for a message and path.
+	FileFetchRequestByMessageAndPath(ctx context.Context, workspaceID, messageID ids.ID, path string) (FileFetchRequest, error)
+
+	// ListFileFetchRequestsByAgent lists requests for an agent with a given state.
+	ListFileFetchRequestsByAgent(ctx context.Context, workspaceID, agentID ids.ID, state FileFetchState) ([]FileFetchRequest, error)
+
+	// ListPendingFileFetchRequestsBefore lists pending requests created on or before a given time.
+	ListPendingFileFetchRequestsBefore(ctx context.Context, before time.Time) ([]FileFetchRequest, error)
+
+	// UpdateFileFetchRequestCompleted marks a request as done with its stored file ID.
+	UpdateFileFetchRequestCompleted(ctx context.Context, id ids.ID, fileID ids.ID, completedAt time.Time) error
+
+	// UpdateFileFetchRequestFailed marks a request as failed with an error code.
+	UpdateFileFetchRequestFailed(ctx context.Context, id ids.ID, errorCode FileFetchErrorCode, completedAt time.Time) error
+
+	// GetFileFetchSettings loads workspace file fetch settings.
+	GetFileFetchSettings(ctx context.Context, workspaceID ids.ID) (FileFetchSettings, error)
+
+	// UpsertFileFetchSettings creates or updates workspace file fetch settings.
+	UpsertFileFetchSettings(ctx context.Context, s FileFetchSettings) error
 }

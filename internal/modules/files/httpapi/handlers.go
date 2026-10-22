@@ -17,9 +17,21 @@ import (
 )
 
 func init() {
-	httpx.RegisterValidation(files.ErrEmptyContent, files.ErrFileTooLarge, files.ErrChannelMismatch, files.ErrNotSender)
+	httpx.RegisterValidation(
+		files.ErrEmptyContent,
+		files.ErrFileTooLarge,
+		files.ErrChannelMismatch,
+		files.ErrNotSender,
+		files.ErrPathNotInMessage,
+		files.ErrAuthorNotAgent,
+		files.ErrAgentNotAssigned,
+		files.ErrInvalidLimit,
+		files.ErrInvalidRequestState,
+		files.ErrUnknownErrorCode,
+	)
 	httpx.RegisterForbidden(files.ErrForbidden)
 	httpx.RegisterStatus(http.StatusNotFound, files.ErrNotFound)
+	httpx.RegisterStatus(http.StatusRequestEntityTooLarge, files.ErrFileTooLarge)
 }
 
 // FileToAPI converts a files.File model to apispec.File.
@@ -34,7 +46,42 @@ func FileToAPI(f files.File) apispec.File {
 		Size:        f.Size,
 		Sha256:      f.SHA256,
 		CreatedAt:   f.CreatedAt,
+		HumanOnly:   &f.HumanOnly,
 	}
+}
+
+// FileFetchRequestToAPI converts a FileFetchRequest model to apispec.FileFetchRequest.
+func FileFetchRequestToAPI(req files.FileFetchRequest, f *files.File) apispec.FileFetchRequest {
+	out := apispec.FileFetchRequest{
+		Id:          req.ID,
+		WorkspaceId: req.WorkspaceID,
+		MessageId:   req.MessageID,
+		ChannelId:   req.ChannelID,
+		AgentId:     req.AgentID,
+		RequestedBy: req.RequestedBy,
+		Path:        req.Path,
+		State:       apispec.FileFetchRequestState(req.State),
+		CreatedAt:   req.CreatedAt,
+		CompletedAt: req.CompletedAt,
+	}
+	if req.FileID != ids.Nil {
+		fid := req.FileID
+		out.FileId = &fid
+	}
+	if req.ErrorCode != "" {
+		code := apispec.FileFetchRequestErrorCode(req.ErrorCode)
+		out.ErrorCode = &code
+	}
+	if f != nil {
+		out.File = &apispec.FileAttachmentWithFetchedAt{
+			Id:        f.ID,
+			Name:      f.Name,
+			Mime:      f.Mime,
+			Size:      f.Size,
+			FetchedAt: f.CreatedAt,
+		}
+	}
+	return out
 }
 
 // Register mounts the files endpoints on mux.
@@ -125,10 +172,149 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 		w.Header().Set("Content-Type", mime)
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", f.Name))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Length", strconv.FormatInt(f.Size, 10))
 
+		if rs, ok := rc.(io.ReadSeeker); ok {
+			http.ServeContent(w, r, f.Name, f.CreatedAt, rs)
+			return
+		}
+
+		w.Header().Set("Content-Length", strconv.FormatInt(f.Size, 10))
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.Copy(w, rc)
+	}))
+
+	// POST /api/v1/messages/{messageId}/file-fetch
+	mux.Handle("POST /api/v1/messages/{messageId}/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
+		messageID, ok := pathID(w, r, "messageId")
+		if !ok {
+			return
+		}
+		var in apispec.CreateFileFetchRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		refresh := in.Refresh != nil && *in.Refresh
+		req, created, err := svc.RequestFileFetch(r.Context(), httpx.Actor(r), messageID, in.Path, refresh)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		status := http.StatusOK
+		if created {
+			status = http.StatusCreated
+		}
+		var f *files.File
+		if req.State == files.FileFetchDone && req.FileID != ids.Nil {
+			file, err := svc.Get(r.Context(), httpx.Actor(r), req.FileID)
+			if err == nil {
+				f = &file
+			}
+		}
+		httpx.JSON(w, status, FileFetchRequestToAPI(req, f))
+	}))
+
+	// GET /api/v1/file-fetch/{id}
+	mux.Handle("GET /api/v1/file-fetch/{id}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		reqID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		req, f, err := svc.GetFileFetch(r.Context(), httpx.Actor(r), reqID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, FileFetchRequestToAPI(req, f))
+	}))
+
+	// GET /api/v1/agent/file-fetch
+	mux.Handle("GET /api/v1/agent/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
+		fetches, err := svc.AgentPendingFileFetches(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := make([]apispec.AgentPendingFileFetch, 0, len(fetches))
+		for _, f := range fetches {
+			out = append(out, apispec.AgentPendingFileFetch{
+				Id:            f.ID,
+				MessageId:     f.MessageID,
+				ChannelId:     f.ChannelID,
+				Path:          f.Path,
+				MaxImageBytes: f.MaxImageBytes,
+				MaxFileBytes:  f.MaxFileBytes,
+			})
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	// PUT /api/v1/agent/file-fetch/{id}/content
+	mux.Handle("PUT /api/v1/agent/file-fetch/{id}/content", wrap(func(w http.ResponseWriter, r *http.Request) {
+		reqID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		contentType := r.Header.Get("Content-Type")
+		filename := r.Header.Get("X-File-Name")
+		mtime := r.Header.Get("X-File-Mtime")
+
+		req, f, err := svc.SaveFetchedContent(r.Context(), httpx.Actor(r), reqID, contentType, filename, mtime, r.Body)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, FileFetchRequestToAPI(req, &f))
+	}))
+
+	// POST /api/v1/agent/file-fetch/{id}/fail
+	mux.Handle("POST /api/v1/agent/file-fetch/{id}/fail", wrap(func(w http.ResponseWriter, r *http.Request) {
+		reqID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var in apispec.FailFileFetchRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		req, err := svc.FailFileFetch(r.Context(), httpx.Actor(r), reqID, files.FileFetchErrorCode(in.ErrorCode))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, FileFetchRequestToAPI(req, nil))
+	}))
+
+	// GET /api/v1/settings/file-fetch
+	mux.Handle("GET /api/v1/settings/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
+		st, err := svc.GetFileFetchSettings(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.FileFetchSettings{
+			MaxImageMb: st.MaxImageMB,
+			MaxFileMb:  st.MaxFileMB,
+		})
+	}))
+
+	// PUT /api/v1/settings/file-fetch
+	mux.Handle("PUT /api/v1/settings/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.UpdateFileFetchSettingsRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		st, err := svc.UpdateFileFetchSettings(r.Context(), httpx.Actor(r), in.MaxImageMb, in.MaxFileMb)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.FileFetchSettings{
+			MaxImageMb: st.MaxImageMB,
+			MaxFileMb:  st.MaxFileMB,
+		})
 	}))
 }
 

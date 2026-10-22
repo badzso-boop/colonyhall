@@ -8,8 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
@@ -24,17 +31,33 @@ type busNotifier interface {
 	Notify(seq int64)
 }
 
-// ChannelReader checks access to channels.
-type ChannelReader interface {
+// ConversationReader checks access and reads messages.
+type ConversationReader interface {
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
+}
+
+// ChannelReader checks access to channels.
+type ChannelReader = ConversationReader
+
+// ActorReader loads actor metadata.
+type ActorReader interface {
+	ActorByID(ctx context.Context, id ids.ID) (identity.Actor, error)
+}
+
+// HostAssignee checks whether an agent has an assignment on a host.
+type HostAssignee interface {
+	Assignment(ctx context.Context, agentID ids.ID) (hosts.Assignment, error)
 }
 
 // Service implements the business logic of the files module.
 type Service struct {
 	Store        Store
 	Storage      StorageBackend
-	Conversation ChannelReader
+	Conversation ConversationReader
+	Actors       ActorReader
+	Hosts        HostAssignee
 	Events       eventsAppender
 	Bus          busNotifier
 	Clock        clock.Clock
@@ -181,6 +204,10 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, fileID ids.ID) (Fi
 		return File{}, ErrNotFound
 	}
 
+	if f.HumanOnly && by.Kind != identity.KindHuman {
+		return File{}, ErrForbidden
+	}
+
 	canRead, err := s.Conversation.CanRead(ctx, by, f.ChannelID)
 	if err != nil {
 		return File{}, err
@@ -217,7 +244,20 @@ func (s *Service) ListByChannel(ctx context.Context, by identity.Actor, channelI
 		return nil, ErrForbidden
 	}
 
-	return s.Store.ListByChannel(ctx, channelID)
+	list, err := s.Store.ListByChannel(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if by.Kind != identity.KindHuman {
+		filtered := make([]File, 0, len(list))
+		for _, f := range list {
+			if !f.HumanOnly {
+				filtered = append(filtered, f)
+			}
+		}
+		return filtered, nil
+	}
+	return list, nil
 }
 
 // ValidateAndAttach validates that all fileIDs belong to the same channel,
@@ -270,4 +310,488 @@ func (s *Service) AttachmentsForMessage(ctx context.Context, messageID ids.ID) (
 // AttachmentsForMessages loads attachments for multiple messages.
 func (s *Service) AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID) (map[ids.ID][]Attachment, error) {
 	return s.Store.AttachmentsForMessages(ctx, messageIDs)
+}
+
+// RequestFileFetch handles a human's request to fetch a file linked in an agent message.
+func (s *Service) RequestFileFetch(ctx context.Context, by identity.Actor, messageID ids.ID, rawPath string, refresh bool) (FileFetchRequest, bool, error) {
+	if by.Kind != identity.KindHuman {
+		return FileFetchRequest{}, false, ErrForbidden
+	}
+
+	msg, err := s.Conversation.MessageByID(ctx, messageID)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+	if msg.WorkspaceID != by.WorkspaceID {
+		return FileFetchRequest{}, false, ErrNotFound
+	}
+
+	canRead, err := s.Conversation.CanRead(ctx, by, msg.ChannelID)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+	if !canRead {
+		return FileFetchRequest{}, false, ErrForbidden
+	}
+
+	if s.Actors == nil {
+		return FileFetchRequest{}, false, ErrNotFound
+	}
+	author, err := s.Actors.ActorByID(ctx, msg.AuthorID)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+	if author.WorkspaceID != by.WorkspaceID {
+		return FileFetchRequest{}, false, ErrNotFound
+	}
+	if author.Kind != identity.KindAgent {
+		return FileFetchRequest{}, false, ErrAuthorNotAgent
+	}
+
+	normPath := NormalizePath(rawPath)
+	if normPath == "" {
+		return FileFetchRequest{}, false, ErrPathNotInMessage
+	}
+	links := FileLinks(msg.Body)
+	if !slices.Contains(links, normPath) {
+		return FileFetchRequest{}, false, ErrPathNotInMessage
+	}
+
+	if s.Hosts == nil {
+		return FileFetchRequest{}, false, ErrAgentNotAssigned
+	}
+	if _, err := s.Hosts.Assignment(ctx, author.ID); err != nil {
+		return FileFetchRequest{}, false, ErrAgentNotAssigned
+	}
+
+	existing, err := s.Store.FileFetchRequestByMessageAndPath(ctx, by.WorkspaceID, msg.ID, normPath)
+	if err == nil {
+		if existing.State == FileFetchDone && !refresh {
+			return existing, false, nil
+		}
+		if existing.State == FileFetchPending && !refresh {
+			return existing, false, nil
+		}
+	}
+
+	now := s.Clock.Now()
+	req := FileFetchRequest{
+		ID:          s.IDs.New(),
+		WorkspaceID: by.WorkspaceID,
+		MessageID:   msg.ID,
+		ChannelID:   msg.ChannelID,
+		AgentID:     author.ID,
+		RequestedBy: by.ID,
+		Path:        normPath,
+		State:       FileFetchPending,
+		CreatedAt:   now,
+	}
+
+	if err := s.Store.InsertFileFetchRequest(ctx, req); err != nil {
+		return FileFetchRequest{}, false, err
+	}
+
+	if s.Events != nil {
+		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchRequested, by.ID, msg.ChannelID, "files", req.ID, FetchRequestedPayload{
+			RequestID: req.ID.String(),
+			AgentID:   author.ID.String(),
+			MessageID: msg.ID.String(),
+		}, now)
+		if err == nil {
+			_ = s.Events.Append(ctx, &ev)
+			if s.Bus != nil {
+				s.Bus.Notify(ev.Seq)
+			}
+		}
+	}
+
+	return req, true, nil
+}
+
+// GetFileFetch returns a file fetch request, failing expired ones with host_offline, and includes file metadata when done.
+func (s *Service) GetFileFetch(ctx context.Context, by identity.Actor, id ids.ID) (FileFetchRequest, *File, error) {
+	if by.Kind != identity.KindHuman {
+		return FileFetchRequest{}, nil, ErrForbidden
+	}
+
+	req, err := s.Store.FileFetchRequestByID(ctx, id)
+	if err != nil {
+		return FileFetchRequest{}, nil, err
+	}
+	if req.WorkspaceID != by.WorkspaceID {
+		return FileFetchRequest{}, nil, ErrNotFound
+	}
+
+	canRead, err := s.Conversation.CanRead(ctx, by, req.ChannelID)
+	if err != nil {
+		return FileFetchRequest{}, nil, err
+	}
+	if !canRead {
+		return FileFetchRequest{}, nil, ErrForbidden
+	}
+
+	// Sweep if pending and timed out (> 2 min)
+	if req.State == FileFetchPending && s.Clock.Now().Sub(req.CreatedAt) >= 2*time.Minute {
+		now := s.Clock.Now()
+		_ = s.Store.UpdateFileFetchRequestFailed(ctx, req.ID, FileFetchErrorHostOffline, now)
+		req.State = FileFetchFailed
+		req.ErrorCode = FileFetchErrorHostOffline
+		req.CompletedAt = &now
+		if s.Events != nil {
+			ev, err := eventlog.NewEvent(s.IDs.New(), req.WorkspaceID, EventFileFetchFailed, req.AgentID, req.ChannelID, "files", req.ID, FetchFailedPayload{
+				RequestID: req.ID.String(),
+				AgentID:   req.AgentID.String(),
+				MessageID: req.MessageID.String(),
+				ErrorCode: string(FileFetchErrorHostOffline),
+			}, now)
+			if err == nil {
+				_ = s.Events.Append(ctx, &ev)
+				if s.Bus != nil {
+					s.Bus.Notify(ev.Seq)
+				}
+			}
+		}
+	}
+
+	if req.State == FileFetchDone && req.FileID != ids.Nil {
+		f, err := s.Store.ByID(ctx, req.FileID)
+		if err == nil {
+			return req, &f, nil
+		}
+	}
+
+	return req, nil, nil
+}
+
+// AgentPendingFileFetch contains the pending request data for an agent.
+type AgentPendingFileFetch struct {
+	ID            ids.ID
+	MessageID     ids.ID
+	ChannelID     ids.ID
+	Path          string
+	MaxImageBytes int64
+	MaxFileBytes  int64
+}
+
+// AgentPendingFileFetches returns pending requests for the calling agent, including byte limits.
+func (s *Service) AgentPendingFileFetches(ctx context.Context, by identity.Actor) ([]AgentPendingFileFetch, error) {
+	if by.Kind != identity.KindAgent {
+		return nil, ErrForbidden
+	}
+
+	reqs, err := s.Store.ListFileFetchRequestsByAgent(ctx, by.WorkspaceID, by.ID, FileFetchPending)
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := s.Store.GetFileFetchSettings(ctx, by.WorkspaceID)
+	if err != nil {
+		settings = FileFetchSettings{
+			WorkspaceID: by.WorkspaceID,
+			MaxImageMB:  DefaultMaxImageMB,
+			MaxFileMB:   DefaultMaxFileMB,
+		}
+	}
+	maxImageBytes := int64(settings.MaxImageMB) * 1024 * 1024
+	maxFileBytes := int64(settings.MaxFileMB) * 1024 * 1024
+
+	now := s.Clock.Now()
+	var out []AgentPendingFileFetch
+	for _, r := range reqs {
+		if now.Sub(r.CreatedAt) >= 2*time.Minute {
+			_ = s.Store.UpdateFileFetchRequestFailed(ctx, r.ID, FileFetchErrorHostOffline, now)
+			if s.Events != nil {
+				ev, err := eventlog.NewEvent(s.IDs.New(), r.WorkspaceID, EventFileFetchFailed, r.AgentID, r.ChannelID, "files", r.ID, FetchFailedPayload{
+					RequestID: r.ID.String(),
+					AgentID:   r.AgentID.String(),
+					MessageID: r.MessageID.String(),
+					ErrorCode: string(FileFetchErrorHostOffline),
+				}, now)
+				if err == nil {
+					_ = s.Events.Append(ctx, &ev)
+					if s.Bus != nil {
+						s.Bus.Notify(ev.Seq)
+					}
+				}
+			}
+			continue
+		}
+		out = append(out, AgentPendingFileFetch{
+			ID:            r.ID,
+			MessageID:     r.MessageID,
+			ChannelID:     r.ChannelID,
+			Path:          r.Path,
+			MaxImageBytes: maxImageBytes,
+			MaxFileBytes:  maxFileBytes,
+		})
+	}
+	return out, nil
+}
+
+// SaveFetchedContent streams the file content to disk, enforces limits on the stream, stores as human-only File, and completes the request.
+func (s *Service) SaveFetchedContent(ctx context.Context, by identity.Actor, requestID ids.ID, contentType, filename, mtime string, r io.Reader) (FileFetchRequest, File, error) {
+	if by.Kind != identity.KindAgent {
+		return FileFetchRequest{}, File{}, ErrForbidden
+	}
+
+	req, err := s.Store.FileFetchRequestByID(ctx, requestID)
+	if err != nil {
+		return FileFetchRequest{}, File{}, err
+	}
+	if req.WorkspaceID != by.WorkspaceID || req.AgentID != by.ID {
+		return FileFetchRequest{}, File{}, ErrNotFound
+	}
+	if req.State != FileFetchPending {
+		return FileFetchRequest{}, File{}, ErrInvalidRequestState
+	}
+
+	settings, err := s.Store.GetFileFetchSettings(ctx, by.WorkspaceID)
+	if err != nil {
+		settings = FileFetchSettings{
+			WorkspaceID: by.WorkspaceID,
+			MaxImageMB:  DefaultMaxImageMB,
+			MaxFileMB:   DefaultMaxFileMB,
+		}
+	}
+
+	cleanName := SanitizeFileName(filename)
+	if cleanName == "attachment" && req.Path != "" {
+		cleanName = SanitizeFileName(filepath.Base(req.Path))
+	}
+
+	isImage := isImageMime(contentType, cleanName)
+	maxBytes := int64(settings.MaxFileMB) * 1024 * 1024
+	if isImage {
+		maxBytes = int64(settings.MaxImageMB) * 1024 * 1024
+	}
+
+	// Stream to a temp file on disk without loading entire body into memory
+	tmp, err := os.CreateTemp("", "colonyhall-fetch-*")
+	if err != nil {
+		return FileFetchRequest{}, File{}, fmt.Errorf("create temp file: %w", err)
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+
+	hasher := sha256.New()
+	lr := &io.LimitedReader{R: r, N: maxBytes + 1}
+	tr := io.TeeReader(lr, hasher)
+	n, err := io.Copy(tmp, tr)
+	if err != nil {
+		return FileFetchRequest{}, File{}, err
+	}
+	if n > maxBytes {
+		return FileFetchRequest{}, File{}, ErrFileTooLarge
+	}
+	if n == 0 {
+		return FileFetchRequest{}, File{}, ErrEmptyContent
+	}
+
+	if err := tmp.Sync(); err != nil {
+		return FileFetchRequest{}, File{}, err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return FileFetchRequest{}, File{}, err
+	}
+
+	sha256Hex := hex.EncodeToString(hasher.Sum(nil))
+	_, err = s.Storage.Put(ctx, sha256Hex, tmp)
+	if err != nil {
+		return FileFetchRequest{}, File{}, fmt.Errorf("storage put: %w", err)
+	}
+
+	now := s.Clock.Now()
+	mimeType := contentType
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	f := File{
+		ID:          s.IDs.New(),
+		WorkspaceID: by.WorkspaceID,
+		UploadedBy:  by.ID,
+		ChannelID:   req.ChannelID,
+		Name:        cleanName,
+		Mime:        mimeType,
+		Size:        n,
+		SHA256:      sha256Hex,
+		CreatedAt:   now,
+		HumanOnly:   true,
+	}
+
+	if err := s.Store.Insert(ctx, f); err != nil {
+		return FileFetchRequest{}, File{}, err
+	}
+
+	if err := s.Store.UpdateFileFetchRequestCompleted(ctx, req.ID, f.ID, now); err != nil {
+		return FileFetchRequest{}, File{}, err
+	}
+
+	req.State = FileFetchDone
+	req.FileID = f.ID
+	req.CompletedAt = &now
+
+	if s.Events != nil {
+		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchCompleted, by.ID, req.ChannelID, "files", req.ID, FetchCompletedPayload{
+			RequestID: req.ID.String(),
+			AgentID:   by.ID.String(),
+			MessageID: req.MessageID.String(),
+			FileID:    f.ID.String(),
+		}, now)
+		if err == nil {
+			_ = s.Events.Append(ctx, &ev)
+			if s.Bus != nil {
+				s.Bus.Notify(ev.Seq)
+			}
+		}
+	}
+
+	return req, f, nil
+}
+
+// FailFileFetch records failure for a requested file fetch.
+func (s *Service) FailFileFetch(ctx context.Context, by identity.Actor, requestID ids.ID, errorCode FileFetchErrorCode) (FileFetchRequest, error) {
+	if by.Kind != identity.KindAgent {
+		return FileFetchRequest{}, ErrForbidden
+	}
+
+	if !isValidErrorCode(errorCode) {
+		return FileFetchRequest{}, ErrUnknownErrorCode
+	}
+
+	req, err := s.Store.FileFetchRequestByID(ctx, requestID)
+	if err != nil {
+		return FileFetchRequest{}, err
+	}
+	if req.WorkspaceID != by.WorkspaceID || req.AgentID != by.ID {
+		return FileFetchRequest{}, ErrNotFound
+	}
+	if req.State != FileFetchPending {
+		return FileFetchRequest{}, ErrInvalidRequestState
+	}
+
+	now := s.Clock.Now()
+	if err := s.Store.UpdateFileFetchRequestFailed(ctx, req.ID, errorCode, now); err != nil {
+		return FileFetchRequest{}, err
+	}
+
+	req.State = FileFetchFailed
+	req.ErrorCode = errorCode
+	req.CompletedAt = &now
+
+	if s.Events != nil {
+		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchFailed, by.ID, req.ChannelID, "files", req.ID, FetchFailedPayload{
+			RequestID: req.ID.String(),
+			AgentID:   by.ID.String(),
+			MessageID: req.MessageID.String(),
+			ErrorCode: string(errorCode),
+		}, now)
+		if err == nil {
+			_ = s.Events.Append(ctx, &ev)
+			if s.Bus != nil {
+				s.Bus.Notify(ev.Seq)
+			}
+		}
+	}
+
+	return req, nil
+}
+
+// SweepPending marks pending requests older than 2 minutes as failed with host_offline.
+func (s *Service) SweepPending(ctx context.Context) (int, error) {
+	now := s.Clock.Now()
+	cutoff := now.Add(-2 * time.Minute)
+	expired, err := s.Store.ListPendingFileFetchRequestsBefore(ctx, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, r := range expired {
+		_ = s.Store.UpdateFileFetchRequestFailed(ctx, r.ID, FileFetchErrorHostOffline, now)
+		if s.Events != nil {
+			ev, err := eventlog.NewEvent(s.IDs.New(), r.WorkspaceID, EventFileFetchFailed, r.AgentID, r.ChannelID, "files", r.ID, FetchFailedPayload{
+				RequestID: r.ID.String(),
+				AgentID:   r.AgentID.String(),
+				MessageID: r.MessageID.String(),
+				ErrorCode: string(FileFetchErrorHostOffline),
+			}, now)
+			if err == nil {
+				_ = s.Events.Append(ctx, &ev)
+				if s.Bus != nil {
+					s.Bus.Notify(ev.Seq)
+				}
+			}
+		}
+		count++
+	}
+	return count, nil
+}
+
+// GetFileFetchSettings loads file fetch limits for a workspace.
+func (s *Service) GetFileFetchSettings(ctx context.Context, by identity.Actor) (FileFetchSettings, error) {
+	if by.Kind != identity.KindHuman {
+		return FileFetchSettings{}, ErrForbidden
+	}
+	return s.Store.GetFileFetchSettings(ctx, by.WorkspaceID)
+}
+
+// UpdateFileFetchSettings updates file fetch limits for a workspace. Admins only.
+func (s *Service) UpdateFileFetchSettings(ctx context.Context, by identity.Actor, maxImageMB, maxFileMB int) (FileFetchSettings, error) {
+	if !by.IsAdmin() {
+		return FileFetchSettings{}, ErrForbidden
+	}
+	if maxImageMB < MinLimitMB || maxImageMB > MaxLimitMB || maxFileMB < MinLimitMB || maxFileMB > MaxLimitMB {
+		return FileFetchSettings{}, ErrInvalidLimit
+	}
+	now := s.Clock.Now()
+	st := FileFetchSettings{
+		WorkspaceID: by.WorkspaceID,
+		MaxImageMB:  maxImageMB,
+		MaxFileMB:   maxFileMB,
+		UpdatedAt:   now,
+	}
+	if err := s.Store.UpsertFileFetchSettings(ctx, st); err != nil {
+		return FileFetchSettings{}, err
+	}
+	if s.Events != nil {
+		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileFetchSettingsUpdated, by.ID, ids.Nil, "files", by.WorkspaceID, FetchSettingsUpdatedPayload{
+			MaxImageMB: maxImageMB,
+			MaxFileMB:  maxFileMB,
+		}, now)
+		if err == nil {
+			_ = s.Events.Append(ctx, &ev)
+			if s.Bus != nil {
+				s.Bus.Notify(ev.Seq)
+			}
+		}
+	}
+	return st, nil
+}
+
+func isImageMime(mime, filename string) bool {
+	if strings.HasPrefix(strings.ToLower(mime), "image/") {
+		return true
+	}
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff":
+		return true
+	}
+	return false
+}
+
+func isValidErrorCode(code FileFetchErrorCode) bool {
+	switch code {
+	case FileFetchErrorHostOffline,
+		FileFetchErrorNotFound,
+		FileFetchErrorDenied,
+		FileFetchErrorTooLarge,
+		FileFetchErrorNotAFile,
+		FileFetchErrorTimeout:
+		return true
+	default:
+		return false
+	}
 }

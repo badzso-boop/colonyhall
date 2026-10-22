@@ -34,6 +34,12 @@ func (s *Storage) Put(_ context.Context, sha256Hex string, r io.Reader) (int64, 
 	return int64(len(b)), nil
 }
 
+type nopCloserReadSeeker struct {
+	*bytes.Reader
+}
+
+func (nopCloserReadSeeker) Close() error { return nil }
+
 // Open opens a reader for content stored under sha256Hex.
 func (s *Storage) Open(_ context.Context, sha256Hex string) (io.ReadCloser, error) {
 	s.mu.RLock()
@@ -42,7 +48,7 @@ func (s *Storage) Open(_ context.Context, sha256Hex string) (io.ReadCloser, erro
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	return io.NopCloser(bytes.NewReader(b)), nil
+	return &nopCloserReadSeeker{Reader: bytes.NewReader(b)}, nil
 }
 
 // Stat returns the length of content stored under sha256Hex.

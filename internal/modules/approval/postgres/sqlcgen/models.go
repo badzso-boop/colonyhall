@@ -209,6 +209,22 @@ type File struct {
 	Size        int64
 	Sha256      string
 	CreatedAt   time.Time
+	HumanOnly   bool
+}
+
+type FileFetchRequest struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	MessageID   uuid.UUID
+	ChannelID   uuid.UUID
+	AgentID     uuid.UUID
+	RequestedBy uuid.UUID
+	Path        string
+	State       string
+	FileID      *uuid.UUID
+	ErrorCode   *string
+	CreatedAt   time.Time
+	CompletedAt *time.Time
 }
 
 type FolderGrant struct {
@@ -433,4 +449,11 @@ type Workspace struct {
 	CreatedAt       time.Time
 	EmergencyStopAt *time.Time
 	EmergencyStopBy *uuid.UUID
+}
+
+type WorkspaceFileFetchSetting struct {
+	WorkspaceID uuid.UUID
+	MaxImageMb  int32
+	MaxFileMb   int32
+	UpdatedAt   time.Time
 }
