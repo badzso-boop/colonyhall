@@ -106,10 +106,29 @@
   .modal-row { display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border-radius:4px; }
   .modal-row:hover { background:var(--bg); }
   .modal-row label { display:flex; align-items:center; gap:6px; cursor:pointer; flex:1; }
+  .file-chip { display:inline-flex; align-items:center; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:1px 8px; font-size:12px; color:var(--fg); cursor:pointer; margin:0 2px; vertical-align:middle; font-family:inherit; }
+  .file-chip:hover { background:var(--hover); border-color:var(--accent); }
+  #fileViewerModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:20; }
+  #fileViewerModal.on { display:flex; }
+  #fileViewerModal .card { max-width:850px; width:100%; max-height:88vh; overflow:hidden; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  #fileViewerModal .viewer-header { display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding-bottom:8px; flex-wrap:wrap; }
+  #fileViewerModal .viewer-body { flex:1; overflow:auto; min-height:200px; }
+  #fileViewerModal pre.file-view-mono { margin:0; font-family:ui-monospace, monospace; font-size:12px; white-space:pre-wrap; word-break:break-all; }
+  #fileViewerModal img.file-view-img { max-width:100%; max-height:65vh; object-fit:contain; display:block; margin:0 auto; }
+  #fileViewerModal .markdown-body h1, #fileViewerModal .markdown-body h2, #fileViewerModal .markdown-body h3, #fileViewerModal .markdown-body h4 { margin:12px 0 6px; }
+  #fileViewerModal .markdown-body p { margin:6px 0; }
+  #fileViewerModal .markdown-body ul, #fileViewerModal .markdown-body ol { margin:6px 0 6px 20px; }
+  #fileViewerModal .markdown-body pre { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:8px; overflow:auto; margin:8px 0; }
+  #fileViewerModal .markdown-body code { font-family:ui-monospace, monospace; font-size:12px; background:var(--bg); padding:1px 4px; border-radius:3px; }
+  #fileViewerModal .markdown-body pre code { padding:0; background:none; }
+  #fileViewerModal .markdown-body a { color:var(--accent); text-decoration:none; }
+  #fileViewerModal .markdown-body a:hover { text-decoration:underline; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     main > nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; }
     header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; }
-    .overview-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; } }
+    .overview-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
+    #fileViewerModal { padding:0; }
+    #fileViewerModal .card { max-width:100%; width:100%; height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; border-radius:0; border:none; } }
 </style>
 </head>
 <body>
@@ -203,6 +222,24 @@
     </div>
   </div>
 </div>
+<div id="fileViewerModal">
+  <div class="card">
+    <div class="viewer-header">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+        <span style="font-size:16px;">📄</span>
+        <strong id="fileViewerPath" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></strong>
+        <span id="fileViewerAgent" class="muted"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="fileViewerStatus" class="muted" style="font-size:12px;"></span>
+        <button id="fileViewerRefresh" class="secondary" style="font-size:12px;display:none;"></button>
+        <button id="fileViewerClose">✕</button>
+      </div>
+    </div>
+    <div id="fileViewerControls" class="row" style="display:none;gap:8px;align-items:center;"></div>
+    <div id="fileViewerBody" class="viewer-body"></div>
+  </div>
+</div>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -246,7 +283,14 @@ const I18N = {
         avatarEmoji: "Profil emoji:", statusText: "Státusz:", bio: "Leírás / Bio:",
         timezone: "Időzóna:", pause: "Szüneteltetés", resume: "Folytatás",
         settings: "Beállítások", commonChannels: "Közös csatornák", contextThreads: "Munkamenetek",
-        newSessionSoon: "új munkamenet hamarosan" },
+        newSessionSoon: "új munkamenet hamarosan",
+        fileFetchTitle: "Fájlmegnyitás", maxImageMb: "Kép limit (MB):", maxFileMb: "Fájl limit (MB):",
+        loadingFile: "betöltés…", refresh: "Frissítés", statusAt: "állapot:",
+        viewStart: "megjelenítés: eleje", viewEnd: "megjelenítés: vége",
+        rawView: "Nyers", renderedView: "Formázott", download: "Letöltés",
+        errHostOffline: "A gép offline", errNotFound: "A fájl nem létezik",
+        errDenied: "A fájl megosztása nem engedélyezett", errTooLarge: "A fájl túl nagy (limit felett)",
+        errNotAFile: "Nem fájl (mappa vagy speciális fájl)", errTimeout: "Időtúllépés" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -288,7 +332,14 @@ const I18N = {
         avatarEmoji: "Avatar emoji:", statusText: "Status:", bio: "Bio / Description:",
         timezone: "Timezone:", pause: "Pause", resume: "Resume",
         settings: "Settings", commonChannels: "Common channels", contextThreads: "Session threads",
-        newSessionSoon: "new session soon" },
+        newSessionSoon: "new session soon",
+        fileFetchTitle: "File Opening", maxImageMb: "Image limit (MB):", maxFileMb: "File limit (MB):",
+        loadingFile: "loading…", refresh: "Refresh", statusAt: "status:",
+        viewStart: "display: start", viewEnd: "display: end",
+        rawView: "Raw", renderedView: "Formatted", download: "Download",
+        errHostOffline: "The machine is offline", errNotFound: "The file does not exist",
+        errDenied: "Sharing this file is not allowed", errTooLarge: "The file is too large (exceeds limit)",
+        errNotAFile: "Not a file (directory or special file)", errTimeout: "Request timed out" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -671,15 +722,21 @@ function renderMsg(m) {
   let bodyText = m.body;
   if (ref) bodyText = bodyText.replace(ref[0], "").trim();
   if (appRef) bodyText = bodyText.replace(appRef[0], "").trim();
-  div.querySelector(".body").textContent = bodyText;
+  const bodyEl = div.querySelector(".body");
+  bodyEl.textContent = "";
+  if (a.kind === "agent") {
+    renderAgentBodyWithFileChips(bodyText, bodyEl, m.id, a.handle);
+  } else {
+    bodyEl.textContent = bodyText;
+  }
   if (ref && me.kind === "human") {
     const btn = el("button", { textContent: L.errorDetails });
     btn.onclick = () => showError(ref[1]);
-    div.querySelector(".body").append(" ", btn);
+    bodyEl.append(" ", btn);
   }
   if (appRef && me.kind === "human") {
     const appSpan = el("span");
-    div.querySelector(".body").append(" ", appSpan);
+    bodyEl.append(" ", appSpan);
     renderApprovalInline(appRef[1], appSpan);
   }
   if (m.attachments && m.attachments.length) {
@@ -737,6 +794,482 @@ function renderMsg(m) {
   div.querySelectorAll("[data-e]").forEach(b => b.onclick = () => toggleReaction(m, b.dataset.e));
   div.querySelector("[data-r]").onclick = () => setReply(m.thread_root_id || m.id);
   return div;
+}
+
+// --- File Links & File Viewer --------------------------------------------
+const LOCAL_PREFIXES = ["/home/", "/mnt/", "/root/", "/srv/", "/tmp/", "/var/", "/opt/", "~/"];
+
+function isStopChar(c) {
+  return /\s/.test(c) || c === '"' || c === "'" || c === "`" || c === ")" || c === "]" || c === ">";
+}
+
+function isBoundary(c) {
+  return !/[a-zA-Z0-9/\\.:]/.test(c);
+}
+
+function parseFileLinkSegments(text) {
+  if (!text) return [];
+  const segments = [];
+  const n = text.length;
+  let i = 0;
+  let lastTextStart = 0;
+
+  while (i < n) {
+    if (text.startsWith("file://", i)) {
+      if (i === 0 || !/[a-zA-Z0-9]/.test(text[i - 1])) {
+        let j = i + 7;
+        while (j < n && !isStopChar(text[j])) j++;
+        let candidate = text.slice(i, j);
+        candidate = candidate.replace(/[.,;:!?]+$/, "");
+        try {
+          const rawUrl = candidate.slice(7);
+          let decoded = decodeURIComponent(rawUrl);
+          if (decoded.startsWith("//")) decoded = decoded.slice(2);
+          if (decoded && (decoded.startsWith("/") || decoded.startsWith("~/"))) {
+            if (i > lastTextStart) {
+              segments.push({ type: "text", text: text.slice(lastTextStart, i) });
+            }
+            const name = decoded.split("/").pop() || decoded;
+            segments.push({ type: "link", raw: candidate, path: decoded, name });
+            i = i + candidate.length;
+            lastTextStart = i;
+            continue;
+          }
+        } catch {}
+      }
+    }
+
+    let matchedPrefix = null;
+    for (const p of LOCAL_PREFIXES) {
+      if (text.startsWith(p, i)) {
+        matchedPrefix = p;
+        break;
+      }
+    }
+
+    if (matchedPrefix) {
+      if (i === 0 || isBoundary(text[i - 1])) {
+        let j = i + matchedPrefix.length;
+        while (j < n && !isStopChar(text[j])) j++;
+        let candidate = text.slice(i, j);
+        candidate = candidate.replace(/[.,;:!?]+$/, "");
+        if (candidate.length > matchedPrefix.length) {
+          if (i > lastTextStart) {
+            segments.push({ type: "text", text: text.slice(lastTextStart, i) });
+          }
+          const name = candidate.split("/").pop() || candidate;
+          segments.push({ type: "link", raw: candidate, path: candidate, name });
+          i = i + candidate.length;
+          lastTextStart = i;
+          continue;
+        }
+      }
+    }
+
+    i++;
+  }
+
+  if (lastTextStart < n) {
+    segments.push({ type: "text", text: text.slice(lastTextStart) });
+  }
+  return segments;
+}
+
+function renderAgentBodyWithFileChips(text, container, messageId, agentHandle) {
+  const segments = parseFileLinkSegments(text);
+  for (const seg of segments) {
+    if (seg.type === "text") {
+      container.appendChild(document.createTextNode(seg.text));
+    } else if (seg.type === "link") {
+      const chip = document.createElement("button");
+      chip.className = "file-chip";
+      chip.title = seg.path;
+      chip.textContent = "📄 " + seg.name;
+      chip.onclick = (e) => {
+        e.stopPropagation();
+        openFileViewer(messageId, seg.path, agentHandle);
+      };
+      container.appendChild(chip);
+    }
+  }
+}
+
+function renderInlineMarkdown(text, parent) {
+  const regex = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\))/g;
+  let lastIdx = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIdx) {
+      parent.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+    }
+    const token = m[0];
+    if (token.startsWith("`") && token.endsWith("`")) {
+      const c = document.createElement("code");
+      c.textContent = token.slice(1, -1);
+      parent.appendChild(c);
+    } else if (token.startsWith("**") && token.endsWith("**")) {
+      const b = document.createElement("strong");
+      b.textContent = token.slice(2, -2);
+      parent.appendChild(b);
+    } else if (token.startsWith("__") && token.endsWith("__")) {
+      const b = document.createElement("strong");
+      b.textContent = token.slice(2, -2);
+      parent.appendChild(b);
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      const it = document.createElement("em");
+      it.textContent = token.slice(1, -1);
+      parent.appendChild(it);
+    } else if (token.startsWith("_") && token.endsWith("_")) {
+      const it = document.createElement("em");
+      it.textContent = token.slice(1, -1);
+      parent.appendChild(it);
+    } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
+      const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+      if (linkMatch) {
+        const linkText = linkMatch[1];
+        const linkUrl = linkMatch[2].trim();
+        if (/^https?:\/\//i.test(linkUrl)) {
+          const a = document.createElement("a");
+          a.href = linkUrl;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = linkText;
+          parent.appendChild(a);
+        } else {
+          parent.appendChild(document.createTextNode(token));
+        }
+      } else {
+        parent.appendChild(document.createTextNode(token));
+      }
+    }
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < text.length) {
+    parent.appendChild(document.createTextNode(text.slice(lastIdx)));
+  }
+}
+
+function buildSafeMarkdownDOM(text) {
+  const container = document.createElement("div");
+  container.className = "markdown-body";
+  const lines = text.split("\n");
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.trim().startsWith("```")) {
+      const lang = line.trim().slice(3).trim();
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++;
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
+      code.textContent = codeLines.join("\n");
+      if (lang) code.className = "language-" + lang;
+      pre.appendChild(code);
+      container.appendChild(pre);
+      continue;
+    }
+
+    const hMatch = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (hMatch) {
+      const level = hMatch[1].length;
+      const h = document.createElement("h" + level);
+      renderInlineMarkdown(hMatch[2], h);
+      container.appendChild(h);
+      i++;
+      continue;
+    }
+
+    if (/^\s*[-*]\s+/.test(line)) {
+      const ul = document.createElement("ul");
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+        const li = document.createElement("li");
+        const content = lines[i].replace(/^\s*[-*]\s+/, "");
+        renderInlineMarkdown(content, li);
+        ul.appendChild(li);
+        i++;
+      }
+      container.appendChild(ul);
+      continue;
+    }
+
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const ol = document.createElement("ol");
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+        const li = document.createElement("li");
+        const content = lines[i].replace(/^\s*\d+\.\s+/, "");
+        renderInlineMarkdown(content, li);
+        ol.appendChild(li);
+        i++;
+      }
+      container.appendChild(ol);
+      continue;
+    }
+
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+
+    const pLines = [];
+    while (i < lines.length && lines[i].trim() !== "" && !lines[i].trim().startsWith("```") && !/^(#{1,6})\s+/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i])) {
+      pLines.push(lines[i]);
+      i++;
+    }
+    const p = document.createElement("p");
+    renderInlineMarkdown(pLines.join(" "), p);
+    container.appendChild(p);
+  }
+  return container;
+}
+
+let currentFileFetch = null;
+let currentFileFetchMessageId = null;
+let currentFileFetchPath = null;
+let currentFileFetchAgentHandle = null;
+let fileFetchPollTimer = null;
+
+function closeFileViewer() {
+  if (fileFetchPollTimer) {
+    clearInterval(fileFetchPollTimer);
+    fileFetchPollTimer = null;
+  }
+  currentFileFetch = null;
+  $("fileViewerModal").className = "modal";
+}
+$("fileViewerClose").onclick = closeFileViewer;
+$("fileViewerModal").onclick = (e) => {
+  if (e.target === $("fileViewerModal")) closeFileViewer();
+};
+
+async function openFileViewer(messageId, path, agentHandle, refresh = false) {
+  if (fileFetchPollTimer) {
+    clearInterval(fileFetchPollTimer);
+    fileFetchPollTimer = null;
+  }
+  currentFileFetchMessageId = messageId;
+  currentFileFetchPath = path;
+  currentFileFetchAgentHandle = agentHandle;
+
+  $("fileViewerPath").textContent = path;
+  $("fileViewerPath").title = path;
+  $("fileViewerAgent").textContent = "@" + (agentHandle || "?");
+  $("fileViewerStatus").textContent = "";
+  $("fileViewerRefresh").textContent = L.refresh;
+  $("fileViewerRefresh").style.display = "none";
+  $("fileViewerRefresh").onclick = () => openFileViewer(messageId, path, agentHandle, true);
+  $("fileViewerControls").style.display = "none";
+  $("fileViewerControls").innerHTML = "";
+  $("fileViewerBody").innerHTML = `<div class="muted" style="padding:20px;text-align:center;">${L.loadingFile}</div>`;
+  $("fileViewerModal").className = "modal on";
+
+  try {
+    const res = await api(`/api/v1/messages/${messageId}/file-fetch`, {
+      method: "POST",
+      body: JSON.stringify({ path, refresh })
+    });
+    currentFileFetch = res;
+    renderFileFetchState(res, messageId, path, agentHandle);
+
+    if (res.state === "pending") {
+      fileFetchPollTimer = setInterval(async () => {
+        if (!currentFileFetch || currentFileFetch.id !== res.id) {
+          clearInterval(fileFetchPollTimer);
+          return;
+        }
+        try {
+          const pollRes = await api(`/api/v1/file-fetch/${res.id}`);
+          if (pollRes.state !== "pending") {
+            clearInterval(fileFetchPollTimer);
+            fileFetchPollTimer = null;
+            currentFileFetch = pollRes;
+            renderFileFetchState(pollRes, messageId, path, agentHandle);
+          }
+        } catch (e) {
+          clearInterval(fileFetchPollTimer);
+        }
+      }, 2000);
+    }
+  } catch (err) {
+    $("fileViewerBody").innerHTML = `<div style="color:var(--err);padding:20px;">${err.message}</div>`;
+  }
+}
+
+async function renderFileFetchState(res, messageId, path, agentHandle) {
+  $("fileViewerRefresh").style.display = "inline-block";
+  if (res.state === "pending") {
+    $("fileViewerStatus").textContent = L.loadingFile;
+    $("fileViewerBody").innerHTML = `<div class="muted" style="padding:20px;text-align:center;">${L.loadingFile}</div>`;
+    return;
+  }
+  if (res.state === "failed") {
+    let errText = res.error_code || "Hiba";
+    switch (res.error_code) {
+      case "host_offline": errText = L.errHostOffline; break;
+      case "not_found": errText = L.errNotFound; break;
+      case "denied": errText = L.errDenied; break;
+      case "too_large": errText = L.errTooLarge; break;
+      case "not_a_file": errText = L.errNotAFile; break;
+      case "timeout": errText = L.errTimeout; break;
+    }
+    $("fileViewerStatus").textContent = L.statusAt + " ✕";
+    $("fileViewerBody").innerHTML = `<div style="padding:24px;text-align:center;color:var(--err);font-size:15px;"><strong>${errText}</strong></div>`;
+    return;
+  }
+  if (res.state === "done" && res.file) {
+    const f = res.file;
+    const timeStr = res.completed_at ? new Date(res.completed_at).toLocaleTimeString() : "";
+    $("fileViewerStatus").textContent = L.statusAt + " " + timeStr;
+
+    await renderFetchedFileContent(f, path);
+  }
+}
+
+async function renderFetchedFileContent(f, originalPath) {
+  const isMd = f.name.endsWith(".md") || f.mime === "text/markdown";
+  const isImg = f.mime && f.mime.startsWith("image/") && !f.mime.includes("svg");
+  const isLog = f.name.endsWith(".log") || f.mime === "text/x-log";
+  const isText = isMd || isLog || (f.mime && (f.mime.startsWith("text/") || f.mime.includes("json") || f.mime.includes("yaml") || f.mime.includes("javascript") || f.mime.includes("xml"))) || /\.(txt|log|json|ya?ml|go|py|js|ts|sh|css|html|sql|toml|ini|conf|c|cpp|h|rs|java|md)$/i.test(f.name);
+
+  const controls = $("fileViewerControls");
+  controls.innerHTML = "";
+  controls.style.display = "flex";
+  const body = $("fileViewerBody");
+  body.innerHTML = "";
+
+  if (isImg) {
+    const img = el("img", { className: "file-view-img", src: `/api/v1/files/${f.id}/content`, alt: f.name });
+    body.append(img);
+    const dlBtn = el("a", { className: "button secondary", href: `/api/v1/files/${f.id}/content`, download: f.name, textContent: `⬇️ ${L.download}` });
+    controls.append(el("span", { className: "muted" }, `${f.mime} · ${formatBytes(f.size)}`), dlBtn);
+    return;
+  }
+
+  if (isMd) {
+    let rawText = "";
+    try {
+      const res = await fetch(`/api/v1/files/${f.id}/content`, {
+        headers: token ? { Authorization: "Bearer " + token } : {}
+      });
+      rawText = await res.text();
+    } catch (e) {
+      body.innerHTML = `<div style="color:var(--err);padding:20px;">${e.message}</div>`;
+      return;
+    }
+
+    let isRaw = false;
+    const toggleBtn = el("button", { className: "secondary", textContent: L.rawView, style: "font-size:12px;" });
+    const dlBtn = el("a", { className: "button secondary", href: `/api/v1/files/${f.id}/content`, download: f.name, textContent: `⬇️ ${L.download}`, style: "font-size:12px;padding:3px 8px;" });
+
+    const updateView = () => {
+      body.innerHTML = "";
+      if (isRaw) {
+        toggleBtn.textContent = L.renderedView;
+        const pre = el("pre", { className: "file-view-mono" });
+        const code = el("code", { textContent: rawText });
+        pre.append(code);
+        body.append(pre);
+      } else {
+        toggleBtn.textContent = L.rawView;
+        body.append(buildSafeMarkdownDOM(rawText));
+      }
+    };
+    toggleBtn.onclick = () => { isRaw = !isRaw; updateView(); };
+    controls.append(toggleBtn, dlBtn, el("span", { className: "muted" }, `${formatBytes(f.size)}`));
+    updateView();
+    return;
+  }
+
+  if (isText) {
+    const dlBtn = el("a", { className: "button secondary", href: `/api/v1/files/${f.id}/content`, download: f.name, textContent: `⬇️ ${L.download}`, style: "font-size:12px;padding:3px 8px;" });
+
+    if (f.size > 2 * 1024 * 1024) {
+      let viewMode = isLog ? "end" : "start";
+      const switchBtn = el("button", { className: "secondary", style: "font-size:12px;" });
+      const infoSpan = el("span", { className: "muted", style: "font-size:12px;" });
+
+      const loadRange = async () => {
+        body.innerHTML = `<div class="muted" style="padding:20px;text-align:center;">${L.loadingFile}</div>`;
+        const oneMB = 1024 * 1024;
+        let rangeHeader = "";
+        if (viewMode === "start") {
+          rangeHeader = `bytes=0-${oneMB - 1}`;
+          switchBtn.textContent = L.viewEnd;
+          infoSpan.textContent = `0 - 1.0 MB / ${formatBytes(f.size)}`;
+        } else {
+          const startByte = f.size - oneMB;
+          rangeHeader = `bytes=${startByte}-${f.size - 1}`;
+          switchBtn.textContent = L.viewStart;
+          infoSpan.textContent = `${formatBytes(startByte)} - ${formatBytes(f.size)} / ${formatBytes(f.size)}`;
+        }
+
+        try {
+          const headers = { Range: rangeHeader };
+          if (token) headers.Authorization = "Bearer " + token;
+          const res = await fetch(`/api/v1/files/${f.id}/content`, { headers });
+          const text = await res.text();
+          body.innerHTML = "";
+          const pre = el("pre", { className: "file-view-mono" });
+          const code = el("code", { textContent: text });
+          pre.append(code);
+          body.append(pre);
+          if (viewMode === "end") {
+            body.scrollTop = body.scrollHeight;
+          }
+        } catch (e) {
+          body.innerHTML = `<div style="color:var(--err);padding:20px;">${e.message}</div>`;
+        }
+      };
+
+      switchBtn.onclick = () => {
+        viewMode = viewMode === "start" ? "end" : "start";
+        loadRange();
+      };
+
+      controls.append(switchBtn, infoSpan, dlBtn);
+      loadRange();
+      return;
+    }
+
+    controls.append(dlBtn, el("span", { className: "muted" }, `${f.mime || "text/plain"} · ${formatBytes(f.size)}`));
+    try {
+      const res = await fetch(`/api/v1/files/${f.id}/content`, {
+        headers: token ? { Authorization: "Bearer " + token } : {}
+      });
+      const text = await res.text();
+      body.innerHTML = "";
+      const pre = el("pre", { className: "file-view-mono" });
+      const code = el("code", { textContent: text });
+      pre.append(code);
+      body.append(pre);
+      if (isLog) {
+        body.scrollTop = body.scrollHeight;
+      }
+    } catch (e) {
+      body.innerHTML = `<div style="color:var(--err);padding:20px;">${e.message}</div>`;
+    }
+    return;
+  }
+
+  const box = el("div", { style: "padding:40px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center;" });
+  box.append(
+    el("div", { style: "font-size:40px;" }, "📄"),
+    el("strong", { style: "font-size:16px;" }, f.name),
+    el("div", { className: "muted" }, `${f.mime || "application/octet-stream"} · ${formatBytes(f.size)}`),
+    el("a", {
+      className: "button",
+      href: `/api/v1/files/${f.id}/content`,
+      download: f.name,
+      textContent: `⬇️ ${L.download}`,
+      style: "display:inline-block;padding:8px 16px;text-decoration:none;"
+    })
+  );
+  body.append(box);
 }
 
 async function showError(id) {
@@ -1524,6 +2057,15 @@ function connectWS() {
       renderHosts();
     } else if (f.event_type === "run.reported" && openPanel === "runs") {
       renderRuns();
+    } else if (f.event_type === "file.fetch_completed" || f.event_type === "file.fetch_failed") {
+      if (currentFileFetch && currentFileFetch.id === d.request_id) {
+        api(`/api/v1/file-fetch/${currentFileFetch.id}`).then(res => {
+          if (currentFileFetch && currentFileFetch.id === res.id) {
+            currentFileFetch = res;
+            renderFileFetchState(res, currentFileFetchMessageId, currentFileFetchPath, currentFileFetchAgentHandle);
+          }
+        }).catch(() => {});
+      }
     }
   };
   ws.onclose = () => { $("status").textContent = L.reconnecting; setTimeout(connectWS, 2000); };
@@ -1918,6 +2460,48 @@ async function renderHosts() {
     prevBox.append(tbl);
   }
   panel.append(prevBox);
+
+  // File fetch limits (Admins only)
+  if (me && (me.role === "admin" || me.role === "owner")) {
+    const limitsBox = el("div", { className: "card" });
+    limitsBox.append(el("h3", { textContent: L.fileFetchTitle }));
+    const limitsRow = el("div", { className: "row", style: "gap:16px;align-items:center;flex-wrap:wrap;" });
+    const imgLabel = el("label", {}, L.maxImageMb + " ");
+    const imgInput = el("input", { type: "number", min: "1", max: "2048", style: "width:80px;" });
+    imgLabel.append(imgInput);
+    const fileLabel = el("label", {}, L.maxFileMb + " ");
+    const fileInput = el("input", { type: "number", min: "1", max: "2048", style: "width:80px;" });
+    fileLabel.append(fileInput);
+    const saveBtn = el("button", { textContent: L.save });
+    const statusSpan = el("span", { className: "muted" });
+    limitsRow.append(imgLabel, fileLabel, saveBtn, statusSpan);
+    limitsBox.append(limitsRow);
+
+    api("/api/v1/settings/file-fetch").then(st => {
+      imgInput.value = st.max_image_mb;
+      fileInput.value = st.max_file_mb;
+    }).catch(() => {});
+
+    saveBtn.onclick = async () => {
+      statusSpan.textContent = "...";
+      try {
+        const res = await api("/api/v1/settings/file-fetch", {
+          method: "PUT",
+          body: JSON.stringify({
+            max_image_mb: parseInt(imgInput.value, 10),
+            max_file_mb: parseInt(fileInput.value, 10)
+          })
+        });
+        imgInput.value = res.max_image_mb;
+        fileInput.value = res.max_file_mb;
+        statusSpan.textContent = "✓";
+        setTimeout(() => { statusSpan.textContent = ""; }, 2000);
+      } catch (err) {
+        statusSpan.textContent = "✕ " + err.message;
+      }
+    };
+    panel.append(limitsBox);
+  }
 }
 
 async function start() {
