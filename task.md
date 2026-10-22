@@ -8,6 +8,8 @@
 
 **Megvalósítva az Antigravityvel, átnézve és beolvasztva (2026-10-22, `docs/handoff/17-chat-markdown-prompt.md`, ág: `feature/chat-markdown`, külön worktree):** markdown a chatüzenetekben, egy közös, tesztelt megjelenítővel (`web/markdown.js`) a chathez és a fájlnézőhöz.
 
+**Kiadva az Antigravitynek (2026-10-22, `docs/handoff/18-sandbox-worktree-network-prompt.md`, ág: `feature/sandbox-worktree-net`, külön worktree):** saját git worktree a sandboxos agenteknek (az őr commitol helyettük, nincs push), és a sandbox hálózata engedélylistás proxyn át (`sandbox_network: filtered | log | open`).
+
 ## Nyitott
 
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
