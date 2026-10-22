@@ -4,6 +4,8 @@
 
 Élő lista: amit a használat közben találunk. Új tétel a „Nyitott” alá kerül; ha kész, átkerül a „Kész” alá a dátummal és a commit azonosítójával. A nagyobb, tervezést igénylő dolgok a „Tervezendő” alatt vannak: ott előbb terv kell, megvalósítás csak külön döntés után.
 
+**Kiadva az Antigravitynek (2026-10-22, `docs/handoff/16-file-links-prompt.md`, ág: `feature/file-links`, külön worktree):** az agentek helyi fájllinkjei a felületen (kattintásra az őr betölti, a szerver tárolja, csak ember nézheti, csak olvasható; kép 200 MB, más fájl 100 MB, a felületen állítható), és a levágott válasz végéről elveszett linkek külön üzenetben.
+
 ## Nyitott
 
 - [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`): az átadó fájl törlése a homelabon, a `CLAUDE.md` „Fejlesztői környezet” részének és az élő Claude Docnak a frissítése (a szerver a homelabon fut).
