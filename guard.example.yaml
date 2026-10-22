@@ -27,6 +27,18 @@ roots:
 # you set this to false.
 # require_sandbox: true
 
+# Sandbox network isolation:
+# filtered: (default) sandbox has no network routes; traffic goes through an allowlist HTTP proxy
+# log:      allow everything through the proxy, but log newly seen host:port (used to discover endpoints)
+# open:     no network unshare or proxy (shares host network, legacy behaviour)
+# sandbox_network: filtered
+
+# Additional allowed host:port entries for sandboxed agents on this machine.
+# Matching is exact host and port, except an explicit leading *. (e.g. *.example.com:443).
+# sandbox_allow:
+#   - api.example.com:443
+#   - "*.github.com:443"
+
 # Allow agents with sandbox: false (e.g. direct mode) to run on this machine.
 # Default false: the server cannot turn off the sandbox unless this is true.
 # Set to true if you run your own trusted agents directly against your code tree

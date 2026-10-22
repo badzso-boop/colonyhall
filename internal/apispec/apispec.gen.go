@@ -949,7 +949,9 @@ type AssignRequest struct {
 	RootDir          *string                 `json:"root_dir,omitempty"`
 	Sandbox          *bool                   `json:"sandbox,omitempty"`
 	WorkModel        *string                 `json:"work_model,omitempty"`
-	WorktreeRepo     *string                 `json:"worktree_repo,omitempty"`
+
+	// WorktreeRepo Git repo path for worktree. For sandboxed agents, the guard commits for the agent; nothing is pushed.
+	WorktreeRepo *string `json:"worktree_repo,omitempty"`
 }
 
 // AssignRequestApprovals defines model for AssignRequest.Approvals.
