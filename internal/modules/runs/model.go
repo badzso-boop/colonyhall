@@ -71,6 +71,7 @@ type Run struct {
 	Status           string
 	ErrorID          ids.ID
 	CreatedAt        time.Time
+	WebReads         []string
 }
 
 // DayUsage is the daily aggregated token usage and run count for one agent in Europe/Budapest.

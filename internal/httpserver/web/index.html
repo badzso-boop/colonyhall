@@ -1656,6 +1656,14 @@ async function refreshOverviewPanel() {
           });
           row.querySelector("td:nth-child(3)").append(errBtn);
         }
+        if (r.web_reads && r.web_reads.length > 0) {
+          const reads = el("span", {
+            textContent: ` 🌐 ${r.web_reads.length}`,
+            title: r.web_reads.join("\n"),
+            style: "cursor:help; font-size:10px; margin-left:4px;"
+          });
+          row.querySelector("td:nth-child(2)").append(reads);
+        }
         runsTbl.append(row);
       }
       useSec.append(runsTbl);
@@ -2742,6 +2750,14 @@ async function renderRuns() {
         el("td", { textContent: durSec, className: "num" }),
         el("td", { textContent: r.status })
       );
+      if (r.web_reads && r.web_reads.length > 0) {
+        const reads = el("span", {
+          textContent: ` 🌐 ${r.web_reads.length}`,
+          title: r.web_reads.join("\n"),
+          style: "cursor:help; font-size:10px; margin-left:4px;"
+        });
+        tr.querySelector("td:nth-child(3)").append(reads);
+      }
       const actionTd = el("td", {});
       if (r.error_id) {
         const btn = el("button", { textContent: L.errorDetails });

@@ -116,4 +116,29 @@ func TestSandboxNetwork_RealBwrap(t *testing.T) {
 	if !strings.Contains(string(out), "403 Forbidden") {
 		t.Fatalf("expected 403 Forbidden for not-allowed host, got: %s", string(out))
 	}
+
+	// 7. Request to 127.0.0.1:3129 reaches the webread MCP server through the bridge
+	webreadSock := filepath.Join(agentDir, "webread.sock")
+	mcpSrv, err := StartWebReadMCPServer(webreadSock, FetchOptions{}, "@bwrap-agent", nil)
+	if err != nil {
+		t.Fatalf("start webread mcp server: %v", err)
+	}
+	defer func() { _ = mcpSrv.Close() }()
+
+	webreadScript := "curl -s -i http://127.0.0.1:3129/mcp"
+	bwrapArgs, env, err = sb.CommandWithOptions("claude-code", agentDir, filepath.Join(agentDir, "work"), nil, "bash", []string{"-c", webreadScript}, SandboxOptions{AllowWebRead: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd = exec.CommandContext(ctx, sb.Bwrap, bwrapArgs...)
+	cmd.Env = env
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bwrap webread request failed: %v\n%s", err, string(out))
+	}
+	// The Streamable HTTP handler responds to GET with 400 or SSE or session response
+	if !strings.Contains(string(out), "HTTP/1.1") {
+		t.Fatalf("expected HTTP response from 127.0.0.1:3129 bridge, got: %s", string(out))
+	}
 }

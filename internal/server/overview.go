@@ -194,13 +194,19 @@ func registerOverview(
 				u := r.ErrorID
 				errID = &u
 			}
+			var webReads *[]string
+			if len(r.WebReads) > 0 {
+				wr := r.WebReads
+				webReads = &wr
+			}
 			lastRuns = append(lastRuns, apispec.OverviewRun{
-				Id:      r.ID,
-				Time:    r.CreatedAt,
-				Phase:   r.Phase,
-				Result:  r.Status,
-				Tokens:  tokens,
-				ErrorId: errID,
+				Id:       r.ID,
+				Time:     r.CreatedAt,
+				Phase:    r.Phase,
+				Result:   r.Status,
+				Tokens:   tokens,
+				ErrorId:  errID,
+				WebReads: webReads,
 			})
 		}
 

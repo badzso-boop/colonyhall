@@ -102,6 +102,12 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	if req.NoExec {
 		args = append(args, "--tools", ClaudeFileTools, "--disallowedTools", "Bash")
 	}
+	if req.AllowWebRead {
+		args = append(args, "--allowedTools", "mcp__colony-web__web_read")
+		if req.MCPConfigPath != "" {
+			args = append(args, "--mcp-config", req.MCPConfigPath, "--strict-mcp-config")
+		}
+	}
 	args = withModel(args, req.Model)
 	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args, nil)
 	res.Text = out.Result

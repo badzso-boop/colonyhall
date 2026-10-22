@@ -52,9 +52,10 @@ type FetchOptions struct {
 
 // RunWebReadTracker tracks per-run fetch counts and downloaded bytes.
 type RunWebReadTracker struct {
-	mu      sync.Mutex
-	fetches int
-	bytes   int64
+	mu          sync.Mutex
+	fetches     int
+	bytes       int64
+	visitedURLs []string
 }
 
 // Check returns an error if the per-run limit has been reached.
@@ -93,6 +94,26 @@ func (t *RunWebReadTracker) Counts() (int, int64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.fetches, t.bytes
+}
+
+// AddVisitedURL records a visited URL.
+func (t *RunWebReadTracker) AddVisitedURL(u string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.visitedURLs = append(t.visitedURLs, u)
+}
+
+// VisitedURLs returns all visited URLs in order of fetch.
+func (t *RunWebReadTracker) VisitedURLs() []string {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string(nil), t.visitedURLs...)
 }
 
 // matchHostPattern matches host against a pattern (exact or leading *.).

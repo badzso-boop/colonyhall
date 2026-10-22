@@ -9,11 +9,13 @@ SELECT * FROM run_error WHERE id = $1;
 INSERT INTO agent_run (
     id, workspace_id, agent_id, host_id, phase, client, model, session_id,
     channel_id, thread_root_id, items, input_tokens, output_tokens,
-    cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at
+    cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at,
+    web_reads
 ) VALUES (
     $1, $2, $3, sqlc.narg(host_id), $4, $5, $6, $7,
     sqlc.narg(channel_id), sqlc.narg(thread_root_id), $8, $9, $10,
-    $11, $12, $13, $14, sqlc.narg(error_id), $15
+    $11, $12, $13, $14, sqlc.narg(error_id), $15,
+    $16
 );
 
 -- name: ListRuns :many

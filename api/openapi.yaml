@@ -1889,6 +1889,10 @@ components:
         duration_ms: { type: integer, minimum: 0, maximum: 86400000 }
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }
+        web_reads:
+          type: array
+          items: { type: string }
+          description: Public web URLs read during this run.
     RunRef:
       type: object
       required: [id]
@@ -1917,6 +1921,9 @@ components:
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
+        web_reads:
+          type: array
+          items: { type: string }
     RunList:
       type: object
       required: [runs]
@@ -2445,6 +2452,9 @@ components:
         result: { type: string }
         tokens: { type: integer, format: int64 }
         error_id: { type: string, format: uuid, nullable: true }
+        web_reads:
+          type: array
+          items: { type: string }
 
     OverviewUsage:
       type: object

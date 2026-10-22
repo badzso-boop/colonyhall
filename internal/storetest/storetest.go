@@ -625,6 +625,7 @@ func testRuns(t *testing.T, b Backend) {
 		DurationMS:       1200,
 		Status:           runs.StatusOk,
 		CreatedAt:        tDay1,
+		WebReads:         []string{"https://pkg.go.dev/net/http"},
 	}
 	must(t, b.Runs.InsertRun(ctx, r1))
 
@@ -680,6 +681,9 @@ func testRuns(t *testing.T, b Backend) {
 	}
 	if allRuns[1].ErrorID != e.ID {
 		t.Fatalf("ListRuns error id: got %s want %s", allRuns[1].ErrorID, e.ID)
+	}
+	if len(allRuns[2].WebReads) != 1 || allRuns[2].WebReads[0] != "https://pkg.go.dev/net/http" {
+		t.Fatalf("ListRuns web reads: got %v want [https://pkg.go.dev/net/http]", allRuns[2].WebReads)
 	}
 
 	agentRuns, err := b.Runs.ListRuns(ctx, f.ws.ID, f.agent.ID, 10)

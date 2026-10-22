@@ -118,10 +118,18 @@ func runSandboxBridge(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("sandbox-bridge", flag.ContinueOnError)
 	sock := fs.String("sock", "", "path to unix domain socket")
 	port := fs.Int("port", 3128, "local TCP port to listen on")
+	webreadSock := fs.String("webread-sock", "", "path to webread unix domain socket")
+	webreadPort := fs.Int("webread-port", 3129, "local TCP port for webread")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *sock == "" || len(rest) == 0 {
-		return fmt.Errorf("usage: colony sandbox-bridge -sock <path> -port <port> -- <client> <args...>")
+		return fmt.Errorf("usage: colony sandbox-bridge -sock <path> [-port <port>] [-webread-sock <path>] [-webread-port <port>] -- <client> <args...>")
 	}
-	return guard.RunBridgeCommand(ctx, *sock, *port, rest[0], rest[1:])
+	mappings := []guard.BridgeMapping{
+		{SockPath: *sock, Port: *port},
+	}
+	if *webreadSock != "" {
+		mappings = append(mappings, guard.BridgeMapping{SockPath: *webreadSock, Port: *webreadPort})
+	}
+	return guard.RunMultiBridgeCommand(ctx, mappings, rest[0], rest[1:])
 }

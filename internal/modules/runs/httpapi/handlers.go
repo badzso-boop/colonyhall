@@ -62,6 +62,10 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			httpx.Error(w, r, err)
 			return
 		}
+		var webReads []string
+		if in.WebReads != nil {
+			webReads = *in.WebReads
+		}
 		run, err := svc.ReportRun(r.Context(), httpx.Actor(r), runs.ReportRunInput{
 			HostID:           httpx.Deref(in.HostId, ids.Nil),
 			Phase:            string(in.Phase),
@@ -78,6 +82,7 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			DurationMS:       in.DurationMs,
 			Status:           string(in.Status),
 			ErrorID:          httpx.Deref(in.ErrorId, ids.Nil),
+			WebReads:         webReads,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -154,6 +159,10 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			}
 			if item.ErrorID != ids.Nil {
 				ar.ErrorId = &item.ErrorID
+			}
+			if len(item.WebReads) > 0 {
+				wr := item.WebReads
+				ar.WebReads = &wr
 			}
 			items = append(items, ar)
 		}
