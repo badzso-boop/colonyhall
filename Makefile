@@ -3,7 +3,7 @@ COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
-.PHONY: help dev down logs run-mem fake-agent test test-pg lint vet fmt build gen gen-check
+.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -26,6 +26,9 @@ fake-agent:      ## Run the fake agent against the local server
 
 test:            ## Unit, contract (memory) and end-to-end tests
 	$(GO) test ./...
+
+test-web:        ## Frontend tests (Node)
+	node --test internal/httpserver/web/markdown.test.mjs
 
 test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v

@@ -6,7 +6,7 @@
 
 **Kiadva az Antigravitynek (2026-10-22, `docs/handoff/16-file-links-prompt.md`, ág: `feature/file-links`, külön worktree):** az agentek helyi fájllinkjei a felületen (kattintásra az őr betölti, a szerver tárolja, csak ember nézheti, csak olvasható; kép 200 MB, más fájl 100 MB, a felületen állítható), és a levágott válasz végéről elveszett linkek külön üzenetben.
 
-**Kiadva az Antigravitynek (2026-10-22, `docs/handoff/17-chat-markdown-prompt.md`, ág: `feature/chat-markdown`, külön worktree):** markdown a chatüzenetekben, egy közös, tesztelt megjelenítővel (`web/markdown.js`) a chathez és a fájlnézőhöz.
+**Megvalósítva az Antigravityvel, átnézve és beolvasztva (2026-10-22, `docs/handoff/17-chat-markdown-prompt.md`, ág: `feature/chat-markdown`, külön worktree):** markdown a chatüzenetekben, egy közös, tesztelt megjelenítővel (`web/markdown.js`) a chathez és a fájlnézőhöz.
 
 ## Nyitott
 
@@ -16,10 +16,9 @@
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
-- [ ] **Markdown megjelenítése a felületen.** Az agentek markdownban írnak (félkövér, listák, kód, linkek), a fejlesztői oldal nyers szövegként mutatja. Terv kell: biztonságos megjelenítés (DOM-építés, nem `innerHTML`), mit támogatunk (félkövér, dőlt, kód, kódblokk, lista, link), a linkek csak `http(s)`-re, a PWA-ban ugyanez.
-
 ## Kész
 
+- [x] **Markdown megjelenítése a felületen (egy közös, biztonságos megjelenítő a chathez és a fájlnézőhöz)** (2026-10-22, `a722cdf`, `14cb799`): minden üzenet (emberi és agent egyaránt) formázott markdownként jelenik meg egy önálló, tiszta rétegződésű, Node test runnerrel fedett renderelővel (`web/markdown.js`). Biztonság: kizárólag DOM-csomópontok építése, nincs `innerHTML`/`outerHTML`, nyers HTML szövegként jelenik meg, linkek csak `http(s)` protokollal, távoli képek tiltva (linkként jelennek meg), szóhatár-szabály (`snake_case` és azonosítók mint `PROFIT_TARGET`, `run_id=9` nem dőltek), a helyi fájllinkek agent üzenetben kattintható `📄` chipként jelennek meg, hosszú üzeneteknél 20 sor felett összecsukás („Több” / „Kevesebb” fade-del), a szál- és előnézeti sorok csupaszított szövegként jelennek meg (`ColonyMarkdown.plain`).
 - [x] **A 10. telepítési lépés** (2026-10-22): a `CLAUDE.md` „Fejlesztői környezet” része, az átadó fájl törlése a homelabon (`shred`), és az élő Claude Doc (Terv lap: szerver a homelabon, csak Tailscale, ütemezés, új „Homelab és felületi körök” rész).
 - [x] **Fájlfeltöltés és fájlmegnyitás 500-as hibával a homelabon** (2026-10-22): a fájltár kötete root-tulajdonú volt, a szerver nem root felhasználóként fut. A homelabon kézzel javítva (`chown 65532`), a `deploy/Dockerfile` mostantól a helyes tulajdonossal hozza a `/data/files` mappát, így egy új telepítésnél nem jön elő.
 - [x] **A fájlnéző nem jelenítette meg a markdown-táblázatot** (2026-10-22): a sorok egy bekezdésbe olvadtak. Most táblázat (telefonon oldalra görgethető), és a `---` vízszintes vonal.
