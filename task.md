@@ -10,6 +10,8 @@
 
 **Kiadva az Antigravitynek (2026-10-22, `docs/handoff/18-sandbox-worktree-network-prompt.md`, ág: `feature/sandbox-worktree-net`, külön worktree):** saját git worktree a sandboxos agenteknek (az őr commitol helyettük, nincs push), és a sandbox hálózata engedélylistás proxyn át (`sandbox_network: filtered | log | open`).
 
+**Előkészítve, a 18. kör után indítható (`docs/handoff/19-web-read-prompt.md`, ág: `feature/web-read`):** `web_read` a sandboxos agenteknek — az őr tölti le a nyilvános oldalakat, csak GET, csak szöveg, belső címek tiltva, agentenként bekapcsolható (alapból ki), minden URL naplózva. A teljes internet a teljes hozzáférésű agenteknél marad (döntés, 2026-10-22).
+
 ## Nyitott
 
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
