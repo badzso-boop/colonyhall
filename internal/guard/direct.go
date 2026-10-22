@@ -293,7 +293,7 @@ func (a *Agent) handleDirect(ctx context.Context, items []Item) error {
 	for _, group := range groups {
 		if runCtx.Err() != nil {
 			if ctx.Err() == nil {
-				a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
+				a.Log.Warn("guard: run stopped, agent halted", "agent", a.logName())
 			}
 			return nil
 		}
@@ -302,7 +302,7 @@ func (a *Agent) handleDirect(ctx context.Context, items []Item) error {
 				return nil
 			}
 			if runCtx.Err() != nil && ctx.Err() == nil {
-				a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
+				a.Log.Warn("guard: run stopped, agent halted", "agent", a.logName())
 				return nil
 			}
 			return a.giveUpAfterRetries(ctx, group, err)
@@ -329,7 +329,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	if !ok {
 		return errBudgetExceeded
 	}
-	agentID := a.me.ID
+	agentID := a.getMe().ID
 
 	if agentID == "" {
 		agentID = a.Cfg.Name
@@ -571,7 +571,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 }
 
 func (a *Agent) logDirectRun(sessionID string, items int, res RunResult, err error) {
-	attrs := []any{"agent", "@" + a.me.Handle, "phase", "direct", "client", a.Cfg.Client, "items", items,
+	attrs := []any{"agent", a.logName(), "phase", "direct", "client", a.Cfg.Client, "items", items,
 		"session", sessionID, "tokens", res.Usage.Total(), "in", res.Usage.Input, "out", res.Usage.Output,
 		"cache_read", res.Usage.CacheRead, "cache_write", res.Usage.CacheWrite, "ms", res.Duration.Milliseconds()}
 	if err != nil {
@@ -617,7 +617,7 @@ func (a *Agent) humanOnly(ctx context.Context, items []Item) []Item {
 	}
 	noted := map[string]bool{}
 	for _, it := range refused {
-		a.Log.Warn("guard: task from a non-human refused", "agent", "@"+a.me.Handle, "from", "@"+it.Author, "kind", it.AuthorKind)
+		a.Log.Warn("guard: task from a non-human refused", "agent", a.logName(), "from", "@"+it.Author, "kind", it.AuthorKind)
 		root := ThreadRoot(it)
 		// No note in a DM: it would wake the sending agent and could start
 		// a ping-pong between the two.

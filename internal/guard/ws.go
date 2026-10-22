@@ -51,8 +51,9 @@ func wsURL(baseURL string) (string, error) {
 }
 
 func (a *Agent) logName() string {
-	if a.me.Handle != "" {
-		return "@" + a.me.Handle
+	me := a.getMe()
+	if me.Handle != "" {
+		return "@" + me.Handle
 	}
 	if a.Cfg.Name != "" {
 		return a.Cfg.Name
@@ -239,7 +240,8 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 					AgentID string `json:"agent_id"`
 				}
 				_ = json.Unmarshal(frame.Data, &p)
-				if p.AgentID == "" || a.me.ID == "" || p.AgentID == a.me.ID {
+				me := a.getMe()
+				if p.AgentID == "" || me.ID == "" || p.AgentID == me.ID {
 					if fileFetchWakeCh != nil {
 						select {
 						case fileFetchWakeCh <- struct{}{}:

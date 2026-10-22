@@ -305,7 +305,7 @@ func (a *Agent) serveFileFetch(ctx context.Context, req AgentPendingFileFetch) {
 		a.ExchangeDir,
 	)
 	if errCode != "" {
-		a.Log.Warn("guard: file fetch rejected", "agent", "@"+a.me.Handle, "path", req.Path, "error_code", errCode, "req_id", req.ID)
+		a.Log.Warn("guard: file fetch rejected", "agent", a.logName(), "path", req.Path, "error_code", errCode, "req_id", req.ID)
 		if err := a.Client.FailFileFetch(ctx, req.ID, errCode); err != nil && ctx.Err() == nil {
 			a.Log.Warn("guard: fail file fetch error", "err", err, "req_id", req.ID)
 		}
@@ -327,7 +327,7 @@ func (a *Agent) serveFileFetch(ctx context.Context, req AgentPendingFileFetch) {
 		limit = req.MaxImageBytes
 	}
 	if limit > 0 && fi.Size() > limit {
-		a.Log.Warn("guard: file fetch too large", "agent", "@"+a.me.Handle, "path", req.Path, "size", fi.Size(), "limit", limit, "req_id", req.ID)
+		a.Log.Warn("guard: file fetch too large", "agent", a.logName(), "path", req.Path, "size", fi.Size(), "limit", limit, "req_id", req.ID)
 		_ = a.Client.FailFileFetch(ctx, req.ID, "too_large")
 		return
 	}
@@ -344,9 +344,9 @@ func (a *Agent) serveFileFetch(ctx context.Context, req AgentPendingFileFetch) {
 
 	err = a.Client.UploadFetchedContent(ctx, req.ID, mimeType, filename, mtime, f, fi.Size())
 	if err != nil {
-		a.Log.Warn("guard: file fetch upload error", "agent", "@"+a.me.Handle, "path", req.Path, "err", err, "req_id", req.ID)
+		a.Log.Warn("guard: file fetch upload error", "agent", a.logName(), "path", req.Path, "err", err, "req_id", req.ID)
 		return
 	}
 
-	a.Log.Info("guard: file fetch completed", "agent", "@"+a.me.Handle, "path", req.Path, "size", fi.Size(), "req_id", req.ID)
+	a.Log.Info("guard: file fetch completed", "agent", a.logName(), "path", req.Path, "size", fi.Size(), "req_id", req.ID)
 }

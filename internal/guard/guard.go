@@ -81,6 +81,7 @@ type Agent struct {
 	cachedHostConfigVer string
 
 	halted   atomic.Bool
+	meMu     sync.RWMutex
 	me       Me
 	handles  map[string]string
 	failures int
@@ -90,6 +91,19 @@ type Agent struct {
 // IsHalted reports whether the agent is known to be paused/halted.
 func (a *Agent) IsHalted() bool {
 	return a.halted.Load()
+}
+
+func (a *Agent) getMe() Me {
+	a.meMu.RLock()
+	m := a.me
+	a.meMu.RUnlock()
+	return m
+}
+
+func (a *Agent) setMe(m Me) {
+	a.meMu.Lock()
+	a.me = m
+	a.meMu.Unlock()
 }
 
 // maxAttempts bounds retries of the same items, so a broken client does not
@@ -112,7 +126,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("guard %s: cannot reach the server: %w", a.Cfg.Name, err)
 	}
-	a.me = me
+	a.setMe(me)
 	a.halted.Store(me.Halted)
 	a.Log.Info("guard: watching", "agent", "@"+me.Handle, "client", a.Cfg.Client, "model", a.Cfg.Model)
 
@@ -148,7 +162,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 		if err := a.Tick(ctx); err != nil && ctx.Err() == nil {
 			a.failures++
-			a.Log.Warn("guard: tick failed", "agent", "@"+a.me.Handle, "err", err, "failures", a.failures)
+			a.Log.Warn("guard: tick failed", "agent", a.logName(), "err", err, "failures", a.failures)
 		}
 		timer.Reset(a.waitInterval())
 	}
@@ -225,7 +239,7 @@ func (a *Agent) Tick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	a.me = me
+	a.setMe(me)
 	a.halted.Store(me.Halted)
 	if me.Halted {
 		return nil
@@ -274,7 +288,7 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		pitems = append(pitems, PromptItem{Item: it, Context: a.threadContext(runCtx, it)})
 	}
 	dctx, cancel := context.WithTimeout(runCtx, a.Cfg.DecideTimeout)
-	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.me.Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir, Wrap: a.DecideWrap})
+	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.getMe().Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir, Wrap: a.DecideWrap})
 	cancel()
 	a.logRun("decide", a.Cfg.Model, len(items), res, err)
 	decideStatus := "ok"
@@ -288,7 +302,7 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 	a.reportRun(ctx, "decide", a.Cfg.Model, "", "", "", len(items), res, decideStatus, "")
 	if err != nil {
 		if runCtx.Err() != nil && ctx.Err() == nil {
-			a.Log.Warn("guard: run stopped, agent halted", "agent", "@"+a.me.Handle)
+			a.Log.Warn("guard: run stopped, agent halted", "agent", a.logName())
 			return nil
 		}
 		return a.giveUpAfterRetries(ctx, items, err)
@@ -315,7 +329,7 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		if err := a.apply(runCtx, it, act); err != nil {
 			_ = a.Client.Ack(ctx, acked)
 			if errors.Is(err, errHalted) || runCtx.Err() != nil {
-				a.Log.Warn("guard: stopped mid-run, agent halted", "agent", "@"+a.me.Handle)
+				a.Log.Warn("guard: stopped mid-run, agent halted", "agent", a.logName())
 				return nil
 			}
 			if errors.Is(err, errBudgetExceeded) {
@@ -343,7 +357,7 @@ func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause erro
 		}
 	}
 	if len(drop) > 0 {
-		a.Log.Error("guard: giving up on items after repeated failures", "agent", "@"+a.me.Handle, "items", len(drop), "err", cause)
+		a.Log.Error("guard: giving up on items after repeated failures", "agent", a.logName(), "items", len(drop), "err", cause)
 		// Say so in the thread: a silent drop looks like the agent never
 		// got the message.
 		dropped := map[string]bool{}
@@ -445,12 +459,12 @@ func (a *Agent) fetchRules(ctx context.Context) (int, string) {
 	if err != nil {
 		if a.cachedRulesText != "" || a.cachedRulesVer > 0 {
 			if a.Log != nil {
-				a.Log.Warn("guard: cannot fetch agent instructions, using cached rules", "agent", "@"+a.me.Handle, "err", err)
+				a.Log.Warn("guard: cannot fetch agent instructions, using cached rules", "agent", a.logName(), "err", err)
 			}
 			return a.cachedRulesVer, a.cachedRulesText
 		}
 		if a.Log != nil {
-			a.Log.Warn("guard: cannot fetch agent instructions, running without rules", "agent", "@"+a.me.Handle, "err", err)
+			a.Log.Warn("guard: cannot fetch agent instructions, running without rules", "agent", a.logName(), "err", err)
 		}
 		return 0, ""
 	}
@@ -518,7 +532,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		a.workCancel = cancel
 		a.workMu.Unlock()
 		res, err := a.Adapter.Work(wctx, WorkRequest{
-			Prompt: WorkPrompt(a.me.Handle, it, task, p.Grants...), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
+			Prompt: WorkPrompt(a.getMe().Handle, it, task, p.Grants...), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
 			AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
 			Rules: rulesText, RulesVersion: rulesVer,
 		})
@@ -557,7 +571,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 // server (humans only) and the guard's log; the thread gets a short note
 // with a reference the web page turns into a "details" button.
 func (a *Agent) reportError(ctx context.Context, it Item, summary, detail, clientID string) (string, error) {
-	a.Log.Error("guard: run error", "agent", "@"+a.me.Handle, "summary", summary, "detail", detail)
+	a.Log.Error("guard: run error", "agent", a.logName(), "summary", summary, "detail", detail)
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
 		thread = it.ItemID
@@ -648,10 +662,7 @@ func (a *Agent) sendLostLinks(ctx context.Context, it Item, thread string, fullL
 		err = a.Client.SendLong(ctx, it.ChannelID, thread, body, filesClientID, true)
 	}
 	if err != nil && a.Log != nil {
-		agentName := a.Cfg.Name
-		if a.me.Handle != "" {
-			agentName = "@" + a.me.Handle
-		}
+		agentName := a.logName()
 		a.Log.Warn("guard: follow-up file links failed", "err", err, "agent", agentName, "channel", it.ChannelID)
 	}
 }
@@ -731,7 +742,7 @@ func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
 				}
 				if me.Halted {
 					a.halted.Store(true)
-					a.Log.Warn("guard: halt detected, stopping the client", "agent", "@"+a.me.Handle, "state", me.State)
+					a.Log.Warn("guard: halt detected, stopping the client", "agent", a.logName(), "state", me.State)
 					cancel()
 					return
 				}
@@ -742,7 +753,7 @@ func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
 }
 
 func (a *Agent) logRun(phase, model string, items int, res RunResult, err error) {
-	attrs := []any{"agent", "@" + a.me.Handle, "phase", phase, "client", a.Cfg.Client, "model", model, "items", items,
+	attrs := []any{"agent", a.logName(), "phase", phase, "client", a.Cfg.Client, "model", model, "items", items,
 		"tokens", res.Usage.Total(), "in", res.Usage.Input, "out", res.Usage.Output,
 		"cache_read", res.Usage.CacheRead, "cache_write", res.Usage.CacheWrite, "ms", res.Duration.Milliseconds()}
 	if phase == "decide" && err == nil {
