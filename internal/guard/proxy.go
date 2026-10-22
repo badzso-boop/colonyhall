@@ -254,7 +254,8 @@ func (p *SandboxProxy) handleConnect(clientConn net.Conn, target string) {
 		return
 	}
 
-	if !p.checkAllowed(host, port, true) {
+	ip, ok := p.checkAllowed(host, port)
+	if !ok {
 		p.logRefusal(host, portStr)
 		_, _ = clientConn.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nForbidden\n"))
 		_ = clientConn.Close()
@@ -267,7 +268,9 @@ func (p *SandboxProxy) handleConnect(clientConn net.Conn, target string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), p.DialTimeout)
 	defer cancel()
-	targetConn, err := dial(ctx, "tcp", net.JoinHostPort(host, portStr))
+	// Dial the address that was checked, never the name again: a second
+	// DNS answer could point at a private address (DNS rebinding).
+	targetConn, err := dial(ctx, "tcp", net.JoinHostPort(ip.String(), portStr))
 	if err != nil {
 		_, _ = clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 		_ = clientConn.Close()
@@ -312,7 +315,8 @@ func (p *SandboxProxy) handlePlainHTTP(clientConn net.Conn, req *http.Request) {
 	}
 
 	// Plain HTTP is ONLY allowed to the Colonyhall server
-	if !p.isServer(host, port) {
+	ip, ok := p.checkAllowed(host, port)
+	if !p.isServer(host, port) || !ok {
 		p.logRefusal(host, portStr)
 		resp := "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nPlain HTTP is only allowed to the Colonyhall server\n"
 		_, _ = clientConn.Write([]byte(resp))
@@ -326,7 +330,7 @@ func (p *SandboxProxy) handlePlainHTTP(clientConn net.Conn, req *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), p.DialTimeout)
 	defer cancel()
-	targetConn, err := dial(ctx, "tcp", net.JoinHostPort(host, portStr))
+	targetConn, err := dial(ctx, "tcp", net.JoinHostPort(ip.String(), portStr))
 	if err != nil {
 		_, _ = clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 		_ = clientConn.Close()
@@ -343,53 +347,27 @@ func (p *SandboxProxy) handlePlainHTTP(clientConn net.Conn, req *http.Request) {
 	spliceConns(clientConn, targetConn)
 }
 
-func (p *SandboxProxy) checkAllowed(host string, port int, isConnect bool) bool {
+// checkAllowed decides whether host:port may be reached and returns the
+// checked address to dial. Log mode skips the allowlist (to discover what a
+// client needs) but never the address checks: private, loopback and the other
+// internal ranges stay closed in every mode, except the Colonyhall server.
+func (p *SandboxProxy) checkAllowed(host string, port int) (net.IP, bool) {
 	host = strings.ToLower(host)
 	portStr := strconv.Itoa(port)
 
 	if p.Mode == "log" {
 		p.logSeen(host, portStr)
-		return true
+	} else if !p.isServer(host, port) && !p.inAllowlist(host, port) {
+		return nil, false
 	}
 
-	// 1. Check against allowlist
-	allowed := false
-	if p.isServer(host, port) {
-		allowed = true
-	} else {
-		for _, rule := range p.Allow {
-			rHost, rPortStr, err := net.SplitHostPort(rule)
-			if err != nil {
-				continue
-			}
-			rPort, err := strconv.Atoi(rPortStr)
-			if err != nil || rPort != port {
-				continue
-			}
-			rHost = strings.ToLower(rHost)
-			if strings.HasPrefix(rHost, "*.") {
-				suffix := rHost[1:] // e.g. ".google.com"
-				if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
-					allowed = true
-					break
-				}
-			} else if rHost == host {
-				allowed = true
-				break
-			}
-		}
-	}
-
-	if !allowed {
-		return false
-	}
-
-	// 2. IP literal check
 	if ip := net.ParseIP(host); ip != nil {
-		return p.isServerIP(ip, port)
+		if p.isServerIP(ip, port) {
+			return ip, true
+		}
+		return nil, false // IP literals only for the server
 	}
 
-	// 3. DNS resolution & private IP check
 	resolver := p.Resolver
 	if resolver == nil {
 		resolver = net.DefaultResolver
@@ -398,18 +376,37 @@ func (p *SandboxProxy) checkAllowed(host string, port int, isConnect bool) bool 
 	defer cancel()
 	addrs, err := resolver.LookupIPAddr(ctx, host)
 	if err != nil || len(addrs) == 0 {
-		return false
+		return nil, false
 	}
-
 	for _, addr := range addrs {
-		if isBlockedIP(addr.IP) {
-			if !p.isServerIP(addr.IP, port) {
-				return false
-			}
+		if isBlockedIP(addr.IP) && !p.isServerIP(addr.IP, port) {
+			return nil, false
 		}
 	}
+	return addrs[0].IP, true
+}
 
-	return true
+func (p *SandboxProxy) inAllowlist(host string, port int) bool {
+	for _, rule := range p.Allow {
+		rHost, rPortStr, err := net.SplitHostPort(rule)
+		if err != nil {
+			continue
+		}
+		rPort, err := strconv.Atoi(rPortStr)
+		if err != nil || rPort != port {
+			continue
+		}
+		rHost = strings.ToLower(rHost)
+		if strings.HasPrefix(rHost, "*.") {
+			suffix := rHost[1:] // e.g. ".google.com"
+			if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
+				return true
+			}
+		} else if rHost == host {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *SandboxProxy) logSeen(host, port string) {

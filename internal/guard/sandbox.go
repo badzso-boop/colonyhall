@@ -129,19 +129,12 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 			a = append(a, hide(d)...)
 		}
 	}
-	// In a git worktree, .git is a pointer file (gitdir: ...).
-	// Mount it read-only over itself so a sandboxed run cannot rewrite it.
-	gitFile := filepath.Join(workDir, ".git")
-	if fi, err := os.Lstat(gitFile); err == nil && !fi.IsDir() {
-		a = append(a, "--ro-bind", gitFile, gitFile)
-	}
-	for _, g := range grants {
-		if g.Path != workDir {
-			gf := filepath.Join(g.Path, ".git")
-			if fi, err := os.Lstat(gf); err == nil && !fi.IsDir() {
-				a = append(a, "--ro-bind", gf, gf)
-			}
-		}
+	// Git metadata is read-only in the sandbox: the guard runs git outside it
+	// (the commit after a run), and a writable .git/config could name a
+	// filter or other command that git would run there. A worktree's .git is
+	// a pointer file (gitdir: ...); its repository's .git is protected too.
+	for _, p := range gitMetadata(append([]string{workDir}, grantPaths(grants)...)) {
+		a = append(a, "--ro-bind", p, p)
 	}
 	// Mounted after the grants, so a broad grant (e.g. the whole home)
 	// cannot reveal them: the deny list, every client's real config, the
@@ -369,4 +362,58 @@ func denyCommands(r *os.Root, name string) error {
 	}
 	_ = r.Remove(name)
 	return r.WriteFile(name, raw, 0o600)
+}
+
+func grantPaths(grants []Grant) []string {
+	out := make([]string, 0, len(grants))
+	for _, g := range grants {
+		out = append(out, g.Path)
+	}
+	return out
+}
+
+// gitMetadata lists what to mount read-only for the given folders: a .git
+// pointer file and the repository's .git folder it points into, or a .git
+// folder itself.
+func gitMetadata(dirs []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if p != "" && !seen[p] && exists(p) {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	for _, d := range dirs {
+		gf := filepath.Join(d, ".git")
+		fi, err := os.Lstat(gf)
+		if err != nil {
+			continue
+		}
+		if fi.IsDir() {
+			add(gf)
+			continue
+		}
+		if !fi.Mode().IsRegular() {
+			continue
+		}
+		add(gf)
+		raw, err := os.ReadFile(gf)
+		if err != nil {
+			continue
+		}
+		gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir:")
+		if !ok {
+			continue
+		}
+		gitdir = strings.TrimSpace(gitdir)
+		if !filepath.IsAbs(gitdir) {
+			gitdir = filepath.Join(d, gitdir)
+		}
+		// <repo>/.git/worktrees/<name> → <repo>/.git
+		if parent := filepath.Dir(filepath.Clean(gitdir)); filepath.Base(parent) == "worktrees" {
+			add(filepath.Dir(parent))
+		}
+	}
+	return out
 }

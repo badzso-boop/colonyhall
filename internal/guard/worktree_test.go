@@ -661,3 +661,90 @@ func TestSandboxedWorktree_GlobalGitConfigIgnored(t *testing.T) {
 		t.Fatalf("global git config was NOT ignored: output contained alias execution: %s", out)
 	}
 }
+
+// A repository usually has no user.name of its own and the global config is
+// not read: the guard's commit must still work.
+func TestSandboxedWorktree_CommitWithoutRepoIdentity(t *testing.T) {
+	ctx := context.Background()
+	repoDir := initTestRepo(t)
+	for _, k := range []string{"user.name", "user.email"} {
+		cmd := exec.Command("git", "config", "--unset", k)
+		cmd.Dir = repoDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("unset %s: %v %s", k, err, out)
+		}
+	}
+	t.Setenv("HOME", t.TempDir())
+	handle := "noid-agent"
+	wtPath, branch, err := EnsureWorktree(ctx, repoDir, handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ag := &Agent{
+		Cfg: AgentConfig{Name: handle}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Sandbox: true, WorktreeRepo: repoDir, WorktreeBranch: branch, RootDir: wtPath,
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "notes.md"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	line := ag.checkAndCommitWorktree(ctx, PromptItem{Item: Item{Channel: "general", Author: "norbi"}}, "write notes", wtPath)
+	if !strings.HasPrefix(line, "🌿 commit ") {
+		t.Fatalf("expected a commit, got %q", line)
+	}
+}
+
+// The repository's .git folder (config, hooks) is read-only inside the
+// sandbox: a writable config could name a filter that the guard's git add
+// would run outside the sandbox.
+func TestSandboxedWorktree_RepoGitDirReadOnlyInBwrap(t *testing.T) {
+	ctx := context.Background()
+	rootsDir := t.TempDir()
+	homeDir := filepath.Join(rootsDir, "home")
+	_ = os.MkdirAll(homeDir, 0o755)
+	sbDir := filepath.Join(rootsDir, "sb")
+	_ = os.MkdirAll(sbDir, 0o755)
+	sb := DetectSandbox(ctx, homeDir, sbDir)
+	if sb == nil {
+		t.Skip("bubblewrap (bwrap) is not available or working; skipping real bwrap test")
+	}
+	repoDir := initTestRepo(t)
+	wtPath, _, err := EnsureWorktree(ctx, repoDir, "cfg-agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentDir := filepath.Join(sbDir, "cfg-agent")
+	_ = os.MkdirAll(agentDir, 0o755)
+	// The agent may write both the worktree and the repository itself.
+	grants := []Grant{{Path: wtPath, Mode: "write", Write: true}, {Path: repoDir, Mode: "write", Write: true}}
+	script := "printf '[filter \"x\"]\\n\\tclean = touch /tmp/pwned\\n' >> " + filepath.Join(repoDir, ".git", "config")
+	args, env, err := sb.Command("claude-code", agentDir, wtPath, grants, "sh", []string{"-c", script})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(sb.Bwrap, args...)
+	cmd.Env = env
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("writing the repository's .git/config inside the sandbox must fail: %s", out)
+	}
+	raw, _ := os.ReadFile(filepath.Join(repoDir, ".git", "config"))
+	if strings.Contains(string(raw), "filter") {
+		t.Fatal(".git/config was changed")
+	}
+}
+
+func TestGitMetadata(t *testing.T) {
+	ctx := context.Background()
+	repoDir := initTestRepo(t)
+	wtPath, _, err := EnsureWorktree(ctx, repoDir, "meta-agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := gitMetadata([]string{wtPath})
+	want := []string{filepath.Join(wtPath, ".git"), filepath.Join(repoDir, ".git")}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if got := gitMetadata([]string{repoDir, repoDir}); len(got) != 1 || got[0] != filepath.Join(repoDir, ".git") {
+		t.Fatalf("a repository folder: got %v", got)
+	}
+}

@@ -270,7 +270,11 @@ func (a *Agent) checkAndCommitWorktree(ctx context.Context, it PromptItem, task,
 	commitMsg := firstLine + "\n\n" + bodyLine
 	author := fmt.Sprintf("%s (Colonyhall sandbox) <%s@colonyhall.local>", handle, handle)
 
-	if _, err := SandboxedGitExec(ctx, a.WorktreeRepo, worktreeDir, handle, "commit", "-m", commitMsg, "--author="+author); err != nil {
+	// The identity is set here: the user's global config is not read, and a
+	// repository often has no user.name of its own.
+	if _, err := SandboxedGitExec(ctx, a.WorktreeRepo, worktreeDir, handle,
+		"-c", "user.name="+handle+" (Colonyhall sandbox)", "-c", "user.email="+handle+"@colonyhall.local", "-c", "commit.gpgsign=false",
+		"commit", "-m", commitMsg, "--author="+author); err != nil {
 		a.Log.Warn("guard: git commit failed", "agent", a.logName(), "err", err)
 		return "⚠️ Commit failed: git commit failed; changes left uncommitted in the worktree."
 	}
