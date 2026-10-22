@@ -17,6 +17,7 @@
 
 ## Kész
 
+- [x] **A fájlnéző nem jelenítette meg a markdown-táblázatot** (2026-10-22): a sorok egy bekezdésbe olvadtak. Most táblázat (telefonon oldalra görgethető), és a `---` vízszintes vonal.
 - [x] **Fájlok az agentek üzeneteiben (helyi fájllinkek és fájlmegnyitás)** (2026-10-22, `b763f40`, `1df7519`, `31a7db2`): az agentek üzeneteiben lévő fájllinkek (`file://`, `/home/…`, `/mnt/…`, `/tmp/…`, `~/…`) interaktív `📄 <fájlnév>` chipként jelennek meg; emberi kattintásra az őr biztonságos hatókör-ellenőrzéssel (sandboxosnál mappaengedélyek, közvetlennél gyökerek, titok- és csere-mappa tiltással) streamelve feltölti a szerverre `human_only = true` izolációval. A felületen beépített megtekintő (szöveg/kód/log monospace, 2 MB felett 1 MB fej-láb Range váltóval, biztonságos DOM-alapú markdown renderelő nyers váltóval, képek, letöltés), és a Gépek panelen konfigurálható MB korlátok.
 - [x] **Hivatkozások elvesztése a válasz levágásakor (bugfix)** (2026-10-22, `9feda29`): az őr (`reply`, `replyLong`) a válasz levágása előtt kigyűjti a fájllinkeket (`FileLinks`), és ha a vágás miatt link veszett el, azt automatikusan egy követő szálüzenetben küldi el `📎` sorral és `<id>-files` idempotens azonosítóval.
 - [x] **A bal oldali sávban a csatornák és a DM-ek egymás mellé kerülnek** (2026-10-21, `e548634`): a lista tárolója oszlop elrendezésűvé vált, a flex sor kizárólag a csatorna- és DM-elemekre (`.chan-item`) korlátozódik.

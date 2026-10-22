@@ -117,6 +117,11 @@
   #fileViewerModal img.file-view-img { max-width:100%; max-height:65vh; object-fit:contain; display:block; margin:0 auto; }
   #fileViewerModal .markdown-body h1, #fileViewerModal .markdown-body h2, #fileViewerModal .markdown-body h3, #fileViewerModal .markdown-body h4 { margin:12px 0 6px; }
   #fileViewerModal .markdown-body p { margin:6px 0; }
+  #fileViewerModal .markdown-body .md-table { overflow-x:auto; margin:8px 0; }
+  #fileViewerModal .markdown-body table { border-collapse:collapse; font-size:13px; }
+  #fileViewerModal .markdown-body th, #fileViewerModal .markdown-body td { border:1px solid var(--line); padding:4px 8px; text-align:left; white-space:nowrap; }
+  #fileViewerModal .markdown-body th { background:var(--bg); font-weight:600; }
+  #fileViewerModal .markdown-body hr { border:none; border-top:1px solid var(--line); margin:12px 0; }
   #fileViewerModal .markdown-body ul, #fileViewerModal .markdown-body ol { margin:6px 0 6px 20px; }
   #fileViewerModal .markdown-body pre { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:8px; overflow:auto; margin:8px 0; }
   #fileViewerModal .markdown-body code { font-family:ui-monospace, monospace; font-size:12px; background:var(--bg); padding:1px 4px; border-radius:3px; }
@@ -949,6 +954,12 @@ function renderInlineMarkdown(text, parent) {
   }
 }
 
+// GitHub-style table rows: "| a | b |"; the second line is the separator.
+const mdTableRow = /^\s*\|.*\|\s*$/;
+const mdTableSep = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const mdTableCells = (line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+const isMdTableStart = (lines, i) => mdTableRow.test(lines[i]) && i + 1 < lines.length && mdTableSep.test(lines[i + 1]);
+
 function buildSafeMarkdownDOM(text) {
   const container = document.createElement("div");
   container.className = "markdown-body";
@@ -985,6 +996,39 @@ function buildSafeMarkdownDOM(text) {
       continue;
     }
 
+    if (isMdTableStart(lines, i)) {
+      const table = document.createElement("table");
+      const head = document.createElement("tr");
+      for (const c of mdTableCells(line)) {
+        const th = document.createElement("th");
+        renderInlineMarkdown(c, th);
+        head.appendChild(th);
+      }
+      table.appendChild(head);
+      i += 2;
+      while (i < lines.length && mdTableRow.test(lines[i])) {
+        const tr = document.createElement("tr");
+        for (const c of mdTableCells(lines[i])) {
+          const td = document.createElement("td");
+          renderInlineMarkdown(c, td);
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+        i++;
+      }
+      const wrap = document.createElement("div");
+      wrap.className = "md-table";
+      wrap.appendChild(table);
+      container.appendChild(wrap);
+      continue;
+    }
+
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      container.appendChild(document.createElement("hr"));
+      i++;
+      continue;
+    }
+
     if (/^\s*[-*]\s+/.test(line)) {
       const ul = document.createElement("ul");
       while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
@@ -1017,7 +1061,7 @@ function buildSafeMarkdownDOM(text) {
     }
 
     const pLines = [];
-    while (i < lines.length && lines[i].trim() !== "" && !lines[i].trim().startsWith("```") && !/^(#{1,6})\s+/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() !== "" && !lines[i].trim().startsWith("```") && !/^(#{1,6})\s+/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i]) && !isMdTableStart(lines, i)) {
       pLines.push(lines[i]);
       i++;
     }
