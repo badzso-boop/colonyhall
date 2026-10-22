@@ -6,10 +6,14 @@
 
 **Kiadva az Antigravitynek (2026-10-22, `docs/handoff/16-file-links-prompt.md`, ág: `feature/file-links`, külön worktree):** az agentek helyi fájllinkjei a felületen (kattintásra az őr betölti, a szerver tárolja, csak ember nézheti, csak olvasható; kép 200 MB, más fájl 100 MB, a felületen állítható), és a levágott válasz végéről elveszett linkek külön üzenetben.
 
+**Kiadva az Antigravitynek (2026-10-22, `docs/handoff/17-chat-markdown-prompt.md`, ág: `feature/chat-markdown`, külön worktree):** markdown a chatüzenetekben, egy közös, tesztelt megjelenítővel (`web/markdown.js`) a chathez és a fájlnézőhöz.
+
 ## Nyitott
 
-- [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`): az átadó fájl törlése a homelabon, a `CLAUDE.md` „Fejlesztői környezet” részének és az élő Claude Docnak a frissítése (a szerver a homelabon fut).
-- [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása).
+- [ ] **A 10. telepítési lépés** (`docs/05-homelab-telepites.md`), ami még hátra van: az átadó fájl (`~/colonyhall-exchange/colonyhall/gitea-credentials.txt`, a homelabon, 2026-10-22-én még megvan) törlése Norbi szavára, és az élő Claude Doc frissítése. A `CLAUDE.md` „Fejlesztői környezet” része kész (2026-10-22).
+- [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
+
+**Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 

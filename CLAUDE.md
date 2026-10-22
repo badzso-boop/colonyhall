@@ -41,9 +41,10 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
 
 ## Fejlesztői környezet
 
-- Fejlesztés a fejlesztőgépen, WSL-ben: `G:\Projects\new-chat` = `/mnt/g/Projects/new-chat`.
-- Helyi futtatás Docker Compose-zal (`deploy/compose.dev.yaml`), a szerver a `http://localhost:8080` címen.
-- Később a homelab szerverre költözik (`ssh homelab`, `~/homelab/colonyhall`); **előtte olvasd el a szerveren a `~/homelab/CLAUDE.md`-t és a `README.md`-t** (megosztott szolgáltatások, titokkezelés, portok). A cél: `colony.ujjweb.hu` a meglévő Cloudflare Tunnelen át, az őrök Tailscale-en.
+- Fejlesztés a fejlesztőgépen, WSL-ben: `G:\Projects\new-chat` = `/mnt/g/Projects/new-chat`. A helyi dev stack (`deploy/compose.dev.yaml`, `http://localhost:8080`) alapból **leállítva**: csak fejlesztéshez és a `make test-pg`-hez indítsd (`make dev`), utána `make down`.
+- **Éles szerver: a homelabon** (2026-10-21 óta), `http://100.85.111.88:8280`, csak Tailscale-en; kód: `~/homelab/colonyhall` (a GitHub-repó klónja), `deploy/compose.yaml`, közös Postgres (`homelab-shared-postgres`, adatbázis `colonyhall`). Részletek és visszaállás: `docs/05-homelab-telepites.md`. A homelabon bármihez nyúlás előtt olvasd el a `~/homelab/CLAUDE.md`-t és a `README.md`-t.
+- **Élesítés** (Norbi futtatja vagy hagyja jóvá): push a GitHubra, majd `ssh homelab 'cd ~/homelab/colonyhall && git pull && docker compose -f deploy/compose.yaml up -d --build'` (a migrációk induláskor futnak). Ellenőrzés: `curl http://100.85.111.88:8280/readyz`.
+- **Őrök** (systemd felhasználói szolgáltatás `colony-guard`, mindkettő a homelab szerverre csatlakozik): **PC** (WSL, `pc-wsl`): `go build -o ~/.local/bin/colony ./cmd/colony && systemctl --user restart colony-guard`; **homelab** (nincs Go): `docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 -v "$PWD":/src -w /src golang:1.27 go build -trimpath -o bin/colony ./cmd/colony && install -m 755 bin/colony ~/.local/bin/colony && systemctl --user restart colony-guard`. Ha a szerver API-ja változott, előbb a szerver, utána az őrök; futó agentmunka alatt ne indítsd újra őket.
 
 ## Parancsok
 
@@ -110,7 +111,7 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 2. **Irányváltás (döntés, 2026-10-15): a saját agentek távirányítása.** Részletek: terv „Működési modell”. Ebben a sorrendben:
    1. ~~Gépek, párosítás, mappaengedélyek, rövid lejáratú agent-tokenek, `bwrap` sandbox~~ – kész (a sandbox mostantól választható mód).
    2. ~~Közvetlen mód: teljes hozzáférés a gyökérkönyvtárból, a felhasználó saját beállításaival; szálanként folytatott munkamenet (`--session-id`/`--resume`); Colonyhall MCP az agentnél; agentenkénti engedélymód (alapból `auto`)~~ – kész.
-   3. Őr a homelab szerveren.
+   3. ~~Őr a homelab szerveren~~ – kész; a szerver is a homelabon fut (2026-10-21).
    4. Agent–agent együttműködés; titkok átadása a `Z:` meghajtón (`colonyhall-exchange`); közös utasítás.
    5. ~~Jóváhagyás a chatből (`--permission-prompt-tool`)~~ – kész (2026-10-16).
    - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
@@ -121,7 +122,7 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
    - ~~Kiadva az Antigravitynek (2026-10-22, `docs/handoff/16-file-links-prompt.md`): agentek által hivatkozott helyi fájlok megnyitása a felületen (őr általi lekéréssel, csak olvasásra, kizárólag embernek); levágási hiba javítása a guardban (FileLinks megmarad); Range-alapú 1 MB fej/farok megjelenítés >2 MB fájloknál; biztonságos DOM-alapú Markdown; adminisztrátori korlátok a Gépek panelen~~ – kész (2026-10-22).
    6. Később: push-értesítés; sandboxos agentek worktree-je; hálózati szűrés a sandboxban. (A sandbox környezeti változói már nem a parancssorban mennek: kész.)
 3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
-4. Homelab-telepítés csak kérésre.
+4. ~~Homelab-telepítés~~ – kész (2026-10-21, `docs/05-homelab-telepites.md`).
 
 **Futtatás (döntés, 2026-10-15):** a szerver és a Postgres Dockerben fut, **az őr natívan, a gépen**, ugyanazokkal a bejelentkezett CLI-kkel (`claude`, `agy`), amiket a felhasználó közvetlenül is használ. Az őrt ne tedd konténerbe: ott újra telepíteni és belépni kellene.
 
