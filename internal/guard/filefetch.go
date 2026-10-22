@@ -14,7 +14,7 @@ import (
 )
 
 var secretPatterns = []string{
-	".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.p12", "credentials*", "*.token", ".netrc", ".git-credentials",
+	".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.p12", "credentials*", "*.token", "*.secret", ".netrc", ".git-credentials",
 }
 
 func isSecretName(base string) bool {

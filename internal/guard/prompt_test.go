@@ -81,3 +81,17 @@ func TestDirectPromptLengthAndLanguage(t *testing.T) {
 		t.Fatalf("expected DirectPrompt to contain %q, got:\n%s", expectedLang, prompt)
 	}
 }
+
+func TestWorkPromptWithBranch(t *testing.T) {
+	it := PromptItem{
+		Item: Item{
+			Author: "norbi",
+			Body:   "Do some work in your repo",
+		},
+	}
+	p := WorkPromptWithBranch("sandboxed-coder", "colony/sandboxed-coder/work", it, "Do some work in your repo")
+	expected := "You work in a git worktree on branch colony/sandboxed-coder/work; the guard commits your changes after the run; you cannot run git or any command."
+	if !strings.Contains(p, expected) {
+		t.Fatalf("expected branch text %q in prompt, got:\n%s", expected, p)
+	}
+}

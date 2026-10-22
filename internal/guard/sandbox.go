@@ -93,6 +93,20 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 			a = append(a, hide(d)...)
 		}
 	}
+	// In a git worktree, .git is a pointer file (gitdir: ...).
+	// Mount it read-only over itself so a sandboxed run cannot rewrite it.
+	gitFile := filepath.Join(workDir, ".git")
+	if fi, err := os.Lstat(gitFile); err == nil && !fi.IsDir() {
+		a = append(a, "--ro-bind", gitFile, gitFile)
+	}
+	for _, g := range grants {
+		if g.Path != workDir {
+			gf := filepath.Join(g.Path, ".git")
+			if fi, err := os.Lstat(gf); err == nil && !fi.IsDir() {
+				a = append(a, "--ro-bind", gf, gf)
+			}
+		}
+	}
 	// Mounted after the grants, so a broad grant (e.g. the whole home)
 	// cannot reveal them: the deny list, every client's real config, the
 	// other agents' sandboxes.

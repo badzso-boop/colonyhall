@@ -477,14 +477,19 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	}
 	grants = ok
 	work := filepath.Join(agentDir, "work")
-	for _, g := range grants { // prefer a writable folder, then a readable one
-		if g.Write {
-			work = g.Path
-			break
+	if m.worktree != nil {
+		work = m.worktree.Path
+		grants = append([]Grant{{Path: m.worktree.Path, Mode: "write", Write: true}}, grants...)
+	} else {
+		for _, g := range grants { // prefer a writable folder, then a readable one
+			if g.Write {
+				work = g.Path
+				break
+			}
 		}
-	}
-	if work == filepath.Join(agentDir, "work") && len(grants) > 0 {
-		work = grants[0].Path
+		if work == filepath.Join(agentDir, "work") && len(grants) > 0 {
+			work = grants[0].Path
+		}
 	}
 	var add []string
 	for _, g := range grants {

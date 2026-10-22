@@ -356,3 +356,308 @@ func TestDirectPrompt_WithWorktreeBranch(t *testing.T) {
 		t.Fatalf("prompt missing expected worktree instruction:\nwant: %s\ngot:\n%s", expectedText, p2)
 	}
 }
+
+func TestSandboxedWorktree_ReconcileAndPolicy(t *testing.T) {
+	ctx := context.Background()
+	rootsDir := t.TempDir()
+	repoDir := filepath.Join(rootsDir, "sandboxed-repo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("git", "init", "-b", "main")
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "config", "user.name", "Tester")
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+	_ = os.WriteFile(filepath.Join(repoDir, "init.txt"), []byte("init"), 0o644)
+	cmd = exec.Command("git", "add", "init.txt")
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "commit", "-m", "init")
+	cmd.Dir = repoDir
+	_ = cmd.Run()
+
+	agentID := "33333333-3333-3333-3333-333333333333"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/token"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "tok", "expires_at": time.Now().Add(time.Hour)})
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "sandbox-agent", "state": "active"})
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	req := false
+	s := &Supervisor{
+		Cfg:        Config{Server: ts.URL, Roots: []string{rootsDir}, SandboxDir: filepath.Join(rootsDir, "sb"), RequireSandbox: &req},
+		host:       &Client{BaseURL: ts.URL, Token: "host-tok", HTTP: ts.Client()},
+		roots:      []string{rootsDir},
+		agents:     map[string]*managed{},
+		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NewAdapter: func(ac AgentConfig) Adapter { return &ClaudeCode{} },
+		lastOK:     time.Now(),
+	}
+
+	cfg := HostConfig{
+		Version: "v1",
+		Agents: []HostAgent{
+			{
+				AgentID:      agentID,
+				Handle:       "sandbox-agent",
+				Client:       "claude-code",
+				Mode:         "compact",
+				WorktreeRepo: repoDir,
+				Sandbox:      true,
+				AllowWork:    true,
+			},
+		},
+	}
+
+	s.reconcile(ctx, cfg)
+
+	if len(s.rejected) != 0 {
+		t.Fatalf("unexpected rejections: %+v", s.rejected)
+	}
+	if len(s.worktrees) != 1 {
+		t.Fatalf("expected 1 worktree in supervisor, got %d", len(s.worktrees))
+	}
+	wt := s.worktrees[0]
+	if wt.AgentID != agentID {
+		t.Errorf("agent id mismatch: %s", wt.AgentID)
+	}
+	if wt.Branch != "colony/sandbox-agent/work" {
+		t.Errorf("branch mismatch: %s", wt.Branch)
+	}
+	expectedWTPath := filepath.Join(repoDir+"-worktrees", "sandbox-agent")
+	if wt.Path != expectedWTPath {
+		t.Errorf("path mismatch: got %s, want %s", wt.Path, expectedWTPath)
+	}
+
+	m := s.agents[agentID]
+	if m == nil {
+		t.Fatal("sandboxed agent not started")
+	}
+	pol := m.agent.Policy()
+	if !pol.Allowed {
+		t.Fatalf("policy should be allowed, got reason: %s", pol.Reason)
+	}
+	if !pol.NoExec {
+		t.Error("sandboxed agent policy must have NoExec: true")
+	}
+	if pol.Dir != expectedWTPath {
+		t.Errorf("policy dir should be worktree: got %s, want %s", pol.Dir, expectedWTPath)
+	}
+	foundWTGrant := false
+	for _, g := range pol.Grants {
+		if g.Path == expectedWTPath && g.Write {
+			foundWTGrant = true
+			break
+		}
+	}
+	if !foundWTGrant {
+		t.Errorf("policy grants should contain worktree as write grant: %+v", pol.Grants)
+	}
+
+	s.stopAll()
+}
+
+func TestSandboxedWorktree_DotGitReadOnlyInBwrap(t *testing.T) {
+	ctx := context.Background()
+	rootsDir := t.TempDir()
+	homeDir := filepath.Join(rootsDir, "home")
+	_ = os.MkdirAll(homeDir, 0o755)
+	sbDir := filepath.Join(rootsDir, "sb")
+	_ = os.MkdirAll(sbDir, 0o755)
+
+	sb := DetectSandbox(ctx, homeDir, sbDir)
+	if sb == nil {
+		t.Skip("bubblewrap (bwrap) is not available or working; skipping real bwrap test")
+	}
+
+	repoDir := initTestRepo(t)
+	wtPath, _, err := EnsureWorktree(ctx, repoDir, "bwrap-agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	agentDir := filepath.Join(sbDir, "bwrap-agent")
+	_ = os.MkdirAll(agentDir, 0o755)
+	grants := []Grant{{Path: wtPath, Mode: "write", Write: true}}
+
+	// Attempt to overwrite .git inside the sandbox with bash
+	bwrapArgs, env, err := sb.Command("claude-code", agentDir, wtPath, grants, "bash", []string{"-c", "echo rewritten > .git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(sb.Bwrap, bwrapArgs...)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	// The write attempt should fail (e.g. Read-only file system)
+	if err == nil {
+		t.Fatalf("expected writing to .git inside sandbox to fail, but command succeeded: %s", string(out))
+	}
+
+	// Verify .git is still intact
+	content, err := os.ReadFile(filepath.Join(wtPath, ".git"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(content), "gitdir:") {
+		t.Fatalf("expected .git to still start with gitdir:, got: %s", string(content))
+	}
+}
+
+func TestSandboxedWorktree_CommitSafetyAndCorruptedDotGit(t *testing.T) {
+	ctx := context.Background()
+	repoDir := initTestRepo(t)
+	handle := "safe-agent"
+	wtPath, branch, err := EnsureWorktree(ctx, repoDir, handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ag := &Agent{
+		Cfg:            AgentConfig{Name: handle},
+		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Sandbox:        true,
+		WorktreeRepo:   repoDir,
+		WorktreeBranch: branch,
+		RootDir:        wtPath,
+	}
+	it := PromptItem{
+		Item: Item{ID: "i-1", Channel: "general", Author: "norbi"},
+	}
+
+	// 1. No changes: returns empty string (no commit)
+	line := ag.checkAndCommitWorktree(ctx, it, "task 1", wtPath)
+	if line != "" {
+		t.Fatalf("expected empty line for no changes, got: %s", line)
+	}
+
+	// 2. Secret file: refused
+	secretFile := filepath.Join(wtPath, ".env")
+	if err := os.WriteFile(secretFile, []byte("SECRET=true"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	line = ag.checkAndCommitWorktree(ctx, it, "task with secret", wtPath)
+	if !strings.Contains(line, "Commit refused") || !strings.Contains(line, "secret") {
+		t.Fatalf("expected secret refusal, got: %s", line)
+	}
+	_ = os.Remove(secretFile)
+
+	// Also test *.secret pattern
+	secretFile2 := filepath.Join(wtPath, "my.secret")
+	if err := os.WriteFile(secretFile2, []byte("token"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	line = ag.checkAndCommitWorktree(ctx, it, "task with my.secret", wtPath)
+	if !strings.Contains(line, "Commit refused") || !strings.Contains(line, "secret") {
+		t.Fatalf("expected secret refusal for my.secret, got: %s", line)
+	}
+	_ = os.Remove(secretFile2)
+
+	// 3. Big file (>10MB): refused
+	bigFile := filepath.Join(wtPath, "huge.bin")
+	f, err := os.Create(bigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(11 * 1024 * 1024); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	line = ag.checkAndCommitWorktree(ctx, it, "task with big file", wtPath)
+	if !strings.Contains(line, "Commit refused") || !strings.Contains(line, "10 MB") {
+		t.Fatalf("expected big file refusal, got: %s", line)
+	}
+	_ = os.Remove(bigFile)
+
+	// 4. Symlink pointing outside worktree: refused
+	outsideFile := filepath.Join(t.TempDir(), "outside.txt")
+	_ = os.WriteFile(outsideFile, []byte("outside content"), 0o644)
+	symlinkPath := filepath.Join(wtPath, "leak.txt")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+	line = ag.checkAndCommitWorktree(ctx, it, "task with symlink", wtPath)
+	if !strings.Contains(line, "Commit refused") || !strings.Contains(line, "symlink") {
+		t.Fatalf("expected symlink refusal, got: %s", line)
+	}
+	_ = os.Remove(symlinkPath)
+
+	// 5. Corrupted .git pointer file from outside: guard's commit still succeeds via explicit --git-dir
+	dotGit := filepath.Join(wtPath, ".git")
+	if err := os.WriteFile(dotGit, []byte("gitdir: /nonexistent/fake/path"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	validFile := filepath.Join(wtPath, "hello.txt")
+	if err := os.WriteFile(validFile, []byte("valid content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	line = ag.checkAndCommitWorktree(ctx, it, "Create a hello file for the demo", wtPath)
+	if !strings.HasPrefix(line, "🌿 commit ") || !strings.Contains(line, "on colony/safe-agent/work (1 files)") {
+		t.Fatalf("expected successful commit line, got: %s", line)
+	}
+
+	// Verify commit details in git history
+	logOut, err := SandboxedGitExec(ctx, repoDir, wtPath, handle, "log", "-n", "1", "--format=%an|%ae|%s|%b")
+	if err != nil {
+		t.Fatalf("git log failed: %v", err)
+	}
+	parts := strings.Split(logOut, "|")
+	if len(parts) < 3 {
+		t.Fatalf("unexpected git log output: %s", logOut)
+	}
+	if parts[0] != "safe-agent (Colonyhall sandbox)" {
+		t.Errorf("author name mismatch: got %q", parts[0])
+	}
+	if parts[1] != "safe-agent@colonyhall.local" {
+		t.Errorf("author email mismatch: got %q", parts[1])
+	}
+	if parts[2] != "colony(safe-agent): Create a hello file for the demo" {
+		t.Errorf("subject mismatch: got %q", parts[2])
+	}
+	if !strings.Contains(logOut, "Requested in #general by @norbi") {
+		t.Errorf("commit body missing request reference: %s", logOut)
+	}
+}
+
+func TestSandboxedWorktree_GlobalGitConfigIgnored(t *testing.T) {
+	ctx := context.Background()
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+
+	// Plant a malicious alias in the user's global .gitconfig
+	gitConfig := "[alias]\n\tstatus = !echo MALICIOUS_GLOBAL_ALIAS\n[core]\n\thooksPath = /tmp/evil\n"
+	if err := os.WriteFile(filepath.Join(fakeHome, ".gitconfig"), []byte(gitConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repoDir := initTestRepo(t)
+	handle := "env-agent"
+	wtPath, _, err := EnsureWorktree(ctx, repoDir, handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Run status via SandboxedGitExec
+	out, err := SandboxedGitExec(ctx, repoDir, wtPath, handle, "status")
+	if err != nil {
+		t.Fatalf("sandboxed git exec failed: %v: %s", err, out)
+	}
+	if strings.Contains(out, "MALICIOUS_GLOBAL_ALIAS") {
+		t.Fatalf("global git config was NOT ignored: output contained alias execution: %s", out)
+	}
+}

@@ -1796,7 +1796,7 @@ components:
         permission_mode: { type: string, maxLength: 40 }
         mode: { type: string, enum: [direct, compact] }
         root_dir: { type: string, maxLength: 1024 }
-        worktree_repo: { type: string, maxLength: 1024 }
+        worktree_repo: { type: string, maxLength: 1024, description: "Git repo path for worktree. For sandboxed agents, the guard commits for the agent; nothing is pushed." }
         sandbox: { type: boolean }
         approvals: { type: string, enum: [none, chat] }
         max_session_tokens: { type: integer, minimum: 0, default: 150000 }
