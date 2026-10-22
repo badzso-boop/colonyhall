@@ -115,8 +115,9 @@ func registerOverview(
 
 		// 2. Assignment
 		var overviewAssignment *apispec.OverviewAssignment
+		// Machines, folders and grants are admin-only, as in the hosts API.
 		asgn, err := hoSvc.AssignmentByAgent(ctx, targetActor.ID)
-		if err == nil {
+		if err == nil && caller.IsAdmin() {
 			host, err := hoSvc.HostByID(ctx, asgn.HostID)
 			hostName := ""
 			if err == nil {
@@ -159,8 +160,28 @@ func registerOverview(
 			}
 		}
 
+		// Non-admins see runs, notes and questions only from channels they can read.
+		visible := map[ids.ID]bool{}
+		canSee := func(channelID ids.ID) bool {
+			if caller.IsAdmin() {
+				return true
+			}
+			ok, seen := visible[channelID]
+			if !seen {
+				ok, _ = cvSvc.CanRead(ctx, caller, channelID)
+				visible[channelID] = ok
+			}
+			return ok
+		}
+
 		// 3. Runs (context per thread & usage)
-		runsList, _ := ruSvc.ListRuns(ctx, caller, targetActor.ID, 200)
+		allRuns, _ := ruSvc.ListRuns(ctx, caller, targetActor.ID, 200)
+		runsList := allRuns[:0:0]
+		for _, r := range allRuns {
+			if canSee(r.ChannelID) {
+				runsList = append(runsList, r)
+			}
+		}
 		lastRuns := make([]apispec.OverviewRun, 0)
 		for i, r := range runsList {
 			if i >= 10 {
@@ -229,7 +250,10 @@ func registerOverview(
 		}
 
 		// 4. Collaboration: notes, leases, questions
-		agentNotes, _ := ntSvc.ListNotes(ctx, caller, targetActor.ID, nil)
+		var agentNotes []notes.Note
+		if caller.IsAdmin() { // a note names no channel; non-admins see notes in the thread itself
+			agentNotes, _ = ntSvc.ListNotes(ctx, caller, targetActor.ID, nil)
+		}
 		seenNoteThreads := make(map[ids.ID]bool)
 		notesList := make([]apispec.AgentNote, 0)
 		for _, n := range agentNotes {
@@ -278,7 +302,7 @@ func registerOverview(
 		questionsList := make([]apispec.Question, 0)
 		for _, q := range allQuestions {
 			if (q.AskedBy == targetActor.ID || (q.ToActorID != nil && *q.ToActorID == targetActor.ID)) &&
-				(q.State == "open" || q.State == "escalated") {
+				(q.State == "open" || q.State == "escalated") && canSee(q.ChannelID) {
 				questionsList = append(questionsList, toOverviewQuestionSpec(ctx, q, idSvc, cvSvc))
 			}
 		}

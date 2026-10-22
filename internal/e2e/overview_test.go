@@ -274,6 +274,29 @@ func TestOverviewE2E(t *testing.T) {
 	if len(collab.OpenQuestions) != 1 || collab.OpenQuestions[0].Text != "Should we proceed with step 2?" {
 		t.Fatalf("expected 1 open question, got %+v", collab.OpenQuestions)
 	}
+
+	// A non-admin human who cannot read #general sees no machine, folders,
+	// runs, notes or questions from it (the hosts API is admin-only).
+	memberRole := apispec.Member
+	var carol apispec.CreateActorResponse
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, apispec.CreateActorRequest{
+		Kind: apispec.ActorKindHuman, Handle: "carol", Role: &memberRole,
+	}, &carol); s != http.StatusCreated {
+		t.Fatalf("create carol: %d", s)
+	}
+	var limited apispec.AgentOverview
+	if s := e.do("GET", fmt.Sprintf("/api/v1/agents/%s/overview", agentIDStr), carol.Token, nil, &limited); s != http.StatusOK {
+		t.Fatalf("member overview: %d", s)
+	}
+	if limited.Assignment != nil {
+		t.Fatalf("non-admin must not see the assignment: %+v", limited.Assignment)
+	}
+	if limited.Threads != nil && len(*limited.Threads) != 0 {
+		t.Fatalf("non-admin must not see threads of unreadable channels: %+v", *limited.Threads)
+	}
+	if len(limited.Usage.LastRuns) != 0 || len(limited.Collaboration.Notes) != 0 || len(limited.Collaboration.OpenQuestions) != 0 {
+		t.Fatalf("non-admin saw runs, notes or questions: %+v %+v", limited.Usage.LastRuns, limited.Collaboration)
+	}
 	_ = secret
 	_ = conversation.KindPublic
 }

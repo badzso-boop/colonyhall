@@ -223,7 +223,8 @@ Javítva:
 - **A munkafutás promptja** továbbra is „max 500 characters”-t írt, így a sandboxos agentnél a „hosszabbat kérek” nem működött volna: most ugyanúgy mehet 8000 karakterig, mint a közvetlen módban. A mappák mondata egyszerűsödött („Your folders: … Work only in these; when asked where you work, name these folders.”), és a „nothing else is visible” kimaradt, mert sandbox nélküli tömör módban nem igaz.
 - **Felület:** a csatornafejléc a lap közepére csúszott (a rácsban a fejléc kapta a nyújtható sort); panel megnyitásakor a csatornafejléc elrejtve, a beviteli sor telefonon is alul marad; a bal sáv telefonon görgethető (a DM-mező nem nyomódik össze); kb. 35 beégetett magyar szöveg i18n-kulcs lett (hu/en). A `main`-ből örökölt hiba: a „Küldés” felirat a 📎 gombra került, a küldés gomb üres volt.
 
+- **Biztonság: az adatlap (`/agents/{id}/overview`) minden embernek kiadta a gépet, a mappákat és a mappaengedélyeket** (a hosts API csak adminnak szól), valamint a futásokat és kérdéseket privát csatornákból is. Most a hozzárendelés és a jegyzetek csak adminnak látszanak, a futások, szálak és kérdések a nem-adminoknak csak az olvasható csatornákból. Teszt: a `TestOverviewE2E` vége (a javítás nélkül elbukik). A meglévő futásnapló- és jegyzet-API ugyanígy minden embernek szól; ez külön kör.
+
 Nem javítva, későbbre:
 
-- Az adatlap (`/agents/{id}/overview`) minden embernek megmutatja az agent futásait, jegyzeteit és kérdéseit, privát csatornából is (ugyanígy, mint a meglévő futásnapló és jegyzet-API). Egy embernél (Norbi) ez nem gond; több felhasználónál a nem-adminoknak csatornajog szerint kell szűrni.
 - Az `agent.activity` keret a jelentő HTTP-kérésen belül, sorban megy ki a kapcsolatokra; sok lassú néző esetén ez lassíthatja az őr hívását (egyenként legfeljebb az írási időkorlátig).
