@@ -53,7 +53,7 @@
   .msg { padding:6px 0; }
   .who { font-weight:600; } .who.agent { color:var(--agent); } .who.system { color:var(--accent); }
   .at { color:var(--muted); font-size:12px; margin-left:6px; }
-  .body { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .body { overflow-wrap:anywhere; }
   form { display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); }
   form input { flex:1; }
   #status { color:var(--muted); font-size:12px; margin-left:auto; }
@@ -115,19 +115,45 @@
   #fileViewerModal .viewer-body { flex:1; overflow:auto; min-height:200px; }
   #fileViewerModal pre.file-view-mono { margin:0; font-family:ui-monospace, monospace; font-size:12px; white-space:pre-wrap; word-break:break-all; }
   #fileViewerModal img.file-view-img { max-width:100%; max-height:65vh; object-fit:contain; display:block; margin:0 auto; }
+  /* Markdown styling for chat and file viewer */
+  .chat-heading { font-weight:600; margin:6px 0 2px; }
+  .chat-h1 { font-size:1.18em; }
+  .chat-h2 { font-size:1.1em; }
+  .chat-h3, .chat-h4, .chat-h5, .chat-h6 { font-size:1em; }
+  .md-p { margin:4px 0; }
+  .msg .body .md-p:first-child { margin-top:0; }
+  .msg .body .md-p:last-child { margin-bottom:0; }
+  .code-block-wrap { margin:6px 0; border:1px solid var(--line); border-radius:6px; overflow:hidden; background:var(--bg); max-width:100%; }
+  .code-block-header { display:flex; justify-content:space-between; align-items:center; padding:3px 8px; background:var(--surface); border-bottom:1px solid var(--line); font-size:11px; }
+  .code-lang { color:var(--muted); font-family:ui-monospace, monospace; text-transform:lowercase; }
+  .copy-btn { border:1px solid var(--line); background:var(--bg); border-radius:4px; padding:1px 6px; font-size:11px; cursor:pointer; color:var(--fg); }
+  .copy-btn:hover { border-color:var(--accent); }
+  .code-block-wrap pre { margin:0; padding:8px; overflow-x:auto; font-family:ui-monospace, monospace; font-size:12px; }
+  .code-block-wrap code { padding:0; background:none; font-family:ui-monospace, monospace; font-size:12px; }
+  .md-quote { border-left:3px solid var(--line); padding-left:8px; margin:4px 0; color:var(--muted); }
+  .md-list { margin:4px 0 4px 20px; padding:0; }
+  .md-list li { margin:2px 0; }
+  .md-list .md-list { margin:2px 0 2px 16px; }
+  .md-table { overflow-x:auto; margin:6px 0; max-width:100%; }
+  .md-table table { border-collapse:collapse; font-size:13px; }
+  .md-table th, .md-table td { border:1px solid var(--line); padding:4px 8px; text-align:left; white-space:nowrap; }
+  .md-table th { background:var(--bg); font-weight:600; }
+  .md-hr { border:none; border-top:1px solid var(--line); margin:8px 0; }
+  .mention { color:var(--accent); font-weight:500; cursor:pointer; border-radius:3px; padding:0 2px; }
+  .mention:hover { text-decoration:underline; }
+  .body code, .markdown-body code { font-family:ui-monospace, monospace; font-size:12px; background:var(--bg); padding:1px 4px; border-radius:3px; }
+  .body a, .markdown-body a { color:var(--accent); text-decoration:none; }
+  .body a:hover, .markdown-body a:hover { text-decoration:underline; }
+  .msg .body.collapsible.collapsed { max-height:340px; overflow:hidden; position:relative; }
+  .msg .body.collapsible.collapsed .msg-fade { display:block; }
+  .msg-fade { display:none; position:absolute; bottom:0; left:0; right:0; height:60px; background:linear-gradient(transparent, var(--bg)); pointer-events:none; }
+  .msg-collapse-btn { display:inline-flex; align-items:center; gap:4px; margin-top:4px; font-size:12px; color:var(--accent); background:none; border:none; cursor:pointer; padding:2px 0; font-weight:500; }
+  .msg-collapse-btn:hover { text-decoration:underline; }
   #fileViewerModal .markdown-body h1, #fileViewerModal .markdown-body h2, #fileViewerModal .markdown-body h3, #fileViewerModal .markdown-body h4 { margin:12px 0 6px; }
   #fileViewerModal .markdown-body p { margin:6px 0; }
   #fileViewerModal .markdown-body .md-table { overflow-x:auto; margin:8px 0; }
-  #fileViewerModal .markdown-body table { border-collapse:collapse; font-size:13px; }
-  #fileViewerModal .markdown-body th, #fileViewerModal .markdown-body td { border:1px solid var(--line); padding:4px 8px; text-align:left; white-space:nowrap; }
-  #fileViewerModal .markdown-body th { background:var(--bg); font-weight:600; }
-  #fileViewerModal .markdown-body hr { border:none; border-top:1px solid var(--line); margin:12px 0; }
+  #fileViewerModal .markdown-body hr { margin:12px 0; }
   #fileViewerModal .markdown-body ul, #fileViewerModal .markdown-body ol { margin:6px 0 6px 20px; }
-  #fileViewerModal .markdown-body pre { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:8px; overflow:auto; margin:8px 0; }
-  #fileViewerModal .markdown-body code { font-family:ui-monospace, monospace; font-size:12px; background:var(--bg); padding:1px 4px; border-radius:3px; }
-  #fileViewerModal .markdown-body pre code { padding:0; background:none; }
-  #fileViewerModal .markdown-body a { color:var(--accent); text-decoration:none; }
-  #fileViewerModal .markdown-body a:hover { text-decoration:underline; }
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     main > nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; }
     header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; }
@@ -245,6 +271,7 @@
     <div id="fileViewerBody" class="viewer-body"></div>
   </div>
 </div>
+<script src="markdown.js"></script>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -293,6 +320,7 @@ const I18N = {
         loadingFile: "betöltés…", refresh: "Frissítés", statusAt: "állapot:",
         viewStart: "megjelenítés: eleje", viewEnd: "megjelenítés: vége",
         rawView: "Nyers", renderedView: "Formázott", download: "Letöltés",
+        copy: "Másolás", copied: "Másolva!", showMore: "Több", showLess: "Kevesebb",
         errHostOffline: "A gép offline", errNotFound: "A fájl nem létezik",
         errDenied: "A fájl megosztása nem engedélyezett", errTooLarge: "A fájl túl nagy (limit felett)",
         errNotAFile: "Nem fájl (mappa vagy speciális fájl)", errTimeout: "Időtúllépés" },
@@ -342,6 +370,7 @@ const I18N = {
         loadingFile: "loading…", refresh: "Refresh", statusAt: "status:",
         viewStart: "display: start", viewEnd: "display: end",
         rawView: "Raw", renderedView: "Formatted", download: "Download",
+        copy: "Copy", copied: "Copied!", showMore: "More", showLess: "Less",
         errHostOffline: "The machine is offline", errNotFound: "The file does not exist",
         errDenied: "Sharing this file is not allowed", errTooLarge: "The file is too large (exceeds limit)",
         errNotAFile: "Not a file (directory or special file)", errTimeout: "Request timed out" },
@@ -709,7 +738,7 @@ function renderMsg(m) {
     `<div class="body"></div><div class="attachments"></div><div class="chips"></div>`;
   if (m.thread_root_id) {
     const root = msgs.get(m.thread_root_id);
-    div.querySelector(".re").textContent = "↪ " + L.inThread + " " + (root ? root.body.slice(0, 60) : "…");
+    div.querySelector(".re").textContent = "↪ " + L.inThread + " " + (root ? ColonyMarkdown.plain(root.body).slice(0, 60) : "…");
   }
   if (m.kind === "system") {
     div.querySelector(".who").className = "who system";
@@ -729,11 +758,47 @@ function renderMsg(m) {
   if (appRef) bodyText = bodyText.replace(appRef[0], "").trim();
   const bodyEl = div.querySelector(".body");
   bodyEl.textContent = "";
-  if (a.kind === "agent") {
-    renderAgentBodyWithFileChips(bodyText, bodyEl, m.id, a.handle);
-  } else {
-    bodyEl.textContent = bodyText;
-  }
+
+  const isAgent = a.kind === "agent";
+  const renderedFrag = ColonyMarkdown.render(ColonyMarkdown.parse(bodyText), {
+    fileChips: isAgent,
+    inChat: true,
+    copyText: L.copy || "Másolás",
+    copiedText: L.copied || "Másolva!",
+    knownHandles: new Set(Object.values(actors).map(act => act.handle)),
+    onMention: (handle) => {
+      const actor = Object.values(actors).find(act => act.handle === handle);
+      if (actor) openOverviewPanel(actor.id);
+    },
+    onFileClick: (path) => {
+      openFileViewer(m.id, path, a.handle);
+    }
+  });
+  bodyEl.appendChild(renderedFrag);
+
+  // Collapse long messages
+  const fadeEl = document.createElement("div");
+  fadeEl.className = "msg-fade";
+  bodyEl.appendChild(fadeEl);
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "msg-collapse-btn";
+  toggleBtn.style.display = "none";
+  toggleBtn.textContent = L.showMore || "Több";
+  toggleBtn.onclick = (e) => {
+    e.stopPropagation();
+    const isCollapsed = bodyEl.classList.toggle("collapsed");
+    toggleBtn.textContent = isCollapsed ? (L.showMore || "Több") : (L.showLess || "Kevesebb");
+  };
+  bodyEl.after(toggleBtn);
+
+  requestAnimationFrame(() => {
+    if (bodyEl.scrollHeight > 360) {
+      bodyEl.classList.add("collapsible", "collapsed");
+      toggleBtn.style.display = "inline-flex";
+    }
+  });
   if (ref && me.kind === "human") {
     const btn = el("button", { textContent: L.errorDetails });
     btn.onclick = () => showError(ref[1]);
@@ -801,276 +866,7 @@ function renderMsg(m) {
   return div;
 }
 
-// --- File Links & File Viewer --------------------------------------------
-const LOCAL_PREFIXES = ["/home/", "/mnt/", "/root/", "/srv/", "/tmp/", "/var/", "/opt/", "~/"];
-
-function isStopChar(c) {
-  return /\s/.test(c) || c === '"' || c === "'" || c === "`" || c === ")" || c === "]" || c === ">";
-}
-
-function isBoundary(c) {
-  return !/[a-zA-Z0-9/\\.:]/.test(c);
-}
-
-function parseFileLinkSegments(text) {
-  if (!text) return [];
-  const segments = [];
-  const n = text.length;
-  let i = 0;
-  let lastTextStart = 0;
-
-  while (i < n) {
-    if (text.startsWith("file://", i)) {
-      if (i === 0 || !/[a-zA-Z0-9]/.test(text[i - 1])) {
-        let j = i + 7;
-        while (j < n && !isStopChar(text[j])) j++;
-        let candidate = text.slice(i, j);
-        candidate = candidate.replace(/[.,;:!?]+$/, "");
-        try {
-          const rawUrl = candidate.slice(7);
-          let decoded = decodeURIComponent(rawUrl);
-          if (decoded.startsWith("//")) decoded = decoded.slice(2);
-          if (decoded && (decoded.startsWith("/") || decoded.startsWith("~/"))) {
-            if (i > lastTextStart) {
-              segments.push({ type: "text", text: text.slice(lastTextStart, i) });
-            }
-            const name = decoded.split("/").pop() || decoded;
-            segments.push({ type: "link", raw: candidate, path: decoded, name });
-            i = i + candidate.length;
-            lastTextStart = i;
-            continue;
-          }
-        } catch {}
-      }
-    }
-
-    let matchedPrefix = null;
-    for (const p of LOCAL_PREFIXES) {
-      if (text.startsWith(p, i)) {
-        matchedPrefix = p;
-        break;
-      }
-    }
-
-    if (matchedPrefix) {
-      if (i === 0 || isBoundary(text[i - 1])) {
-        let j = i + matchedPrefix.length;
-        while (j < n && !isStopChar(text[j])) j++;
-        let candidate = text.slice(i, j);
-        candidate = candidate.replace(/[.,;:!?]+$/, "");
-        if (candidate.length > matchedPrefix.length) {
-          if (i > lastTextStart) {
-            segments.push({ type: "text", text: text.slice(lastTextStart, i) });
-          }
-          const name = candidate.split("/").pop() || candidate;
-          segments.push({ type: "link", raw: candidate, path: candidate, name });
-          i = i + candidate.length;
-          lastTextStart = i;
-          continue;
-        }
-      }
-    }
-
-    i++;
-  }
-
-  if (lastTextStart < n) {
-    segments.push({ type: "text", text: text.slice(lastTextStart) });
-  }
-  return segments;
-}
-
-function renderAgentBodyWithFileChips(text, container, messageId, agentHandle) {
-  const segments = parseFileLinkSegments(text);
-  for (const seg of segments) {
-    if (seg.type === "text") {
-      container.appendChild(document.createTextNode(seg.text));
-    } else if (seg.type === "link") {
-      const chip = document.createElement("button");
-      chip.className = "file-chip";
-      chip.title = seg.path;
-      chip.textContent = "📄 " + seg.name;
-      chip.onclick = (e) => {
-        e.stopPropagation();
-        openFileViewer(messageId, seg.path, agentHandle);
-      };
-      container.appendChild(chip);
-    }
-  }
-}
-
-function renderInlineMarkdown(text, parent) {
-  const regex = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\))/g;
-  let lastIdx = 0;
-  let m;
-  while ((m = regex.exec(text)) !== null) {
-    if (m.index > lastIdx) {
-      parent.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
-    }
-    const token = m[0];
-    if (token.startsWith("`") && token.endsWith("`")) {
-      const c = document.createElement("code");
-      c.textContent = token.slice(1, -1);
-      parent.appendChild(c);
-    } else if (token.startsWith("**") && token.endsWith("**")) {
-      const b = document.createElement("strong");
-      b.textContent = token.slice(2, -2);
-      parent.appendChild(b);
-    } else if (token.startsWith("__") && token.endsWith("__")) {
-      const b = document.createElement("strong");
-      b.textContent = token.slice(2, -2);
-      parent.appendChild(b);
-    } else if (token.startsWith("*") && token.endsWith("*")) {
-      const it = document.createElement("em");
-      it.textContent = token.slice(1, -1);
-      parent.appendChild(it);
-    } else if (token.startsWith("_") && token.endsWith("_")) {
-      const it = document.createElement("em");
-      it.textContent = token.slice(1, -1);
-      parent.appendChild(it);
-    } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
-      const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
-      if (linkMatch) {
-        const linkText = linkMatch[1];
-        const linkUrl = linkMatch[2].trim();
-        if (/^https?:\/\//i.test(linkUrl)) {
-          const a = document.createElement("a");
-          a.href = linkUrl;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.textContent = linkText;
-          parent.appendChild(a);
-        } else {
-          parent.appendChild(document.createTextNode(token));
-        }
-      } else {
-        parent.appendChild(document.createTextNode(token));
-      }
-    }
-    lastIdx = regex.lastIndex;
-  }
-  if (lastIdx < text.length) {
-    parent.appendChild(document.createTextNode(text.slice(lastIdx)));
-  }
-}
-
-// GitHub-style table rows: "| a | b |"; the second line is the separator.
-const mdTableRow = /^\s*\|.*\|\s*$/;
-const mdTableSep = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
-const mdTableCells = (line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
-const isMdTableStart = (lines, i) => mdTableRow.test(lines[i]) && i + 1 < lines.length && mdTableSep.test(lines[i + 1]);
-
-function buildSafeMarkdownDOM(text) {
-  const container = document.createElement("div");
-  container.className = "markdown-body";
-  const lines = text.split("\n");
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (line.trim().startsWith("```")) {
-      const lang = line.trim().slice(3).trim();
-      const codeLines = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith("```")) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      i++;
-      const pre = document.createElement("pre");
-      const code = document.createElement("code");
-      code.textContent = codeLines.join("\n");
-      if (lang) code.className = "language-" + lang;
-      pre.appendChild(code);
-      container.appendChild(pre);
-      continue;
-    }
-
-    const hMatch = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (hMatch) {
-      const level = hMatch[1].length;
-      const h = document.createElement("h" + level);
-      renderInlineMarkdown(hMatch[2], h);
-      container.appendChild(h);
-      i++;
-      continue;
-    }
-
-    if (isMdTableStart(lines, i)) {
-      const table = document.createElement("table");
-      const head = document.createElement("tr");
-      for (const c of mdTableCells(line)) {
-        const th = document.createElement("th");
-        renderInlineMarkdown(c, th);
-        head.appendChild(th);
-      }
-      table.appendChild(head);
-      i += 2;
-      while (i < lines.length && mdTableRow.test(lines[i])) {
-        const tr = document.createElement("tr");
-        for (const c of mdTableCells(lines[i])) {
-          const td = document.createElement("td");
-          renderInlineMarkdown(c, td);
-          tr.appendChild(td);
-        }
-        table.appendChild(tr);
-        i++;
-      }
-      const wrap = document.createElement("div");
-      wrap.className = "md-table";
-      wrap.appendChild(table);
-      container.appendChild(wrap);
-      continue;
-    }
-
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      container.appendChild(document.createElement("hr"));
-      i++;
-      continue;
-    }
-
-    if (/^\s*[-*]\s+/.test(line)) {
-      const ul = document.createElement("ul");
-      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
-        const li = document.createElement("li");
-        const content = lines[i].replace(/^\s*[-*]\s+/, "");
-        renderInlineMarkdown(content, li);
-        ul.appendChild(li);
-        i++;
-      }
-      container.appendChild(ul);
-      continue;
-    }
-
-    if (/^\s*\d+\.\s+/.test(line)) {
-      const ol = document.createElement("ol");
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        const li = document.createElement("li");
-        const content = lines[i].replace(/^\s*\d+\.\s+/, "");
-        renderInlineMarkdown(content, li);
-        ol.appendChild(li);
-        i++;
-      }
-      container.appendChild(ol);
-      continue;
-    }
-
-    if (line.trim() === "") {
-      i++;
-      continue;
-    }
-
-    const pLines = [];
-    while (i < lines.length && lines[i].trim() !== "" && !lines[i].trim().startsWith("```") && !/^(#{1,6})\s+/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i]) && !isMdTableStart(lines, i)) {
-      pLines.push(lines[i]);
-      i++;
-    }
-    const p = document.createElement("p");
-    renderInlineMarkdown(pLines.join(" "), p);
-    container.appendChild(p);
-  }
-  return container;
-}
+// --- File Viewer --------------------------------------------------------
 
 let currentFileFetch = null;
 let currentFileFetchMessageId = null;
@@ -1220,7 +1016,16 @@ async function renderFetchedFileContent(f, originalPath) {
         body.append(pre);
       } else {
         toggleBtn.textContent = L.rawView;
-        body.append(buildSafeMarkdownDOM(rawText));
+        const dom = ColonyMarkdown.render(ColonyMarkdown.parse(rawText), {
+          fileChips: false,
+          inChat: false,
+          copyText: L.copy || "Másolás",
+          copiedText: L.copied || "Másolva!"
+        });
+        const wrap = document.createElement("div");
+        wrap.className = "markdown-body";
+        wrap.appendChild(dom);
+        body.append(wrap);
       }
     };
     toggleBtn.onclick = () => { isRaw = !isRaw; updateView(); };
@@ -2049,7 +1854,7 @@ setInterval(renderActivity, 2000);
 function setReply(rootId) {
   replyRoot = rootId;
   $("replybar").className = rootId ? "on" : "";
-  if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? r.body.slice(0, 80) : ""); $("text").focus(); }
+  if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? ColonyMarkdown.plain(r.body).slice(0, 80) : ""); $("text").focus(); }
   renderActivity();
 }
 $("replycancel").onclick = () => setReply(null);
