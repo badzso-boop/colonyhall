@@ -748,3 +748,56 @@ func TestGitMetadata(t *testing.T) {
 		t.Fatalf("a repository folder: got %v", got)
 	}
 }
+
+// A .git pointer file in a writable folder can say anything: following it
+// must never mount a folder the agent could not otherwise see.
+func TestGitMetadata_ForgedPointerIgnored(t *testing.T) {
+	secret := filepath.Join(t.TempDir(), "private")
+	admin := filepath.Join(secret, "worktrees", "x")
+	if err := os.MkdirAll(admin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The admin folder's back link points somewhere else, as it would for a
+	// real worktree of another repository.
+	_ = os.WriteFile(filepath.Join(admin, "gitdir"), []byte("/elsewhere/.git\n"), 0o644)
+	granted := t.TempDir()
+	if err := os.WriteFile(filepath.Join(granted, ".git"), []byte("gitdir: "+admin+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range gitMetadata([]string{granted}) {
+		if strings.HasPrefix(p, secret) {
+			t.Fatalf("a forged pointer mounted %s", p)
+		}
+	}
+}
+
+// Even if a filter got into the repository config, a .gitattributes written
+// by the agent must not make the guard's git add run it.
+func TestSandboxedWorktree_AttributesFilterNotRun(t *testing.T) {
+	ctx := context.Background()
+	repoDir := initTestRepo(t)
+	handle := "attr-agent"
+	wtPath, branch, err := EnsureWorktree(ctx, repoDir, handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "filter-ran")
+	cmd := exec.Command("git", "config", "filter.evil.clean", "touch "+marker+"; cat")
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	_ = os.WriteFile(filepath.Join(wtPath, ".gitattributes"), []byte("* filter=evil\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(wtPath, "a.txt"), []byte("x"), 0o644)
+	ag := &Agent{
+		Cfg: AgentConfig{Name: handle}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Sandbox: true, WorktreeRepo: repoDir, WorktreeBranch: branch, RootDir: wtPath,
+	}
+	line := ag.checkAndCommitWorktree(ctx, PromptItem{Item: Item{Channel: "general", Author: "norbi"}}, "add files", wtPath)
+	if !strings.HasPrefix(line, "🌿 commit ") {
+		t.Fatalf("expected a commit, got %q", line)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the filter from .gitattributes ran during the guard's git add")
+	}
+}

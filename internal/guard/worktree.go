@@ -38,6 +38,9 @@ func gitExec(ctx context.Context, dir string, args ...string) (string, error) {
 	return trimmed, nil
 }
 
+// emptyTree is git's well-known empty tree object.
+const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 // WorktreeGitDir returns the explicit path to the worktree's git administrative
 // directory inside the repository (<repo>/.git/worktrees/<handle>).
 func WorktreeGitDir(repoPath, handle string) string {
@@ -53,8 +56,13 @@ func WorktreeGitDir(repoPath, handle string) string {
 // --git-dir and --work-tree explicitly so git never reads the worktree's .git pointer file.
 func SandboxedGitExec(ctx context.Context, repoPath, worktreePath, handle string, args ...string) (string, error) {
 	gitDir := WorktreeGitDir(repoPath, handle)
+	// Attributes come from the empty tree, so a .gitattributes written by the
+	// agent cannot switch on a filter, diff or textconv driver: a second line
+	// of defence behind the read-only .git in the sandbox.
 	fullArgs := append([]string{
 		"-c", "core.quotepath=false",
+		"-c", "core.attributesFile=/dev/null",
+		"--attr-source=" + emptyTree,
 		"--git-dir=" + gitDir,
 		"--work-tree=" + worktreePath,
 	}, args...)

@@ -166,3 +166,8 @@ Nem javítva, későbbre:
 
 - A `proxy.sock` az agent saját (írható) sandbox-mappájában van; a prompt azon kívül kérte. Kockázata kicsi (a socketet az agent csak a maga elől ronthatja el), de egy `<agent>.net/` testvérmappa tisztább.
 - A `git status --porcelain` kimenetét szövegként bontja; különleges karakteres fájlnévnél a commit biztonságosan elmarad („could not stat”). A `-z` kapcsoló tisztább lenne.
+
+### Utójavítás (2026-10-22, automatikus biztonsági átnézés nyomán)
+
+- **Az előző javítás (`gitMetadata`) új rést nyitott:** a `.git` mutatófájl tartalmát követte, és egy írható mappába az agent maga írhatott olyan mutatót (`gitdir: /bármi/worktrees/x`), amitől a következő futásnál a `/bármi` csak olvashatóan megjelent volna neki. Most a mutatót csak akkor követi, ha a cél egy valódi worktree-adminmappa (`<repo>/.git/worktrees/<név>`), aminek a git által írt `gitdir` visszamutatója erre a mutatófájlra mutat; hamisítani csak olyan mappában lehet, amit az agent már amúgy is ír. Teszt: `TestGitMetadata_ForgedPointerIgnored`.
+- **Második védelmi vonal:** az őr git-parancsai az attribútumokat az üres fából olvassák (`--attr-source=<empty tree>`, `core.attributesFile=/dev/null`, git ≥ 2.40; a PC-n 2.43, a homelabon 2.47), így egy `.gitattributes` akkor sem kapcsolhat be szűrőt, ha a repó configjába valahogy került egy. Teszt: `TestSandboxedWorktree_AttributesFilterNotRun` (a javítás nélkül a szűrő lefut).

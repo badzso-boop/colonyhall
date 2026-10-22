@@ -406,14 +406,47 @@ func gitMetadata(dirs []string) []string {
 		if !ok {
 			continue
 		}
-		gitdir = strings.TrimSpace(gitdir)
-		if !filepath.IsAbs(gitdir) {
-			gitdir = filepath.Join(d, gitdir)
-		}
-		// <repo>/.git/worktrees/<name> → <repo>/.git
-		if parent := filepath.Dir(filepath.Clean(gitdir)); filepath.Base(parent) == "worktrees" {
-			add(filepath.Dir(parent))
+		if common := worktreeCommonDir(gf, strings.TrimSpace(gitdir)); common != "" {
+			add(common)
 		}
 	}
 	return out
+}
+
+// worktreeCommonDir returns the repository .git folder of a worktree whose
+// pointer file is gf, or "" when the pointer is not a real worktree link.
+// The pointer may have been written by an agent, so it is followed only when
+// its target is a worktree admin folder (<repo>/.git/worktrees/<name>) whose
+// own "gitdir" file points back at gf: git writes that back link, and an
+// agent can fake it only in a folder it can already write — so a forged
+// pointer never mounts a folder the agent could not see.
+func worktreeCommonDir(gf, gitdir string) string {
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(filepath.Dir(gf), gitdir)
+	}
+	admin, err := filepath.EvalSymlinks(gitdir)
+	if err != nil {
+		return ""
+	}
+	parent := filepath.Dir(admin)
+	if filepath.Base(parent) != "worktrees" {
+		return ""
+	}
+	back, err := os.ReadFile(filepath.Join(admin, "gitdir"))
+	if err != nil {
+		return ""
+	}
+	realGF, err := filepath.EvalSymlinks(gf)
+	if err != nil {
+		return ""
+	}
+	realBack, err := filepath.EvalSymlinks(strings.TrimSpace(string(back)))
+	if err != nil || realBack != realGF {
+		return ""
+	}
+	common := filepath.Dir(parent)
+	if filepath.Base(common) != ".git" {
+		return ""
+	}
+	return common
 }
