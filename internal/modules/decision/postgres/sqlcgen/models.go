@@ -44,6 +44,7 @@ type AgentHost struct {
 	DailyTokenLimit  int64
 	WorktreeRepo     string
 	AllowPreview     bool
+	AllowWebRead     bool
 }
 
 type AgentNote struct {

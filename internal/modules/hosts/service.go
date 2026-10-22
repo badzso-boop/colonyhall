@@ -225,6 +225,7 @@ type AssignInput struct {
 	DailyTokenLimit  *int64
 	WorktreeRepo     string
 	AllowPreview     bool
+	AllowWebRead     bool
 }
 
 // Assign puts an agent on a host (moving it if it was elsewhere; grants on
@@ -283,6 +284,9 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	if in.AllowPreview && (in.Mode != AgentModeDirect || sandbox) {
 		return AgentConfig{}, ErrPreviewFullAccess
 	}
+	if in.AllowWebRead && !sandbox {
+		return AgentConfig{}, ErrWebReadSandboxedOnly
+	}
 	if in.PermissionMode == "" {
 		in.PermissionMode = "auto" // claude: --permission-mode auto; antigravity: --mode accept-edits
 	}
@@ -317,6 +321,7 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 		AgentID: agent.ID, HostID: h.ID, WorkspaceID: by.WorkspaceID, Client: in.Client, Model: clip(in.Model, 100),
 		WorkModel: clip(in.WorkModel, 100), AllowWork: in.AllowWork, PermissionMode: clip(in.PermissionMode, 40),
 		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), WorktreeRepo: clip(in.WorktreeRepo, 1024), Sandbox: sandbox, Approvals: approvals, AllowPreview: in.AllowPreview,
+		AllowWebRead:     in.AllowWebRead,
 		MaxSessionTokens: maxSessionTokens, DailyTokenLimit: dailyTokenLimit,
 		CreatedBy: by.ID, CreatedAt: s.Clock.Now(),
 	}
@@ -325,7 +330,7 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 			AgentID: agent.ID.String(), HostID: h.ID.String(), Client: a.Client, Model: a.Model,
 			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: a.Approvals,
 			MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
-			AllowPreview: a.AllowPreview,
+			AllowPreview: a.AllowPreview, AllowWebRead: a.AllowWebRead,
 		},
 		func(ctx context.Context) error {
 			old, err := s.Store.AssignmentByAgent(ctx, agent.ID)

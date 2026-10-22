@@ -519,12 +519,12 @@ func testHosts(t *testing.T, b Backend) {
 	a := hosts.Assignment{
 		AgentID: f.agent.ID, HostID: h.ID, WorkspaceID: f.ws.ID, Client: "claude-code", Model: "haiku",
 		WorkModel: "sonnet", AllowWork: true, Mode: hosts.AgentModeDirect, RootDir: "/work", WorktreeRepo: "/work/repo", Sandbox: false,
-		Approvals: hosts.ApprovalsChat, MaxSessionTokens: 120000, DailyTokenLimit: 500000, AllowPreview: true, CreatedBy: f.human.ID, CreatedAt: t0,
+		Approvals: hosts.ApprovalsChat, MaxSessionTokens: 120000, DailyTokenLimit: 500000, AllowPreview: true, AllowWebRead: false, CreatedBy: f.human.ID, CreatedAt: t0,
 	}
 	must(t, hs.SetAssignment(ctx, a))
 	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 || ga.WorktreeRepo != "/work/repo" || !ga.AllowPreview {
-		t.Fatalf("approvals / limits / worktree: %+v %v", ga, err)
+	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 || ga.WorktreeRepo != "/work/repo" || !ga.AllowPreview || ga.AllowWebRead {
+		t.Fatalf("approvals / limits / worktree / web_read: %+v %v", ga, err)
 	}
 	a.Model = "opus"
 	a.Mode = hosts.AgentModeCompact
@@ -532,15 +532,16 @@ func testHosts(t *testing.T, b Backend) {
 	a.Sandbox = true
 	a.Approvals = hosts.ApprovalsNone
 	a.AllowPreview = false
+	a.AllowWebRead = true
 	a.MaxSessionTokens = 80000
 	a.DailyTokenLimit = 250000
 	must(t, hs.SetAssignment(ctx, a)) // replaces
 	ga, err = hs.AssignmentByAgent(ctx, f.agent.ID)
-	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || ga.WorktreeRepo != "/work/repo2" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone || ga.MaxSessionTokens != 80000 || ga.DailyTokenLimit != 250000 || ga.AllowPreview {
+	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || ga.WorktreeRepo != "/work/repo2" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone || ga.MaxSessionTokens != 80000 || ga.DailyTokenLimit != 250000 || ga.AllowPreview || !ga.AllowWebRead {
 		t.Fatalf("AssignmentByAgent: %+v %v", ga, err)
 	}
 	as, err := hs.AssignmentsForHost(ctx, h.ID)
-	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone || as[0].WorktreeRepo != "/work/repo2" || as[0].MaxSessionTokens != 80000 || as[0].DailyTokenLimit != 250000 || as[0].AllowPreview {
+	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone || as[0].WorktreeRepo != "/work/repo2" || as[0].MaxSessionTokens != 80000 || as[0].DailyTokenLimit != 250000 || as[0].AllowPreview || !as[0].AllowWebRead {
 		t.Fatalf("AssignmentsForHost: %+v %v", as, err)
 	}
 

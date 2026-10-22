@@ -126,6 +126,7 @@ type Assignment struct {
 	CreatedAt        time.Time
 	WorktreeRepo     string
 	AllowPreview     bool
+	AllowWebRead     bool
 }
 
 // HostPreview is what a guard needs to know about an active/requested preview.
@@ -162,25 +163,26 @@ type AgentConfig struct {
 
 // Errors.
 var (
-	ErrForbidden           = errors.New("not allowed")
-	ErrBadCode             = errors.New("invalid or expired pairing code")
-	ErrBadHostToken        = errors.New("invalid or revoked host token")
-	ErrBadPath             = errors.New("path must be absolute and clean (no '..'), at most 1024 characters")
-	ErrBadMode             = errors.New("mode must be read or write")
-	ErrBadAgentMode        = errors.New("mode must be direct or compact")
-	ErrBadRootDir          = errors.New("direct mode requires a root_dir")
-	ErrWorktreeDirectOnly  = errors.New("worktree_repo is only supported for direct agents or sandboxed compact agents")
-	ErrPreviewFullAccess   = errors.New("allow_preview needs a full-access agent (direct mode, no sandbox)")
-	ErrBadClient           = errors.New("client must be claude-code or antigravity")
-	ErrBadApprovals        = errors.New("approvals must be none or chat")
-	ErrApprovalsChatClient = errors.New("approvals=chat requires client claude-code")
-	ErrBadMaxSessionTokens = errors.New("max_session_tokens must be non-negative")
-	ErrBadDailyTokenLimit  = errors.New("daily_token_limit must be non-negative")
-	ErrBadName             = errors.New("host name must be 1-64 characters")
-	ErrNotAssigned         = errors.New("the agent is not assigned to this host")
-	ErrNotAgent            = errors.New("only agents can be assigned to a host")
-	ErrHostRevoked         = errors.New("the host is revoked")
-	ErrBadState            = errors.New("state must be approved or revoked")
+	ErrForbidden            = errors.New("not allowed")
+	ErrBadCode              = errors.New("invalid or expired pairing code")
+	ErrBadHostToken         = errors.New("invalid or revoked host token")
+	ErrBadPath              = errors.New("path must be absolute and clean (no '..'), at most 1024 characters")
+	ErrBadMode              = errors.New("mode must be read or write")
+	ErrBadAgentMode         = errors.New("mode must be direct or compact")
+	ErrBadRootDir           = errors.New("direct mode requires a root_dir")
+	ErrWorktreeDirectOnly   = errors.New("worktree_repo is only supported for direct agents or sandboxed compact agents")
+	ErrPreviewFullAccess    = errors.New("allow_preview needs a full-access agent (direct mode, no sandbox)")
+	ErrWebReadSandboxedOnly = errors.New("allow_web_read is only available for sandboxed agents")
+	ErrBadClient            = errors.New("client must be claude-code or antigravity")
+	ErrBadApprovals         = errors.New("approvals must be none or chat")
+	ErrApprovalsChatClient  = errors.New("approvals=chat requires client claude-code")
+	ErrBadMaxSessionTokens  = errors.New("max_session_tokens must be non-negative")
+	ErrBadDailyTokenLimit   = errors.New("daily_token_limit must be non-negative")
+	ErrBadName              = errors.New("host name must be 1-64 characters")
+	ErrNotAssigned          = errors.New("the agent is not assigned to this host")
+	ErrNotAgent             = errors.New("only agents can be assigned to a host")
+	ErrHostRevoked          = errors.New("the host is revoked")
+	ErrBadState             = errors.New("state must be approved or revoked")
 )
 
 // Clients the guard knows.

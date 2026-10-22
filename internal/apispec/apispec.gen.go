@@ -937,6 +937,7 @@ type ApprovalState string
 // AssignRequest defines model for AssignRequest.
 type AssignRequest struct {
 	AllowPreview     *bool                   `json:"allow_preview,omitempty"`
+	AllowWebRead     *bool                   `json:"allow_web_read,omitempty"`
 	AllowWork        *bool                   `json:"allow_work,omitempty"`
 	Approvals        *AssignRequestApprovals `json:"approvals,omitempty"`
 	Client           AssignRequestClient     `json:"client"`
@@ -1286,6 +1287,7 @@ type HostState string
 type HostAgent struct {
 	AgentId      openapi_types.UUID `json:"agent_id"`
 	AllowPreview *bool              `json:"allow_preview,omitempty"`
+	AllowWebRead *bool              `json:"allow_web_read,omitempty"`
 	AllowWork    bool               `json:"allow_work"`
 	Approvals    HostAgentApprovals `json:"approvals"`
 	Client       HostAgentClient    `json:"client"`
@@ -1497,6 +1499,7 @@ type OpenDMRequest struct {
 
 // OverviewAssignment defines model for OverviewAssignment.
 type OverviewAssignment struct {
+	AllowWebRead     *bool              `json:"allow_web_read,omitempty"`
 	Approvals        string             `json:"approvals"`
 	Client           string             `json:"client"`
 	DailyTokenLimit  int64              `json:"daily_token_limit"`

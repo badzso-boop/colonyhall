@@ -243,6 +243,7 @@ type HostAgent struct {
 	Grants           []Grant `json:"grants"`
 	WorktreeRepo     string  `json:"worktree_repo"`
 	AllowPreview     bool    `json:"allow_preview"`
+	AllowWebRead     bool    `json:"allow_web_read"`
 }
 
 // HostPreview is one preview the guard needs to run or stop.

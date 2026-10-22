@@ -1783,6 +1783,7 @@ components:
         max_session_tokens: { type: integer, default: 150000, description: "Max context tokens before starting a fresh session (0 = no limit)" }
         daily_token_limit: { type: integer, format: int64, default: 0, description: "Max tokens per Budapest calendar day (0 = none)" }
         allow_preview: { type: boolean }
+        allow_web_read: { type: boolean }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -1802,6 +1803,7 @@ components:
         max_session_tokens: { type: integer, minimum: 0, default: 150000 }
         daily_token_limit: { type: integer, format: int64, minimum: 0, default: 0 }
         allow_preview: { type: boolean }
+        allow_web_read: { type: boolean }
     GrantRequest:
       type: object
       required: [path, mode]
@@ -2417,6 +2419,7 @@ components:
         approvals: { type: string }
         max_session_tokens: { type: integer }
         daily_token_limit: { type: integer, format: int64 }
+        allow_web_read: { type: boolean }
         grants:
           type: array
           items: { $ref: "#/components/schemas/FolderGrant" }

@@ -156,6 +156,7 @@ func registerOverview(
 				Approvals:        asgn.Approvals,
 				MaxSessionTokens: asgn.MaxSessionTokens,
 				DailyTokenLimit:  asgn.DailyTokenLimit,
+				AllowWebRead:     &asgn.AllowWebRead,
 				Grants:           fgrants,
 			}
 		}
