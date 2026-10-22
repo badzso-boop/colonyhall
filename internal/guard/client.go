@@ -452,3 +452,74 @@ func (c *Client) LatestNote(ctx context.Context, agentID, threadRootID string) (
 	}
 	return notes[0].Text, nil
 }
+
+// AgentPendingFileFetch describes a file fetch request queued for an agent.
+type AgentPendingFileFetch struct {
+	ID            string `json:"id"`
+	MessageID     string `json:"message_id"`
+	ChannelID     string `json:"channel_id"`
+	Path          string `json:"path"`
+	MaxImageBytes int64  `json:"max_image_bytes"`
+	MaxFileBytes  int64  `json:"max_file_bytes"`
+}
+
+// PendingFileFetches retrieves pending file fetch requests for this agent.
+func (c *Client) PendingFileFetches(ctx context.Context) ([]AgentPendingFileFetch, error) {
+	var out []AgentPendingFileFetch
+	err := c.do(ctx, http.MethodGet, "/api/v1/agent/file-fetch?state=pending", nil, &out)
+	return out, err
+}
+
+// UploadFetchedContent streams fetched file content to the server.
+func (c *Client) UploadFetchedContent(ctx context.Context, id, contentType, filename, mtime string, content io.Reader, size int64) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, strings.TrimSuffix(c.BaseURL, "/")+"/api/v1/agent/file-fetch/"+id+"/content", content)
+	if err != nil {
+		return err
+	}
+	token := c.Token
+	if c.Tokens != nil {
+		if token, err = c.Tokens.Token(ctx); err != nil {
+			return err
+		}
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", contentType)
+	if filename != "" {
+		req.Header.Set("X-File-Name", filename)
+	}
+	if mtime != "" {
+		req.Header.Set("X-File-Mtime", mtime)
+	}
+	if size >= 0 {
+		req.ContentLength = size
+	}
+	hc := c.HTTP
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	res, err := hc.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode == http.StatusUnauthorized && c.Tokens != nil {
+		c.Tokens.Invalidate()
+	}
+	if res.StatusCode >= 300 {
+		raw, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+		var p struct{ Detail, Title string }
+		_ = json.Unmarshal(raw, &p)
+		if p.Detail == "" {
+			p.Detail = p.Title
+		}
+		return &APIError{Status: res.StatusCode, Detail: p.Detail}
+	}
+	return nil
+}
+
+// FailFileFetch reports a file fetch request failure with an error code.
+func (c *Client) FailFileFetch(ctx context.Context, id, errorCode string) error {
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/file-fetch/"+id+"/fail", map[string]string{
+		"error_code": errorCode,
+	}, nil)
+}

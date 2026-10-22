@@ -64,6 +64,16 @@ type Agent struct {
 	// HostConfigVersion, when set (host mode), returns the host config version.
 	HostConfigVersion func() string
 
+	// File fetch options and scope
+	Sandbox          bool
+	Roots            []string
+	GrantsFunc       func() []Grant
+	DenyFiles        []string
+	FileFetchLimiter chan struct{}
+
+	fileFetchMu       sync.Mutex
+	fileFetchInFlight map[string]bool
+
 	rulesMu             sync.Mutex
 	cachedRulesVer      int
 	cachedRulesText     string
@@ -107,9 +117,13 @@ func (a *Agent) Run(ctx context.Context) error {
 	a.Log.Info("guard: watching", "agent", "@"+me.Handle, "client", a.Cfg.Client, "model", a.Cfg.Model)
 
 	wakeCh := make(chan struct{}, 1)
+	fileFetchWakeCh := make(chan struct{}, 1)
+	fileFetchWakeCh <- struct{}{} // initial check on startup
+	go a.runFileFetchLoop(ctx, fileFetchWakeCh)
+
 	if !a.DisableWS && !a.Cfg.DisableWS {
 		wakeCh <- struct{}{} // initial inbox check on startup
-		go a.watchWS(ctx, wakeCh)
+		go a.watchWS(ctx, wakeCh, fileFetchWakeCh)
 	}
 
 	timer := time.NewTimer(a.waitInterval())
@@ -127,6 +141,10 @@ func (a *Agent) Run(ctx context.Context) error {
 				}
 			}
 		case <-timer.C:
+			select {
+			case fileFetchWakeCh <- struct{}{}:
+			default:
+			}
 		}
 		if err := a.Tick(ctx); err != nil && ctx.Err() == nil {
 			a.failures++

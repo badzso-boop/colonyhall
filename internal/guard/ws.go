@@ -2,6 +2,7 @@ package guard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -85,7 +86,11 @@ func (a *Agent) currentToken(ctx context.Context) (string, error) {
 
 // watchWS maintains a persistent WebSocket connection to /ws/ui, reconnecting
 // with backoff when the socket closes, or immediately when the token changes.
-func (a *Agent) watchWS(ctx context.Context, wakeCh chan<- struct{}) {
+func (a *Agent) watchWS(ctx context.Context, wakeCh chan<- struct{}, extra ...chan<- struct{}) {
+	var fileFetchWakeCh chan<- struct{}
+	if len(extra) > 0 {
+		fileFetchWakeCh = extra[0]
+	}
 	agentName := a.logName()
 	var attempt int
 	for {
@@ -95,7 +100,7 @@ func (a *Agent) watchWS(ctx context.Context, wakeCh chan<- struct{}) {
 		default:
 		}
 
-		connected, err := a.runWSConn(ctx, agentName, wakeCh)
+		connected, err := a.runWSConn(ctx, agentName, wakeCh, fileFetchWakeCh)
 		if ctx.Err() != nil {
 			return
 		}
@@ -130,7 +135,7 @@ func (a *Agent) watchWS(ctx context.Context, wakeCh chan<- struct{}) {
 
 // runWSConn dials /ws/ui, sends the hello handshake, starts the token rotation
 // monitor, and reads event frames until disconnection.
-func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- struct{}) (bool, error) {
+func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- struct{}, fileFetchWakeCh chan<- struct{}) (bool, error) {
 	token, err := a.currentToken(ctx)
 	if err != nil {
 		a.Log.Debug("guard: cannot get agent token for websocket", "agent", agentName, "err", err)
@@ -210,7 +215,9 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 
 	for {
 		var frame struct {
-			Type string `json:"type"`
+			Type      string          `json:"type"`
+			EventType string          `json:"event_type"`
+			Data      json.RawMessage `json:"data"`
 		}
 		err := wsjson.Read(connCtx, conn, &frame)
 		if err != nil {
@@ -226,10 +233,36 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 		}
 
 		switch frame.Type {
-		case "event", "resync_required":
+		case "event":
+			if frame.EventType == "file.fetch_requested" {
+				var p struct {
+					AgentID string `json:"agent_id"`
+				}
+				_ = json.Unmarshal(frame.Data, &p)
+				if p.AgentID == "" || a.me.ID == "" || p.AgentID == a.me.ID {
+					if fileFetchWakeCh != nil {
+						select {
+						case fileFetchWakeCh <- struct{}{}:
+						default:
+						}
+					}
+				}
+			} else {
+				select {
+				case wakeCh <- struct{}{}:
+				default:
+				}
+			}
+		case "resync_required":
 			select {
 			case wakeCh <- struct{}{}:
 			default:
+			}
+			if fileFetchWakeCh != nil {
+				select {
+				case fileFetchWakeCh <- struct{}{}:
+				default:
+				}
 			}
 		case "welcome", "replay_done":
 			// Ignored as per spec

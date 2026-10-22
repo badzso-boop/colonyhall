@@ -56,14 +56,15 @@ type Supervisor struct {
 	sandbox  *Sandbox
 	previews *PreviewSupervisor
 
-	mu         sync.Mutex
-	lastOK     time.Time
-	version    string
-	agents     map[string]*managed
-	rejected   []Rejected
-	reported   time.Time
-	exchangeOK bool
-	worktrees  []Worktree
+	mu               sync.Mutex
+	lastOK           time.Time
+	version          string
+	agents           map[string]*managed
+	rejected         []Rejected
+	reported         time.Time
+	exchangeOK       bool
+	worktrees        []Worktree
+	fileFetchLimiter chan struct{}
 }
 
 type managed struct {
@@ -78,6 +79,7 @@ type managed struct {
 
 // Start prepares the machine: token, roots, sandbox.
 func (s *Supervisor) start(ctx context.Context) error {
+	s.fileFetchLimiter = make(chan struct{}, 2)
 	raw, err := os.ReadFile(s.Cfg.HostTokenFile)
 	if err != nil {
 		return fmt.Errorf("guard: host token: %w (run `colony guard enroll` first)", err)
@@ -409,6 +411,15 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			defer s.mu.Unlock()
 			return s.version
 		},
+		Sandbox: ha.Sandbox,
+		Roots:   s.roots,
+		GrantsFunc: func() []Grant {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			return slices.Clone(m.grants)
+		},
+		DenyFiles:        []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile},
+		FileFetchLimiter: s.fileFetchLimiter,
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch
