@@ -322,6 +322,7 @@ const I18N = {
         viewStart: "megjelenítés: eleje", viewEnd: "megjelenítés: vége",
         rawView: "Nyers", renderedView: "Formázott", download: "Letöltés",
         copy: "Másolás", copied: "Másolva!", showMore: "Több", showLess: "Kevesebb",
+        webRead: "Weboldalak olvasása (web_read)", webReadHint: "az őr tölti le, csak olvasás, nyilvános oldalak",
         worktreeHint: "Worktree: az őr commitol az ágens helyett; semmi sem kerül pusholásra",
         errHostOffline: "A gép offline", errNotFound: "A fájl nem létezik",
         errDenied: "A fájl megosztása nem engedélyezett", errTooLarge: "A fájl túl nagy (limit felett)",
@@ -374,6 +375,7 @@ const I18N = {
         viewStart: "display: start", viewEnd: "display: end",
         rawView: "Raw", renderedView: "Formatted", download: "Download",
         copy: "Copy", copied: "Copied!", showMore: "More", showLess: "Less",
+        webRead: "Web read (web_read)", webReadHint: "fetched by the guard, read-only, public sites",
         worktreeHint: "Worktree: a guard commits for the agent; nothing is pushed",
         errHostOffline: "The machine is offline", errNotFound: "The file does not exist",
         errDenied: "Sharing this file is not allowed", errTooLarge: "The file is too large (exceeds limit)",
@@ -1515,6 +1517,8 @@ async function refreshOverviewPanel() {
       el("span", { textContent: asgn.worktree_repo || "–" }),
       el("span", { className: "muted", textContent: "Worktree branch:" }),
       el("span", { textContent: asgn.worktree_branch || "–" }),
+      el("span", { className: "muted", textContent: (L.webRead || "Webolvasás") + ":" }),
+      el("span", { textContent: asgn.allow_web_read ? (L.yes || "igen") : (L.no || "nem") }),
       el("span", { className: "muted", textContent: "Token limitek:" }),
       el("span", { textContent: `max session: ${asgn.max_session_tokens || "–"}, napi: ${asgn.daily_token_limit || "–"}` })
     );
@@ -1651,6 +1655,14 @@ async function refreshOverviewPanel() {
             onclick: () => showError(r.error_id)
           });
           row.querySelector("td:nth-child(3)").append(errBtn);
+        }
+        if (r.web_reads && r.web_reads.length > 0) {
+          const reads = el("span", {
+            textContent: ` 🌐 ${r.web_reads.length}`,
+            title: r.web_reads.join("\n"),
+            style: "cursor:help; font-size:10px; margin-left:4px;"
+          });
+          row.querySelector("td:nth-child(2)").append(reads);
         }
         runsTbl.append(row);
       }
@@ -2133,6 +2145,7 @@ async function renderHosts() {
         a.root_dir || "",
         a.worktree_repo ? "repo: " + a.worktree_repo : "",
         a.sandbox ? "sandbox" : "no-sandbox",
+        a.allow_web_read ? "web_read" : "",
         a.allow_preview ? "preview" : "",
         a.approvals ? "approvals: " + a.approvals : "",
         a.permission_mode || "",
@@ -2148,6 +2161,7 @@ async function renderHosts() {
         method: "PUT",
         body: JSON.stringify({
           host_id: h.id, client: a.client, mode: a.mode, root_dir: a.root_dir, worktree_repo: a.worktree_repo, allow_preview: !!a.allow_preview,
+          allow_web_read: !!a.allow_web_read,
           sandbox: a.sandbox, permission_mode: a.permission_mode, approvals: a.approvals,
           model: a.model, work_model: a.work_model, allow_work: a.allow_work,
           max_session_tokens: maxSession,
@@ -2218,6 +2232,24 @@ async function renderHosts() {
       const maxSess = el("input", { placeholder: "max session (150000)", size: 14, value: "150000" });
       const dailyLim = el("input", { placeholder: "daily limit (0 = none)", size: 14, value: "0" });
       const allowPreview = el("input", { type: "checkbox" });
+      const allowWebRead = el("input", { type: "checkbox" });
+      const webReadLabel = el("label", { style: "display:none;" }, allowWebRead, " " + (L.webRead || "web_read"));
+      const webReadHint = el("div", { className: "muted small", style: "display:none; margin-top:2px; margin-bottom:8px;" }, L.webReadHint);
+
+      const updateSandboxVisibility = () => {
+        const isSb = sandbox.checked;
+        webReadLabel.style.display = isSb ? "" : "none";
+        webReadHint.style.display = isSb ? "" : "none";
+        if (!isSb) allowWebRead.checked = false;
+      };
+      sandbox.onchange = updateSandboxVisibility;
+      mode.onchange = () => {
+        if (mode.value === "compact") {
+          sandbox.checked = true;
+        }
+        updateSandboxVisibility();
+      };
+
       const go = el("button", { textContent: L.assign });
       go.onclick = async () => {
         await api(`/api/v1/agents/${sel.value}/host`, { method: "PUT", body: JSON.stringify({
@@ -2227,12 +2259,14 @@ async function renderHosts() {
           model: model.value.trim(), work_model: wmodel.value.trim(), allow_work: work.checked,
           max_session_tokens: parseInt(maxSess.value, 10) || 0,
           daily_token_limit: parseInt(dailyLim.value, 10) || 0,
-          allow_preview: allowPreview.checked
+          allow_preview: allowPreview.checked,
+          allow_web_read: sandbox.checked && allowWebRead.checked
         }) }).catch(e => alert(e.message));
         renderHosts();
       };
-      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, worktreeRepo, approvals, permMode, el("label", {}, sandbox, " sandbox"), model, wmodel, el("label", {}, work, " " + L.work), maxSess, dailyLim, el("label", {}, allowPreview, " preview"), go));
+      c.append(el("div", { className: "row" }, sel, client, mode, rootDir, worktreeRepo, approvals, permMode, el("label", {}, sandbox, " sandbox"), webReadLabel, model, wmodel, el("label", {}, work, " " + L.work), maxSess, dailyLim, el("label", {}, allowPreview, " preview"), go));
       c.append(el("div", { className: "muted small", style: "margin-top:2px; margin-bottom:8px;" }, L.worktreeHint));
+      c.append(webReadHint);
     }
     panel.append(c);
   }
@@ -2716,6 +2750,14 @@ async function renderRuns() {
         el("td", { textContent: durSec, className: "num" }),
         el("td", { textContent: r.status })
       );
+      if (r.web_reads && r.web_reads.length > 0) {
+        const reads = el("span", {
+          textContent: ` 🌐 ${r.web_reads.length}`,
+          title: r.web_reads.join("\n"),
+          style: "cursor:help; font-size:10px; margin-left:4px;"
+        });
+        tr.querySelector("td:nth-child(3)").append(reads);
+      }
       const actionTd = el("td", {});
       if (r.error_id) {
         const btn = el("button", { textContent: L.errorDetails });

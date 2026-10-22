@@ -95,14 +95,34 @@ func (b *BridgeServer) Close() error {
 	}
 }
 
-// RunBridgeCommand starts the bridge and runs the target command, forwarding stdio.
-// When the command exits, the bridge is closed and the process exit code or error is returned.
-func RunBridgeCommand(ctx context.Context, sockPath string, port int, clientBin string, clientArgs []string) error {
-	bridge, err := StartBridge(sockPath, port)
-	if err != nil {
-		return err
+// BridgeMapping defines a single TCP-to-Unix socket forwarding.
+type BridgeMapping struct {
+	SockPath string
+	Port     int
+}
+
+// RunMultiBridgeCommand starts the bridge listeners for all mappings and runs the target command, forwarding stdio.
+// When the command exits, all bridges are closed and the process exit code or error is returned.
+func RunMultiBridgeCommand(ctx context.Context, mappings []BridgeMapping, clientBin string, clientArgs []string) error {
+	var bridges []*BridgeServer
+	for _, m := range mappings {
+		if m.SockPath == "" {
+			continue
+		}
+		b, err := StartBridge(m.SockPath, m.Port)
+		if err != nil {
+			for _, opened := range bridges {
+				_ = opened.Close()
+			}
+			return err
+		}
+		bridges = append(bridges, b)
 	}
-	defer func() { _ = bridge.Close() }()
+	defer func() {
+		for _, b := range bridges {
+			_ = b.Close()
+		}
+	}()
 
 	cmd := exec.CommandContext(ctx, clientBin, clientArgs...)
 	cmd.Stdin = os.Stdin
@@ -110,4 +130,10 @@ func RunBridgeCommand(ctx context.Context, sockPath string, port int, clientBin 
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	return cmd.Run()
+}
+
+// RunBridgeCommand starts the bridge and runs the target command, forwarding stdio.
+// When the command exits, the bridge is closed and the process exit code or error is returned.
+func RunBridgeCommand(ctx context.Context, sockPath string, port int, clientBin string, clientArgs []string) error {
+	return RunMultiBridgeCommand(ctx, []BridgeMapping{{SockPath: sockPath, Port: port}}, clientBin, clientArgs)
 }

@@ -33,6 +33,7 @@ type AssignmentEvent struct {
 	DailyTokenLimit  int64  `json:"daily_token_limit,omitempty"`
 	WorktreeRepo     string `json:"worktree_repo,omitempty"`
 	AllowPreview     bool   `json:"allow_preview"`
+	AllowWebRead     bool   `json:"allow_web_read"`
 }
 
 // GrantEvent is the payload of grant events.

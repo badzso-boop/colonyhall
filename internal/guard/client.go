@@ -243,6 +243,7 @@ type HostAgent struct {
 	Grants           []Grant `json:"grants"`
 	WorktreeRepo     string  `json:"worktree_repo"`
 	AllowPreview     bool    `json:"allow_preview"`
+	AllowWebRead     bool    `json:"allow_web_read"`
 }
 
 // HostPreview is one preview the guard needs to run or stop.
@@ -353,21 +354,22 @@ func (c *Client) ReportError(ctx context.Context, channelID, threadRootID, summa
 
 // ReportRunInput is the payload sent when reporting an agent run.
 type ReportRunInput struct {
-	HostID           string `json:"host_id,omitempty"`
-	Phase            string `json:"phase"`
-	Client           string `json:"client"`
-	Model            string `json:"model"`
-	SessionID        string `json:"session_id"`
-	ChannelID        string `json:"channel_id,omitempty"`
-	ThreadRootID     string `json:"thread_root_id,omitempty"`
-	Items            int    `json:"items"`
-	InputTokens      int64  `json:"input_tokens"`
-	OutputTokens     int64  `json:"output_tokens"`
-	CacheReadTokens  int64  `json:"cache_read_tokens"`
-	CacheWriteTokens int64  `json:"cache_write_tokens"`
-	DurationMS       int    `json:"duration_ms"`
-	Status           string `json:"status"`
-	ErrorID          string `json:"error_id,omitempty"`
+	HostID           string   `json:"host_id,omitempty"`
+	Phase            string   `json:"phase"`
+	Client           string   `json:"client"`
+	Model            string   `json:"model"`
+	SessionID        string   `json:"session_id"`
+	ChannelID        string   `json:"channel_id,omitempty"`
+	ThreadRootID     string   `json:"thread_root_id,omitempty"`
+	Items            int      `json:"items"`
+	InputTokens      int64    `json:"input_tokens"`
+	OutputTokens     int64    `json:"output_tokens"`
+	CacheReadTokens  int64    `json:"cache_read_tokens"`
+	CacheWriteTokens int64    `json:"cache_write_tokens"`
+	DurationMS       int      `json:"duration_ms"`
+	Status           string   `json:"status"`
+	ErrorID          string   `json:"error_id,omitempty"`
+	WebReads         []string `json:"web_reads,omitempty"`
 }
 
 // ReportRun reports a finished run with token counts and duration to the server.

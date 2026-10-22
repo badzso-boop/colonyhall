@@ -44,6 +44,7 @@ type AgentHost struct {
 	DailyTokenLimit  int64
 	WorktreeRepo     string
 	AllowPreview     bool
+	AllowWebRead     bool
 }
 
 type AgentNote struct {
@@ -83,6 +84,7 @@ type AgentRun struct {
 	Status           string
 	ErrorID          *uuid.UUID
 	CreatedAt        time.Time
+	WebReads         []string
 }
 
 type ApiToken struct {

@@ -129,6 +129,7 @@ type ReportRunInput struct {
 	DurationMS       int
 	Status           string
 	ErrorID          ids.ID
+	WebReads         []string
 }
 
 // ReportRun records a finished run for the calling agent.
@@ -200,6 +201,7 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 		Status:           in.Status,
 		ErrorID:          in.ErrorID,
 		CreatedAt:        s.Clock.Now(),
+		WebReads:         in.WebReads,
 	}
 
 	var seq int64

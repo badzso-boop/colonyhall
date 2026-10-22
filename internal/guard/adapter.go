@@ -42,9 +42,11 @@ type WorkRequest struct {
 	// write their granted folders but not run commands.
 	NoExec bool
 	// Wrap, when set, wraps the client command (the bwrap sandbox).
-	Wrap         Wrapper
-	Rules        string
-	RulesVersion int
+	Wrap          Wrapper
+	Rules         string
+	RulesVersion  int
+	AllowWebRead  bool
+	MCPConfigPath string
 }
 
 // DirectRequest is the input of a direct mode run: a full interactive session

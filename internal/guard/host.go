@@ -464,8 +464,11 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			defer s.mu.Unlock()
 			return s.version
 		},
-		Sandbox: ha.Sandbox,
-		Roots:   s.roots,
+		Sandbox:      ha.Sandbox,
+		AllowWebRead: ha.AllowWebRead,
+		WebReadAllow: s.Cfg.WebReadAllow,
+		WebReadDeny:  s.Cfg.WebReadDeny,
+		Roots:        s.roots,
 		GrantsFunc: func() []Grant {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -555,17 +558,27 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 			add = append(add, g.Path)
 		}
 	}
-	p := WorkPolicy{Allowed: true, Dir: work, AddDirs: add, Grants: grants}
+	p := WorkPolicy{
+		Allowed:      true,
+		Dir:          work,
+		AddDirs:      add,
+		Grants:       grants,
+		AgentDir:     agentDir,
+		AllowWebRead: conf.Sandbox && conf.AllowWebRead && s.Cfg.SandboxNetwork != "open",
+	}
 	// Sandboxed agents may read and write their folders but not run
 	// commands (decision, 2026-10-15); full-access agents run as in a terminal.
 	p.NoExec = conf.Sandbox
 	if conf.Sandbox && s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
+		allowWebRead := conf.AllowWebRead
 		p.Wrap = func(name string, args []string) (string, []string, []string, error) {
 			if err := s.startProxyForRun(m, agentDir); err != nil {
 				return "", nil, nil, err
 			}
-			a, env, err := sb.Command(client, agentDir, work, grants, name, args)
+			a, env, err := sb.CommandWithOptions(client, agentDir, work, grants, name, args, SandboxOptions{
+				AllowWebRead: allowWebRead,
+			})
 			return sb.Bwrap, a, env, err
 		}
 	}

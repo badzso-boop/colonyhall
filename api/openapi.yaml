@@ -1783,6 +1783,7 @@ components:
         max_session_tokens: { type: integer, default: 150000, description: "Max context tokens before starting a fresh session (0 = no limit)" }
         daily_token_limit: { type: integer, format: int64, default: 0, description: "Max tokens per Budapest calendar day (0 = none)" }
         allow_preview: { type: boolean }
+        allow_web_read: { type: boolean }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -1802,6 +1803,7 @@ components:
         max_session_tokens: { type: integer, minimum: 0, default: 150000 }
         daily_token_limit: { type: integer, format: int64, minimum: 0, default: 0 }
         allow_preview: { type: boolean }
+        allow_web_read: { type: boolean }
     GrantRequest:
       type: object
       required: [path, mode]
@@ -1887,6 +1889,10 @@ components:
         duration_ms: { type: integer, minimum: 0, maximum: 86400000 }
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }
+        web_reads:
+          type: array
+          items: { type: string }
+          description: Public web URLs read during this run.
     RunRef:
       type: object
       required: [id]
@@ -1915,6 +1921,9 @@ components:
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
+        web_reads:
+          type: array
+          items: { type: string }
     RunList:
       type: object
       required: [runs]
@@ -2417,6 +2426,7 @@ components:
         approvals: { type: string }
         max_session_tokens: { type: integer }
         daily_token_limit: { type: integer, format: int64 }
+        allow_web_read: { type: boolean }
         grants:
           type: array
           items: { $ref: "#/components/schemas/FolderGrant" }
@@ -2442,6 +2452,9 @@ components:
         result: { type: string }
         tokens: { type: integer, format: int64 }
         error_id: { type: string, format: uuid, nullable: true }
+        web_reads:
+          type: array
+          items: { type: string }
 
     OverviewUsage:
       type: object

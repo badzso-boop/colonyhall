@@ -87,11 +87,13 @@ const insertRun = `-- name: InsertRun :exec
 INSERT INTO agent_run (
     id, workspace_id, agent_id, host_id, phase, client, model, session_id,
     channel_id, thread_root_id, items, input_tokens, output_tokens,
-    cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at
+    cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at,
+    web_reads
 ) VALUES (
-    $1, $2, $3, $16, $4, $5, $6, $7,
-    $17, $18, $8, $9, $10,
-    $11, $12, $13, $14, $19, $15
+    $1, $2, $3, $17, $4, $5, $6, $7,
+    $18, $19, $8, $9, $10,
+    $11, $12, $13, $14, $20, $15,
+    $16
 )
 `
 
@@ -111,6 +113,7 @@ type InsertRunParams struct {
 	DurationMs       int32
 	Status           string
 	CreatedAt        time.Time
+	WebReads         []string
 	HostID           *uuid.UUID
 	ChannelID        *uuid.UUID
 	ThreadRootID     *uuid.UUID
@@ -134,6 +137,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 		arg.DurationMs,
 		arg.Status,
 		arg.CreatedAt,
+		arg.WebReads,
 		arg.HostID,
 		arg.ChannelID,
 		arg.ThreadRootID,
@@ -143,7 +147,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at FROM agent_run
+SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads FROM agent_run
 WHERE workspace_id = $1
   AND ($3::uuid IS NULL OR agent_id = $3::uuid)
 ORDER BY created_at DESC
@@ -185,6 +189,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]AgentRun,
 			&i.Status,
 			&i.ErrorID,
 			&i.CreatedAt,
+			&i.WebReads,
 		); err != nil {
 			return nil, err
 		}

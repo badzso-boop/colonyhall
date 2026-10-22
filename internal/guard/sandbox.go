@@ -73,11 +73,24 @@ func colonyBinaryPath() (string, error) {
 	return "", errors.New("cannot find colony binary")
 }
 
+// SandboxOptions configures optional features for a sandboxed command.
+type SandboxOptions struct {
+	AllowWebRead bool
+}
+
 // Command builds the bwrap command line around the client command, after
 // preparing the agent's own config folder, and returns the argv for bwrap
 // and the environment for the process.
 func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name string, args []string) ([]string, []string, error) {
+	return s.CommandWithOptions(client, agentDir, workDir, grants, name, args, SandboxOptions{})
+}
+
+// CommandWithOptions builds the bwrap command line with additional sandbox options.
+func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []Grant, name string, args []string, opts SandboxOptions) ([]string, []string, error) {
 	netIsolated := s.NetworkMode == "filtered" || s.NetworkMode == "log"
+	// web_read reaches the guard only through the in-sandbox bridge; without
+	// network isolation 127.0.0.1:3129 would be the machine's own loopback.
+	webRead := opts.AllowWebRead && netIsolated
 	a := []string{"--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts"}
 	if netIsolated {
 		a = append(a, "--unshare-net")
@@ -153,7 +166,7 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 		a = append(a, "--tmpfs", s.Root)
 	}
 	a = append(a, "--bind", agentDir, agentDir)
-	mounts, clientEnv, err := s.clientMounts(client, agentDir)
+	mounts, clientEnv, err := s.clientMounts(client, agentDir, webRead)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -175,13 +188,17 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 		}
 	}
 	if netIsolated {
+		noProxy := ""
+		if webRead {
+			noProxy = "127.0.0.1,localhost"
+		}
 		env = append(env,
 			"HTTPS_PROXY=http://127.0.0.1:3128",
 			"HTTP_PROXY=http://127.0.0.1:3128",
 			"https_proxy=http://127.0.0.1:3128",
 			"http_proxy=http://127.0.0.1:3128",
-			"NO_PROXY=",
-			"no_proxy=",
+			"NO_PROXY="+noProxy,
+			"no_proxy="+noProxy,
 		)
 	}
 	if client == "claude-code" {
@@ -190,7 +207,12 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 	env = append(env, clientEnv...)
 	if netIsolated && colonyBin != "" {
 		sockPath := filepath.Join(agentDir, "proxy.sock")
-		bridgeArgs := []string{"sandbox-bridge", "-sock", sockPath, "-port", "3128", "--", name}
+		bridgeArgs := []string{"sandbox-bridge", "-sock", sockPath, "-port", "3128"}
+		if webRead {
+			webreadSock := filepath.Join(agentDir, "webread.sock")
+			bridgeArgs = append(bridgeArgs, "-webread-sock", webreadSock, "-webread-port", "3129")
+		}
+		bridgeArgs = append(bridgeArgs, "--", name)
 		bridgeArgs = append(bridgeArgs, args...)
 		a = append(a, "--chdir", workDir, "--", colonyBin)
 		return append(a, bridgeArgs...), env, nil
@@ -208,7 +230,7 @@ func (s *Sandbox) Command(client, agentDir, workDir string, grants []Grant, name
 // which refuses to follow links out of it. Login tokens are copied in fresh
 // for every run and never written back: a run cannot plant its own
 // credentials into the user's real login.
-func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, error) {
+func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead bool) ([]string, []string, error) {
 	cfgRoot := agentDir + ".config"
 	if err := os.MkdirAll(cfgRoot, 0o700); err != nil {
 		return nil, nil, err
@@ -217,9 +239,22 @@ func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, err
 	case "claude-code":
 		dir, err := s.ownConfig(cfgRoot, "claude", func(r *os.Root) error {
 			if s.ClaudeToken != "" {
-				return nil // passed as CLAUDE_CODE_OAUTH_TOKEN instead
+				// passed as CLAUDE_CODE_OAUTH_TOKEN instead
+			} else {
+				if err := copyInto(r, filepath.Join(s.Home, ".claude", ".credentials.json"), ".credentials.json", true); err != nil {
+					return err
+				}
 			}
-			return copyInto(r, filepath.Join(s.Home, ".claude", ".credentials.json"), ".credentials.json", true)
+			if allowWebRead {
+				mcpCfg := []byte("{\n  \"mcpServers\": {\n    \"colony-web\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:3129/mcp\"\n    }\n  }\n}\n")
+				_ = r.Remove("mcp.json")
+				if err := r.WriteFile("mcp.json", mcpCfg, 0o600); err != nil {
+					return err
+				}
+			} else {
+				_ = r.Remove("mcp.json")
+			}
+			return nil
 		})
 		if err != nil {
 			return nil, nil, err
@@ -232,7 +267,7 @@ func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, err
 	case "antigravity":
 		realCLI := filepath.Join(s.Home, ".gemini", "antigravity-cli")
 		dir, err := s.ownConfig(cfgRoot, "gemini", func(r *os.Root) error {
-			for _, d := range []string{"antigravity-cli/bin", "antigravity-cli/builtin"} {
+			for _, d := range []string{"antigravity-cli/bin", "antigravity-cli/builtin", "config"} {
 				if err := r.MkdirAll(d, 0o700); err != nil {
 					return err
 				}
@@ -244,8 +279,17 @@ func (s *Sandbox) clientMounts(client, agentDir string) ([]string, []string, err
 					return err
 				}
 			}
-			if err := denyCommands(r, "antigravity-cli/settings.json"); err != nil {
+			if err := denyCommands(r, "antigravity-cli/settings.json", allowWebRead); err != nil {
 				return err
+			}
+			if allowWebRead {
+				mcpCfg := []byte("{\n  \"mcpServers\": {\n    \"colony-web\": {\n      \"disabled\": false,\n      \"url\": \"http://127.0.0.1:3129/mcp\",\n      \"serverUrl\": \"http://127.0.0.1:3129/mcp\"\n    }\n  }\n}\n")
+				_ = r.Remove("config/mcp_config.json")
+				if err := r.WriteFile("config/mcp_config.json", mcpCfg, 0o600); err != nil {
+					return err
+				}
+			} else {
+				_ = r.Remove("config/mcp_config.json")
 			}
 			return copyInto(r, filepath.Join(realCLI, "antigravity-oauth-token"), "antigravity-cli/antigravity-oauth-token", true)
 		})
@@ -341,8 +385,9 @@ func exists(p string) bool {
 // allow rules at all (any inherited rule could permit running something),
 // and command(*) denied. A headless run denies whatever is not allowed, so
 // with accept-edits the agent can read and edit files and nothing else.
+// When allowWebRead is true, the colony-web MCP server is configured and allowed.
 // Doing it every run also undoes any change a run made to its copy.
-func denyCommands(r *os.Root, name string) error {
+func denyCommands(r *os.Root, name string, allowWebRead bool) error {
 	settings := map[string]any{}
 	if raw, err := r.ReadFile(name); err == nil {
 		if err := json.Unmarshal(raw, &settings); err != nil {
@@ -354,8 +399,22 @@ func denyCommands(r *os.Root, name string) error {
 		perms = map[string]any{}
 	}
 	perms["allow"] = []any{}
+	if allowWebRead {
+		perms["allow"] = []any{"mcp(colony-web/*)"}
+	}
 	perms["deny"] = []any{"command(*)"}
 	settings["permissions"] = perms
+	if allowWebRead {
+		settings["mcpServers"] = map[string]any{
+			"colony-web": map[string]any{
+				"disabled":  false,
+				"url":       "http://127.0.0.1:3129/mcp",
+				"serverUrl": "http://127.0.0.1:3129/mcp",
+			},
+		}
+	} else {
+		delete(settings, "mcpServers")
+	}
 	raw, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err

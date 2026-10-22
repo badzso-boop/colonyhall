@@ -62,6 +62,10 @@ func (s *Store) InsertRun(ctx context.Context, r runs.Run) error {
 	if r.ErrorID != ids.Nil {
 		errorID = &r.ErrorID
 	}
+	webReads := r.WebReads
+	if webReads == nil {
+		webReads = []string{}
+	}
 	return s.q(ctx).InsertRun(ctx, sqlcgen.InsertRunParams{
 		ID:               r.ID,
 		WorkspaceID:      r.WorkspaceID,
@@ -82,6 +86,7 @@ func (s *Store) InsertRun(ctx context.Context, r runs.Run) error {
 		Status:           r.Status,
 		ErrorID:          errorID,
 		CreatedAt:        r.CreatedAt,
+		WebReads:         webReads,
 	})
 }
 
@@ -117,6 +122,7 @@ func (s *Store) ListRuns(ctx context.Context, workspaceID ids.ID, agentID ids.ID
 			DurationMS:       int(r.DurationMs),
 			Status:           r.Status,
 			CreatedAt:        r.CreatedAt,
+			WebReads:         r.WebReads,
 		}
 		if r.HostID != nil {
 			item.HostID = *r.HostID

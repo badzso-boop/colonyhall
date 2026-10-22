@@ -22,6 +22,7 @@ type hostAgent struct {
 	MaxSessionTokens int    `json:"max_session_tokens"`
 	DailyTokenLimit  int64  `json:"daily_token_limit"`
 	WorktreeRepo     string `json:"worktree_repo"`
+	AllowWebRead     bool   `json:"allow_web_read"`
 	Grants           []struct {
 		ID           string `json:"id"`
 		Path         string `json:"path"`
@@ -355,5 +356,51 @@ func TestWorktreeAssignmentAndReport(t *testing.T) {
 	wt := list.Hosts[0].Report.Worktrees[0]
 	if wt.AgentID != agent || wt.Path != "/repo-worktrees/fake-agent" || wt.Branch != "colony/fake-agent/work" {
 		t.Fatalf("worktree entry mismatch: %+v", wt)
+	}
+}
+
+func TestHostAssignAllowWebRead(t *testing.T) {
+	e := newEnv(t)
+	agent := e.agentID()
+	host, hostToken := e.enroll("laptop-webread")
+
+	// 1. Full-access agent (mode: direct, sandbox: false) with allow_web_read -> 400 Bad Request
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "root_dir": "/app", "allow_web_read": true}, nil); s != http.StatusBadRequest {
+		t.Fatalf("allow_web_read on full-access agent must fail with 400, got: %d", s)
+	}
+
+	// 2. Sandboxed agent (mode: compact, sandbox: true) with allow_web_read -> 200 OK
+	var assigned hostAgent
+	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
+		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": true, "allow_web_read": true}, &assigned); s != http.StatusOK {
+		t.Fatalf("assign sandboxed agent with allow_web_read: %d", s)
+	}
+	if !assigned.AllowWebRead {
+		t.Fatalf("expected allow_web_read to be true, got false")
+	}
+
+	// 3. Appears in host config
+	var cfg struct {
+		Agents []hostAgent `json:"agents"`
+	}
+	if s := e.do("GET", "/api/v1/host/config", hostToken, nil, &cfg); s != http.StatusOK {
+		t.Fatalf("get host config: %d", s)
+	}
+	if len(cfg.Agents) != 1 || !cfg.Agents[0].AllowWebRead {
+		t.Fatalf("expected allow_web_read in host config: %+v", cfg)
+	}
+
+	// 4. Appears in agent overview
+	var ov struct {
+		Assignment *struct {
+			AllowWebRead *bool `json:"allow_web_read"`
+		} `json:"assignment"`
+	}
+	if s := e.do("GET", "/api/v1/agents/"+agent+"/overview", server.DevAdminToken, nil, &ov); s != http.StatusOK {
+		t.Fatalf("get agent overview: %d", s)
+	}
+	if ov.Assignment == nil || ov.Assignment.AllowWebRead == nil || !*ov.Assignment.AllowWebRead {
+		t.Fatalf("expected allow_web_read=true in agent overview: %+v", ov.Assignment)
 	}
 }

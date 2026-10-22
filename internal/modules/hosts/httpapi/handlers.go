@@ -18,7 +18,7 @@ func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
 	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName,
 		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
-		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
+		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)
 }
 
@@ -69,6 +69,7 @@ func agentOut(a hosts.AgentConfig) apispec.HostAgent {
 		Mode: apispec.HostAgentMode(a.Mode), RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: apispec.HostAgentApprovals(approvals),
 		MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
 		AllowPreview: &a.AllowPreview,
+		AllowWebRead: &a.AllowWebRead,
 		Grants:       make([]apispec.FolderGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, grantOut(g, nil))
@@ -172,6 +173,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), WorktreeRepo: httpx.Deref(in.WorktreeRepo, ""), Sandbox: in.Sandbox, Approvals: approvals,
 			MaxSessionTokens: in.MaxSessionTokens, DailyTokenLimit: in.DailyTokenLimit,
 			AllowPreview: httpx.Deref(in.AllowPreview, false),
+			AllowWebRead: httpx.Deref(in.AllowWebRead, false),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)

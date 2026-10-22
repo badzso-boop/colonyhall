@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,6 +68,9 @@ type Agent struct {
 
 	// File fetch options and scope
 	Sandbox          bool
+	AllowWebRead     bool
+	WebReadAllow     []string
+	WebReadDeny      []string
 	Roots            []string
 	GrantsFunc       func() []Grant
 	DenyFiles        []string
@@ -403,13 +408,15 @@ func (a *Agent) apply(ctx context.Context, it PromptItem, act Action) error {
 
 // WorkPolicy says whether and where a work run may happen.
 type WorkPolicy struct {
-	Allowed bool
-	Reason  string // why not, shown in the chat
-	Dir     string
-	AddDirs []string
-	Grants  []Grant
-	Wrap    Wrapper
-	NoExec  bool
+	Allowed      bool
+	Reason       string // why not, shown in the chat
+	Dir          string
+	AddDirs      []string
+	Grants       []Grant
+	Wrap         Wrapper
+	NoExec       bool
+	AgentDir     string
+	AllowWebRead bool
 }
 
 func (a *Agent) policy() WorkPolicy {
@@ -535,42 +542,80 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		if a.Sandbox && a.WorktreeBranch != "" {
 			promptBranch = a.WorktreeBranch
 		}
+		var tracker *RunWebReadTracker
+		var mcpSrv *WebReadServer
+		var mcpConfigPath string
+		if p.AllowWebRead && p.AgentDir != "" {
+			tracker = &RunWebReadTracker{}
+			sockPath := filepath.Join(p.AgentDir, "webread.sock")
+			srv, err := StartWebReadMCPServer(sockPath, FetchOptions{
+				Allow:   a.WebReadAllow,
+				Deny:    a.WebReadDeny,
+				Tracker: tracker,
+			}, a.logName(), a.Log)
+			if err != nil {
+				a.Log.Error("guard: start web_read mcp server", "err", err)
+			} else {
+				mcpSrv = srv
+				defer func() { _ = mcpSrv.Close() }()
+			}
+			mcpConfigPath = filepath.Join(p.AgentDir+".config", "claude", "mcp.json")
+		}
 		res, err := a.Adapter.Work(wctx, WorkRequest{
-			Prompt: WorkPromptWithBranch(a.getMe().Handle, promptBranch, it, task, p.Grants...), Model: a.Cfg.WorkModel, Dir: p.Dir, PermissionMode: a.Cfg.PermissionMode,
-			AddDirs: p.AddDirs, Wrap: p.Wrap, NoExec: p.NoExec,
-			Rules: rulesText, RulesVersion: rulesVer,
+			Prompt:         WorkPromptWithWebRead(a.getMe().Handle, promptBranch, p.AllowWebRead, it, task, p.Grants...),
+			Model:          a.Cfg.WorkModel,
+			Dir:            p.Dir,
+			PermissionMode: a.Cfg.PermissionMode,
+			AddDirs:        p.AddDirs,
+			Wrap:           p.Wrap,
+			NoExec:         p.NoExec,
+			AllowWebRead:   p.AllowWebRead,
+			MCPConfigPath:  mcpConfigPath,
+			Rules:          rulesText,
+			RulesVersion:   rulesVer,
 		})
 		stopped := errors.Is(wctx.Err(), context.Canceled)
 		cancel()
 		a.workMu.Lock()
 		a.workCancel = nil
 		a.workMu.Unlock()
+		var visitedURLs []string
+		if tracker != nil {
+			visitedURLs = tracker.VisitedURLs()
+		}
 		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
 		if ctx.Err() != nil {
-			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
+			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", visitedURLs)
 			return errHalted
 		}
 		text := res.Text
 		if err != nil && !stopped {
 			errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
-			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID)
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID, visitedURLs)
 			return rerr
 		}
 		var commitLine string
 		if a.Sandbox && a.WorktreeRepo != "" {
 			commitLine = a.checkAndCommitWorktree(ctx, it, task, p.Dir)
 		}
+		var webReadFooter string
+		if len(visitedURLs) > 0 {
+			webReadFooter = formatWebReadFooter(visitedURLs)
+		}
 		if stopped {
-			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "")
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", visitedURLs)
 			text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
 		} else {
-			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "")
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "", visitedURLs)
 		}
 		if strings.TrimSpace(text) == "" {
 			text = "Done."
 		}
 		if commitLine != "" {
 			text = strings.TrimSpace(text) + "\n\n" + commitLine
+		}
+		if webReadFooter != "" {
+			text = strings.TrimSpace(text) + "\n\n" + webReadFooter
 		}
 		// A work run answers a request (often a summary someone asked for), so
 		// like a direct run it may go past the short-reply limit.
@@ -764,6 +809,9 @@ func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
 }
 
 func (a *Agent) logRun(phase, model string, items int, res RunResult, err error) {
+	if a.Log == nil {
+		return
+	}
 	attrs := []any{"agent", a.logName(), "phase", phase, "client", a.Cfg.Client, "model", model, "items", items,
 		"tokens", res.Usage.Total(), "in", res.Usage.Input, "out", res.Usage.Output,
 		"cache_read", res.Usage.CacheRead, "cache_write", res.Usage.CacheWrite, "ms", res.Duration.Milliseconds()}
@@ -777,7 +825,7 @@ func (a *Agent) logRun(phase, model string, items int, res RunResult, err error)
 	a.Log.Info("guard: run", attrs...)
 }
 
-func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelID, threadRootID string, items int, res RunResult, status, errorID string) {
+func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelID, threadRootID string, items int, res RunResult, status, errorID string, webReads ...[]string) {
 	rctx := ctx
 	if rctx.Err() != nil {
 		rctx = context.Background()
@@ -788,6 +836,10 @@ func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelI
 	dur := int(res.Duration.Milliseconds())
 	if dur < 0 {
 		dur = 0
+	}
+	var urls []string
+	if len(webReads) > 0 {
+		urls = webReads[0]
 	}
 	_, err := a.Client.ReportRun(rctx, ReportRunInput{
 		Phase:            phase,
@@ -804,10 +856,35 @@ func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelI
 		DurationMS:       dur,
 		Status:           status,
 		ErrorID:          errorID,
+		WebReads:         urls,
 	})
-	if err != nil {
+	if err != nil && a.Log != nil {
 		a.Log.Warn("guard: could not report run", "phase", phase, "err", err)
 	}
+}
+
+func formatWebReadFooter(urls []string) string {
+	if len(urls) == 0 {
+		return ""
+	}
+	var hosts []string
+	seen := make(map[string]bool)
+	for _, raw := range urls {
+		u, err := url.Parse(raw)
+		host := raw
+		if err == nil && u.Hostname() != "" {
+			host = u.Hostname()
+		}
+		if !seen[host] {
+			seen[host] = true
+			hosts = append(hosts, host)
+		}
+	}
+	pageWord := "pages"
+	if len(urls) == 1 {
+		pageWord = "page"
+	}
+	return fmt.Sprintf("🌐 web_read: %s (%d %s)", strings.Join(hosts, ", "), len(urls), pageWord)
 }
 
 func summarize(d Decision) string {

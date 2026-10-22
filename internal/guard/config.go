@@ -26,6 +26,8 @@ type Config struct {
 	SandboxDir       string            `yaml:"sandbox_dir"`       // default ~/.local/share/colonyhall/sandbox
 	SandboxNetwork   string            `yaml:"sandbox_network"`   // filtered (default), log, open
 	SandboxAllow     []string          `yaml:"sandbox_allow"`     // additional machine-wide host:port allowlist entries
+	WebReadAllow     []string          `yaml:"web_read_allow"`    // if set, only these hosts for web_read (*.domain or exact)
+	WebReadDeny      []string          `yaml:"web_read_deny"`     // always refused hosts for web_read
 	RequireSandbox   *bool             `yaml:"require_sandbox"`   // default true: no work runs without bwrap
 	AllowUnsandboxed bool              `yaml:"allow_unsandboxed"` // default false: permit agents with sandbox: false
 	ConfigPoll       time.Duration     `yaml:"config_poll"`
