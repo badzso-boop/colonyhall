@@ -438,14 +438,49 @@ Amikor az `exchange_dir` elérhető és írható (`exchange_ok=true`), a közvet
 
 ### Munkaterület: git worktree agentenként (`internal/guard/worktree.go`)
 
-Közvetlen módú, teljes hozzáférésű agenteknél a hozzárendelésben megadható a `worktree_repo` (egy git repó útvonala a gazdagépen).
+Közvetlen módú (`direct`) és sandboxos (`compact`) agenteknél egyaránt megadható a hozzárendelésben a `worktree_repo` (egy git repó útvonala a gazdagépen).
 
-- **Validáció és biztonság:** Az őr induláskor ellenőrzi az útvonalat (`CheckGrant`), meggyőződik róla, hogy valódi git repó (`git -C <repo> rev-parse --git-dir`), és a gép engedélyezett gyökérmappáin belül van. Minden belső git hívást hookok nélkül (`-c core.hooksPath=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) hajt végre időkorláttal, így kártékony repó-hookok nem futhatnak le.
+- **Validáció és biztonság:** Az őr induláskor ellenőrzi az útvonalat (`CheckGrant`), meggyőződik róla, hogy valódi git repó (`git -C <repo> rev-parse --git-dir`), és a gép engedélyezett gyökérmappáin belül van. Minden belső git hívást hookok nélkül (`-c core.hooksPath=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`) hajt végre explicit `--git-dir` és `--work-tree` megadásával, így kártékony repó-hookok nem futhatnak le.
 - **Worktree felépítése:** Az őr létrehozza a `<repo>-worktrees/<handle>` könyvtárat a `colony/<handle>/work` ágon a repó alapértelmezett ágából kiindulva. Ha a worktree könyvtár már létezik és a megfelelő ágon van, újrahasználja. A fő munkakönyvtárhoz és a `main` ághoz nem nyúl.
-- **Futtatás és jelentés:** A munkafutás a worktree könyvtárában indul (Claude Code esetén `cwd`, Antigravity esetén `--add-dir`). A közvetlen prompt tájékoztatja az agentet a saját ágról és szabályokról:
-  `You work in your own worktree on branch colony/<handle>/work; commit there; never commit to the main branch; deliver through a PR when asked.`
-  A létrejött worktree-ket (`agent_id`, `path`, `branch`) az őr a `HostReport`-ban visszajelenti a szervernek, és a fejlesztői felület Gépek paneljén megjelenik.
+- **Futtatás és jelentés:**
+  - **Közvetlen módban:** A munkafutás a worktree könyvtárában indul (Claude Code esetén `cwd`, Antigravity esetén `--add-dir`). A közvetlen prompt tájékoztatja az agentet a saját ágról és szabályokról:
+    `You work in your own worktree on branch colony/<handle>/work; commit there; never commit to the main branch; deliver through a PR when asked.`
+  - **Sandboxos módban:** A worktree könyvtár lesz a sandbox munkakönyvtára (`--bind <worktree> /workspace --chdir /workspace`). A `.git` fájl szigorúan csak olvashatóan kerül felcsatolásra (`--ro-bind`), így a sandboxban futó ágens nem tud közvetlenül git commitot, push-t indítani vagy a git beállításokat módosítani.
+  - A létrejött worktree-ket (`agent_id`, `path`, `branch`) az őr a `HostReport`-ban visszajelenti a szervernek, és a fejlesztői felület Gépek paneljén megjelenik.
+- **Futás utáni commit sandboxos agent helyett:** A munkafutás lezárásakor az őr ellenőrzi a munkakönyvtár állapotát (`git status --porcelain`). Ha van módosítás:
+  1. *Biztonsági szűrés:* ellenőrzi a hozzáadott és módosított fájlokat. Megtagadja a commitot és hibát jelent, ha:
+     - Titokfájl-gyanús név szerepel benne (`isSecretName`: `.env`, `*.key`, `*.pem`, `id_*`, `credentials*`, `.netrc`, `.npmrc`, stb.),
+     - 10 MB-nál nagyobb fájl található benne,
+     - A worktree könyvtárán kívülre mutató szimbolikus link keletkezett.
+  2. *Commit készítése:* Ha az ellenőrzés sikeres, az őr a sandboxon kívül commitot készít:
+     - Szerző: `<handle> (Colonyhall sandbox) <handle@colonyhall.local>`,
+     - Tárgy: `colony(<handle>): <feladat első 60 karaktere>`,
+     - Törzs: `Requested in #<csatorna>/DM by @<felhasználó>`,
+     - Push nem történik; az emberi felügyelő dönt a módosítások továbbküldéséről.
 - **Hibakezelés:** Ha a worktree létrehozása nem sikerül (pl. nem git repó, vagy nem sikerül létrehozni), az agent nem indul el, és a hiba oka bekerül a `rejected` listába (hasonlóan az elutasított gyökérmappákhoz).
+
+### Hálózati szűrés és proxy a sandboxban (`internal/guard/proxy.go`, `bridge.go`)
+
+A sandboxban (`compact` mód) futó munkafutások hálózati hozzáférése izolált és engedélyezési listához kötött.
+
+- **Névtér-izoláció (`bwrap --unshare-net`):** A sandbox nem rendelkezik közvetlen hozzáféréssel a host hálózati interfészeihez (`--unshare-net`).
+- **Proxy architektúra és híd:**
+  - Az őr a gazdagépen, a sandboxon kívül elindít egy helyi HTTP/CONNECT proxyt, amely kizárólag egy belső Unix domain socketen (`<agent_dir>/proxy.sock`) figyel.
+  - A sandboxba a socket bind-mounttal kerül be (`--bind <agent_dir>/proxy.sock <agent_dir>/proxy.sock`), és a `colony` bináris is bekerül csak olvashatóan.
+  - A munkafutás belépési pontjaként a `colony sandbox-bridge -sock <path> -port 3128 -- <kliens> <argumentumok>` parancs fut le, amely a sandbox belső loopbackjén (127.0.0.1:3128) figyelő TCP port forgalmát kétirányúan a Unix socket proxy felé továbbítja.
+  - A kliens a szabványos proxy környezeti változókat kapja (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, stb.).
+- **Anti-SSRF és DNS rebinding védelem:**
+  - A proxy csak 443-as portra engedélyez CONNECT forgalmat (kivéve a Colonyhall szerver portját).
+  - Tilos a nyers IP-címek közvetlen elérése.
+  - Minden DNS-feloldás után a proxy ellenőrzi a kapott IP-címeket: azonnal megtagadja a kapcsolatot, ha az IP loopback (127.0.0.0/8, ::1), privát (RFC1918 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16, fe80::/10), multicast, unspecified (0.0.0.0, ::), CGNAT (100.64.0.0/10) vagy IPv6 ULA (fc00::/7).
+  - Kivétel: a Colonyhall szerver feloldott IP-címe és portja mindig engedélyezett (akár CGNAT vagy helyi cím esetén is).
+  - Sima (plain) HTTP forgalom kizárólag a beállított Colonyhall szerver címe felé továbbítható.
+- **Kliens-alapértelmezések:**
+  - Claude Code: `api.anthropic.com:443`,
+  - Antigravity: `daily-cloudcode-pa.googleapis.com:443`, `www.googleapis.com:443`, `antigravity-unleash.goog:443`, `lh3.googleusercontent.com:443`, `play.googleapis.com:443`.
+- **`guard.yaml` konfigurációs kulcsok:**
+  - `sandbox_network`: hálózati mód (`filtered` [alapértelmezett], `log` [minden kimenő forgalom engedélyezett és naplózott], `open` [unshare-net kikapcsolva, rollback kapcsoló]).
+  - `sandbox_allow`: egyedi hoszt:port listát tartalmazó kiegészítő szabályok (pl. `api.anthropic.com:443`, `*.google.com:443`). Exact match és csillaggal kezdődő wildcard (`*.domain`) támogatott.
 
 ## Wiki (megvalósítva, 2026-10-16)
 
