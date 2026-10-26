@@ -98,6 +98,8 @@
   #chanInfo { display:flex; align-items:baseline; gap:8px; min-width:0; overflow:hidden; }
   #chanTitle { font-weight:700; font-size:15px; white-space:nowrap; }
   #chanDesc { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #chanActs { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  #chanCompaction { display:inline-flex; align-items:center; gap:8px; }
   #errModal, #appModal, .modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
   #errModal.on, #appModal.on, .modal.on { display:flex; }
   #errModal .card, #appModal .card, .modal .card { max-width:720px; width:100%; max-height:85vh; overflow:auto; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
@@ -157,6 +159,8 @@
   @media (max-width:640px) { main { grid-template-columns:1fr; grid-template-rows:auto minmax(0,1fr); }
     main > nav { border-right:0; border-bottom:1px solid var(--line); max-height:28vh; }
     header { gap:6px; padding:6px 10px; } header #tabs { gap:4px; } header #tabs button { padding:3px 7px; font-size:13px; }
+    #chanHeader { flex-wrap:wrap; gap:6px; padding:6px 10px; }
+    #chanActs { width:100%; justify-content:space-between; }
     .overview-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
     #fileViewerModal { padding:0; }
     #fileViewerModal .card { max-width:100%; width:100%; height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; border-radius:0; border:none; } }
@@ -182,6 +186,10 @@
         <span id="chanDesc"></span>
       </div>
       <div id="chanActs">
+        <div id="chanCompaction" style="display:inline-flex;align-items:center;gap:8px;">
+          <span id="chanCompactionCount" class="muted" style="font-size:12px;"></span>
+          <button id="chanCompactBtn" class="secondary" style="font-size:12px;display:none;"></button>
+        </div>
         <button id="chanMembersBtn" style="display:none"></button>
       </div>
     </div>
@@ -250,6 +258,15 @@
         <select id="addMemberSelect" style="flex:1;"></select>
         <button id="addMemberBtn"></button>
       </div>
+    </div>
+    <div id="channelCompactionSection" style="display:none;border-top:1px solid var(--line);padding-top:10px;">
+      <div style="font-weight:600;margin-bottom:4px;" id="lblChannelCompaction"></div>
+      <div class="row" style="gap:8px;align-items:center;">
+        <input id="chanCompThreshInput" type="number" min="20000" max="2000000" style="width:140px;" placeholder="350000">
+        <button id="chanCompThreshSave" class="secondary"></button>
+        <span id="chanCompThreshStatus" class="muted" style="font-size:12px;"></span>
+      </div>
+      <div class="muted small" style="margin-top:4px;" id="lblChannelCompactionHint"></div>
     </div>
   </div>
 </div>
@@ -327,7 +344,15 @@ const I18N = {
         worktreeHint: "Worktree: az őr commitol az ágens helyett; semmi sem kerül pusholásra",
         errHostOffline: "A gép offline", errNotFound: "A fájl nem létezik",
         errDenied: "A fájl megosztása nem engedélyezett", errTooLarge: "A fájl túl nagy (limit felett)",
-        errNotAFile: "Nem fájl (mappa vagy speciális fájl)", errTimeout: "Időtúllépés" },
+        errNotAFile: "Nem fájl (mappa vagy speciális fájl)", errTimeout: "Időtúllépés",
+        compactNow: "🗜 Tömörítés most", compacting: "🗜 Tömörítés folyamatban…",
+        editSummary: "✏️ Szerkesztés", regenerateSummary: "🔄 Újragenerálás",
+        regenerateConfirm: "Biztosan újragenerálod az összefoglalót?", regenerating: "Újragenerálás indítva…",
+        compactionSettings: "Tömörítés", compactionThreshold: "Tömörítési küszöb (token):",
+        compactionHint: "~4 karakter = 1 token; 350 000 ≈ 1,4 millió karakter",
+        scribeAgent: "Összefoglaló agent (scribe):", noScribe: "-- nincs kiválasztva --",
+        channelCompactionOverride: "Csatorna tömörítési küszöb (token):",
+        channelCompactionHint: "Opcionális (üres = alapértelmezett beállítás, 20 000 – 2 000 000)" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -381,7 +406,15 @@ const I18N = {
         worktreeHint: "Worktree: a guard commits for the agent; nothing is pushed",
         errHostOffline: "The machine is offline", errNotFound: "The file does not exist",
         errDenied: "Sharing this file is not allowed", errTooLarge: "The file is too large (exceeds limit)",
-        errNotAFile: "Not a file (directory or special file)", errTimeout: "Request timed out" },
+        errNotAFile: "Not a file (directory or special file)", errTimeout: "Request timed out",
+        compactNow: "🗜 Compact now", compacting: "🗜 Compacting…",
+        editSummary: "✏️ Edit", regenerateSummary: "🔄 Regenerate",
+        regenerateConfirm: "Are you sure you want to regenerate the summary?", regenerating: "Regenerating…",
+        compactionSettings: "Compaction", compactionThreshold: "Compaction threshold (tokens):",
+        compactionHint: "~4 characters = 1 token; 350,000 ≈ 1.4M characters",
+        scribeAgent: "Scribe agent:", noScribe: "-- none --",
+        channelCompactionOverride: "Channel compaction threshold (tokens):",
+        channelCompactionHint: "Optional (empty = workspace default, 20,000 – 2,000,000)" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -730,6 +763,65 @@ function renderChannels() {
   }
 }
 
+async function updateCompactionStatus() {
+  const countEl = $("chanCompactionCount");
+  const btn = $("chanCompactBtn");
+  if (!countEl || !btn) return;
+  if (!current) {
+    countEl.textContent = "";
+    btn.style.display = "none";
+    return;
+  }
+  const c = channels.find(x => x.id === current) || overseen.find(x => x.id === current);
+  if (!c) {
+    countEl.textContent = "";
+    btn.style.display = "none";
+    return;
+  }
+
+  let url = `/api/v1/channels/${current}/compaction`;
+  if (replyRoot) {
+    url += `?thread_root_id=${replyRoot}`;
+  }
+  try {
+    const status = await api(url);
+    if (!status || status.channel_id !== current) return;
+    const tokens = Number(status.approx_tokens_since || 0).toLocaleString();
+    const thresh = Number(status.threshold_tokens || 0).toLocaleString();
+    countEl.textContent = `~${tokens} / ${thresh} token`;
+
+    const canWrite = me?.kind === "human";
+    if (canWrite) {
+      btn.style.display = "inline-block";
+      if (status.has_pending_compaction) {
+        btn.disabled = true;
+        btn.textContent = L.compacting;
+      } else {
+        btn.disabled = false;
+        btn.textContent = L.compactNow;
+        btn.onclick = async () => {
+          btn.disabled = true;
+          try {
+            await api(`/api/v1/channels/${current}/compactions`, {
+              method: "POST",
+              body: JSON.stringify({ thread_root_id: replyRoot || undefined })
+            });
+            await updateCompactionStatus();
+          } catch (e) {
+            alert(e.message);
+            btn.disabled = false;
+          }
+        };
+      }
+    } else {
+      btn.style.display = "none";
+    }
+  } catch (err) {
+    countEl.textContent = "";
+    btn.style.display = "none";
+  }
+}
+
 async function open(id) {
   if (openPanel) showPanel(null);
   current = id; setReply(null); clearPendingFiles();
@@ -752,6 +844,7 @@ async function open(id) {
   await api(`/api/v1/channels/${id}/read`, { method: "POST" }).catch(() => {});
   renderChannels();
   renderActivity();
+  updateCompactionStatus();
 }
 
 function renderFeed() {
@@ -844,11 +937,24 @@ function renderMsg(m) {
     const attDiv = div.querySelector(".attachments");
     for (const att of m.attachments) {
       const isImg = att.mime && att.mime.startsWith("image/") && !att.mime.includes("svg");
+      const isMd = att.name.endsWith(".md") || att.mime === "text/markdown";
       if (isImg) {
         const a = el("a", { href: `/api/v1/files/${att.id}/content`, target: "_blank", title: `${att.name} (${formatBytes(att.size)})` });
         const img = el("img", { className: "attachment-img", src: `/api/v1/files/${att.id}/content`, alt: att.name });
         a.append(img);
         attDiv.append(a);
+      } else if (isMd) {
+        const link = el("a", {
+          className: "attachment-link",
+          href: `/api/v1/files/${att.id}/content`,
+          title: `${att.mime}, ${formatBytes(att.size)}`,
+          style: "cursor:pointer;"
+        }, `📄 ${att.name} (${formatBytes(att.size)})`);
+        link.onclick = (e) => {
+          e.preventDefault();
+          openFileModal({ id: att.id, name: att.name, mime: att.mime || "text/markdown", size: att.size });
+        };
+        attDiv.append(link);
       } else {
         const link = el("a", {
           className: "attachment-link",
@@ -859,6 +965,92 @@ function renderMsg(m) {
         attDiv.append(link);
       }
     }
+  }
+  if (m.compaction_id && me?.kind === "human") {
+    const compBar = el("div", { className: "row", style: "gap:6px;margin-top:6px;align-items:center;" });
+    const editBtn = el("button", { className: "secondary", style: "font-size:12px;", textContent: L.editSummary });
+    const regenBtn = el("button", { className: "secondary", style: "font-size:12px;", textContent: L.regenerateSummary });
+
+    const editContainer = el("div", { style: "display:none;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);" });
+    const editText = el("textarea", { style: "width:100%;height:180px;font-family:ui-monospace, monospace;font-size:13px;resize:vertical;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px;box-sizing:border-box;" });
+    const editSave = el("button", { className: "on", style: "font-size:12px;", textContent: L.save });
+    const editCancel = el("button", { className: "secondary", style: "font-size:12px;", textContent: L.cancel });
+    const editStatus = el("span", { className: "muted", style: "font-size:12px;margin-left:6px;" });
+    const editActions = el("div", { className: "row", style: "gap:6px;justify-content:flex-end;margin-top:6px;align-items:center;" }, editStatus, editCancel, editSave);
+    editContainer.append(editText, editActions);
+
+    let editorOpen = false;
+    editBtn.onclick = async () => {
+      editorOpen = !editorOpen;
+      if (!editorOpen) {
+        editContainer.style.display = "none";
+        return;
+      }
+      editContainer.style.display = "block";
+      editText.value = L.loadingFile;
+      editText.disabled = true;
+      editSave.disabled = true;
+
+      const summaryAtt = (m.attachments || []).find(a => a.name.endsWith(".md")) || (m.attachments && m.attachments[0]);
+      let mdContent = "";
+      if (summaryAtt) {
+        try {
+          const res = await fetch(`/api/v1/files/${summaryAtt.id}/content`, {
+            headers: token ? { Authorization: "Bearer " + token } : {}
+          });
+          mdContent = await res.text();
+        } catch (e) {
+          mdContent = "Hiba: " + e.message;
+        }
+      }
+      editText.value = mdContent;
+      editText.disabled = false;
+      editSave.disabled = false;
+      editText.focus();
+    };
+
+    editCancel.onclick = () => {
+      editorOpen = false;
+      editContainer.style.display = "none";
+    };
+
+    editSave.onclick = async () => {
+      editSave.disabled = true;
+      editStatus.textContent = "...";
+      try {
+        await api(`/api/v1/compactions/${m.compaction_id}/summary`, {
+          method: "PUT",
+          body: JSON.stringify({ markdown: editText.value })
+        });
+        editStatus.textContent = "✓";
+        setTimeout(() => {
+          editorOpen = false;
+          editContainer.style.display = "none";
+          reloadCurrentFeed();
+        }, 600);
+      } catch (e) {
+        alert(e.message);
+        editSave.disabled = false;
+        editStatus.textContent = "";
+      }
+    };
+
+    regenBtn.onclick = async () => {
+      if (!confirm(L.regenerateConfirm)) return;
+      regenBtn.disabled = true;
+      regenBtn.textContent = L.regenerating;
+      try {
+        await api(`/api/v1/compactions/${m.compaction_id}/regenerate`, { method: "POST" });
+        await updateCompactionStatus();
+      } catch (e) {
+        alert(e.message);
+        regenBtn.disabled = false;
+        regenBtn.textContent = L.regenerateSummary;
+      }
+    };
+
+    compBar.append(editBtn, regenBtn);
+    div.append(compBar, editContainer);
   }
   if (m.link_cards && m.link_cards.length > 0) {
     const cardsDiv = el("div", { className: "link-cards" });
@@ -1152,6 +1344,23 @@ async function renderFetchedFileContent(f, originalPath) {
   body.append(box);
 }
 
+async function openFileModal(file) {
+  if (fileFetchPollTimer) {
+    clearInterval(fileFetchPollTimer);
+    fileFetchPollTimer = null;
+  }
+  $("fileViewerPath").textContent = file.name;
+  $("fileViewerPath").title = file.name;
+  $("fileViewerAgent").textContent = "";
+  $("fileViewerStatus").textContent = "";
+  $("fileViewerRefresh").style.display = "none";
+  $("fileViewerControls").style.display = "none";
+  $("fileViewerBody").replaceChildren(el("div", { style: "padding:20px;text-align:center;", className: "muted", textContent: L.loadingFile }));
+  $("fileViewerModal").className = "modal on";
+
+  await renderFetchedFileContent(file, file.name);
+}
+
 async function showError(id) {
   const e = await api(`/api/v1/errors/${id}`).catch(err => { alert(err.message); return null; });
   if (!e) return;
@@ -1336,6 +1545,41 @@ async function refreshMembersModal() {
     };
   } else {
     addSec.style.display = "none";
+  }
+
+  const compSec = $("channelCompactionSection");
+  if (isAdmin) {
+    compSec.style.display = "";
+    $("lblChannelCompaction").textContent = L.channelCompactionOverride;
+    $("chanCompThreshSave").textContent = L.save;
+    $("lblChannelCompactionHint").textContent = L.channelCompactionHint;
+    const c = channels.find(x => x.id === channelId);
+    $("chanCompThreshInput").value = (c && c.compact_threshold_tokens) ? c.compact_threshold_tokens : "";
+    $("chanCompThreshSave").onclick = async () => {
+      const raw = $("chanCompThreshInput").value.trim();
+      let val = null;
+      if (raw !== "") {
+        val = parseInt(raw, 10);
+        if (isNaN(val) || val < 20000 || val > 2000000) {
+          alert("20 000 – 2 000 000");
+          return;
+        }
+      }
+      try {
+        await api(`/api/v1/channels/${channelId}/compaction`, {
+          method: "PATCH",
+          body: JSON.stringify({ compact_threshold_tokens: val })
+        });
+        if (c) c.compact_threshold_tokens = val;
+        $("chanCompThreshStatus").textContent = "✓";
+        setTimeout(() => { $("chanCompThreshStatus").textContent = ""; }, 2500);
+        updateCompactionStatus();
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+  } else {
+    compSec.style.display = "none";
   }
 }
 
@@ -1897,6 +2141,7 @@ function setReply(rootId) {
   $("replybar").className = rootId ? "on" : "";
   if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? ColonyMarkdown.plain(r.body).slice(0, 80) : ""); $("text").focus(); }
   renderActivity();
+  updateCompactionStatus();
 }
 $("replycancel").onclick = () => setReply(null);
 
@@ -1930,12 +2175,20 @@ function connectWS() {
     const d = f.data || {};
     if (f.event_type === "message.created") {
       if (d.channel_id === current) {
-        const m = { id: d.message_id, author_id: d.author_id, body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, reactions: [], attachments: d.attachments || [] };
+        const m = { id: d.message_id, author_id: d.author_id, kind: d.kind || "text", body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, compaction_id: d.compaction_id || null, reactions: [], attachments: d.attachments || [] };
         msgs.set(m.id, m); $("feed").appendChild(renderMsg(m)); $("feed").scrollTop = $("feed").scrollHeight;
         api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
+        updateCompactionStatus();
       } else {
         const c = channels.find(x => x.id === d.channel_id);
         if (c) { c.unread++; renderChannels(); } else await load();
+      }
+    } else if (f.event_type.startsWith("compaction.")) {
+      if (d.channel_id === current) {
+        updateCompactionStatus();
+        if (f.event_type === "compaction.done") {
+          reloadCurrentFeed();
+        }
       }
     } else if (f.event_type.startsWith("reaction.") && d.channel_id === current) {
       await refreshMessage(d.message_id);
@@ -2429,6 +2682,73 @@ async function renderHosts() {
       }
     };
     panel.append(limitsBox);
+
+    const compBox = el("div", { className: "card" });
+    compBox.append(el("h3", { textContent: `🗜 ${L.compactionSettings}` }));
+
+    const compRow = el("div", { className: "row", style: "gap:16px;align-items:center;flex-wrap:wrap;" });
+    const threshLabel = el("label", {}, L.compactionThreshold + " ");
+    const threshInput = el("input", { type: "number", min: "20000", max: "2000000", style: "width:120px;" });
+    threshLabel.append(threshInput);
+
+    const scribeLabel = el("label", {}, L.scribeAgent + " ");
+    const scribeSelect = el("select", {});
+    scribeLabel.append(scribeSelect);
+
+    const saveCompBtn = el("button", { textContent: L.save });
+    const compStatus = el("span", { className: "muted" });
+    compRow.append(threshLabel, scribeLabel, saveCompBtn, compStatus);
+
+    const compHint = el("div", { className: "muted small", style: "margin-top:4px;", textContent: L.compactionHint });
+    compBox.append(compRow, compHint);
+
+    const assignedAgentIds = new Set();
+    for (const h of hosts) {
+      for (const a of h.agents || []) {
+        assignedAgentIds.add(a.agent_id);
+      }
+    }
+    scribeSelect.append(el("option", { value: "", textContent: L.noScribe }));
+    for (const aId of assignedAgentIds) {
+      const act = actors[aId];
+      if (act) {
+        scribeSelect.append(el("option", { value: aId, textContent: `@${act.handle}` }));
+      }
+    }
+
+    api("/api/v1/settings/compaction").then(st => {
+      threshInput.value = st.default_threshold_tokens || 350000;
+      if (st.scribe_agent_id) scribeSelect.value = st.scribe_agent_id;
+    }).catch(() => {});
+
+    saveCompBtn.onclick = async () => {
+      compStatus.textContent = "...";
+      saveCompBtn.disabled = true;
+      const tVal = parseInt(threshInput.value, 10);
+      if (isNaN(tVal) || tVal < 20000 || tVal > 2000000) {
+        alert("20 000 – 2 000 000");
+        saveCompBtn.disabled = false;
+        compStatus.textContent = "";
+        return;
+      }
+      try {
+        await api("/api/v1/settings/compaction", {
+          method: "PUT",
+          body: JSON.stringify({
+            default_threshold_tokens: tVal,
+            scribe_agent_id: scribeSelect.value || null
+          })
+        });
+        compStatus.textContent = "✓";
+        setTimeout(() => { compStatus.textContent = ""; }, 2000);
+      } catch (err) {
+        alert(err.message);
+        compStatus.textContent = "";
+      } finally {
+        saveCompBtn.disabled = false;
+      }
+    };
+    panel.append(compBox);
   }
 }
 
