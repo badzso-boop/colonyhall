@@ -949,6 +949,44 @@ A 15. fejlesztési kör (`docs/handoff/15-ui-round-prompt.md`) felületi és agg
 - **Hosszabb válasz engedélyezése:** A közvetlen mód promptja (`DirectPrompt`) explicit kimondja: `"Keep the answer short (≤600 characters) unless someone asks for more; when asked for a longer summary or report, you may write up to 8000 characters."`.
 - **Azonos nyelv szabály:** Mind a munkafutás, mind a közvetlen futás promptja rögzíti: `"Answer in the language of the message you are answering; do not mix languages."`.
 
+## Automatikus tömörítés (Compaction) szálakban, DM-ekben és csatornákban (megvalósítva, 2026-10-26, `feature/compaction`)
+
+A beszélgetések folyamatos token-alapú tömörítése és összegzése a kontextusablak túlcsordulásának megelőzésére (`internal/modules/compaction`).
+
+### 1. Egységek (units) és számlálók
+- **Üzenetfolyam-egységek:** Minden szál (`thread_root_id`), közvetlen üzenetváltás fő folyama (`thread_root_id IS NULL`), valamint csatorna fő folyama egy-egy független tömörítési egységet (`compaction_unit`) alkot.
+- **Tokenszámláló:** A szerver minden új normál szöveges üzenet létrehozásakor (`onMessageCreated`) megbecsüli a tokenek számát (`len(body)/4`, minimum 1 token üzenetenként, kivéve rendszerüzenetek), és növeli az egység `approx_tokens_since` és `messages_since` értékét.
+- **Küszöbérték (threshold):** Alapértelmezetten a munkatér szintű beállítás (`workspace_compaction_settings.default_threshold_tokens`, alapértelmezett: 350 000 token, megengedett tartomány: 20 000 – 2 000 000). Csatornánként felülbírálható (`channel.compact_threshold_tokens`).
+- **Aktiválás (trigger):** Amikor egy egység számlálója meghaladja a küszöböt ÉS nincs még függőben lévő (`pending`) tömörítése, a szerver létrehoz egy új `compaction` rekordot (`trigger: auto`), és a kijelölt jegyző agent postafiókjába egy `compact` típusú inbox elemet kézbesít (`FlagWake`).
+- **Kézi indítás:** Írási joggal rendelkező emberi felhasználók a felületről bármikor indíthatnak tömörítést (`POST /api/v1/channels/{id}/compactions`), amely `manual` triggerrel hoz létre feladatot.
+- **Időtúllépés:** A 15 percnél régebbi `pending` tömörítések automatikusan `timeout` állapotba kerülnek.
+
+### 2. Tömörítési rekord és REST végpontok
+- **Tábla (`compaction`):** `id`, `workspace_id`, `channel_id`, `thread_root_id`, `up_to_message_id`, `previous_compaction_id`, `trigger` (`auto`, `manual`, `regenerate`, `edit`), `requested_by`, `compactor_agent_id`, `state` (`pending`, `done`, `failed`), `summary_file_id`, `system_message_id`, `stats` (messages, approx tokens in, summary tokens), `error_code`, timestamps.
+- **Végpontok:**
+  - `GET /api/v1/settings/compaction` és `PUT /api/v1/settings/compaction` (admin): globális küszöb és jegyző agent (`scribe_agent_id`).
+  - `GET /api/v1/channels/{channelId}/compaction` (olvasási jog): tokenállapot, küszöb, függő tömörítés jelzése.
+  - `POST /api/v1/channels/{channelId}/compactions` (emberi írási jog): kézi indítás.
+  - `PATCH /api/v1/channels/{channelId}/compaction` (admin): csatorna küszöb felülbírálása.
+  - `GET /api/v1/channels/{channelId}/compactions`: korábbi tömörítések listája.
+  - `PUT /api/v1/compactions/{id}/summary` (ember): összefoglaló manuális szerkesztése (`trigger: edit`).
+  - `POST /api/v1/compactions/{id}/regenerate` (ember): újragenerálás indítása (`trigger: regenerate`).
+  - `GET /api/v1/agent/compactions/{id}` és `POST /api/v1/agent/compactions/{id}/result`: a kijelölt jegyző agent számára a feladat lekérése és eredmény beküldése.
+  - `GET /api/v1/agent/context`: agent kontextus lekérése (`compaction_id`, `summary_markdown`, `messages_after`).
+
+### 3. Jegyző (scribe) futás (`internal/guard`)
+- **Inbox feldolgozás:** Az őr a `compact` típusú inbox elemeket külön ágon kezeli (`handleCompact`), sosem chat-válaszként.
+- **Izolált összefoglalás (`Summarize`):**
+  - **Claude Code:** `--tools ""` és `--strict-mcp-config`, `--no-session-persistence`, a jegyzőhöz rendelt modell.
+  - **Antigravity:** Eszközök nélküli izolált futás (`--output-format json`, slash-parancsok tiltva).
+- **Prompt:** Angol nyelvű rendszerutasítás; az üzenetek adatként mennek (`<colonyhall_message>`, `<colonyhall_summary>`); kötelező fejlécek: `Összefoglaló`, `Döntések`, `Állapot`, `Nyitott kérdések és teendők`, `Fontos részletek`.
+- **Eredmény tárolása:** A szerver csatornafájlként menti a markdown-t, posztol egy `🗜` kezdetű rendszerüzenetet a csatolt fájllal, lenullázza az egység számlálóját, és `compaction.done` eseményt publikál.
+
+### 4. Agent munkamenet priming (`internal/guard/direct.go`)
+- **Session rotálás:** A közvetlen módban futó agentek a `DirectState.Compactions` szótárban egységenként (`thread_root`) tárolják az utolsó ismert `compaction_id`-t.
+- **Kontextus inicializálás:** Amikor a szervertől kapott `compaction_id` eltér a tárolttól, az őr rotálja a munkamenetet (`Generations++`, Claude/agy session törlése), és a nyitó promptot a `<colonyhall_summary>` blokkal és az összefoglaló után érkezett üzenetekkel (`<m ctx from="...">`) tölti fel (legfeljebb 200 üzenet).
+- **Munkamenet-limit:** Tömörítés mellett az agent `max_session_tokens` paramétere 0-ra állítható, mert a kontextus frissességéről a tömörítés és a priming gondoskodik.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.
