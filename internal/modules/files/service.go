@@ -116,6 +116,10 @@ func (s *Service) UploadAuthorized(ctx context.Context, by identity.Actor, chann
 }
 
 func (s *Service) upload(ctx context.Context, by identity.Actor, channelID ids.ID, filename string, r io.Reader) (File, error) {
+	// A paused or stopped actor never writes, whatever the caller allowed.
+	if by.Halted {
+		return File{}, identity.ErrHalted
+	}
 	var err error
 	cleanName := SanitizeFileName(filename)
 	maxBytes := s.MaxUploadBytes()

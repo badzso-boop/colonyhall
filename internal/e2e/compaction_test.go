@@ -403,3 +403,59 @@ func TestCompactionScribeNeedsNoMembership(t *testing.T) {
 		t.Fatalf("the scribe must get the previous summary, got %v", task2.PreviousSummary)
 	}
 }
+
+// The scribe's exception from the channel rules lasts only while it is the
+// scribe the settings name and is active: a replaced or paused scribe can no
+// longer read or finish a pending compaction.
+func TestCompactionReplacedOrPausedScribeRefused(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	newAgent := func(handle string) (string, string) {
+		var a struct {
+			Actor struct{ ID string }
+			Token string
+		}
+		if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": handle, "role": "member"}, &a); s != http.StatusCreated {
+			t.Fatalf("create %s: %d", handle, s)
+		}
+		return a.Actor.ID, a.Token
+	}
+	setScribe := func(id string) {
+		u, _ := uuid.Parse(id)
+		if s := e.do("PUT", "/api/v1/settings/compaction", server.DevAdminToken, apispec.UpdateCompactionSettingsRequest{CompactThresholdTokens: 350000, CompactorAgentId: &u}, nil); s != http.StatusOK {
+			t.Fatalf("settings: %d", s)
+		}
+	}
+	oldID, oldTok := newAgent("jegyzo-regi")
+	newID, _ := newAgent("jegyzo-uj")
+	setScribe(oldID)
+	general := e.generalID()
+	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "valami"}); s != http.StatusCreated {
+		t.Fatalf("send: %d", s)
+	}
+	_ = e.app.Drain(ctx)
+	var comp apispec.Compaction
+	if s := e.do("POST", "/api/v1/channels/"+general+"/compactions", server.DevAdminToken, map[string]any{}, &comp); s != http.StatusOK && s != http.StatusCreated {
+		t.Fatalf("trigger: %d", s)
+	}
+	md := "# x"
+	// Paused: refused.
+	if s := e.do("PUT", "/api/v1/actors/"+oldID+"/state", server.DevAdminToken, map[string]any{"state": "paused"}, nil); s != http.StatusNoContent {
+		t.Fatalf("pause: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/compactions/"+comp.Id.String()+"/result", oldTok, apispec.CompactionResultRequest{Markdown: &md}, nil); s == http.StatusOK {
+		t.Fatal("a paused scribe finished a compaction")
+	}
+	if s := e.do("PUT", "/api/v1/actors/"+oldID+"/state", server.DevAdminToken, map[string]any{"state": "active"}, nil); s != http.StatusNoContent {
+		t.Fatalf("resume: %d", s)
+	}
+	// Replaced: refused.
+	setScribe(newID)
+	if s := e.do("GET", "/api/v1/agent/compactions/"+comp.Id.String(), oldTok, nil, nil); s != http.StatusNotFound {
+		t.Fatalf("a replaced scribe read the task: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/compactions/"+comp.Id.String()+"/result", oldTok, apispec.CompactionResultRequest{Markdown: &md}, nil); s != http.StatusNotFound {
+		t.Fatalf("a replaced scribe finished the compaction: %d", s)
+	}
+}

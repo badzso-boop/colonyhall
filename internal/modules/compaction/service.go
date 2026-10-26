@@ -394,12 +394,34 @@ func (s *Service) TriggerCompaction(ctx context.Context, by identity.Actor, chan
 	return comp, nil
 }
 
-func (s *Service) GetScribeTask(ctx context.Context, by identity.Actor, compactionID ids.ID) (ScribeTask, error) {
-	comp, err := s.Store.CompactionByID(ctx, compactionID)
-	if err != nil {
-		return ScribeTask{}, ErrNotFound
+// scribeFor checks that by may work on the compaction: it skips the
+// channel's own access rules, so it must be the scribe the settings name
+// now (not one replaced since), active, in the same workspace, and the
+// compaction still pending.
+func (s *Service) scribeFor(ctx context.Context, by identity.Actor, compactionID ids.ID) (Compaction, error) {
+	if by.Kind != identity.KindAgent {
+		return Compaction{}, ErrNotFound
 	}
-	if comp.CompactorAgentID != by.ID {
+	if by.Halted {
+		return Compaction{}, identity.ErrHalted
+	}
+	comp, err := s.Store.CompactionByID(ctx, compactionID)
+	if err != nil || comp.WorkspaceID != by.WorkspaceID || comp.CompactorAgentID != by.ID {
+		return Compaction{}, ErrNotFound
+	}
+	st, err := s.Store.GetSettings(ctx, by.WorkspaceID)
+	if err != nil || st.CompactorAgentID != by.ID {
+		return Compaction{}, ErrNotFound
+	}
+	return comp, nil
+}
+
+func (s *Service) GetScribeTask(ctx context.Context, by identity.Actor, compactionID ids.ID) (ScribeTask, error) {
+	comp, err := s.scribeFor(ctx, by, compactionID)
+	if err != nil {
+		return ScribeTask{}, err
+	}
+	if comp.State != StatePending {
 		return ScribeTask{}, ErrNotFound
 	}
 
@@ -488,12 +510,9 @@ type ScribeResultInput struct {
 }
 
 func (s *Service) SubmitScribeResult(ctx context.Context, by identity.Actor, compactionID ids.ID, in ScribeResultInput) (Compaction, error) {
-	comp, err := s.Store.CompactionByID(ctx, compactionID)
+	comp, err := s.scribeFor(ctx, by, compactionID)
 	if err != nil {
-		return Compaction{}, ErrNotFound
-	}
-	if comp.CompactorAgentID != by.ID {
-		return Compaction{}, ErrNotFound
+		return Compaction{}, err
 	}
 	if comp.State != StatePending {
 		return comp, nil
