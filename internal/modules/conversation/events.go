@@ -44,14 +44,16 @@ type MemberRemoved struct {
 // MessageCreated is the payload of EventMessageCreated. It carries the whole
 // message so the gateway can forward it without another query.
 type MessageCreated struct {
-	MessageID    string       `json:"message_id"`
-	ChannelID    string       `json:"channel_id"`
-	ThreadRootID string       `json:"thread_root_id,omitempty"`
-	AuthorID     string       `json:"author_id"`
-	ClientMsgID  string       `json:"client_msg_id,omitempty"`
-	Kind         string       `json:"kind"`
-	Body         string       `json:"body"`
-	Mentions     []string     `json:"mentions"`
-	Attachments  []Attachment `json:"attachments,omitempty"`
-	CreatedAt    time.Time    `json:"created_at"`
+	MessageID    string   `json:"message_id"`
+	ChannelID    string   `json:"channel_id"`
+	ThreadRootID string   `json:"thread_root_id,omitempty"`
+	AuthorID     string   `json:"author_id"`
+	ClientMsgID  string   `json:"client_msg_id,omitempty"`
+	Kind         string   `json:"kind"`
+	Body         string   `json:"body"`
+	Mentions     []string `json:"mentions"`
+	// NoThreadFollow: delivered to the thread's agents another way.
+	NoThreadFollow bool         `json:"no_thread_follow,omitempty"`
+	Attachments    []Attachment `json:"attachments,omitempty"`
+	CreatedAt      time.Time    `json:"created_at"`
 }

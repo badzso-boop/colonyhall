@@ -188,7 +188,7 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 // only them, and an agent's reply wakes nobody this way, so two agents in a
 // thread cannot keep waking each other.
 func (s *Service) threadFollowers(ctx context.Context, ch conversation.Channel, p conversation.MessageCreated) (map[ids.ID]bool, error) {
-	if p.ThreadRootID == "" || len(p.Mentions) > 0 || ch.Kind == conversation.KindDM {
+	if p.ThreadRootID == "" || len(p.Mentions) > 0 || ch.Kind == conversation.KindDM || p.NoThreadFollow {
 		return nil, nil
 	}
 	authorID, err := ids.Parse(p.AuthorID)

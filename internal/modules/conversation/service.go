@@ -285,6 +285,10 @@ type SendInput struct {
 	// Elaborate lets an agent exceed AgentMaxBody; set only when someone
 	// asked for a detailed answer.
 	Elaborate bool
+	// NoThreadFollow keeps a thread reply from reaching the thread's agents
+	// as a plain reply; set when the sender delivers it another way (a
+	// question's answer reaches the asker as its own answer item).
+	NoThreadFollow bool
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -416,7 +420,9 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 				return err
 			}
 		}
-		seq, err = s.appendEvent(ctx, by, c.ID, EventMessageCreated, "message", msg.ID, MessageCreatedPayload(msg))
+		payload := MessageCreatedPayload(msg)
+		payload.NoThreadFollow = in.NoThreadFollow
+		seq, err = s.appendEvent(ctx, by, c.ID, EventMessageCreated, "message", msg.ID, payload)
 		return err
 	})
 	if err != nil {

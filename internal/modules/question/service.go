@@ -333,6 +333,8 @@ func (s *Service) Answer(ctx context.Context, by identity.Actor, questionRef str
 		ThreadRootID: q.ThreadRootID,
 		Body:         msgBody,
 		Elaborate:    true,
+		// The asker gets the answer as its own inbox item.
+		NoThreadFollow: true,
 	})
 	if err != nil {
 		return Question{}, err
@@ -397,10 +399,11 @@ func (s *Service) Withdraw(ctx context.Context, by identity.Actor, questionRef s
 	// Post withdraw message to thread
 	msgBody := fmt.Sprintf("%s withdrawn by asker.", q.FormattedNumber())
 	_, _ = s.Conversation.SendMessage(ctx, by, conversation.SendInput{
-		ChannelID:    q.ChannelID,
-		ThreadRootID: q.ThreadRootID,
-		Body:         msgBody,
-		Elaborate:    true,
+		ChannelID:      q.ChannelID,
+		ThreadRootID:   q.ThreadRootID,
+		Body:           msgBody,
+		Elaborate:      true,
+		NoThreadFollow: true,
 	})
 
 	now := s.Clock.Now()
