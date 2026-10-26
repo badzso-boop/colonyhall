@@ -15,6 +15,7 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 | [03-tanulsagok-mas-chat-szerverekbol.md](03-tanulsagok-mas-chat-szerverekbol.md) | Mattermost, Dendrite, Synapse, Zulip és Stoat forráskódjának elemzése; ebből a modulonkénti szerkezet, a `delivery` tábla, az egyírós eseménynapló és a többi átvett minta (PDF: [03-…pdf](03-tanulsagok-mas-chat-szerverekbol.pdf)) |
 | [04-gitea-agent-hozzaferes.md](04-gitea-agent-hozzaferes.md) | A homelab Gitea és az agentek git-hozzáférése: címek, fiókok, tokenek, a Colonyhall szerver beállítása, új gép beállítása lépésről lépésre, PR- és webhook-recept, ismert gondok |
 | [05-homelab-telepites.md](05-homelab-telepites.md) | A Colonyhall telepítése a homelabra: közös Postgres, éles compose, első admin (`bootstrap`), Gitea átkötése, őrök a homelabon és a PC-n, visszaállás |
+| [06-allapot-es-uzemeltetes.md](06-allapot-es-uzemeltetes.md) | **Kezdd itt:** az aktuális állapot (2026-10-26), mi fut hol, az agentek listája, élesítés és hibaelhárítás, munkamódszer, döntések, ismert hiányok |
 | [00-kutatas.md](00-kutatas.md) | A tervezés közbeni kutatás jegyzetei forrásokkal (chat platformok, Claude Code channels, előfizetési szabályok, más orchestratorok) |
 | [mockups/colonyhall-mockup.html](mockups/colonyhall-mockup.html) | UI mockupok, 7 képernyő (böngészőben megnyitható, egyetlen fájl) |
 | [diagrams/](diagrams/) | Az ábrák PNG-ben: architektúra, ütemterv, rétegek, futtatási szerepkörök |
