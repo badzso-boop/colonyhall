@@ -35,6 +35,10 @@ import (
 	audhttp "colonyhall/internal/modules/audit/httpapi"
 	audmem "colonyhall/internal/modules/audit/memory"
 	audpg "colonyhall/internal/modules/audit/postgres"
+	"colonyhall/internal/modules/compaction"
+	compactionhttp "colonyhall/internal/modules/compaction/httpapi"
+	compmem "colonyhall/internal/modules/compaction/memory"
+	comppg "colonyhall/internal/modules/compaction/postgres"
 	"colonyhall/internal/modules/conversation"
 	convhttp "colonyhall/internal/modules/conversation/httpapi"
 	convmcp "colonyhall/internal/modules/conversation/mcptools"
@@ -165,6 +169,7 @@ type App struct {
 	Decisions    *decision.Service
 	Leases       *lease.Service
 	Sidebar      *sidebar.Service
+	Compaction   *compaction.Service
 	Runs         *runs.Service
 	Gateway      *gateway.Gateway
 	logger       *slog.Logger
@@ -211,6 +216,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dcStore        decision.Store
 		lsStore        lease.Store
 		sbStore        sidebar.Store
+		cmStore        compaction.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -231,6 +237,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dcStore = decmem.New()
 		lsStore = leasesmem.New()
 		sbStore = sidebarmem.New()
+		cmStore = compmem.NewStore()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -266,6 +273,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dcStore = &decpg.Store{DB: pg}
 		lsStore = &leasespg.Store{DB: pg}
 		sbStore = &sidebarpg.Store{DB: pg}
+		cmStore = &comppg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -347,6 +355,18 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
 	lsSvc := lease.NewService(lsStore, idSvc, events, b, tx, opt.Clock, opt.IDs)
 	sbSvc := sidebar.NewService(sbStore, cvSvc, opt.Clock, opt.IDs)
+	cmSvc := &compaction.Service{
+		Store:        cmStore,
+		Conversation: cvSvc,
+		Directory:    idSvc,
+		Files:        fiSvc,
+		Events:       events,
+		Bus:          b,
+		Clock:        opt.Clock,
+		IDs:          opt.IDs,
+		Tx:           tx,
+	}
+	cvSvc.Compactions = cmStore
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -354,6 +374,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		{Name: git.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: gitSvc.HandleEvent, Logger: opt.Logger},
 		{Name: preview.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: prSvc.HandleEvent, Logger: opt.Logger},
 		{Name: lease.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: lsSvc.HandleEvent, Logger: opt.Logger},
+		{Name: compaction.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: cmSvc.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -376,6 +397,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	dechttp.Register(mux, dcSvc, idSvc)
 	leaseshttp.Register(mux, lsSvc, idSvc)
 	sidebarhttp.Register(mux, sbSvc, idSvc)
+	compactionhttp.Register(mux, cmSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -441,6 +463,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Decisions:    dcSvc,
 		Leases:       lsSvc,
 		Sidebar:      sbSvc,
+		Compaction:   cmSvc,
 		Runs:         ruSvc,
 		Gateway:      gw,
 		logger:       opt.Logger,
@@ -494,9 +517,20 @@ func (a *App) Run(ctx context.Context) error {
 // Drain runs every consumer until it has processed all current events.
 // Tests use it to make the asynchronous parts deterministic.
 func (a *App) Drain(ctx context.Context) error {
-	for _, c := range a.Consumers {
-		if err := c.Drain(ctx); err != nil {
-			return err
+	for pass := 0; pass < 10; pass++ {
+		var anyProcessed bool
+		for _, c := range a.Consumers {
+			offsetBefore, _ := c.Store.Offset(ctx, c.Name)
+			if err := c.Drain(ctx); err != nil {
+				return err
+			}
+			offsetAfter, _ := c.Store.Offset(ctx, c.Name)
+			if offsetAfter > offsetBefore {
+				anyProcessed = true
+			}
+		}
+		if !anyProcessed {
+			break
 		}
 	}
 	return nil

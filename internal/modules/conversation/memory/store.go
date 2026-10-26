@@ -375,6 +375,20 @@ func (s *Store) ThreadMessages(_ context.Context, rootID ids.ID) ([]conversation
 	return out, nil
 }
 
+// MainStreamMessages returns top-level messages in the channel, oldest first.
+func (s *Store) MainStreamMessages(_ context.Context, channelID ids.ID) ([]conversation.Message, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []conversation.Message
+	for _, m := range s.messages {
+		if m.ChannelID == channelID && m.ThreadRootID == ids.Nil {
+			out = append(out, m)
+		}
+	}
+	sortMessages(out)
+	return out, nil
+}
+
 // LastMessageNotBy returns the newest message by someone else.
 func (s *Store) LastMessageNotBy(_ context.Context, channelID, actorID ids.ID) (conversation.Message, error) {
 	s.mu.RLock()

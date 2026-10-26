@@ -31,6 +31,7 @@ const (
 	ItemMessage      = "message"
 	ItemReactionDown = "reaction_down" // a 👎 on the recipient's message; never wakes
 	ItemAnswer       = "answer"        // answer to an agent's question; wakes
+	ItemCompact      = "compact"       // compaction request to scribe agent; wakes
 )
 
 // Delivery is one inbox row.

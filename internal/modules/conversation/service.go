@@ -22,6 +22,10 @@ type Attachments interface {
 	AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID) (map[ids.ID][]Attachment, error)
 }
 
+type CompactionReader interface {
+	CompactionIDsBySystemMessageIDs(ctx context.Context, messageIDs []ids.ID) (map[ids.ID]ids.ID, error)
+}
+
 // Service holds the conversation use cases.
 type Service struct {
 	Store       Store
@@ -33,6 +37,7 @@ type Service struct {
 	Clock       clock.Clock
 	Attachments Attachments
 	LinkCards   LinkCardProvider
+	Compactions CompactionReader
 }
 
 func subject(a identity.Actor) policy.Subject {
@@ -584,7 +589,11 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if err != nil {
 		return nil, err
 	}
-	return s.withAttachments(ctx, msgs)
+	msgs, err = s.withAttachments(ctx, msgs)
+	if err != nil {
+		return nil, err
+	}
+	return s.withCompactions(ctx, msgs)
 }
 
 // withAttachments fills Message.Attachments for a slice of messages.
@@ -606,6 +615,89 @@ func (s *Service) withAttachments(ctx context.Context, msgs []Message) ([]Messag
 		}
 	}
 	return msgs, nil
+}
+
+func (s *Service) withCompactions(ctx context.Context, msgs []Message) ([]Message, error) {
+	if len(msgs) == 0 || s.Compactions == nil {
+		return msgs, nil
+	}
+	idList := make([]ids.ID, len(msgs))
+	for i, m := range msgs {
+		idList[i] = m.ID
+	}
+	byMsg, err := s.Compactions.CompactionIDsBySystemMessageIDs(ctx, idList)
+	if err != nil {
+		return msgs, nil
+	}
+	for i := range msgs {
+		if cid, ok := byMsg[msgs[i].ID]; ok {
+			msgs[i].CompactionID = cid
+		}
+	}
+	return msgs, nil
+}
+
+// MessagesInUnit returns messages in a unit (thread or main stream), oldest first.
+func (s *Service) MessagesInUnit(ctx context.Context, channelID, threadRootID ids.ID) ([]Message, error) {
+	var msgs []Message
+	var err error
+	if threadRootID != ids.Nil {
+		msgs, err = s.Store.ThreadMessages(ctx, threadRootID)
+	} else {
+		msgs, err = s.Store.MainStreamMessages(ctx, channelID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	msgs, err = s.withAttachments(ctx, msgs)
+	if err != nil {
+		return nil, err
+	}
+	return s.withCompactions(ctx, msgs)
+}
+
+// PostSystemMessage posts a system message to a unit with optional file attachments.
+func (s *Service) PostSystemMessage(ctx context.Context, workspaceID, channelID, threadRootID, authorID ids.ID, body string, fileIDs []ids.ID) (Message, error) {
+	now := s.Clock.Now()
+	sysMsg := Message{
+		ID:           s.IDs.New(),
+		WorkspaceID:  workspaceID,
+		ChannelID:    channelID,
+		ThreadRootID: threadRootID,
+		AuthorID:     authorID,
+		Kind:         "system",
+		Body:         body,
+		CreatedAt:    now,
+	}
+	err := s.Tx.InTx(ctx, func(txCtx context.Context) error {
+		if err := s.Store.InsertMessage(txCtx, sysMsg); err != nil {
+			return err
+		}
+		if len(fileIDs) > 0 && s.Attachments != nil {
+			by := identity.Actor{ID: authorID, WorkspaceID: workspaceID}
+			if err := s.Attachments.ValidateAndAttach(txCtx, by, channelID, sysMsg.ID, fileIDs); err != nil {
+				return err
+			}
+		}
+		if _, err := s.Store.IncrementMsgCount(txCtx, channelID); err != nil {
+			return err
+		}
+		if threadRootID != ids.Nil {
+			if err := s.Store.BumpThread(txCtx, threadRootID, now); err != nil {
+				return err
+			}
+		}
+		by, err := s.Directory.ActorByID(txCtx, authorID)
+		if err != nil {
+			by = identity.Actor{ID: authorID, WorkspaceID: workspaceID}
+		}
+		_, err = s.appendEvent(txCtx, by, channelID, EventMessageCreated, "message", sysMsg.ID, MessageCreatedPayload(sysMsg))
+		return err
+	})
+	if err != nil {
+		return Message{}, err
+	}
+	return sysMsg, nil
 }
 
 // MarkRead marks every message in the channel as seen by the actor.

@@ -9,7 +9,7 @@ SELECT * FROM channel WHERE id = $1;
 SELECT * FROM channel WHERE workspace_id = $1 AND name = $2;
 
 -- name: ChannelsForActor :many
-SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.msg_count, c.created_by, c.created_at,
+SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.compact_threshold_tokens, c.msg_count, c.created_by, c.created_at,
        (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
@@ -97,6 +97,10 @@ ORDER BY created_at, actor_id;
 
 -- name: ThreadMessages :many
 SELECT * FROM message WHERE (id = sqlc.arg(root_id) OR thread_root_id = sqlc.arg(root_id)) AND deleted_at IS NULL
+ORDER BY id;
+
+-- name: MainStreamMessages :many
+SELECT * FROM message WHERE channel_id = $1 AND thread_root_id IS NULL AND deleted_at IS NULL
 ORDER BY id;
 
 -- name: LastMessageNotBy :one

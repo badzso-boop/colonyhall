@@ -23,14 +23,15 @@ const (
 
 // Channel is a conversation space.
 type Channel struct {
-	ID          ids.ID
-	WorkspaceID ids.ID
-	Kind        ChannelKind
-	Name        string
-	Description string
-	MsgCount    int64 // total messages, for unread badges
-	CreatedBy   ids.ID
-	CreatedAt   time.Time
+	ID                     ids.ID
+	WorkspaceID            ids.ID
+	Kind                   ChannelKind
+	Name                   string
+	Description            string
+	CompactThresholdTokens *int
+	MsgCount               int64 // total messages, for unread badges
+	CreatedBy              ids.ID
+	CreatedAt              time.Time
 }
 
 // Member is an actor's membership in a channel. MsgCount is how many of the
@@ -89,6 +90,7 @@ type Message struct {
 	ClientMsgID  string // set by the client for idempotent sends; may be empty
 	Kind         string // "text" or "system"
 	Body         string
+	CompactionID ids.ID // set for compaction system messages
 	Mentions     []ids.ID
 	ReplyCount   int
 	LastReplyAt  *time.Time

@@ -46,6 +46,8 @@ type Store interface {
 	ReactionsFor(ctx context.Context, messageIDs []ids.ID) ([]Reaction, error)
 	// ThreadMessages returns the root and its replies, oldest first.
 	ThreadMessages(ctx context.Context, rootID ids.ID) ([]Message, error)
+	// MainStreamMessages returns top-level messages in the channel, oldest first.
+	MainStreamMessages(ctx context.Context, channelID ids.ID) ([]Message, error)
 	// LastMessageNotBy returns the newest message in the channel by someone else.
 	LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (Message, error)
 }

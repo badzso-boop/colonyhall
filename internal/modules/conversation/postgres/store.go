@@ -52,9 +52,14 @@ func (s *Store) ChannelsForActor(ctx context.Context, workspaceID, actorID ids.I
 	}
 	out := make([]conversation.ChannelView, 0, len(rows))
 	for _, r := range rows {
+		var compactThreshold *int
+		if r.CompactThresholdTokens != nil {
+			v := int(*r.CompactThresholdTokens)
+			compactThreshold = &v
+		}
 		out = append(out, conversation.ChannelView{
 			Channel: conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
-				Name: r.Name, Description: r.Description, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt},
+				Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt},
 			IsMember: r.IsMember, Unread: r.Unread, Mentions: r.Mentions,
 		})
 	}
@@ -190,8 +195,13 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 	if err != nil {
 		return conversation.Channel{}, err
 	}
+	var compactThreshold *int
+	if r.CompactThresholdTokens != nil {
+		v := int(*r.CompactThresholdTokens)
+		compactThreshold = &v
+	}
 	return conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
-		Name: r.Name, Description: r.Description, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}, nil
+		Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}, nil
 }
 
 func toMessage(r sqlcgen.Message) conversation.Message {
@@ -270,6 +280,11 @@ func (s *Store) ReactionsFor(ctx context.Context, messageIDs []ids.ID) ([]conver
 // ThreadMessages returns the root and its replies.
 func (s *Store) ThreadMessages(ctx context.Context, rootID ids.ID) ([]conversation.Message, error) {
 	return manyMessages(s.q(ctx).ThreadMessages(ctx, rootID))
+}
+
+// MainStreamMessages returns top-level messages in the channel.
+func (s *Store) MainStreamMessages(ctx context.Context, channelID ids.ID) ([]conversation.Message, error) {
+	return manyMessages(s.q(ctx).MainStreamMessages(ctx, channelID))
 }
 
 // LastMessageNotBy returns the newest message by someone else.

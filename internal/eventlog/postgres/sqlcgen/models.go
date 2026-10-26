@@ -128,14 +128,15 @@ type AuditLog struct {
 }
 
 type Channel struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	Kind        string
-	Name        string
-	MsgCount    int64
-	CreatedBy   uuid.UUID
-	CreatedAt   time.Time
-	Description string
+	ID                     uuid.UUID
+	WorkspaceID            uuid.UUID
+	Kind                   string
+	Name                   string
+	MsgCount               int64
+	CreatedBy              uuid.UUID
+	CreatedAt              time.Time
+	Description            string
+	CompactThresholdTokens *int32
 }
 
 type ChannelMember struct {
@@ -146,6 +147,38 @@ type ChannelMember struct {
 	MentionCount int64
 	JoinedAt     time.Time
 	LeftAt       *time.Time
+}
+
+type Compaction struct {
+	ID                   uuid.UUID
+	WorkspaceID          uuid.UUID
+	ChannelID            uuid.UUID
+	ThreadRootID         *uuid.UUID
+	UpToMessageID        *uuid.UUID
+	PreviousCompactionID *uuid.UUID
+	Trigger              string
+	RequestedBy          *uuid.UUID
+	CompactorAgentID     *uuid.UUID
+	State                string
+	SummaryFileID        *uuid.UUID
+	SystemMessageID      *uuid.UUID
+	MessagesCount        int32
+	ApproxTokensIn       int32
+	SummaryTokens        int32
+	ErrorCode            *string
+	CreatedAt            time.Time
+	CompletedAt          *time.Time
+}
+
+type CompactionUnit struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	ChannelID         uuid.UUID
+	ThreadRootID      *uuid.UUID
+	ApproxTokensSince int32
+	MessagesSince     int32
+	LastCompactionID  *uuid.UUID
+	UpdatedAt         time.Time
 }
 
 type ConsumerOffset struct {
@@ -451,6 +484,13 @@ type Workspace struct {
 	CreatedAt       time.Time
 	EmergencyStopAt *time.Time
 	EmergencyStopBy *uuid.UUID
+}
+
+type WorkspaceCompactionSetting struct {
+	WorkspaceID            uuid.UUID
+	CompactThresholdTokens int32
+	CompactorAgentID       *uuid.UUID
+	UpdatedAt              time.Time
 }
 
 type WorkspaceFileFetchSetting struct {

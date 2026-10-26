@@ -15,6 +15,7 @@ import (
 	"colonyhall/internal/modules/agentrules"
 	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/audit"
+	"colonyhall/internal/modules/compaction"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/decision"
 	"colonyhall/internal/modules/delivery"
@@ -56,6 +57,7 @@ type Backend struct {
 	Decisions    decision.Store
 	Leases       lease.Store
 	Sidebar      sidebar.Store
+	Compaction   compaction.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -79,6 +81,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("decisions", func(t *testing.T) { testDecisions(t, newBackend(t)) })
 	t.Run("leases", func(t *testing.T) { testLeases(t, newBackend(t)) })
 	t.Run("sidebar", func(t *testing.T) { testSidebar(t, newBackend(t)) })
+	t.Run("compaction", func(t *testing.T) { testCompaction(t, newBackend(t)) })
 }
 
 var (
@@ -2340,5 +2343,215 @@ func testSidebar(t *testing.T, b Backend) {
 	must(t, err)
 	if len(list) != 1 || list[0].ID != sec1.ID {
 		t.Fatalf("delete section failed: %+v", list)
+	}
+}
+
+func testCompaction(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Compaction
+
+	// 1. Settings
+	gotInit, err := st.GetSettings(ctx, f.ws.ID)
+	must(t, err)
+	if gotInit.CompactThresholdTokens != compaction.DefaultThresholdTokens {
+		t.Fatalf("expected default threshold %d, got %d", compaction.DefaultThresholdTokens, gotInit.CompactThresholdTokens)
+	}
+
+	defThresh := 60000
+	settings := compaction.Settings{
+		WorkspaceID:            f.ws.ID,
+		CompactThresholdTokens: defThresh,
+		CompactorAgentID:       f.agent.ID,
+		UpdatedAt:              t0,
+	}
+	must(t, st.UpsertSettings(ctx, settings))
+
+	gotSt, err := st.GetSettings(ctx, f.ws.ID)
+	must(t, err)
+	if gotSt.CompactThresholdTokens != defThresh || gotSt.CompactorAgentID != f.agent.ID {
+		t.Fatalf("unexpected settings: %+v", gotSt)
+	}
+
+	// 2. Channel threshold
+	gotThresh, err := st.GetChannelThreshold(ctx, f.channel.ID)
+	must(t, err)
+	if gotThresh != nil {
+		t.Fatalf("expected nil channel threshold, got %v", gotThresh)
+	}
+
+	chThresh := 30000
+	must(t, st.SetChannelThreshold(ctx, f.channel.ID, &chThresh))
+	gotThresh, err = st.GetChannelThreshold(ctx, f.channel.ID)
+	must(t, err)
+	if gotThresh == nil || *gotThresh != chThresh {
+		t.Fatalf("expected %d, got %v", chThresh, gotThresh)
+	}
+
+	must(t, st.SetChannelThreshold(ctx, f.channel.ID, nil))
+	gotThresh, err = st.GetChannelThreshold(ctx, f.channel.ID)
+	must(t, err)
+	if gotThresh != nil {
+		t.Fatalf("expected nil channel threshold after clear, got %v", gotThresh)
+	}
+
+	// 3. Compaction unit
+	// Initial unit: not found
+	_, err = st.GetUnit(ctx, f.channel.ID, ids.Nil)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected db.ErrNotFound, got %v", err)
+	}
+
+	// Add tokens to main stream
+	u1, err := st.AddTokensToUnit(ctx, f.ws.ID, f.channel.ID, ids.Nil, 1000, 1, t0.Add(time.Minute))
+	must(t, err)
+	if u1.MessagesSince != 1 || u1.ApproxTokensSince != 1000 {
+		t.Fatalf("unexpected unit after add 1: %+v", u1)
+	}
+	u2, err := st.AddTokensToUnit(ctx, f.ws.ID, f.channel.ID, ids.Nil, 500, 1, t0.Add(2*time.Minute))
+	must(t, err)
+	if u2.MessagesSince != 2 || u2.ApproxTokensSince != 1500 {
+		t.Fatalf("unexpected unit after add 2: %+v", u2)
+	}
+
+	// Thread unit
+	threadRootMsg := conversation.Message{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		ChannelID:   f.channel.ID,
+		AuthorID:    f.human.ID,
+		Kind:        "text",
+		Body:        "root message",
+		CreatedAt:   t0,
+	}
+	must(t, b.Conversation.InsertMessage(ctx, threadRootMsg))
+	threadRootID := threadRootMsg.ID
+	ut1, err := st.AddTokensToUnit(ctx, f.ws.ID, f.channel.ID, threadRootID, 200, 1, t0.Add(3*time.Minute))
+	must(t, err)
+	if ut1.MessagesSince != 1 || ut1.ApproxTokensSince != 200 || ut1.ThreadRootID != threadRootID {
+		t.Fatalf("unexpected thread unit: %+v", ut1)
+	}
+
+	// Check main unit not affected by thread
+	uCheck, err := st.GetUnit(ctx, f.channel.ID, ids.Nil)
+	must(t, err)
+	if uCheck.MessagesSince != 2 || uCheck.ApproxTokensSince != 1500 {
+		t.Fatalf("main unit affected by thread unit: %+v", uCheck)
+	}
+
+	// 4. Compactions
+	_, err = st.PendingCompaction(ctx, f.channel.ID, ids.Nil)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected db.ErrNotFound for pending compaction, got %v", err)
+	}
+
+	compId := gen.New()
+	comp := compaction.Compaction{
+		ID:               compId,
+		WorkspaceID:      f.ws.ID,
+		ChannelID:        f.channel.ID,
+		Trigger:          compaction.TriggerAuto,
+		CompactorAgentID: f.agent.ID,
+		State:            compaction.StatePending,
+		MessagesCount:    2,
+		ApproxTokensIn:   1500,
+		CreatedAt:        t0.Add(5 * time.Minute),
+	}
+	must(t, st.InsertCompaction(ctx, comp))
+
+	pending, err := st.PendingCompaction(ctx, f.channel.ID, ids.Nil)
+	must(t, err)
+	if pending.ID != compId || pending.State != compaction.StatePending {
+		t.Fatalf("expected pending compaction %s, got %+v", compId, pending)
+	}
+
+	gotComp, err := st.CompactionByID(ctx, compId)
+	must(t, err)
+	if gotComp.State != compaction.StatePending || gotComp.CompactorAgentID != f.agent.ID {
+		t.Fatalf("unexpected compaction: %+v", gotComp)
+	}
+
+	// Complete compaction
+	summaryFile := files.File{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		UploadedBy:  f.agent.ID,
+		ChannelID:   f.channel.ID,
+		Name:        "summary.md",
+		Mime:        "text/markdown",
+		Size:        500,
+		SHA256:      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		CreatedAt:   t0,
+	}
+	must(t, b.Files.Insert(ctx, summaryFile))
+	summaryFileID := summaryFile.ID
+
+	sysMsg := conversation.Message{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		ChannelID:   f.channel.ID,
+		AuthorID:    f.agent.ID,
+		Kind:        "system",
+		Body:        "compacted",
+		CreatedAt:   t0.Add(6 * time.Minute),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, sysMsg))
+	sysMsgID := sysMsg.ID
+
+	doneAt := t0.Add(6 * time.Minute)
+	must(t, st.CompleteCompaction(ctx, compId, summaryFileID, sysMsgID, 2, 1500, 300, doneAt))
+
+	gotComp, err = st.CompactionByID(ctx, compId)
+	must(t, err)
+	if gotComp.State != compaction.StateDone || gotComp.SummaryFileID != summaryFileID || gotComp.SystemMessageID != sysMsgID || gotComp.SummaryTokens != 300 {
+		t.Fatalf("unexpected done compaction: %+v", gotComp)
+	}
+
+	// Pending is now not found
+	_, err = st.PendingCompaction(ctx, f.channel.ID, ids.Nil)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected pending compaction to be not found, got %v", err)
+	}
+
+	// Reset unit
+	must(t, st.ResetUnit(ctx, f.channel.ID, ids.Nil, compId, 0, 0, doneAt))
+	uReset, err := st.GetUnit(ctx, f.channel.ID, ids.Nil)
+	must(t, err)
+	if uReset.MessagesSince != 0 || uReset.ApproxTokensSince != 0 || uReset.LastCompactionID != compId {
+		t.Fatalf("unexpected unit after reset: %+v", uReset)
+	}
+
+	// Latest done compaction for unit
+	lastComp, err := st.LatestDoneCompaction(ctx, f.channel.ID, ids.Nil)
+	must(t, err)
+	if lastComp.ID != compId {
+		t.Fatalf("expected latest done compaction %s, got %+v", compId, lastComp)
+	}
+
+	// CompactionIDsBySystemMessageIDs
+	mapping, err := st.CompactionIDsBySystemMessageIDs(ctx, []ids.ID{sysMsgID})
+	must(t, err)
+	if mapping[sysMsgID] != compId {
+		t.Fatalf("expected mapping[%s] == %s, got %s", sysMsgID, compId, mapping[sysMsgID])
+	}
+
+	// Fail pending compaction test
+	failCompId := gen.New()
+	failComp := compaction.Compaction{
+		ID:               failCompId,
+		WorkspaceID:      f.ws.ID,
+		ChannelID:        f.channel.ID,
+		Trigger:          compaction.TriggerManual,
+		CompactorAgentID: f.agent.ID,
+		State:            compaction.StatePending,
+		CreatedAt:        t0.Add(10 * time.Minute),
+	}
+	must(t, st.InsertCompaction(ctx, failComp))
+	must(t, st.FailPendingCompaction(ctx, failCompId, "agent_error", t0.Add(12*time.Minute)))
+
+	gotFail, err := st.CompactionByID(ctx, failCompId)
+	must(t, err)
+	if gotFail.State != compaction.StateFailed || gotFail.ErrorCode != "agent_error" {
+		t.Fatalf("expected failed compaction, got %+v", gotFail)
 	}
 }

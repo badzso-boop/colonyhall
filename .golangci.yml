@@ -118,6 +118,9 @@ linters:
             - pkg: colonyhall/internal/modules/sidebar/postgres
             - pkg: colonyhall/internal/modules/sidebar/memory
             - pkg: colonyhall/internal/modules/sidebar/httpapi
+            - pkg: colonyhall/internal/modules/compaction/postgres
+            - pkg: colonyhall/internal/modules/compaction/memory
+            - pkg: colonyhall/internal/modules/compaction/httpapi
             - pkg: colonyhall/internal/server
               desc: only cmd/ may use the composition root
 

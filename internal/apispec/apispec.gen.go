@@ -162,6 +162,51 @@ func (e ChannelKind) Valid() bool {
 	}
 }
 
+// Defines values for CompactionState.
+const (
+	CompactionStateDone    CompactionState = "done"
+	CompactionStateFailed  CompactionState = "failed"
+	CompactionStatePending CompactionState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the CompactionState enum.
+func (e CompactionState) Valid() bool {
+	switch e {
+	case CompactionStateDone:
+		return true
+	case CompactionStateFailed:
+		return true
+	case CompactionStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CompactionTrigger.
+const (
+	CompactionTriggerAuto       CompactionTrigger = "auto"
+	CompactionTriggerEdit       CompactionTrigger = "edit"
+	CompactionTriggerManual     CompactionTrigger = "manual"
+	CompactionTriggerRegenerate CompactionTrigger = "regenerate"
+)
+
+// Valid indicates whether the value is a known member of the CompactionTrigger enum.
+func (e CompactionTrigger) Valid() bool {
+	switch e {
+	case CompactionTriggerAuto:
+		return true
+	case CompactionTriggerEdit:
+		return true
+	case CompactionTriggerManual:
+		return true
+	case CompactionTriggerRegenerate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateScheduleRequestCatchUp.
 const (
 	CreateScheduleRequestCatchUpOnce CreateScheduleRequestCatchUp = "once"
@@ -416,8 +461,9 @@ func (e HostPreviewReportState) Valid() bool {
 
 // Defines values for InboxItemAuthorKind.
 const (
-	InboxItemAuthorKindAgent InboxItemAuthorKind = "agent"
-	InboxItemAuthorKindHuman InboxItemAuthorKind = "human"
+	InboxItemAuthorKindAgent  InboxItemAuthorKind = "agent"
+	InboxItemAuthorKindHuman  InboxItemAuthorKind = "human"
+	InboxItemAuthorKindSystem InboxItemAuthorKind = "system"
 )
 
 // Valid indicates whether the value is a known member of the InboxItemAuthorKind enum.
@@ -426,6 +472,8 @@ func (e InboxItemAuthorKind) Valid() bool {
 	case InboxItemAuthorKindAgent:
 		return true
 	case InboxItemAuthorKindHuman:
+		return true
+	case InboxItemAuthorKindSystem:
 		return true
 	default:
 		return false
@@ -458,16 +506,16 @@ func (e LinkCardKind) Valid() bool {
 
 // Defines values for MessageKind.
 const (
-	System MessageKind = "system"
-	Text   MessageKind = "text"
+	MessageKindSystem MessageKind = "system"
+	MessageKindText   MessageKind = "text"
 )
 
 // Valid indicates whether the value is a known member of the MessageKind enum.
 func (e MessageKind) Valid() bool {
 	switch e {
-	case System:
+	case MessageKindSystem:
 		return true
-	case Text:
+	case MessageKindText:
 		return true
 	default:
 		return false
@@ -713,25 +761,25 @@ func (e SetStateRequestState) Valid() bool {
 
 // Defines values for WikiRevisionKind.
 const (
-	Append  WikiRevisionKind = "append"
-	Create  WikiRevisionKind = "create"
-	Delete  WikiRevisionKind = "delete"
-	Edit    WikiRevisionKind = "edit"
-	Restore WikiRevisionKind = "restore"
+	WikiRevisionKindAppend  WikiRevisionKind = "append"
+	WikiRevisionKindCreate  WikiRevisionKind = "create"
+	WikiRevisionKindDelete  WikiRevisionKind = "delete"
+	WikiRevisionKindEdit    WikiRevisionKind = "edit"
+	WikiRevisionKindRestore WikiRevisionKind = "restore"
 )
 
 // Valid indicates whether the value is a known member of the WikiRevisionKind enum.
 func (e WikiRevisionKind) Valid() bool {
 	switch e {
-	case Append:
+	case WikiRevisionKindAppend:
 		return true
-	case Create:
+	case WikiRevisionKindCreate:
 		return true
-	case Delete:
+	case WikiRevisionKindDelete:
 		return true
-	case Edit:
+	case WikiRevisionKindEdit:
 		return true
-	case Restore:
+	case WikiRevisionKindRestore:
 		return true
 	default:
 		return false
@@ -826,6 +874,14 @@ type AgentBudget struct {
 
 	// UsedToday Total tokens consumed today (input + output + cache_read + cache_write)
 	UsedToday int64 `json:"used_today"`
+}
+
+// AgentContext defines model for AgentContext.
+type AgentContext struct {
+	CompactionId    *openapi_types.UUID `json:"compaction_id,omitempty"`
+	HasMore         bool                `json:"has_more"`
+	MessagesAfter   []ContextMessage    `json:"messages_after"`
+	SummaryMarkdown *string             `json:"summary_markdown,omitempty"`
 }
 
 // AgentInstructions defines model for AgentInstructions.
@@ -989,10 +1045,11 @@ type AuditVerify struct {
 
 // Channel defines model for Channel.
 type Channel struct {
-	Description *string            `json:"description,omitempty"`
-	Id          openapi_types.UUID `json:"id"`
-	IsMember    bool               `json:"is_member"`
-	Kind        ChannelKind        `json:"kind"`
+	CompactThresholdTokens *int               `json:"compact_threshold_tokens,omitempty"`
+	Description            *string            `json:"description,omitempty"`
+	Id                     openapi_types.UUID `json:"id"`
+	IsMember               bool               `json:"is_member"`
+	Kind                   ChannelKind        `json:"kind"`
 
 	// MemberIds DM channels only
 	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
@@ -1020,6 +1077,84 @@ type ChannelMember struct {
 // ChannelMemberList defines model for ChannelMemberList.
 type ChannelMemberList struct {
 	Members []ChannelMember `json:"members"`
+}
+
+// Compaction defines model for Compaction.
+type Compaction struct {
+	ChannelId            openapi_types.UUID  `json:"channel_id"`
+	CompactorAgentId     *openapi_types.UUID `json:"compactor_agent_id,omitempty"`
+	CompletedAt          *time.Time          `json:"completed_at,omitempty"`
+	CreatedAt            time.Time           `json:"created_at"`
+	ErrorCode            *string             `json:"error_code,omitempty"`
+	Id                   openapi_types.UUID  `json:"id"`
+	PreviousCompactionId *openapi_types.UUID `json:"previous_compaction_id,omitempty"`
+	RequestedBy          *openapi_types.UUID `json:"requested_by,omitempty"`
+	State                CompactionState     `json:"state"`
+	Stats                *CompactionStats    `json:"stats,omitempty"`
+	SummaryFileId        *openapi_types.UUID `json:"summary_file_id,omitempty"`
+	SystemMessageId      *openapi_types.UUID `json:"system_message_id,omitempty"`
+	ThreadRootId         *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	Trigger              CompactionTrigger   `json:"trigger"`
+	UpToMessageId        *openapi_types.UUID `json:"up_to_message_id,omitempty"`
+	WorkspaceId          openapi_types.UUID  `json:"workspace_id"`
+}
+
+// CompactionState defines model for Compaction.State.
+type CompactionState string
+
+// CompactionTrigger defines model for Compaction.Trigger.
+type CompactionTrigger string
+
+// CompactionResultRequest defines model for CompactionResultRequest.
+type CompactionResultRequest struct {
+	ErrorCode *string `json:"error_code,omitempty"`
+	Markdown  *string `json:"markdown,omitempty"`
+}
+
+// CompactionSettings defines model for CompactionSettings.
+type CompactionSettings struct {
+	CompactThresholdTokens int                 `json:"compact_threshold_tokens"`
+	CompactorAgentId       *openapi_types.UUID `json:"compactor_agent_id,omitempty"`
+	CompactorHandle        *string             `json:"compactor_handle,omitempty"`
+	UpdatedAt              time.Time           `json:"updated_at"`
+}
+
+// CompactionStats defines model for CompactionStats.
+type CompactionStats struct {
+	ApproxTokensIn *int `json:"approx_tokens_in,omitempty"`
+	Messages       *int `json:"messages,omitempty"`
+	SummaryTokens  *int `json:"summary_tokens,omitempty"`
+}
+
+// CompactionTaskMessage defines model for CompactionTaskMessage.
+type CompactionTaskMessage struct {
+	Attachments  *[]string          `json:"attachments,omitempty"`
+	AuthorHandle string             `json:"author_handle"`
+	AuthorKind   string             `json:"author_kind"`
+	Body         string             `json:"body"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+}
+
+// CompactionUnitStatus defines model for CompactionUnitStatus.
+type CompactionUnitStatus struct {
+	ApproxTokensSince    int                 `json:"approx_tokens_since"`
+	ChannelId            openapi_types.UUID  `json:"channel_id"`
+	HasPendingCompaction bool                `json:"has_pending_compaction"`
+	LastCompactionId     *openapi_types.UUID `json:"last_compaction_id,omitempty"`
+	MessagesSince        int                 `json:"messages_since"`
+	ThreadRootId         *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	ThresholdTokens      int                 `json:"threshold_tokens"`
+}
+
+// ContextMessage defines model for ContextMessage.
+type ContextMessage struct {
+	Attachments  *[]string          `json:"attachments,omitempty"`
+	AuthorHandle string             `json:"author_handle"`
+	AuthorKind   string             `json:"author_kind"`
+	Body         string             `json:"body"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
 }
 
 // CreateActorRequest defines model for CreateActorRequest.
@@ -1473,6 +1608,7 @@ type Message struct {
 	Body         string               `json:"body"`
 	ChannelId    openapi_types.UUID   `json:"channel_id"`
 	ClientMsgId  *string              `json:"client_msg_id,omitempty"`
+	CompactionId *openapi_types.UUID  `json:"compaction_id,omitempty"`
 	CreatedAt    time.Time            `json:"created_at"`
 	Id           openapi_types.UUID   `json:"id"`
 	Kind         MessageKind          `json:"kind"`
@@ -1787,6 +1923,16 @@ type ScheduleList struct {
 	Schedules []Schedule `json:"schedules"`
 }
 
+// ScribeCompactionTask defines model for ScribeCompactionTask.
+type ScribeCompactionTask struct {
+	ChannelId       openapi_types.UUID      `json:"channel_id"`
+	Id              openapi_types.UUID      `json:"id"`
+	MaxSummaryChars *int                    `json:"max_summary_chars,omitempty"`
+	Messages        []CompactionTaskMessage `json:"messages"`
+	PreviousSummary *string                 `json:"previous_summary,omitempty"`
+	ThreadRootId    *openapi_types.UUID     `json:"thread_root_id,omitempty"`
+}
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	Body string `json:"body"`
@@ -1904,6 +2050,22 @@ type UpdateAgentRulesRequest struct {
 	Text string `json:"text"`
 }
 
+// UpdateChannelCompactionRequest defines model for UpdateChannelCompactionRequest.
+type UpdateChannelCompactionRequest struct {
+	CompactThresholdTokens *int `json:"compact_threshold_tokens,omitempty"`
+}
+
+// UpdateCompactionSettingsRequest defines model for UpdateCompactionSettingsRequest.
+type UpdateCompactionSettingsRequest struct {
+	CompactThresholdTokens int                 `json:"compact_threshold_tokens"`
+	CompactorAgentId       *openapi_types.UUID `json:"compactor_agent_id,omitempty"`
+}
+
+// UpdateCompactionSummaryRequest defines model for UpdateCompactionSummaryRequest.
+type UpdateCompactionSummaryRequest struct {
+	Markdown string `json:"markdown"`
+}
+
 // UpdateFileFetchSettingsRequest defines model for UpdateFileFetchSettingsRequest.
 type UpdateFileFetchSettingsRequest struct {
 	MaxFileMb  int `json:"max_file_mb"`
@@ -1980,6 +2142,12 @@ type ListAuditParams struct {
 	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetAgentContextParams defines parameters for GetAgentContext.
+type GetAgentContextParams struct {
+	ChannelId    openapi_types.UUID  `form:"channel_id" json:"channel_id"`
+	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
 // GetAgentPendingFileFetchesParams defines parameters for GetAgentPendingFileFetches.
 type GetAgentPendingFileFetchesParams struct {
 	State *string `form:"state,omitempty" json:"state,omitempty"`
@@ -1993,6 +2161,16 @@ type GetInboxParams struct {
 // ListAgentNotesParams defines parameters for ListAgentNotes.
 type ListAgentNotesParams struct {
 	Thread *openapi_types.UUID `form:"thread,omitempty" json:"thread,omitempty"`
+}
+
+// GetChannelCompactionParams defines parameters for GetChannelCompaction.
+type GetChannelCompactionParams struct {
+	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
+// TriggerCompactionJSONBody defines parameters for TriggerCompaction.
+type TriggerCompactionJSONBody struct {
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // UploadFileMultipartBody defines parameters for UploadFile.
@@ -2069,6 +2247,9 @@ type UpdateAgentRulesJSONRequestBody = UpdateAgentRulesRequest
 // ReportAgentActivityJSONRequestBody defines body for ReportAgentActivity for application/json ContentType.
 type ReportAgentActivityJSONRequestBody = AgentActivityRequest
 
+// SubmitScribeCompactionResultJSONRequestBody defines body for SubmitScribeCompactionResult for application/json ContentType.
+type SubmitScribeCompactionResultJSONRequestBody = CompactionResultRequest
+
 // ReportRunErrorJSONRequestBody defines body for ReportRunError for application/json ContentType.
 type ReportRunErrorJSONRequestBody = RunErrorRequest
 
@@ -2096,6 +2277,12 @@ type LoginJSONRequestBody = LoginRequest
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
 
+// UpdateChannelCompactionJSONRequestBody defines body for UpdateChannelCompaction for application/json ContentType.
+type UpdateChannelCompactionJSONRequestBody = UpdateChannelCompactionRequest
+
+// TriggerCompactionJSONRequestBody defines body for TriggerCompaction for application/json ContentType.
+type TriggerCompactionJSONRequestBody TriggerCompactionJSONBody
+
 // UploadFileMultipartRequestBody defines body for UploadFile for multipart/form-data ContentType.
 type UploadFileMultipartRequestBody UploadFileMultipartBody
 
@@ -2104,6 +2291,9 @@ type AddChannelMemberJSONRequestBody = AddMemberRequest
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessageRequest
+
+// UpdateCompactionSummaryJSONRequestBody defines body for UpdateCompactionSummary for application/json ContentType.
+type UpdateCompactionSummaryJSONRequestBody = UpdateCompactionSummaryRequest
 
 // OpenDMJSONRequestBody defines body for OpenDM for application/json ContentType.
 type OpenDMJSONRequestBody = OpenDMRequest
@@ -2131,6 +2321,9 @@ type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest
+
+// UpdateCompactionSettingsJSONRequestBody defines body for UpdateCompactionSettings for application/json ContentType.
+type UpdateCompactionSettingsJSONRequestBody = UpdateCompactionSettingsRequest
 
 // UpdateFileFetchSettingsJSONRequestBody defines body for UpdateFileFetchSettings for application/json ContentType.
 type UpdateFileFetchSettingsJSONRequestBody = UpdateFileFetchSettingsRequest

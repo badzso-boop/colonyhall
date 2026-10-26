@@ -30,6 +30,9 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 		ClientMsgId: httpx.Ptr(m.ClientMsgID), Kind: apispec.MessageKind(m.Kind), Body: m.Body,
 		ReplyCount: m.ReplyCount, LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
 		ThreadRootId: httpx.Ptr(m.ThreadRootID), Mentions: m.Mentions}
+	if m.CompactionID != ids.Nil {
+		out.CompactionId = httpx.Ptr(m.CompactionID)
+	}
 	if out.Mentions == nil {
 		out.Mentions = []ids.ID{}
 	}
@@ -74,18 +77,34 @@ func channelToAPI(c conversation.ChannelView) apispec.Channel {
 		desc = &c.Description
 	}
 	out := apispec.Channel{
-		Id:          c.ID,
-		Kind:        apispec.ChannelKind(c.Kind),
-		Name:        c.Name,
-		Description: desc,
-		IsMember:    c.IsMember,
-		Unread:      c.Unread,
-		Mentions:    c.Mentions,
+		Id:                     c.ID,
+		Kind:                   apispec.ChannelKind(c.Kind),
+		Name:                   c.Name,
+		Description:            desc,
+		CompactThresholdTokens: c.CompactThresholdTokens,
+		IsMember:               c.IsMember,
+		Unread:                 c.Unread,
+		Mentions:               c.Mentions,
 	}
 	if c.MemberIDs != nil {
 		out.MemberIds = &c.MemberIDs
 	}
 	return out
+}
+
+// ChannelToAPI converts a domain Channel to an OpenAPI Channel.
+func ChannelToAPI(c conversation.Channel) apispec.Channel {
+	var desc *string
+	if c.Description != "" {
+		desc = &c.Description
+	}
+	return apispec.Channel{
+		Id:                     c.ID,
+		Kind:                   apispec.ChannelKind(c.Kind),
+		Name:                   c.Name,
+		Description:            desc,
+		CompactThresholdTokens: c.CompactThresholdTokens,
+	}
 }
 
 // SendResultToAPI converts a send outcome.

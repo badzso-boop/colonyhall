@@ -20,6 +20,10 @@ type Reader interface {
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	// CanWrite reports whether the actor may post in the channel.
 	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	// MessagesInUnit returns messages in a unit (thread or main stream), oldest first.
+	MessagesInUnit(ctx context.Context, channelID, threadRootID ids.ID) ([]Message, error)
+	// PostSystemMessage posts a system message to a unit with optional file attachments.
+	PostSystemMessage(ctx context.Context, workspaceID, channelID, threadRootID, authorID ids.ID, body string, fileIDs []ids.ID) (Message, error)
 }
 
 var _ Reader = (*Service)(nil)

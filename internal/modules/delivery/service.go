@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/compaction"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/question"
@@ -47,8 +48,49 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
 		}
 		return s.onQuestionAnswered(ctx, e, p)
+	case compaction.EventCreated:
+		var p compaction.CompactionCreated
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+		}
+		return s.onCompactionCreated(ctx, e, p)
 	}
 	return nil
+}
+
+func (s *Service) onCompactionCreated(ctx context.Context, e eventlog.Event, p compaction.CompactionCreated) error {
+	agentID, err := ids.Parse(p.CompactorAgentID)
+	if err != nil {
+		return err
+	}
+	compID, err := ids.Parse(p.CompactionID)
+	if err != nil {
+		return err
+	}
+	chID, err := ids.Parse(p.ChannelID)
+	if err != nil {
+		return err
+	}
+	var fromActorID ids.ID
+	if p.RequestedBy != "" {
+		if reqID, err := ids.Parse(p.RequestedBy); err == nil {
+			fromActorID = reqID
+		}
+	}
+	d := Delivery{
+		ID:          s.IDs.New(),
+		WorkspaceID: e.WorkspaceID,
+		RecipientID: agentID,
+		ItemKind:    ItemCompact,
+		ItemID:      compID,
+		ChannelID:   chID,
+		FromActorID: fromActorID,
+		Flags:       FlagUnread | FlagWake,
+		EventSeq:    e.Seq,
+		CreatedAt:   s.Clock.Now(),
+	}
+	_, err = s.Store.Insert(ctx, d)
+	return err
 }
 
 // onReaction tells an agent that someone disagreed (👎) with its message.
@@ -278,7 +320,7 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 			item.AuthorHandle = handles[d.FromActorID]
 			item.AuthorKind = kinds[d.FromActorID]
 		}
-		if item.AuthorHandle == "" && d.ItemKind == ItemAnswer {
+		if item.AuthorHandle == "" && (d.ItemKind == ItemAnswer || d.ItemKind == ItemCompact) {
 			item.AuthorHandle = "system"
 			item.AuthorKind = "system"
 		}

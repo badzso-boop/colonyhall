@@ -422,6 +422,106 @@ paths:
         "204": { description: Marked as read }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /channels/{channelId}/compaction:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    get:
+      operationId: getChannelCompaction
+      tags: [compaction]
+      description: Get compaction unit status and counter for channel main stream or thread.
+      parameters:
+        - name: thread_root_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/CompactionUnitStatus" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateChannelCompaction
+      tags: [compaction]
+      description: Admins or channel managers. Update channel compaction threshold override.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateChannelCompactionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated channel
+          content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/compactions:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: triggerCompaction
+      tags: [compaction]
+      description: Humans who can write the channel. Manually trigger a compaction.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                thread_root_id: { type: string, format: uuid }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201":
+          description: Compaction created
+          content: { application/json: { schema: { $ref: "#/components/schemas/Compaction" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /compactions/{id}/summary:
+    put:
+      operationId: updateCompactionSummary
+      tags: [compaction]
+      description: Humans who can write the channel. Store edited summary markdown.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCompactionSummaryRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Compaction updated
+          content: { application/json: { schema: { $ref: "#/components/schemas/Compaction" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /compactions/{id}/regenerate:
+    post:
+      operationId: regenerateCompaction
+      tags: [compaction]
+      description: Humans who can write the channel. Request regeneration of compaction.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: New compaction created
+          content: { application/json: { schema: { $ref: "#/components/schemas/Compaction" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /sidebar/sections:
     get:
       operationId: listSidebarSections
@@ -1251,6 +1351,87 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /agent/compactions/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getScribeCompactionTask
+      tags: [compaction]
+      description: Scribe agent only. Get task details, previous summary, and messages to summarize.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/ScribeCompactionTask" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/compactions/{id}/result:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: submitScribeCompactionResult
+      tags: [compaction]
+      description: Scribe agent only. Submit generated summary markdown or error code.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CompactionResultRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Compaction completed
+          content: { application/json: { schema: { $ref: "#/components/schemas/Compaction" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/context:
+    get:
+      operationId: getAgentContext
+      tags: [compaction]
+      description: Agent token. Get primed context (latest compaction summary and capped messages after it).
+      parameters:
+        - name: channel_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: thread_root_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: OK
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentContext" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /settings/compaction:
+    get:
+      operationId: getCompactionSettings
+      tags: [compaction]
+      description: Humans only. Get workspace compaction settings.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Compaction settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/CompactionSettings" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateCompactionSettings
+      tags: [compaction]
+      description: Admins only. Update workspace compaction settings.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCompactionSettingsRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated compaction settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/CompactionSettings" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /settings/file-fetch:
     get:
       operationId: getFileFetchSettings
@@ -1521,6 +1702,7 @@ components:
         kind: { $ref: "#/components/schemas/ChannelKind" }
         name: { type: string }
         description: { type: string, maxLength: 250 }
+        compact_threshold_tokens: { type: integer, nullable: true, minimum: 20000, maximum: 2000000 }
         is_member: { type: boolean }
         unread: { type: integer, format: int64 }
         mentions: { type: integer, format: int64 }
@@ -1570,6 +1752,7 @@ components:
         client_msg_id: { type: string }
         kind: { type: string, enum: [text, system] }
         body: { type: string }
+        compaction_id: { type: string, format: uuid, nullable: true }
         mentions: { type: array, items: { type: string, format: uuid } }
         reply_count: { type: integer }
         last_reply_at: { type: string, format: date-time }
@@ -1633,7 +1816,7 @@ components:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
         author: { type: string }
-        author_kind: { type: string, enum: [human, agent], description: Who caused the item }
+        author_kind: { type: string, enum: [human, agent, system], description: Who caused the item }
         body: { type: string }
         mentioned: { type: boolean }
         dm: { type: boolean }
@@ -2512,6 +2695,122 @@ components:
         common_channels:
           type: array
           items: { $ref: "#/components/schemas/OverviewCommonChannel" }
+
+    CompactionSettings:
+      type: object
+      required: [compact_threshold_tokens, updated_at]
+      properties:
+        compact_threshold_tokens: { type: integer, minimum: 20000, maximum: 2000000 }
+        compactor_agent_id: { type: string, format: uuid, nullable: true }
+        compactor_handle: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+
+    UpdateCompactionSettingsRequest:
+      type: object
+      required: [compact_threshold_tokens]
+      properties:
+        compact_threshold_tokens: { type: integer, minimum: 20000, maximum: 2000000 }
+        compactor_agent_id: { type: string, format: uuid, nullable: true }
+
+    CompactionUnitStatus:
+      type: object
+      required: [channel_id, approx_tokens_since, messages_since, threshold_tokens, has_pending_compaction]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        approx_tokens_since: { type: integer }
+        messages_since: { type: integer }
+        threshold_tokens: { type: integer }
+        has_pending_compaction: { type: boolean }
+        last_compaction_id: { type: string, format: uuid, nullable: true }
+
+    UpdateChannelCompactionRequest:
+      type: object
+      properties:
+        compact_threshold_tokens: { type: integer, nullable: true, minimum: 20000, maximum: 2000000 }
+
+    CompactionStats:
+      type: object
+      properties:
+        messages: { type: integer }
+        approx_tokens_in: { type: integer }
+        summary_tokens: { type: integer }
+
+    Compaction:
+      type: object
+      required: [id, workspace_id, channel_id, trigger, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        up_to_message_id: { type: string, format: uuid, nullable: true }
+        previous_compaction_id: { type: string, format: uuid, nullable: true }
+        trigger: { type: string, enum: [auto, manual, regenerate, edit] }
+        requested_by: { type: string, format: uuid, nullable: true }
+        compactor_agent_id: { type: string, format: uuid, nullable: true }
+        state: { type: string, enum: [pending, done, failed] }
+        summary_file_id: { type: string, format: uuid, nullable: true }
+        system_message_id: { type: string, format: uuid, nullable: true }
+        stats: { $ref: "#/components/schemas/CompactionStats" }
+        error_code: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    CompactionTaskMessage:
+      type: object
+      required: [id, author_handle, author_kind, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        author_handle: { type: string }
+        author_kind: { type: string }
+        body: { type: string }
+        attachments: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+
+    ScribeCompactionTask:
+      type: object
+      required: [id, channel_id, messages]
+      properties:
+        id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        previous_summary: { type: string, nullable: true }
+        messages: { type: array, items: { $ref: "#/components/schemas/CompactionTaskMessage" } }
+        max_summary_chars: { type: integer }
+
+    CompactionResultRequest:
+      type: object
+      properties:
+        markdown: { type: string, maxLength: 40000 }
+        error_code: { type: string }
+
+    UpdateCompactionSummaryRequest:
+      type: object
+      required: [markdown]
+      properties:
+        markdown: { type: string, maxLength: 40000 }
+
+    ContextMessage:
+      type: object
+      required: [id, author_handle, author_kind, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        author_handle: { type: string }
+        author_kind: { type: string }
+        body: { type: string }
+        attachments: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+
+    AgentContext:
+      type: object
+      required: [messages_after, has_more]
+      properties:
+        compaction_id: { type: string, format: uuid, nullable: true }
+        summary_markdown: { type: string, nullable: true }
+        messages_after: { type: array, items: { $ref: "#/components/schemas/ContextMessage" } }
+        has_more: { type: boolean }
+
 
 
 

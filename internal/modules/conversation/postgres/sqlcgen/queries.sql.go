@@ -84,7 +84,7 @@ func (q *Queries) BumpThread(ctx context.Context, arg BumpThreadParams) error {
 }
 
 const channelByID = `-- name: ChannelByID :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description FROM channel WHERE id = $1
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens FROM channel WHERE id = $1
 `
 
 func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error) {
@@ -99,12 +99,13 @@ func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.Description,
+		&i.CompactThresholdTokens,
 	)
 	return i, err
 }
 
 const channelByName = `-- name: ChannelByName :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description FROM channel WHERE workspace_id = $1 AND name = $2
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens FROM channel WHERE workspace_id = $1 AND name = $2
 `
 
 type ChannelByNameParams struct {
@@ -124,12 +125,13 @@ func (q *Queries) ChannelByName(ctx context.Context, arg ChannelByNameParams) (C
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.Description,
+		&i.CompactThresholdTokens,
 	)
 	return i, err
 }
 
 const channelsForActor = `-- name: ChannelsForActor :many
-SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.msg_count, c.created_by, c.created_at,
+SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.compact_threshold_tokens, c.msg_count, c.created_by, c.created_at,
        (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
@@ -146,17 +148,18 @@ type ChannelsForActorParams struct {
 }
 
 type ChannelsForActorRow struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	Kind        string
-	Name        string
-	Description string
-	MsgCount    int64
-	CreatedBy   uuid.UUID
-	CreatedAt   time.Time
-	IsMember    bool
-	Unread      int64
-	Mentions    int64
+	ID                     uuid.UUID
+	WorkspaceID            uuid.UUID
+	Kind                   string
+	Name                   string
+	Description            string
+	CompactThresholdTokens *int32
+	MsgCount               int64
+	CreatedBy              uuid.UUID
+	CreatedAt              time.Time
+	IsMember               bool
+	Unread                 int64
+	Mentions               int64
 }
 
 func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorParams) ([]ChannelsForActorRow, error) {
@@ -174,6 +177,7 @@ func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorPara
 			&i.Kind,
 			&i.Name,
 			&i.Description,
+			&i.CompactThresholdTokens,
 			&i.MsgCount,
 			&i.CreatedBy,
 			&i.CreatedAt,
@@ -369,6 +373,45 @@ type ListMessagesParams struct {
 
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessages, arg.ChannelID, arg.Before, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.AuthorID,
+			&i.ClientMsgID,
+			&i.Kind,
+			&i.Body,
+			&i.Mentions,
+			&i.ReplyCount,
+			&i.LastReplyAt,
+			&i.CreatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const mainStreamMessages = `-- name: MainStreamMessages :many
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE channel_id = $1 AND thread_root_id IS NULL AND deleted_at IS NULL
+ORDER BY id
+`
+
+func (q *Queries) MainStreamMessages(ctx context.Context, channelID uuid.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, mainStreamMessages, channelID)
 	if err != nil {
 		return nil, err
 	}

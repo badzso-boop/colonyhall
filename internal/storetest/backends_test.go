@@ -3,6 +3,8 @@ package storetest
 import (
 	rulesmem "colonyhall/internal/modules/agentrules/memory"
 	rulespg "colonyhall/internal/modules/agentrules/postgres"
+	compmem "colonyhall/internal/modules/compaction/memory"
+	comppg "colonyhall/internal/modules/compaction/postgres"
 	decisionsmem "colonyhall/internal/modules/decision/memory"
 	decisionspg "colonyhall/internal/modules/decision/postgres"
 	leasesmem "colonyhall/internal/modules/lease/memory"
@@ -54,7 +56,7 @@ func TestMemory(t *testing.T) {
 			Runs: runmem.New(), Schedule: schedmem.New(), Approval: appmem.New(), Wiki: wikimem.New(),
 			Question: qmem.New(), Files: filesmem.NewStore(), Git: gitmem.New(), Preview: previewmem.New(),
 			AgentRules: rulesmem.New(), Notes: notesmem.New(), Decisions: decisionsmem.New(), Leases: leasesmem.New(),
-			Sidebar: sidebarmem.New()}
+			Sidebar: sidebarmem.New(), Compaction: compmem.NewStore()}
 	})
 }
 
@@ -75,7 +77,7 @@ func TestPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	Run(t, func(t *testing.T) Backend {
-		_, err := pg.Pool.Exec(ctx, `TRUNCATE sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
+		_, err := pg.Pool.Exec(ctx, `TRUNCATE compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
 			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)
@@ -85,6 +87,6 @@ func TestPostgres(t *testing.T) {
 			Hosts: &hostpg.Store{DB: pg}, Runs: &runpg.Store{DB: pg}, Schedule: &schedpg.Store{DB: pg},
 			Approval: &apppg.Store{DB: pg}, Wiki: &wikipg.Store{DB: pg}, Question: &qpg.Store{DB: pg}, Files: &filespg.Store{DB: pg}, Git: &gitpg.Store{DB: pg}, Preview: &previewpg.Store{DB: pg},
 			AgentRules: &rulespg.Store{DB: pg}, Notes: &notespg.Store{DB: pg}, Decisions: &decisionspg.Store{DB: pg}, Leases: &leasespg.Store{DB: pg},
-			Sidebar: &sidebarpg.Store{DB: pg}}
+			Sidebar: &sidebarpg.Store{DB: pg}, Compaction: &comppg.Store{DB: pg}}
 	})
 }
