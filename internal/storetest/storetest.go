@@ -437,6 +437,27 @@ func testDelivery(t *testing.T, b Backend) {
 	if _, total, _ = b.Delivery.Pending(ctx, f.agent.ID, 10); total != 0 {
 		t.Fatalf("acked item still pending")
 	}
+
+	// Terminal events
+	exitCode := 0
+	te := delivery.TerminalEvent{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		AgentID:      f.agent.ID,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: ids.Nil,
+		Name:         "ros-build",
+		ExitCode:     &exitCode,
+		DurationMs:   2592000,
+		Tail:         "build complete",
+		CreatedAt:    t0,
+	}
+	must(t, b.Delivery.InsertTerminalEvent(ctx, te))
+	teList, err := b.Delivery.TerminalEventsByIDs(ctx, []ids.ID{te.ID})
+	must(t, err)
+	if len(teList) != 1 || teList[0].Name != "ros-build" || teList[0].ExitCode == nil || *teList[0].ExitCode != 0 {
+		t.Fatalf("TerminalEventsByIDs unexpected: %+v", teList)
+	}
 }
 
 func testAudit(t *testing.T, b Backend) {

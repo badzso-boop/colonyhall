@@ -148,9 +148,11 @@ type mcpConfigDoc struct {
 }
 
 type mcpServerDoc struct {
-	Type    string            `json:"type"`
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers"`
+	Type    string            `json:"type,omitempty"`
+	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
 }
 
 // DefaultApprovalTimeout is the time the approve tool waits for a human decision.
@@ -159,6 +161,10 @@ const DefaultApprovalTimeout = 10 * time.Minute
 // writeMCPConfig writes a temporary 0600 MCP config file with the Colonyhall
 // server and agent bearer token, returning its path and a cleanup func.
 func writeMCPConfig(dir, serverURL, token string, extra ...map[string]string) (string, func(), error) {
+	return writeMCPConfigWithServers(dir, serverURL, token, nil, extra...)
+}
+
+func writeMCPConfigWithServers(dir, serverURL, token string, servers map[string]mcpServerDoc, extra ...map[string]string) (string, func(), error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", nil, err
 	}
@@ -172,14 +178,18 @@ func writeMCPConfig(dir, serverURL, token string, extra ...map[string]string) (s
 			}
 		}
 	}
-	doc := mcpConfigDoc{
-		MCPServers: map[string]mcpServerDoc{
-			"colonyhall": {
-				Type:    "http",
-				URL:     strings.TrimSuffix(serverURL, "/") + "/mcp",
-				Headers: headers,
-			},
+	mcpServers := map[string]mcpServerDoc{
+		"colonyhall": {
+			Type:    "http",
+			URL:     strings.TrimSuffix(serverURL, "/") + "/mcp",
+			Headers: headers,
 		},
+	}
+	for k, v := range servers {
+		mcpServers[k] = v
+	}
+	doc := mcpConfigDoc{
+		MCPServers: mcpServers,
 	}
 	raw, err := json.Marshal(doc)
 	if err != nil {
@@ -258,6 +268,10 @@ func DirectPromptWithBranch(items []Item, branch string, exchangeDir ...string) 
 			fmt.Fprintf(&b, "<colonyhall_message from=%q delegated_by=%q channel=%q message=%q>\n%s\n</colonyhall_message>\n\n",
 				attr(from), attr(delBy), attr(ch), attr(msgID), text(it.Body, maxItemBody))
 			delegatedItems = append(delegatedItems, it)
+			continue
+		}
+		if it.Kind == "terminal" {
+			fmt.Fprintf(&b, "%s\n\n", it.Body)
 			continue
 		}
 		fmt.Fprintf(&b, "<colonyhall_message from=%q channel=%q message=%q>\n%s\n</colonyhall_message>\n\n",
@@ -509,6 +523,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	}
 
 	var cleanup func()
+	last := group[len(group)-1]
 	switch a.Cfg.Client {
 	case "claude-code":
 		req.Rules = rulesText
@@ -524,7 +539,20 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			mcpTimeout := (DefaultApprovalTimeout + 60*time.Second).Milliseconds()
 			req.Env = append(req.Env, fmt.Sprintf("MCP_TOOL_TIMEOUT=%d", mcpTimeout))
 		}
-		mcpPath, cl, err := writeMCPConfig(stateDir, a.Client.BaseURL, token, extraHeaders)
+		colonyBin, binErr := os.Executable()
+		if binErr != nil {
+			colonyBin = "colony"
+		}
+		var extraServers map[string]mcpServerDoc
+		if !a.Sandbox {
+			extraServers = map[string]mcpServerDoc{
+				"colony-terminal": {
+					Command: colonyBin,
+					Args:    []string{"terminal-mcp", "-agent", a.Cfg.Name, "-state", stateDir, "-channel", last.ChannelID, "-thread", last.ThreadRootID},
+				},
+			}
+		}
+		mcpPath, cl, err := writeMCPConfigWithServers(stateDir, a.Client.BaseURL, token, extraServers, extraHeaders)
 		if err != nil {
 			return fmt.Errorf("guard: direct mcp config: %w", err)
 		}
@@ -549,7 +577,20 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			return fmt.Errorf("guard: direct token: %w", err)
 		}
 		ws := filepath.Join(stateDir, "agy-workspace")
-		cl, err := writeAgyMCPConfig(ws, a.Client.BaseURL, token, extraHeaders)
+		colonyBin, binErr := os.Executable()
+		if binErr != nil {
+			colonyBin = "colony"
+		}
+		var agyExtraServers map[string]any
+		if !a.Sandbox {
+			agyExtraServers = map[string]any{
+				"colony-terminal": map[string]any{
+					"command": colonyBin,
+					"args":    []string{"terminal-mcp", "-agent", a.Cfg.Name, "-state", stateDir, "-channel", last.ChannelID, "-thread", last.ThreadRootID},
+				},
+			}
+		}
+		cl, err := writeAgyMCPConfig(ws, a.Client.BaseURL, token, agyExtraServers, extraHeaders)
 		if err != nil {
 			return fmt.Errorf("guard: direct mcp config: %w", err)
 		}
@@ -571,7 +612,6 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	if a.Cfg.Approvals == "chat" {
 		timeout += DefaultApprovalTimeout + 60*time.Second
 	}
-	last := group[len(group)-1]
 	runKey := uuid.New().String()
 	pr := newProgressReporter(a.Client, last.ChannelID, last.ThreadRootID, runKey, a.Log)
 	req.OnStep = pr.OnStep
@@ -753,11 +793,11 @@ func lastTranscriptContext(path string) (int, bool) {
 // 2026-10-15): its items are acknowledged with a short note instead, so the
 // sender knows. Reactions from agents are simply acknowledged. Answer items
 // to the agent's own questions are also allowed. Approved delegated items
-// are also allowed.
+// and finished terminal wake items are also allowed.
 func (a *Agent) humanOnly(ctx context.Context, items []Item) []Item {
 	var keep, refused []Item
 	for _, it := range items {
-		if it.AuthorKind == "human" || it.Kind == "answer" || it.Kind == "delegated" {
+		if it.AuthorKind == "human" || it.Kind == "answer" || it.Kind == "delegated" || it.Kind == "terminal" {
 			keep = append(keep, it)
 		} else {
 			refused = append(refused, it)
@@ -804,7 +844,7 @@ const agyMCPFile = ".agents/mcp_config.json"
 
 // writeAgyMCPConfig writes the Colonyhall MCP server, with the agent's
 // token, into the guard-owned agy workspace (0600) and returns a cleanup.
-func writeAgyMCPConfig(ws, serverURL, token string, extra ...map[string]string) (func(), error) {
+func writeAgyMCPConfig(ws, serverURL, token string, servers map[string]any, extra ...map[string]string) (func(), error) {
 	dir := filepath.Join(ws, ".agents")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -815,10 +855,14 @@ func writeAgyMCPConfig(ws, serverURL, token string, extra ...map[string]string) 
 			headers[k] = v
 		}
 	}
-	doc := map[string]any{"mcpServers": map[string]any{"colonyhall": map[string]any{
+	mcpServers := map[string]any{"colonyhall": map[string]any{
 		"serverUrl": strings.TrimSuffix(serverURL, "/") + "/mcp",
 		"headers":   headers,
-	}}}
+	}}
+	for k, v := range servers {
+		mcpServers[k] = v
+	}
+	doc := map[string]any{"mcpServers": mcpServers}
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		return nil, err

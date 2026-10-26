@@ -82,6 +82,40 @@ func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) 
 	return result.RowsAffected(), nil
 }
 
+const insertTerminalEvent = `-- name: InsertTerminalEvent :exec
+INSERT INTO terminal_event (id, workspace_id, agent_id, channel_id, thread_root_id, name, exit_code, duration_ms, tail, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertTerminalEventParams struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	AgentID      uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Name         string
+	ExitCode     *int32
+	DurationMs   int64
+	Tail         string
+	CreatedAt    time.Time
+}
+
+func (q *Queries) InsertTerminalEvent(ctx context.Context, arg InsertTerminalEventParams) error {
+	_, err := q.db.Exec(ctx, insertTerminalEvent,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.AgentID,
+		arg.ChannelID,
+		arg.ThreadRootID,
+		arg.Name,
+		arg.ExitCode,
+		arg.DurationMs,
+		arg.Tail,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const pending = `-- name: Pending :many
 SELECT id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, acked_at, from_actor_id, delegated_by FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL ORDER BY id LIMIT $2
 `
@@ -113,6 +147,41 @@ func (q *Queries) Pending(ctx context.Context, arg PendingParams) ([]Delivery, e
 			&i.AckedAt,
 			&i.FromActorID,
 			&i.DelegatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const terminalEventsByIDs = `-- name: TerminalEventsByIDs :many
+SELECT id, workspace_id, agent_id, channel_id, thread_root_id, name, exit_code, duration_ms, tail, created_at FROM terminal_event WHERE id = ANY($1::uuid[])
+`
+
+func (q *Queries) TerminalEventsByIDs(ctx context.Context, ids []uuid.UUID) ([]TerminalEvent, error) {
+	rows, err := q.db.Query(ctx, terminalEventsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TerminalEvent
+	for rows.Next() {
+		var i TerminalEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.AgentID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.Name,
+			&i.ExitCode,
+			&i.DurationMs,
+			&i.Tail,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

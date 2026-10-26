@@ -230,6 +230,23 @@ func (c *Client) React(ctx context.Context, messageID, emoji string) error {
 	return c.do(ctx, http.MethodPut, "/api/v1/messages/"+messageID+"/reactions/"+url.PathEscape(emoji), nil, nil)
 }
 
+// CreateTerminalEvent posts a finished terminal event to wake the agent.
+func (c *Client) CreateTerminalEvent(ctx context.Context, name, channelID, threadRootID string, exitCode *int, durationMs int64, tail string) error {
+	in := map[string]any{
+		"name":        name,
+		"channel_id":  channelID,
+		"duration_ms": durationMs,
+		"tail":        tail,
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	if exitCode != nil {
+		in["exit_code"] = *exitCode
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/terminal-events", in, nil)
+}
+
 // Thread returns a thread's root and replies.
 func (c *Client) Thread(ctx context.Context, messageID string) (Message, []Message, error) {
 	var r struct {

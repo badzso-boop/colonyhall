@@ -47,9 +47,12 @@ func (e AgentActivityRequestState) Valid() bool {
 
 // Defines values for AgentFsPendingRequestOp.
 const (
-	AgentFsPendingRequestOpGitStatus AgentFsPendingRequestOp = "git_status"
-	AgentFsPendingRequestOpList      AgentFsPendingRequestOp = "list"
-	AgentFsPendingRequestOpSearch    AgentFsPendingRequestOp = "search"
+	AgentFsPendingRequestOpGitStatus  AgentFsPendingRequestOp = "git_status"
+	AgentFsPendingRequestOpList       AgentFsPendingRequestOp = "list"
+	AgentFsPendingRequestOpSearch     AgentFsPendingRequestOp = "search"
+	AgentFsPendingRequestOpTermKill   AgentFsPendingRequestOp = "term_kill"
+	AgentFsPendingRequestOpTermList   AgentFsPendingRequestOp = "term_list"
+	AgentFsPendingRequestOpTermOutput AgentFsPendingRequestOp = "term_output"
 )
 
 // Valid indicates whether the value is a known member of the AgentFsPendingRequestOp enum.
@@ -61,6 +64,12 @@ func (e AgentFsPendingRequestOp) Valid() bool {
 		return true
 	case AgentFsPendingRequestOpSearch:
 		return true
+	case AgentFsPendingRequestOpTermKill:
+		return true
+	case AgentFsPendingRequestOpTermList:
+		return true
+	case AgentFsPendingRequestOpTermOutput:
+		return true
 	default:
 		return false
 	}
@@ -68,9 +77,12 @@ func (e AgentFsPendingRequestOp) Valid() bool {
 
 // Defines values for AgentFsRequestOp.
 const (
-	AgentFsRequestOpGitStatus AgentFsRequestOp = "git_status"
-	AgentFsRequestOpList      AgentFsRequestOp = "list"
-	AgentFsRequestOpSearch    AgentFsRequestOp = "search"
+	AgentFsRequestOpGitStatus  AgentFsRequestOp = "git_status"
+	AgentFsRequestOpList       AgentFsRequestOp = "list"
+	AgentFsRequestOpSearch     AgentFsRequestOp = "search"
+	AgentFsRequestOpTermKill   AgentFsRequestOp = "term_kill"
+	AgentFsRequestOpTermList   AgentFsRequestOp = "term_list"
+	AgentFsRequestOpTermOutput AgentFsRequestOp = "term_output"
 )
 
 // Valid indicates whether the value is a known member of the AgentFsRequestOp enum.
@@ -82,6 +94,12 @@ func (e AgentFsRequestOp) Valid() bool {
 		return true
 	case AgentFsRequestOpSearch:
 		return true
+	case AgentFsRequestOpTermKill:
+		return true
+	case AgentFsRequestOpTermList:
+		return true
+	case AgentFsRequestOpTermOutput:
+		return true
 	default:
 		return false
 	}
@@ -89,9 +107,12 @@ func (e AgentFsRequestOp) Valid() bool {
 
 // Defines values for AgentFsResponseOp.
 const (
-	AgentFsResponseOpGitStatus AgentFsResponseOp = "git_status"
-	AgentFsResponseOpList      AgentFsResponseOp = "list"
-	AgentFsResponseOpSearch    AgentFsResponseOp = "search"
+	AgentFsResponseOpGitStatus  AgentFsResponseOp = "git_status"
+	AgentFsResponseOpList       AgentFsResponseOp = "list"
+	AgentFsResponseOpSearch     AgentFsResponseOp = "search"
+	AgentFsResponseOpTermKill   AgentFsResponseOp = "term_kill"
+	AgentFsResponseOpTermList   AgentFsResponseOp = "term_list"
+	AgentFsResponseOpTermOutput AgentFsResponseOp = "term_output"
 )
 
 // Valid indicates whether the value is a known member of the AgentFsResponseOp enum.
@@ -102,6 +123,12 @@ func (e AgentFsResponseOp) Valid() bool {
 	case AgentFsResponseOpList:
 		return true
 	case AgentFsResponseOpSearch:
+		return true
+	case AgentFsResponseOpTermKill:
+		return true
+	case AgentFsResponseOpTermList:
+		return true
+	case AgentFsResponseOpTermOutput:
 		return true
 	default:
 		return false
@@ -951,6 +978,30 @@ func (e SetStateRequestState) Valid() bool {
 	}
 }
 
+// Defines values for TerminalSummaryStatus.
+const (
+	TerminalSummaryStatusError    TerminalSummaryStatus = "error"
+	TerminalSummaryStatusFinished TerminalSummaryStatus = "finished"
+	TerminalSummaryStatusKilled   TerminalSummaryStatus = "killed"
+	TerminalSummaryStatusRunning  TerminalSummaryStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the TerminalSummaryStatus enum.
+func (e TerminalSummaryStatus) Valid() bool {
+	switch e {
+	case TerminalSummaryStatusError:
+		return true
+	case TerminalSummaryStatusFinished:
+		return true
+	case TerminalSummaryStatusKilled:
+		return true
+	case TerminalSummaryStatusRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WikiRevisionKind.
 const (
 	WikiRevisionKindAppend  WikiRevisionKind = "append"
@@ -1112,6 +1163,9 @@ type AgentContext struct {
 
 // AgentFsPendingRequest defines model for AgentFsPendingRequest.
 type AgentFsPendingRequest struct {
+	KilledBy  *string                 `json:"killed_by,omitempty"`
+	Lines     *int                    `json:"lines,omitempty"`
+	Name      *string                 `json:"name,omitempty"`
 	Op        AgentFsPendingRequestOp `json:"op"`
 	Path      *string                 `json:"path,omitempty"`
 	Query     *string                 `json:"query,omitempty"`
@@ -1125,6 +1179,8 @@ type AgentFsPendingRequestOp string
 // AgentFsRequest defines model for AgentFsRequest.
 type AgentFsRequest struct {
 	ChannelId openapi_types.UUID `json:"channel_id"`
+	Lines     *int               `json:"lines,omitempty"`
+	Name      *string            `json:"name,omitempty"`
 	Op        AgentFsRequestOp   `json:"op"`
 	Path      *string            `json:"path,omitempty"`
 	Query     *string            `json:"query,omitempty"`
@@ -1139,10 +1195,13 @@ type AgentFsResponse struct {
 	Entries   *[]FsEntry         `json:"entries,omitempty"`
 	ErrorCode *string            `json:"error_code,omitempty"`
 	GitStatus *[]FsGitStatus     `json:"git_status,omitempty"`
+	Killed    *bool              `json:"killed,omitempty"`
 	Op        *AgentFsResponseOp `json:"op,omitempty"`
+	Output    *string            `json:"output,omitempty"`
 	Reason    *string            `json:"reason,omitempty"`
 	Results   *[]FsSearchResult  `json:"results,omitempty"`
 	Roots     *[]FsRoot          `json:"roots,omitempty"`
+	Terminals *[]TerminalSummary `json:"terminals,omitempty"`
 	Truncated *bool              `json:"truncated,omitempty"`
 }
 
@@ -1529,6 +1588,16 @@ type CreateScheduleRequestCatchUp string
 // CreateSidebarSectionRequest defines model for CreateSidebarSectionRequest.
 type CreateSidebarSectionRequest struct {
 	Name string `json:"name"`
+}
+
+// CreateTerminalEventRequest defines model for CreateTerminalEventRequest.
+type CreateTerminalEventRequest struct {
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	DurationMs   int64               `json:"duration_ms"`
+	ExitCode     *int                `json:"exit_code,omitempty"`
+	Name         string              `json:"name"`
+	Tail         string              `json:"tail"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // CreateWikiPageRequest defines model for CreateWikiPageRequest.
@@ -2417,6 +2486,24 @@ type SidebarSectionList struct {
 	Sections []SidebarSection `json:"sections"`
 }
 
+// TerminalSummary defines model for TerminalSummary.
+type TerminalSummary struct {
+	ChannelId    openapi_types.UUID    `json:"channel_id"`
+	Command      string                `json:"command"`
+	Cwd          string                `json:"cwd"`
+	DurationMs   int64                 `json:"duration_ms"`
+	ExitCode     *int                  `json:"exit_code,omitempty"`
+	FinishedAt   *time.Time            `json:"finished_at,omitempty"`
+	KilledBy     *string               `json:"killed_by,omitempty"`
+	Name         string                `json:"name"`
+	StartedAt    time.Time             `json:"started_at"`
+	Status       TerminalSummaryStatus `json:"status"`
+	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
+}
+
+// TerminalSummaryStatus defines model for TerminalSummary.Status.
+type TerminalSummaryStatus string
+
 // Thread defines model for Thread.
 type Thread struct {
 	Replies []Message `json:"replies"`
@@ -2679,6 +2766,9 @@ type ReportAgentProgressJSONRequestBody = AgentProgressRequest
 
 // ReportRunJSONRequestBody defines body for ReportRun for application/json ContentType.
 type ReportRunJSONRequestBody = ReportRunRequest
+
+// CreateTerminalEventJSONRequestBody defines body for CreateTerminalEvent for application/json ContentType.
+type CreateTerminalEventJSONRequestBody = CreateTerminalEventRequest
 
 // RequestAgentFileFetchJSONRequestBody defines body for RequestAgentFileFetch for application/json ContentType.
 type RequestAgentFileFetchJSONRequestBody = CreateAgentFileFetchRequest

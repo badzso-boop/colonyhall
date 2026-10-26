@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"colonyhall/internal/platform/ids"
 )
 
 const (
@@ -748,4 +750,49 @@ func readLastLines(path string, maxLines int) (string, error) {
 		lines = lines[len(lines)-maxLines:]
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// HandleTerminalFinish posts the completion message into the chat thread and wakes the agent.
+func HandleTerminalFinish(ctx context.Context, client *Client, tm *TerminalManager, meta *TerminalMeta) error {
+	if client == nil || meta == nil {
+		return nil
+	}
+	now := time.Now()
+	dur := meta.Duration(now)
+	totalSecs := int(dur.Seconds())
+	if totalSecs < 0 {
+		totalSecs = 0
+	}
+	mins := totalSecs / 60
+	secs := totalSecs % 60
+	durStr := fmt.Sprintf("%02d:%02d", mins, secs)
+	if mins >= 60 {
+		hours := mins / 60
+		mins = mins % 60
+		durStr = fmt.Sprintf("%d:%02d:%02d", hours, mins, secs)
+	}
+
+	var body string
+	if meta.KilledBy != "" {
+		body = fmt.Sprintf("⛔ %s leállítva", meta.Name)
+	} else if meta.ExitCode != nil && *meta.ExitCode == 0 {
+		body = fmt.Sprintf("⚙️ %s kész · exit 0 · %s", meta.Name, durStr)
+	} else if meta.ExitCode != nil {
+		body = fmt.Sprintf("⚠️ %s hibával állt le · exit %d · %s", meta.Name, *meta.ExitCode, durStr)
+	} else {
+		body = fmt.Sprintf("⚠️ %s hibával állt le · %s", meta.Name, durStr)
+	}
+
+	clientMsgID := ids.V7{}.New().String()
+	_ = client.Send(ctx, meta.ChannelID, meta.ThreadRootID, body, clientMsgID)
+
+	tail := ""
+	if tm != nil {
+		out, err := tm.Output(meta.Handle, meta.Name, 40)
+		if err == nil {
+			tail = out
+		}
+	}
+
+	return client.CreateTerminalEvent(ctx, meta.Name, meta.ChannelID, meta.ThreadRootID, meta.ExitCode, dur.Milliseconds(), tail)
 }

@@ -66,6 +66,60 @@ func (s *Store) Ack(ctx context.Context, recipientID ids.ID, idList []ids.ID, at
 	return int(n), err
 }
 
+// InsertTerminalEvent stores a terminal completion event in postgres.
+func (s *Store) InsertTerminalEvent(ctx context.Context, te delivery.TerminalEvent) error {
+	var exitCode *int32
+	if te.ExitCode != nil {
+		ec := int32(*te.ExitCode)
+		exitCode = &ec
+	}
+	return s.q(ctx).InsertTerminalEvent(ctx, sqlcgen.InsertTerminalEventParams{
+		ID:           te.ID,
+		WorkspaceID:  te.WorkspaceID,
+		AgentID:      te.AgentID,
+		ChannelID:    te.ChannelID,
+		ThreadRootID: nullID(te.ThreadRootID),
+		Name:         te.Name,
+		ExitCode:     exitCode,
+		DurationMs:   te.DurationMs,
+		Tail:         te.Tail,
+		CreatedAt:    te.CreatedAt,
+	})
+}
+
+// TerminalEventsByIDs loads terminal events by their IDs.
+func (s *Store) TerminalEventsByIDs(ctx context.Context, eventIDs []ids.ID) ([]delivery.TerminalEvent, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := s.q(ctx).TerminalEventsByIDs(ctx, eventIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]delivery.TerminalEvent, 0, len(rows))
+	for _, r := range rows {
+		te := delivery.TerminalEvent{
+			ID:          r.ID,
+			WorkspaceID: r.WorkspaceID,
+			AgentID:     r.AgentID,
+			ChannelID:   r.ChannelID,
+			Name:        r.Name,
+			DurationMs:  r.DurationMs,
+			Tail:        r.Tail,
+			CreatedAt:   r.CreatedAt,
+		}
+		if r.ThreadRootID != nil {
+			te.ThreadRootID = *r.ThreadRootID
+		}
+		if r.ExitCode != nil {
+			ec := int(*r.ExitCode)
+			te.ExitCode = &ec
+		}
+		out = append(out, te)
+	}
+	return out, nil
+}
+
 func nullID(id ids.ID) *ids.ID {
 	if id == ids.Nil {
 		return nil

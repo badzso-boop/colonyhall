@@ -33,6 +33,7 @@ const (
 	ItemAnswer       = "answer"        // answer to an agent's question; wakes
 	ItemCompact      = "compact"       // compaction request to scribe agent; wakes
 	ItemDelegated    = "delegated"     // approved task from another agent; wakes
+	ItemTerminal     = "terminal"      // finished terminal wake; wakes
 )
 
 // Delivery is one inbox row.

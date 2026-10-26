@@ -678,6 +678,29 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Acknowledged, content: { application/json: { schema: { $ref: "#/components/schemas/AckResponse" } } } }
 
+  /agent/terminal-events:
+    post:
+      operationId: createTerminalEvent
+      tags: [agents]
+      description: Agents only. Report a finished agent terminal to wake the agent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTerminalEventRequest"
+      responses:
+        default:
+          $ref: "#/components/responses/Problem"
+        "204":
+          description: Terminal event recorded and wake item created
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+
   /hosts/pairing-codes:
     post:
       operationId: createPairingCode
@@ -2586,30 +2609,62 @@ components:
         max_image_bytes: { type: integer, format: int64 }
         max_file_bytes: { type: integer, format: int64 }
 
+    CreateTerminalEventRequest:
+      type: object
+      required: [name, channel_id, duration_ms, tail]
+      properties:
+        name: { type: string }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        exit_code: { type: integer, nullable: true }
+        duration_ms: { type: integer, format: int64 }
+        tail: { type: string }
+
+    TerminalSummary:
+      type: object
+      required: [name, status, command, cwd, channel_id, started_at, duration_ms]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [running, finished, killed, error] }
+        command: { type: string }
+        cwd: { type: string }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        exit_code: { type: integer, nullable: true }
+        killed_by: { type: string, nullable: true }
+        duration_ms: { type: integer, format: int64 }
+
     AgentFsRequest:
       type: object
       required: [channel_id, op]
       properties:
         channel_id: { type: string, format: uuid }
-        op: { type: string, enum: [list, search, git_status] }
+        op: { type: string, enum: [list, search, git_status, term_list, term_output, term_kill] }
         root: { type: string }
         path: { type: string }
         query: { type: string }
+        name: { type: string }
+        lines: { type: integer }
 
     AgentFsPendingRequest:
       type: object
       required: [request_id, op]
       properties:
         request_id: { type: string }
-        op: { type: string, enum: [list, search, git_status] }
+        op: { type: string, enum: [list, search, git_status, term_list, term_output, term_kill] }
         root: { type: string }
         path: { type: string }
         query: { type: string }
+        name: { type: string }
+        lines: { type: integer }
+        killed_by: { type: string }
 
     AgentFsResponse:
       type: object
       properties:
-        op: { type: string, enum: [list, search, git_status] }
+        op: { type: string, enum: [list, search, git_status, term_list, term_output, term_kill] }
         roots:
           type: array
           items:
@@ -2626,6 +2681,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FsGitStatus"
+        terminals:
+          type: array
+          items:
+            $ref: "#/components/schemas/TerminalSummary"
+        output: { type: string }
+        killed: { type: boolean }
         truncated: { type: boolean }
         reason: { type: string }
         error_code: { type: string }

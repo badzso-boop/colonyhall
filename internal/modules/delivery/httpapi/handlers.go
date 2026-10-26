@@ -10,7 +10,12 @@ import (
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/ids"
 )
+
+func init() {
+	httpx.RegisterForbidden(delivery.ErrForbidden)
+}
 
 // ToAPI converts an inbox item to its API shape.
 func ToAPI(it delivery.InboxItem) apispec.InboxItem {
@@ -57,5 +62,32 @@ func Register(mux *http.ServeMux, svc *delivery.Service, auth identity.RequestAu
 			return
 		}
 		httpx.JSON(w, http.StatusOK, apispec.AckResponse{Acked: n})
+	}))
+
+	mux.Handle("POST /api/v1/agent/terminal-events", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.CreateTerminalEventRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		var threadRootID ids.ID
+		if in.ThreadRootId != nil {
+			threadRootID = ids.ID(*in.ThreadRootId)
+		}
+		err := svc.CreateTerminalEvent(
+			r.Context(),
+			httpx.Actor(r),
+			in.Name,
+			ids.ID(in.ChannelId),
+			threadRootID,
+			in.ExitCode,
+			in.DurationMs,
+			in.Tail,
+		)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 }

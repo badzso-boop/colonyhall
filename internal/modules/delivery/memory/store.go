@@ -20,14 +20,19 @@ type itemKey struct {
 
 // Store implements delivery.Store in memory.
 type Store struct {
-	mu    sync.Mutex
-	rows  map[ids.ID]delivery.Delivery
-	index map[itemKey]ids.ID
+	mu             sync.Mutex
+	rows           map[ids.ID]delivery.Delivery
+	index          map[itemKey]ids.ID
+	terminalEvents map[ids.ID]delivery.TerminalEvent
 }
 
 // New returns an empty store.
 func New() *Store {
-	return &Store{rows: map[ids.ID]delivery.Delivery{}, index: map[itemKey]ids.ID{}}
+	return &Store{
+		rows:           map[ids.ID]delivery.Delivery{},
+		index:          map[itemKey]ids.ID{},
+		terminalEvents: map[ids.ID]delivery.TerminalEvent{},
+	}
 }
 
 // Insert stores a delivery once per (recipient, item).
@@ -77,4 +82,25 @@ func (s *Store) Ack(_ context.Context, recipientID ids.ID, idList []ids.ID, at t
 		n++
 	}
 	return n, nil
+}
+
+// InsertTerminalEvent records a terminal event in memory.
+func (s *Store) InsertTerminalEvent(_ context.Context, te delivery.TerminalEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.terminalEvents[te.ID] = te
+	return nil
+}
+
+// TerminalEventsByIDs returns terminal events by IDs.
+func (s *Store) TerminalEventsByIDs(_ context.Context, eventIDs []ids.ID) ([]delivery.TerminalEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []delivery.TerminalEvent
+	for _, id := range eventIDs {
+		if te, ok := s.terminalEvents[id]; ok {
+			out = append(out, te)
+		}
+	}
+	return out, nil
 }

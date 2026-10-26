@@ -477,6 +477,19 @@ type SidebarSection struct {
 	DeletedAt   *time.Time
 }
 
+type TerminalEvent struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	AgentID      uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Name         string
+	ExitCode     *int32
+	DurationMs   int64
+	Tail         string
+	CreatedAt    time.Time
+}
+
 type WikiPage struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

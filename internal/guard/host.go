@@ -130,6 +130,7 @@ func (s *Supervisor) start(ctx context.Context) error {
 
 	stateDir := filepath.Dir(s.Cfg.SandboxDir)
 	s.terminals = NewTerminalManager(stateDir, s.roots, s.home)
+	s.terminals.SetOnFinish(s.handleTerminalFinish)
 	_ = s.terminals.AdoptExisting()
 	s.terminals.StartWatcher(ctx, 5*time.Second)
 	return nil
@@ -641,6 +642,35 @@ func (s *Supervisor) stopAll() {
 	}
 	if s.terminals != nil {
 		s.terminals.KillAll("halt")
+	}
+}
+
+func (s *Supervisor) handleTerminalFinish(meta *TerminalMeta) {
+	if meta == nil {
+		return
+	}
+	s.mu.Lock()
+	var client *Client
+	for _, m := range s.agents {
+		if m.conf.AgentID == meta.AgentID || cleanHandle(m.conf.Handle) == meta.Handle {
+			if m.agent != nil {
+				client = m.agent.Client
+			}
+			break
+		}
+	}
+	s.mu.Unlock()
+
+	if client == nil {
+		s.Log.Warn("guard: terminal finished but agent client not found", "agent_id", meta.AgentID, "name", meta.Name)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := HandleTerminalFinish(ctx, client, s.terminals, meta); err != nil {
+		s.Log.Warn("guard: handle terminal finish failed", "agent_id", meta.AgentID, "name", meta.Name, "err", err)
 	}
 }
 

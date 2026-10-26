@@ -43,6 +43,15 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "terminal-mcp" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := runTerminalMCP(ctx, os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "colony terminal-mcp: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) < 2 || os.Args[1] != "guard" {
 		fmt.Fprintf(os.Stderr, usage, strings.Join(guard.AdapterNames(), ", "))
 		os.Exit(2)
@@ -82,6 +91,25 @@ func main() {
 		log.Error("colony guard", "err", err)
 		os.Exit(1)
 	}
+}
+
+func runTerminalMCP(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("terminal-mcp", flag.ExitOnError)
+	agent := fs.String("agent", "", "agent handle")
+	stateDir := fs.String("state", "", "state directory")
+	channelID := fs.String("channel", "", "channel ID")
+	threadRootID := fs.String("thread", "", "thread root ID")
+	sandbox := fs.Bool("sandbox", false, "whether agent is sandboxed")
+	_ = fs.Parse(args)
+
+	if *sandbox {
+		return errors.New("sandboxed agents may not run terminals")
+	}
+	if *agent == "" || *stateDir == "" {
+		return errors.New("-agent and -state are required")
+	}
+
+	return guard.RunTerminalMCPServer(ctx, *agent, *stateDir, *channelID, *threadRootID)
 }
 
 func enroll(ctx context.Context, args []string) error {
