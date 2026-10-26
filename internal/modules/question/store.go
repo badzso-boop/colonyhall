@@ -24,6 +24,8 @@ type Store interface {
 	Escalate(ctx context.Context, id ids.ID, escalatedAt time.Time) (Question, bool, error)
 	// Expire moves an open question to expired. Returns (updated, true, nil) or (Question{}, false, nil) if not open.
 	Expire(ctx context.Context, id ids.ID, expiredAt time.Time) (Question, bool, error)
+	// Reopen sets an answered question back to open with nil answer fields.
+	Reopen(ctx context.Context, id ids.ID) error
 	// Due lists open questions to agents that are due for escalation (created_at <= escalateBefore) or deadline (deadline <= deadlineBefore).
 	Due(ctx context.Context, escalateBefore, deadlineBefore time.Time, limit int) ([]Question, error)
 }

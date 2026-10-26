@@ -18,6 +18,7 @@ import (
 	"colonyhall/internal/modules/compaction"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/decision"
+	"colonyhall/internal/modules/delegation"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/git"
@@ -58,6 +59,7 @@ type Backend struct {
 	Leases       lease.Store
 	Sidebar      sidebar.Store
 	Compaction   compaction.Store
+	Delegation   delegation.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -82,6 +84,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("leases", func(t *testing.T) { testLeases(t, newBackend(t)) })
 	t.Run("sidebar", func(t *testing.T) { testSidebar(t, newBackend(t)) })
 	t.Run("compaction", func(t *testing.T) { testCompaction(t, newBackend(t)) })
+	t.Run("delegation", func(t *testing.T) { testDelegation(t, newBackend(t)) })
 }
 
 var (
@@ -1317,7 +1320,7 @@ func testQuestion(t *testing.T, b Backend) {
 	}
 	must(t, st.Insert(ctx, q6))
 
-	// q7: to human (should never be returned by Due)
+	// q7: to human with deadline but allow_expire=false (should never be returned by Due)
 	dl7 := t0.Add(10 * time.Minute)
 	q7ID := gen.New()
 	q7 := question.Question{
@@ -1343,6 +1346,39 @@ func testQuestion(t *testing.T, b Backend) {
 	}
 	if dueList[0].ID != q5ID || dueList[1].ID != q6ID {
 		t.Fatalf("expected [q5, q6], got %+v", dueList)
+	}
+
+	// q8: to human with deadline and allow_expire=true (delegation question) is due when deadline passes
+	dl8 := t0.Add(10 * time.Minute)
+	q8ID := gen.New()
+	q8 := question.Question{
+		ID:           q8ID,
+		Number:       8,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.agent.ID,
+		ToHuman:      true,
+		AllowExpire:  true,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: rootMsg.ID,
+		Text:         "To human with deadline and allow_expire, due on deadline",
+		Options:      []string{"a", "b"},
+		Deadline:     &dl8,
+		State:        question.StateOpen,
+		CreatedAt:    t0,
+	}
+	must(t, st.Insert(ctx, q8))
+
+	dueWithHumanDL, err := st.Due(ctx, t0, t0.Add(15*time.Minute), 10)
+	must(t, err)
+	foundQ8 := false
+	for _, q := range dueWithHumanDL {
+		if q.ID == q8ID {
+			foundQ8 = true
+			break
+		}
+	}
+	if !foundQ8 {
+		t.Fatalf("expected q8 to be due when deadline passed, got %+v", dueWithHumanDL)
 	}
 
 	// Non-existent lookups return db.ErrNotFound

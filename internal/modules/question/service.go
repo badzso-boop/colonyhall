@@ -49,13 +49,15 @@ type Service struct {
 
 // AskInput contains parameters for asking a question.
 type AskInput struct {
-	ChannelID       ids.ID
-	ThreadRootID    ids.ID
-	To              string
-	Text            string
-	Options         []string
-	DefaultOption   *string
-	DeadlineMinutes *int
+	ChannelID         ids.ID
+	ThreadRootID      ids.ID
+	To                string
+	Text              string
+	Options           []string
+	DefaultOption     *string
+	DeadlineMinutes   *int
+	AllowMultipleOpen bool
+	AllowExpire       bool
 }
 
 // Ask asks a new question in a conversation thread.
@@ -121,13 +123,15 @@ func (s *Service) Ask(ctx context.Context, by identity.Actor, in AskInput) (Ques
 		if root.ChannelID != in.ChannelID {
 			return Question{}, ErrForbidden
 		}
-		// One open question per thread per asker
-		count, err := s.Store.CountOpenByThreadAsker(ctx, in.ThreadRootID, by.ID)
-		if err != nil {
-			return Question{}, err
-		}
-		if count > 0 {
-			return Question{}, ErrQuestionAlreadyOpen
+		if !in.AllowMultipleOpen {
+			// One open question per thread per asker
+			count, err := s.Store.CountOpenByThreadAsker(ctx, in.ThreadRootID, by.ID)
+			if err != nil {
+				return Question{}, err
+			}
+			if count > 0 {
+				return Question{}, ErrQuestionAlreadyOpen
+			}
 		}
 	}
 
@@ -237,6 +241,7 @@ func (s *Service) Ask(ctx context.Context, by identity.Actor, in AskInput) (Ques
 		AskedBy:       by.ID,
 		ToActorID:     toActorID,
 		ToHuman:       toHuman,
+		AllowExpire:   in.AllowExpire,
 		ChannelID:     in.ChannelID,
 		ThreadRootID:  threadRootID,
 		Text:          text,
@@ -658,6 +663,11 @@ func (s *Service) record(ctx context.Context, workspaceID, actorID ids.ID, typ s
 		s.Bus.Notify(seq)
 	}
 	return err
+}
+
+// Reopen sets an answered question back to open state.
+func (s *Service) Reopen(ctx context.Context, id ids.ID) error {
+	return s.Store.Reopen(ctx, id)
 }
 
 func (s *Service) recordEvent(ctx context.Context, workspaceID, actorID ids.ID, typ string, aggID ids.ID, payload any) error {

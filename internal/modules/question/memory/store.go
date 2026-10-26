@@ -245,16 +245,35 @@ func (s *Store) Expire(_ context.Context, id ids.ID, expiredAt time.Time) (quest
 	return cloneQuestion(q), true, nil
 }
 
+func (s *Store) Reopen(_ context.Context, id ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	q, ok := s.questions[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	q.State = question.StateOpen
+	q.Answer = nil
+	q.AnsweredBy = nil
+	q.AnsweredAt = nil
+	s.questions[id] = q
+	return nil
+}
+
 func (s *Store) Due(_ context.Context, escalateBefore, deadlineBefore time.Time, limit int) ([]question.Question, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var out []question.Question
 	for _, q := range s.questions {
-		if q.State != question.StateOpen || q.ToHuman {
+		if q.State != question.StateOpen {
 			continue
 		}
-		isEscalate := !q.CreatedAt.After(escalateBefore)
+		if q.ToHuman && !q.AllowExpire {
+			continue
+		}
+		isEscalate := !q.ToHuman && !q.CreatedAt.After(escalateBefore)
 		isDeadline := q.Deadline != nil && !q.Deadline.After(deadlineBefore)
 		if isEscalate || isDeadline {
 			out = append(out, cloneQuestion(q))

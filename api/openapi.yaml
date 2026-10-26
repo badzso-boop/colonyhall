@@ -1149,6 +1149,29 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Answered question, content: { application/json: { schema: { $ref: "#/components/schemas/Question" } } } }
+  /delegations:
+    get:
+      operationId: listDelegations
+      tags: [delegation]
+      description: List delegation requests in the workspace. Humans only.
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, denied, expired]
+          description: "Filter by state: pending, approved, denied, expired"
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Delegations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DelegationList"
+        "403": { $ref: "#/components/responses/Problem" }
+
   /files/{fileId}:
     parameters:
       - name: fileId
@@ -1850,6 +1873,7 @@ components:
         mentioned: { type: boolean }
         dm: { type: boolean }
         at: { type: string, format: date-time }
+        delegated_by: { type: string, description: "Handle of the approving admin for kind=delegated" }
     Inbox:
       type: object
       required: [items, total]
@@ -2896,6 +2920,71 @@ components:
         summary_markdown: { type: string, nullable: true }
         messages_after: { type: array, items: { $ref: "#/components/schemas/ContextMessage" } }
         has_more: { type: boolean }
+
+    Delegation:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - message_id
+        - channel_id
+        - from_agent_id
+        - to_agent_id
+        - question_id
+        - state
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+        channel_id:
+          type: string
+          format: uuid
+        thread_root_id:
+          type: string
+          format: uuid
+        from_agent_id:
+          type: string
+          format: uuid
+        from_agent_handle:
+          type: string
+        to_agent_id:
+          type: string
+          format: uuid
+        to_agent_handle:
+          type: string
+        question_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [pending, approved, denied, expired]
+        decided_by:
+          type: string
+          format: uuid
+        decided_by_handle:
+          type: string
+        decided_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    DelegationList:
+      type: object
+      required: [delegations]
+      properties:
+        delegations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Delegation"
 
 
 

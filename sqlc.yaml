@@ -99,6 +99,10 @@ sql:
     schema: migrations
     queries: internal/modules/compaction/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/compaction/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/delegation/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/delegation/postgres/sqlcgen } }
 
 
 

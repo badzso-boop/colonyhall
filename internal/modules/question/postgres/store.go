@@ -35,6 +35,7 @@ func toModel(r sqlcgen.Question) question.Question {
 		AskedBy:       r.AskedBy,
 		ToActorID:     r.ToActorID,
 		ToHuman:       r.ToHuman,
+		AllowExpire:   r.AllowExpire,
 		ChannelID:     r.ChannelID,
 		ThreadRootID:  r.ThreadRootID,
 		Text:          r.Text,
@@ -72,6 +73,7 @@ func (s *Store) Insert(ctx context.Context, q question.Question) error {
 		Deadline:      q.Deadline,
 		State:         q.State,
 		CreatedAt:     q.CreatedAt,
+		AllowExpire:   q.AllowExpire,
 	})
 	if err != nil {
 		if db.IsUniqueViolation(err) {
@@ -197,6 +199,11 @@ func (s *Store) Expire(ctx context.Context, id ids.ID, expiredAt time.Time) (que
 		return question.Question{}, false, err
 	}
 	return toModel(r), true, nil
+}
+
+func (s *Store) Reopen(ctx context.Context, id ids.ID) error {
+	_, err := s.q(ctx).ReopenQuestion(ctx, id)
+	return err
 }
 
 func (s *Store) Due(ctx context.Context, escalateBefore, deadlineBefore time.Time, limit int) ([]question.Question, error) {

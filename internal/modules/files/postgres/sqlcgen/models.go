@@ -208,6 +208,21 @@ type Decision struct {
 	CreatedAt    time.Time
 }
 
+type Delegation struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	MessageID    uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	FromAgentID  uuid.UUID
+	ToAgentID    uuid.UUID
+	QuestionID   uuid.UUID
+	State        string
+	DecidedBy    *uuid.UUID
+	DecidedAt    *time.Time
+	CreatedAt    time.Time
+}
+
 type Delivery struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -220,6 +235,7 @@ type Delivery struct {
 	CreatedAt   time.Time
 	AckedAt     *time.Time
 	FromActorID *uuid.UUID
+	DelegatedBy *uuid.UUID
 }
 
 type Event struct {
@@ -391,6 +407,7 @@ type Question struct {
 	EscalatedAt   *time.Time
 	WithdrawnAt   *time.Time
 	ExpiredAt     *time.Time
+	AllowExpire   bool
 }
 
 type Reaction struct {

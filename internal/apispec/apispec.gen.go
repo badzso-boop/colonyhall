@@ -288,6 +288,30 @@ func (e CreateScheduleRequestCatchUp) Valid() bool {
 	}
 }
 
+// Defines values for DelegationState.
+const (
+	DelegationStateApproved DelegationState = "approved"
+	DelegationStateDenied   DelegationState = "denied"
+	DelegationStateExpired  DelegationState = "expired"
+	DelegationStatePending  DelegationState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the DelegationState enum.
+func (e DelegationState) Valid() bool {
+	switch e {
+	case DelegationStateApproved:
+		return true
+	case DelegationStateDenied:
+		return true
+	case DelegationStateExpired:
+		return true
+	case DelegationStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FailFileFetchRequestErrorCode.
 const (
 	FailFileFetchRequestErrorCodeDenied      FailFileFetchRequestErrorCode = "denied"
@@ -849,6 +873,30 @@ func (e WikiRevisionKind) Valid() bool {
 	}
 }
 
+// Defines values for ListDelegationsParamsState.
+const (
+	ListDelegationsParamsStateApproved ListDelegationsParamsState = "approved"
+	ListDelegationsParamsStateDenied   ListDelegationsParamsState = "denied"
+	ListDelegationsParamsStateExpired  ListDelegationsParamsState = "expired"
+	ListDelegationsParamsStatePending  ListDelegationsParamsState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ListDelegationsParamsState enum.
+func (e ListDelegationsParamsState) Valid() bool {
+	switch e {
+	case ListDelegationsParamsStateApproved:
+		return true
+	case ListDelegationsParamsStateDenied:
+		return true
+	case ListDelegationsParamsStateExpired:
+		return true
+	case ListDelegationsParamsStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWikiPagesParamsDeleted.
 const (
 	N0 ListWikiPagesParamsDeleted = 0
@@ -1368,6 +1416,33 @@ type DecisionsResponse struct {
 	Decisions []Decision `json:"decisions"`
 }
 
+// Delegation defines model for Delegation.
+type Delegation struct {
+	ChannelId       openapi_types.UUID  `json:"channel_id"`
+	CreatedAt       time.Time           `json:"created_at"`
+	DecidedAt       *time.Time          `json:"decided_at,omitempty"`
+	DecidedBy       *openapi_types.UUID `json:"decided_by,omitempty"`
+	DecidedByHandle *string             `json:"decided_by_handle,omitempty"`
+	FromAgentHandle *string             `json:"from_agent_handle,omitempty"`
+	FromAgentId     openapi_types.UUID  `json:"from_agent_id"`
+	Id              openapi_types.UUID  `json:"id"`
+	MessageId       openapi_types.UUID  `json:"message_id"`
+	QuestionId      openapi_types.UUID  `json:"question_id"`
+	State           DelegationState     `json:"state"`
+	ThreadRootId    *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	ToAgentHandle   *string             `json:"to_agent_handle,omitempty"`
+	ToAgentId       openapi_types.UUID  `json:"to_agent_id"`
+	WorkspaceId     openapi_types.UUID  `json:"workspace_id"`
+}
+
+// DelegationState defines model for Delegation.State.
+type DelegationState string
+
+// DelegationList defines model for DelegationList.
+type DelegationList struct {
+	Delegations []Delegation `json:"delegations"`
+}
+
 // EditWikiPageRequest defines model for EditWikiPageRequest.
 type EditWikiPageRequest struct {
 	BaseRev int       `json:"base_rev"`
@@ -1637,10 +1712,13 @@ type InboxItem struct {
 	Author string    `json:"author"`
 
 	// AuthorKind Who caused the item
-	AuthorKind   InboxItemAuthorKind `json:"author_kind"`
-	Body         string              `json:"body"`
-	Channel      string              `json:"channel"`
-	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	AuthorKind InboxItemAuthorKind `json:"author_kind"`
+	Body       string              `json:"body"`
+	Channel    string              `json:"channel"`
+	ChannelId  openapi_types.UUID  `json:"channel_id"`
+
+	// DelegatedBy Handle of the approving admin for kind=delegated
+	DelegatedBy  *string             `json:"delegated_by,omitempty"`
 	Dm           bool                `json:"dm"`
 	Id           openapi_types.UUID  `json:"id"`
 	ItemId       openapi_types.UUID  `json:"item_id"`
@@ -2303,6 +2381,15 @@ type ListDecisionsParams struct {
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Query *string `form:"query,omitempty" json:"query,omitempty"`
 }
+
+// ListDelegationsParams defines parameters for ListDelegations.
+type ListDelegationsParams struct {
+	// State Filter by state: pending, approved, denied, expired
+	State *ListDelegationsParamsState `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// ListDelegationsParamsState defines parameters for ListDelegations.
+type ListDelegationsParamsState string
 
 // ListPreviewsParams defines parameters for ListPreviews.
 type ListPreviewsParams struct {

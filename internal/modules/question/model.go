@@ -27,6 +27,7 @@ type Question struct {
 	AskedBy       ids.ID
 	ToActorID     *ids.ID
 	ToHuman       bool
+	AllowExpire   bool
 	ChannelID     ids.ID
 	ThreadRootID  ids.ID
 	Text          string

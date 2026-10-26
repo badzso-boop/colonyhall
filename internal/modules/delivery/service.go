@@ -17,11 +17,18 @@ import (
 // ConsumerName is the event-log consumer that fills the inbox.
 const ConsumerName = "delivery"
 
+// ApprovalChecker reports whether an agent task needs human delegation approval.
+type ApprovalChecker interface {
+	NeedsApproval(ctx context.Context, fromActorID, toActorID ids.ID) (bool, error)
+	IsDelegationQuestion(ctx context.Context, questionID ids.ID) (bool, error)
+}
+
 // Service holds the delivery use cases.
 type Service struct {
 	Store        Store
 	Conversation conversation.Reader
 	Directory    identity.Directory
+	Approval     ApprovalChecker
 	IDs          ids.Generator
 	Clock        clock.Clock
 }
@@ -123,6 +130,13 @@ func (s *Service) onReaction(ctx context.Context, e eventlog.Event, p conversati
 }
 
 func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p question.Event) error {
+	if s.Approval != nil && p.QuestionID != "" {
+		if qID, err := ids.Parse(p.QuestionID); err == nil {
+			if isDel, err := s.Approval.IsDelegationQuestion(ctx, qID); err == nil && isDel {
+				return nil // Handled by delegation module on approve/deny
+			}
+		}
+	}
 	askerID, err := ids.Parse(p.AskedBy)
 	if err != nil {
 		return err
@@ -177,22 +191,66 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 	if err != nil {
 		return err
 	}
+	authorID, err := ids.Parse(p.AuthorID)
+	if err != nil {
+		return err
+	}
+	author, err := s.Directory.ActorByID(ctx, authorID)
+	if err != nil {
+		return err
+	}
+	recipients, err := FindRecipients(ctx, s.Conversation, s.Directory, ch, p)
+	if err != nil {
+		return err
+	}
+	for _, rec := range recipients {
+		a := rec.Actor
+		if author.Kind == identity.KindAgent && a.Kind == identity.KindAgent && s.Approval != nil {
+			needsApproval, err := s.Approval.NeedsApproval(ctx, author.ID, a.ID)
+			if err != nil {
+				return err
+			}
+			if needsApproval {
+				// Target is full-access agent: non-human task requires human approval.
+				continue
+			}
+		}
+		d := Delivery{
+			ID: s.IDs.New(), WorkspaceID: e.WorkspaceID, RecipientID: a.ID, ItemKind: ItemMessage,
+			ItemID: msgID, ChannelID: ch.ID, FromActorID: e.ActorID, Flags: rec.Flags, EventSeq: e.Seq, CreatedAt: s.Clock.Now(),
+		}
+		if _, err := s.Store.Insert(ctx, d); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Recipient is an actor in a channel who should receive an inbox item for a message.
+type Recipient struct {
+	Actor identity.Actor
+	Flags Flags
+}
+
+// FindRecipients computes which actors in a channel should receive an inbox item for the given message.
+func FindRecipients(ctx context.Context, conv conversation.Reader, dir identity.Directory, ch conversation.Channel, p conversation.MessageCreated) ([]Recipient, error) {
 	mentioned := map[string]bool{}
 	for _, m := range p.Mentions {
 		mentioned[m] = true
 	}
-	members, err := s.Conversation.MemberIDs(ctx, ch.ID)
+	members, err := conv.MemberIDs(ctx, ch.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	actors, err := s.Directory.ActorsByIDs(ctx, members)
+	actors, err := dir.ActorsByIDs(ctx, members)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	following, err := s.threadFollowers(ctx, ch, p)
+	following, err := ThreadFollowers(ctx, conv, dir, ch, p)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var out []Recipient
 	for _, a := range actors {
 		if a.ID.String() == p.AuthorID {
 			continue
@@ -213,23 +271,17 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 		if a.Kind == identity.KindAgent {
 			flags |= FlagWake
 		}
-		d := Delivery{
-			ID: s.IDs.New(), WorkspaceID: e.WorkspaceID, RecipientID: a.ID, ItemKind: ItemMessage,
-			ItemID: msgID, ChannelID: ch.ID, FromActorID: e.ActorID, Flags: flags, EventSeq: e.Seq, CreatedAt: s.Clock.Now(),
-		}
-		if _, err := s.Store.Insert(ctx, d); err != nil {
-			return err
-		}
+		out = append(out, Recipient{Actor: a, Flags: flags})
 	}
-	return nil
+	return out, nil
 }
 
-// threadFollowers returns who a reply reaches without a mention: a human's
+// ThreadFollowers returns who a reply reaches without a mention: a human's
 // reply in a channel thread goes to the agents that wrote in that thread
 // (like following a thread in Slack). A reply that mentions someone reaches
 // only them, and an agent's reply wakes nobody this way, so two agents in a
 // thread cannot keep waking each other.
-func (s *Service) threadFollowers(ctx context.Context, ch conversation.Channel, p conversation.MessageCreated) (map[ids.ID]bool, error) {
+func ThreadFollowers(ctx context.Context, conv conversation.Reader, dir identity.Directory, ch conversation.Channel, p conversation.MessageCreated) (map[ids.ID]bool, error) {
 	if p.ThreadRootID == "" || len(p.Mentions) > 0 || ch.Kind == conversation.KindDM || p.NoThreadFollow {
 		return nil, nil
 	}
@@ -237,7 +289,7 @@ func (s *Service) threadFollowers(ctx context.Context, ch conversation.Channel, 
 	if err != nil {
 		return nil, err
 	}
-	author, err := s.Directory.ActorByID(ctx, authorID)
+	author, err := dir.ActorByID(ctx, authorID)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +300,7 @@ func (s *Service) threadFollowers(ctx context.Context, ch conversation.Channel, 
 	if err != nil {
 		return nil, err
 	}
-	authors, err := s.Conversation.ThreadAuthorIDs(ctx, rootID)
+	authors, err := conv.ThreadAuthorIDs(ctx, rootID)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +326,7 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 	}
 	msgIDs := make([]ids.ID, 0, len(ds))
 	for _, d := range ds {
-		if d.ItemKind == ItemMessage || d.ItemKind == ItemReactionDown || d.ItemKind == ItemAnswer {
+		if d.ItemKind == ItemMessage || d.ItemKind == ItemReactionDown || d.ItemKind == ItemAnswer || d.ItemKind == ItemDelegated {
 			if d.ItemID != ids.Nil {
 				msgIDs = append(msgIDs, d.ItemID)
 			}
@@ -293,6 +345,9 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 	for _, d := range ds {
 		if d.FromActorID != ids.Nil {
 			authorIDs = append(authorIDs, d.FromActorID)
+		}
+		if d.DelegatedBy != ids.Nil {
+			authorIDs = append(authorIDs, d.DelegatedBy)
 		}
 	}
 	authors, err := s.Directory.ActorsByIDs(ctx, authorIDs)
@@ -319,6 +374,9 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 		if d.FromActorID != ids.Nil {
 			item.AuthorHandle = handles[d.FromActorID]
 			item.AuthorKind = kinds[d.FromActorID]
+		}
+		if d.DelegatedBy != ids.Nil {
+			item.DelegatedBy = handles[d.DelegatedBy]
 		}
 		if item.AuthorHandle == "" && (d.ItemKind == ItemAnswer || d.ItemKind == ItemCompact) {
 			item.AuthorHandle = "system"

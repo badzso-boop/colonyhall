@@ -26,7 +26,7 @@ func (s *Store) Insert(ctx context.Context, d delivery.Delivery) (bool, error) {
 	n, err := s.q(ctx).InsertDelivery(ctx, sqlcgen.InsertDeliveryParams{
 		ID: d.ID, WorkspaceID: d.WorkspaceID, RecipientID: d.RecipientID, ItemKind: d.ItemKind, ItemID: d.ItemID,
 		ChannelID: channel, Flags: int16(d.Flags), EventSeq: d.EventSeq, CreatedAt: d.CreatedAt,
-		FromActorID: nullID(d.FromActorID),
+		FromActorID: nullID(d.FromActorID), DelegatedBy: nullID(d.DelegatedBy),
 	})
 	return n == 1, err
 }
@@ -51,6 +51,9 @@ func (s *Store) Pending(ctx context.Context, recipientID ids.ID, limit int) ([]d
 		}
 		if r.FromActorID != nil {
 			d.FromActorID = *r.FromActorID
+		}
+		if r.DelegatedBy != nil {
+			d.DelegatedBy = *r.DelegatedBy
 		}
 		out = append(out, d)
 	}

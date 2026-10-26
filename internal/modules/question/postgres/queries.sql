@@ -2,11 +2,11 @@
 INSERT INTO question (
     id, number, workspace_id, asked_by, to_actor_id, to_human,
     channel_id, thread_root_id, text, options, default_option,
-    deadline, state, created_at
+    deadline, state, created_at, allow_expire
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11,
-    $12, $13, $14
+    $12, $13, $14, $15
 ) RETURNING *;
 
 -- name: NextQuestionNumber :one
@@ -61,12 +61,21 @@ SET state = 'expired',
 WHERE id = $1 AND state IN ('open', 'escalated')
 RETURNING *;
 
+-- name: ReopenQuestion :one
+UPDATE question
+SET state = 'open',
+    answer = NULL,
+    answered_by = NULL,
+    answered_at = NULL
+WHERE id = $1
+RETURNING *;
+
 -- name: ListDueQuestions :many
 SELECT * FROM question
 WHERE state = 'open'
-  AND to_human = false
+  AND (to_human = false OR allow_expire = true)
   AND (
-    (created_at <= $1)
+    (to_human = false AND created_at <= $1)
     OR (deadline IS NOT NULL AND deadline <= $2)
   )
 ORDER BY created_at ASC

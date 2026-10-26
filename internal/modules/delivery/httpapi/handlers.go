@@ -14,10 +14,17 @@ import (
 
 // ToAPI converts an inbox item to its API shape.
 func ToAPI(it delivery.InboxItem) apispec.InboxItem {
-	return apispec.InboxItem{Id: it.ID, Kind: it.ItemKind, ItemId: it.ItemID, Channel: it.ChannelName,
+	var delegatedBy *string
+	if it.DelegatedBy != "" {
+		delegatedBy = &it.DelegatedBy
+	}
+	return apispec.InboxItem{
+		Id: it.ID, Kind: it.ItemKind, ItemId: it.ItemID, Channel: it.ChannelName,
 		ChannelId: it.ChannelID, ThreadRootId: httpx.Ptr(it.ThreadRootID), Author: it.AuthorHandle,
 		AuthorKind: apispec.InboxItemAuthorKind(it.AuthorKind), Body: it.Body,
-		Mentioned: it.Flags.Has(delivery.FlagMentioned), Dm: it.Flags.Has(delivery.FlagDM), At: it.MessageAt}
+		Mentioned: it.Flags.Has(delivery.FlagMentioned), Dm: it.Flags.Has(delivery.FlagDM), At: it.MessageAt,
+		DelegatedBy: delegatedBy,
+	}
 }
 
 // Register mounts the inbox routes on mux. Every route requires auth.

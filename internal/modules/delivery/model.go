@@ -32,6 +32,7 @@ const (
 	ItemReactionDown = "reaction_down" // a 👎 on the recipient's message; never wakes
 	ItemAnswer       = "answer"        // answer to an agent's question; wakes
 	ItemCompact      = "compact"       // compaction request to scribe agent; wakes
+	ItemDelegated    = "delegated"     // approved task from another agent; wakes
 )
 
 // Delivery is one inbox row.
@@ -43,6 +44,7 @@ type Delivery struct {
 	ItemID      ids.ID
 	ChannelID   ids.ID
 	FromActorID ids.ID // who caused it: the author, the reactor, …
+	DelegatedBy ids.ID // admin human who approved it (for delegated items)
 	Flags       Flags
 	EventSeq    int64
 	CreatedAt   time.Time
@@ -60,6 +62,7 @@ type InboxItem struct {
 	Body         string
 	ThreadRootID ids.ID
 	MessageAt    time.Time
+	DelegatedBy  string // handle of the approving admin (for delegated items)
 }
 
 // Limits.
