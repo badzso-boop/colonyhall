@@ -3916,6 +3916,7 @@ async function renderHosts() {
   const naSubmit = el("button", { textContent: L.createAgent });
   const naStatus = el("div", { className: "warn grant", style: "display:none;" });
 
+  let naPending = null; // the agent created by a failed attempt, reused on retry
   naSubmit.onclick = async () => {
     naStatus.style.display = "none";
     naStatus.textContent = "";
@@ -3926,22 +3927,36 @@ async function renderHosts() {
       return;
     }
 
-    let created;
-    try {
-      created = await api("/api/v1/actors", {
-        method: "POST",
-        body: JSON.stringify({
-          kind: "agent",
-          handle: handle,
-          display_name: naName.value.trim() || undefined,
-          role: "member"
-        })
-      });
-    } catch (e) {
-      naStatus.textContent = "Hiba az agent létrehozásakor (POST /actors): " + e.message;
-      naStatus.style.display = "";
-      return;
+    // The agent is created first and assigned after; when the assignment
+    // fails, a retry must not create it again (the handle is taken by then).
+    // Reuse the agent from the failed attempt, or an existing agent with
+    // this handle that has no machine yet.
+    const assignedIds = new Set(hosts.flatMap(h => (h.agents || []).map(x => x.agent_id)));
+    const existing = Object.values(actors).find(x => x.kind === "agent" && x.handle === handle);
+    let created = null;
+    if (naPending && naPending.actor.handle === handle) {
+      created = naPending;
+    } else if (existing && !assignedIds.has(existing.id)) {
+      created = { actor: existing };
+    } else {
+      try {
+        created = await api("/api/v1/actors", {
+          method: "POST",
+          body: JSON.stringify({
+            kind: "agent",
+            handle: handle,
+            display_name: naName.value.trim() || undefined,
+            role: "member"
+          })
+        });
+      } catch (e) {
+        naStatus.textContent = "Hiba az agent létrehozásakor (POST /actors): " + e.message;
+        naStatus.style.display = "";
+        return;
+      }
+      if (created.actor) actors[created.actor.id] = created.actor;
     }
+    naPending = created;
 
     for (const { ch, cb } of chBoxes) {
       if (cb.checked) {
