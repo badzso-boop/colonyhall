@@ -267,3 +267,73 @@ func TestLiveProgressE2E(t *testing.T) {
 		t.Fatalf("expected 2 steps in overview run, got: %v", firstRun.Steps)
 	}
 }
+
+// Steps are for humans only: another agent's guard connection, even in a
+// channel it can read, never gets agent.progress frames; and a terminal
+// event for a channel the agent cannot read is refused.
+func TestProgressNotSentToAgentsAndTerminalEventChannelChecked(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	general := e.generalID()
+
+	var other struct {
+		Actor struct{ ID string }
+		Token string
+	}
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "worker", "role": "member"}, &other); s != http.StatusCreated {
+		t.Fatalf("create worker: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": other.Actor.ID, "can_write": true}, nil); s != http.StatusNoContent {
+		t.Fatalf("add worker: %d", s)
+	}
+
+	// @fake-agent's guard connection, a reader of #general.
+	ws, res, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(e.srv.URL, "http")+"/ws/ui", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Body != nil {
+		_ = res.Body.Close()
+	}
+	defer func() { _ = ws.CloseNow() }()
+	if err := wsjson.Write(ctx, ws, map[string]any{"type": "hello", "token": server.DevAgentToken}); err != nil {
+		t.Fatal(err)
+	}
+	expectFrame(t, ctx, ws, "welcome")
+	expectFrame(t, ctx, ws, "replay_done")
+
+	// @worker reports a step, then a human posts a sentinel message.
+	if s := e.do("POST", "/api/v1/agent/progress", other.Token, map[string]any{
+		"channel_id": general, "run_key": "r1",
+		"steps": []any{map[string]any{"kind": "read", "label": "secret/plan.md", "state": "done", "started_at": "2026-10-26T10:00:00Z"}},
+	}, nil); s != http.StatusNoContent && s != http.StatusOK && s != http.StatusAccepted {
+		t.Fatalf("progress: %d", s)
+	}
+	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "sentinel"}); s != http.StatusCreated {
+		t.Fatalf("sentinel: %d", s)
+	}
+	for {
+		var f map[string]any
+		if err := wsjson.Read(ctx, ws, &f); err != nil {
+			t.Fatalf("waiting for the sentinel: %v", err)
+		}
+		if f["type"] == "agent.progress" {
+			t.Fatalf("an agent connection got another agent's steps: %v", f)
+		}
+		if f["type"] == "event" && f["event_type"] == "message.created" {
+			break
+		}
+	}
+
+	// A terminal event for a private channel the agent cannot read.
+	var priv struct{ ID string }
+	if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": "ops-private", "kind": "private"}, &priv); s != http.StatusCreated {
+		t.Fatalf("private channel: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/terminal-events", server.DevAgentToken, map[string]any{
+		"name": "x", "channel_id": priv.ID, "duration_ms": 1, "tail": "done",
+	}, nil); s != http.StatusForbidden {
+		t.Fatalf("terminal event for an unreadable channel: want 403, got %d", s)
+	}
+}

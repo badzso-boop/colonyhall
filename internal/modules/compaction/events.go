@@ -33,3 +33,14 @@ type CompactionFailed struct {
 	ChannelID    string `json:"channel_id"`
 	ErrorCode    string `json:"error_code"`
 }
+
+// EventSettingsUpdated: an admin changed the threshold or the scribe.
+const EventSettingsUpdated = "compaction.settings_updated"
+
+// SettingsUpdated is the payload of EventSettingsUpdated.
+type SettingsUpdated struct {
+	WorkspaceID            string `json:"workspace_id"`
+	UpdatedBy              string `json:"updated_by"`
+	CompactThresholdTokens int    `json:"compact_threshold_tokens"`
+	CompactorAgentID       string `json:"compactor_agent_id"`
+}

@@ -446,6 +446,15 @@ func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, na
 	if by.Kind != identity.KindAgent {
 		return ErrForbidden
 	}
+	if channelID != ids.Nil && s.Conversation != nil {
+		ok, err := s.Conversation.CanRead(ctx, by, channelID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrForbidden
+		}
+	}
 	// Cap tail at 40 lines and 8 KB
 	if len(tail) > 8*1024 {
 		tail = tail[len(tail)-8*1024:]

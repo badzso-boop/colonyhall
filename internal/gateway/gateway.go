@@ -369,6 +369,10 @@ func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in a
 	}
 
 	for _, c := range recipients {
+		// Steps are for humans only: other agents' guards never get them.
+		if c.actor.Kind != identity.KindHuman {
+			continue
+		}
 		visible, err := c.visibleChannel(ctx, ids.ID(in.ChannelId))
 		if err == nil && visible {
 			_ = c.writeJSON(ctx, frame)

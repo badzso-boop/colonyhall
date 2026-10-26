@@ -117,12 +117,16 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 	pending, err := s.Store.PendingCompaction(ctx, chID, threadRootID)
 	if err == nil {
 		if now.Sub(pending.CreatedAt) > 15*time.Minute {
-			_ = s.Store.FailPendingCompaction(ctx, pending.ID, "timeout", now)
-			_ = s.appendAndPublish(ctx, e.WorkspaceID, EventFailed, pending.ID, CompactionFailed{
-				CompactionID: pending.ID.String(),
-				WorkspaceID:  e.WorkspaceID.String(),
-				ChannelID:    chID.String(),
-				ErrorCode:    "timeout",
+			_ = s.withTx(ctx, func(ctx context.Context) error {
+				if err := s.Store.FailPendingCompaction(ctx, pending.ID, "timeout", now); err != nil {
+					return err
+				}
+				return s.appendAndPublish(ctx, e.WorkspaceID, EventFailed, pending.ID, CompactionFailed{
+					CompactionID: pending.ID.String(),
+					WorkspaceID:  e.WorkspaceID.String(),
+					ChannelID:    chID.String(),
+					ErrorCode:    "timeout",
+				})
 			})
 		} else {
 			return nil // Already pending
@@ -143,18 +147,42 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 		CreatedAt:            now,
 	}
 
-	if err := s.Store.InsertCompaction(ctx, comp); err != nil {
-		return err
-	}
-
-	return s.appendAndPublish(ctx, e.WorkspaceID, EventCreated, comp.ID, CompactionCreated{
-		CompactionID:     comp.ID.String(),
-		WorkspaceID:      e.WorkspaceID.String(),
-		ChannelID:        chID.String(),
-		ThreadRootID:     threadRootID.String(),
-		CompactorAgentID: st.CompactorAgentID.String(),
-		Trigger:          string(comp.Trigger),
+	return s.withTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.InsertCompaction(ctx, comp); err != nil {
+			return err
+		}
+		return s.appendAndPublish(ctx, e.WorkspaceID, EventCreated, comp.ID, CompactionCreated{
+			CompactionID:     comp.ID.String(),
+			WorkspaceID:      e.WorkspaceID.String(),
+			ChannelID:        chID.String(),
+			ThreadRootID:     threadRootID.String(),
+			CompactorAgentID: st.CompactorAgentID.String(),
+			Trigger:          string(comp.Trigger),
+		})
 	})
+}
+
+// notifyKey collects the event sequence numbers appended inside withTx, so
+// the bus is woken only after the transaction commits.
+type notifyKey struct{}
+
+// withTx runs a state change and its event in one transaction
+// (transactional outbox) and wakes the bus after the commit.
+func (s *Service) withTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	var seqs []int64
+	ctx = context.WithValue(ctx, notifyKey{}, &seqs)
+	var err error
+	if s.Tx != nil {
+		err = s.Tx.InTx(ctx, fn)
+	} else {
+		err = fn(ctx)
+	}
+	if err == nil && s.Bus != nil {
+		for _, q := range seqs {
+			s.Bus.Notify(q)
+		}
+	}
+	return err
 }
 
 func (s *Service) appendAndPublish(ctx context.Context, workspaceID ids.ID, typ string, compID ids.ID, payload any) error {
@@ -167,7 +195,9 @@ func (s *Service) appendAndPublish(ctx context.Context, workspaceID ids.ID, typ 
 			return err
 		}
 	}
-	if s.Bus != nil {
+	if seqs, ok := ctx.Value(notifyKey{}).(*[]int64); ok {
+		*seqs = append(*seqs, ev.Seq)
+	} else if s.Bus != nil {
 		s.Bus.Notify(ev.Seq)
 	}
 	return nil
@@ -190,7 +220,7 @@ func (s *Service) GetSettings(ctx context.Context, by identity.Actor) (Settings,
 }
 
 func (s *Service) UpdateSettings(ctx context.Context, by identity.Actor, threshold int, compactorAgentID ids.ID) (Settings, error) {
-	if by.Role != identity.RoleOwner && by.Role != identity.RoleAdmin {
+	if by.Kind != identity.KindHuman || (by.Role != identity.RoleOwner && by.Role != identity.RoleAdmin) {
 		return Settings{}, ErrForbidden
 	}
 	if threshold < MinThresholdTokens || threshold > MaxThresholdTokens {
@@ -208,7 +238,18 @@ func (s *Service) UpdateSettings(ctx context.Context, by identity.Actor, thresho
 		CompactorAgentID:       compactorAgentID,
 		UpdatedAt:              s.Clock.Now(),
 	}
-	if err := s.Store.UpsertSettings(ctx, st); err != nil {
+	err := s.withTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.UpsertSettings(ctx, st); err != nil {
+			return err
+		}
+		return s.appendAndPublish(ctx, by.WorkspaceID, EventSettingsUpdated, by.WorkspaceID, SettingsUpdated{
+			WorkspaceID:            by.WorkspaceID.String(),
+			UpdatedBy:              by.ID.String(),
+			CompactThresholdTokens: threshold,
+			CompactorAgentID:       compactorAgentID.String(),
+		})
+	})
+	if err != nil {
 		return Settings{}, err
 	}
 	if st.CompactorAgentID != ids.Nil && s.Directory != nil {
@@ -328,19 +369,23 @@ func (s *Service) TriggerCompaction(ctx context.Context, by identity.Actor, chan
 		CreatedAt:            now,
 	}
 
-	if err := s.Store.InsertCompaction(ctx, comp); err != nil {
+	err = s.withTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.InsertCompaction(ctx, comp); err != nil {
+			return err
+		}
+		return s.appendAndPublish(ctx, by.WorkspaceID, EventCreated, comp.ID, CompactionCreated{
+			CompactionID:     comp.ID.String(),
+			WorkspaceID:      by.WorkspaceID.String(),
+			ChannelID:        channelID.String(),
+			ThreadRootID:     threadRootID.String(),
+			CompactorAgentID: st.CompactorAgentID.String(),
+			RequestedBy:      by.ID.String(),
+			Trigger:          string(comp.Trigger),
+		})
+	})
+	if err != nil {
 		return Compaction{}, err
 	}
-
-	_ = s.appendAndPublish(ctx, by.WorkspaceID, EventCreated, comp.ID, CompactionCreated{
-		CompactionID:     comp.ID.String(),
-		WorkspaceID:      by.WorkspaceID.String(),
-		ChannelID:        channelID.String(),
-		ThreadRootID:     threadRootID.String(),
-		CompactorAgentID: st.CompactorAgentID.String(),
-		RequestedBy:      by.ID.String(),
-		Trigger:          string(comp.Trigger),
-	})
 
 	return comp, nil
 }
@@ -452,15 +497,20 @@ func (s *Service) SubmitScribeResult(ctx context.Context, by identity.Actor, com
 
 	now := s.Clock.Now()
 	if in.ErrorCode != "" {
-		if err := s.Store.FailPendingCompaction(ctx, comp.ID, in.ErrorCode, now); err != nil {
+		err := s.withTx(ctx, func(ctx context.Context) error {
+			if err := s.Store.FailPendingCompaction(ctx, comp.ID, in.ErrorCode, now); err != nil {
+				return err
+			}
+			return s.appendAndPublish(ctx, comp.WorkspaceID, EventFailed, comp.ID, CompactionFailed{
+				CompactionID: comp.ID.String(),
+				WorkspaceID:  comp.WorkspaceID.String(),
+				ChannelID:    comp.ChannelID.String(),
+				ErrorCode:    in.ErrorCode,
+			})
+		})
+		if err != nil {
 			return Compaction{}, err
 		}
-		_ = s.appendAndPublish(ctx, comp.WorkspaceID, EventFailed, comp.ID, CompactionFailed{
-			CompactionID: comp.ID.String(),
-			WorkspaceID:  comp.WorkspaceID.String(),
-			ChannelID:    comp.ChannelID.String(),
-			ErrorCode:    in.ErrorCode,
-		})
 		comp.State = StateFailed
 		comp.ErrorCode = in.ErrorCode
 		comp.CompletedAt = &now
@@ -516,20 +566,25 @@ func (s *Service) SubmitScribeResult(ctx context.Context, by identity.Actor, com
 		return Compaction{}, fmt.Errorf("post system message: %w", err)
 	}
 
-	if err := s.Store.CompleteCompaction(ctx, comp.ID, file.ID, sysMsg.ID, messagesCount, approxTokensIn, summaryTokens, now); err != nil {
+	err = s.withTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.CompleteCompaction(ctx, comp.ID, file.ID, sysMsg.ID, messagesCount, approxTokensIn, summaryTokens, now); err != nil {
+			return err
+		}
+		if err := s.Store.ResetUnit(ctx, comp.ChannelID, comp.ThreadRootID, comp.ID, 0, 0, now); err != nil {
+			return err
+		}
+		return s.appendAndPublish(ctx, comp.WorkspaceID, EventDone, comp.ID, CompactionDone{
+			CompactionID:    comp.ID.String(),
+			WorkspaceID:     comp.WorkspaceID.String(),
+			ChannelID:       comp.ChannelID.String(),
+			ThreadRootID:    comp.ThreadRootID.String(),
+			SummaryFileID:   file.ID.String(),
+			SystemMessageID: sysMsg.ID.String(),
+		})
+	})
+	if err != nil {
 		return Compaction{}, err
 	}
-
-	_ = s.Store.ResetUnit(ctx, comp.ChannelID, comp.ThreadRootID, comp.ID, 0, 0, now)
-
-	_ = s.appendAndPublish(ctx, comp.WorkspaceID, EventDone, comp.ID, CompactionDone{
-		CompactionID:    comp.ID.String(),
-		WorkspaceID:     comp.WorkspaceID.String(),
-		ChannelID:       comp.ChannelID.String(),
-		ThreadRootID:    comp.ThreadRootID.String(),
-		SummaryFileID:   file.ID.String(),
-		SystemMessageID: sysMsg.ID.String(),
-	})
 
 	comp.State = StateDone
 	comp.SummaryFileID = file.ID
@@ -542,6 +597,11 @@ func (s *Service) SubmitScribeResult(ctx context.Context, by identity.Actor, com
 }
 
 func (s *Service) EditSummary(ctx context.Context, by identity.Actor, compactionID ids.ID, markdown string) (Compaction, error) {
+	// Only humans edit a summary: an agent's text there would reach every
+	// later session of the conversation.
+	if by.Kind != identity.KindHuman {
+		return Compaction{}, ErrForbidden
+	}
 	if len(markdown) > DefaultMaxSummaryChars {
 		return Compaction{}, ErrSummaryTooLong
 	}
@@ -588,25 +648,33 @@ func (s *Service) EditSummary(ctx context.Context, by identity.Actor, compaction
 		CompletedAt:          &now,
 	}
 
-	if err := s.Store.InsertCompaction(ctx, newComp); err != nil {
+	err = s.withTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.InsertCompaction(ctx, newComp); err != nil {
+			return err
+		}
+		if err := s.Store.ResetUnit(ctx, existing.ChannelID, existing.ThreadRootID, newComp.ID, 0, 0, now); err != nil {
+			return err
+		}
+		return s.appendAndPublish(ctx, by.WorkspaceID, EventDone, newComp.ID, CompactionDone{
+			CompactionID:    newComp.ID.String(),
+			WorkspaceID:     newComp.WorkspaceID.String(),
+			ChannelID:       newComp.ChannelID.String(),
+			ThreadRootID:    newComp.ThreadRootID.String(),
+			SummaryFileID:   file.ID.String(),
+			SystemMessageID: existing.SystemMessageID.String(),
+		})
+	})
+	if err != nil {
 		return Compaction{}, err
 	}
-
-	_ = s.Store.ResetUnit(ctx, existing.ChannelID, existing.ThreadRootID, newComp.ID, 0, 0, now)
-
-	_ = s.appendAndPublish(ctx, by.WorkspaceID, EventDone, newComp.ID, CompactionDone{
-		CompactionID:    newComp.ID.String(),
-		WorkspaceID:     newComp.WorkspaceID.String(),
-		ChannelID:       newComp.ChannelID.String(),
-		ThreadRootID:    newComp.ThreadRootID.String(),
-		SummaryFileID:   file.ID.String(),
-		SystemMessageID: existing.SystemMessageID.String(),
-	})
 
 	return newComp, nil
 }
 
 func (s *Service) Regenerate(ctx context.Context, by identity.Actor, compactionID ids.ID) (Compaction, error) {
+	if by.Kind != identity.KindHuman {
+		return Compaction{}, ErrForbidden
+	}
 	existing, err := s.Store.CompactionByID(ctx, compactionID)
 	if err != nil {
 		return Compaction{}, ErrNotFound
@@ -636,19 +704,23 @@ func (s *Service) Regenerate(ctx context.Context, by identity.Actor, compactionI
 		CreatedAt:            now,
 	}
 
-	if err := s.Store.InsertCompaction(ctx, newComp); err != nil {
+	err = s.withTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.InsertCompaction(ctx, newComp); err != nil {
+			return err
+		}
+		return s.appendAndPublish(ctx, by.WorkspaceID, EventCreated, newComp.ID, CompactionCreated{
+			CompactionID:     newComp.ID.String(),
+			WorkspaceID:      by.WorkspaceID.String(),
+			ChannelID:        existing.ChannelID.String(),
+			ThreadRootID:     existing.ThreadRootID.String(),
+			CompactorAgentID: st.CompactorAgentID.String(),
+			RequestedBy:      by.ID.String(),
+			Trigger:          string(newComp.Trigger),
+		})
+	})
+	if err != nil {
 		return Compaction{}, err
 	}
-
-	_ = s.appendAndPublish(ctx, by.WorkspaceID, EventCreated, newComp.ID, CompactionCreated{
-		CompactionID:     newComp.ID.String(),
-		WorkspaceID:      by.WorkspaceID.String(),
-		ChannelID:        existing.ChannelID.String(),
-		ThreadRootID:     existing.ThreadRootID.String(),
-		CompactorAgentID: st.CompactorAgentID.String(),
-		RequestedBy:      by.ID.String(),
-		Trigger:          string(newComp.Trigger),
-	})
 
 	return newComp, nil
 }
