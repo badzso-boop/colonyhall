@@ -78,6 +78,8 @@ type Agent struct {
 	DenyFiles        []string
 	FileFetchLimiter chan struct{}
 
+	Terminals *TerminalManager
+
 	fileFetchMu       sync.Mutex
 	fileFetchInFlight map[string]bool
 
@@ -871,6 +873,9 @@ func (a *Agent) watchHalt(ctx context.Context) (context.Context, func()) {
 				if me.Halted {
 					a.halted.Store(true)
 					a.Log.Warn("guard: halt detected, stopping the client", "agent", a.logName(), "state", me.State)
+					if a.Terminals != nil {
+						a.Terminals.KillAllForHandle(a.Cfg.Name, "halt")
+					}
 					cancel()
 					return
 				}

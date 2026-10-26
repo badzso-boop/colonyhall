@@ -50,11 +50,12 @@ type Supervisor struct {
 	// DockerRunner overrides the docker compose runner (tests).
 	DockerRunner DockerRunner
 
-	host     *Client
-	roots    []string
-	home     string
-	sandbox  *Sandbox
-	previews *PreviewSupervisor
+	host      *Client
+	roots     []string
+	home      string
+	sandbox   *Sandbox
+	previews  *PreviewSupervisor
+	terminals *TerminalManager
 
 	mu               sync.Mutex
 	lastOK           time.Time
@@ -126,6 +127,11 @@ func (s *Supervisor) start(ctx context.Context) error {
 		return fmt.Errorf("guard: preview supervisor: %w", err)
 	}
 	s.previews = ps
+
+	stateDir := filepath.Dir(s.Cfg.SandboxDir)
+	s.terminals = NewTerminalManager(stateDir, s.roots, s.home)
+	_ = s.terminals.AdoptExisting()
+	s.terminals.StartWatcher(ctx, 5*time.Second)
 	return nil
 }
 
@@ -175,8 +181,10 @@ func (s *Supervisor) sync(ctx context.Context) {
 	s.mu.Unlock()
 	if changed {
 		s.reconcile(ctx, cfg)
-	} else if s.previews != nil {
-		s.previews.CheckExpired(ctx)
+	} else {
+		if s.previews != nil {
+			s.previews.CheckExpired(ctx)
+		}
 		halted := make(map[string]bool)
 		s.mu.Lock()
 		for id, m := range s.agents {
@@ -185,7 +193,12 @@ func (s *Supervisor) sync(ctx context.Context) {
 			}
 		}
 		s.mu.Unlock()
-		s.previews.CheckHalted(ctx, halted)
+		if s.previews != nil {
+			s.previews.CheckHalted(ctx, halted)
+		}
+		if s.terminals != nil {
+			s.terminals.CheckHalted(halted)
+		}
 	}
 	s.mu.Lock()
 	stale := time.Since(s.reported) > 10*time.Minute
@@ -293,16 +306,19 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 	if changed || len(gone) > 0 {
 		s.report(ctx)
 	}
-	if s.previews != nil {
-		halted := make(map[string]bool)
-		s.mu.Lock()
-		for id, m := range s.agents {
-			if m.agent != nil && m.agent.IsHalted() {
-				halted[id] = true
-			}
+	halted := make(map[string]bool)
+	s.mu.Lock()
+	for id, m := range s.agents {
+		if m.agent != nil && m.agent.IsHalted() {
+			halted[id] = true
 		}
-		s.mu.Unlock()
+	}
+	s.mu.Unlock()
+	if s.previews != nil {
 		s.previews.Reconcile(ctx, cfg.Previews, cfg.Agents, halted)
+	}
+	if s.terminals != nil {
+		s.terminals.CheckHalted(halted)
 	}
 }
 
@@ -476,6 +492,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		},
 		DenyFiles:        []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile},
 		FileFetchLimiter: s.fileFetchLimiter,
+		Terminals:        s.terminals,
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch
@@ -602,6 +619,9 @@ func (s *Supervisor) stop(agentID string) {
 	m.proxyMu.Unlock()
 	m.cancel()
 	<-m.done
+	if s.terminals != nil {
+		s.terminals.KillAllForHandle(m.conf.Handle, "halt")
+	}
 	s.Log.Info("guard: agent stopped", "agent", "@"+m.conf.Handle)
 }
 
@@ -618,6 +638,9 @@ func (s *Supervisor) stopAll() {
 	}
 	if s.previews != nil {
 		s.previews.StopAll(context.Background())
+	}
+	if s.terminals != nil {
+		s.terminals.KillAll("halt")
 	}
 }
 
