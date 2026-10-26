@@ -987,6 +987,31 @@ A beszélgetések folyamatos token-alapú tömörítése és összegzése a kont
 - **Kontextus inicializálás:** Amikor a szervertől kapott `compaction_id` eltér a tárolttól, az őr rotálja a munkamenetet (`Generations++`, Claude/agy session törlése), és a nyitó promptot a `<colonyhall_summary>` blokkal és az összefoglaló után érkezett üzenetekkel (`<m ctx from="...">`) tölti fel (legfeljebb 200 üzenet).
 - **Munkamenet-limit:** Tömörítés mellett az agent `max_session_tokens` paramétere 0-ra állítható, mert a kontextus frissességéről a tömörítés és a priming gondoskodik.
 
+## Élő folyamatjelzés és lépésnapló (megvalósítva, 2026-10-26, feature/live-progress)
+
+A futó agentek tevékenységének valós idejű követése és az utólagos lépésnapló (`internal/guard`, `internal/gateway`, `internal/modules/runs`).
+
+### 1. Streaming adapterek és lépésmodell (`internal/guard`)
+- **Futtatás:** Az őr mind a Claude Code-ot (`--output-format stream-json --verbose`), mind az Antigravity-t (`--output-format stream-json`) soronként streamelt NDJSON módban futtatja (`StreamRunner`, `ExecStreamRunner`).
+- **Lépésmodell (`step.go`):** Egységes lépéskategóriák: `read` (📖 olvasás), `write` (✏️ új fájl), `edit` (✏️ módosítás), `search` (🔎 keresés/grep/glob), `command` (⚙️ terminál parancs), `web` (🌐 web olvasás), `mcp` (🧩 MCP eszközhívás), `think` (💭 gondolkodás), `answer` (✍️ válaszírás), `denied` (⛔ megtagadva), `other` (egyéb).
+- **Biztonsági szűrés és maszkolás:**
+  - Minden fájlútvonal a munkamappához képesti relatív formára alakul (`RelPath`), megelőzve az abszolút gépi útvonalak szivárgását.
+  - A parancsok argumentumai a `Redact` függvénnyel szűrtek (érzékeny kapcsolók és tokenek kitakarása).
+  - Gondolkodási szövegek (thinking blocks) és eszközkimenetek/fájltartalmak soha nem kerülnek továbbításra a kliens felé (biztonsági okokból csak a diszkrét lépésfajta és a rövid felirat látható).
+- **Antigravity kontextusmérés:** A `stream-json` kimenetből kinyert modellhívási `result` események tokenadataiból (`input_tokens`, `output_tokens`) az őr képes pontosan mérni az Antigravity munkamenetek aktuális kontextusméretét; az `ERROR` jelzés után, ha már érkezett kimeneti token, a válasz érvényesnek minősül.
+
+### 2. Szerveroldali folyamatkövetés és tárolás
+- **Periodikus frissítés (`POST /api/v1/agent/progress`):** Az őr futás közben legfeljebb másodpercenként egyszer kötegelt állapotjelentést küld a szervernek (`ActiveRunProgress`). A szerver memóriában tárolja az aktív futás lépéseit (`run_key` alapján, legfeljebb 200 lépés); a futás befejezése után 2 percig, illetve 15 perc tétlenség után automatikusan törlődik.
+- **Valós idejű WebSocket keret (`agent.progress`):** Efemer közvetítés az adott csatornára feliratkozott klienseknek.
+- **Aktív lépések lekérdezése (`GET /api/v1/channels/{channelId}/progress`):** Újracsatlakozó vagy frissen oldalra érkező felhasználók számára az aktív futások azonnali lekérdezése (csatornatagsági jogosultság-ellenőrzéssel).
+- **Perzisztens lépésnapló:** A futás befejeztével a futásjelentés (`ReportRunRequest`) tartalmazza a végső lépéslistát (`steps`) és a válaszüzenet azonosítóját (`reply_message_id`). A szerver adatbázisban tárolja (`agent_run.steps jsonb`, `agent_run.reply_message_id uuid`, migráció: `00029_run_steps.sql`).
+
+### 3. Webes felület (`internal/httpserver/web/index.html`)
+- **Élő állapotjelző:** A csatorna fejlécében/aktivitássávjában futás közben megjelenik az eltelt idő számláló (`m:ss`), az utolsó lépések ikonnal és rövid leírással, alapértelmezetten 3 lépésre összecsukva, „összes (N)” / „kevesebb” gombbal.
+- **Válasz alatti lépésfiók (drawer):** A sikeres agent válasz alatt egy diszkrét „▸ N lépés · m:ss” gomb jelenik meg, amelyre kattintva kinyitható a részletes lépéslista relatív utakkal és futtatott parancsokkal.
+- **Futások és Áttekintés nézet:** A „Futások” fülön és az Agent Overview panelen a futás sorában lévő lépésszámláló gombbal az archív lépéslista közvetlenül megtekinthető.
+- **XSS védelem:** Minden lépésszöveg kizárólag DOM `textContent` és biztonságos elemlétrehozás útján kerül renderelésre.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.

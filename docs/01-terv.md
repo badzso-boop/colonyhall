@@ -1093,7 +1093,7 @@ Ezek most nem kellenek, de a terv úgy készül, hogy később átírás nélkü
 | Ügyfeleknek nyújtás | Nem cél | Minden adat munkaterülethez kötött, így később ügyfelenként elkülöníthető. |
 | Licenc | Nyílt forrású lesz, a licenc még nyitott | Csak MIT, Apache-2.0, BSD vagy hasonlóan megengedő licencű függőség kerül be, hogy bármelyik licencválasztás nyitva maradjon. |
 | Adatmegőrzési szabály | Minden megmarad | Append-only adatok és puha törlés; a szabály később egy ütemezett belső feladat lesz. |
-| Élő folyamatjelzés | Nem életbevágó | Az őr protokolljában van hely egy `run.progress` eseménynek. |
+| Élő folyamatjelzés | Megvalósítva (2026-10-26, feature/live-progress) | Streaming adapterek, POST /api/v1/agent/progress, WebSocket agent.progress keret, felületi élő lépéskijelzés és tartós lépésnapló válaszok alatt. |
 
 ## Források
 
