@@ -106,6 +106,12 @@ type ProgressFrame struct {
 	Done         bool                `json:"done"`
 }
 
+// FsRequestFrame is pushed to WebSocket clients when a filesystem request arrives for an agent.
+type FsRequestFrame struct {
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+}
+
 type hello struct {
 	Type    string `json:"type"`
 	Token   string `json:"token"`
@@ -221,6 +227,37 @@ func (g *Gateway) ReportActivity(ctx context.Context, actor identity.Actor, chan
 		}
 	}
 	return nil
+}
+
+// PushFsRequest delivers an ephemeral fs.request frame only to the open connections of the given agent.
+func (g *Gateway) PushFsRequest(agentID ids.ID, requestID string) bool {
+	g.mu.Lock()
+	var recipients []*connection
+	for c := range g.conns {
+		if c.actor.Kind == identity.KindAgent && c.actor.ID == agentID {
+			recipients = append(recipients, c)
+		}
+	}
+	g.mu.Unlock()
+
+	if len(recipients) == 0 {
+		return false
+	}
+
+	frame := FsRequestFrame{
+		Type:      "fs.request",
+		RequestID: requestID,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), writeTimeout)
+	defer cancel()
+
+	pushed := false
+	for _, c := range recipients {
+		if err := c.writeJSON(ctx, frame); err == nil {
+			pushed = true
+		}
+	}
+	return pushed
 }
 
 // IsAgentWorking returns whether the agent is currently working in any channel.

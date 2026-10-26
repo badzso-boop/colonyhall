@@ -790,6 +790,50 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /agents/{agentId}/fs:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: agentFsRequest
+      tags: [files]
+      description: Humans only. Relay an ephemeral filesystem operation (list, search, git_status) to the agent's guard.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentFsRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Result of the filesystem operation
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentFsResponse" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "504": { $ref: "#/components/responses/Problem" }
+
+  /agents/{agentId}/file-fetch:
+    parameters:
+      - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: requestAgentFileFetch
+      tags: [files]
+      description: Humans only. Request the guard to fetch a file in an agent's folder.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateAgentFileFetchRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Existing done request returned
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "201":
+          description: Pending request created
+          content: { application/json: { schema: { $ref: "#/components/schemas/FileFetchRequest" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /decisions:
     get:
       operationId: listDecisions
@@ -1409,6 +1453,42 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/fs/{requestId}:
+    parameters:
+      - { name: requestId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getAgentFsRequest
+      tags: [files]
+      description: Agents only. Get op and args for an ephemeral fs request.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Pending filesystem request details
+          content: { application/json: { schema: { $ref: "#/components/schemas/AgentFsPendingRequest" } } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /agent/fs/{requestId}/result:
+    parameters:
+      - { name: requestId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: postAgentFsResult
+      tags: [files]
+      description: Agents only. Deliver the JSON answer (max 2 MB) or error for an ephemeral fs request.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentFsResultRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Result accepted and delivered }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
 
   /agent/compactions/{id}:
     parameters:
@@ -2459,6 +2539,14 @@ components:
         path: { type: string, minLength: 1 }
         refresh: { type: boolean }
 
+    CreateAgentFileFetchRequest:
+      type: object
+      required: [channel_id, path]
+      properties:
+        channel_id: { type: string, format: uuid }
+        path: { type: string, minLength: 1 }
+        refresh: { type: boolean }
+
     FileAttachmentWithFetchedAt:
       type: object
       required: [id, name, mime, size, fetched_at]
@@ -2471,7 +2559,7 @@ components:
 
     FileFetchRequest:
       type: object
-      required: [id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, created_at]
+      required: [id, workspace_id, channel_id, agent_id, requested_by, path, state, created_at]
       properties:
         id: { type: string, format: uuid }
         workspace_id: { type: string, format: uuid }
@@ -2489,7 +2577,7 @@ components:
 
     AgentPendingFileFetch:
       type: object
-      required: [id, message_id, channel_id, path, max_image_bytes, max_file_bytes]
+      required: [id, channel_id, path, max_image_bytes, max_file_bytes]
       properties:
         id: { type: string, format: uuid }
         message_id: { type: string, format: uuid }
@@ -2497,6 +2585,122 @@ components:
         path: { type: string }
         max_image_bytes: { type: integer, format: int64 }
         max_file_bytes: { type: integer, format: int64 }
+
+    AgentFsRequest:
+      type: object
+      required: [channel_id, op]
+      properties:
+        channel_id: { type: string, format: uuid }
+        op: { type: string, enum: [list, search, git_status] }
+        root: { type: string }
+        path: { type: string }
+        query: { type: string }
+
+    AgentFsPendingRequest:
+      type: object
+      required: [request_id, op]
+      properties:
+        request_id: { type: string }
+        op: { type: string, enum: [list, search, git_status] }
+        root: { type: string }
+        path: { type: string }
+        query: { type: string }
+
+    AgentFsResponse:
+      type: object
+      properties:
+        op: { type: string, enum: [list, search, git_status] }
+        roots:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsRoot"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsEntry"
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsSearchResult"
+        git_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsGitStatus"
+        truncated: { type: boolean }
+        reason: { type: string }
+        error_code: { type: string }
+
+    AgentFsResultRequest:
+      type: object
+      properties:
+        op: { type: string, enum: [list, search, git_status] }
+        roots:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsRoot"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsEntry"
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsSearchResult"
+        git_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsGitStatus"
+        truncated: { type: boolean }
+        reason: { type: string }
+        error_code: { type: string }
+
+    FsRoot:
+      type: object
+      required: [name, path]
+      properties:
+        name: { type: string }
+        path: { type: string }
+        mode: { type: string }
+
+    FsEntry:
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [dir, file, symlink] }
+        size: { type: integer, format: int64 }
+        mtime: { type: string, format: date-time }
+        heavy: { type: boolean }
+        symlink_target: { type: string }
+        symlink_refused: { type: boolean }
+
+    FsSearchResult:
+      type: object
+      required: [root, path]
+      properties:
+        root: { type: string }
+        path: { type: string }
+
+    FsGitStatus:
+      type: object
+      required: [root]
+      properties:
+        root: { type: string }
+        branch: { type: string }
+        ahead: { type: integer }
+        behind: { type: integer }
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/FsGitFile"
+        error_code: { type: string }
+
+    FsGitFile:
+      type: object
+      required: [path, status]
+      properties:
+        path: { type: string }
+        status: { type: string }
 
     FailFileFetchRequest:
       type: object

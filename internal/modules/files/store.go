@@ -39,6 +39,9 @@ type Store interface {
 	// FileFetchRequestByMessageAndPath loads the most recent request for a message and path.
 	FileFetchRequestByMessageAndPath(ctx context.Context, workspaceID, messageID ids.ID, path string) (FileFetchRequest, error)
 
+	// FileFetchRequestByAgentAndPath loads the most recent request for an agent and path.
+	FileFetchRequestByAgentAndPath(ctx context.Context, workspaceID, agentID ids.ID, path string) (FileFetchRequest, error)
+
 	// ListFileFetchRequestsByAgent lists requests for an agent with a given state.
 	ListFileFetchRequestsByAgent(ctx context.Context, workspaceID, agentID ids.ID, state FileFetchState) ([]FileFetchRequest, error)
 

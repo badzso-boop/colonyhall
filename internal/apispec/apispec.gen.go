@@ -45,6 +45,90 @@ func (e AgentActivityRequestState) Valid() bool {
 	}
 }
 
+// Defines values for AgentFsPendingRequestOp.
+const (
+	AgentFsPendingRequestOpGitStatus AgentFsPendingRequestOp = "git_status"
+	AgentFsPendingRequestOpList      AgentFsPendingRequestOp = "list"
+	AgentFsPendingRequestOpSearch    AgentFsPendingRequestOp = "search"
+)
+
+// Valid indicates whether the value is a known member of the AgentFsPendingRequestOp enum.
+func (e AgentFsPendingRequestOp) Valid() bool {
+	switch e {
+	case AgentFsPendingRequestOpGitStatus:
+		return true
+	case AgentFsPendingRequestOpList:
+		return true
+	case AgentFsPendingRequestOpSearch:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentFsRequestOp.
+const (
+	AgentFsRequestOpGitStatus AgentFsRequestOp = "git_status"
+	AgentFsRequestOpList      AgentFsRequestOp = "list"
+	AgentFsRequestOpSearch    AgentFsRequestOp = "search"
+)
+
+// Valid indicates whether the value is a known member of the AgentFsRequestOp enum.
+func (e AgentFsRequestOp) Valid() bool {
+	switch e {
+	case AgentFsRequestOpGitStatus:
+		return true
+	case AgentFsRequestOpList:
+		return true
+	case AgentFsRequestOpSearch:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentFsResponseOp.
+const (
+	AgentFsResponseOpGitStatus AgentFsResponseOp = "git_status"
+	AgentFsResponseOpList      AgentFsResponseOp = "list"
+	AgentFsResponseOpSearch    AgentFsResponseOp = "search"
+)
+
+// Valid indicates whether the value is a known member of the AgentFsResponseOp enum.
+func (e AgentFsResponseOp) Valid() bool {
+	switch e {
+	case AgentFsResponseOpGitStatus:
+		return true
+	case AgentFsResponseOpList:
+		return true
+	case AgentFsResponseOpSearch:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentFsResultRequestOp.
+const (
+	AgentFsResultRequestOpGitStatus AgentFsResultRequestOp = "git_status"
+	AgentFsResultRequestOpList      AgentFsResultRequestOp = "list"
+	AgentFsResultRequestOpSearch    AgentFsResultRequestOp = "search"
+)
+
+// Valid indicates whether the value is a known member of the AgentFsResultRequestOp enum.
+func (e AgentFsResultRequestOp) Valid() bool {
+	switch e {
+	case AgentFsResultRequestOpGitStatus:
+		return true
+	case AgentFsResultRequestOpList:
+		return true
+	case AgentFsResultRequestOpSearch:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentStepKind.
 const (
 	AgentStepKindAnswer  AgentStepKind = "answer"
@@ -405,6 +489,27 @@ func (e FolderGrantMode) Valid() bool {
 	case FolderGrantModeRead:
 		return true
 	case FolderGrantModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FsEntryKind.
+const (
+	FsEntryKindDir     FsEntryKind = "dir"
+	FsEntryKindFile    FsEntryKind = "file"
+	FsEntryKindSymlink FsEntryKind = "symlink"
+)
+
+// Valid indicates whether the value is a known member of the FsEntryKind enum.
+func (e FsEntryKind) Valid() bool {
+	switch e {
+	case FsEntryKindDir:
+		return true
+	case FsEntryKindFile:
+		return true
+	case FsEntryKindSymlink:
 		return true
 	default:
 		return false
@@ -1005,6 +1110,60 @@ type AgentContext struct {
 	SummaryMarkdown *string             `json:"summary_markdown,omitempty"`
 }
 
+// AgentFsPendingRequest defines model for AgentFsPendingRequest.
+type AgentFsPendingRequest struct {
+	Op        AgentFsPendingRequestOp `json:"op"`
+	Path      *string                 `json:"path,omitempty"`
+	Query     *string                 `json:"query,omitempty"`
+	RequestId string                  `json:"request_id"`
+	Root      *string                 `json:"root,omitempty"`
+}
+
+// AgentFsPendingRequestOp defines model for AgentFsPendingRequest.Op.
+type AgentFsPendingRequestOp string
+
+// AgentFsRequest defines model for AgentFsRequest.
+type AgentFsRequest struct {
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	Op        AgentFsRequestOp   `json:"op"`
+	Path      *string            `json:"path,omitempty"`
+	Query     *string            `json:"query,omitempty"`
+	Root      *string            `json:"root,omitempty"`
+}
+
+// AgentFsRequestOp defines model for AgentFsRequest.Op.
+type AgentFsRequestOp string
+
+// AgentFsResponse defines model for AgentFsResponse.
+type AgentFsResponse struct {
+	Entries   *[]FsEntry         `json:"entries,omitempty"`
+	ErrorCode *string            `json:"error_code,omitempty"`
+	GitStatus *[]FsGitStatus     `json:"git_status,omitempty"`
+	Op        *AgentFsResponseOp `json:"op,omitempty"`
+	Reason    *string            `json:"reason,omitempty"`
+	Results   *[]FsSearchResult  `json:"results,omitempty"`
+	Roots     *[]FsRoot          `json:"roots,omitempty"`
+	Truncated *bool              `json:"truncated,omitempty"`
+}
+
+// AgentFsResponseOp defines model for AgentFsResponse.Op.
+type AgentFsResponseOp string
+
+// AgentFsResultRequest defines model for AgentFsResultRequest.
+type AgentFsResultRequest struct {
+	Entries   *[]FsEntry              `json:"entries,omitempty"`
+	ErrorCode *string                 `json:"error_code,omitempty"`
+	GitStatus *[]FsGitStatus          `json:"git_status,omitempty"`
+	Op        *AgentFsResultRequestOp `json:"op,omitempty"`
+	Reason    *string                 `json:"reason,omitempty"`
+	Results   *[]FsSearchResult       `json:"results,omitempty"`
+	Roots     *[]FsRoot               `json:"roots,omitempty"`
+	Truncated *bool                   `json:"truncated,omitempty"`
+}
+
+// AgentFsResultRequestOp defines model for AgentFsResultRequest.Op.
+type AgentFsResultRequestOp string
+
 // AgentInstructions defines model for AgentInstructions.
 type AgentInstructions struct {
 	Text    string `json:"text"`
@@ -1041,12 +1200,12 @@ type AgentOverview struct {
 
 // AgentPendingFileFetch defines model for AgentPendingFileFetch.
 type AgentPendingFileFetch struct {
-	ChannelId     openapi_types.UUID `json:"channel_id"`
-	Id            openapi_types.UUID `json:"id"`
-	MaxFileBytes  int64              `json:"max_file_bytes"`
-	MaxImageBytes int64              `json:"max_image_bytes"`
-	MessageId     openapi_types.UUID `json:"message_id"`
-	Path          string             `json:"path"`
+	ChannelId     openapi_types.UUID  `json:"channel_id"`
+	Id            openapi_types.UUID  `json:"id"`
+	MaxFileBytes  int64               `json:"max_file_bytes"`
+	MaxImageBytes int64               `json:"max_image_bytes"`
+	MessageId     *openapi_types.UUID `json:"message_id,omitempty"`
+	Path          string              `json:"path"`
 }
 
 // AgentProgressRequest defines model for AgentProgressRequest.
@@ -1326,6 +1485,13 @@ type CreateActorResponse struct {
 	Token string `json:"token"`
 }
 
+// CreateAgentFileFetchRequest defines model for CreateAgentFileFetchRequest.
+type CreateAgentFileFetchRequest struct {
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	Path      string             `json:"path"`
+	Refresh   *bool              `json:"refresh,omitempty"`
+}
+
 // CreateChannelRequest defines model for CreateChannelRequest.
 type CreateChannelRequest struct {
 	Description *string      `json:"description,omitempty"`
@@ -1527,7 +1693,7 @@ type FileFetchRequest struct {
 	File        *FileAttachmentWithFetchedAt `json:"file,omitempty"`
 	FileId      *openapi_types.UUID          `json:"file_id,omitempty"`
 	Id          openapi_types.UUID           `json:"id"`
-	MessageId   openapi_types.UUID           `json:"message_id"`
+	MessageId   *openapi_types.UUID          `json:"message_id,omitempty"`
 	Path        string                       `json:"path"`
 	RequestedBy openapi_types.UUID           `json:"requested_by"`
 	State       FileFetchRequestState        `json:"state"`
@@ -1559,6 +1725,49 @@ type FolderGrant struct {
 
 // FolderGrantMode defines model for FolderGrant.Mode.
 type FolderGrantMode string
+
+// FsEntry defines model for FsEntry.
+type FsEntry struct {
+	Heavy          *bool       `json:"heavy,omitempty"`
+	Kind           FsEntryKind `json:"kind"`
+	Mtime          *time.Time  `json:"mtime,omitempty"`
+	Name           string      `json:"name"`
+	Size           *int64      `json:"size,omitempty"`
+	SymlinkRefused *bool       `json:"symlink_refused,omitempty"`
+	SymlinkTarget  *string     `json:"symlink_target,omitempty"`
+}
+
+// FsEntryKind defines model for FsEntry.Kind.
+type FsEntryKind string
+
+// FsGitFile defines model for FsGitFile.
+type FsGitFile struct {
+	Path   string `json:"path"`
+	Status string `json:"status"`
+}
+
+// FsGitStatus defines model for FsGitStatus.
+type FsGitStatus struct {
+	Ahead     *int         `json:"ahead,omitempty"`
+	Behind    *int         `json:"behind,omitempty"`
+	Branch    *string      `json:"branch,omitempty"`
+	ErrorCode *string      `json:"error_code,omitempty"`
+	Files     *[]FsGitFile `json:"files,omitempty"`
+	Root      string       `json:"root"`
+}
+
+// FsRoot defines model for FsRoot.
+type FsRoot struct {
+	Mode *string `json:"mode,omitempty"`
+	Name string  `json:"name"`
+	Path string  `json:"path"`
+}
+
+// FsSearchResult defines model for FsSearchResult.
+type FsSearchResult struct {
+	Path string `json:"path"`
+	Root string `json:"root"`
+}
 
 // GitRepoMapping defines model for GitRepoMapping.
 type GitRepoMapping struct {
@@ -2459,6 +2668,9 @@ type ReportRunErrorJSONRequestBody = RunErrorRequest
 // FailFileFetchRequestJSONRequestBody defines body for FailFileFetchRequest for application/json ContentType.
 type FailFileFetchRequestJSONRequestBody = FailFileFetchRequest
 
+// PostAgentFsResultJSONRequestBody defines body for PostAgentFsResult for application/json ContentType.
+type PostAgentFsResultJSONRequestBody = AgentFsResultRequest
+
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest
 
@@ -2467,6 +2679,12 @@ type ReportAgentProgressJSONRequestBody = AgentProgressRequest
 
 // ReportRunJSONRequestBody defines body for ReportRun for application/json ContentType.
 type ReportRunJSONRequestBody = ReportRunRequest
+
+// RequestAgentFileFetchJSONRequestBody defines body for RequestAgentFileFetch for application/json ContentType.
+type RequestAgentFileFetchJSONRequestBody = CreateAgentFileFetchRequest
+
+// AgentFsRequestJSONRequestBody defines body for AgentFsRequest for application/json ContentType.
+type AgentFsRequestJSONRequestBody = AgentFsRequest
 
 // AddGrantJSONRequestBody defines body for AddGrant for application/json ContentType.
 type AddGrantJSONRequestBody = GrantRequest

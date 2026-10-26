@@ -196,6 +196,25 @@ func (s *Store) FileFetchRequestByMessageAndPath(_ context.Context, workspaceID,
 	return matches[0], nil
 }
 
+// FileFetchRequestByAgentAndPath loads the most recent request for an agent and path.
+func (s *Store) FileFetchRequestByAgentAndPath(_ context.Context, workspaceID, agentID ids.ID, path string) (files.FileFetchRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var matches []files.FileFetchRequest
+	for _, r := range s.requests {
+		if r.WorkspaceID == workspaceID && r.AgentID == agentID && r.Path == path {
+			matches = append(matches, r)
+		}
+	}
+	if len(matches) == 0 {
+		return files.FileFetchRequest{}, db.ErrNotFound
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].CreatedAt.After(matches[j].CreatedAt)
+	})
+	return matches[0], nil
+}
+
 // ListFileFetchRequestsByAgent lists requests for an agent with a given state.
 func (s *Store) ListFileFetchRequestsByAgent(_ context.Context, workspaceID, agentID ids.ID, state files.FileFetchState) ([]files.FileFetchRequest, error) {
 	s.mu.RLock()

@@ -55,6 +55,13 @@ WHERE workspace_id = $1 AND message_id = $2 AND path = $3
 ORDER BY created_at DESC
 LIMIT 1;
 
+-- name: FileFetchRequestByAgentAndPath :one
+SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+FROM file_fetch_request
+WHERE workspace_id = $1 AND agent_id = $2 AND path = $3
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: ListFileFetchRequestsByAgent :many
 SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
 FROM file_fetch_request

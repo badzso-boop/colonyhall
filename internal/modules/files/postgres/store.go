@@ -147,10 +147,15 @@ func (s *Store) InsertFileFetchRequest(ctx context.Context, req files.FileFetchR
 		str := string(req.ErrorCode)
 		errCode = &str
 	}
+	var msgID *uuid.UUID
+	if req.MessageID != ids.Nil {
+		u := uuid.UUID(req.MessageID)
+		msgID = &u
+	}
 	return s.q(ctx).InsertFileFetchRequest(ctx, sqlcgen.InsertFileFetchRequestParams{
 		ID:          uuid.UUID(req.ID),
 		WorkspaceID: uuid.UUID(req.WorkspaceID),
-		MessageID:   uuid.UUID(req.MessageID),
+		MessageID:   msgID,
 		ChannelID:   uuid.UUID(req.ChannelID),
 		AgentID:     uuid.UUID(req.AgentID),
 		RequestedBy: uuid.UUID(req.RequestedBy),
@@ -177,9 +182,30 @@ func (s *Store) FileFetchRequestByID(ctx context.Context, id ids.ID) (files.File
 
 // FileFetchRequestByMessageAndPath loads the most recent request for a message and path.
 func (s *Store) FileFetchRequestByMessageAndPath(ctx context.Context, workspaceID, messageID ids.ID, path string) (files.FileFetchRequest, error) {
+	var msgID *uuid.UUID
+	if messageID != ids.Nil {
+		u := uuid.UUID(messageID)
+		msgID = &u
+	}
 	row, err := s.q(ctx).FileFetchRequestByMessageAndPath(ctx, sqlcgen.FileFetchRequestByMessageAndPathParams{
 		WorkspaceID: uuid.UUID(workspaceID),
-		MessageID:   uuid.UUID(messageID),
+		MessageID:   msgID,
+		Path:        path,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return files.FileFetchRequest{}, db.ErrNotFound
+		}
+		return files.FileFetchRequest{}, err
+	}
+	return toDomainFetchRequest(row), nil
+}
+
+// FileFetchRequestByAgentAndPath loads the most recent request for an agent and path.
+func (s *Store) FileFetchRequestByAgentAndPath(ctx context.Context, workspaceID, agentID ids.ID, path string) (files.FileFetchRequest, error) {
+	row, err := s.q(ctx).FileFetchRequestByAgentAndPath(ctx, sqlcgen.FileFetchRequestByAgentAndPathParams{
+		WorkspaceID: uuid.UUID(workspaceID),
+		AgentID:     uuid.UUID(agentID),
 		Path:        path,
 	})
 	if err != nil {
@@ -301,10 +327,14 @@ func toDomain(r sqlcgen.File) files.File {
 }
 
 func toDomainFetchRequest(r sqlcgen.FileFetchRequest) files.FileFetchRequest {
+	var msgID ids.ID
+	if r.MessageID != nil {
+		msgID = ids.ID(*r.MessageID)
+	}
 	req := files.FileFetchRequest{
 		ID:          ids.ID(r.ID),
 		WorkspaceID: ids.ID(r.WorkspaceID),
-		MessageID:   ids.ID(r.MessageID),
+		MessageID:   msgID,
 		ChannelID:   ids.ID(r.ChannelID),
 		AgentID:     ids.ID(r.AgentID),
 		RequestedBy: ids.ID(r.RequestedBy),

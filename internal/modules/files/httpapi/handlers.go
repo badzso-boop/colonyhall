@@ -14,6 +14,8 @@ import (
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/ids"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func init() {
@@ -32,6 +34,8 @@ func init() {
 	httpx.RegisterForbidden(files.ErrForbidden)
 	httpx.RegisterStatus(http.StatusNotFound, files.ErrNotFound)
 	httpx.RegisterStatus(http.StatusRequestEntityTooLarge, files.ErrFileTooLarge)
+	httpx.RegisterStatus(http.StatusGatewayTimeout, files.ErrFsTimeout)
+	httpx.RegisterStatus(http.StatusGone, files.ErrFsGone)
 }
 
 // FileToAPI converts a files.File model to apispec.File.
@@ -55,7 +59,6 @@ func FileFetchRequestToAPI(req files.FileFetchRequest, f *files.File) apispec.Fi
 	out := apispec.FileFetchRequest{
 		Id:          req.ID,
 		WorkspaceId: req.WorkspaceID,
-		MessageId:   req.MessageID,
 		ChannelId:   req.ChannelID,
 		AgentId:     req.AgentID,
 		RequestedBy: req.RequestedBy,
@@ -63,6 +66,10 @@ func FileFetchRequestToAPI(req files.FileFetchRequest, f *files.File) apispec.Fi
 		State:       apispec.FileFetchRequestState(req.State),
 		CreatedAt:   req.CreatedAt,
 		CompletedAt: req.CompletedAt,
+	}
+	if req.MessageID != ids.Nil {
+		msgID := openapi_types.UUID(req.MessageID)
+		out.MessageId = &msgID
 	}
 	if req.FileID != ids.Nil {
 		fid := req.FileID
@@ -237,9 +244,14 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 		}
 		out := make([]apispec.AgentPendingFileFetch, 0, len(fetches))
 		for _, f := range fetches {
+			var msgUUID *openapi_types.UUID
+			if f.MessageID != ids.Nil {
+				u := openapi_types.UUID(f.MessageID)
+				msgUUID = &u
+			}
 			out = append(out, apispec.AgentPendingFileFetch{
 				Id:            f.ID,
-				MessageId:     f.MessageID,
+				MessageId:     msgUUID,
 				ChannelId:     f.ChannelID,
 				Path:          f.Path,
 				MaxImageBytes: f.MaxImageBytes,
@@ -315,6 +327,120 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 			MaxImageMb: st.MaxImageMB,
 			MaxFileMb:  st.MaxFileMB,
 		})
+	}))
+
+	// POST /api/v1/agents/{agentId}/fs
+	mux.Handle("POST /api/v1/agents/{agentId}/fs", wrap(func(w http.ResponseWriter, r *http.Request) {
+		agentID, ok := pathID(w, r, "agentId")
+		if !ok {
+			return
+		}
+		var in apispec.AgentFsRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		var root, path, query string
+		if in.Root != nil {
+			root = *in.Root
+		}
+		if in.Path != nil {
+			path = *in.Path
+		}
+		if in.Query != nil {
+			query = *in.Query
+		}
+		res, err := svc.RequestAgentFs(r.Context(), httpx.Actor(r), agentID, ids.ID(in.ChannelId), string(in.Op), root, path, query)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, res)
+	}))
+
+	// POST /api/v1/agents/{agentId}/file-fetch
+	mux.Handle("POST /api/v1/agents/{agentId}/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
+		agentID, ok := pathID(w, r, "agentId")
+		if !ok {
+			return
+		}
+		var in apispec.CreateAgentFileFetchRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		refresh := in.Refresh != nil && *in.Refresh
+		req, created, err := svc.RequestAgentFileFetch(r.Context(), httpx.Actor(r), agentID, ids.ID(in.ChannelId), in.Path, refresh)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		status := http.StatusOK
+		if created {
+			status = http.StatusCreated
+		}
+		var f *files.File
+		if req.State == files.FileFetchDone && req.FileID != ids.Nil {
+			file, err := svc.Store.ByID(r.Context(), req.FileID)
+			if err == nil {
+				f = &file
+			}
+		}
+		httpx.JSON(w, status, FileFetchRequestToAPI(req, f))
+	}))
+
+	// GET /api/v1/agent/fs/{requestId}
+	mux.Handle("GET /api/v1/agent/fs/{requestId}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		reqID := r.PathValue("requestId")
+		if reqID == "" {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "requestId is required"})
+			return
+		}
+		pending, err := svc.GetAgentFsRequest(r.Context(), httpx.Actor(r), reqID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.AgentFsPendingRequest{
+			RequestId: pending.ID,
+			Op:        apispec.AgentFsPendingRequestOp(pending.Op),
+		}
+		if pending.Root != "" {
+			r := pending.Root
+			out.Root = &r
+		}
+		if pending.Path != "" {
+			p := pending.Path
+			out.Path = &p
+		}
+		if pending.Query != "" {
+			q := pending.Query
+			out.Query = &q
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	// POST /api/v1/agent/fs/{requestId}/result
+	mux.Handle("POST /api/v1/agent/fs/{requestId}/result", wrap(func(w http.ResponseWriter, r *http.Request) {
+		reqID := r.PathValue("requestId")
+		if reqID == "" {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "requestId is required"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024)
+		var in apispec.AgentFsResultRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		err := svc.DeliverAgentFsResult(r.Context(), httpx.Actor(r), reqID, files.FsResult{
+			Payload: in,
+		})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}))
 }
 

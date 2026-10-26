@@ -1556,6 +1556,12 @@ func testFiles(t *testing.T, b Backend) {
 		t.Fatalf("unexpected byMsgPath: %+v", byMsgPath)
 	}
 
+	byAgentPath, err := b.Files.FileFetchRequestByAgentAndPath(ctx, ws, ag1, "/home/bot/app.log")
+	must(t, err)
+	if byAgentPath.ID != req1ID {
+		t.Fatalf("unexpected byAgentPath: %+v", byAgentPath)
+	}
+
 	agentPending, err := b.Files.ListFileFetchRequestsByAgent(ctx, ws, ag1, files.FileFetchPending)
 	must(t, err)
 	if len(agentPending) != 1 || agentPending[0].ID != req1ID {
@@ -1570,6 +1576,32 @@ func testFiles(t *testing.T, b Backend) {
 	if doneReq.State != files.FileFetchDone || doneReq.FileID != f3ID || doneReq.CompletedAt == nil || !doneReq.CompletedAt.Equal(completedAt) {
 		t.Fatalf("unexpected doneReq: %+v", doneReq)
 	}
+
+	// Request without message_id (from agent file browser)
+	reqNoMsgID := gen.New()
+	reqNoMsg := files.FileFetchRequest{
+		ID:          reqNoMsgID,
+		WorkspaceID: ws,
+		MessageID:   ids.Nil,
+		ChannelID:   ch1,
+		AgentID:     ag1,
+		RequestedBy: u1,
+		Path:        "/home/bot/src/main.go",
+		State:       files.FileFetchPending,
+		CreatedAt:   t0.Add(2 * time.Second),
+	}
+	must(t, b.Files.InsertFileFetchRequest(ctx, reqNoMsg))
+	gotNoMsg, err := b.Files.FileFetchRequestByID(ctx, reqNoMsgID)
+	must(t, err)
+	if gotNoMsg.MessageID != ids.Nil {
+		t.Fatalf("expected MessageID to be ids.Nil, got %v", gotNoMsg.MessageID)
+	}
+	byAgentPath2, err := b.Files.FileFetchRequestByAgentAndPath(ctx, ws, ag1, "/home/bot/src/main.go")
+	must(t, err)
+	if byAgentPath2.ID != reqNoMsgID {
+		t.Fatalf("unexpected byAgentPath2: %+v", byAgentPath2)
+	}
+	must(t, b.Files.UpdateFileFetchRequestCompleted(ctx, reqNoMsgID, f3ID, completedAt))
 
 	// Failed request
 	req2ID := gen.New()

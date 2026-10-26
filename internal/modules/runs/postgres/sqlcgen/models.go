@@ -268,7 +268,7 @@ type File struct {
 type FileFetchRequest struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	MessageID   uuid.UUID
+	MessageID   *uuid.UUID
 	ChannelID   uuid.UUID
 	AgentID     uuid.UUID
 	RequestedBy uuid.UUID

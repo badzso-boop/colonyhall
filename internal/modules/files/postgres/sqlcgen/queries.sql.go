@@ -134,6 +134,40 @@ func (q *Queries) FileByID(ctx context.Context, id uuid.UUID) (File, error) {
 	return i, err
 }
 
+const fileFetchRequestByAgentAndPath = `-- name: FileFetchRequestByAgentAndPath :one
+SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
+FROM file_fetch_request
+WHERE workspace_id = $1 AND agent_id = $2 AND path = $3
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type FileFetchRequestByAgentAndPathParams struct {
+	WorkspaceID uuid.UUID
+	AgentID     uuid.UUID
+	Path        string
+}
+
+func (q *Queries) FileFetchRequestByAgentAndPath(ctx context.Context, arg FileFetchRequestByAgentAndPathParams) (FileFetchRequest, error) {
+	row := q.db.QueryRow(ctx, fileFetchRequestByAgentAndPath, arg.WorkspaceID, arg.AgentID, arg.Path)
+	var i FileFetchRequest
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.MessageID,
+		&i.ChannelID,
+		&i.AgentID,
+		&i.RequestedBy,
+		&i.Path,
+		&i.State,
+		&i.FileID,
+		&i.ErrorCode,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const fileFetchRequestByID = `-- name: FileFetchRequestByID :one
 SELECT id, workspace_id, message_id, channel_id, agent_id, requested_by, path, state, file_id, error_code, created_at, completed_at
 FROM file_fetch_request
@@ -170,7 +204,7 @@ LIMIT 1
 
 type FileFetchRequestByMessageAndPathParams struct {
 	WorkspaceID uuid.UUID
-	MessageID   uuid.UUID
+	MessageID   *uuid.UUID
 	Path        string
 }
 
@@ -294,7 +328,7 @@ INSERT INTO file_fetch_request (
 type InsertFileFetchRequestParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	MessageID   uuid.UUID
+	MessageID   *uuid.UUID
 	ChannelID   uuid.UUID
 	AgentID     uuid.UUID
 	RequestedBy uuid.UUID

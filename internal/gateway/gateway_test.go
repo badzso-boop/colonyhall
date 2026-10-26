@@ -244,3 +244,41 @@ func TestGatewayProgressChannelPermissions(t *testing.T) {
 		t.Fatalf("expected ErrForbidden for agent calling ChannelProgress, got: %v", err)
 	}
 }
+
+func TestGatewayPushFsRequest(t *testing.T) {
+	gw := &Gateway{}
+	ag1 := newID()
+	ag2 := newID()
+
+	// No connections: returns false
+	if gw.PushFsRequest(ag1, "req-none") {
+		t.Fatal("expected false when no connections open")
+	}
+
+	c1 := &connection{
+		actor: identity.Actor{ID: ag1, Kind: identity.KindAgent},
+	}
+	c2 := &connection{
+		actor: identity.Actor{ID: ag2, Kind: identity.KindAgent},
+	}
+	chuman := &connection{
+		actor: identity.Actor{ID: newID(), Kind: identity.KindHuman},
+	}
+
+	gw.register(c1)
+	gw.register(c2)
+	gw.register(chuman)
+
+	gw.mu.Lock()
+	var targets []*connection
+	for c := range gw.conns {
+		if c.actor.Kind == identity.KindAgent && c.actor.ID == ag1 {
+			targets = append(targets, c)
+		}
+	}
+	gw.mu.Unlock()
+
+	if len(targets) != 1 || targets[0] != c1 {
+		t.Fatalf("expected only c1 targeted for ag1, got: %v", targets)
+	}
+}

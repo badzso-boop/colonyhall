@@ -450,6 +450,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Logger:         opt.Logger,
 		OriginPatterns: opt.OriginPatterns,
 	}
+	fiSvc.FsPusher = gw
+	fiSvc.Logger = opt.Logger
 	mux.Handle("GET /ws/ui", gw)
 	mux.Handle("POST /api/v1/agent/activity", httpx.RequireAuth(idSvc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in apispec.AgentActivityRequest

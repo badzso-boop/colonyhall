@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
@@ -36,6 +38,7 @@ type ConversationReader interface {
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
+	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
 }
 
 // ChannelReader checks access to channels.
@@ -49,6 +52,11 @@ type ActorReader interface {
 // HostAssignee checks whether an agent has an assignment on a host.
 type HostAssignee interface {
 	Assignment(ctx context.Context, agentID ids.ID) (hosts.Assignment, error)
+}
+
+// FsPusher delivers an ephemeral fs.request frame to an agent's open connections.
+type FsPusher interface {
+	PushFsRequest(agentID ids.ID, requestID string) bool
 }
 
 // Service implements the business logic of the files module.
@@ -65,6 +73,10 @@ type Service struct {
 	Tx           db.TxRunner
 	MaxUploadMB  int
 	DetectMime   func(head []byte) string
+	FsPusher     FsPusher
+	FsRelay      *FsRelay
+	FsTimeout    time.Duration
+	Logger       *slog.Logger
 }
 
 // MaxUploadBytes returns the maximum allowed upload size in bytes.
@@ -398,6 +410,178 @@ func (s *Service) RequestFileFetch(ctx context.Context, by identity.Actor, messa
 	}
 
 	return req, true, nil
+}
+
+// RequestAgentFileFetch handles a human's request to fetch a file in an agent's folder without a message context.
+func (s *Service) RequestAgentFileFetch(ctx context.Context, by identity.Actor, agentID ids.ID, channelID ids.ID, rawPath string, refresh bool) (FileFetchRequest, bool, error) {
+	if by.Kind != identity.KindHuman {
+		return FileFetchRequest{}, false, ErrForbidden
+	}
+	if s.Actors == nil {
+		return FileFetchRequest{}, false, ErrNotFound
+	}
+	targetAgent, err := s.Actors.ActorByID(ctx, agentID)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+	if targetAgent.WorkspaceID != by.WorkspaceID || targetAgent.Kind != identity.KindAgent {
+		return FileFetchRequest{}, false, ErrNotFound
+	}
+	canRead, err := s.Conversation.CanRead(ctx, by, channelID)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+	if !canRead {
+		return FileFetchRequest{}, false, ErrForbidden
+	}
+	members, err := s.Conversation.MemberIDs(ctx, channelID)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+	if !slices.Contains(members, agentID) {
+		return FileFetchRequest{}, false, ErrForbidden
+	}
+	if s.Hosts == nil {
+		return FileFetchRequest{}, false, ErrAgentNotAssigned
+	}
+	if _, err := s.Hosts.Assignment(ctx, agentID); err != nil {
+		return FileFetchRequest{}, false, ErrAgentNotAssigned
+	}
+
+	normPath := NormalizePath(rawPath)
+	if normPath == "" {
+		return FileFetchRequest{}, false, &httpx.BadRequest{Detail: "path is required"}
+	}
+
+	existing, err := s.Store.FileFetchRequestByAgentAndPath(ctx, by.WorkspaceID, agentID, normPath)
+	if err == nil {
+		if existing.State == FileFetchDone && !refresh {
+			return existing, false, nil
+		}
+		if existing.State == FileFetchPending && !refresh {
+			return existing, false, nil
+		}
+	}
+
+	now := s.Clock.Now()
+	req := FileFetchRequest{
+		ID:          s.IDs.New(),
+		WorkspaceID: by.WorkspaceID,
+		MessageID:   ids.Nil,
+		ChannelID:   channelID,
+		AgentID:     agentID,
+		RequestedBy: by.ID,
+		Path:        normPath,
+		State:       FileFetchPending,
+		CreatedAt:   now,
+	}
+
+	err = s.commit(ctx, func(ctx context.Context) error { return s.Store.InsertFileFetchRequest(ctx, req) },
+		by.WorkspaceID, EventFileFetchRequested, by.ID, channelID, req.ID, FetchRequestedPayload{
+			RequestID: req.ID.String(),
+			AgentID:   agentID.String(),
+		}, now)
+	if err != nil {
+		return FileFetchRequest{}, false, err
+	}
+
+	return req, true, nil
+}
+
+func (s *Service) fsRelay() *FsRelay {
+	if s.FsRelay == nil {
+		s.FsRelay = NewFsRelay()
+	}
+	return s.FsRelay
+}
+
+// RequestAgentFs relays an ephemeral filesystem request to the agent's guard and waits up to 15s.
+func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID ids.ID, channelID ids.ID, op, root, path, query string) (any, error) {
+	if by.Kind != identity.KindHuman {
+		return nil, ErrForbidden
+	}
+	if op != "list" && op != "search" && op != "git_status" {
+		return nil, &httpx.BadRequest{Detail: "invalid op"}
+	}
+	if s.Actors == nil {
+		return nil, ErrNotFound
+	}
+	targetAgent, err := s.Actors.ActorByID(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+	if targetAgent.WorkspaceID != by.WorkspaceID || targetAgent.Kind != identity.KindAgent {
+		return nil, ErrNotFound
+	}
+	canRead, err := s.Conversation.CanRead(ctx, by, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !canRead {
+		return nil, ErrForbidden
+	}
+	members, err := s.Conversation.MemberIDs(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !slices.Contains(members, agentID) {
+		return nil, ErrForbidden
+	}
+	if s.Hosts == nil {
+		return nil, ErrAgentNotAssigned
+	}
+	if _, err := s.Hosts.Assignment(ctx, agentID); err != nil {
+		return nil, ErrAgentNotAssigned
+	}
+
+	// Audit request (who, which agent, op, path — never file names from answer, never content)
+	if s.Logger != nil {
+		s.Logger.Info("audit: fs request", "actor_id", by.ID, "agent_id", agentID, "op", op, "path", path)
+	}
+
+	reqID := s.IDs.New().String()
+	relay := s.fsRelay()
+	now := s.Clock.Now()
+	pending := relay.Register(reqID, agentID, op, root, path, query, now)
+
+	if s.FsPusher != nil {
+		s.FsPusher.PushFsRequest(agentID, reqID)
+	}
+
+	timeout := s.FsTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+
+	select {
+	case res := <-pending.ResultCh:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Payload, nil
+	case <-time.After(timeout):
+		relay.Timeout(reqID)
+		return nil, ErrFsTimeout
+	case <-ctx.Done():
+		relay.Timeout(reqID)
+		return nil, ctx.Err()
+	}
+}
+
+// GetAgentFsRequest returns a pending filesystem request for the calling agent.
+func (s *Service) GetAgentFsRequest(ctx context.Context, by identity.Actor, requestID string) (*FsPendingRequest, error) {
+	if by.Kind != identity.KindAgent {
+		return nil, ErrForbidden
+	}
+	return s.fsRelay().Get(requestID, by.ID)
+}
+
+// DeliverAgentFsResult delivers the result from the agent's guard to the waiting human handler.
+func (s *Service) DeliverAgentFsResult(ctx context.Context, by identity.Actor, requestID string, res FsResult) error {
+	if by.Kind != identity.KindAgent {
+		return ErrForbidden
+	}
+	return s.fsRelay().Deliver(requestID, by.ID, res)
 }
 
 // GetFileFetch returns a file fetch request, failing expired ones with host_offline, and includes file metadata when done.
