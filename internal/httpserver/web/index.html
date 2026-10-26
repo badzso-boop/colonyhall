@@ -3907,6 +3907,9 @@ async function renderHosts() {
     el("option", { value: "bypassPermissions", textContent: "bypassPermissions (!)" })
   );
   const naSandbox = el("input", { type: "checkbox" });
+  // Compact agents are usually sandboxed (no root folder needed); direct
+  // agents usually are not. The admin can still change it.
+  naMode.onchange = () => { naSandbox.checked = naMode.value === "compact"; };
   const naModel = el("input", { placeholder: "model (haiku)", size: 12 });
   const naWModel = el("input", { placeholder: "work model", size: 12 });
   const naWork = el("input", { type: "checkbox" });

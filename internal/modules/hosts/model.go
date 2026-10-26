@@ -169,7 +169,7 @@ var (
 	ErrBadPath              = errors.New("path must be absolute and clean (no '..'), at most 1024 characters")
 	ErrBadMode              = errors.New("mode must be read or write")
 	ErrBadAgentMode         = errors.New("mode must be direct or compact")
-	ErrBadRootDir           = errors.New("direct mode requires a root_dir")
+	ErrBadRootDir           = errors.New("root_dir is required unless the agent is sandboxed: give a folder, or choose compact mode with sandbox")
 	ErrWorktreeDirectOnly   = errors.New("worktree_repo is only supported for direct agents or sandboxed compact agents")
 	ErrPreviewFullAccess    = errors.New("allow_preview needs a full-access agent (direct mode, no sandbox)")
 	ErrWebReadSandboxedOnly = errors.New("allow_web_read is only available for sandboxed agents")
