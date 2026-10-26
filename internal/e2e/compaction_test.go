@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/modules/compaction"
 	"colonyhall/internal/server"
@@ -342,5 +344,62 @@ func TestCompactionManualAndTimeout(t *testing.T) {
 	// Now another manual trigger is allowed
 	if s := e.do("POST", fmt.Sprintf("/api/v1/channels/%s/compactions", ch.Id), server.DevAdminToken, nil, &comp); s != http.StatusCreated {
 		t.Fatalf("second manual trigger after timeout: expected 201, got %d", s)
+	}
+}
+
+// The scribe is not a member of the conversations it compacts (the admin
+// chose it; the compaction request is its permission): it must still store
+// the summary, and read the previous one on the next round.
+func TestCompactionScribeNeedsNoMembership(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var scribe struct {
+		Actor struct{ ID string }
+		Token string
+	}
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "jegyzo", "role": "member"}, &scribe); s != http.StatusCreated {
+		t.Fatalf("create scribe: %d", s)
+	}
+	scribeID, _ := uuid.Parse(scribe.Actor.ID)
+	if s := e.do("PUT", "/api/v1/settings/compaction", server.DevAdminToken, apispec.UpdateCompactionSettingsRequest{CompactThresholdTokens: 350000, CompactorAgentId: &scribeID}, nil); s != http.StatusOK {
+		t.Fatalf("settings: %d", s)
+	}
+	var priv struct{ ID string }
+	if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": "norbi-private", "kind": "private"}, &priv); s != http.StatusCreated {
+		t.Fatalf("private channel: %d", s)
+	}
+	if _, s := e.send(server.DevAdminToken, priv.ID, map[string]any{"body": "Döntöttünk: Postgres marad."}); s != http.StatusCreated {
+		t.Fatalf("send: %d", s)
+	}
+	_ = e.app.Drain(ctx)
+
+	round := func(summary string) apispec.ScribeCompactionTask {
+		var comp apispec.Compaction
+		if s := e.do("POST", "/api/v1/channels/"+priv.ID+"/compactions", server.DevAdminToken, map[string]any{}, &comp); s != http.StatusOK && s != http.StatusCreated {
+			t.Fatalf("trigger: %d", s)
+		}
+		var task apispec.ScribeCompactionTask
+		if s := e.do("GET", "/api/v1/agent/compactions/"+comp.Id.String(), scribe.Token, nil, &task); s != http.StatusOK {
+			t.Fatalf("scribe task: %d", s)
+		}
+		var done apispec.Compaction
+		if s := e.do("POST", "/api/v1/agent/compactions/"+comp.Id.String()+"/result", scribe.Token, apispec.CompactionResultRequest{Markdown: &summary}, &done); s != http.StatusOK {
+			t.Fatalf("scribe result without membership: %d", s)
+		}
+		if done.State != apispec.CompactionStateDone || done.SummaryFileId == nil {
+			t.Fatalf("not done: %+v", done)
+		}
+		return task
+	}
+	round("# Összefoglaló\n\nPostgres marad.")
+	if _, s := e.send(server.DevAdminToken, priv.ID, map[string]any{"body": "És a cache: Redis."}); s != http.StatusCreated {
+		t.Fatalf("send 2: %d", s)
+	}
+	_ = e.app.Drain(ctx)
+	task2 := round("# Összefoglaló\n\nPostgres és Redis.")
+	if task2.PreviousSummary == nil || !strings.Contains(*task2.PreviousSummary, "Postgres marad") {
+		t.Fatalf("the scribe must get the previous summary, got %v", task2.PreviousSummary)
 	}
 }

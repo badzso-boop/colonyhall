@@ -104,7 +104,19 @@ func (s *Service) Upload(ctx context.Context, by identity.Actor, channelID ids.I
 	if !canWrite {
 		return File{}, ErrForbidden
 	}
+	return s.upload(ctx, by, channelID, filename, r)
+}
 
+// UploadAuthorized stores a file in a channel for another module that has
+// already decided who may do it (the compaction module: the scribe chosen by
+// an admin writes a channel's summary without being its member). It skips
+// the channel check; never expose it to a request directly.
+func (s *Service) UploadAuthorized(ctx context.Context, by identity.Actor, channelID ids.ID, filename string, r io.Reader) (File, error) {
+	return s.upload(ctx, by, channelID, filename, r)
+}
+
+func (s *Service) upload(ctx context.Context, by identity.Actor, channelID ids.ID, filename string, r io.Reader) (File, error) {
+	var err error
 	cleanName := SanitizeFileName(filename)
 	maxBytes := s.MaxUploadBytes()
 
@@ -232,6 +244,21 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, fileID ids.ID) (Fi
 }
 
 // OpenContent opens a reader for the file's content if the caller has access.
+// OpenContentAuthorized opens a file for another module that has already
+// decided who may read it (the compaction module: the scribe reads the
+// previous summary). It skips the channel check; never expose it directly.
+func (s *Service) OpenContentAuthorized(ctx context.Context, fileID ids.ID) (File, io.ReadCloser, error) {
+	f, err := s.Store.ByID(ctx, fileID)
+	if err != nil {
+		return File{}, nil, err
+	}
+	rc, err := s.Storage.Open(ctx, f.SHA256)
+	if err != nil {
+		return File{}, nil, err
+	}
+	return f, rc, nil
+}
+
 func (s *Service) OpenContent(ctx context.Context, by identity.Actor, fileID ids.ID) (File, io.ReadCloser, error) {
 	f, err := s.Get(ctx, by, fileID)
 	if err != nil {

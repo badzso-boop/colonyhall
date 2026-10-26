@@ -32,6 +32,10 @@ var (
 type FilesManager interface {
 	Upload(ctx context.Context, by identity.Actor, channelID ids.ID, filename string, r io.Reader) (files.File, error)
 	OpenContent(ctx context.Context, by identity.Actor, fileID ids.ID) (files.File, io.ReadCloser, error)
+	// The scribe needs no channel membership: the compaction request is its
+	// permission (checked here), so these skip the channel check.
+	UploadAuthorized(ctx context.Context, by identity.Actor, channelID ids.ID, filename string, r io.Reader) (files.File, error)
+	OpenContentAuthorized(ctx context.Context, fileID ids.ID) (files.File, io.ReadCloser, error)
 }
 
 type Service struct {
@@ -403,7 +407,7 @@ func (s *Service) GetScribeTask(ctx context.Context, by identity.Actor, compacti
 	if comp.PreviousCompactionID != ids.Nil {
 		prev, err := s.Store.CompactionByID(ctx, comp.PreviousCompactionID)
 		if err == nil && prev.SummaryFileID != ids.Nil && s.Files != nil {
-			_, r, err := s.Files.OpenContent(ctx, by, prev.SummaryFileID)
+			_, r, err := s.Files.OpenContentAuthorized(ctx, prev.SummaryFileID)
 			if err == nil {
 				defer func() { _ = r.Close() }()
 				data, _ := io.ReadAll(r)
@@ -532,7 +536,7 @@ func (s *Service) SubmitScribeResult(ctx context.Context, by identity.Actor, com
 	}
 	fileName := fmt.Sprintf("%s-%s-compaction-%d.md", ch.Name, unitName, now.Unix())
 
-	file, err := s.Files.Upload(ctx, by, comp.ChannelID, fileName, strings.NewReader(in.Markdown))
+	file, err := s.Files.UploadAuthorized(ctx, by, comp.ChannelID, fileName, strings.NewReader(in.Markdown))
 	if err != nil {
 		return Compaction{}, fmt.Errorf("upload summary file: %w", err)
 	}
