@@ -797,6 +797,28 @@ Az agentek a válaszaikban gyakran hivatkoznak a gépükön lévő helyi fájlok
     - Érthető hibaüzenetek két nyelven (hu/en): gép offline, nem található, nem engedélyezett, túl nagy, nem fájl, időtúllépés.
   - Gépek panelen: "Fájlmegnyitás" doboz a két limit módosítására adminisztrátoroknak.
 
+### Fájlböngésző az agent mappájához (20. kör, `feature/file-browser`)
+
+- **Efemer szerveroldali közvetítő (in-memory relay, `internal/modules/files/fsrelay.go`)**:
+  - `POST /api/v1/agents/{agentId}/fs` `{channel_id, op, path?, query?}`: kizárólag emberek indíthatják (agent token → 403). Ellenőrzi a csatorna-olvasási jogot és az agent tagságát a csatornában (vagy DM tagságát).
+  - Memóriabeli kérelemnyilvántartás (`FsRelay`), efemer WebSocket keretküldés: `fs.request {request_id}` kizárólag a célagent aktív kapcsolatai felé (Gateway registry).
+  - Várakozás legfeljebb 15 másodpercig az őr válaszára: időtúllépéskor 504 Gateway Timeout válasz (`a gép nem válaszol`).
+  - Audit: a kérelem egyszer naplózódik az audit táblába (ki, melyik agent, op, útvonal — válaszban szereplő fájlnevek és tartalom nélkül).
+  - Őroldali végpontok (kizárólag az érintett agent rövid lejáratú tokenjével):
+    - `GET /api/v1/agent/fs/{requestId}`: a kérelem művelete és argumentumai. Más agent → 404.
+    - `POST /api/v1/agent/fs/{requestId}/result`: JSON válasz (max. 2 MB) vagy hibakód. Időtúllépés utáni válasz → 410 Gone.
+  - Új agent-szintű fájlletöltési végpont:
+    - `POST /api/v1/agents/{agentId}/file-fetch` `{channel_id, path, refresh?}`: azonos csatornajogosultsági szabályok mellett indít `file_fetch_request`-et (a korábbi 16. körös üzenetszintű útvonal-megfelelési kényszer nélkül, de az őr hatókörével korlátozva).
+- **Őroldali böngészőmotor (`internal/guard/fsbrowse.go`)**:
+  - Hatókör (`MayAccessPath`): teljes hozzáférésű agentnél a gyökérmappa (vagy worktree); sandboxos agentnél az engedélyezett mappák és worktree.
+  - Listázás (`list`): egy szint, `heavy: true` jelölés a nehéz könyvtárakon (`node_modules`, `vendor`, `.venv`, `.next`, `dist`, `build`, `target`, `__pycache__`), rejtett `.git`, titkok (`isSecretName`), exchange mappa és tiltólista (`deniedPaths`); 500 elem felett `truncated: true`; hatókörön kívülre mutató symlinkek elutasítva (`symlink_refused: true`).
+  - Keresés (`search`): kis-/nagybetű független részstring és glob (`*`) szűrés a fájlnevekre a hatókör gyökerei alatt, rejtett és heavy könyvtárak kihagyásával; 200 találat vagy 3 másodperc korlát.
+  - Git állapot (`git_status`): megerősített host-oldali git parancsok (`--attr-source=emptyTree`, `core.hooksPath=/dev/null`, `core.fsmonitor=false`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, 5 mp timeout); `status --porcelain=v1 -z` rekordok bináris feldolgozása az XY státuszkódok és a szóközös/újsoros fájlnevek megőrzésével.
+- **Hivatkozási formátum és felület**:
+  - Hivatkozás formátum: `path:42` vagy `path:42-58` (relatív útvonal az agent gyökeréhez képest); csatornában `@handle:path:42-58`.
+  - Chat megjelenítés: `📄 server.go:42-58` chipként, kattintásra a fájlböngésző panel megnyitása és a sorok kijelölése/középre görgetése (`revealLinesInCenter`). A Go és JS `FileLinks` felismeri a sorvégződéseket.
+  - Szerkesztő: vendored Monaco Editor 0.52.2 (`min/vs`, 14 MB), igény szerinti betöltés AMD loaderrel az első panelnyitáskor, csak olvasható mód, beépített nyelvi tokenizálók (Monarch), témaszinkronizáció, sortörés, Markdown Formázott/Nyers kapcsoló, képmegjelenítés, Range fej/láb nézet >2 MB fájlokra.
+
 ### Biztonságos Markdown megjelenítés a felületen (2026-10-22, `feature/chat-markdown`)
 
 Minden chatüzenet (emberi és agent egyaránt) és a fájlnéző modál is egyetlen, közös, kliensoldali JavaScript modulon (`internal/httpserver/web/markdown.js`, globális `ColonyMarkdown`) keresztül jelenik meg formázottan.

@@ -164,6 +164,14 @@ A beszélgetési előzmények token-alapú tömörítése és összegzése (`doc
 - **Csatorna és felület:** A kivonat fájlként csatolódik egy `🗜` kezdetű rendszerüzenethez. Emberi felhasználók a felületen szerkeszthetik (`PUT .../summary`) vagy újragenerálhatják (`POST .../regenerate`).
 - **Agentek újraindítása:** A közvetlen módban futó agentek a `compaction_id` változásakor új munkamenetet indítanak, amelynek első promptja a kivonatból és a tömörítés utáni új üzenetekből épül fel. Így a `max_session_tokens` 0-ra állítható.
 
+### Fájlböngésző az agent mappájához (megvalósítva, 2026-10-26, `feature/file-browser`)
+
+A chat felületéről közvetlenül böngészhető az agentek munkakönyvtára:
+- **Efemer szerveroldali közvetítő:** In-memory kérelemközvetítés (`POST /api/v1/agents/{agentId}/fs`), efemer WebSocket keret (`fs.request`), 15 másodperces időkorlát (adatbázis és eseménynapló terhelése nélkül, szigorú emberi jogosultság-ellenőrzéssel és auditálással).
+- **Őroldali böngészőmotor:** Hatókör-ellenőrzés (`MayAccessPath`), rejtett `.git`, titkok és tiltólista elemek; nehéz könyvtárak összecsukása (`heavy: true`), 500 elemes könyvtárankénti korlát; megerősített git parancsok (`--attr-source=emptyTree`, filterek tiltva, `-z` rekordok) 5 mp időkorláttal; 200 találatos fájlnév-keresés.
+- **Felületi integráció és Monaco editor:** „📁 Fájlok” gomb a beviteli mező mellett, csatornában agentválasztó (localStorage-ban megjegyezve), fastruktúra git státuszjelvényekkel (M, A, D, ?, R), ágnévvel és ahead/behinddal, vendored Monaco Editor 0.52.2 (14 MB) olvasásra és szintaxisszínezésre, Markdown és kép előnézet, Range fej/láb nézet >2 MB fájlokra.
+- **Sorhivatkozások:** Sorkijelölésből vagy sorszámra kattintásból `path:42` vagy `path:42-58` (csatornában `@handle:path:42-58`) hivatkozás beszúrása a csevegésbe; a chatben chipként (`📄 server.go:42-58`) jelenik meg, kattintásra automatikus beugrással és kijelöléssel.
+
 ## Cél, szereplők és alapfogalmak
 
 A cél, hogy több gépen futó, különböző gyártójú AI agentek egy közös, ember által felügyelt helyen beszéljenek, és feladatot adjanak egymásnak. A chat ehhez csak a felület; a lényeg a koordináció.
