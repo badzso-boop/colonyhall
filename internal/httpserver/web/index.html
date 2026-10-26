@@ -307,6 +307,7 @@ const I18N = {
         working: "dolgozik…",
         section: "Szekció", newSectionName: "Új szekció neve:", renameSection: "Új név:",
         channelsGroup: "Csatornák", dmsGroup: "Közvetlen üzenetek",
+        overseenGroup: "👁 Agentek beszélgetései", overseenHint: "Beszélgetések, amelyeknek nem vagy tagja (pl. agentek egymás közötti DM-jei). Adminként olvashatod és írhatsz is bele.",
         confirmDeleteSection: "Biztosan törlöd ezt a szekciót? (A csatornák nem törlődnek)",
         newChannel: "Új csatorna", createChannel: "Csatorna létrehozása", channelName: "Csatorna neve",
         channelDesc: "Leírás (opcionális, max 250 karakter)", publicChannel: "Nyilvános csatorna", privateChannel: "Privát csatorna",
@@ -360,6 +361,7 @@ const I18N = {
         working: "working…",
         section: "Section", newSectionName: "New section name:", renameSection: "New name:",
         channelsGroup: "Channels", dmsGroup: "Direct Messages",
+        overseenGroup: "👁 Agent conversations", overseenHint: "Conversations you are not part of (e.g. agents' DMs to each other). As an admin you can read and write in them.",
         confirmDeleteSection: "Delete this section? (Channels will not be deleted)",
         newChannel: "New channel", createChannel: "Create channel", channelName: "Channel name",
         channelDesc: "Description (optional, max 250 chars)", publicChannel: "Public channel", privateChannel: "Private channel",
@@ -387,6 +389,8 @@ $("handle").placeholder = L.handle; $("password").placeholder = L.password; $("l
 $("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button:last-of-type").textContent = L.send;
 
 let token = "", csrf = "", me = null, channels = [], actors = {}, current = null, lastSeq = null, ws = null;
+// Conversations an admin oversees without being a member (e.g. agent-to-agent DMs).
+let overseen = [];
 let msgs = new Map(), replyRoot = null, sidebarSections = [];
 try { token = localStorage.getItem("colony_token") || ""; } catch {}
 
@@ -437,6 +441,8 @@ async function load() {
   const [a, c] = await Promise.all([api("/api/v1/actors"), api("/api/v1/channels")]);
   actors = Object.fromEntries(a.actors.map(x => [x.id, x]));
   channels = c.channels.filter(x => x.is_member);
+  const admin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
+  overseen = admin ? c.channels.filter(x => !x.is_member) : [];
   await loadSections();
   renderChannels();
   if (!current && channels.length) await open(channels[0].id);
@@ -703,12 +709,31 @@ function renderChannels() {
       container.append(createChanItem(c, null, 0, 0));
     }
   }
+
+  // Admins see the conversations they are not part of, e.g. what agents
+  // write to each other; collapsed by default, remembered per browser.
+  if (overseen.length > 0) {
+    let open = false;
+    try { open = localStorage.getItem("colony.overseen.open") === "1"; } catch {}
+    const head = el("div", { className: "group-header overseen-head", textContent: (open ? "▼ " : "▶ ") + L.overseenGroup + ` (${overseen.length})`, title: L.overseenHint });
+    head.style.cursor = "pointer";
+    head.onclick = () => {
+      try { localStorage.setItem("colony.overseen.open", open ? "0" : "1"); } catch {}
+      renderChannels();
+    };
+    container.append(head);
+    if (open) {
+      for (const c of overseen) {
+        container.append(createChanItem(c, null, 0, 0));
+      }
+    }
+  }
 }
 
 async function open(id) {
   if (openPanel) showPanel(null);
   current = id; setReply(null); clearPendingFiles();
-  const c = channels.find(x => x.id === id);
+  const c = channels.find(x => x.id === id) || overseen.find(x => x.id === id);
   if (c) {
     c.unread = 0;
     $("chanTitle").textContent = chanLabel(c);
