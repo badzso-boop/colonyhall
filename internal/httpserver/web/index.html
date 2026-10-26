@@ -4317,23 +4317,22 @@ async function renderHosts() {
     const compHint = el("div", { className: "muted small", style: "margin-top:4px;", textContent: L.compactionHint });
     compBox.append(compRow, compHint);
 
-    const assignedAgentIds = new Set();
+    // Every agent with a machine can be the scribe; the handle comes with
+    // the host list, so an agent created after the page loaded is listed too.
+    const assigned = new Map();
     for (const h of hosts) {
       for (const a of h.agents || []) {
-        assignedAgentIds.add(a.agent_id);
+        assigned.set(a.agent_id, a.handle || actors[a.agent_id]?.handle || a.agent_id);
       }
     }
     scribeSelect.append(el("option", { value: "", textContent: L.noScribe }));
-    for (const aId of assignedAgentIds) {
-      const act = actors[aId];
-      if (act) {
-        scribeSelect.append(el("option", { value: aId, textContent: `@${act.handle}` }));
-      }
+    for (const [aId, handle] of assigned) {
+      scribeSelect.append(el("option", { value: aId, textContent: `@${handle}` }));
     }
 
     api("/api/v1/settings/compaction").then(st => {
-      threshInput.value = st.default_threshold_tokens || 350000;
-      if (st.scribe_agent_id) scribeSelect.value = st.scribe_agent_id;
+      threshInput.value = st.compact_threshold_tokens || 350000;
+      if (st.compactor_agent_id) scribeSelect.value = st.compactor_agent_id;
     }).catch(() => {});
 
     saveCompBtn.onclick = async () => {
@@ -4350,8 +4349,8 @@ async function renderHosts() {
         await api("/api/v1/settings/compaction", {
           method: "PUT",
           body: JSON.stringify({
-            default_threshold_tokens: tVal,
-            scribe_agent_id: scribeSelect.value || null
+            compact_threshold_tokens: tVal,
+            compactor_agent_id: scribeSelect.value || null
           })
         });
         compStatus.textContent = "✓";
