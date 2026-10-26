@@ -340,7 +340,8 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 			httpx.Error(w, r, err)
 			return
 		}
-		var root, path, query string
+		var root, path, query, name string
+		var lines int
 		if in.Root != nil {
 			root = *in.Root
 		}
@@ -350,7 +351,13 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 		if in.Query != nil {
 			query = *in.Query
 		}
-		res, err := svc.RequestAgentFs(r.Context(), httpx.Actor(r), agentID, ids.ID(in.ChannelId), string(in.Op), root, path, query)
+		if in.Name != nil {
+			name = *in.Name
+		}
+		if in.Lines != nil {
+			lines = *in.Lines
+		}
+		res, err := svc.RequestAgentFs(r.Context(), httpx.Actor(r), agentID, ids.ID(in.ChannelId), string(in.Op), root, path, query, name, lines)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
@@ -416,6 +423,18 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 		if pending.Query != "" {
 			q := pending.Query
 			out.Query = &q
+		}
+		if pending.Name != "" {
+			n := pending.Name
+			out.Name = &n
+		}
+		if pending.Lines > 0 {
+			l := pending.Lines
+			out.Lines = &l
+		}
+		if pending.KilledBy != "" {
+			k := pending.KilledBy
+			out.KilledBy = &k
 		}
 		httpx.JSON(w, http.StatusOK, out)
 	}))

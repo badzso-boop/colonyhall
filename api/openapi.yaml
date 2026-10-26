@@ -2694,7 +2694,7 @@ components:
     AgentFsResultRequest:
       type: object
       properties:
-        op: { type: string, enum: [list, search, git_status] }
+        op: { type: string, enum: [list, search, git_status, term_list, term_output, term_kill] }
         roots:
           type: array
           items:
@@ -2711,6 +2711,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FsGitStatus"
+        terminals:
+          type: array
+          items:
+            $ref: "#/components/schemas/TerminalSummary"
+        output: { type: string }
+        killed: { type: boolean }
         truncated: { type: boolean }
         reason: { type: string }
         error_code: { type: string }

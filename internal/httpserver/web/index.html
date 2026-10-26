@@ -22,6 +22,17 @@
   .overview-panel.on { display:flex; }
   .file-browser-panel { display:none; position:absolute; top:0; right:0; bottom:0; width:580px; max-width:100%; background:var(--surface); border-left:1px solid var(--line); z-index:10; box-shadow:-2px 0 8px rgba(0,0,0,0.06); flex-direction:column; overflow:hidden; }
   .file-browser-panel.on { display:flex; }
+  .terminal-viewer-panel { display:none; position:absolute; top:0; right:0; bottom:0; width:680px; max-width:100%; background:var(--surface); border-left:1px solid var(--line); z-index:15; box-shadow:-2px 0 8px rgba(0,0,0,0.06); flex-direction:column; overflow:hidden; }
+  .terminal-viewer-panel.on { display:flex; }
+  .tv-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; background:var(--surface); }
+  .tv-actions { display:flex; align-items:center; gap:8px; }
+  .tv-badge { font-size:11px; font-weight:600; padding:1px 6px; border-radius:10px; line-height:16px; }
+  .tv-badge.running { background:#e0f2fe; color:#0369a1; }
+  .tv-badge.finished { background:#d1fae5; color:#047857; }
+  .tv-badge.error { background:#fee2e2; color:#b91c1c; }
+  .tv-badge.killed { background:#f3f4f6; color:#4b5563; }
+  .tv-output-container { flex:1; position:relative; overflow-y:auto; background:#1e1e1e; color:#d4d4d4; padding:8px 12px; min-height:0; }
+  .tv-output { margin:0; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; line-height:1.45; white-space:pre-wrap; word-break:break-all; }
   .fb-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; background:var(--surface); }
   .fb-tabs { display:flex; gap:4px; align-items:center; }
   .fb-tab-btn { padding:3px 8px; font-size:12px; border:1px solid var(--line); border-radius:4px; background:var(--surface); cursor:pointer; color:var(--fg); }
@@ -185,6 +196,7 @@
     #chanActs { width:100%; justify-content:space-between; }
     .overview-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
     .file-browser-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
+    .terminal-viewer-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
     #fileViewerModal { padding:0; }
     #fileViewerModal .card { max-width:100%; width:100%; height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; border-radius:0; border:none; } }
 </style>
@@ -292,6 +304,31 @@
           <img id="fbImgView" class="file-view-img" src="" alt="">
         </div>
       </div>
+    </div>
+  </aside>
+  <aside id="terminalViewerPanel" class="terminal-viewer-panel">
+    <div class="tv-header">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+        <span style="font-size:16px;">🖥</span>
+        <strong id="tvTitle" style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Terminál</strong>
+        <span id="tvStatusBadge" class="tv-badge"></span>
+        <span id="tvAutoRefresh" class="muted" style="font-size:11px;display:none;"></span>
+      </div>
+      <div class="tv-actions">
+        <button id="tvStopBtn" type="button" style="display:none;background:var(--danger, #dc2626);color:#fff;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:12px;">Leállítás</button>
+        <button id="tvCloseBtn" type="button" class="overview-close" title="Bezárás">✕</button>
+      </div>
+    </div>
+    <div class="tv-meta" style="padding:6px 12px;background:var(--bg);border-bottom:1px solid var(--line);font-size:11px;display:flex;flex-direction:column;gap:4px;">
+      <div id="tvMetaInfo" style="display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);"></div>
+      <div id="tvSshBox" style="display:flex;align-items:center;gap:6px;background:var(--surface);padding:4px 8px;border-radius:4px;border:1px solid var(--line);">
+        <span class="muted" id="tvSshLabel" style="font-size:11px;font-weight:600;">SSH:</span>
+        <code id="tvSshCmd" style="flex:1;font-size:11px;user-select:all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace, monospace;"></code>
+        <button id="tvSshCopyBtn" type="button" style="border:1px solid var(--line);background:var(--bg);padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px;">Másolás</button>
+      </div>
+    </div>
+    <div id="tvOutputContainer" class="tv-output-container">
+      <pre id="tvOutput" class="tv-output"></pre>
     </div>
   </aside>
 </main>
@@ -435,6 +472,11 @@ const I18N = {
         wordWrap: "Sortörés", truncatedList: "első 500 elem megjelenítve", truncatedSearch: "200 találat (korlátozva)",
         searchTimeout: "Keresési időtúllépés (részleges eredmények)", noFilesFound: "Nincs találat.", noFiles: "A mappa üres.",
         symlinkRefused: "szimbolikus link a határokon kívülre mutat (letiltva)", hostNotResponding: "a gép nem válaszol",
+        terminals: "Terminálok", noTerminals: "Nincsenek aktív vagy mentett terminálok.",
+        terminalOutput: "Terminál kimenet", terminalRunning: "fut ⏳", terminalFinished: "kész ✅ exit 0",
+        terminalError: "hiba ⚠️ exit ", terminalKilled: "leállítva ⛔", autoRefreshNotice: "frissítés 2 mp-enként",
+        stopTerminal: "Leállítás", confirmStopTerminal: "Biztosan leállítod a terminált?", terminalStopped: "Terminál leállítva.",
+        sshAttach: "Csatlakozás SSH-val", onHost: (h) => `a(z) ${h} gépen`, viewTerminal: "Terminál megtekintése",
         treeTab: "📁 Fa", fileTab: "📄 Fájl" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
@@ -506,6 +548,11 @@ const I18N = {
         wordWrap: "Word wrap", truncatedList: "first 500 entries shown", truncatedSearch: "200 results (limited)",
         searchTimeout: "Search timed out (partial results)", noFilesFound: "No files found.", noFiles: "Directory is empty.",
         symlinkRefused: "symlink points out of scope (refused)", hostNotResponding: "the machine is not responding",
+        terminals: "Terminals", noTerminals: "No active or saved terminals.",
+        terminalOutput: "Terminal output", terminalRunning: "running ⏳", terminalFinished: "done ✅ exit 0",
+        terminalError: "error ⚠️ exit ", terminalKilled: "stopped ⛔", autoRefreshNotice: "refreshing every 2s",
+        stopTerminal: "Stop", confirmStopTerminal: "Are you sure you want to stop this terminal?", terminalStopped: "Terminal stopped.",
+        sshAttach: "Attach via SSH", onHost: (h) => `on ${h}`, viewTerminal: "View terminal",
         treeTab: "📁 Tree", fileTab: "📄 File" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
@@ -1187,6 +1234,19 @@ function renderMsg(m) {
     const appSpan = el("span");
     bodyEl.append(" ", appSpan);
     renderApprovalInline(appRef[1], appSpan);
+  }
+  const termMatch = /^(⚙️|⚠️|⛔)\s+([a-z0-9][a-z0-9-]{0,31})\s+(kész|hibával állt le|leállítva)/.exec(m.body);
+  if (termMatch && isAgent && me.kind === "human") {
+    const termName = termMatch[2];
+    const termBtn = el("button", {
+      textContent: "🖥 " + (L.viewTerminal || "Terminál megtekintése"),
+      style: "margin-left:6px; font-size:11px; padding:2px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); cursor:pointer;"
+    });
+    termBtn.onclick = (e) => {
+      e.stopPropagation();
+      openTerminalViewer(m.channel_id, m.author_id, termName, null);
+    };
+    bodyEl.append(" ", termBtn);
   }
   const isQuestionOrDel = (m.client_msg_id && m.client_msg_id.startsWith("q-")) || /\bQ-\d+\b/.test(m.body);
   const isDelTarget = delegations.some(d => d.message_id === m.id);
@@ -2390,6 +2450,201 @@ async function showError(id) {
 }
 $("errClose").onclick = () => { $("errModal").className = ""; };
 
+let tvOpen = false;
+let tvCurrentChannelId = null;
+let tvSelectedAgentId = null;
+let tvTermName = null;
+let tvHostName = "";
+let tvPollTimer = null;
+let tvAutoScroll = true;
+
+$("tvOutputContainer").onscroll = () => {
+  const el = $("tvOutputContainer");
+  tvAutoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight < 30);
+};
+
+function closeTerminalViewer() {
+  tvOpen = false;
+  if (tvPollTimer) {
+    clearInterval(tvPollTimer);
+    tvPollTimer = null;
+  }
+  $("terminalViewerPanel").classList.remove("on");
+}
+$("tvCloseBtn").onclick = closeTerminalViewer;
+
+async function openTerminalViewer(channelId, agentId, termName, hostName) {
+  tvOpen = true;
+  tvCurrentChannelId = channelId || current;
+  tvSelectedAgentId = agentId;
+  tvTermName = termName;
+  tvHostName = hostName || "";
+  tvAutoScroll = true;
+
+  if (tvPollTimer) {
+    clearInterval(tvPollTimer);
+    tvPollTimer = null;
+  }
+
+  $("terminalViewerPanel").classList.add("on");
+  $("tvTitle").textContent = `${termName}`;
+  $("tvOutput").textContent = "";
+  $("tvStatusBadge").className = "tv-badge";
+  $("tvStatusBadge").textContent = "";
+  $("tvAutoRefresh").style.display = "none";
+  $("tvStopBtn").style.display = "none";
+
+  const ag = actors[agentId];
+  const handle = ag?.handle || "agent";
+  const sshCmd = `tmux -L colonyhall attach -r -t colony-${handle}-${termName}`;
+  $("tvSshCmd").textContent = sshCmd;
+  const hostLabel = tvHostName ? ` (${typeof L.onHost === "function" ? L.onHost(tvHostName) : tvHostName})` : "";
+  $("tvSshLabel").textContent = (L.sshAttach || "Csatlakozás SSH-val") + hostLabel + ":";
+
+  await tvRefresh();
+}
+
+$("tvSshCopyBtn").onclick = () => {
+  const cmd = $("tvSshCmd").textContent;
+  if (cmd) {
+    navigator.clipboard.writeText(cmd).then(() => {
+      const orig = $("tvSshCopyBtn").textContent;
+      $("tvSshCopyBtn").textContent = L.copied || "Másolva!";
+      setTimeout(() => { $("tvSshCopyBtn").textContent = orig; }, 1500);
+    }).catch(() => {});
+  }
+};
+
+$("tvStopBtn").onclick = async () => {
+  if (!confirm(L.confirmStopTerminal || "Biztosan leállítod a terminált?")) return;
+  try {
+    await api(`/api/v1/agents/${tvSelectedAgentId}/fs`, {
+      method: "POST",
+      body: JSON.stringify({
+        channel_id: tvCurrentChannelId,
+        op: "term_kill",
+        name: tvTermName
+      })
+    });
+    await tvRefresh();
+  } catch (err) {
+    alert(err.message || "Hiba történt a terminál leállítása során.");
+  }
+};
+
+async function tvRefresh() {
+  if (!tvOpen || !tvSelectedAgentId || !tvCurrentChannelId || !tvTermName) return;
+
+  try {
+    const outRes = await api(`/api/v1/agents/${tvSelectedAgentId}/fs`, {
+      method: "POST",
+      body: JSON.stringify({
+        channel_id: tvCurrentChannelId,
+        op: "term_output",
+        name: tvTermName,
+        lines: 1000
+      })
+    });
+
+    if (outRes && outRes.output !== undefined) {
+      $("tvOutput").textContent = outRes.output || "";
+      if (tvAutoScroll) {
+        $("tvOutputContainer").scrollTop = $("tvOutputContainer").scrollHeight;
+      }
+    }
+
+    const listRes = await api(`/api/v1/agents/${tvSelectedAgentId}/fs`, {
+      method: "POST",
+      body: JSON.stringify({
+        channel_id: tvCurrentChannelId,
+        op: "term_list"
+      })
+    });
+
+    let currentTerm = null;
+    if (listRes && listRes.terminals) {
+      currentTerm = listRes.terminals.find(t => t.name === tvTermName);
+    }
+
+    if (currentTerm) {
+      renderTvMeta(currentTerm);
+    }
+  } catch (err) {
+    $("tvAutoRefresh").style.display = "none";
+  }
+}
+
+function renderTvMeta(term) {
+  const badge = $("tvStatusBadge");
+  badge.className = "tv-badge " + (term.status || "");
+  let statusText = term.status;
+  if (term.status === "running") {
+    statusText = L.terminalRunning || "fut ⏳";
+  } else if (term.status === "finished") {
+    statusText = L.terminalFinished || "kész ✅ exit 0";
+  } else if (term.status === "error") {
+    const code = term.exit_code !== undefined && term.exit_code !== null ? term.exit_code : "?";
+    statusText = (L.terminalError || "hiba ⚠️ exit ") + code;
+  } else if (term.status === "killed") {
+    statusText = L.terminalKilled || "leállítva ⛔";
+  }
+  badge.textContent = statusText;
+
+  const metaInfo = $("tvMetaInfo");
+  metaInfo.innerHTML = "";
+  if (term.command) {
+    const cmdEl = el("span", {}, el("b", { textContent: "Parancs: " }), el("code", { textContent: term.command }));
+    metaInfo.appendChild(cmdEl);
+  }
+  if (term.cwd) {
+    const cwdEl = el("span", {}, el("b", { textContent: "Cwd: " }), el("span", { textContent: term.cwd }));
+    metaInfo.appendChild(cwdEl);
+  }
+  if (term.duration_ms) {
+    const durStr = formatTermDuration(term.duration_ms);
+    metaInfo.appendChild(el("span", {}, el("b", { textContent: "Idő: " }), el("span", { textContent: durStr })));
+  }
+  if (term.killed_by) {
+    metaInfo.appendChild(el("span", {}, el("b", { textContent: "Leállította: " }), el("span", { textContent: term.killed_by })));
+  }
+
+  const isAdmin = me && me.role === "admin";
+  if (isAdmin && term.status === "running") {
+    $("tvStopBtn").style.display = "inline-block";
+    $("tvStopBtn").textContent = L.stopTerminal || "Leállítás";
+  } else {
+    $("tvStopBtn").style.display = "none";
+  }
+
+  if (term.status === "running") {
+    $("tvAutoRefresh").style.display = "inline";
+    $("tvAutoRefresh").textContent = L.autoRefreshNotice || "frissítés 2 mp-enként";
+    if (!tvPollTimer && tvOpen) {
+      tvPollTimer = setInterval(tvRefresh, 2000);
+    }
+  } else {
+    $("tvAutoRefresh").style.display = "none";
+    if (tvPollTimer) {
+      clearInterval(tvPollTimer);
+      tvPollTimer = null;
+    }
+  }
+}
+
+function formatTermDuration(ms) {
+  if (!ms || ms <= 0) return "0s";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const remS = s % 60;
+  if (m < 60) {
+    return `${m}:${remS < 10 ? '0' : ''}${remS}`;
+  }
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return `${h}:${remM < 10 ? '0' : ''}${remM}:${remS < 10 ? '0' : ''}${remS}`;
+}
+
 async function showApproval(id) {
   const app = await api(`/api/v1/approvals/${id}`).catch(err => { alert(err.message); return null; });
   if (!app) return;
@@ -3026,6 +3281,92 @@ async function refreshOverviewPanel() {
       colSec.append(el("span", { className: "muted", style: "font-size:12px;", textContent: L.noCollab }));
     }
     body.append(colSec);
+  }
+
+  // 7. Terminals
+  if (act.kind === "agent") {
+    const termSec = el("div", { className: "overview-section", id: "overviewTerminalsSec" });
+    termSec.append(el("h4", { textContent: "🖥 " + (L.terminals || "Terminálok") }));
+    const termLoading = el("span", { className: "muted", style: "font-size:12px;", textContent: L.loadingFile || "betöltés…" });
+    termSec.append(termLoading);
+    body.append(termSec);
+
+    (async () => {
+      try {
+        const relayChan = (ov.common_channels && ov.common_channels.length > 0 && ov.common_channels[0].id) || current;
+        if (!relayChan) {
+          termLoading.textContent = L.noCommonChannels || "Nincs közös csatorna a lekérdezéshez.";
+          return;
+        }
+        const res = await api(`/api/v1/agents/${actorId}/fs`, {
+          method: "POST",
+          body: JSON.stringify({
+            channel_id: relayChan,
+            op: "term_list"
+          })
+        });
+
+        termSec.innerHTML = "";
+        termSec.append(el("h4", { textContent: "🖥 " + (L.terminals || "Terminálok") }));
+
+        const terms = res?.terminals || [];
+        if (terms.length === 0) {
+          termSec.append(el("span", { className: "muted", style: "font-size:12px;", textContent: L.noTerminals || "Nincsenek aktív vagy mentett terminálok." }));
+          return;
+        }
+
+        const list = el("div", { style: "display:flex; flex-direction:column; gap:6px;" });
+        for (const t of terms) {
+          let badgeClass = "tv-badge " + (t.status || "");
+          let badgeText = t.status;
+          if (t.status === "running") badgeText = L.terminalRunning || "fut ⏳";
+          else if (t.status === "finished") badgeText = L.terminalFinished || "kész ✅ exit 0";
+          else if (t.status === "error") badgeText = (L.terminalError || "hiba ⚠️ exit ") + (t.exit_code ?? "?");
+          else if (t.status === "killed") badgeText = L.terminalKilled || "leállítva ⛔";
+
+          const dur = formatTermDuration(t.duration_ms);
+          const startTime = t.started_at ? new Date(t.started_at).toLocaleTimeString() : "";
+
+          const item = el("div", {
+            style: "display:flex; flex-direction:column; gap:3px; padding:6px 8px; border-radius:6px; background:var(--bg); cursor:pointer; border:1px solid var(--line);",
+            onclick: () => {
+              openTerminalViewer(relayChan, actorId, t.name, ov.assignment?.host_name);
+            }
+          });
+
+          const topRow = el("div", { style: "display:flex; align-items:center; justify-content:space-between; gap:6px;" },
+            el("span", { style: "font-weight:600; font-family:ui-monospace, monospace; font-size:12px;", textContent: t.name }),
+            el("span", { className: badgeClass, textContent: badgeText })
+          );
+
+          const bottomRow = el("div", { style: "display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); gap:6px;" },
+            el("span", { textContent: `${startTime} · ${dur}` })
+          );
+
+          if (t.thread_root_id) {
+            const thLink = el("a", {
+              href: "#",
+              textContent: "🧵 " + (L.inThread || "szál"),
+              style: "color:var(--accent); text-decoration:none;",
+              onclick: (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                closeOverviewPanel();
+                open(t.channel_id, t.thread_root_id);
+              }
+            });
+            bottomRow.appendChild(thLink);
+          }
+
+          item.appendChild(topRow);
+          item.appendChild(bottomRow);
+          list.appendChild(item);
+        }
+        termSec.appendChild(list);
+      } catch (err) {
+        termLoading.textContent = L.noTerminals || "Nincsenek elérhető terminálok.";
+      }
+    })();
   }
 }
 

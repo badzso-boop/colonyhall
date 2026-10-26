@@ -137,9 +137,12 @@ func (e AgentFsResponseOp) Valid() bool {
 
 // Defines values for AgentFsResultRequestOp.
 const (
-	AgentFsResultRequestOpGitStatus AgentFsResultRequestOp = "git_status"
-	AgentFsResultRequestOpList      AgentFsResultRequestOp = "list"
-	AgentFsResultRequestOpSearch    AgentFsResultRequestOp = "search"
+	AgentFsResultRequestOpGitStatus  AgentFsResultRequestOp = "git_status"
+	AgentFsResultRequestOpList       AgentFsResultRequestOp = "list"
+	AgentFsResultRequestOpSearch     AgentFsResultRequestOp = "search"
+	AgentFsResultRequestOpTermKill   AgentFsResultRequestOp = "term_kill"
+	AgentFsResultRequestOpTermList   AgentFsResultRequestOp = "term_list"
+	AgentFsResultRequestOpTermOutput AgentFsResultRequestOp = "term_output"
 )
 
 // Valid indicates whether the value is a known member of the AgentFsResultRequestOp enum.
@@ -150,6 +153,12 @@ func (e AgentFsResultRequestOp) Valid() bool {
 	case AgentFsResultRequestOpList:
 		return true
 	case AgentFsResultRequestOpSearch:
+		return true
+	case AgentFsResultRequestOpTermKill:
+		return true
+	case AgentFsResultRequestOpTermList:
+		return true
+	case AgentFsResultRequestOpTermOutput:
 		return true
 	default:
 		return false
@@ -1213,10 +1222,13 @@ type AgentFsResultRequest struct {
 	Entries   *[]FsEntry              `json:"entries,omitempty"`
 	ErrorCode *string                 `json:"error_code,omitempty"`
 	GitStatus *[]FsGitStatus          `json:"git_status,omitempty"`
+	Killed    *bool                   `json:"killed,omitempty"`
 	Op        *AgentFsResultRequestOp `json:"op,omitempty"`
+	Output    *string                 `json:"output,omitempty"`
 	Reason    *string                 `json:"reason,omitempty"`
 	Results   *[]FsSearchResult       `json:"results,omitempty"`
 	Roots     *[]FsRoot               `json:"roots,omitempty"`
+	Terminals *[]TerminalSummary      `json:"terminals,omitempty"`
 	Truncated *bool                   `json:"truncated,omitempty"`
 }
 

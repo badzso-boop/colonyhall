@@ -496,12 +496,17 @@ func (s *Service) fsRelay() *FsRelay {
 }
 
 // RequestAgentFs relays an ephemeral filesystem request to the agent's guard and waits up to 15s.
-func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID ids.ID, channelID ids.ID, op, root, path, query string) (any, error) {
+func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID ids.ID, channelID ids.ID, op, root, path, query, name string, lines int) (any, error) {
 	if by.Kind != identity.KindHuman {
 		return nil, ErrForbidden
 	}
-	if op != "list" && op != "search" && op != "git_status" {
+	switch op {
+	case "list", "search", "git_status", "term_list", "term_output", "term_kill":
+	default:
 		return nil, &httpx.BadRequest{Detail: "invalid op"}
+	}
+	if op == "term_kill" && !by.IsAdmin() {
+		return nil, ErrForbidden
 	}
 	if s.Actors == nil {
 		return nil, ErrNotFound
@@ -534,15 +539,24 @@ func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID
 		return nil, ErrAgentNotAssigned
 	}
 
+	killedBy := ""
+	if op == "term_kill" {
+		killedBy = "@" + by.Handle
+	}
+
 	// Audit request (who, which agent, op, path — never file names from answer, never content)
 	if s.Logger != nil {
-		s.Logger.Info("audit: fs request", "actor_id", by.ID, "agent_id", agentID, "op", op, "path", path)
+		if op == "term_kill" {
+			s.Logger.Info("audit: term kill", "actor_id", by.ID, "actor_handle", by.Handle, "agent_id", agentID, "name", name, "killed_by", killedBy)
+		} else {
+			s.Logger.Info("audit: fs request", "actor_id", by.ID, "agent_id", agentID, "op", op, "path", path)
+		}
 	}
 
 	reqID := s.IDs.New().String()
 	relay := s.fsRelay()
 	now := s.Clock.Now()
-	pending := relay.Register(reqID, agentID, op, root, path, query, now)
+	pending := relay.Register(reqID, agentID, op, root, path, query, name, lines, killedBy, now)
 
 	if s.FsPusher != nil {
 		s.FsPusher.PushFsRequest(agentID, reqID)

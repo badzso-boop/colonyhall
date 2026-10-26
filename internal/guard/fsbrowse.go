@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"colonyhall/internal/apispec"
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 var heavyDirs = map[string]bool{
@@ -496,6 +498,117 @@ func (a *Agent) ExecuteFsOperation(ctx context.Context, pending *apispec.AgentFs
 			return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpGitStatus), ErrorCode: strPtr("denied")}
 		}
 		return res
+	case apispec.AgentFsPendingRequestOpTermList:
+		if a.Terminals == nil {
+			empty := make([]apispec.TerminalSummary, 0)
+			return &apispec.AgentFsResponse{
+				Op:        opPtr(apispec.AgentFsResponseOpTermList),
+				Terminals: &empty,
+			}
+		}
+		handle := a.getMe().Handle
+		if handle == "" {
+			handle = a.Cfg.Name
+		}
+		list, err := a.Terminals.List(handle)
+		if err != nil {
+			return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpTermList), ErrorCode: strPtr("error")}
+		}
+		now := time.Now()
+		summaries := make([]apispec.TerminalSummary, 0, len(list))
+		for _, m := range list {
+			var chUUID openapi_types.UUID
+			if u, err := uuid.Parse(m.ChannelID); err == nil {
+				chUUID = openapi_types.UUID(u)
+			}
+			var trUUID *openapi_types.UUID
+			if m.ThreadRootID != "" {
+				if u, err := uuid.Parse(m.ThreadRootID); err == nil {
+					parsed := openapi_types.UUID(u)
+					trUUID = &parsed
+				}
+			}
+			var finAt *time.Time
+			if m.FinishedAt != nil {
+				tCopy := *m.FinishedAt
+				finAt = &tCopy
+			}
+			var killedBy *string
+			if m.KilledBy != "" {
+				k := m.KilledBy
+				killedBy = &k
+			}
+			summaries = append(summaries, apispec.TerminalSummary{
+				Name:         m.Name,
+				Status:       apispec.TerminalSummaryStatus(m.Status()),
+				Command:      m.Command,
+				Cwd:          m.Cwd,
+				ChannelId:    chUUID,
+				ThreadRootId: trUUID,
+				StartedAt:    m.StartedAt,
+				FinishedAt:   finAt,
+				ExitCode:     m.ExitCode,
+				KilledBy:     killedBy,
+				DurationMs:   m.Duration(now).Milliseconds(),
+			})
+		}
+		return &apispec.AgentFsResponse{
+			Op:        opPtr(apispec.AgentFsResponseOpTermList),
+			Terminals: &summaries,
+		}
+	case apispec.AgentFsPendingRequestOpTermOutput:
+		if a.Terminals == nil {
+			return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpTermOutput), ErrorCode: strPtr("not_found")}
+		}
+		name := ""
+		if pending.Name != nil {
+			name = *pending.Name
+		}
+		lines := 1000
+		if pending.Lines != nil && *pending.Lines > 0 {
+			lines = *pending.Lines
+			if lines > 1000 {
+				lines = 1000
+			}
+		}
+		handle := a.getMe().Handle
+		if handle == "" {
+			handle = a.Cfg.Name
+		}
+		out, err := a.Terminals.Output(handle, name, lines)
+		if err != nil {
+			return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpTermOutput), ErrorCode: strPtr("not_found")}
+		}
+		filtered := FilterTerminalOutput(out)
+		return &apispec.AgentFsResponse{
+			Op:     opPtr(apispec.AgentFsResponseOpTermOutput),
+			Output: &filtered,
+		}
+	case apispec.AgentFsPendingRequestOpTermKill:
+		if a.Terminals == nil {
+			return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpTermKill), ErrorCode: strPtr("not_found")}
+		}
+		name := ""
+		if pending.Name != nil {
+			name = *pending.Name
+		}
+		killedBy := ""
+		if pending.KilledBy != nil {
+			killedBy = *pending.KilledBy
+		}
+		handle := a.getMe().Handle
+		if handle == "" {
+			handle = a.Cfg.Name
+		}
+		err := a.Terminals.Kill(handle, name, killedBy)
+		if err != nil {
+			return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpTermKill), ErrorCode: strPtr("error")}
+		}
+		killed := true
+		return &apispec.AgentFsResponse{
+			Op:     opPtr(apispec.AgentFsResponseOpTermKill),
+			Killed: &killed,
+		}
 	default:
 		return &apispec.AgentFsResponse{ErrorCode: strPtr("denied")}
 	}

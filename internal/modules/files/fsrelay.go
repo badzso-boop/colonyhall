@@ -23,6 +23,9 @@ type FsPendingRequest struct {
 	Root      string
 	Path      string
 	Query     string
+	Name      string
+	Lines     int
+	KilledBy  string
 	CreatedAt time.Time
 	ResultCh  chan FsResult
 }
@@ -50,7 +53,7 @@ func NewFsRelay() *FsRelay {
 }
 
 // Register adds a pending request to the relay.
-func (r *FsRelay) Register(id string, agentID ids.ID, op, root, path, query string, now time.Time) *FsPendingRequest {
+func (r *FsRelay) Register(id string, agentID ids.ID, op, root, path, query, name string, lines int, killedBy string, now time.Time) *FsPendingRequest {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	req := &FsPendingRequest{
@@ -60,6 +63,9 @@ func (r *FsRelay) Register(id string, agentID ids.ID, op, root, path, query stri
 		Root:      root,
 		Path:      path,
 		Query:     query,
+		Name:      name,
+		Lines:     lines,
+		KilledBy:  killedBy,
 		CreatedAt: now,
 		ResultCh:  make(chan FsResult, 1),
 	}
