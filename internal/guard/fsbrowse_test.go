@@ -26,6 +26,9 @@ func newTestAgent(t *testing.T, sandbox bool, roots []string, grants []Grant) (*
 	if len(grants) > 0 {
 		ag.GrantsFunc = func() []Grant { return grants }
 	}
+	if len(roots) > 0 {
+		ag.RootDir = roots[0] // as in production: the agent's root lies inside the machine's roots
+	}
 	return ag, dir
 }
 
@@ -33,11 +36,17 @@ func TestFsBrowse_ScopeRoots(t *testing.T) {
 	d1 := t.TempDir()
 	d2 := t.TempDir()
 
-	// Full-access agent: RootDir is scope root
+	// Full-access agent: its own root folder is the scope root, not the
+	// machine's roots (those hold only project folders).
 	agFull, _ := newTestAgent(t, false, []string{d1}, nil)
+	agRoot := filepath.Join(d1, "visegradevent")
+	if err := os.MkdirAll(agRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agFull.RootDir = agRoot
 	roots := agFull.ScopeRoots()
-	if len(roots) != 1 || roots[0].Path != d1 || roots[0].Mode != "write" {
-		t.Fatalf("expected 1 write root for full access, got: %+v", roots)
+	if len(roots) != 1 || roots[0].Path != agRoot || roots[0].Mode != "write" {
+		t.Fatalf("expected the agent's root folder as the only root, got: %+v", roots)
 	}
 
 	// Sandboxed agent with 2 grants
