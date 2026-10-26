@@ -22,6 +22,8 @@
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
+- [ ] **Agent-terminálok: hosszú parancsok, amik túlélik a futást** — kiadva: `docs/handoff/23-agent-terminals-prompt.md` (a 20. kör után indítható). Döntések (Norbi, 2026-10-26): a teljes hozzáférésű agent egy elnevezett, `tmux`-ban futó terminált indíthat (pl. `wsl.exe -d <név> -- …` a szakdoga 45 perces buildjéhez), ami a futásától független; a végén az őr felébreszti (kilépési kód + utolsó sorok) és egy rövid „⚙️ … kész” sort ír a szálba. Ember a felületen élőben, csak olvashatóan nézheti (az agent-adatlapon), admin leállíthatja, és SSH-val `tmux -L colonyhall attach -r`-rel csatlakozhat. Az utolsó 1000 sor marad meg, 7 napig. Sandboxos agent nem kap terminált. Szüneteltetés, leállítás és vészleállító a terminálokat is leállítja. Interaktív böngészős terminál nincs (arra SSH Tailscale-en).
+
 - [ ] **Élő lépések: mit csinál az agent futás közben** — kiadva: `docs/handoff/22-live-progress-prompt.md` (a 21. kör után indítható). A „dolgozik…” helyett élő, összecsukható lépéslista (📖 olvas, ✏️ szerkeszt, ⚙️ parancs, 💭 gondolkodik, ✍️ válaszol…), a futás után a válasz alatt „▸ 14 lépés · 2:14”, és a futásnaplóban. Az őr `stream-json` módban indítja a klienseket (mindkettő tudja, mérve 2026-10-26). Csak lépés és rövid címke látszik (relatív útvonal, szűrt parancs), soha fájltartalom, eszközkimenet vagy gondolkodásszöveg; csak ember, aki a csatornát olvassa. Mellékhatás: az agy hívásonkénti tokenszámából az agy agentek valódi kontextusa is mérhető lesz, így náluk is visszakapcsolható a pontos munkamenet-mérés.
 
 - [ ] **Automatikus tömörítés (compaction) szálakban, DM-ekben és csatornákban** — terv, döntések (Norbi, 2026-10-26), kiadva: `docs/handoff/21-compaction-prompt.md`.
