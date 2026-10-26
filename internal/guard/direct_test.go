@@ -188,8 +188,11 @@ func TestClaudeDirectArgumentBuilding(t *testing.T) {
 	if v, _ := flagValue(f.args, "--mcp-config"); v != mcpPath {
 		t.Fatalf("expected mcp config %s, got %s", mcpPath, v)
 	}
-	if v, _ := flagValue(f.args, "--output-format"); v != "json" {
-		t.Fatalf("expected json output format, got %s", v)
+	if v, _ := flagValue(f.args, "--output-format"); v != "stream-json" {
+		t.Fatalf("expected stream-json output format, got %s", v)
+	}
+	if !slices.Contains(f.args, "--verbose") {
+		t.Fatalf("expected --verbose in stream-json args: %v", f.args)
 	}
 
 	// Verify forbidden flags do NOT appear
@@ -249,8 +252,8 @@ func TestAntigravityDirectArgumentBuilding(t *testing.T) {
 	if slices.Contains(f.args, "--conversation") {
 		t.Fatalf("expected no --conversation on first run: %v", f.args)
 	}
-	if v, _ := flagValue(f.args, "--output-format"); v != "json" {
-		t.Fatalf("expected output-format json: %v", f.args)
+	if v, _ := flagValue(f.args, "--output-format"); v != "stream-json" {
+		t.Fatalf("expected output-format stream-json: %v", f.args)
 	}
 
 	// Second run with conversation ID
@@ -1264,8 +1267,8 @@ func TestDirectSessionRotationAntigravity(t *testing.T) {
 		}
 	}
 
-	// A token count stored by an older guard (over the limit) does not
-	// rotate either.
+	// When a per-call context size is reported (over the limit), Antigravity
+	// rotates its session to avoid overflowing the context window.
 	st, err = LoadDirectState(filepath.Join(stateDir, "direct_state.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -1278,8 +1281,8 @@ func TestDirectSessionRotationAntigravity(t *testing.T) {
 	if err := agent.handleDirect(context.Background(), item3); err != nil {
 		t.Fatalf("run 3 failed: %v", err)
 	}
-	if requests[2].ConversationID != "agy-conv-1" {
-		t.Fatalf("run 3 must continue the conversation, got %q", requests[2].ConversationID)
+	if requests[2].ConversationID != "" {
+		t.Fatalf("run 3 must rotate and start a new conversation when context exceeds limit, got %q", requests[2].ConversationID)
 	}
 }
 

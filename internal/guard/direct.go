@@ -344,17 +344,15 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 
 	gen := state.Generations[threadRoot]
 	maxSessionTokens := a.Cfg.MaxSessionTokens
-	if !reportsContext(a.Cfg.Client) {
-		// Antigravity reports only usage summed over every model call of a
-		// run (measured: 1–2 million for one message) and keeps its own
-		// context (it summarises long conversations), so a token limit would
-		// only start a fresh session — and lose the thread — on every message.
+	lastTokens := state.LastRunTokens[threadRoot]
+	if !reportsContext(a.Cfg.Client, lastTokens) {
+		// Antigravity reports context only when per-call usage was streamed
+		// (which sets LastRunTokens > 0). If not available, token limit is disabled.
 		maxSessionTokens = 0
 	}
 	rotated := false
 	var rotTokens int
 	if maxSessionTokens > 0 {
-		lastTokens := state.LastRunTokens[threadRoot]
 		if lastTokens >= maxSessionTokens {
 			rotTokens = lastTokens
 			rotated = true
@@ -592,7 +590,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	// The rotation compares the context size, not the run's summed usage:
 	// a run with many tool calls sums the same context once per call.
 	contextTokens := res.ContextTokens
-	if contextTokens <= 0 && reportsContext(a.Cfg.Client) {
+	if contextTokens <= 0 && a.Cfg.Client != "antigravity" {
 		contextTokens = res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
 	}
 	state.LastRunTokens[threadRoot] = contextTokens
@@ -816,10 +814,14 @@ func (a *Agent) threadRecap(ctx context.Context, threadRootID string) string {
 }
 
 // reportsContext tells whether a client's run result lets the guard measure
-// the session's context size. Claude Code does (its transcript); Antigravity
-// does not, so its sessions are not rotated by token count.
-func reportsContext(client string) bool {
-	return client != "antigravity"
+// the session's context size. Claude Code does (its transcript or streaming);
+// Antigravity does only when the run streamed a per-call usage (recorded in
+// state.LastRunTokens).
+func reportsContext(client string, lastTokens int) bool {
+	if client == "antigravity" {
+		return lastTokens > 0
+	}
+	return true
 }
 
 func inGroup(id string, group []Item) bool {

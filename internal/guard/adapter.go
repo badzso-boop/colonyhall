@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -49,6 +50,7 @@ type WorkRequest struct {
 	RulesVersion  int
 	AllowWebRead  bool
 	MCPConfigPath string
+	OnStep        func(Step)
 }
 
 // DirectRequest is the input of a direct mode run: a full interactive session
@@ -67,6 +69,7 @@ type DirectRequest struct {
 	AddDirs              []string
 	Rules                string
 	RulesVersion         int
+	OnStep               func(Step)
 }
 
 // SummarizeRequest is the input of a summarization run.
@@ -121,6 +124,47 @@ type RunResult struct {
 
 // Runner executes a command; tests replace it.
 type Runner func(ctx context.Context, dir, name string, args []string, env []string) (stdout, stderr []byte, err error)
+
+// StreamRunner executes a command and streams stdout line by line; tests replace it.
+type StreamRunner func(ctx context.Context, dir, name string, args []string, env []string, onStdoutLine func(string)) error
+
+// ExecStreamRunner runs a real process and streams stdout line by line.
+func ExecStreamRunner(ctx context.Context, dir, name string, args []string, env []string, onStdoutLine func(string)) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = env
+	}
+	setProcessGroup(cmd)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	reader := bufio.NewReader(stdout)
+	for {
+		line, rerr := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if len(line) > 0 && onStdoutLine != nil {
+			onStdoutLine(line)
+		}
+		if rerr != nil {
+			break
+		}
+	}
+	err = cmd.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w: %s", name, err, clip(strings.TrimSpace(errb.String()), 300))
+	}
+	return nil
+}
 
 // ExecRunner runs a real process with stdin closed, killing its whole
 // process group when ctx ends (emergency stop, pause, timeout).

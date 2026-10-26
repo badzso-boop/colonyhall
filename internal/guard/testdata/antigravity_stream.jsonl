@@ -1,0 +1,8 @@
+{"event":"init","conversation_id":"conv_agy_456","model":"gemini-pro","cwd":"/workspace"}
+{"event":"step_update","step_index":1,"state":"ACTIVE","step_type":"tool","tool_name":"read_file","tool_info":{"parameters":{"Path":"/workspace/main.go"}}}
+{"event":"step_update","step_index":1,"state":"DONE","step_type":"tool","tool_name":"read_file","duration_seconds":0.05,"tool_info":{"parameters":{"Path":"/workspace/main.go"}}}
+{"event":"step_update","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"run_command","tool_info":{"parameters":{"CommandLine":"make test API_KEY=super_secret_key"}}}
+{"event":"step_update","step_index":2,"state":"DONE","step_type":"tool","tool_name":"run_command","duration_seconds":0.12,"tool_info":{"parameters":{"CommandLine":"make test API_KEY=super_secret_key"}}}
+{"event":"step_update","step_index":3,"state":"ACTIVE","step_type":"agent_response","text_delta":"Tests pass."}
+{"event":"step_update","step_index":3,"state":"DONE","step_type":"agent_response","duration_seconds":0.3,"usage":{"input_tokens":18000,"cache_read_tokens":14000,"output_tokens":50}}
+{"event":"result","status":"SUCCESS","response":"Tests pass.","conversation_id":"conv_agy_456","usage":{"input_tokens":36000,"cache_read_tokens":28000,"output_tokens":100,"thinking_tokens":0}}

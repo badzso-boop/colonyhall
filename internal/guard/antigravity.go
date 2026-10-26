@@ -1,6 +1,8 @@
 package guard
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,8 +14,9 @@ import (
 // prompt (~12k tokens) cannot be replaced, so a wake-up costs about 13k
 // tokens; the rules go into the prompt and the answer is one JSON object.
 type Antigravity struct {
-	Bin string // default "agy"
-	Run Runner
+	Bin       string // default "agy"
+	Run       Runner
+	StreamRun StreamRunner
 }
 
 type agyOutput struct {
@@ -30,6 +33,37 @@ type agyOutput struct {
 		Thinking  int `json:"thinking_tokens"`
 		CacheRead int `json:"cache_read_tokens"`
 	} `json:"usage"`
+}
+
+type agyStreamLine struct {
+	Event           string          `json:"event"`
+	ConversationID  string          `json:"conversation_id"`
+	Model           string          `json:"model"`
+	Cwd             string          `json:"cwd"`
+	StepIndex       int             `json:"step_index"`
+	State           string          `json:"state"`
+	StepType        string          `json:"step_type"`
+	ToolName        string          `json:"tool_name"`
+	ToolInfo        *agyToolInfo    `json:"tool_info"`
+	TextDelta       string          `json:"text_delta"`
+	DurationSeconds float64         `json:"duration_seconds"`
+	Usage           *agyStreamUsage `json:"usage"`
+	Status          string          `json:"status"`
+	Response        string          `json:"response"`
+	DeniedActions   []struct {
+		Action string `json:"action"`
+	} `json:"denied_actions"`
+}
+
+type agyToolInfo struct {
+	Parameters map[string]interface{} `json:"parameters"`
+}
+
+type agyStreamUsage struct {
+	Input     int `json:"input_tokens"`
+	Output    int `json:"output_tokens"`
+	Thinking  int `json:"thinking_tokens"`
+	CacheRead int `json:"cache_read_tokens"`
 }
 
 func (a *Antigravity) bin() string {
@@ -71,7 +105,7 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 	if req.Rules != "" {
 		prompt = fmt.Sprintf("<colonyhall_rules version=\"%d\">\n%s\n</colonyhall_rules>\n\n", req.RulesVersion, req.Rules) + prompt
 	}
-	args := []string{"-p", prompt, "--output-format", "json"}
+	args := []string{"-p", prompt, "--output-format", "stream-json"}
 	mode := req.PermissionMode
 	if req.NoExec {
 		mode = "accept-edits" // sandboxed: file edits yes, nothing that bypasses permissions
@@ -81,7 +115,8 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 		args = append(args, "--add-dir", d)
 	}
 	args = withModel(args, req.Model)
-	res, out, err := a.execAs(ctx, req.Dir, req.Wrap, args)
+	baseDirs := append([]string{req.Dir}, req.AddDirs...)
+	res, out, err := a.execStream(ctx, req.Dir, req.Wrap, args, baseDirs, req.OnStep)
 	res.Text = out.Response
 	return res, err
 }
@@ -100,17 +135,212 @@ func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult,
 	for _, d := range req.AddDirs {
 		args = append(args, "--add-dir", d)
 	}
-	args = append(args, "--output-format", "json")
+	args = append(args, "--output-format", "stream-json")
 	if req.Model != "" {
 		args = withModel(args, req.Model)
 	}
-	res, out, err := a.execAs(ctx, req.Dir, nil, args)
+	baseDirs := append([]string{req.Dir}, req.AddDirs...)
+	res, out, err := a.execStream(ctx, req.Dir, nil, args, baseDirs, req.OnStep)
 	res.Text = out.Response
 	res.ConversationID = out.ConversationID
-	for _, d := range out.Denied {
-		res.Denied = append(res.Denied, d.Action)
-	}
 	return res, err
+}
+
+func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, baseDirs []string, onStep func(Step)) (RunResult, agyOutput, error) {
+	start := time.Now()
+	var (
+		name string
+		env  []string
+		err  error
+	)
+	if wrap != nil {
+		name, args, env, err = wrap.command(a.bin(), args)
+		if err != nil {
+			return RunResult{}, agyOutput{}, fmt.Errorf("sandbox: %w", err)
+		}
+	} else {
+		name = a.bin()
+	}
+
+	var (
+		resultFound    bool
+		out            agyOutput
+		res            RunResult
+		lastAgyContext int
+	)
+
+	onLine := func(line string) {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			return
+		}
+		var sl agyStreamLine
+		if jerr := json.Unmarshal([]byte(line), &sl); jerr != nil {
+			return
+		}
+		if sl.Event == "" && (sl.Status != "" || sl.Response != "" || sl.ConversationID != "") {
+			sl.Event = "result"
+		}
+		switch sl.Event {
+		case "step_update":
+			switch sl.StepType {
+			case "tool":
+				st := mapAgyTool(sl, baseDirs)
+				if onStep != nil {
+					onStep(st)
+				}
+			case "agent_response":
+				if strings.ToUpper(sl.State) == "ACTIVE" {
+					if onStep != nil {
+						onStep(Step{Kind: StepKindAnswer, Label: "Válaszol…", State: StepStateActive, StartedAt: time.Now()})
+					}
+				} else if strings.ToUpper(sl.State) == "DONE" {
+					if sl.Usage != nil {
+						lastAgyContext = sl.Usage.Input + sl.Usage.CacheRead
+					}
+					if onStep != nil {
+						d := time.Duration(sl.DurationSeconds * float64(time.Second))
+						onStep(Step{
+							Kind:       StepKindAnswer,
+							Label:      "Válaszol…",
+							State:      StepStateDone,
+							StartedAt:  time.Now(),
+							Duration:   d,
+							DurationMs: d.Milliseconds(),
+						})
+					}
+				}
+			}
+		case "result":
+			resultFound = true
+			out.Status = sl.Status
+			out.Response = sl.Response
+			out.ConversationID = sl.ConversationID
+			if sl.Usage != nil {
+				out.Usage.Input = sl.Usage.Input
+				out.Usage.Output = sl.Usage.Output
+				out.Usage.Thinking = sl.Usage.Thinking
+				out.Usage.CacheRead = sl.Usage.CacheRead
+				res.Usage = Usage{
+					Input:     sl.Usage.Input,
+					Output:    sl.Usage.Output + sl.Usage.Thinking,
+					CacheRead: sl.Usage.CacheRead,
+				}
+			}
+			for _, d := range sl.DeniedActions {
+				out.Denied = append(out.Denied, struct {
+					Action string `json:"action"`
+				}{Action: d.Action})
+				res.Denied = append(res.Denied, d.Action)
+			}
+		}
+	}
+
+	streamer := a.StreamRun
+	if streamer == nil && a.Run != nil {
+		streamer = func(ctx context.Context, dir, name string, args, env []string, onStdoutLine func(string)) error {
+			stdout, _, rerr := a.Run(ctx, dir, name, args, env)
+			if len(stdout) > 0 {
+				reader := bufio.NewReader(bytes.NewReader(stdout))
+				for {
+					l, err := reader.ReadString('\n')
+					l = strings.TrimRight(l, "\r\n")
+					if len(l) > 0 && onStdoutLine != nil {
+						onStdoutLine(l)
+					}
+					if err != nil {
+						break
+					}
+				}
+			}
+			return rerr
+		}
+	}
+	if streamer == nil {
+		streamer = ExecStreamRunner
+	}
+
+	runErr := streamer(ctx, dir, name, args, env, onLine)
+	res.Duration = time.Since(start)
+
+	if !resultFound {
+		if runErr != nil {
+			return res, out, runErr
+		}
+		return res, out, fmt.Errorf("agy: unreadable output: missing result event")
+	}
+
+	if lastAgyContext > 0 {
+		res.ContextTokens = lastAgyContext
+	}
+
+	if out.Status != "SUCCESS" {
+		if len(out.Structured) > 0 && string(out.Structured) != "null" {
+			return res, out, nil
+		}
+		if strings.TrimSpace(out.Response) != "" && out.Usage.Output > 0 {
+			res.ClientWarning = fmt.Sprintf("agy: run status %q after an answer", out.Status)
+			return res, out, nil
+		}
+		return res, out, fmt.Errorf("agy: run status %q: %s", out.Status, clip(strings.TrimSpace(out.Response), 200))
+	}
+	return res, out, nil
+}
+
+func mapAgyTool(sl agyStreamLine, baseDirs []string) Step {
+	now := time.Now()
+	name := sl.ToolName
+	params := make(map[string]interface{})
+	if sl.ToolInfo != nil && sl.ToolInfo.Parameters != nil {
+		params = sl.ToolInfo.Parameters
+	}
+	getString := func(keys ...string) string {
+		for _, k := range keys {
+			if v, ok := params[k].(string); ok && v != "" {
+				return v
+			}
+		}
+		return ""
+	}
+
+	state := StepStateActive
+	if strings.ToUpper(sl.State) == "DONE" {
+		state = StepStateDone
+	}
+
+	var d time.Duration
+	var dms int64
+	if sl.DurationSeconds > 0 {
+		d = time.Duration(sl.DurationSeconds * float64(time.Second))
+		dms = d.Milliseconds()
+	}
+
+	switch name {
+	case "read_file":
+		p := getString("Path", "path", "file_path")
+		return Step{Kind: StepKindRead, Label: RelPath(p, baseDirs...), Path: p, State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	case "write_file", "replace", "edit_file", "edit":
+		p := getString("Path", "path", "file_path")
+		kind := StepKindWrite
+		if strings.Contains(name, "edit") || name == "replace" {
+			kind = StepKindEdit
+		}
+		return Step{Kind: kind, Label: RelPath(p, baseDirs...), Path: p, State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	case "run_command", "shell":
+		cmd := getString("CommandLine", "command", "cmd")
+		return Step{Kind: StepKindCommand, Label: Redact(cmd), State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	case "search_web", "web_search":
+		q := getString("query", "q")
+		return Step{Kind: StepKindSearch, Label: Redact(q), State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	case "search", "grep", "list_directory", "list", "find":
+		q := getString("query", "pattern", "Path", "path")
+		return Step{Kind: StepKindSearch, Label: Redact(q), State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	case "web_read":
+		url := getString("url")
+		return Step{Kind: StepKindWeb, Label: Redact(url), State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	default:
+		return Step{Kind: StepKindOther, Label: Redact(name), State: state, StartedAt: now, Duration: d, DurationMs: dms}
+	}
 }
 
 // agyPermissionArgs maps the agent's permission mode to agy flags. A
