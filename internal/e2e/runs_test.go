@@ -39,6 +39,10 @@ func (a *runTrackingAdapter) Direct(_ context.Context, _ guard.DirectRequest) (g
 	return guard.RunResult{Text: "ok"}, nil
 }
 
+func (a *runTrackingAdapter) Summarize(_ context.Context, _ guard.SummarizeRequest) (guard.RunResult, error) {
+	return guard.RunResult{Text: "ok"}, nil
+}
+
 func TestRunLoggingFromGuard(t *testing.T) {
 	e := newEnv(t)
 	general := e.generalID()

@@ -52,6 +52,19 @@ func (a *Antigravity) Decide(ctx context.Context, req DecideRequest) (RunResult,
 	return finishDecision(res, structuredOrText(out.Structured, out.Response), refs)
 }
 
+// Summarize implements Adapter.
+func (a *Antigravity) Summarize(ctx context.Context, req SummarizeRequest) (RunResult, error) {
+	prompt := req.Prompt + "\nDo not call any tools; answer only with the Markdown summary."
+	args := []string{"-p", prompt, "--output-format", "json", "--disable-slash-commands"}
+	args = withModel(args, req.Model)
+	res, out, err := a.execAs(ctx, req.Dir, req.Wrap, args)
+	if err != nil {
+		return res, err
+	}
+	res.Text = out.Response
+	return res, nil
+}
+
 // Work implements Adapter.
 func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
 	prompt := req.Prompt

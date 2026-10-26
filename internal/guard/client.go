@@ -535,3 +535,71 @@ func (c *Client) FailFileFetch(ctx context.Context, id, errorCode string) error 
 		"error_code": errorCode,
 	}, nil)
 }
+
+// ScribeTaskMessage is a message in a compaction task.
+type ScribeTaskMessage struct {
+	ID           string    `json:"id"`
+	AuthorHandle string    `json:"author_handle"`
+	AuthorKind   string    `json:"author_kind"`
+	Body         string    `json:"body"`
+	Attachments  []string  `json:"attachments,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// ScribeCompactionTask is the payload returned by GET /api/v1/agent/compactions/{id}.
+type ScribeCompactionTask struct {
+	ID              string              `json:"id"`
+	ChannelID       string              `json:"channel_id"`
+	ThreadRootID    string              `json:"thread_root_id,omitempty"`
+	PreviousSummary string              `json:"previous_summary,omitempty"`
+	Messages        []ScribeTaskMessage `json:"messages"`
+	MaxSummaryChars int                 `json:"max_summary_chars,omitempty"`
+}
+
+// CompactionTask queries the compaction task details for the scribe agent.
+func (c *Client) CompactionTask(ctx context.Context, id string) (ScribeCompactionTask, error) {
+	var task ScribeCompactionTask
+	err := c.do(ctx, http.MethodGet, "/api/v1/agent/compactions/"+id, nil, &task)
+	return task, err
+}
+
+// ReportCompactionResult posts the scribe agent's summary or error code.
+func (c *Client) ReportCompactionResult(ctx context.Context, id, markdown, errorCode string) error {
+	in := map[string]any{}
+	if markdown != "" {
+		in["markdown"] = markdown
+	}
+	if errorCode != "" {
+		in["error_code"] = errorCode
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/compactions/"+id+"/result", in, nil)
+}
+
+// ContextMessage is a message in an agent context.
+type ContextMessage struct {
+	ID           string    `json:"id"`
+	AuthorHandle string    `json:"author_handle"`
+	AuthorKind   string    `json:"author_kind"`
+	Body         string    `json:"body"`
+	Attachments  []string  `json:"attachments,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// AgentContext is the payload returned by GET /api/v1/agent/context.
+type AgentContext struct {
+	CompactionID    string           `json:"compaction_id,omitempty"`
+	SummaryMarkdown string           `json:"summary_markdown,omitempty"`
+	MessagesAfter   []ContextMessage `json:"messages_after"`
+	HasMore         bool             `json:"has_more"`
+}
+
+// AgentContext fetches the primed context for a channel/thread.
+func (c *Client) AgentContext(ctx context.Context, channelID, threadRootID string) (AgentContext, error) {
+	path := "/api/v1/agent/context?channel_id=" + url.QueryEscape(channelID)
+	if threadRootID != "" {
+		path += "&thread_root_id=" + url.QueryEscape(threadRootID)
+	}
+	var res AgentContext
+	err := c.do(ctx, http.MethodGet, path, nil, &res)
+	return res, err
+}

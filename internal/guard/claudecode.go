@@ -83,6 +83,25 @@ func (c *ClaudeCode) Decide(ctx context.Context, req DecideRequest) (RunResult, 
 	return finishDecision(res, structuredOrText(out.Structured, out.Result), refs)
 }
 
+// Summarize implements Adapter.
+func (c *ClaudeCode) Summarize(ctx context.Context, req SummarizeRequest) (RunResult, error) {
+	args := []string{
+		"-p", req.Prompt,
+		"--tools", "",
+		"--strict-mcp-config",
+		"--setting-sources", "",
+		"--no-session-persistence",
+		"--output-format", "json",
+	}
+	args = withModel(args, req.Model)
+	res, out, err := c.execAs(ctx, req.Dir, req.Wrap, args, nil)
+	if err != nil {
+		return res, err
+	}
+	res.Text = out.Result
+	return res, nil
+}
+
 // Work implements Adapter.
 func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, error) {
 	args := []string{"-p", req.Prompt, "--output-format", "json", "--no-session-persistence"}

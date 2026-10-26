@@ -20,6 +20,8 @@ type Adapter interface {
 	Work(ctx context.Context, req WorkRequest) (RunResult, error)
 	// Direct is a full CLI session per thread, run in the root dir.
 	Direct(ctx context.Context, req DirectRequest) (RunResult, error)
+	// Summarize is a tool-less run to produce a markdown summary of a conversation.
+	Summarize(ctx context.Context, req SummarizeRequest) (RunResult, error)
 }
 
 // DecideRequest is the input of a decision run.
@@ -65,6 +67,14 @@ type DirectRequest struct {
 	AddDirs              []string
 	Rules                string
 	RulesVersion         int
+}
+
+// SummarizeRequest is the input of a summarization run.
+type SummarizeRequest struct {
+	Prompt string
+	Model  string
+	Dir    string
+	Wrap   Wrapper
 }
 
 // Wrapper wraps a client command, e.g. in the bwrap sandbox.

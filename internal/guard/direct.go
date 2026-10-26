@@ -68,6 +68,7 @@ type DirectState struct {
 	LastRunTokens  map[string]int    `json:"last_run_tokens"`
 	Generations    map[string]int    `json:"generations"`
 	RulesVersions  map[string]int    `json:"rules_versions"`
+	Compactions    map[string]string `json:"compactions"`
 }
 
 // LoadDirectState loads the state file, returning an empty state if not found.
@@ -78,6 +79,7 @@ func LoadDirectState(path string) (*DirectState, error) {
 		LastRunTokens:  make(map[string]int),
 		Generations:    make(map[string]int),
 		RulesVersions:  make(map[string]int),
+		Compactions:    make(map[string]string),
 	}
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -103,6 +105,9 @@ func LoadDirectState(path string) (*DirectState, error) {
 	}
 	if st.RulesVersions == nil {
 		st.RulesVersions = make(map[string]int)
+	}
+	if st.Compactions == nil {
+		st.Compactions = make(map[string]string)
 	}
 	return st, nil
 }
@@ -362,6 +367,30 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		}
 	}
 
+	var (
+		compactionRotate bool
+		agentContext     *AgentContext
+	)
+	if a.Client != nil {
+		agCtx, err := a.Client.AgentContext(ctx, group[0].ChannelID, group[0].ThreadRootID)
+		if err == nil && agCtx.CompactionID != "" {
+			agentContext = &agCtx
+			storedCompID := state.Compactions[threadRoot]
+			if storedCompID != agCtx.CompactionID {
+				if storedCompID != "" {
+					compactionRotate = true
+					gen++
+					state.Generations[threadRoot] = gen
+					state.LastRunTokens[threadRoot] = 0
+					delete(state.Conversations, threadRoot)
+					delete(state.RulesVersions, threadRoot)
+				}
+				state.Compactions[threadRoot] = agCtx.CompactionID
+				_ = state.Save(stateFile)
+			}
+		}
+	}
+
 	sessionKey := threadRoot
 	if gen > 0 {
 		sessionKey = fmt.Sprintf("%s#%d", threadRoot, gen)
@@ -389,7 +418,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	isAgyResume := state.Conversations[threadRoot] != ""
 	isFresh := (!isClaudeResume && a.Cfg.Client == "claude-code") ||
 		(!isAgyResume && a.Cfg.Client == "antigravity") ||
-		rotated
+		rotated || compactionRotate
 
 	var noteBlock string
 	if isFresh && a.Client != nil {
@@ -398,9 +427,31 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		}
 	}
 
+	var summaryBlock string
+	if isFresh && agentContext != nil && agentContext.SummaryMarkdown != "" {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "<colonyhall_summary compaction=%q>\n%s\n</colonyhall_summary>\n\n",
+			attr(agentContext.CompactionID), text(agentContext.SummaryMarkdown, 50000))
+		for _, m := range agentContext.MessagesAfter {
+			if inGroup(m.ID, group) {
+				continue
+			}
+			from := m.AuthorHandle
+			if !strings.HasPrefix(from, "@") {
+				from = "@" + from
+			}
+			fmt.Fprintf(&sb, "<m ctx from=%q>\n%s\n</m>\n", attr(from), text(m.Body, 5000))
+		}
+		sb.WriteString("\n")
+		summaryBlock = sb.String()
+	}
+
 	prompt := DirectPromptWithBranch(group, a.WorktreeBranch, exchangeDir)
 	if noteBlock != "" {
 		prompt = noteBlock + prompt
+	}
+	if summaryBlock != "" {
+		prompt = summaryBlock + prompt
 	}
 	if rotated {
 		recap := a.threadRecap(ctx, threadRoot)
@@ -769,4 +820,13 @@ func (a *Agent) threadRecap(ctx context.Context, threadRootID string) string {
 // does not, so its sessions are not rotated by token count.
 func reportsContext(client string) bool {
 	return client != "antigravity"
+}
+
+func inGroup(id string, group []Item) bool {
+	for _, it := range group {
+		if it.ItemID == id || it.ID == id {
+			return true
+		}
+	}
+	return false
 }

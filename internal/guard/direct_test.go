@@ -490,6 +490,9 @@ func (d *directTestAdapter) Direct(ctx context.Context, req DirectRequest) (RunR
 	}
 	return RunResult{Text: "ok"}, nil
 }
+func (d *directTestAdapter) Summarize(ctx context.Context, req SummarizeRequest) (RunResult, error) {
+	return RunResult{Text: "ok"}, nil
+}
 
 func TestClaudeDirectResumeAfterFailedFirstRun(t *testing.T) {
 	cfgDir := t.TempDir()

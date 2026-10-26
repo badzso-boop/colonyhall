@@ -41,6 +41,11 @@ func (s *scriptedAdapter) Direct(ctx context.Context, req guard.DirectRequest) (
 	return guard.RunResult{Text: "ok"}, nil
 }
 
+func (s *scriptedAdapter) Summarize(_ context.Context, _ guard.SummarizeRequest) (guard.RunResult, error) {
+	s.calls++
+	return guard.RunResult{Text: "ok"}, nil
+}
+
 func (e *env) guardAgent(ad guard.Adapter, allowWork bool) *guard.Agent {
 	cfg := guard.Config{Server: e.srv.URL, Agents: []guard.AgentConfig{{
 		Client: "claude-code", TokenEnv: "UNUSED", Debounce: time.Millisecond, HaltCheck: 5 * time.Millisecond, AllowWork: allowWork,

@@ -261,6 +261,22 @@ func (a *Agent) Tick(ctx context.Context) error {
 	if err != nil || len(items) == 0 {
 		return err
 	}
+	var chatItems []Item
+	for _, it := range items {
+		if it.Kind == "compact" {
+			if err := a.handleCompact(ctx, it); err != nil {
+				a.Log.Error("guard: handle compact failed", "item", it.ID, "err", err)
+			}
+		} else {
+			chatItems = append(chatItems, it)
+		}
+	}
+	if len(chatItems) == 0 {
+		a.failures = 0
+		return nil
+	}
+	items = chatItems
+
 	if a.Mode == "direct" || (a.Mode == "" && a.Cfg.Mode == "direct") {
 		if err := a.handleDirect(ctx, items); err != nil {
 			return err
@@ -271,6 +287,44 @@ func (a *Agent) Tick(ctx context.Context) error {
 		}
 	}
 	a.failures = 0
+	return nil
+}
+
+func (a *Agent) handleCompact(ctx context.Context, it Item) error {
+	task, err := a.Client.CompactionTask(ctx, it.ItemID)
+	if err != nil {
+		_ = a.Client.Ack(ctx, []string{it.ID})
+		return fmt.Errorf("fetch compaction task %s: %w", it.ItemID, err)
+	}
+
+	prompt := ScribePrompt(task)
+	req := SummarizeRequest{
+		Prompt: prompt,
+		Model:  a.Cfg.Model,
+		Dir:    a.Cfg.Dir,
+		Wrap:   a.DecideWrap,
+	}
+
+	res, err := a.Adapter.Summarize(ctx, req)
+	if err != nil {
+		_ = a.Client.ReportCompactionResult(ctx, task.ID, "", "adapter_error")
+		_ = a.Client.Ack(ctx, []string{it.ID})
+		return fmt.Errorf("summarize %s: %w", task.ID, err)
+	}
+
+	trimmed := strings.TrimSpace(res.Text)
+	if trimmed == "" {
+		_ = a.Client.ReportCompactionResult(ctx, task.ID, "", "empty_summary")
+		_ = a.Client.Ack(ctx, []string{it.ID})
+		return nil
+	}
+
+	if err := a.Client.ReportCompactionResult(ctx, task.ID, trimmed, ""); err != nil {
+		_ = a.Client.Ack(ctx, []string{it.ID})
+		return fmt.Errorf("report compaction result %s: %w", task.ID, err)
+	}
+
+	_ = a.Client.Ack(ctx, []string{it.ID})
 	return nil
 }
 

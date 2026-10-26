@@ -110,6 +110,10 @@ func (s *scriptedAdapter) Direct(ctx context.Context, req DirectRequest) (RunRes
 	return RunResult{}, nil
 }
 
+func (s *scriptedAdapter) Summarize(ctx context.Context, req SummarizeRequest) (RunResult, error) {
+	return RunResult{}, nil
+}
+
 func TestGuardDailyTokenBudget_Direct(t *testing.T) {
 	fakeNow := time.Date(2026, 10, 16, 14, 0, 0, 0, time.UTC)
 	resetsAt := time.Date(2026, 10, 16, 22, 0, 0, 0, time.UTC) // midnight Budapest

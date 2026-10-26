@@ -225,6 +225,10 @@ func (m *mockWorkAdapter) Direct(ctx context.Context, req DirectRequest) (RunRes
 	return RunResult{}, nil
 }
 
+func (m *mockWorkAdapter) Summarize(ctx context.Context, req SummarizeRequest) (RunResult, error) {
+	return RunResult{Text: "Summary of page."}, nil
+}
+
 func TestWebRead_WorkRunEndToEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
