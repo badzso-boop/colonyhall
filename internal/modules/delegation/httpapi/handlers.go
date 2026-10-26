@@ -28,6 +28,10 @@ func ToAPI(v delegation.DelegationView) apispec.Delegation {
 	if v.ToAgentHandle != "" {
 		toHandle = &v.ToAgentHandle
 	}
+	var appHandle *string
+	if v.ApproverHandle != "" {
+		appHandle = &v.ApproverHandle
+	}
 	return apispec.Delegation{
 		Id:              v.ID,
 		WorkspaceId:     v.WorkspaceID,
@@ -42,6 +46,7 @@ func ToAPI(v delegation.DelegationView) apispec.Delegation {
 		State:           apispec.DelegationState(v.State),
 		DecidedBy:       v.DecidedBy,
 		DecidedByHandle: v.DecidedByHandle,
+		ApproverHandle:  appHandle,
 		DecidedAt:       v.DecidedAt,
 		CreatedAt:       v.CreatedAt,
 	}
@@ -56,7 +61,13 @@ func Register(mux *http.ServeMux, svc *delegation.Service, auth identity.Request
 		if s := r.URL.Query().Get("state"); s != "" {
 			state = &s
 		}
-		items, err := svc.List(r.Context(), httpx.Actor(r), state)
+		var msgID *ids.ID
+		if m := r.URL.Query().Get("message_id"); m != "" {
+			if parsed, err := ids.Parse(m); err == nil {
+				msgID = &parsed
+			}
+		}
+		items, err := svc.List(r.Context(), httpx.Actor(r), state, msgID)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return

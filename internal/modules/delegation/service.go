@@ -447,15 +447,43 @@ func (s *Service) onQuestionExpired(ctx context.Context, e eventlog.Event, p que
 	})
 }
 
-// List returns delegations in the workspace, optionally filtered by state. Only humans may call it.
-func (s *Service) List(ctx context.Context, by identity.Actor, state *string) ([]DelegationView, error) {
-	if by.Kind != identity.KindHuman {
+// List returns delegations in the workspace, optionally filtered by state and message ID.
+func (s *Service) List(ctx context.Context, by identity.Actor, state *string, messageID *ids.ID) ([]DelegationView, error) {
+	if by.Kind == identity.KindAgent && messageID == nil {
 		return nil, ErrForbidden
 	}
 
-	items, err := s.Store.ListByWorkspace(ctx, by.WorkspaceID, state)
-	if err != nil {
-		return nil, err
+	var items []Delegation
+	var err error
+	if messageID != nil {
+		if by.Kind == identity.KindAgent {
+			del, err := s.Store.GetByMessageAndTarget(ctx, *messageID, by.ID)
+			if err == nil {
+				if state == nil || *state == del.State {
+					items = []Delegation{del}
+				}
+			} else if !errors.Is(err, db.ErrNotFound) {
+				return nil, err
+			}
+		} else {
+			all, err := s.Store.ListByWorkspace(ctx, by.WorkspaceID, state)
+			if err != nil {
+				return nil, err
+			}
+			for _, d := range all {
+				if d.MessageID == *messageID {
+					items = append(items, d)
+				}
+			}
+		}
+	} else {
+		if by.Kind != identity.KindHuman {
+			return nil, ErrForbidden
+		}
+		items, err = s.Store.ListByWorkspace(ctx, by.WorkspaceID, state)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	actorIDs := make([]ids.ID, 0, len(items)*3)
@@ -475,16 +503,26 @@ func (s *Service) List(ctx context.Context, by identity.Actor, state *string) ([
 		handles[a.ID] = a.Handle
 	}
 
+	var defaultApprover string
+	if len(items) > 0 {
+		admins, err := s.Directory.Admins(ctx, by.WorkspaceID)
+		if err == nil && len(admins) > 0 {
+			defaultApprover = admins[0].Handle
+		}
+	}
+
 	views := make([]DelegationView, 0, len(items))
 	for _, it := range items {
 		v := DelegationView{
 			Delegation:      it,
 			FromAgentHandle: handles[it.FromAgentID],
 			ToAgentHandle:   handles[it.ToAgentID],
+			ApproverHandle:  defaultApprover,
 		}
 		if it.DecidedBy != nil {
 			h := handles[*it.DecidedBy]
 			v.DecidedByHandle = &h
+			v.ApproverHandle = h
 		}
 		views = append(views, v)
 	}

@@ -1418,6 +1418,7 @@ type DecisionsResponse struct {
 
 // Delegation defines model for Delegation.
 type Delegation struct {
+	ApproverHandle  *string             `json:"approver_handle,omitempty"`
 	ChannelId       openapi_types.UUID  `json:"channel_id"`
 	CreatedAt       time.Time           `json:"created_at"`
 	DecidedAt       *time.Time          `json:"decided_at,omitempty"`
@@ -2386,6 +2387,9 @@ type ListDecisionsParams struct {
 type ListDelegationsParams struct {
 	// State Filter by state: pending, approved, denied, expired
 	State *ListDelegationsParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// MessageId Filter by message ID
+	MessageId *openapi_types.UUID `form:"message_id,omitempty" json:"message_id,omitempty"`
 }
 
 // ListDelegationsParamsState defines parameters for ListDelegations.

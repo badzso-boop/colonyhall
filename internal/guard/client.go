@@ -58,6 +58,7 @@ type Item struct {
 	ThreadRootID string    `json:"thread_root_id"`
 	Author       string    `json:"author"`
 	AuthorKind   string    `json:"author_kind"`
+	DelegatedBy  string    `json:"delegated_by,omitempty"`
 	Body         string    `json:"body"`
 	Mentioned    bool      `json:"mentioned"`
 	DM           bool      `json:"dm"`
@@ -250,6 +251,39 @@ func (c *Client) Handles(ctx context.Context) (map[string]string, error) {
 		out[a.ID] = a.Handle
 	}
 	return out, nil
+}
+
+// HasDelegation checks whether a delegation exists on the server for messageID.
+func (c *Client) HasDelegation(ctx context.Context, messageID string) (bool, string, error) {
+	if messageID == "" {
+		return false, "", nil
+	}
+	var res struct {
+		Delegations []struct {
+			State           string  `json:"state"`
+			DecidedByHandle *string `json:"decided_by_handle,omitempty"`
+			ApproverHandle  *string `json:"approver_handle,omitempty"`
+		} `json:"delegations"`
+	}
+	err := c.do(ctx, http.MethodGet, "/api/v1/delegations?message_id="+url.QueryEscape(messageID), nil, &res)
+	if err != nil {
+		var ae *APIError
+		if errors.As(err, &ae) && (ae.Status == http.StatusForbidden || ae.Status == http.StatusNotFound) {
+			return false, "", nil
+		}
+		return false, "", err
+	}
+	if len(res.Delegations) == 0 {
+		return false, "", nil
+	}
+	approver := "norbi"
+	d := res.Delegations[0]
+	if d.ApproverHandle != nil && *d.ApproverHandle != "" {
+		approver = *d.ApproverHandle
+	} else if d.DecidedByHandle != nil && *d.DecidedByHandle != "" {
+		approver = *d.DecidedByHandle
+	}
+	return true, approver, nil
 }
 
 // HostAgent is one agent of the host config.

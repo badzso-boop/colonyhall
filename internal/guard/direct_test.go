@@ -340,17 +340,170 @@ func TestHumanOnly(t *testing.T) {
 		{ID: "it-human", Author: "alice", AuthorKind: "human", Kind: "message", Body: "hello from human"},
 		{ID: "it-agent", Author: "otherbot", AuthorKind: "agent", Kind: "message", Body: "task from bot"},
 		{ID: "it-answer", Author: "otherbot", AuthorKind: "agent", Kind: "answer", Body: "Q-1 answer: yes"},
+		{ID: "it-delegated", Author: "otherbot", AuthorKind: "agent", DelegatedBy: "norbi", Kind: "delegated", Body: "delegated task"},
 	}
 
 	kept := agent.humanOnly(context.Background(), items)
-	if len(kept) != 2 {
-		t.Fatalf("expected 2 items kept (human and answer), got %d: %+v", len(kept), kept)
+	if len(kept) != 3 {
+		t.Fatalf("expected 3 items kept (human, answer, delegated), got %d: %+v", len(kept), kept)
 	}
-	if kept[0].ID != "it-human" || kept[1].ID != "it-answer" {
-		t.Fatalf("expected [it-human, it-answer], got: %+v", kept)
+	if kept[0].ID != "it-human" || kept[1].ID != "it-answer" || kept[2].ID != "it-delegated" {
+		t.Fatalf("expected [it-human, it-answer, it-delegated], got: %+v", kept)
 	}
 	if len(acks) != 1 || acks[0] != "it-agent" {
 		t.Fatalf("expected refused it-agent to be acked, got: %v", acks)
+	}
+}
+
+func TestDelegatedPromptAndExecution(t *testing.T) {
+	// 1. DirectPrompt framing test
+	item := Item{
+		ID:           "i-del-1",
+		ItemID:       "msg-del-1",
+		Channel:      "general",
+		Author:       "projects",
+		AuthorKind:   "agent",
+		DelegatedBy:  "norbi",
+		Kind:         "delegated",
+		Body:         "run the release pipeline",
+		ThreadRootID: "thread-root-del",
+	}
+	prompt := DirectPrompt([]Item{item})
+	wantTag := `<colonyhall_message from="@projects" delegated_by="@norbi" channel="#general" message="msg-del-1">`
+	if !strings.Contains(prompt, wantTag) {
+		t.Fatalf("expected prompt to contain %q, got:\n%s", wantTag, prompt)
+	}
+	wantLine := "This task was written by the agent @projects and approved by @norbi; do it as if @norbi had asked."
+	if !strings.Contains(prompt, wantLine) {
+		t.Fatalf("expected prompt to contain instruction line %q, got:\n%s", wantLine, prompt)
+	}
+
+	// 2. Refusal note when delegation exists on server
+	var postedNotes []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/v1/delegations"):
+			msgID := r.URL.Query().Get("message_id")
+			if msgID == "msg-has-del" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"delegations": []map[string]any{
+						{
+							"state":           "pending",
+							"approver_handle": "norbi",
+						},
+					},
+				})
+			} else {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"delegations": []map[string]any{},
+				})
+			}
+		case strings.Contains(r.URL.Path, "/messages"):
+			var req struct {
+				Body string `json:"body"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			postedNotes = append(postedNotes, req.Body)
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"id": "msg-rep"}})
+		case strings.HasSuffix(r.URL.Path, "/inbox/ack"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"acked": 1})
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	agent := &Agent{
+		me:     Me{ID: "target-bot", Handle: "target-bot"},
+		Client: &Client{BaseURL: ts.URL, HTTP: ts.Client()},
+		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+
+	// Refused item with delegation -> "Ezt a feladatot jóváhagyásra küldtem (@norbi)."
+	agent.humanOnly(context.Background(), []Item{
+		{ID: "it-with-del", ItemID: "msg-has-del", Author: "otherbot", AuthorKind: "agent", Kind: "message", Body: "please run", ChannelID: "ch-1"},
+	})
+	if len(postedNotes) != 1 || postedNotes[0] != "Ezt a feladatot jóváhagyásra küldtem (@norbi)." {
+		t.Fatalf("expected delegation refusal note, got: %v", postedNotes)
+	}
+
+	// Refused item without delegation -> "⛔ I only take tasks from humans."
+	agent.humanOnly(context.Background(), []Item{
+		{ID: "it-no-del", ItemID: "msg-no-del", Author: "otherbot", AuthorKind: "agent", Kind: "message", Body: "please run", ChannelID: "ch-1"},
+	})
+	if len(postedNotes) != 2 || postedNotes[1] != "⛔ I only take tasks from humans." {
+		t.Fatalf("expected standard refusal note, got: %v", postedNotes)
+	}
+
+	// 3. Execution flow: delegated item runs as task, reply goes to original thread
+	var sentDirect DirectRequest
+	var repliesToThread []string
+	ad := &directTestAdapter{}
+	ad.impl = func(_ context.Context, req DirectRequest) (RunResult, error) {
+		sentDirect = req
+		return RunResult{Text: "pipeline finished successfully", SessionID: "sess-del"}, nil
+	}
+
+	execServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/messages"):
+			var req struct {
+				Body         string `json:"body"`
+				ThreadRootID string `json:"thread_root_id"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			repliesToThread = append(repliesToThread, req.ThreadRootID)
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"id": "msg-reply-1"}})
+		case strings.HasSuffix(r.URL.Path, "/inbox/ack"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"acked": 1})
+		case strings.HasSuffix(r.URL.Path, "/runs"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "run-1"})
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer execServer.Close()
+
+	execAgent := &Agent{
+		Cfg: AgentConfig{
+			Client:    "claude-code",
+			Approvals: "none",
+			HaltCheck: time.Hour,
+		},
+		Client:   &Client{BaseURL: execServer.URL, Token: "tok-del", HTTP: execServer.Client()},
+		Adapter:  ad,
+		StateDir: t.TempDir(),
+		RootDir:  t.TempDir(),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+	}
+
+	delItem := Item{
+		ID:           "it-run-del",
+		ItemID:       "msg-run-del",
+		Author:       "projects",
+		AuthorKind:   "agent",
+		DelegatedBy:  "norbi",
+		Kind:         "delegated",
+		ChannelID:    "chan-del-1",
+		Channel:      "general",
+		ThreadRootID: "thread-root-del-99",
+		Body:         "run the release pipeline",
+	}
+
+	if err := execAgent.handleDirect(context.Background(), []Item{delItem}); err != nil {
+		t.Fatalf("handleDirect failed: %v", err)
+	}
+
+	wantRunTag := `<colonyhall_message from="@projects" delegated_by="@norbi" channel="#general" message="msg-run-del">`
+	if !strings.Contains(sentDirect.Prompt, wantRunTag) {
+		t.Errorf("adapter prompt missing tag %q", wantRunTag)
+	}
+	if !strings.Contains(sentDirect.Prompt, wantLine) {
+		t.Errorf("adapter prompt missing instruction %q", wantLine)
+	}
+	if len(repliesToThread) != 1 || repliesToThread[0] != "thread-root-del-99" {
+		t.Fatalf("expected reply to thread %q, got: %v", "thread-root-del-99", repliesToThread)
 	}
 }
 

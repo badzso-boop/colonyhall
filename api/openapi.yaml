@@ -1153,7 +1153,7 @@ paths:
     get:
       operationId: listDelegations
       tags: [delegation]
-      description: List delegation requests in the workspace. Humans only.
+      description: List delegation requests in the workspace.
       parameters:
         - name: state
           in: query
@@ -1162,6 +1162,13 @@ paths:
             type: string
             enum: [pending, approved, denied, expired]
           description: "Filter by state: pending, approved, denied, expired"
+        - name: message_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: "Filter by message ID"
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200":
@@ -2969,6 +2976,8 @@ components:
           type: string
           format: uuid
         decided_by_handle:
+          type: string
+        approver_handle:
           type: string
         decided_at:
           type: string

@@ -46,6 +46,7 @@ type DelegationView struct {
 	Delegation
 	FromAgentHandle string
 	ToAgentHandle   string
+	ApproverHandle  string
 	DecidedByHandle *string
 }
 
