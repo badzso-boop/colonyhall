@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -49,7 +50,7 @@ func (s *Store) ErrorByID(ctx context.Context, id ids.ID) (runs.Error, error) {
 
 // InsertRun stores an agent run.
 func (s *Store) InsertRun(ctx context.Context, r runs.Run) error {
-	var hostID, channelID, threadRootID, errorID *ids.ID
+	var hostID, channelID, threadRootID, errorID, replyMsgID *ids.ID
 	if r.HostID != ids.Nil {
 		hostID = &r.HostID
 	}
@@ -62,9 +63,18 @@ func (s *Store) InsertRun(ctx context.Context, r runs.Run) error {
 	if r.ErrorID != ids.Nil {
 		errorID = &r.ErrorID
 	}
+	if r.ReplyMessageID != ids.Nil {
+		replyMsgID = &r.ReplyMessageID
+	}
 	webReads := r.WebReads
 	if webReads == nil {
 		webReads = []string{}
+	}
+	stepsJSON := []byte("[]")
+	if len(r.Steps) > 0 {
+		if b, err := json.Marshal(r.Steps); err == nil {
+			stepsJSON = b
+		}
 	}
 	return s.q(ctx).InsertRun(ctx, sqlcgen.InsertRunParams{
 		ID:               r.ID,
@@ -87,6 +97,8 @@ func (s *Store) InsertRun(ctx context.Context, r runs.Run) error {
 		ErrorID:          errorID,
 		CreatedAt:        r.CreatedAt,
 		WebReads:         webReads,
+		Steps:            stepsJSON,
+		ReplyMessageID:   replyMsgID,
 	})
 }
 
@@ -136,6 +148,17 @@ func (s *Store) ListRuns(ctx context.Context, workspaceID ids.ID, agentID ids.ID
 		if r.ErrorID != nil {
 			item.ErrorID = *r.ErrorID
 		}
+		if r.ReplyMessageID != nil {
+			item.ReplyMessageID = *r.ReplyMessageID
+		}
+		var steps []runs.Step
+		if len(r.Steps) > 0 {
+			_ = json.Unmarshal(r.Steps, &steps)
+		}
+		if steps == nil {
+			steps = []runs.Step{}
+		}
+		item.Steps = steps
 		out = append(out, item)
 	}
 	return out, nil

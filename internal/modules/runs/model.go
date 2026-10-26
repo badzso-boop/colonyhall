@@ -50,6 +50,16 @@ const (
 	MaxDurationMS = 24 * 60 * 60 * 1000 // 24 hours in ms
 )
 
+// Step is one recorded step in an agent run.
+type Step struct {
+	Kind       string    `json:"kind"`
+	Label      string    `json:"label"`
+	Path       string    `json:"path,omitempty"`
+	State      string    `json:"state"`
+	StartedAt  time.Time `json:"started_at"`
+	DurationMs int64     `json:"duration_ms,omitempty"`
+}
+
 // Run is one recorded agent run.
 type Run struct {
 	ID               ids.ID
@@ -72,6 +82,8 @@ type Run struct {
 	ErrorID          ids.ID
 	CreatedAt        time.Time
 	WebReads         []string
+	Steps            []Step
+	ReplyMessageID   ids.ID
 }
 
 // DayUsage is the daily aggregated token usage and run count for one agent in Europe/Budapest.

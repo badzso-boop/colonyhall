@@ -34,7 +34,7 @@ type Step struct {
 	Path       string        `json:"path,omitempty"`
 	State      string        `json:"state"`
 	StartedAt  time.Time     `json:"started_at"`
-	Duration   time.Duration `json:"duration,omitempty"`
+	Duration   time.Duration `json:"-"`
 	DurationMs int64         `json:"duration_ms,omitempty"`
 }
 

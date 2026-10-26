@@ -66,6 +66,27 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 		if in.WebReads != nil {
 			webReads = *in.WebReads
 		}
+		var steps []runs.Step
+		if in.Steps != nil {
+			for _, st := range *in.Steps {
+				var p string
+				if st.Path != nil {
+					p = *st.Path
+				}
+				var dur int64
+				if st.DurationMs != nil {
+					dur = *st.DurationMs
+				}
+				steps = append(steps, runs.Step{
+					Kind:       string(st.Kind),
+					Label:      st.Label,
+					Path:       p,
+					State:      string(st.State),
+					StartedAt:  st.StartedAt,
+					DurationMs: dur,
+				})
+			}
+		}
 		run, err := svc.ReportRun(r.Context(), httpx.Actor(r), runs.ReportRunInput{
 			HostID:           httpx.Deref(in.HostId, ids.Nil),
 			Phase:            string(in.Phase),
@@ -83,6 +104,8 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			Status:           string(in.Status),
 			ErrorID:          httpx.Deref(in.ErrorId, ids.Nil),
 			WebReads:         webReads,
+			Steps:            steps,
+			ReplyMessageID:   httpx.Deref(in.ReplyMessageId, ids.Nil),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -160,9 +183,33 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			if item.ErrorID != ids.Nil {
 				ar.ErrorId = &item.ErrorID
 			}
+			if item.ReplyMessageID != ids.Nil {
+				ar.ReplyMessageId = &item.ReplyMessageID
+			}
 			if len(item.WebReads) > 0 {
 				wr := item.WebReads
 				ar.WebReads = &wr
+			}
+			if len(item.Steps) > 0 {
+				stList := make([]apispec.AgentStep, len(item.Steps))
+				for i, s := range item.Steps {
+					as := apispec.AgentStep{
+						Kind:      apispec.AgentStepKind(s.Kind),
+						Label:     s.Label,
+						State:     apispec.AgentStepState(s.State),
+						StartedAt: s.StartedAt,
+					}
+					if s.Path != "" {
+						p := s.Path
+						as.Path = &p
+					}
+					if s.DurationMs > 0 {
+						dms := s.DurationMs
+						as.DurationMs = &dms
+					}
+					stList[i] = as
+				}
+				ar.Steps = &stList
 			}
 			items = append(items, ar)
 		}

@@ -130,6 +130,8 @@ type ReportRunInput struct {
 	Status           string
 	ErrorID          ids.ID
 	WebReads         []string
+	Steps            []Step
+	ReplyMessageID   ids.ID
 }
 
 // ReportRun records a finished run for the calling agent.
@@ -180,6 +182,9 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 	}
 	in.HostID = ids.Nil
 	in.Client, in.Model, in.SessionID = clip(strings.TrimSpace(in.Client), 40), clip(strings.TrimSpace(in.Model), 100), clip(strings.TrimSpace(in.SessionID), 100)
+	if len(in.Steps) > 200 {
+		in.Steps = in.Steps[:200]
+	}
 
 	r := Run{
 		ID:               s.IDs.New(),
@@ -202,6 +207,8 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 		ErrorID:          in.ErrorID,
 		CreatedAt:        s.Clock.Now(),
 		WebReads:         in.WebReads,
+		Steps:            in.Steps,
+		ReplyMessageID:   in.ReplyMessageID,
 	}
 
 	var seq int64

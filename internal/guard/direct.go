@@ -545,6 +545,11 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	if a.Cfg.Approvals == "chat" {
 		timeout += DefaultApprovalTimeout + 60*time.Second
 	}
+	last := group[len(group)-1]
+	runKey := uuid.New().String()
+	pr := newProgressReporter(a.Client, last.ChannelID, last.ThreadRootID, runKey, a.Log)
+	req.OnStep = pr.OnStep
+
 	dctx, cancel := context.WithTimeout(ctx, timeout)
 	a.workMu.Lock()
 	a.workCancel = cancel
@@ -554,6 +559,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	a.workMu.Lock()
 	a.workCancel = nil
 	a.workMu.Unlock()
+	steps := pr.Finish()
 
 	a.logDirectRun(sessionID, len(group), res, err)
 
@@ -564,14 +570,12 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		}
 	}
 
-	last := group[len(group)-1]
-
 	if ctx.Err() != nil {
-		a.reportRun(context.Background(), "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "halted", "")
+		a.reportRun(context.Background(), "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "halted", "", steps, "")
 		return errHalted
 	}
 	if err != nil {
-		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", "")
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", "", steps, "")
 		return err
 	}
 
@@ -607,7 +611,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 				". A run without a terminal cannot ask for permission; change the agent's permission mode on the Machines page."
 		}
 		errID, rerr := a.reportError(ctx, last, "run ended without an answer", detail, "gd-"+last.ID)
-		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", errID)
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", errID, steps, "")
 		if rerr != nil {
 			if errors.Is(rerr, errHalted) || ctx.Err() != nil {
 				return errHalted
@@ -615,13 +619,16 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			return rerr
 		}
 	} else {
-		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "ok", "")
-		if err := a.replyLong(ctx, last, res.Text, "gd-"+last.ID); err != nil {
+		replyMsgID, err := a.replyLongWithID(ctx, last, res.Text, "gd-"+last.ID)
+		if err != nil {
 			if errors.Is(err, errHalted) || ctx.Err() != nil {
+				a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "halted", "", steps, "")
 				return errHalted
 			}
+			a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", "", steps, "")
 			return err
 		}
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "ok", "", steps, replyMsgID)
 	}
 
 	// Ack items

@@ -20,13 +20,17 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/conversation"
@@ -62,12 +66,24 @@ type Gateway struct {
 	mu         sync.Mutex
 	conns      map[*connection]struct{}
 	activities map[activityKey]time.Time
+	progress   map[string]*runProgress
 }
 
 type activityKey struct {
 	agentID      ids.ID
 	channelID    ids.ID
 	threadRootID ids.ID
+}
+
+type runProgress struct {
+	AgentID      ids.ID
+	ChannelID    ids.ID
+	ThreadRootID ids.ID
+	RunKey       string
+	Steps        []apispec.AgentStep
+	Done         bool
+	DoneAt       time.Time
+	UpdatedAt    time.Time
 }
 
 // ActivityFrame is pushed to WebSocket clients when an agent begins or finishes work.
@@ -77,6 +93,17 @@ type ActivityFrame struct {
 	ChannelID    string  `json:"channel_id"`
 	ThreadRootID *string `json:"thread_root_id,omitempty"`
 	State        string  `json:"state"`
+}
+
+// ProgressFrame is pushed to WebSocket clients when an agent reports progress steps.
+type ProgressFrame struct {
+	Type         string              `json:"type"`
+	AgentID      string              `json:"agent_id"`
+	ChannelID    string              `json:"channel_id"`
+	ThreadRootID *string             `json:"thread_root_id,omitempty"`
+	RunKey       string              `json:"run_key"`
+	Steps        []apispec.AgentStep `json:"steps"`
+	Done         bool                `json:"done"`
 }
 
 type hello struct {
@@ -211,6 +238,151 @@ func (g *Gateway) IsAgentWorking(agentID ids.ID) bool {
 		}
 	}
 	return false
+}
+
+func (g *Gateway) pruneProgressLocked(now time.Time) {
+	for k, rp := range g.progress {
+		if rp.Done && now.Sub(rp.DoneAt) >= 2*time.Minute {
+			delete(g.progress, k)
+			continue
+		}
+		if now.Sub(rp.UpdatedAt) >= 15*time.Minute {
+			delete(g.progress, k)
+			continue
+		}
+	}
+}
+
+// ReportProgress updates the in-memory progress for a run and pushes an ephemeral
+// agent.progress WebSocket frame to viewers who can read that channel.
+func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in apispec.AgentProgressRequest) error {
+	if actor.Kind != identity.KindAgent {
+		return identity.ErrForbidden
+	}
+	if actor.Halted {
+		return identity.ErrHalted
+	}
+	if in.ChannelId == uuid.Nil {
+		return &httpx.BadRequest{Detail: "channel_id is required"}
+	}
+	if in.RunKey == "" {
+		return &httpx.BadRequest{Detail: "run_key is required"}
+	}
+	canRead, err := g.Conversation.CanRead(ctx, actor, ids.ID(in.ChannelId))
+	if err != nil {
+		return err
+	}
+	if !canRead {
+		return identity.ErrForbidden
+	}
+
+	now := g.now()
+	g.mu.Lock()
+	if g.progress == nil {
+		g.progress = make(map[string]*runProgress)
+	}
+	g.pruneProgressLocked(now)
+
+	var trID ids.ID
+	if in.ThreadRootId != nil {
+		trID = ids.ID(*in.ThreadRootId)
+	}
+
+	rp, ok := g.progress[in.RunKey]
+	if !ok {
+		rp = &runProgress{
+			AgentID:      actor.ID,
+			ChannelID:    ids.ID(in.ChannelId),
+			ThreadRootID: trID,
+			RunKey:       in.RunKey,
+			UpdatedAt:    now,
+		}
+		g.progress[in.RunKey] = rp
+	}
+	rp.Steps = append(rp.Steps, in.Steps...)
+	if len(rp.Steps) > 200 {
+		rp.Steps = rp.Steps[:200]
+	}
+	rp.UpdatedAt = now
+	isDone := in.Done != nil && *in.Done
+	if isDone {
+		rp.Done = true
+		rp.DoneAt = now
+	}
+
+	recipients := make([]*connection, 0, len(g.conns))
+	for c := range g.conns {
+		if c.actor.WorkspaceID == actor.WorkspaceID {
+			recipients = append(recipients, c)
+		}
+	}
+	g.mu.Unlock()
+
+	frame := ProgressFrame{
+		Type:      "agent.progress",
+		AgentID:   actor.ID.String(),
+		ChannelID: in.ChannelId.String(),
+		RunKey:    in.RunKey,
+		Steps:     in.Steps,
+		Done:      isDone,
+	}
+	if in.ThreadRootId != nil && *in.ThreadRootId != uuid.Nil {
+		tr := in.ThreadRootId.String()
+		frame.ThreadRootID = &tr
+	}
+
+	for _, c := range recipients {
+		visible, err := c.visibleChannel(ctx, ids.ID(in.ChannelId))
+		if err == nil && visible {
+			_ = c.writeJSON(ctx, frame)
+		}
+	}
+	return nil
+}
+
+// ChannelProgress returns active runs with their steps in the channel for humans who can read it.
+func (g *Gateway) ChannelProgress(ctx context.Context, actor identity.Actor, channelID ids.ID) ([]apispec.ActiveRunProgress, error) {
+	if actor.Kind != identity.KindHuman {
+		return nil, identity.ErrForbidden
+	}
+	canRead, err := g.Conversation.CanRead(ctx, actor, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if !canRead {
+		return nil, identity.ErrForbidden
+	}
+
+	now := g.now()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.pruneProgressLocked(now)
+
+	out := make([]apispec.ActiveRunProgress, 0)
+	for _, rp := range g.progress {
+		if rp.ChannelID == channelID {
+			var tr *openapi_types.UUID
+			if rp.ThreadRootID != ids.Nil {
+				u := openapi_types.UUID(rp.ThreadRootID)
+				tr = &u
+			}
+			done := rp.Done
+			stepsCopy := make([]apispec.AgentStep, len(rp.Steps))
+			copy(stepsCopy, rp.Steps)
+			out = append(out, apispec.ActiveRunProgress{
+				AgentId:      openapi_types.UUID(rp.AgentID),
+				ChannelId:    openapi_types.UUID(rp.ChannelID),
+				ThreadRootId: tr,
+				RunKey:       rp.RunKey,
+				Steps:        stepsCopy,
+				Done:         &done,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].RunKey < out[j].RunKey
+	})
+	return out, nil
 }
 
 // ServeHTTP upgrades the request and runs the connection until it closes.

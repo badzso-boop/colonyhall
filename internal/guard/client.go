@@ -152,6 +152,20 @@ func (c *Client) SetActivity(ctx context.Context, channelID, threadRootID, state
 	return c.do(ctx, http.MethodPost, "/api/v1/agent/activity", in, nil)
 }
 
+// ReportProgress sends progress steps to the server during a run.
+func (c *Client) ReportProgress(ctx context.Context, channelID, threadRootID, runKey string, steps []Step, done bool) error {
+	in := map[string]any{
+		"channel_id": channelID,
+		"run_key":    runKey,
+		"steps":      steps,
+		"done":       done,
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/progress", in, nil)
+}
+
 // Me returns the agent with its current state.
 func (c *Client) Me(ctx context.Context) (Me, error) {
 	var m Me
@@ -179,12 +193,13 @@ func (c *Client) Ack(ctx context.Context, ids []string) error {
 
 // Send posts a message. clientMsgID makes retries safe.
 func (c *Client) Send(ctx context.Context, channelID, threadRootID, body, clientMsgID string) error {
-	return c.SendLong(ctx, channelID, threadRootID, body, clientMsgID, false)
+	_, err := c.SendLong(ctx, channelID, threadRootID, body, clientMsgID, false)
+	return err
 }
 
 // SendLong posts a message; elaborate allows an agent's message to be
-// longer than the usual limit (a report someone asked for).
-func (c *Client) SendLong(ctx context.Context, channelID, threadRootID, body, clientMsgID string, elaborate bool) error {
+// longer than the usual limit (a report someone asked for). It returns the created message ID if available.
+func (c *Client) SendLong(ctx context.Context, channelID, threadRootID, body, clientMsgID string, elaborate bool) (string, error) {
 	in := map[string]any{"body": body, "client_msg_id": clientMsgID}
 	if elaborate {
 		in["elaborate"] = true
@@ -192,7 +207,19 @@ func (c *Client) SendLong(ctx context.Context, channelID, threadRootID, body, cl
 	if threadRootID != "" {
 		in["thread_root_id"] = threadRootID
 	}
-	return c.do(ctx, http.MethodPost, "/api/v1/channels/"+channelID+"/messages", in, nil)
+	var res struct {
+		Message *struct {
+			ID string `json:"id"`
+		} `json:"message"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/v1/channels/"+channelID+"/messages", in, &res)
+	if err != nil {
+		return "", err
+	}
+	if res.Message != nil {
+		return res.Message.ID, nil
+	}
+	return "", nil
 }
 
 // React adds a reaction.
@@ -370,6 +397,8 @@ type ReportRunInput struct {
 	Status           string   `json:"status"`
 	ErrorID          string   `json:"error_id,omitempty"`
 	WebReads         []string `json:"web_reads,omitempty"`
+	Steps            []Step   `json:"steps,omitempty"`
+	ReplyMessageID   string   `json:"reply_message_id,omitempty"`
 }
 
 // ReportRun reports a finished run with token counts and duration to the server.

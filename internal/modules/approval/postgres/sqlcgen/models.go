@@ -85,6 +85,8 @@ type AgentRun struct {
 	ErrorID          *uuid.UUID
 	CreatedAt        time.Time
 	WebReads         []string
+	Steps            []byte
+	ReplyMessageID   *uuid.UUID
 }
 
 type ApiToken struct {

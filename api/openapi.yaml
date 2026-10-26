@@ -422,6 +422,21 @@ paths:
         "204": { description: Marked as read }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /channels/{channelId}/progress:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    get:
+      operationId: getChannelProgress
+      tags: [conversation]
+      description: Returns runs in progress with all their steps so far in the channel. Humans who can read the channel only.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Runs in progress
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChannelProgressResponse" } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /channels/{channelId}/compaction:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
@@ -885,6 +900,20 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Updated }
+
+  /agent/progress:
+    post:
+      operationId: reportAgentProgress
+      tags: [agents]
+      description: Agents only. Report progress steps during an active run.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentProgressRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /agent/errors:
     post:
@@ -2053,6 +2082,46 @@ components:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
         state: { type: string, enum: [working, idle] }
+    AgentStep:
+      type: object
+      required: [kind, label, state, started_at]
+      properties:
+        kind: { type: string, enum: [read, write, edit, search, command, web, mcp, think, answer, denied, other] }
+        label: { type: string }
+        path: { type: string }
+        state: { type: string, enum: [active, done] }
+        started_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+    AgentProgressRequest:
+      type: object
+      required: [channel_id, run_key, steps]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        run_key: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AgentStep" }
+        done: { type: boolean }
+    ActiveRunProgress:
+      type: object
+      required: [agent_id, channel_id, run_key, steps]
+      properties:
+        agent_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        run_key: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AgentStep" }
+        done: { type: boolean }
+    ChannelProgressResponse:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/ActiveRunProgress" }
     ReportRunRequest:
       type: object
       required: [phase, client, model, session_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status]
@@ -2076,6 +2145,14 @@ components:
           type: array
           items: { type: string }
           description: Public web URLs read during this run.
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AgentStep" }
+          description: Steps executed during this run, capped at 200.
+        reply_message_id:
+          type: string
+          format: uuid
+          description: Message ID of the reply posted by the agent.
     RunRef:
       type: object
       required: [id]
@@ -2107,6 +2184,12 @@ components:
         web_reads:
           type: array
           items: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AgentStep" }
+        reply_message_id:
+          type: string
+          format: uuid
     RunList:
       type: object
       required: [runs]
@@ -2638,6 +2721,9 @@ components:
         web_reads:
           type: array
           items: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AgentStep" }
 
     OverviewUsage:
       type: object

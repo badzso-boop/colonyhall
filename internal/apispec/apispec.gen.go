@@ -45,6 +45,69 @@ func (e AgentActivityRequestState) Valid() bool {
 	}
 }
 
+// Defines values for AgentStepKind.
+const (
+	AgentStepKindAnswer  AgentStepKind = "answer"
+	AgentStepKindCommand AgentStepKind = "command"
+	AgentStepKindDenied  AgentStepKind = "denied"
+	AgentStepKindEdit    AgentStepKind = "edit"
+	AgentStepKindMcp     AgentStepKind = "mcp"
+	AgentStepKindOther   AgentStepKind = "other"
+	AgentStepKindRead    AgentStepKind = "read"
+	AgentStepKindSearch  AgentStepKind = "search"
+	AgentStepKindThink   AgentStepKind = "think"
+	AgentStepKindWeb     AgentStepKind = "web"
+	AgentStepKindWrite   AgentStepKind = "write"
+)
+
+// Valid indicates whether the value is a known member of the AgentStepKind enum.
+func (e AgentStepKind) Valid() bool {
+	switch e {
+	case AgentStepKindAnswer:
+		return true
+	case AgentStepKindCommand:
+		return true
+	case AgentStepKindDenied:
+		return true
+	case AgentStepKindEdit:
+		return true
+	case AgentStepKindMcp:
+		return true
+	case AgentStepKindOther:
+		return true
+	case AgentStepKindRead:
+		return true
+	case AgentStepKindSearch:
+		return true
+	case AgentStepKindThink:
+		return true
+	case AgentStepKindWeb:
+		return true
+	case AgentStepKindWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentStepState.
+const (
+	AgentStepStateActive AgentStepState = "active"
+	AgentStepStateDone   AgentStepState = "done"
+)
+
+// Valid indicates whether the value is a known member of the AgentStepState enum.
+func (e AgentStepState) Valid() bool {
+	switch e {
+	case AgentStepStateActive:
+		return true
+	case AgentStepStateDone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApprovalDecision.
 const (
 	Allow ApprovalDecision = "allow"
@@ -814,6 +877,16 @@ type AckResponse struct {
 	Acked int `json:"acked"`
 }
 
+// ActiveRunProgress defines model for ActiveRunProgress.
+type ActiveRunProgress struct {
+	AgentId      openapi_types.UUID  `json:"agent_id"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	Done         *bool               `json:"done,omitempty"`
+	RunKey       string              `json:"run_key"`
+	Steps        []AgentStep         `json:"steps"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
 // Actor defines model for Actor.
 type Actor struct {
 	AvatarEmoji *string   `json:"avatar_emoji,omitempty"`
@@ -928,6 +1001,15 @@ type AgentPendingFileFetch struct {
 	Path          string             `json:"path"`
 }
 
+// AgentProgressRequest defines model for AgentProgressRequest.
+type AgentProgressRequest struct {
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	Done         *bool               `json:"done,omitempty"`
+	RunKey       string              `json:"run_key"`
+	Steps        []AgentStep         `json:"steps"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
 // AgentRules defines model for AgentRules.
 type AgentRules struct {
 	CreatedAt *time.Time          `json:"created_at,omitempty"`
@@ -951,6 +1033,22 @@ type AgentRulesResponse struct {
 	Text      string                   `json:"text"`
 	Version   int                      `json:"version"`
 }
+
+// AgentStep defines model for AgentStep.
+type AgentStep struct {
+	DurationMs *int64         `json:"duration_ms,omitempty"`
+	Kind       AgentStepKind  `json:"kind"`
+	Label      string         `json:"label"`
+	Path       *string        `json:"path,omitempty"`
+	StartedAt  time.Time      `json:"started_at"`
+	State      AgentStepState `json:"state"`
+}
+
+// AgentStepKind defines model for AgentStep.Kind.
+type AgentStepKind string
+
+// AgentStepState defines model for AgentStep.State.
+type AgentStepState string
 
 // AgentToken defines model for AgentToken.
 type AgentToken struct {
@@ -1077,6 +1175,11 @@ type ChannelMember struct {
 // ChannelMemberList defines model for ChannelMemberList.
 type ChannelMemberList struct {
 	Members []ChannelMember `json:"members"`
+}
+
+// ChannelProgressResponse defines model for ChannelProgressResponse.
+type ChannelProgressResponse struct {
+	Runs []ActiveRunProgress `json:"runs"`
 }
 
 // Compaction defines model for Compaction.
@@ -1673,6 +1776,7 @@ type OverviewRun struct {
 	Id       openapi_types.UUID  `json:"id"`
 	Phase    string              `json:"phase"`
 	Result   string              `json:"result"`
+	Steps    *[]AgentStep        `json:"steps,omitempty"`
 	Time     time.Time           `json:"time"`
 	Tokens   int64               `json:"tokens"`
 	WebReads *[]string           `json:"web_reads,omitempty"`
@@ -1800,21 +1904,27 @@ type ReorderSidebarSectionsRequest struct {
 
 // ReportRunRequest defines model for ReportRunRequest.
 type ReportRunRequest struct {
-	CacheReadTokens  int64                  `json:"cache_read_tokens"`
-	CacheWriteTokens int64                  `json:"cache_write_tokens"`
-	ChannelId        *openapi_types.UUID    `json:"channel_id,omitempty"`
-	Client           string                 `json:"client"`
-	DurationMs       int                    `json:"duration_ms"`
-	ErrorId          *openapi_types.UUID    `json:"error_id,omitempty"`
-	HostId           *openapi_types.UUID    `json:"host_id,omitempty"`
-	InputTokens      int64                  `json:"input_tokens"`
-	Items            int                    `json:"items"`
-	Model            string                 `json:"model"`
-	OutputTokens     int64                  `json:"output_tokens"`
-	Phase            ReportRunRequestPhase  `json:"phase"`
-	SessionId        string                 `json:"session_id"`
-	Status           ReportRunRequestStatus `json:"status"`
-	ThreadRootId     *openapi_types.UUID    `json:"thread_root_id,omitempty"`
+	CacheReadTokens  int64                 `json:"cache_read_tokens"`
+	CacheWriteTokens int64                 `json:"cache_write_tokens"`
+	ChannelId        *openapi_types.UUID   `json:"channel_id,omitempty"`
+	Client           string                `json:"client"`
+	DurationMs       int                   `json:"duration_ms"`
+	ErrorId          *openapi_types.UUID   `json:"error_id,omitempty"`
+	HostId           *openapi_types.UUID   `json:"host_id,omitempty"`
+	InputTokens      int64                 `json:"input_tokens"`
+	Items            int                   `json:"items"`
+	Model            string                `json:"model"`
+	OutputTokens     int64                 `json:"output_tokens"`
+	Phase            ReportRunRequestPhase `json:"phase"`
+
+	// ReplyMessageId Message ID of the reply posted by the agent.
+	ReplyMessageId *openapi_types.UUID    `json:"reply_message_id,omitempty"`
+	SessionId      string                 `json:"session_id"`
+	Status         ReportRunRequestStatus `json:"status"`
+
+	// Steps Steps executed during this run, capped at 200.
+	Steps        *[]AgentStep        `json:"steps,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 
 	// WebReads Public web URLs read during this run.
 	WebReads *[]string `json:"web_reads,omitempty"`
@@ -1846,8 +1956,10 @@ type Run struct {
 	Model            string              `json:"model"`
 	OutputTokens     int64               `json:"output_tokens"`
 	Phase            RunPhase            `json:"phase"`
+	ReplyMessageId   *openapi_types.UUID `json:"reply_message_id,omitempty"`
 	SessionId        string              `json:"session_id"`
 	Status           RunStatus           `json:"status"`
+	Steps            *[]AgentStep        `json:"steps,omitempty"`
 	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
 	WebReads         *[]string           `json:"web_reads,omitempty"`
 	WorkspaceId      openapi_types.UUID  `json:"workspace_id"`
@@ -2258,6 +2370,9 @@ type FailFileFetchRequestJSONRequestBody = FailFileFetchRequest
 
 // AckInboxJSONRequestBody defines body for AckInbox for application/json ContentType.
 type AckInboxJSONRequestBody = AckRequest
+
+// ReportAgentProgressJSONRequestBody defines body for ReportAgentProgress for application/json ContentType.
+type ReportAgentProgressJSONRequestBody = AgentProgressRequest
 
 // ReportRunJSONRequestBody defines body for ReportRun for application/json ContentType.
 type ReportRunJSONRequestBody = ReportRunRequest

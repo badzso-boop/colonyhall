@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
 )
 
 // Agent runs the guard loop for one agent.
@@ -358,7 +359,7 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 			decideStatus = "error"
 		}
 	}
-	a.reportRun(ctx, "decide", a.Cfg.Model, "", "", "", len(items), res, decideStatus, "")
+	a.reportRun(ctx, "decide", a.Cfg.Model, "", "", "", len(items), res, decideStatus, "", nil, "")
 	if err != nil {
 		if runCtx.Err() != nil && ctx.Err() == nil {
 			a.Log.Warn("guard: run stopped, agent halted", "agent", a.logName())
@@ -615,6 +616,8 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			}
 			mcpConfigPath = filepath.Join(p.AgentDir+".config", "claude", "mcp.json")
 		}
+		runKey := uuid.New().String()
+		pr := newProgressReporter(a.Client, it.ChannelID, it.ThreadRootID, runKey, a.Log)
 		res, err := a.Adapter.Work(wctx, WorkRequest{
 			Prompt:         WorkPromptWithWebRead(a.getMe().Handle, promptBranch, p.AllowWebRead, it, task, p.Grants...),
 			Model:          a.Cfg.WorkModel,
@@ -627,7 +630,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			MCPConfigPath:  mcpConfigPath,
 			Rules:          rulesText,
 			RulesVersion:   rulesVer,
+			OnStep:         pr.OnStep,
 		})
+		steps := pr.Finish()
 		stopped := errors.Is(wctx.Err(), context.Canceled)
 		cancel()
 		a.workMu.Lock()
@@ -639,13 +644,13 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		}
 		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
 		if ctx.Err() != nil {
-			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", visitedURLs)
+			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", steps, "", visitedURLs)
 			return errHalted
 		}
 		text := res.Text
 		if err != nil && !stopped {
 			errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
-			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID, visitedURLs)
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID, steps, "", visitedURLs)
 			return rerr
 		}
 		var commitLine string
@@ -657,10 +662,10 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			webReadFooter = formatWebReadFooter(visitedURLs)
 		}
 		if stopped {
-			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", visitedURLs)
 			text = "⚠️ Stopped: my folder access changed while I was working. Ask again if it is still needed."
-		} else {
-			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "", visitedURLs)
+			replyMsgID, replyErr := a.replyLongWithID(ctx, it.Item, text, "gw-"+it.ID)
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", steps, replyMsgID, visitedURLs)
+			return replyErr
 		}
 		if strings.TrimSpace(text) == "" {
 			text = "Done."
@@ -671,9 +676,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		if webReadFooter != "" {
 			text = strings.TrimSpace(text) + "\n\n" + webReadFooter
 		}
-		// A work run answers a request (often a summary someone asked for), so
-		// like a direct run it may go past the short-reply limit.
-		return a.replyLong(ctx, it.Item, text, "gw-"+it.ID)
+		replyMsgID, replyErr := a.replyLongWithID(ctx, it.Item, text, "gw-"+it.ID)
+		a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "ok", "", steps, replyMsgID, visitedURLs)
+		return replyErr
 	})
 }
 
@@ -701,6 +706,11 @@ func (a *Agent) reportError(ctx context.Context, it Item, summary, detail, clien
 
 // reply answers in the item's thread (top level in a DM without a thread).
 func (a *Agent) reply(ctx context.Context, it Item, text, clientID string) error {
+	_, err := a.replyWithID(ctx, it, text, clientID)
+	return err
+}
+
+func (a *Agent) replyWithID(ctx context.Context, it Item, text, clientID string) (string, error) {
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
 		thread = it.ItemID
@@ -711,11 +721,12 @@ func (a *Agent) reply(ctx context.Context, it Item, text, clientID string) error
 	text = strings.TrimSpace(text)
 	fullLinks := FileLinks(text)
 	clipped := clip(text, MaxReplyLen)
-	if err := halted(a.Client.Send(ctx, it.ChannelID, thread, clipped, clientID)); err != nil {
-		return err
+	msgID, err := a.Client.SendLong(ctx, it.ChannelID, thread, clipped, clientID, false)
+	if err := halted(err); err != nil {
+		return "", err
 	}
 	a.sendLostLinks(ctx, it, thread, fullLinks, clipped, clientID)
-	return nil
+	return msgID, nil
 }
 
 // MaxLongReply bounds a direct-mode answer (a report someone asked for).
@@ -725,9 +736,14 @@ const MaxLongReply = 8000
 // usual limit is sent as an elaborate message instead of being cut. Used
 // for direct-mode answers: a human asked, and a report may be long.
 func (a *Agent) replyLong(ctx context.Context, it Item, text, clientID string) error {
+	_, err := a.replyLongWithID(ctx, it, text, clientID)
+	return err
+}
+
+func (a *Agent) replyLongWithID(ctx context.Context, it Item, text, clientID string) (string, error) {
 	text = strings.TrimSpace(text)
 	if utf8.RuneCountInString(text) <= MaxReplyLen {
-		return a.reply(ctx, it, text, clientID)
+		return a.replyWithID(ctx, it, text, clientID)
 	}
 	thread := it.ThreadRootID
 	if thread == "" && !it.DM {
@@ -738,11 +754,12 @@ func (a *Agent) replyLong(ctx context.Context, it Item, text, clientID string) e
 	}
 	fullLinks := FileLinks(text)
 	clipped := clip(text, MaxLongReply)
-	if err := halted(a.Client.SendLong(ctx, it.ChannelID, thread, clipped, clientID, true)); err != nil {
-		return err
+	msgID, err := a.Client.SendLong(ctx, it.ChannelID, thread, clipped, clientID, true)
+	if err := halted(err); err != nil {
+		return "", err
 	}
 	a.sendLostLinks(ctx, it, thread, fullLinks, clipped, clientID)
-	return nil
+	return msgID, nil
 }
 
 func (a *Agent) sendLostLinks(ctx context.Context, it Item, thread string, fullLinks []string, clipped, clientID string) {
@@ -769,7 +786,7 @@ func (a *Agent) sendLostLinks(ctx context.Context, it Item, thread string, fullL
 	if utf8.RuneCountInString(body) <= MaxReplyLen {
 		err = a.Client.Send(ctx, it.ChannelID, thread, body, filesClientID)
 	} else {
-		err = a.Client.SendLong(ctx, it.ChannelID, thread, body, filesClientID, true)
+		_, err = a.Client.SendLong(ctx, it.ChannelID, thread, body, filesClientID, true)
 	}
 	if err != nil && a.Log != nil {
 		agentName := a.logName()
@@ -883,7 +900,7 @@ func (a *Agent) logRun(phase, model string, items int, res RunResult, err error)
 	a.Log.Info("guard: run", attrs...)
 }
 
-func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelID, threadRootID string, items int, res RunResult, status, errorID string, webReads ...[]string) {
+func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelID, threadRootID string, items int, res RunResult, status, errorID string, steps []Step, replyMessageID string, webReads ...[]string) {
 	rctx := ctx
 	if rctx.Err() != nil {
 		rctx = context.Background()
@@ -915,6 +932,8 @@ func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelI
 		Status:           status,
 		ErrorID:          errorID,
 		WebReads:         urls,
+		Steps:            steps,
+		ReplyMessageID:   replyMessageID,
 	})
 	if err != nil && a.Log != nil {
 		a.Log.Warn("guard: could not report run", "phase", phase, "err", err)

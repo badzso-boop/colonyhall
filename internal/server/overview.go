@@ -199,6 +199,28 @@ func registerOverview(
 				wr := r.WebReads
 				webReads = &wr
 			}
+			var steps *[]apispec.AgentStep
+			if len(r.Steps) > 0 {
+				stList := make([]apispec.AgentStep, len(r.Steps))
+				for i, s := range r.Steps {
+					as := apispec.AgentStep{
+						Kind:      apispec.AgentStepKind(s.Kind),
+						Label:     s.Label,
+						State:     apispec.AgentStepState(s.State),
+						StartedAt: s.StartedAt,
+					}
+					if s.Path != "" {
+						p := s.Path
+						as.Path = &p
+					}
+					if s.DurationMs > 0 {
+						dms := s.DurationMs
+						as.DurationMs = &dms
+					}
+					stList[i] = as
+				}
+				steps = &stList
+			}
 			lastRuns = append(lastRuns, apispec.OverviewRun{
 				Id:       r.ID,
 				Time:     r.CreatedAt,
@@ -207,6 +229,7 @@ func registerOverview(
 				Tokens:   tokens,
 				ErrorId:  errID,
 				WebReads: webReads,
+				Steps:    steps,
 			})
 		}
 

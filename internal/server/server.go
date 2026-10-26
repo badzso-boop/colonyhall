@@ -442,6 +442,31 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})))
+	mux.Handle("POST /api/v1/agent/progress", httpx.RequireAuth(idSvc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.AgentProgressRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if err := gw.ReportProgress(r.Context(), httpx.Actor(r), in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	mux.Handle("GET /api/v1/channels/{channelId}/progress", httpx.RequireAuth(idSvc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chID, err := ids.Parse(r.PathValue("channelId"))
+		if err != nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "invalid channel id"})
+			return
+		}
+		runs, err := gw.ChannelProgress(r.Context(), httpx.Actor(r), chID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.ChannelProgressResponse{Runs: runs})
+	})))
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, gw, opt.Clock)
 
 	return &App{
