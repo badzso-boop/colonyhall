@@ -337,3 +337,46 @@ func TestProgressNotSentToAgentsAndTerminalEventChannelChecked(t *testing.T) {
 		t.Fatalf("terminal event for an unreadable channel: want 403, got %d", s)
 	}
 }
+
+// Run keys come from the guards: another agent using the same run key must
+// not add steps to someone else's run.
+func TestProgressRunKeyScopedToAgent(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	var other struct {
+		Actor struct{ ID string }
+		Token string
+	}
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "intruder", "role": "member"}, &other); s != http.StatusCreated {
+		t.Fatalf("create intruder: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": other.Actor.ID, "can_write": true}, nil); s != http.StatusNoContent {
+		t.Fatalf("add intruder: %d", s)
+	}
+	step := func(label string) []any {
+		return []any{map[string]any{"kind": "read", "label": label, "state": "done", "started_at": "2026-10-26T10:00:00Z"}}
+	}
+	e.do("POST", "/api/v1/agent/progress", server.DevAgentToken, map[string]any{"channel_id": general, "run_key": "shared", "steps": step("real.md")}, nil)
+	e.do("POST", "/api/v1/agent/progress", other.Token, map[string]any{"channel_id": general, "run_key": "shared", "steps": step("forged.md")}, nil)
+
+	var res struct {
+		Runs []struct {
+			AgentID string `json:"agent_id"`
+			Steps   []struct{ Label string }
+		}
+	}
+	if s := e.do("GET", "/api/v1/channels/"+general+"/progress", server.DevAdminToken, nil, &res); s != http.StatusOK {
+		t.Fatalf("progress: %d", s)
+	}
+	agentID := e.agentID()
+	for _, r := range res.Runs {
+		if r.AgentID != agentID {
+			continue
+		}
+		for _, st := range r.Steps {
+			if st.Label == "forged.md" {
+				t.Fatalf("another agent's step landed in @fake-agent's run: %+v", r)
+			}
+		}
+	}
+}

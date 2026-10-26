@@ -66,13 +66,21 @@ type Gateway struct {
 	mu         sync.Mutex
 	conns      map[*connection]struct{}
 	activities map[activityKey]time.Time
-	progress   map[string]*runProgress
+	progress   map[progressKey]*runProgress
 }
 
 type activityKey struct {
 	agentID      ids.ID
 	channelID    ids.ID
 	threadRootID ids.ID
+}
+
+// progressKey scopes a run to its workspace and agent: run keys come from
+// the guards, so one agent must not be able to add steps to another's run.
+type progressKey struct {
+	workspaceID ids.ID
+	agentID     ids.ID
+	runKey      string
 }
 
 type runProgress struct {
@@ -316,7 +324,7 @@ func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in a
 	now := g.now()
 	g.mu.Lock()
 	if g.progress == nil {
-		g.progress = make(map[string]*runProgress)
+		g.progress = make(map[progressKey]*runProgress)
 	}
 	g.pruneProgressLocked(now)
 
@@ -325,7 +333,12 @@ func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in a
 		trID = ids.ID(*in.ThreadRootId)
 	}
 
-	rp, ok := g.progress[in.RunKey]
+	key := progressKey{workspaceID: actor.WorkspaceID, agentID: actor.ID, runKey: in.RunKey}
+	rp, ok := g.progress[key]
+	if ok && rp.ChannelID != ids.ID(in.ChannelId) {
+		g.mu.Unlock()
+		return &httpx.BadRequest{Detail: "run_key belongs to another channel"}
+	}
 	if !ok {
 		rp = &runProgress{
 			AgentID:      actor.ID,
@@ -334,7 +347,7 @@ func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in a
 			RunKey:       in.RunKey,
 			UpdatedAt:    now,
 		}
-		g.progress[in.RunKey] = rp
+		g.progress[key] = rp
 	}
 	rp.Steps = append(rp.Steps, in.Steps...)
 	if len(rp.Steps) > 200 {
