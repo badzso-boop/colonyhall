@@ -218,6 +218,7 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 		var frame struct {
 			Type      string          `json:"type"`
 			EventType string          `json:"event_type"`
+			RequestID string          `json:"request_id"`
 			Data      json.RawMessage `json:"data"`
 		}
 		err := wsjson.Read(connCtx, conn, &frame)
@@ -234,6 +235,18 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 		}
 
 		switch frame.Type {
+		case "fs.request":
+			reqID := frame.RequestID
+			if reqID == "" && len(frame.Data) > 0 {
+				var p struct {
+					RequestID string `json:"request_id"`
+				}
+				_ = json.Unmarshal(frame.Data, &p)
+				reqID = p.RequestID
+			}
+			if reqID != "" {
+				go a.serveFsRequest(connCtx, reqID)
+			}
 		case "event":
 			if frame.EventType == "file.fetch_requested" {
 				var p struct {

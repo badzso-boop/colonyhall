@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"colonyhall/internal/apispec"
 )
 
 // Client is the guard's REST client for one agent. The guard is an ordinary
@@ -665,4 +667,18 @@ func (c *Client) AgentContext(ctx context.Context, channelID, threadRootID strin
 	var res AgentContext
 	err := c.do(ctx, http.MethodGet, path, nil, &res)
 	return res, err
+}
+
+// GetFsRequest fetches the parameters for an ephemeral filesystem request.
+func (c *Client) GetFsRequest(ctx context.Context, requestID string) (*apispec.AgentFsPendingRequest, error) {
+	var out apispec.AgentFsPendingRequest
+	if err := c.do(ctx, "GET", "/api/v1/agent/fs/"+requestID, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PostFsResult delivers the result or error of an ephemeral filesystem request.
+func (c *Client) PostFsResult(ctx context.Context, requestID string, result any) error {
+	return c.do(ctx, "POST", "/api/v1/agent/fs/"+requestID+"/result", result, nil)
 }

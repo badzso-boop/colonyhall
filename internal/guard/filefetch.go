@@ -65,6 +65,57 @@ func isDeniedPath(p, home string, denyFiles []string, exchangeDir string) bool {
 	return false
 }
 
+// MayAccessPath checks whether a real (already resolved/cleaned) path is within the allowed scope
+// and does not violate secret patterns or deny list rules.
+func MayAccessPath(
+	realPath string,
+	roots []string,
+	grants []Grant,
+	sandboxed bool,
+	home string,
+	denyFiles []string,
+	exchangeDir string,
+) (bool, string) {
+	if realPath == "" {
+		return false, "denied"
+	}
+	realPath = filepath.Clean(realPath)
+
+	if isSecretName(filepath.Base(realPath)) {
+		return false, "denied"
+	}
+	if isDeniedPath(realPath, home, denyFiles, exchangeDir) {
+		return false, "denied"
+	}
+
+	if sandboxed {
+		insideGrant := false
+		for _, g := range grants {
+			if realGrant, reason := CheckGrant(g.Path, roots, home); reason == "" && realGrant != "" {
+				if within(realPath, realGrant) {
+					insideGrant = true
+					break
+				}
+			}
+		}
+		if !insideGrant {
+			return false, "denied"
+		}
+	} else {
+		insideRoot := false
+		for _, r := range roots {
+			if within(realPath, r) {
+				insideRoot = true
+				break
+			}
+		}
+		if !insideRoot {
+			return false, "denied"
+		}
+	}
+	return true, ""
+}
+
 // CheckFileFetch validates the requested path against scope, deny rules, symlinks, file type, and mime.
 // Returns (realPath, mimeType, isImage, errorCode).
 // If errorCode != "", the request must be failed with that errorCode.
@@ -112,41 +163,9 @@ func CheckFileFetch(
 	}
 	realPath = filepath.Clean(realPath)
 
-	// Re-check secret patterns on resolved path
-	if isSecretName(filepath.Base(realPath)) {
-		return "", "", false, "denied"
-	}
-
-	// Re-check deny list on resolved path
-	if isDeniedPath(realPath, home, denyFiles, exchangeDir) {
-		return "", "", false, "denied"
-	}
-
-	// Scope check
-	if sandboxed {
-		insideGrant := false
-		for _, g := range grants {
-			if realGrant, reason := CheckGrant(g.Path, roots, home); reason == "" && realGrant != "" {
-				if within(realPath, realGrant) {
-					insideGrant = true
-					break
-				}
-			}
-		}
-		if !insideGrant {
-			return "", "", false, "denied"
-		}
-	} else {
-		insideRoot := false
-		for _, r := range roots {
-			if within(realPath, r) {
-				insideRoot = true
-				break
-			}
-		}
-		if !insideRoot {
-			return "", "", false, "denied"
-		}
+	// Re-check secret patterns, deny list, and scope on resolved path
+	if ok, code := MayAccessPath(realPath, roots, grants, sandboxed, home, denyFiles, exchangeDir); !ok {
+		return "", "", false, code
 	}
 
 	// Regular file check

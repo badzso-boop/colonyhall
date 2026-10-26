@@ -479,6 +479,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch
+		agent.WorktreePath = wt.Path
 	}
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
 	if ha.Sandbox && s.sandbox != nil {

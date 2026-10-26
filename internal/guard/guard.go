@@ -44,6 +44,7 @@ type Agent struct {
 	StateDir       string
 	WorktreeRepo   string
 	WorktreeBranch string
+	WorktreePath   string
 
 	ExchangeDir string
 	ExchangeOK  bool

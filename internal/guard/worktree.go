@@ -13,11 +13,7 @@ import (
 // gitTimeout is the timeout for each git command run by the guard.
 const gitTimeout = 30 * time.Second
 
-// gitExec runs a git command with hooks and user/system git config hooks disabled:
-// -c core.hooksPath=/dev/null, GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL=/dev/null, no shell, arguments as slice, timeout.
-// core.fsmonitor is off too: a repo's own config could name a command there,
-// and git would run it on checkout or status.
-func gitExec(ctx context.Context, dir string, args ...string) (string, error) {
+func gitExecRaw(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	tctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
 
@@ -27,7 +23,15 @@ func gitExec(ctx context.Context, dir string, args ...string) (string, error) {
 		cmd.Dir = dir
 	}
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0")
-	out, err := cmd.CombinedOutput()
+	return cmd.CombinedOutput()
+}
+
+// gitExec runs a git command with hooks and user/system git config hooks disabled:
+// -c core.hooksPath=/dev/null, GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL=/dev/null, no shell, arguments as slice, timeout.
+// core.fsmonitor is off too: a repo's own config could name a command there,
+// and git would run it on checkout or status.
+func gitExec(ctx context.Context, dir string, args ...string) (string, error) {
+	out, err := gitExecRaw(ctx, dir, args...)
 	trimmed := strings.TrimSpace(string(out))
 	if err != nil {
 		if trimmed != "" {
