@@ -339,6 +339,13 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 
 	gen := state.Generations[threadRoot]
 	maxSessionTokens := a.Cfg.MaxSessionTokens
+	if !reportsContext(a.Cfg.Client) {
+		// Antigravity reports only usage summed over every model call of a
+		// run (measured: 1–2 million for one message) and keeps its own
+		// context (it summarises long conversations), so a token limit would
+		// only start a fresh session — and lose the thread — on every message.
+		maxSessionTokens = 0
+	}
 	rotated := false
 	var rotTokens int
 	if maxSessionTokens > 0 {
@@ -534,7 +541,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	// The rotation compares the context size, not the run's summed usage:
 	// a run with many tool calls sums the same context once per call.
 	contextTokens := res.ContextTokens
-	if contextTokens <= 0 {
+	if contextTokens <= 0 && reportsContext(a.Cfg.Client) {
 		contextTokens = res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
 	}
 	state.LastRunTokens[threadRoot] = contextTokens
@@ -755,4 +762,11 @@ func (a *Agent) threadRecap(ctx context.Context, threadRootID string) string {
 		fmt.Fprintf(&b, "<m ctx from=%q>%s</m>\n", attr(author), text(m.Body, maxContextBody))
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// reportsContext tells whether a client's run result lets the guard measure
+// the session's context size. Claude Code does (its transcript); Antigravity
+// does not, so its sessions are not rotated by token count.
+func reportsContext(client string) bool {
+	return client != "antigravity"
 }

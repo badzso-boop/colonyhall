@@ -319,7 +319,7 @@ func TestRulesDelivery_ClaudeAndAntigravityLifecycle(t *testing.T) {
 			t.Fatalf("run 4 (resumed v2): rules should NOT be prepended, got:\n%s", p)
 		}
 
-		// Simulate session rotation by artificially setting LastRunTokens >= MaxSessionTokens
+		// A stored token count over the limit (as the old guard stored it)
 		stFile := stateDir + "/direct_state.json"
 		st, err := LoadDirectState(stFile)
 		if err != nil {
@@ -330,7 +330,9 @@ func TestRulesDelivery_ClaudeAndAntigravityLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Run 5: After session rotation -> rules MUST be prepended
+		// Run 5: Antigravity reports no context size, so a token count over
+		// the limit does not rotate the session: the conversation continues
+		// and the rules are not prepended again.
 		items5 := []Item{{ID: "it-5", AuthorKind: "human", ItemID: "m5", ThreadRootID: "m1", Channel: "dev", ChannelID: "c1", Body: "fifth message"}}
 		if err := agent.handleDirect(ctx, items5); err != nil {
 			t.Fatal(err)
@@ -339,8 +341,8 @@ func TestRulesDelivery_ClaudeAndAntigravityLifecycle(t *testing.T) {
 		if !ok {
 			t.Fatal("missing -p")
 		}
-		if !strings.HasPrefix(p, "<colonyhall_rules version=\"2\">\nShared Rules v2\n</colonyhall_rules>") {
-			t.Fatalf("run 5 (rotation): expected rules v2 in prompt after rotation, got:\n%s", p)
+		if strings.Contains(p, "<colonyhall_rules") {
+			t.Fatalf("run 5: an Antigravity session must not rotate on token count, got:\n%s", p)
 		}
 	})
 }

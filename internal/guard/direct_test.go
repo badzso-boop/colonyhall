@@ -1158,6 +1158,8 @@ func TestDirectSessionRotationClaude(t *testing.T) {
 	}
 }
 
+// TestDirectSessionRotationAntigravity: Antigravity sessions are not rotated
+// by token count (no context size is reported).
 func TestDirectSessionRotationAntigravity(t *testing.T) {
 	stateDir, root := t.TempDir(), t.TempDir()
 	agentID := uuid.New().String()
@@ -1234,40 +1236,47 @@ func TestDirectSessionRotationAntigravity(t *testing.T) {
 	if st.Conversations[threadRoot] != "agy-conv-1" {
 		t.Fatalf("expected conversation agy-conv-1, got %s", st.Conversations[threadRoot])
 	}
-	if st.LastRunTokens[threadRoot] != 2500 {
-		t.Fatalf("expected LastRunTokens 2500, got %d", st.LastRunTokens[threadRoot])
+	// Antigravity's usage is summed over every model call (measured: 1–2
+	// million tokens for one message), so it is not stored as a context size.
+	if st.LastRunTokens[threadRoot] != 0 {
+		t.Fatalf("expected no context size for Antigravity, got %d", st.LastRunTokens[threadRoot])
 	}
 
-	// Run 2: threshold exceeded (2500 >= 2000) -> rotates!
+	// Run 2: the summed usage is over the limit, but the session continues.
 	nextUsage = Usage{Input: 500, Output: 50}
-	nextConvID = "agy-conv-2"
+	nextConvID = "agy-conv-1"
 	item2 := []Item{{ID: "it-2", AuthorKind: "human", ItemID: "m2", ChannelID: "c1", ThreadRootID: "m1", Body: "next agy"}}
 	if err := agent.handleDirect(context.Background(), item2); err != nil {
 		t.Fatalf("run 2 failed: %v", err)
 	}
-
 	if len(requests) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(requests))
 	}
-	req2 := requests[1]
-	// Antigravity rotation: no --conversation (ConversationID == "")
-	if req2.ConversationID != "" {
-		t.Fatalf("rotated agy run should have empty ConversationID, got %s", req2.ConversationID)
+	if requests[1].ConversationID != "agy-conv-1" {
+		t.Fatalf("run 2 must continue the conversation agy-conv-1, got %q", requests[1].ConversationID)
 	}
-	if !strings.Contains(req2.Prompt, `@alice">initial</m>`) {
-		t.Fatalf("rotated agy prompt missing recap: %s", req2.Prompt)
-	}
-
-	wantNotice := "🔄 Started a fresh session (the previous one reached 2500 tokens)."
-	foundNotice := false
 	for _, p := range postedReplies {
-		if strings.Contains(p, wantNotice) {
-			foundNotice = true
-			break
+		if strings.Contains(p, "fresh session") {
+			t.Fatalf("unexpected rotation notice: %s", p)
 		}
 	}
-	if !foundNotice {
-		t.Fatalf("missing rotation notice %q in replies: %v", wantNotice, postedReplies)
+
+	// A token count stored by an older guard (over the limit) does not
+	// rotate either.
+	st, err = LoadDirectState(filepath.Join(stateDir, "direct_state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.LastRunTokens[threadRoot] = 2_000_000
+	if err := st.Save(filepath.Join(stateDir, "direct_state.json")); err != nil {
+		t.Fatal(err)
+	}
+	item3 := []Item{{ID: "it-3", AuthorKind: "human", ItemID: "m3", ChannelID: "c1", ThreadRootID: "m1", Body: "third agy"}}
+	if err := agent.handleDirect(context.Background(), item3); err != nil {
+		t.Fatalf("run 3 failed: %v", err)
+	}
+	if requests[2].ConversationID != "agy-conv-1" {
+		t.Fatalf("run 3 must continue the conversation, got %q", requests[2].ConversationID)
 	}
 }
 
