@@ -4118,6 +4118,7 @@ async function renderHosts() {
         el("option", { value: "bypassPermissions", textContent: "bypassPermissions (!)" })
       );
       const sandbox = el("input", { type: "checkbox" });
+      mode.onchange = () => { sandbox.checked = mode.value === "compact"; }; // as in the new-agent form
       const model = el("input", { placeholder: "model (haiku)", size: 14 });
       const wmodel = el("input", { placeholder: "work model", size: 12 });
       const work = el("input", { type: "checkbox" });
