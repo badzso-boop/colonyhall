@@ -352,7 +352,8 @@ const I18N = {
         compactionHint: "~4 karakter = 1 token; 350 000 ≈ 1,4 millió karakter",
         scribeAgent: "Összefoglaló agent (scribe):", noScribe: "-- nincs kiválasztva --",
         channelCompactionOverride: "Csatorna tömörítési küszöb (token):",
-        channelCompactionHint: "Opcionális (üres = alapértelmezett beállítás, 20 000 – 2 000 000)" },
+        channelCompactionHint: "Opcionális (üres = alapértelmezett beállítás, 20 000 – 2 000 000)",
+        allSteps: "összes ({n})", showLessSteps: "kevesebb", steps: "lépés" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -414,7 +415,8 @@ const I18N = {
         compactionHint: "~4 characters = 1 token; 350,000 ≈ 1.4M characters",
         scribeAgent: "Scribe agent:", noScribe: "-- none --",
         channelCompactionOverride: "Channel compaction threshold (tokens):",
-        channelCompactionHint: "Optional (empty = workspace default, 20,000 – 2,000,000)" },
+        channelCompactionHint: "Optional (empty = workspace default, 20,000 – 2,000,000)",
+        allSteps: "all ({n})", showLessSteps: "less", steps: "steps" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -845,12 +847,147 @@ async function open(id) {
   renderChannels();
   renderActivity();
   updateCompactionStatus();
+  loadChannelProgress(id);
+  loadRunsCache();
 }
 
 function renderFeed() {
   $("feed").innerHTML = "";
   for (const m of msgs.values()) $("feed").appendChild(renderMsg(m));
   $("feed").scrollTop = $("feed").scrollHeight;
+}
+
+function stepIcon(kind) {
+  switch (kind) {
+    case "read": return "📖";
+    case "write":
+    case "edit": return "✏️";
+    case "search": return "🔎";
+    case "command": return "⚙️";
+    case "web": return "🌐";
+    case "mcp": return "🧩";
+    case "think": return "💭";
+    case "answer": return "✍️";
+    case "denied": return "⛔";
+    default: return "⚙️";
+  }
+}
+
+function formatElapsed(ms) {
+  if (!ms || ms < 0) return "0:00";
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
+function renderStepItem(step, isActive) {
+  const row = document.createElement("div");
+  row.className = "step-item" + (isActive ? " active" : "");
+  row.style.display = "flex";
+  row.style.alignItems = "center";
+  row.style.gap = "6px";
+  row.style.fontSize = "12px";
+  row.style.lineHeight = "1.4";
+  row.style.padding = "2px 0";
+
+  const iconSpan = document.createElement("span");
+  iconSpan.textContent = stepIcon(step.kind);
+  iconSpan.style.flexShrink = "0";
+
+  const labelSpan = document.createElement("span");
+  labelSpan.textContent = step.label || step.kind;
+  labelSpan.style.overflow = "hidden";
+  labelSpan.style.textOverflow = "ellipsis";
+  labelSpan.style.whiteSpace = "nowrap";
+  labelSpan.style.flex = "1";
+
+  row.append(iconSpan, labelSpan);
+
+  if (isActive) {
+    const pulse = document.createElement("span");
+    pulse.textContent = "●";
+    pulse.style.color = "var(--primary, #3498db)";
+    pulse.style.fontSize = "10px";
+    pulse.style.flexShrink = "0";
+    row.append(pulse);
+  } else if (step.duration_ms) {
+    const durSpan = document.createElement("span");
+    durSpan.className = "muted";
+    durSpan.style.fontSize = "11px";
+    durSpan.style.flexShrink = "0";
+    durSpan.textContent = (step.duration_ms / 1000).toFixed(1) + "s";
+    row.append(durSpan);
+  }
+  return row;
+}
+
+const liveProgress = new Map();
+const expandedRuns = new Set();
+const runsCache = new Map();
+
+async function loadRunsCache() {
+  if (me?.kind !== "human") return;
+  try {
+    const res = await api("/api/v1/runs?limit=100");
+    if (res && res.runs) {
+      for (const r of res.runs) {
+        if (r.reply_message_id) {
+          runsCache.set(r.reply_message_id, r);
+        }
+      }
+      renderStepDrawers();
+    }
+  } catch (e) {
+    // best-effort
+  }
+}
+
+function renderStepDrawerForMsg(msgId, container) {
+  if (!container) container = document.querySelector(`.run-steps-drawer[data-msg-id="${msgId}"]`);
+  if (!container) return;
+  container.innerHTML = "";
+  const run = runsCache.get(msgId);
+  if (!run || !run.steps || run.steps.length === 0) return;
+
+  const count = run.steps.length;
+  const durStr = formatElapsed(run.duration_ms);
+  const summaryText = `${count} ${L.steps} · ${durStr}`;
+
+  const toggleRow = el("div", {
+    className: "step-drawer-toggle",
+    style: "cursor:pointer; font-size:12px; color:var(--muted); margin-top:6px; display:inline-flex; align-items:center; gap:4px; user-select:none;"
+  });
+
+  const arrow = el("span", { textContent: "▸" });
+  const label = el("span", { textContent: summaryText });
+  toggleRow.append(arrow, label);
+
+  const stepsList = el("div", {
+    className: "step-drawer-list",
+    style: "display:none; margin-top:6px; padding-left:12px; border-left:2px solid var(--line);"
+  });
+  for (const st of run.steps) {
+    stepsList.appendChild(renderStepItem(st, false));
+  }
+
+  let isOpen = false;
+  toggleRow.onclick = (e) => {
+    e.stopPropagation();
+    isOpen = !isOpen;
+    arrow.textContent = isOpen ? "▾" : "▸";
+    stepsList.style.display = isOpen ? "block" : "none";
+  };
+
+  container.append(toggleRow, stepsList);
+}
+
+function renderStepDrawers() {
+  const drawers = document.querySelectorAll(".run-steps-drawer");
+  for (const d of drawers) {
+    const msgId = d.getAttribute("data-msg-id");
+    if (msgId) renderStepDrawerForMsg(msgId, d);
+  }
 }
 
 function renderMsg(m) {
@@ -1075,6 +1212,11 @@ function renderMsg(m) {
       cardsDiv.append(cardEl);
     }
     div.append(cardsDiv);
+  }
+  if (a.kind === "agent") {
+    const stepsDrawer = el("div", { className: "run-steps-drawer", "data-msg-id": m.id });
+    div.append(stepsDrawer);
+    renderStepDrawerForMsg(m.id, stepsDrawer);
   }
   for (const r of m.reactions || []) {
     const chip = document.createElement("button");
@@ -1933,6 +2075,24 @@ async function refreshOverviewPanel() {
           });
           row.querySelector("td:nth-child(2)").append(reads);
         }
+        if (r.steps && r.steps.length > 0) {
+          const stepsBtn = el("button", {
+            textContent: ` 📋 ${r.steps.length} ${L.steps}`,
+            style: "padding:0 3px; font-size:10px; margin-left:4px; background:none; border:none; color:var(--primary, #3498db); cursor:pointer;"
+          });
+          const stepsBox = el("div", {
+            style: "display:none; margin-top:4px; padding:4px 6px; background:var(--surface, #222); border-radius:4px; font-size:10px;"
+          });
+          for (const st of r.steps) {
+            stepsBox.appendChild(renderStepItem(st, false));
+          }
+          let open = false;
+          stepsBtn.onclick = () => {
+            open = !open;
+            stepsBox.style.display = open ? "block" : "none";
+          };
+          row.querySelector("td:nth-child(2)").append(stepsBtn, stepsBox);
+        }
         runsTbl.append(row);
       }
       useSec.append(runsTbl);
@@ -2108,33 +2268,158 @@ function handleActivityFrame(f) {
   renderActivity();
 }
 
+async function loadChannelProgress(channelId) {
+  if (!channelId || me?.kind !== "human") return;
+  try {
+    const res = await api(`/api/v1/channels/${channelId}/progress`);
+    if (res && res.runs) {
+      for (const run of res.runs) {
+        liveProgress.set(run.run_key, {
+          run_key: run.run_key,
+          agent_id: run.agent_id,
+          channel_id: run.channel_id,
+          thread_root_id: run.thread_root_id || null,
+          steps: run.steps || [],
+          done: !!run.done,
+          started_at: (run.steps && run.steps[0] && run.steps[0].started_at) ? new Date(run.steps[0].started_at).getTime() : Date.now()
+        });
+      }
+      renderActivity();
+    }
+  } catch (e) {
+    // best-effort
+  }
+}
+
+function handleProgressFrame(f) {
+  let item = liveProgress.get(f.run_key);
+  if (!item) {
+    item = {
+      run_key: f.run_key,
+      agent_id: f.agent_id,
+      channel_id: f.channel_id,
+      thread_root_id: f.thread_root_id || null,
+      steps: [],
+      done: false,
+      started_at: Date.now()
+    };
+    liveProgress.set(f.run_key, item);
+  }
+  if (f.steps && f.steps.length > 0) {
+    item.steps.push(...f.steps);
+  }
+  item.done = !!f.done;
+  if (item.done) {
+    setTimeout(() => {
+      liveProgress.delete(f.run_key);
+      renderActivity();
+    }, 2000);
+    setTimeout(loadRunsCache, 800);
+  }
+  renderActivity();
+}
+
 function renderActivity() {
   const bar = $("activityBar");
   if (!bar) return;
   const now = Date.now();
-  const active = [];
   for (const [k, v] of activities.entries()) {
     if (v.expires <= now) {
       activities.delete(k);
-      continue;
     }
-    if (v.channel_id !== current) continue;
-    // Agents mostly answer in a thread: the channel view shows every run in
-    // the channel, a thread only its own.
-    if (replyRoot && v.thread_root_id !== replyRoot) continue;
-    const h = actors[v.agent_id]?.handle;
-    const name = h ? "@" + h : "@agent";
-    if (!active.includes(name)) active.push(name);
   }
-  if (!active.length) {
-    bar.style.display = "none";
-    bar.textContent = "";
-  } else {
-    bar.style.display = "block";
-    bar.textContent = `${active.join(", ")} ${L.working}`;
+
+  const activeForCurrent = [];
+  for (const [runKey, run] of liveProgress.entries()) {
+    if (run.done) continue;
+    if (run.channel_id !== current) continue;
+    if (replyRoot && run.thread_root_id !== replyRoot) continue;
+    activeForCurrent.push(run);
+  }
+
+  if (activeForCurrent.length === 0) {
+    const active = [];
+    for (const v of activities.values()) {
+      if (v.channel_id !== current) continue;
+      if (replyRoot && v.thread_root_id !== replyRoot) continue;
+      const h = actors[v.agent_id]?.handle;
+      const name = h ? "@" + h : "@agent";
+      if (!active.includes(name)) active.push(name);
+    }
+    if (!active.length) {
+      bar.style.display = "none";
+      bar.innerHTML = "";
+    } else {
+      bar.style.display = "block";
+      bar.innerHTML = "";
+      bar.textContent = `${active.join(", ")} ${L.working}`;
+    }
+    return;
+  }
+
+  bar.style.display = "block";
+  bar.innerHTML = "";
+
+  for (const run of activeForCurrent) {
+    const h = actors[run.agent_id]?.handle;
+    const name = h ? "@" + h : "@agent";
+    const elapsedMs = now - (run.started_at || now);
+    const elapsedStr = formatElapsed(elapsedMs);
+
+    const runBlock = el("div", {
+      className: "live-progress-block",
+      style: "padding:4px 0; border-bottom:1px dashed var(--line, #eee); font-style:normal;"
+    });
+
+    const header = el("div", {
+      className: "live-progress-header",
+      style: "display:flex; justify-content:space-between; align-items:center; font-weight:500; font-size:12px; color:var(--text, #333);"
+    });
+    const titleSpan = el("span", { textContent: `${name} ${L.working}` });
+    const timerSpan = el("span", { className: "muted", style: "font-variant-numeric:tabular-nums; font-size:11px;", textContent: elapsedStr });
+    header.append(titleSpan, timerSpan);
+    runBlock.append(header);
+
+    const steps = run.steps || [];
+    if (steps.length > 0) {
+      const isExpanded = expandedRuns.has(run.run_key);
+      const visibleSteps = isExpanded ? steps : steps.slice(-3);
+
+      const stepsContainer = el("div", {
+        className: "live-progress-steps",
+        style: "margin-top:4px; padding-left:8px;"
+      });
+
+      visibleSteps.forEach((st, idx) => {
+        const isLast = (isExpanded ? idx === steps.length - 1 : idx === visibleSteps.length - 1);
+        const isActive = isLast && st.state === "active";
+        stepsContainer.appendChild(renderStepItem(st, isActive));
+      });
+      runBlock.append(stepsContainer);
+
+      if (steps.length > 3) {
+        const toggleBtn = el("button", {
+          type: "button",
+          style: "background:none; border:none; color:var(--primary, #3498db); cursor:pointer; font-size:11px; padding:2px 0; margin-top:2px;",
+          textContent: isExpanded ? L.showLessSteps : L.allSteps.replace("{n}", steps.length)
+        });
+        toggleBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (expandedRuns.has(run.run_key)) {
+            expandedRuns.delete(run.run_key);
+          } else {
+            expandedRuns.add(run.run_key);
+          }
+          renderActivity();
+        };
+        runBlock.append(toggleBtn);
+      }
+    }
+
+    bar.append(runBlock);
   }
 }
-setInterval(renderActivity, 2000);
+setInterval(renderActivity, 1000);
 
 function setReply(rootId) {
   replyRoot = rootId;
@@ -2170,6 +2455,10 @@ function connectWS() {
       handleActivityFrame(f);
       return;
     }
+    if (f.type === "agent.progress") {
+      handleProgressFrame(f);
+      return;
+    }
     if (f.type !== "event") return;
     lastSeq = f.seq;
     const d = f.data || {};
@@ -2179,6 +2468,7 @@ function connectWS() {
         msgs.set(m.id, m); $("feed").appendChild(renderMsg(m)); $("feed").scrollTop = $("feed").scrollHeight;
         api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
         updateCompactionStatus();
+        setTimeout(loadRunsCache, 600);
       } else {
         const c = channels.find(x => x.id === d.channel_id);
         if (c) { c.unread++; renderChannels(); } else await load();
@@ -3102,6 +3392,24 @@ async function renderRuns() {
           style: "cursor:help; font-size:10px; margin-left:4px;"
         });
         tr.querySelector("td:nth-child(3)").append(reads);
+      }
+      if (r.steps && r.steps.length > 0) {
+        const stepsBtn = el("button", {
+          textContent: ` 📋 ${r.steps.length} ${L.steps}`,
+          style: "padding:0 3px; font-size:11px; margin-left:6px; background:none; border:none; color:var(--primary, #3498db); cursor:pointer;"
+        });
+        const stepsBox = el("div", {
+          style: "display:none; margin-top:4px; padding:4px 8px; background:var(--bg, #f8f9fa); border-radius:4px; font-size:11px;"
+        });
+        for (const st of r.steps) {
+          stepsBox.appendChild(renderStepItem(st, false));
+        }
+        let open = false;
+        stepsBtn.onclick = () => {
+          open = !open;
+          stepsBox.style.display = open ? "block" : "none";
+        };
+        tr.querySelector("td:nth-child(3)").append(stepsBtn, stepsBox);
       }
       const actionTd = el("td", {});
       if (r.error_id) {
