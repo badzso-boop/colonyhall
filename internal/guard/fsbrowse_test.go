@@ -290,3 +290,38 @@ func TestFsBrowse_GitAttributesFilterNotRun(t *testing.T) {
 		t.Fatal("evil filter ran during GitStatus!")
 	}
 }
+
+// The file browser and `path:42` references send paths relative to the
+// agent's folder; the fetch must resolve them there (it used to refuse every
+// relative path as denied), and must not let `..` climb out.
+func TestResolveFetchPathRelativeToAgentRoot(t *testing.T) {
+	machine := t.TempDir()
+	agRoot := filepath.Join(machine, "visegradevent")
+	if err := os.MkdirAll(filepath.Join(agRoot, "visegradevent_v2"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agRoot, "visegradevent_v2", "index.html"), []byte("<p>hi</p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(machine, "other.txt"), []byte("outside the agent folder"), 0o644)
+	ag, _ := newTestAgent(t, false, []string{machine}, nil)
+	ag.RootDir = agRoot
+
+	got := ag.resolveFetchPath("visegradevent_v2/index.html")
+	if got != filepath.Join(agRoot, "visegradevent_v2", "index.html") {
+		t.Fatalf("resolved to %q", got)
+	}
+	if _, _, _, code := CheckFileFetch(got, ag.activeRoots(), ag.activeGrants(), false, "", nil, ""); code != "" {
+		t.Fatalf("the resolved file must be served, got %q", code)
+	}
+	if p := ag.resolveFetchPath("../other.txt"); filepath.IsAbs(p) {
+		t.Fatalf("a path climbing out of the root must stay relative (refused), got %q", p)
+	}
+	if _, _, _, code := CheckFileFetch(ag.resolveFetchPath("../other.txt"), ag.activeRoots(), ag.activeGrants(), false, "", nil, ""); code != "denied" {
+		t.Fatalf("../ must be refused, got %q", code)
+	}
+	abs := filepath.Join(agRoot, "visegradevent_v2", "index.html")
+	if ag.resolveFetchPath(abs) != abs {
+		t.Fatal("an absolute path must pass unchanged")
+	}
+}

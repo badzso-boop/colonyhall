@@ -338,8 +338,35 @@ func (a *Agent) pollAndServeFileFetches(ctx context.Context) {
 	}
 }
 
+// resolveFetchPath turns a path relative to the agent's folder (as the
+// file browser and `path:42` references send it) into an absolute one: the
+// first scope root under which it exists, else under the first root (so the
+// usual checks answer not_found). "~/" and absolute paths pass unchanged;
+// a relative path that climbs out of its root is left relative (refused).
+func (a *Agent) resolveFetchPath(p string) string {
+	if p == "" || filepath.IsAbs(p) || p == "~" || strings.HasPrefix(p, "~/") {
+		return p
+	}
+	rel := filepath.Clean(filepath.FromSlash(p))
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return p
+	}
+	roots := a.ScopeRoots()
+	for _, r := range roots {
+		cand := filepath.Join(r.Path, rel)
+		if _, err := os.Lstat(cand); err == nil {
+			return cand
+		}
+	}
+	if len(roots) > 0 {
+		return filepath.Join(roots[0].Path, rel)
+	}
+	return p
+}
+
 func (a *Agent) serveFileFetch(ctx context.Context, req AgentPendingFileFetch) {
 	home := a.homeDir()
+	req.Path = a.resolveFetchPath(req.Path)
 	realPath, mimeType, isImage, errCode := CheckFileFetch(
 		req.Path,
 		a.activeRoots(),

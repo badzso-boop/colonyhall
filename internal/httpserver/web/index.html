@@ -469,7 +469,7 @@ const I18N = {
         allSteps: "összes ({n})", showLessSteps: "kevesebb", steps: "lépés",
         files: "Fájlok", fileBrowser: "Fájlböngésző", searchFiles: "Keresés fájlnévre…",
         noAgentsInChannel: "Nincs agent ebben a csatornában.", insertReference: "Hivatkozás beszúrása",
-        wordWrap: "Sortörés", truncatedList: "első 500 elem megjelenítve", truncatedSearch: "200 találat (korlátozva)",
+        wordWrap: "Sortörés", fileLoadFailed: "nem sikerült betölteni", truncatedList: "első 500 elem megjelenítve", truncatedSearch: "200 találat (korlátozva)",
         searchTimeout: "Keresési időtúllépés (részleges eredmények)", noFilesFound: "Nincs találat.", noFiles: "A mappa üres.",
         symlinkRefused: "szimbolikus link a határokon kívülre mutat (letiltva)", hostNotResponding: "a gép nem válaszol",
         terminals: "Terminálok", noTerminals: "Nincsenek aktív vagy mentett terminálok.",
@@ -545,7 +545,7 @@ const I18N = {
         allSteps: "all ({n})", showLessSteps: "less", steps: "steps",
         files: "Files", fileBrowser: "File Browser", searchFiles: "Search files…",
         noAgentsInChannel: "No agents in this channel.", insertReference: "Insert reference",
-        wordWrap: "Word wrap", truncatedList: "first 500 entries shown", truncatedSearch: "200 results (limited)",
+        wordWrap: "Word wrap", fileLoadFailed: "could not load the file", truncatedList: "first 500 entries shown", truncatedSearch: "200 results (limited)",
         searchTimeout: "Search timed out (partial results)", noFilesFound: "No files found.", noFiles: "Directory is empty.",
         symlinkRefused: "symlink points out of scope (refused)", hostNotResponding: "the machine is not responding",
         terminals: "Terminals", noTerminals: "No active or saved terminals.",
@@ -2158,7 +2158,7 @@ async function fbOpenFile(filePath, startLine, endLine) {
 
     await handleFbFileFetchResult(res, filePath, startLine, endLine);
   } catch (err) {
-    $("fbViewerStatus").textContent = "✕";
+    $("fbViewerStatus").textContent = "⚠ " + (L.fileLoadFailed || "nem sikerült betölteni");
     if (fbEditor) {
       fbEditor.setValue("// " + (err.message || L.hostNotResponding));
     }
@@ -2198,7 +2198,7 @@ async function handleFbFileFetchResult(res, filePath, startLine, endLine) {
       case "not_a_file": errText = L.errNotAFile; break;
       case "timeout": errText = L.errTimeout; break;
     }
-    $("fbViewerStatus").textContent = "✕";
+    $("fbViewerStatus").textContent = "⚠ " + (L.fileLoadFailed || "nem sikerült betölteni");
     if (fbEditor) {
       fbEditor.setValue("// " + errText);
     }
@@ -2286,7 +2286,7 @@ $("fbViewerRefresh").onclick = async () => {
     });
     await handleFbFileFetchResult(res, fbCurrentFilePath, fbCurrentLineSelection?.startLine, fbCurrentLineSelection?.endLine);
   } catch (err) {
-    $("fbViewerStatus").textContent = "✕";
+    $("fbViewerStatus").textContent = "⚠ " + (L.fileLoadFailed || "nem sikerült betölteni");
   }
 };
 
