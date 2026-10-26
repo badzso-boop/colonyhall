@@ -44,6 +44,7 @@ func FileLinks(text string) []string {
 				}
 				candidate := text[i:j]
 				candidate = strings.TrimRight(candidate, ".,;:!?")
+				candidate = trimLineSuffix(candidate)
 				if path := decodeFileURL(candidate); path != "" {
 					rawFound = append(rawFound, path)
 				}
@@ -73,6 +74,7 @@ func FileLinks(text string) []string {
 				}
 				candidate := text[i:j]
 				candidate = strings.TrimRight(candidate, ".,;:!?")
+				candidate = trimLineSuffix(candidate)
 				if len(candidate) > len(matchedPrefix) {
 					rawFound = append(rawFound, candidate)
 				}
@@ -127,6 +129,39 @@ func isLocalPathBoundary(prev rune) bool {
 	switch prev {
 	case '/', '\\', '.', ':', '?':
 		return false
+	}
+	return true
+}
+
+func trimLineSuffix(s string) string {
+	colonIdx := strings.LastIndexByte(s, ':')
+	if colonIdx <= 0 {
+		return s
+	}
+	suffix := s[colonIdx+1:]
+	if isLineNumberOrRange(suffix) {
+		return s[:colonIdx]
+	}
+	return s
+}
+
+func isLineNumberOrRange(s string) bool {
+	if s == "" {
+		return false
+	}
+	parts := strings.Split(s, "-")
+	if len(parts) > 2 {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" {
+			return false
+		}
+		for _, r := range p {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
 	}
 	return true
 }

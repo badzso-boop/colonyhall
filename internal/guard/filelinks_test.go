@@ -76,6 +76,11 @@ func TestFileLinks(t *testing.T) {
 			text: "Csak a mappa neve: /home/ és ~/ önmagában.",
 			want: nil,
 		},
+		{
+			name: "file links with line and range suffixes",
+			text: "Nézd meg: /home/szmajli01/logs/scheduler.log:42-58, /var/log/app.log:12 és file:///tmp/test.go:10-20.",
+			want: []string{"/home/szmajli01/logs/scheduler.log", "/var/log/app.log", "/tmp/test.go"},
+		},
 	}
 
 	for _, tc := range tests {

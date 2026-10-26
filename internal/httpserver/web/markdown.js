@@ -201,13 +201,31 @@
           punct = trailingPunct[0];
           cand = cand.slice(0, cand.length - punct.length);
         }
+        let lineSuffix = "";
+        let startLine = null, endLine = null;
+        const lineMatch = cand.match(/:(\d+)(?:-(\d+))?$/);
+        if (lineMatch) {
+          lineSuffix = lineMatch[0].slice(1);
+          startLine = parseInt(lineMatch[1], 10);
+          endLine = lineMatch[2] ? parseInt(lineMatch[2], 10) : startLine;
+          cand = cand.slice(0, cand.length - lineMatch[0].length);
+        }
         try {
           let dec = decodeURIComponent(cand.slice(7));
           if (dec.startsWith("//")) dec = dec.slice(2);
           if (dec.startsWith("/") || dec.startsWith("~/")) {
             flush();
-            const name = dec.split("/").pop() || dec;
-            tokens.push({ type: "filelink", path: dec, name, raw: cand });
+            const base = dec.split("/").pop() || dec;
+            const name = lineSuffix ? base + ":" + lineSuffix : base;
+            tokens.push({
+              type: "filelink",
+              path: dec,
+              name,
+              lines: lineSuffix,
+              startLine,
+              endLine,
+              raw: text.slice(i, j - punct.length)
+            });
             if (punct) curText += punct;
             i = j;
             continue;
@@ -233,13 +251,126 @@
           punct = trailingPunct[0];
           cand = cand.slice(0, cand.length - punct.length);
         }
+        let lineSuffix = "";
+        let startLine = null, endLine = null;
+        const lineMatch = cand.match(/:(\d+)(?:-(\d+))?$/);
+        if (lineMatch) {
+          lineSuffix = lineMatch[0].slice(1);
+          startLine = parseInt(lineMatch[1], 10);
+          endLine = lineMatch[2] ? parseInt(lineMatch[2], 10) : startLine;
+          cand = cand.slice(0, cand.length - lineMatch[0].length);
+        }
         if (cand.length > matchedPrefix.length) {
           flush();
-          const name = cand.split("/").pop() || cand;
-          tokens.push({ type: "filelink", path: cand, name, raw: cand });
+          const base = cand.split("/").pop() || cand;
+          const name = lineSuffix ? base + ":" + lineSuffix : base;
+          tokens.push({
+            type: "filelink",
+            path: cand,
+            name,
+            lines: lineSuffix,
+            startLine,
+            endLine,
+            raw: text.slice(i, j - punct.length)
+          });
           if (punct) curText += punct;
           i = j;
           continue;
+        }
+      }
+
+      // 6.5 File references: @handle:path[:line[-line]], path:line[-line], Windows paths
+      // Case A: Agent-prefixed reference @handle:path[:line[-line]]
+      if (text[i] === "@" && (i === 0 || !isAlphaNum(text[i - 1]))) {
+        const atMatch = text.slice(i).match(/^@([a-zA-Z0-9_-]+):([^\s"`\)\]>,]+)/);
+        if (atMatch) {
+          const agentHandle = atMatch[1];
+          let remainder = atMatch[2];
+          const fullMatchLen = atMatch[0].length;
+          const trailingPunct = remainder.match(/[.,;:!?]+$/);
+          let punct = "";
+          if (trailingPunct) {
+            punct = trailingPunct[0];
+            remainder = remainder.slice(0, remainder.length - punct.length);
+          }
+          let lineSuffix = "";
+          let startLine = null, endLine = null;
+          const lineMatch = remainder.match(/:(\d+)(?:-(\d+))?$/);
+          let filePath = remainder;
+          if (lineMatch) {
+            lineSuffix = lineMatch[0].slice(1);
+            startLine = parseInt(lineMatch[1], 10);
+            endLine = lineMatch[2] ? parseInt(lineMatch[2], 10) : startLine;
+            filePath = remainder.slice(0, remainder.length - lineMatch[0].length);
+          }
+          // Check that filePath is non-empty, not purely numeric, and valid path
+          if (filePath && !/^\d+$/.test(filePath) && !/:\/\//.test(filePath)) {
+            flush();
+            const base = filePath.split(/[/\\]/).pop() || filePath;
+            const name = lineSuffix ? base + ":" + lineSuffix : base;
+            tokens.push({
+              type: "filelink",
+              agent: agentHandle,
+              path: filePath,
+              name,
+              lines: lineSuffix,
+              startLine,
+              endLine,
+              isRef: true,
+              isRelative: true,
+              raw: text.slice(i, i + fullMatchLen - punct.length)
+            });
+            if (punct) curText += punct;
+            i += fullMatchLen;
+            continue;
+          }
+        }
+      }
+
+      // Case B: Relative reference or Windows path with line suffix (path:line[-line])
+      if ((i === 0 || !/[a-zA-Z0-9/\\.:]/.test(text[i - 1])) && /[a-zA-Z0-9.~]/.test(text[i])) {
+        // Find potential token boundary (capped at 500 chars)
+        let j = i;
+        while (j < n && j - i < 500 && !isStopChar(text[j]) && /[a-zA-Z0-9_.~/\\:-]/.test(text[j])) j++;
+        let cand = text.slice(i, j);
+        if (cand.includes(":")) {
+          const trailingPunct = cand.match(/[.,;:!?]+$/);
+          let punct = "";
+          if (trailingPunct) {
+            punct = trailingPunct[0];
+            cand = cand.slice(0, cand.length - punct.length);
+          }
+          const lineMatch = cand.match(/:(\d+)(?:-(\d+))?$/);
+          if (lineMatch) {
+            const lineSuffix = lineMatch[0].slice(1);
+            const startLine = parseInt(lineMatch[1], 10);
+            const endLine = lineMatch[2] ? parseInt(lineMatch[2], 10) : startLine;
+            const filePath = cand.slice(0, cand.length - lineMatch[0].length);
+            const isWinDrive = /^[a-zA-Z]:[/\\]/.test(filePath);
+            const isNumeric = /^\d+$/.test(filePath);
+            const hasSlash = /[/\\]/.test(filePath);
+            const hasExt = /\.[a-zA-Z0-9]{1,10}$/.test(filePath);
+
+            if (!isNumeric && !/:\/\//.test(filePath) && (hasSlash || hasExt || isWinDrive)) {
+              flush();
+              const base = filePath.split(/[/\\]/).pop() || filePath;
+              const name = base + ":" + lineSuffix;
+              tokens.push({
+                type: "filelink",
+                path: filePath,
+                name,
+                lines: lineSuffix,
+                startLine,
+                endLine,
+                isRef: true,
+                isRelative: !isWinDrive,
+                raw: text.slice(i, j - punct.length)
+              });
+              if (punct) curText += punct;
+              i = j;
+              continue;
+            }
+          }
         }
       }
 
@@ -630,16 +761,31 @@
             break;
           }
           case "filelink": {
-            if (options.fileChips) {
+            let canRenderChip = !!options.fileChips;
+            if (node.isRelative) {
+              if (typeof options.resolveAgent === "function") {
+                const resolved = options.resolveAgent(node);
+                if (!resolved) {
+                  canRenderChip = false;
+                }
+              } else if (options.inChat) {
+                if (options.channelType === "channel" && !node.agent) {
+                  canRenderChip = false;
+                } else if (node.agent && options.knownAgents && !options.knownAgents.has(node.agent)) {
+                  canRenderChip = false;
+                }
+              }
+            }
+            if (canRenderChip) {
               const btn = document.createElement("button");
               btn.type = "button";
               btn.className = "file-chip";
-              btn.title = node.path;
+              btn.title = node.path + (node.lines ? ":" + node.lines : "");
               btn.textContent = "📄 " + node.name;
               btn.onclick = (e) => {
                 e.stopPropagation();
                 if (typeof options.onFileClick === "function") {
-                  options.onFileClick(node.path);
+                  options.onFileClick(node.path, node);
                 }
               };
               container.appendChild(btn);

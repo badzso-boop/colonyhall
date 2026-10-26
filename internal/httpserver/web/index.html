@@ -20,6 +20,28 @@
   main { flex:1; min-height:0; display:grid; grid-template-columns:220px 1fr; position:relative; }
   .overview-panel { display:none; position:absolute; top:0; right:0; bottom:0; width:380px; background:var(--surface); border-left:1px solid var(--line); overflow-y:auto; padding:16px; z-index:5; box-shadow:-2px 0 8px rgba(0,0,0,0.06); flex-direction:column; gap:16px; }
   .overview-panel.on { display:flex; }
+  .file-browser-panel { display:none; position:absolute; top:0; right:0; bottom:0; width:580px; max-width:100%; background:var(--surface); border-left:1px solid var(--line); z-index:10; box-shadow:-2px 0 8px rgba(0,0,0,0.06); flex-direction:column; overflow:hidden; }
+  .file-browser-panel.on { display:flex; }
+  .fb-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; background:var(--surface); }
+  .fb-tabs { display:flex; gap:4px; align-items:center; }
+  .fb-tab-btn { padding:3px 8px; font-size:12px; border:1px solid var(--line); border-radius:4px; background:var(--surface); cursor:pointer; color:var(--fg); }
+  .fb-tab-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .fb-tree { flex:1; overflow-y:auto; padding:6px 8px; font-size:12px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .fb-tree-item { display:flex; align-items:center; gap:6px; padding:3px 6px; border-radius:4px; cursor:pointer; user-select:none; }
+  .fb-tree-item:hover { background:var(--hover, rgba(0,0,0,0.04)); }
+  .fb-tree-item.active { background:var(--hover, rgba(0,0,0,0.08)); font-weight:600; }
+  .fb-git-badge { font-size:10px; font-weight:bold; padding:0 4px; border-radius:3px; line-height:14px; display:inline-block; margin-left:auto; }
+  .fb-git-M { background:#fef3c7; color:#b45309; }
+  .fb-git-A { background:#d1fae5; color:#047857; }
+  .fb-git-D { background:#fee2e2; color:#b91c1c; }
+  .fb-git-Q { background:#e0f2fe; color:#0369a1; }
+  .fb-git-R { background:#ede9fe; color:#6d28d9; }
+  .fb-git-dot { color:var(--accent); font-size:8px; margin-left:2px; vertical-align:middle; }
+  .fb-repo-badge { font-size:11px; padding:1px 6px; border-radius:10px; background:var(--line); color:var(--fg); font-family:system-ui, sans-serif; }
+  .fb-viewer { flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .fb-viewer-header { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 12px; border-bottom:1px solid var(--line); background:var(--surface); flex-wrap:wrap; font-size:12px; }
+  .fb-viewer-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .fb-viewer-body { flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
   .overview-header { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; }
   .overview-close { border:none; background:transparent; font-size:16px; cursor:pointer; color:var(--muted); }
   .overview-close:hover { color:var(--fg); }
@@ -162,6 +184,7 @@
     #chanHeader { flex-wrap:wrap; gap:6px; padding:6px 10px; }
     #chanActs { width:100%; justify-content:space-between; }
     .overview-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
+    .file-browser-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
     #fileViewerModal { padding:0; }
     #fileViewerModal .card { max-width:100%; width:100%; height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; border-radius:0; border:none; } }
 </style>
@@ -208,6 +231,7 @@
       <form id="send">
         <input type="file" id="fileinput" style="display:none">
         <button type="button" id="clipbtn" title="Fájl csatolása">📎</button>
+        <button type="button" id="filesBtn" title="Fájlok">📁 Fájlok</button>
         <input id="text" autocomplete="off">
         <button></button>
       </form>
@@ -219,6 +243,56 @@
       <button id="overviewClose" class="overview-close">✕</button>
     </div>
     <div id="overviewBody" class="overview-body"></div>
+  </aside>
+  <aside id="fileBrowserPanel" class="file-browser-panel">
+    <div class="fb-header">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+        <span style="font-size:16px;">📁</span>
+        <strong id="fbTitle" style="font-size:14px;">Fájlok</strong>
+        <select id="fbAgentSelect" style="display:none;font-size:12px;padding:2px 6px;"></select>
+        <span id="fbAgentLabel" class="muted" style="display:none;font-size:12px;"></span>
+      </div>
+      <div class="fb-tabs">
+        <button id="fbTabTree" type="button" class="fb-tab-btn active">📁 Fa</button>
+        <button id="fbTabViewer" type="button" class="fb-tab-btn" style="display:none;">📄 Fájl</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="fbRefreshBtn" type="button" class="secondary" style="font-size:12px;padding:3px 6px;" title="Frissítés">🔄</button>
+        <button id="fbCloseBtn" type="button" class="overview-close" title="Bezárás">✕</button>
+      </div>
+    </div>
+    <div id="fbTreePane" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+      <div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface);">
+        <input id="fbSearchInput" autocomplete="off" placeholder="Keresés fájlnévre…" style="flex:1;font-size:12px;padding:4px 8px;">
+        <button id="fbSearchClear" type="button" class="secondary" style="display:none;font-size:12px;padding:2px 6px;">✕</button>
+      </div>
+      <div id="fbSearchResults" style="display:none;flex:1;overflow-y:auto;padding:8px 12px;"></div>
+      <div id="fbTreeContainer" class="fb-tree"></div>
+    </div>
+    <div id="fbViewerPane" class="fb-viewer" style="display:none;">
+      <div class="fb-viewer-header">
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+          <span style="font-size:14px;">📄</span>
+          <strong id="fbViewerPath" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></strong>
+        </div>
+        <div class="fb-viewer-actions">
+          <span id="fbViewerStatus" class="muted"></span>
+          <button id="fbViewerRefresh" type="button" class="secondary" style="font-size:12px;padding:2px 6px;" title="Frissítés">🔄</button>
+          <button id="fbInsertRefBtn" type="button" class="secondary" style="font-size:12px;padding:2px 8px;" title="Hivatkozás beszúrása a csevegésbe">🔗 Hivatkozás</button>
+          <button id="fbWordWrapBtn" type="button" class="secondary" style="font-size:12px;padding:2px 6px;" title="Sortörés">↩</button>
+          <button id="fbMdToggle" type="button" class="secondary" style="display:none;font-size:12px;padding:2px 6px;">Nyers</button>
+          <button id="fbRangeSwitchBtn" type="button" class="secondary" style="display:none;font-size:12px;padding:2px 6px;"></button>
+          <span id="fbRangeInfo" class="muted" style="display:none;font-size:11px;"></span>
+        </div>
+      </div>
+      <div id="fbViewerBody" class="fb-viewer-body">
+        <div id="fbMonacoContainer" style="flex:1;width:100%;height:100%;"></div>
+        <div id="fbMdContainer" class="markdown-body" style="display:none;flex:1;overflow-y:auto;padding:16px;"></div>
+        <div id="fbImgContainer" style="display:none;flex:1;overflow:auto;padding:16px;text-align:center;">
+          <img id="fbImgView" class="file-view-img" src="" alt="">
+        </div>
+      </div>
+    </div>
   </aside>
 </main>
 <div id="errModal"><div class="card"><h3 id="errTitle"></h3><div class="muted" id="errMeta"></div><pre id="errDetail"></pre><button id="errClose">✕</button></div></div>
@@ -355,7 +429,13 @@ const I18N = {
         scribeAgent: "Összefoglaló agent (scribe):", noScribe: "-- nincs kiválasztva --",
         channelCompactionOverride: "Csatorna tömörítési küszöb (token):",
         channelCompactionHint: "Opcionális (üres = alapértelmezett beállítás, 20 000 – 2 000 000)",
-        allSteps: "összes ({n})", showLessSteps: "kevesebb", steps: "lépés" },
+        allSteps: "összes ({n})", showLessSteps: "kevesebb", steps: "lépés",
+        files: "Fájlok", fileBrowser: "Fájlböngésző", searchFiles: "Keresés fájlnévre…",
+        noAgentsInChannel: "Nincs agent ebben a csatornában.", insertReference: "Hivatkozás beszúrása",
+        wordWrap: "Sortörés", truncatedList: "első 500 elem megjelenítve", truncatedSearch: "200 találat (korlátozva)",
+        searchTimeout: "Keresési időtúllépés (részleges eredmények)", noFilesFound: "Nincs találat.", noFiles: "A mappa üres.",
+        symlinkRefused: "szimbolikus link a határokon kívülre mutat (letiltva)", hostNotResponding: "a gép nem válaszol",
+        treeTab: "📁 Fa", fileTab: "📄 Fájl" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -420,12 +500,22 @@ const I18N = {
         scribeAgent: "Scribe agent:", noScribe: "-- none --",
         channelCompactionOverride: "Channel compaction threshold (tokens):",
         channelCompactionHint: "Optional (empty = workspace default, 20,000 – 2,000,000)",
-        allSteps: "all ({n})", showLessSteps: "less", steps: "steps" },
+        allSteps: "all ({n})", showLessSteps: "less", steps: "steps",
+        files: "Files", fileBrowser: "File Browser", searchFiles: "Search files…",
+        noAgentsInChannel: "No agents in this channel.", insertReference: "Insert reference",
+        wordWrap: "Word wrap", truncatedList: "first 500 entries shown", truncatedSearch: "200 results (limited)",
+        searchTimeout: "Search timed out (partial results)", noFilesFound: "No files found.", noFiles: "Directory is empty.",
+        symlinkRefused: "symlink points out of scope (refused)", hostNotResponding: "the machine is not responding",
+        treeTab: "📁 Tree", fileTab: "📄 File" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
 $("handle").placeholder = L.handle; $("password").placeholder = L.password; $("loginbtn").textContent = L.login;
 $("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button:last-of-type").textContent = L.send;
+$("filesBtn").textContent = "📁 " + L.files; $("filesBtn").title = L.files;
+$("fbTitle").textContent = L.files; $("fbSearchInput").placeholder = L.searchFiles;
+$("fbTabTree").textContent = L.treeTab; $("fbTabViewer").textContent = L.fileTab;
+$("fbInsertRefBtn").textContent = "🔗 " + L.insertReference; $("fbWordWrapBtn").title = L.wordWrap;
 
 let token = "", csrf = "", me = null, channels = [], actors = {}, current = null, lastSeq = null, ws = null;
 // Conversations an admin oversees without being a member (e.g. agent-to-agent DMs).
@@ -868,6 +958,7 @@ async function open(id) {
   updateCompactionStatus();
   loadChannelProgress(id);
   loadRunsCache();
+  if (fbOpen) openFileBrowser(id);
 }
 
 function renderFeed() {
@@ -1040,18 +1131,26 @@ function renderMsg(m) {
   bodyEl.textContent = "";
 
   const isAgent = a.kind === "agent";
+  const curCh = channels.find(x => x.id === current) || overseen.find(x => x.id === current);
   const renderedFrag = ColonyMarkdown.render(ColonyMarkdown.parse(bodyText), {
-    fileChips: isAgent,
+    fileChips: true,
     inChat: true,
     copyText: L.copy || "Másolás",
     copiedText: L.copied || "Másolva!",
     knownHandles: new Set(Object.values(actors).map(act => act.handle)),
+    knownAgents: new Set(Object.values(actors).filter(act => act.kind === "agent").map(act => act.handle)),
+    channelType: curCh?.kind === "dm" ? "dm" : "channel",
     onMention: (handle) => {
       const actor = Object.values(actors).find(act => act.handle === handle);
       if (actor) openOverviewPanel(actor.id);
     },
-    onFileClick: (path) => {
-      openFileViewer(m.id, path, a.handle);
+    onFileClick: (path, node) => {
+      let targetAgentId = null;
+      if (node?.agent) {
+        const targetAct = Object.values(actors).find(act => act.handle === node.agent && act.kind === "agent");
+        if (targetAct) targetAgentId = targetAct.id;
+      }
+      openFileBrowser(current, targetAgentId, path, node?.startLine, node?.endLine);
     }
   });
   bodyEl.appendChild(renderedFrag);
@@ -1527,6 +1626,758 @@ async function openFileModal(file) {
   $("fileViewerModal").className = "modal on";
 
   await renderFetchedFileContent(file, file.name);
+}
+
+// --- File Browser Panel (round 20) ---------------------------------------
+
+let fbOpen = false;
+let fbCurrentChannelId = null;
+let fbSelectedAgentId = null;
+let fbCurrentFilePath = null;
+let fbCurrentFileId = null;
+let fbCurrentFileSize = 0;
+let fbCurrentMime = "";
+let fbCurrentCompletedAt = null;
+let fbMonacoLoadedPromise = null;
+let fbEditor = null;
+let fbWordWrap = false;
+let fbMdRaw = false;
+let fbRangeMode = "start";
+let fbCurrentLineSelection = null;
+let fbTreeData = new Map();
+let fbExpandedDirs = new Set();
+let fbGitStatusMap = new Map();
+let fbGitDirs = new Set();
+let fbRepoRoots = [];
+let fbActiveTab = "tree";
+
+function ensureMonaco() {
+  if (window.monaco && window.monaco.editor) {
+    return Promise.resolve(window.monaco);
+  }
+  if (fbMonacoLoadedPromise) {
+    return fbMonacoLoadedPromise;
+  }
+  fbMonacoLoadedPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/vendor/monaco/vs/loader.js";
+    script.onload = () => {
+      try {
+        window.require.config({ paths: { vs: "/vendor/monaco/vs" } });
+        window.MonacoEnvironment = {
+          getWorkerUrl: function(workerId, label) {
+            const base = window.location.origin + "/vendor/monaco/vs";
+            return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+              self.MonacoEnvironment = { baseUrl: '${base}' };
+              importScripts('${base}/base/worker/workerMain.js');
+            `)}`;
+          }
+        };
+        window.require(["vs/editor/editor.main"], () => {
+          resolve(window.monaco);
+        }, reject);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return fbMonacoLoadedPromise;
+}
+
+function getMonacoLanguage(filePath) {
+  if (!filePath) return "plaintext";
+  const ext = filePath.split(".").pop().toLowerCase();
+  const map = {
+    go: "go", js: "javascript", mjs: "javascript", cjs: "javascript",
+    ts: "typescript", tsx: "typescript", jsx: "javascript",
+    py: "python", json: "json", html: "html", htm: "html",
+    css: "css", scss: "scss", less: "less", md: "markdown", markdown: "markdown",
+    yaml: "yaml", yml: "yaml", sh: "shell", bash: "shell", zsh: "shell",
+    sql: "sql", c: "c", h: "c", cpp: "cpp", hpp: "cpp", cc: "cpp",
+    rs: "rust", rb: "ruby", php: "php", java: "java", kt: "kotlin",
+    xml: "xml", svg: "xml", dockerfile: "dockerfile", makefile: "makefile",
+    ini: "ini", toml: "ini"
+  };
+  return map[ext] || "plaintext";
+}
+
+function getMonacoTheme() {
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs";
+}
+
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    if (window.monaco && window.monaco.editor) {
+      window.monaco.editor.setTheme(e.matches ? "vs-dark" : "vs");
+    }
+  });
+}
+
+function setFbTab(tab) {
+  fbActiveTab = tab;
+  if (tab === "tree") {
+    $("fbTabTree").classList.add("active");
+    $("fbTabViewer").classList.remove("active");
+    $("fbTreePane").style.display = "flex";
+    $("fbViewerPane").style.display = "none";
+  } else {
+    $("fbTabViewer").classList.add("active");
+    $("fbTabTree").classList.remove("active");
+    $("fbTreePane").style.display = "none";
+    $("fbViewerPane").style.display = "flex";
+    if (fbEditor) {
+      setTimeout(() => fbEditor.layout(), 10);
+    }
+  }
+}
+
+$("fbTabTree").onclick = () => setFbTab("tree");
+$("fbTabViewer").onclick = () => setFbTab("viewer");
+
+function closeFileBrowser() {
+  fbOpen = false;
+  $("fileBrowserPanel").classList.remove("on");
+}
+$("fbCloseBtn").onclick = closeFileBrowser;
+
+$("filesBtn").onclick = () => {
+  if (fbOpen) closeFileBrowser();
+  else openFileBrowser();
+};
+
+async function openFileBrowser(channelId, agentId, filePath, startLine, endLine) {
+  fbOpen = true;
+  $("fileBrowserPanel").classList.add("on");
+  fbCurrentChannelId = channelId || current;
+  if (!fbCurrentChannelId) return;
+
+  const c = channels.find(x => x.id === fbCurrentChannelId) || overseen.find(x => x.id === fbCurrentChannelId);
+  const isDm = c && c.kind === "dm";
+
+  ensureMonaco().catch(() => {});
+
+  if (isDm) {
+    $("fbAgentSelect").style.display = "none";
+    $("fbAgentLabel").style.display = "inline-block";
+    const otherId = (c.member_ids || []).find(id => id !== me.id);
+    const agent = actors[otherId];
+    if (agent) {
+      fbSelectedAgentId = agent.id;
+      $("fbAgentLabel").textContent = (agent.avatar_emoji ? agent.avatar_emoji + " " : "") + "@" + agent.handle;
+    } else {
+      fbSelectedAgentId = otherId;
+      $("fbAgentLabel").textContent = "@agent";
+    }
+    await fbRefresh();
+  } else {
+    $("fbAgentLabel").style.display = "none";
+    $("fbAgentSelect").style.display = "inline-block";
+
+    let memberAgents = [];
+    try {
+      const res = await api(`/api/v1/channels/${fbCurrentChannelId}/members`);
+      if (res && res.members) {
+        memberAgents = res.members.filter(m => m.kind === "agent");
+      }
+    } catch (e) {}
+
+    const sel = $("fbAgentSelect");
+    sel.innerHTML = "";
+    if (memberAgents.length === 0) {
+      sel.style.display = "none";
+      $("fbTreeContainer").innerHTML = `<div style="padding:24px;text-align:center;" class="muted">${L.noAgentsInChannel || "Nincs agent ebben a csatornában."}</div>`;
+      setFbTab("tree");
+      return;
+    }
+
+    for (const ag of memberAgents) {
+      const opt = el("option", { value: ag.actor_id, textContent: `@${ag.handle}` });
+      sel.appendChild(opt);
+    }
+
+    const saved = localStorage.getItem("fb_agent_" + fbCurrentChannelId);
+    if (agentId && memberAgents.some(m => m.actor_id === agentId)) {
+      fbSelectedAgentId = agentId;
+      sel.value = agentId;
+    } else if (saved && memberAgents.some(m => m.actor_id === saved)) {
+      fbSelectedAgentId = saved;
+      sel.value = saved;
+    } else {
+      fbSelectedAgentId = memberAgents[0].actor_id;
+      sel.value = memberAgents[0].actor_id;
+    }
+
+    sel.onchange = async () => {
+      fbSelectedAgentId = sel.value;
+      localStorage.setItem("fb_agent_" + fbCurrentChannelId, fbSelectedAgentId);
+      fbTreeData.clear();
+      fbExpandedDirs.clear();
+      await fbRefresh();
+    };
+
+    await fbRefresh();
+  }
+
+  if (filePath) {
+    await fbOpenFile(filePath, startLine, endLine);
+  } else {
+    setFbTab("tree");
+  }
+}
+
+async function fbRefresh() {
+  if (!fbSelectedAgentId || !fbCurrentChannelId) return;
+  $("fbTreeContainer").innerHTML = `<div style="padding:20px;text-align:center;" class="muted">${L.loadingFile || "betöltés…"}</div>`;
+
+  try {
+    const gitRes = await api(`/api/v1/agents/${fbSelectedAgentId}/fs`, {
+      method: "POST",
+      body: JSON.stringify({ channel_id: fbCurrentChannelId, op: "git_status" })
+    }).catch(() => null);
+
+    fbGitStatusMap.clear();
+    fbGitDirs.clear();
+    if (gitRes && gitRes.git) {
+      for (const repo of gitRes.git) {
+        if (repo.files) {
+          for (const f of repo.files) {
+            fbGitStatusMap.set(f.path, f.status);
+            let p = f.path;
+            while (p.includes("/")) {
+              p = p.slice(0, p.lastIndexOf("/"));
+              fbGitDirs.add(p);
+            }
+          }
+        }
+      }
+    }
+
+    const listRes = await api(`/api/v1/agents/${fbSelectedAgentId}/fs`, {
+      method: "POST",
+      body: JSON.stringify({ channel_id: fbCurrentChannelId, op: "list", path: "" })
+    });
+
+    fbRepoRoots = listRes.roots || [];
+    fbTreeData.set("", listRes.entries || []);
+
+    for (const expPath of Array.from(fbExpandedDirs)) {
+      try {
+        const sub = await api(`/api/v1/agents/${fbSelectedAgentId}/fs`, {
+          method: "POST",
+          body: JSON.stringify({ channel_id: fbCurrentChannelId, op: "list", path: expPath })
+        });
+        fbTreeData.set(expPath, sub.entries || []);
+      } catch (e) {
+        fbExpandedDirs.delete(expPath);
+      }
+    }
+
+    fbRenderTree();
+  } catch (err) {
+    $("fbTreeContainer").innerHTML = `<div style="padding:24px;text-align:center;color:var(--err);">${err.message || L.hostNotResponding}</div>`;
+  }
+}
+$("fbRefreshBtn").onclick = fbRefresh;
+
+function fbRenderTree() {
+  const container = $("fbTreeContainer");
+  container.innerHTML = "";
+
+  if (fbRepoRoots.length > 0) {
+    for (const root of fbRepoRoots) {
+      const rootHeader = el("div", {
+        style: "display:flex;align-items:center;gap:6px;padding:4px 6px;margin-bottom:4px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;"
+      });
+      rootHeader.append(
+        el("span", {}, "📁 " + (root.name || "root")),
+        root.branch ? el("span", { className: "fb-repo-badge" }, "🌿 " + root.branch) : el("span"),
+        (root.ahead || root.behind) ? el("span", { className: "fb-repo-badge muted" }, `↑${root.ahead || 0} ↓${root.behind || 0}`) : el("span")
+      );
+      container.appendChild(rootHeader);
+    }
+  }
+
+  const rootEntries = fbTreeData.get("") || [];
+  if (rootEntries.length === 0) {
+    container.append(el("div", { className: "muted", style: "padding:12px 6px;" }, L.noFiles || "A mappa üres."));
+    return;
+  }
+
+  container.appendChild(fbBuildTreeBranch("", 0));
+}
+
+function fbBuildTreeBranch(dirPath, depth) {
+  const frag = document.createDocumentFragment();
+  const entries = fbTreeData.get(dirPath) || [];
+
+  for (const entry of entries) {
+    const fullPath = dirPath ? `${dirPath}/${entry.name}` : entry.name;
+    const isDir = entry.kind === "dir";
+    const isSymlink = entry.kind === "symlink";
+
+    const itemRow = el("div", {
+      className: "fb-tree-item" + (fbCurrentFilePath === fullPath ? " active" : ""),
+      style: `padding-left:${6 + depth * 16}px;`
+    });
+
+    if (isDir) {
+      const isExpanded = fbExpandedDirs.has(fullPath);
+      const toggleSpan = el("span", { style: "width:12px;font-size:10px;color:var(--muted);", textContent: isExpanded ? "▾" : "▸" });
+      const iconSpan = el("span", {}, entry.heavy ? "📦" : "📁");
+      const nameSpan = el("span", { style: "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", textContent: entry.name });
+      itemRow.append(toggleSpan, iconSpan, nameSpan);
+
+      if (fbGitDirs.has(fullPath)) {
+        itemRow.append(el("span", { className: "fb-git-dot", title: "Tartalmaz módosításokat" }, "●"));
+      }
+
+      itemRow.onclick = async (e) => {
+        e.stopPropagation();
+        if (fbExpandedDirs.has(fullPath)) {
+          fbExpandedDirs.delete(fullPath);
+          fbRenderTree();
+        } else {
+          fbExpandedDirs.add(fullPath);
+          if (!fbTreeData.has(fullPath)) {
+            try {
+              toggleSpan.textContent = "…";
+              const sub = await api(`/api/v1/agents/${fbSelectedAgentId}/fs`, {
+                method: "POST",
+                body: JSON.stringify({ channel_id: fbCurrentChannelId, op: "list", path: fullPath })
+              });
+              fbTreeData.set(fullPath, sub.entries || []);
+            } catch (err) {
+              fbExpandedDirs.delete(fullPath);
+              alert(err.message || L.hostNotResponding);
+            }
+          }
+          fbRenderTree();
+        }
+      };
+
+      frag.appendChild(itemRow);
+
+      if (isExpanded) {
+        frag.appendChild(fbBuildTreeBranch(fullPath, depth + 1));
+      }
+    } else {
+      const spacer = el("span", { style: "width:12px;" });
+      const iconSpan = el("span", {}, isSymlink ? "🔗" : "📄");
+      const nameSpan = el("span", { style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", textContent: entry.name });
+      itemRow.append(spacer, iconSpan, nameSpan);
+
+      if (entry.symlink_refused) {
+        itemRow.append(el("span", { className: "muted small", title: L.symlinkRefused, style: "color:var(--err);font-size:10px;" }, "⛔"));
+      }
+
+      const gitStat = fbGitStatusMap.get(fullPath);
+      if (gitStat) {
+        let badgeClass = "fb-git-M";
+        if (gitStat === "A") badgeClass = "fb-git-A";
+        else if (gitStat === "D") badgeClass = "fb-git-D";
+        else if (gitStat === "?" || gitStat === "??") badgeClass = "fb-git-Q";
+        else if (gitStat === "R") badgeClass = "fb-git-R";
+        itemRow.append(el("span", { className: `fb-git-badge ${badgeClass}` }, gitStat));
+      }
+
+      const refBtn = el("button", {
+        type: "button",
+        className: "secondary",
+        style: "margin-left:auto;padding:1px 5px;font-size:11px;border:none;background:transparent;",
+        title: L.insertReference || "Hivatkozás beszúrása",
+        textContent: "🔗"
+      });
+      refBtn.onclick = (e) => {
+        e.stopPropagation();
+        fbInsertReference(fullPath);
+      };
+      itemRow.append(refBtn);
+
+      itemRow.onclick = () => fbOpenFile(fullPath);
+      frag.appendChild(itemRow);
+    }
+  }
+
+  return frag;
+}
+
+let fbSearchDebounce = null;
+$("fbSearchInput").oninput = () => {
+  const q = $("fbSearchInput").value.trim();
+  if (!q) {
+    $("fbSearchClear").style.display = "none";
+    $("fbSearchResults").style.display = "none";
+    $("fbTreeContainer").style.display = "block";
+    return;
+  }
+  $("fbSearchClear").style.display = "inline-block";
+  clearTimeout(fbSearchDebounce);
+  fbSearchDebounce = setTimeout(async () => {
+    if (!fbSelectedAgentId || !fbCurrentChannelId) return;
+    $("fbSearchResults").style.display = "block";
+    $("fbTreeContainer").style.display = "none";
+    $("fbSearchResults").innerHTML = `<div style="padding:16px;text-align:center;" class="muted">${L.loadingFile || "betöltés…"}</div>`;
+
+    try {
+      const res = await api(`/api/v1/agents/${fbSelectedAgentId}/fs`, {
+        method: "POST",
+        body: JSON.stringify({ channel_id: fbCurrentChannelId, op: "search", query: q })
+      });
+
+      const list = $("fbSearchResults");
+      list.innerHTML = "";
+
+      if (res.error_code === "timeout") {
+        list.append(el("div", { className: "warn", style: "padding:4px 8px;font-size:12px;margin-bottom:6px;" }, L.searchTimeout || "Időtúllépés"));
+      }
+
+      const results = res.search_results || [];
+      if (results.length === 0) {
+        list.append(el("div", { className: "muted", style: "padding:16px;text-align:center;" }, L.noFilesFound || "Nincs találat."));
+        return;
+      }
+
+      if (res.truncated) {
+        list.append(el("div", { className: "muted", style: "font-size:11px;padding:2px 8px;margin-bottom:6px;" }, L.truncatedSearch || "200 találat (korlátozva)"));
+      }
+
+      for (const r of results) {
+        const row = el("div", {
+          className: "fb-tree-item",
+          style: "padding:4px 8px;cursor:pointer;"
+        });
+        row.append(el("span", {}, "📄"), el("span", { style: "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" }, r.path));
+        const gitStat = fbGitStatusMap.get(r.path);
+        if (gitStat) {
+          row.append(el("span", { className: "fb-git-badge fb-git-M" }, gitStat));
+        }
+        row.onclick = () => fbOpenFile(r.path);
+        list.append(row);
+      }
+    } catch (e) {
+      $("fbSearchResults").innerHTML = `<div style="padding:16px;text-align:center;color:var(--err);">${e.message || L.hostNotResponding}</div>`;
+    }
+  }, 250);
+};
+
+$("fbSearchClear").onclick = () => {
+  $("fbSearchInput").value = "";
+  $("fbSearchClear").style.display = "none";
+  $("fbSearchResults").style.display = "none";
+  $("fbTreeContainer").style.display = "block";
+};
+
+async function fbOpenFile(filePath, startLine, endLine) {
+  fbCurrentFilePath = filePath;
+  fbCurrentLineSelection = startLine ? { startLine, endLine: endLine || startLine } : null;
+
+  $("fbTabViewer").style.display = "inline-block";
+  const baseName = filePath.split("/").pop() || filePath;
+  $("fbTabViewer").textContent = "📄 " + baseName;
+  setFbTab("viewer");
+
+  $("fbViewerPath").textContent = filePath;
+  $("fbViewerPath").title = filePath;
+  $("fbViewerStatus").textContent = L.loadingFile || "betöltés…";
+  $("fbMdToggle").style.display = "none";
+  $("fbRangeSwitchBtn").style.display = "none";
+  $("fbRangeInfo").style.display = "none";
+  updateInsertReferenceBtn();
+
+  $("fbMonacoContainer").style.display = "block";
+  $("fbMdContainer").style.display = "none";
+  $("fbImgContainer").style.display = "none";
+
+  try {
+    const res = await api(`/api/v1/agents/${fbSelectedAgentId}/file-fetch`, {
+      method: "POST",
+      body: JSON.stringify({ channel_id: fbCurrentChannelId, path: filePath, refresh: false })
+    });
+
+    await handleFbFileFetchResult(res, filePath, startLine, endLine);
+  } catch (err) {
+    $("fbViewerStatus").textContent = "✕";
+    if (fbEditor) {
+      fbEditor.setValue("// " + (err.message || L.hostNotResponding));
+    }
+  }
+}
+
+async function handleFbFileFetchResult(res, filePath, startLine, endLine) {
+  if (res.state === "pending") {
+    $("fbViewerStatus").textContent = L.loadingFile || "betöltés…";
+    let pollCount = 0;
+    const timer = setInterval(async () => {
+      pollCount++;
+      if (pollCount > 30 || !fbOpen || fbCurrentFilePath !== filePath) {
+        clearInterval(timer);
+        return;
+      }
+      try {
+        const poll = await api(`/api/v1/file-fetch/${res.id}`);
+        if (poll.state !== "pending") {
+          clearInterval(timer);
+          await handleFbFileFetchResult(poll, filePath, startLine, endLine);
+        }
+      } catch (e) {
+        clearInterval(timer);
+      }
+    }, 1500);
+    return;
+  }
+
+  if (res.state === "failed") {
+    let errText = res.error_code || "Hiba";
+    switch (res.error_code) {
+      case "host_offline": errText = L.errHostOffline; break;
+      case "not_found": errText = L.errNotFound; break;
+      case "denied": errText = L.errDenied; break;
+      case "too_large": errText = L.errTooLarge; break;
+      case "not_a_file": errText = L.errNotAFile; break;
+      case "timeout": errText = L.errTimeout; break;
+    }
+    $("fbViewerStatus").textContent = "✕";
+    if (fbEditor) {
+      fbEditor.setValue("// " + errText);
+    }
+    return;
+  }
+
+  if (res.state === "done" && res.file) {
+    const f = res.file;
+    fbCurrentFileId = f.id;
+    fbCurrentFileSize = f.size;
+    fbCurrentMime = f.mime || "";
+    fbCurrentCompletedAt = res.completed_at;
+
+    const timeStr = res.completed_at ? new Date(res.completed_at).toLocaleTimeString() : "";
+    $("fbViewerStatus").textContent = (L.statusAt || "állapot:") + " " + timeStr;
+
+    const isImg = fbCurrentMime.startsWith("image/") && !fbCurrentMime.includes("svg");
+    const isMd = filePath.endsWith(".md") || fbCurrentMime === "text/markdown";
+
+    if (isImg) {
+      $("fbMonacoContainer").style.display = "none";
+      $("fbMdContainer").style.display = "none";
+      $("fbImgContainer").style.display = "block";
+      $("fbImgView").src = `/api/v1/files/${f.id}/content`;
+      return;
+    }
+
+    $("fbImgContainer").style.display = "none";
+    $("fbMonacoContainer").style.display = "block";
+
+    await ensureMonaco();
+
+    if (isMd) {
+      $("fbMdToggle").style.display = "inline-block";
+      $("fbMdToggle").textContent = fbMdRaw ? (L.renderedView || "Formázott") : (L.rawView || "Nyers");
+      $("fbMdToggle").onclick = () => {
+        fbMdRaw = !fbMdRaw;
+        $("fbMdToggle").textContent = fbMdRaw ? (L.renderedView || "Formázott") : (L.rawView || "Nyers");
+        if (fbMdRaw) {
+          $("fbMonacoContainer").style.display = "block";
+          $("fbMdContainer").style.display = "none";
+          if (fbEditor) fbEditor.layout();
+        } else {
+          $("fbMonacoContainer").style.display = "none";
+          $("fbMdContainer").style.display = "block";
+          renderFbMarkdown();
+        }
+      };
+    }
+
+    if (f.size > 2 * 1024 * 1024) {
+      $("fbRangeSwitchBtn").style.display = "inline-block";
+      $("fbRangeInfo").style.display = "inline-block";
+      await loadFbRangeContent(startLine, endLine);
+      return;
+    }
+
+    let content = "";
+    try {
+      const resp = await fetch(`/api/v1/files/${f.id}/content`, {
+        headers: token ? { Authorization: "Bearer " + token } : {}
+      });
+      content = await resp.text();
+    } catch (e) {
+      content = "// Hiba: " + e.message;
+    }
+
+    initOrUpdateMonaco(content, filePath, startLine, endLine);
+
+    if (isMd && !fbMdRaw) {
+      $("fbMonacoContainer").style.display = "none";
+      $("fbMdContainer").style.display = "block";
+      renderFbMarkdown(content);
+    }
+  }
+}
+
+$("fbViewerRefresh").onclick = async () => {
+  if (!fbSelectedAgentId || !fbCurrentChannelId || !fbCurrentFilePath) return;
+  $("fbViewerStatus").textContent = L.loadingFile || "betöltés…";
+  try {
+    const res = await api(`/api/v1/agents/${fbSelectedAgentId}/file-fetch`, {
+      method: "POST",
+      body: JSON.stringify({ channel_id: fbCurrentChannelId, path: fbCurrentFilePath, refresh: true })
+    });
+    await handleFbFileFetchResult(res, fbCurrentFilePath, fbCurrentLineSelection?.startLine, fbCurrentLineSelection?.endLine);
+  } catch (err) {
+    $("fbViewerStatus").textContent = "✕";
+  }
+};
+
+async function loadFbRangeContent(startLine, endLine) {
+  const oneMB = 1024 * 1024;
+  let rangeHeader = "";
+  if (fbRangeMode === "start") {
+    rangeHeader = `bytes=0-${oneMB - 1}`;
+    $("fbRangeSwitchBtn").textContent = L.viewEnd || "megjelenítés: vége";
+  } else {
+    const startByte = fbCurrentFileSize - oneMB;
+    rangeHeader = `bytes=${startByte}-${fbCurrentFileSize - 1}`;
+    $("fbRangeSwitchBtn").textContent = L.viewStart || "megjelenítés: eleje";
+  }
+
+  $("fbRangeSwitchBtn").onclick = () => {
+    fbRangeMode = fbRangeMode === "start" ? "end" : "start";
+    loadFbRangeContent(startLine, endLine);
+  };
+
+  try {
+    const resp = await fetch(`/api/v1/files/${fbCurrentFileId}/content`, {
+      headers: { ...(token ? { Authorization: "Bearer " + token } : {}), Range: rangeHeader }
+    });
+    const text = await resp.text();
+    const loadedLines = text.split("\n").length;
+    const estTotalLines = Math.round(loadedLines * (fbCurrentFileSize / oneMB));
+    $("fbRangeInfo").textContent = fbRangeMode === "start"
+      ? `1–${loadedLines}. sor a ~${estTotalLines}-ból`
+      : `vége: ${loadedLines} sor`;
+
+    initOrUpdateMonaco(text, fbCurrentFilePath, startLine, endLine);
+  } catch (e) {
+    if (fbEditor) fbEditor.setValue("// Hiba: " + e.message);
+  }
+}
+
+function initOrUpdateMonaco(content, filePath, startLine, endLine) {
+  const lang = getMonacoLanguage(filePath);
+  const theme = getMonacoTheme();
+
+  if (!fbEditor) {
+    fbEditor = window.monaco.editor.create($("fbMonacoContainer"), {
+      value: content,
+      language: lang,
+      readOnly: true,
+      lineNumbers: "on",
+      theme: theme,
+      wordWrap: fbWordWrap ? "on" : "off",
+      automaticLayout: true,
+      minimap: { enabled: true },
+      scrollBeyondLastLine: false,
+      fontSize: 13
+    });
+
+    fbEditor.onDidChangeCursorSelection((e) => {
+      const sel = e.selection;
+      if (sel && !sel.isEmpty()) {
+        const start = Math.min(sel.startLineNumber, sel.endLineNumber);
+        const end = Math.max(sel.startLineNumber, sel.endLineNumber);
+        fbCurrentLineSelection = { startLine: start, endLine: end };
+      } else if (sel) {
+        fbCurrentLineSelection = { startLine: sel.startLineNumber, endLine: sel.startLineNumber };
+      }
+      updateInsertReferenceBtn();
+    });
+  } else {
+    const oldModel = fbEditor.getModel();
+    const newModel = window.monaco.editor.createModel(content, lang);
+    fbEditor.setModel(newModel);
+    if (oldModel) oldModel.dispose();
+    fbEditor.updateOptions({
+      wordWrap: fbWordWrap ? "on" : "off",
+      theme: theme
+    });
+  }
+
+  if (startLine) {
+    const end = endLine || startLine;
+    setTimeout(() => {
+      fbEditor.revealLinesInCenter(startLine, end);
+      fbEditor.setSelection(new window.monaco.Range(startLine, 1, end, 1000));
+    }, 20);
+  }
+}
+
+function renderFbMarkdown(content) {
+  const text = content || (fbEditor ? fbEditor.getValue() : "");
+  const container = $("fbMdContainer");
+  container.innerHTML = "";
+  const dom = ColonyMarkdown.render(ColonyMarkdown.parse(text), {
+    fileChips: false,
+    inChat: false,
+    copyText: L.copy || "Másolás",
+    copiedText: L.copied || "Másolva!"
+  });
+  container.appendChild(dom);
+}
+
+$("fbWordWrapBtn").onclick = () => {
+  fbWordWrap = !fbWordWrap;
+  $("fbWordWrapBtn").style.borderColor = fbWordWrap ? "var(--accent)" : "var(--line)";
+  if (fbEditor) {
+    fbEditor.updateOptions({ wordWrap: fbWordWrap ? "on" : "off" });
+  }
+};
+
+function updateInsertReferenceBtn() {
+  const btn = $("fbInsertRefBtn");
+  if (!fbCurrentFilePath) {
+    btn.textContent = "🔗 " + (L.insertReference || "Hivatkozás");
+    return;
+  }
+  const lines = fbCurrentLineSelection;
+  if (lines && lines.startLine) {
+    const rangeStr = lines.startLine === lines.endLine ? `:${lines.startLine}` : `:${lines.startLine}-${lines.endLine}`;
+    btn.textContent = `🔗 ${rangeStr}`;
+  } else {
+    btn.textContent = "🔗 " + (L.insertReference || "Hivatkozás");
+  }
+}
+
+$("fbInsertRefBtn").onclick = () => {
+  if (!fbCurrentFilePath) return;
+  fbInsertReference(fbCurrentFilePath, fbCurrentLineSelection?.startLine, fbCurrentLineSelection?.endLine);
+};
+
+function fbInsertReference(filePath, startLine, endLine) {
+  const c = channels.find(x => x.id === fbCurrentChannelId) || overseen.find(x => x.id === fbCurrentChannelId);
+  const isChannel = c && c.kind !== "dm";
+  let ref = filePath;
+
+  if (startLine) {
+    ref += startLine === endLine || !endLine ? `:${startLine}` : `:${startLine}-${endLine}`;
+  }
+
+  if (isChannel && fbSelectedAgentId) {
+    const ag = actors[fbSelectedAgentId];
+    if (ag) {
+      ref = `@${ag.handle}:${ref}`;
+    }
+  }
+
+  const input = $("text");
+  const cur = input.value;
+  if (cur && !cur.endsWith(" ")) {
+    input.value = cur + " " + ref + " ";
+  } else {
+    input.value = cur + ref + " ";
+  }
+  input.focus();
 }
 
 async function showError(id) {

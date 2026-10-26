@@ -317,3 +317,68 @@ func main() {}
   assert.ok(res.includes("kész feladat"));
   assert.ok(res.includes("func main() {}"));
 });
+
+test("file references: line numbers, ranges, agent handles, Windows paths", () => {
+  const input = "Lásd: a/b.go:12 és a/b.go:12-30, továbbá @h:a/b.go:7 és C:\\project\\foo.go:12 vagy foo\\bar.go:12.";
+  const blocks = md.parse(input);
+  assert.equal(blocks.length, 1);
+  const p = blocks[0];
+  const filelinks = p.children.filter((c) => c.type === "filelink");
+  assert.equal(filelinks.length, 5);
+
+  // 1. a/b.go:12
+  assert.equal(filelinks[0].path, "a/b.go");
+  assert.equal(filelinks[0].name, "b.go:12");
+  assert.equal(filelinks[0].lines, "12");
+  assert.equal(filelinks[0].startLine, 12);
+  assert.equal(filelinks[0].endLine, 12);
+  assert.equal(filelinks[0].isRelative, true);
+
+  // 2. a/b.go:12-30
+  assert.equal(filelinks[1].path, "a/b.go");
+  assert.equal(filelinks[1].name, "b.go:12-30");
+  assert.equal(filelinks[1].lines, "12-30");
+  assert.equal(filelinks[1].startLine, 12);
+  assert.equal(filelinks[1].endLine, 30);
+  assert.equal(filelinks[1].isRelative, true);
+
+  // 3. @h:a/b.go:7
+  assert.equal(filelinks[2].agent, "h");
+  assert.equal(filelinks[2].path, "a/b.go");
+  assert.equal(filelinks[2].name, "b.go:7");
+  assert.equal(filelinks[2].lines, "7");
+  assert.equal(filelinks[2].startLine, 7);
+  assert.equal(filelinks[2].endLine, 7);
+  assert.equal(filelinks[2].isRelative, true);
+
+  // 4. C:\project\foo.go:12
+  assert.equal(filelinks[3].path, "C:\\project\\foo.go");
+  assert.equal(filelinks[3].name, "foo.go:12");
+  assert.equal(filelinks[3].lines, "12");
+  assert.equal(filelinks[3].startLine, 12);
+  assert.equal(filelinks[3].endLine, 12);
+  assert.equal(filelinks[3].isRelative, false);
+
+  // 5. foo\bar.go:12
+  assert.equal(filelinks[4].path, "foo\\bar.go");
+  assert.equal(filelinks[4].name, "bar.go:12");
+  assert.equal(filelinks[4].lines, "12");
+  assert.equal(filelinks[4].startLine, 12);
+  assert.equal(filelinks[4].endLine, 12);
+});
+
+test("non-references: http urls with port and times are not file references", () => {
+  const input = "Megtekinthető itt: http://x/y:8080 és az időpont 10:42 legyen.";
+  const blocks = md.parse(input);
+  const p = blocks[0];
+  const filelinks = p.children.filter((c) => c.type === "filelink");
+  assert.equal(filelinks.length, 0);
+
+  const weblinks = p.children.filter((c) => c.type === "link");
+  assert.equal(weblinks.length, 1);
+  assert.equal(weblinks[0].href, "http://x/y:8080");
+
+  const fullText = p.children.map((c) => c.text || c.raw || "").join("");
+  assert.ok(fullText.includes("10:42"));
+});
+
