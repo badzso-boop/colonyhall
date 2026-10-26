@@ -140,7 +140,10 @@ func (a *Antigravity) execAs(ctx context.Context, dir string, wrap Wrapper, args
 		if len(out.Structured) > 0 && string(out.Structured) != "null" {
 			return res, out, nil
 		}
-		if strings.TrimSpace(out.Response) != "" {
+		// Only with evidence that the model wrote it: an error text in the
+		// response field (paths, internals) must not reach the chat, where
+		// error details never go.
+		if strings.TrimSpace(out.Response) != "" && out.Usage.Output > 0 {
 			res.ClientWarning = fmt.Sprintf("agy: run status %q after an answer", out.Status)
 			return res, out, nil
 		}

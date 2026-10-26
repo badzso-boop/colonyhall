@@ -1449,6 +1449,12 @@ func TestAntigravityErrorStatusWithAnswerKeepsTheAnswer(t *testing.T) {
 	if !strings.HasPrefix(res.Text, "A dokumentációkban") || res.ConversationID != "c-1" || res.ClientWarning == "" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
+	// An error text in the response with no generated output is not an
+	// answer: it stays a failure, so its details never reach the chat.
+	f.stdout = `{"status":"ERROR","response":"internal error: open /root/.gemini/x: permission denied","conversation_id":"c-1","usage":{"input_tokens":500,"output_tokens":0}}`
+	if _, err := a.Direct(context.Background(), DirectRequest{Prompt: "x", Dir: "/p"}); err == nil {
+		t.Fatal("an ERROR whose response the model did not write must fail")
+	}
 	// Without an answer, ERROR is still a failure.
 	f.stdout = `{"status":"ERROR","response":"","conversation_id":"c-1"}`
 	if _, err := a.Direct(context.Background(), DirectRequest{Prompt: "x", Dir: "/p"}); err == nil {
