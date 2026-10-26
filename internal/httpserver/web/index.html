@@ -304,6 +304,8 @@ const I18N = {
         noRuns: "Nincs futási adat.",
         approvalDetails: "Részletek", approvalAllow: "Engedélyezem", approvalDeny: "Elutasítom",
         approvalPending: "jóváhagyásra vár", approvalAllowed: "engedélyezve", approvalDenied: "elutasítva", approvalExpired: "lejárt",
+        delegationApprovedBy: "Jóváhagyta", delegationDeniedBy: "Elutasította", delegationExpired: "Lejárt",
+        delegationApprove: "Jóváhagyom", delegationDeny: "Elutasítom",
         newAgent: "Új agent", createAgent: "Agent létrehozása", joinChannels: "Csatornák:",
         noHostAssign: "gép hozzárendelése később",
         hostModeTokenNote: "Megjegyzés: az agent tokenje gépes (host) módban nem szükséges — az őr automatikusan saját rövid lejáratú tokeneket kér a szervertől.",
@@ -367,6 +369,8 @@ const I18N = {
         noRuns: "No runs recorded.",
         approvalDetails: "Details", approvalAllow: "Allow", approvalDeny: "Deny",
         approvalPending: "pending", approvalAllowed: "allowed", approvalDenied: "denied", approvalExpired: "expired",
+        delegationApprovedBy: "Approved by", delegationDeniedBy: "Denied by", delegationExpired: "Expired",
+        delegationApprove: "Approve", delegationDeny: "Deny",
         newAgent: "New agent", createAgent: "Create agent", joinChannels: "Channels:",
         noHostAssign: "assign host later",
         hostModeTokenNote: "Note: the agent token is not needed in host mode — the guard requests its own short-lived tokens from the server.",
@@ -459,6 +463,21 @@ function chanLabel(c) {
   return "✉ " + (others.join(", ") || (me?.avatar_emoji ? me.avatar_emoji + " " : "") + "@" + me.handle);
 }
 
+let delegations = [];
+
+async function loadDelegations() {
+  if (me?.kind === "human") {
+    try {
+      const res = await api("/api/v1/delegations");
+      delegations = res.delegations || [];
+    } catch {
+      delegations = [];
+    }
+  } else {
+    delegations = [];
+  }
+}
+
 async function loadSections() {
   if (me?.kind === "human") {
     try {
@@ -478,7 +497,7 @@ async function load() {
   channels = c.channels.filter(x => x.is_member);
   const admin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
   overseen = admin ? c.channels.filter(x => !x.is_member) : [];
-  await loadSections();
+  await Promise.all([loadSections(), loadDelegations()]);
   renderChannels();
   if (!current && channels.length) await open(channels[0].id);
 }
@@ -1069,6 +1088,13 @@ function renderMsg(m) {
     const appSpan = el("span");
     bodyEl.append(" ", appSpan);
     renderApprovalInline(appRef[1], appSpan);
+  }
+  const isQuestionOrDel = (m.client_msg_id && m.client_msg_id.startsWith("q-")) || /\bQ-\d+\b/.test(m.body);
+  const isDelTarget = delegations.some(d => d.message_id === m.id);
+  if ((isQuestionOrDel || isDelTarget) && me.kind === "human") {
+    const delSpan = el("div", { className: "delegation-inline-box" });
+    bodyEl.append(delSpan);
+    renderDelegationInline(m, delSpan);
   }
   if (m.attachments && m.attachments.length) {
     const attDiv = div.querySelector(".attachments");
@@ -2250,6 +2276,94 @@ async function renderApprovalInline(id, span) {
     const tag = el("span", { className: "muted", style: "margin-left:6px;", textContent: labels[app.state] || app.state });
     span.append(tag);
   }
+}
+
+async function renderDelegationInline(m, span) {
+  if (me?.kind !== "human") return;
+  let del = delegations.find(d => (m.client_msg_id && m.client_msg_id === "q-" + d.question_id) || d.message_id === m.id);
+  if (!del) {
+    try {
+      const res = await api("/api/v1/delegations");
+      delegations = res.delegations || [];
+      del = delegations.find(d => (m.client_msg_id && m.client_msg_id === "q-" + d.question_id) || d.message_id === m.id);
+    } catch {}
+  }
+  if (!del) return;
+
+  span.innerHTML = "";
+  const container = el("div", { className: "delegation-status", style: "margin-top: 6px; display: inline-flex; gap: 8px; align-items: center;" });
+
+  if (del.state === "pending") {
+    const admin = me.role === "admin" || me.role === "owner";
+    if (admin) {
+      const approveBtn = el("button", {
+        textContent: L.delegationApprove || "Jóváhagyom",
+        style: "color: #137333; font-weight: bold; border-color: #137333; cursor: pointer;"
+      });
+      approveBtn.onclick = async () => {
+        approveBtn.disabled = true;
+        try {
+          await api(`/api/v1/questions/${encodeURIComponent(del.question_id)}/answer`, {
+            method: "POST",
+            body: JSON.stringify({ answer: "Jóváhagyom" })
+          });
+          await loadDelegations();
+          await open(current);
+        } catch (e) {
+          alert(e.message);
+          approveBtn.disabled = false;
+        }
+      };
+
+      const denyBtn = el("button", {
+        textContent: L.delegationDeny || "Elutasítom",
+        style: "color: #b3261e; border-color: #b3261e; cursor: pointer;"
+      });
+      denyBtn.onclick = async () => {
+        denyBtn.disabled = true;
+        try {
+          await api(`/api/v1/questions/${encodeURIComponent(del.question_id)}/answer`, {
+            method: "POST",
+            body: JSON.stringify({ answer: "Elutasítom" })
+          });
+          await loadDelegations();
+          await open(current);
+        } catch (e) {
+          alert(e.message);
+          denyBtn.disabled = false;
+        }
+      };
+
+      container.append(approveBtn, denyBtn);
+    } else {
+      container.append(el("span", { className: "muted", textContent: L.approvalPending || "jóváhagyásra vár" }));
+    }
+  } else if (del.state === "approved") {
+    const timeStr = del.decided_at ? new Date(del.decided_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+    const who = del.decided_by_handle ? "@" + del.decided_by_handle : (me.handle ? "@" + me.handle : "");
+    const badge = el("span", {
+      style: "color: #137333; font-weight: 500;",
+      textContent: `✅ ${L.delegationApprovedBy || "Jóváhagyta"} ${who} ${timeStr}`.trim()
+    });
+    container.append(badge);
+  } else if (del.state === "denied") {
+    const timeStr = del.decided_at ? new Date(del.decided_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+    const who = del.decided_by_handle ? "@" + del.decided_by_handle : (me.handle ? "@" + me.handle : "");
+    const badge = el("span", {
+      style: "color: #b3261e; font-weight: 500;",
+      textContent: `⛔ ${L.delegationDeniedBy || "Elutasította"} ${who} ${timeStr}`.trim()
+    });
+    container.append(badge);
+  } else if (del.state === "expired") {
+    const badge = el("span", {
+      className: "muted",
+      style: "font-weight: 500;",
+      textContent: `⌛ ${L.delegationExpired || "Lejárt"}`
+    });
+    container.append(badge);
+  }
+
+  span.append(container);
 }
 
 async function toggleReaction(m, emoji) {
