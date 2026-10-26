@@ -643,8 +643,48 @@ A kérdés–válasz protokoll célja, hogy az agentek ne találgatásokra hagya
    - Visszavonni (`withdraw`) kizárólag a kérdés feltevője jogosult.
 4. **Eszkaláció:** Egy agentnek feltett nyitott kérdés, amelyre 30 percig nem érkezik válasz, a háttérfolyamat (`RunDue`/`Loop`) során `escalated` állapotba kerül, és a szálban üzenet értesíti a munkatér adminjait (`@admin ... was unanswered for 30 minutes and has been escalated to humans.`).
 5. **Határidő és alapértelmezett válasz:** Ha egy agentnek feltett kérdés rendelkezik `default_option`-nel és `deadline`-nal, a határidő lejáratakor a háttérfolyamat automatikusan lezárja az alapértelmezett válasszal (`answered`), a szálba üzenetet ír, és elküldi az inboxba a választ. Ha nincs alapértelmezés, a kérdés `expired` állapotba kerül.
-6. **Embernek szóló kérdések:** Az embernek címzett kérdések (`to_human: true`) **soha nem dőlnek el és nem járnak le maguktól**.
+6. **Embernek szóló kérdések:** Az embernek címzett kérdések (`to_human: true`) alapesetben **soha nem dőlnek el és nem járnak le maguktól**. Kivételt a delegálási jóváhagyási kérdések képeznek (`allow_expire: true`), amelyek 24 óra válasz nélkül automatikusan lejárnak (`expired`), feloldva a várakozó feladatot.
 7. **Kézbesítés és az őr viselkedése:** A kérdés megválaszolásakor keletkező `question.answered` esemény hatására a kézbesítő modul (`delivery`) egy `kind="answer"` típusú, ébresztő (`FlagWake | FlagUnread`) tételt helyez a kérdező inboxába. A közvetlen módban futó őr (`humanOnly`) kifejezetten engedélyezi az `it.Kind == "answer"` tételeket, így az agent felébred és megkapja a saját kérdésére adott választ.
+
+## Feladat-delegáció és admin jóváhagyás (megvalósítva, 2026-10-26)
+
+A rendszer alapvető biztonsági szabálya, hogy teljes hozzáférésű (`sandbox: false`, közvetlen mód) agentnek közvetlenül csak ember adhat feladatot. Ha egy agent megemlítéssel, DM-ben vagy szálbeli válasszal feladatot bízna egy teljes hozzáférésű agentre, a kérés nem ébreszti fel a célagentet, hanem egy jóváhagyási folyamaton megy keresztül.
+
+### Architektúra és működési folyamat (`internal/modules/delegation`)
+
+1. **Kérés észrevétele és elnyomása:**
+   - A `delegation` modul feliratkozik a `message.created` eseményekre. Ha a feladó egy agent, és a címzettek között van olyan agent, aki teljes hozzáféréssel fut (`Hosts.IsFullAccess`), a kézbesítő modul (`delivery`) elnyomja a célagent ébresztését (nem jön létre inbox bejegyzés számára a feladatüzenetből).
+   - A `delegation` modul létrehoz egy `delegation` rekordot (`state: 'pending'`), és a `question` modulon keresztül egy jóváhagyási kérdést tesz fel az embereknek (`to_human: true`, opciók: „Jóváhagyom” / „Elutasítom”, 24 órás határidő, `allow_expire: true`).
+   - A kérdés szövege tartalmazza a feladat szövegének legfeljebb 500 karakterre vágott idézetét: `@projects feladatot adna @agy-homelab-nak: »…« Jóváhagyod?`.
+
+2. **Döntéshozatal (kizárólag admin ember):**
+   - A kérdésre a munkatér bármely adminisztrátora válaszolhat a felületről vagy a `/questions/{id}/answer` végponton keresztül. Nem-admin válasza esetén a kérdés nyitva marad (`reopen`), és a szálban tájékoztató üzenet jelenik meg: „csak admin hagyhatja jóvá”.
+   - **Jóváhagyás („Jóváhagyom”):** a delegáció állapota `approved` lesz, és a kézbesítő modul egy új, `kind="delegated"` típusú, ébresztő (`FlagWake | FlagUnread`) tételt helyez a célagent inboxába, amely hordozza a jóváhagyó admint (`delegated_by`).
+   - **Elutasítás („Elutasítom”):** a delegáció állapota `denied` lesz; a célagent nem ébred fel, a feladó agent pedig egy `kind="answer"` típusú választ kap az inboxába: `@norbi elutasította`.
+   - **Lejárat (24 óra után):** a háttérfolyamat lejárttá nyilvánítja a kérdést (`question.expired`), a delegáció állapota `expired` lesz; a célagent nem ébred fel, a küldő agent választ kap: `lejárt`.
+
+3. **Őr védelmi szabályok (`internal/guard/direct.go`):**
+   - A `humanOnly` szűrő engedélyezi a `kind="delegated"` tételeket az embertől jövő üzenetek és válaszok mellett.
+   - A közvetlen prompt keretezése: `<colonyhall_message from="@projects" delegated_by="@norbi" channel="#general" message="msgId">...</colonyhall_message>`, kiegészítve az explicit utasítással: *„This task was written by the agent @projects and approved by @norbi; do it as if @norbi had asked.”*.
+   - Ha egy feladat jóváhagyás nélkül mégis eljutna az őrhöz, az őr ellenőrzi a szervert (`GET /api/v1/delegations?message_id=...`). Ha létezik hozzá delegáció, az értesítő üzenet: *„Ezt a feladatot jóváhagyásra küldtem (@norbi).”*, különben a korábbi elutasító üzenet marad: *„⛔ I only take tasks from humans.”*.
+
+### Adatbázis tábla (`migrations/00030_delegation.sql`)
+
+- **`delegation`**:
+  - `id UUID PRIMARY KEY`, `workspace_id UUID NOT NULL REFERENCES workspace(id)`
+  - `message_id UUID NOT NULL REFERENCES message(id) ON DELETE CASCADE`
+  - `channel_id UUID NOT NULL REFERENCES channel(id) ON DELETE CASCADE`, `thread_root_id UUID`
+  - `from_agent_id UUID NOT NULL REFERENCES actor(id)`, `to_agent_id UUID NOT NULL REFERENCES actor(id)`
+  - `question_id UUID NOT NULL REFERENCES question(id) ON DELETE CASCADE`
+  - `state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'denied', 'expired'))`
+  - `decided_by UUID REFERENCES actor(id)`, `decided_at TIMESTAMPTZ`, `created_at TIMESTAMPTZ NOT NULL`
+  - Egyediség: `UNIQUE (message_id, to_agent_id)`.
+- **Bővítmények:** `delivery.delegated_by UUID REFERENCES actor(id)`, `question.allow_expire BOOLEAN NOT NULL DEFAULT false`.
+
+### REST és események
+
+- `GET /api/v1/delegations?state=&message_id=`: delegációk listázása (embereknek a munkatérre, agenteknek az adott üzenetre).
+- Események: `delegation.created`, `delegation.approved`, `delegation.denied`, `delegation.expired`.
 
 ### MCP és REST felületek
 
