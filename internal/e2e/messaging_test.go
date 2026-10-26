@@ -224,3 +224,92 @@ func TestDMNameCannotBeSquatted(t *testing.T) {
 		t.Fatalf("dm: %+v (expected name %s)", dm, name)
 	}
 }
+
+// TestThreadReplyReachesAgentsInTheThread: a human's reply in a channel
+// thread, without a mention, reaches the agents that wrote in that thread;
+// a reply with a mention reaches only the mentioned; agents' replies and
+// threads the agent never wrote in reach nobody this way.
+func TestThreadReplyReachesAgentsInTheThread(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	ack := func(token string) {
+		var ids []string
+		for _, it := range e.inbox(token) {
+			ids = append(ids, it.ID)
+		}
+		if len(ids) > 0 {
+			e.do("POST", "/api/v1/agent/inbox/ack", token, map[string]any{"ids": ids}, nil)
+		}
+	}
+	bodies := func(token string) []string {
+		var out []string
+		for _, it := range e.inbox(token) {
+			out = append(out, it.Body)
+		}
+		return out
+	}
+
+	// A second agent in #general.
+	agentRole := "member"
+	var other struct {
+		Actor struct{ ID string }
+		Token string
+	}
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "helper", "role": agentRole}, &other); s != http.StatusCreated {
+		t.Fatalf("create helper: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": other.Actor.ID, "can_write": true}, nil); s != http.StatusNoContent {
+		t.Fatalf("add helper: %d", s)
+	}
+
+	// The human asks @fake-agent; it answers in the thread.
+	root, s := e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent nézd meg a logokat"})
+	if s != http.StatusCreated {
+		t.Fatalf("root: %d", s)
+	}
+	ack(server.DevAgentToken)
+	if _, s := e.send(server.DevAgentToken, general, map[string]any{"body": "Megnéztem, minden rendben.", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("agent reply: %d", s)
+	}
+
+	// 1. A plain human reply in that thread reaches @fake-agent, not @helper.
+	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "És a tegnapi futás?", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("reply: %d", s)
+	}
+	if got := bodies(server.DevAgentToken); len(got) != 1 || got[0] != "És a tegnapi futás?" {
+		t.Fatalf("the agent in the thread should get the plain reply, got %v", got)
+	}
+	if got := bodies(other.Token); len(got) != 0 {
+		t.Fatalf("an agent that never wrote in the thread got %v", got)
+	}
+	ack(server.DevAgentToken)
+
+	// 2. A reply that mentions @helper reaches only @helper.
+	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "@helper nézd meg te is", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("mention reply: %d", s)
+	}
+	if got := bodies(server.DevAgentToken); len(got) != 0 {
+		t.Fatalf("a reply mentioning someone else reached the thread's agent: %v", got)
+	}
+	if got := bodies(other.Token); len(got) != 1 {
+		t.Fatalf("the mentioned agent should get it, got %v", got)
+	}
+	ack(other.Token)
+
+	// 3. An agent's reply in the thread wakes nobody (no loops between agents).
+	if _, s := e.send(other.Token, general, map[string]any{"body": "Én is megnéztem.", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("helper reply: %d", s)
+	}
+	if got := bodies(server.DevAgentToken); len(got) != 0 {
+		t.Fatalf("an agent's reply woke the other agent: %v", got)
+	}
+
+	// 4. A plain reply in a thread @fake-agent never wrote in reaches nobody.
+	root2, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "Más téma."})
+	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "Folytatás.", "thread_root_id": root2.ID}); s != http.StatusCreated {
+		t.Fatalf("reply2: %d", s)
+	}
+	if got := bodies(server.DevAgentToken); len(got) != 0 {
+		t.Fatalf("a thread the agent never wrote in reached it: %v", got)
+	}
+}

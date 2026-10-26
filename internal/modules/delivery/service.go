@@ -147,6 +147,10 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 	if err != nil {
 		return err
 	}
+	following, err := s.threadFollowers(ctx, ch, p)
+	if err != nil {
+		return err
+	}
 	for _, a := range actors {
 		if a.ID.String() == p.AuthorID {
 			continue
@@ -154,6 +158,9 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 		var flags Flags
 		if mentioned[a.ID.String()] {
 			flags |= FlagUnread | FlagMentioned
+		}
+		if following[a.ID] && a.Kind == identity.KindAgent {
+			flags |= FlagUnread | FlagThread
 		}
 		if ch.Kind == conversation.KindDM {
 			flags |= FlagUnread | FlagDM
@@ -173,6 +180,41 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 		}
 	}
 	return nil
+}
+
+// threadFollowers returns who a reply reaches without a mention: a human's
+// reply in a channel thread goes to the agents that wrote in that thread
+// (like following a thread in Slack). A reply that mentions someone reaches
+// only them, and an agent's reply wakes nobody this way, so two agents in a
+// thread cannot keep waking each other.
+func (s *Service) threadFollowers(ctx context.Context, ch conversation.Channel, p conversation.MessageCreated) (map[ids.ID]bool, error) {
+	if p.ThreadRootID == "" || len(p.Mentions) > 0 || ch.Kind == conversation.KindDM {
+		return nil, nil
+	}
+	authorID, err := ids.Parse(p.AuthorID)
+	if err != nil {
+		return nil, err
+	}
+	author, err := s.Directory.ActorByID(ctx, authorID)
+	if err != nil {
+		return nil, err
+	}
+	if author.Kind != identity.KindHuman {
+		return nil, nil
+	}
+	rootID, err := ids.Parse(p.ThreadRootID)
+	if err != nil {
+		return nil, err
+	}
+	authors, err := s.Conversation.ThreadAuthorIDs(ctx, rootID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[ids.ID]bool, len(authors))
+	for _, id := range authors {
+		out[id] = true
+	}
+	return out, nil
 }
 
 // Inbox returns the actor's pending items with the message text attached,

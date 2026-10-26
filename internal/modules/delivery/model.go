@@ -18,6 +18,9 @@ const (
 	FlagMentioned Flags = 1 << 1
 	FlagWake      Flags = 1 << 2 // should wake an agent
 	FlagDM        Flags = 1 << 3
+	// FlagThread: a human replied, without mentioning anyone, in a thread
+	// the recipient (an agent) had written in.
+	FlagThread Flags = 1 << 4
 )
 
 // Has reports whether all bits in f2 are set.

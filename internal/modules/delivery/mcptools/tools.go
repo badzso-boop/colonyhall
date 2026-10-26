@@ -131,6 +131,8 @@ func FormatInbox(handle string, items []delivery.InboxItem, total int) string {
 		reason := "mention"
 		if it.Flags.Has(delivery.FlagDM) {
 			reason = "dm"
+		} else if it.Flags.Has(delivery.FlagThread) && !it.Flags.Has(delivery.FlagMentioned) {
+			reason = "reply in your thread"
 		}
 		fmt.Fprintf(&b, "\n%d. id=%s #%s @%s %s (%s)", i+1, it.ID, it.ChannelName, it.AuthorHandle,
 			it.MessageAt.Format("2006-01-02 15:04"), reason)

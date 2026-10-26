@@ -874,3 +874,20 @@ func (s *Service) postPauseSystemNote(ctx context.Context, by identity.Actor, c 
 	}
 	return nil
 }
+
+// ThreadAuthorIDs implements Reader.
+func (s *Service) ThreadAuthorIDs(ctx context.Context, rootID ids.ID) ([]ids.ID, error) {
+	msgs, err := s.Store.ThreadMessages(ctx, rootID)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[ids.ID]bool{}
+	var out []ids.ID
+	for _, m := range msgs {
+		if !seen[m.AuthorID] {
+			seen[m.AuthorID] = true
+			out = append(out, m.AuthorID)
+		}
+	}
+	return out, nil
+}
