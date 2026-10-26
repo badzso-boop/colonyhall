@@ -1435,3 +1435,23 @@ func TestLastTranscriptContext(t *testing.T) {
 		t.Fatal("a session id with path or glob characters must not match a file")
 	}
 }
+
+// An agy run can end with status ERROR after writing its full answer (seen
+// on long conversations); the answer must reach the chat, not be retried.
+func TestAntigravityErrorStatusWithAnswerKeepsTheAnswer(t *testing.T) {
+	var f fakeRunner
+	a := &Antigravity{Run: f.run}
+	f.stdout = `{"status":"ERROR","response":"A dokumentációkban még kidolgozott tételek: ...","conversation_id":"c-1","usage":{"input_tokens":618468,"output_tokens":27147}}`
+	res, err := a.Direct(context.Background(), DirectRequest{Prompt: "mi maradt?", Dir: "/p"})
+	if err != nil {
+		t.Fatalf("an answer with status ERROR must not fail the run: %v", err)
+	}
+	if !strings.HasPrefix(res.Text, "A dokumentációkban") || res.ConversationID != "c-1" || res.ClientWarning == "" {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	// Without an answer, ERROR is still a failure.
+	f.stdout = `{"status":"ERROR","response":"","conversation_id":"c-1"}`
+	if _, err := a.Direct(context.Background(), DirectRequest{Prompt: "x", Dir: "/p"}); err == nil {
+		t.Fatal("an ERROR without an answer must fail")
+	}
+}

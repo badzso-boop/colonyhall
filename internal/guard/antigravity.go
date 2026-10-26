@@ -133,8 +133,15 @@ func (a *Antigravity) execAs(ctx context.Context, dir string, wrap Wrapper, args
 		return res, out, err
 	}
 	if out.Status != "SUCCESS" {
-		// A run can end in ERROR after it already produced its decision.
+		// A run can end in ERROR after it already produced its decision or
+		// its answer (seen on long conversations: a full answer, then
+		// status ERROR). The answer is kept; treating it as a failure threw
+		// it away and retried the run, so the chat only saw "working".
 		if len(out.Structured) > 0 && string(out.Structured) != "null" {
+			return res, out, nil
+		}
+		if strings.TrimSpace(out.Response) != "" {
+			res.ClientWarning = fmt.Sprintf("agy: run status %q after an answer", out.Status)
 			return res, out, nil
 		}
 		return res, out, fmt.Errorf("agy: run status %q: %s", out.Status, clip(strings.TrimSpace(out.Response), 200))

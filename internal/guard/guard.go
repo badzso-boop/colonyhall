@@ -822,6 +822,10 @@ func (a *Agent) logRun(phase, model string, items int, res RunResult, err error)
 		a.Log.Warn("guard: run failed", append(attrs, "err", err)...)
 		return
 	}
+	if res.ClientWarning != "" {
+		a.Log.Warn("guard: run answered with a client warning", append(attrs, "warning", res.ClientWarning)...)
+		return
+	}
 	a.Log.Info("guard: run", attrs...)
 }
 

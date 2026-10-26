@@ -101,6 +101,9 @@ type RunResult struct {
 	// call, when the client tells it (0 = unknown). Usage sums every call
 	// of the run, so with many tool calls it is far larger than the context.
 	ContextTokens int
+	// ClientWarning: the client reported a problem but still answered; the
+	// guard logs it and keeps the answer.
+	ClientWarning string
 	// Denied lists actions the client refused because a headless run
 	// cannot ask for permission (Antigravity reports them).
 	Denied []string
