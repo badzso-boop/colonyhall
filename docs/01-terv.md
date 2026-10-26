@@ -1102,6 +1102,7 @@ Ezek most nem kellenek, de a terv úgy készül, hogy később átírás nélkü
 | Licenc | Nyílt forrású lesz, a licenc még nyitott | Csak MIT, Apache-2.0, BSD vagy hasonlóan megengedő licencű függőség kerül be, hogy bármelyik licencválasztás nyitva maradjon. |
 | Adatmegőrzési szabály | Minden megmarad | Append-only adatok és puha törlés; a szabály később egy ütemezett belső feladat lesz. |
 | Élő folyamatjelzés | Megvalósítva (2026-10-26, feature/live-progress) | Streaming adapterek, POST /api/v1/agent/progress, WebSocket agent.progress keret, felületi élő lépéskijelzés és tartós lépésnapló válaszok alatt. |
+| Ágens terminálok (hosszú parancsok) | Megvalósítva (2026-10-26, feature/agent-terminals) | tmux-alapú háttérfolyamatok, stdio MCP term tools, ébresztés befejezéskor, webes élő olvasó és SSH csatlakozási parancs. |
 
 ## Források
 

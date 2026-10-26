@@ -144,6 +144,16 @@ A sandboxos (`compact`) ágensek hálózati forgalma alapértelmezésben szűrt 
   - `open`: a hálózati névtér-izoláció ki van kapcsolva (a sandbox közvetlenül a gép hálózatát látja, ahogy a Task 18 előtt).
 - **Visszaállítás / Rollback:** Ha egy sandboxos agent hálózati hiba miatt elakad, azonnali visszaállításként állítsuk be a `guard.yaml`-ban a `sandbox_network: open` értéket, majd indítsuk újra az őrt (`systemctl --user restart colony-guard`).
 
+### Ágens terminálok és tmux követelmény (23. kör)
+
+Az ágens-terminálok (`terminal-mcp`, háttérben futó hosszú parancsok) futtatásához a `tmux` megléte szükséges minden őrt futtató gépen (`sudo apt install -y tmux`). Az őr a terminálokat egy elkülönített socket alatt kezeli (`tmux -L colonyhall`), így azok nem ütköznek a felhasználó saját tmux munkameneteivel.
+
+A webes felületről vagy közvetlenül SSH-n keresztül bármely futó terminálhoz csatlakozhatunk csak olvasható módban:
+```sh
+tmux -L colonyhall attach -r -t colony-<handle>-<name>
+```
+(A leváláshoz a szabványos `Ctrl+B`, majd `D` billentyűkombináció használható.)
+
 ## 9. Őr a PC-n (WSL)
 
 Ugyanígy, a szerver címe `http://100.85.111.88:8280`, `host_token_file: /root/.config/colonyhall/host.token`; a `colony` bináris a repóból (`go build -o ~/.local/bin/colony ./cmd/colony`), a `guard.yaml` a `~/.config/colonyhall/`-ban, `roots` a PC-n engedett mappák. A WSL-ben a linger már be van kapcsolva (2026-10-21), a WSL-t a Windows Feladatütemező tartja életben (bejelentkezéskor `conhost.exe --headless wsl.exe -d Ubuntu-24.04 -- sleep infinity`).

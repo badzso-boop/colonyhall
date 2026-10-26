@@ -819,6 +819,47 @@ Az agentek a válaszaikban gyakran hivatkoznak a gépükön lévő helyi fájlok
   - Chat megjelenítés: `📄 server.go:42-58` chipként, kattintásra a fájlböngésző panel megnyitása és a sorok kijelölése/középre görgetése (`revealLinesInCenter`). A Go és JS `FileLinks` felismeri a sorvégződéseket.
   - Szerkesztő: vendored Monaco Editor 0.52.2 (`min/vs`, 14 MB), igény szerinti betöltés AMD loaderrel az első panelnyitáskor, csak olvasható mód, beépített nyelvi tokenizálók (Monarch), témaszinkronizáció, sortörés, Markdown Formázott/Nyers kapcsoló, képmegjelenítés, Range fej/láb nézet >2 MB fájlokra.
 
+### Ágens terminálok (23. kör, `feature/agent-terminals`)
+
+A funkció célja, hogy a teljes hozzáférésű agentek elnevezett, hosszú futásidejű parancsokat indíthassanak (pl. WSL cross-distribution build, 45 perces fordítások), amelyek túlélik az agent közvetlen futási idejét (`work_timeout`, 15 perc) és a folyamatcsoport terminálását (`Setpgid` + `kill(-pgid)`). A parancs végeztével az őr automatikusan felébreszti az agentet, miközben az ember a webes felületen élőben olvashatja a kimenetet, leállíthatja a folyamatot, vagy SSH-n keresztül rácsatlakozhat.
+
+- **Őroldali terminálmenedzser (`internal/guard/terminal.go`)**:
+  - **Izolált tmux szerver:** minden terminálművelet független tmux szerver-socketet használ (`tmux -L colonyhall`), soha nem a felhasználó alapértelmezett munkameneteit. A munkamenet elnevezése: `colony-<handle>-<name>`. A név szabálya: `^[a-z0-9][a-z0-9-]{0,31}$`.
+  - **Lemezes állapottárolás:** az őr állapotkönyvtárában agentenként és terminálonként (`<state>/terminals/<handle>/<name>/`, 0700 jogosultság): `meta.json` (agent ID, handle, név, parancs, cwd, channel ID, thread root ID, indítási/befejezési idő, kilépési kód, leállító), `output.log` (`pipe-pane -o` csővezetéken át, 1 MB méretkorlátnál újsorhoz igazítva levágva), `exit` (a shell burok által `trap 'echo $? > exit' EXIT` segítségével mentett hibakód).
+  - **Korlátok és ellenőrzések:** legfeljebb 5 futó terminál agentenként, legfeljebb 20 a hosztgépen. A munkamappa (`cwd`) kizárólag az agent engedélyezett gyökérkönyvtárán vagy worktree-jén belül lehet (`CheckGrant` valós útvonal ellenőrzéssel). Befejezett terminál neve újrahasznosítható.
+  - **Megfigyelő (watcher) és örökbefogadás:** 5 másodpercenként ellenőrzi a futó munkameneteket és az `exit` fájlok megjelenését. Az őr újraindulásakor a meglévő, még futó tmux munkameneteket örökbe fogadja; a leállás alatt befejeződötteket azonnal feldolgozza és jelenti.
+  - **Leállítási szemantika (halt):** az agent szüneteltetése, leállítása, törlése, a gépről való leválasztása vagy a vészleállító (emergency stop) azonnal terminálja az agent összes futó terminálját (`kill-session`), és rögzíti a `killed_by: "halt"` állapotot.
+  - **Adatmegőrzés (retention):** a befejezett terminálok adatai 7 napig maradnak meg a lemezen, ezután a megfigyelő automatikusan törli a teljes könyvtárat.
+  - **Vezérlőkarakter-szűrés (`FilterTerminalOutput`):** az agentnek és embernek kiadott terminálkimenetből a rendszer kiszűri az ANSI escape-szekvenciákat és a C0/C1 vezérlőkaraktereket, kizárólag a soremelést (`\n`), kocsivisszát (`\r`) és tabulátort (`\t`) megtartva.
+
+- **Ágens eszközök és Stdio MCP szerver (`internal/guard/terminal_mcp.go`, `cmd/colony/main.go`)**:
+  - Rejtett CLI alparancs: `colony terminal-mcp -agent <handle> -state <dir>`, amely stdio protokollon keresztül valósítja meg a Model Context Protocol (MCP) kiszolgálót.
+  - Kizárólag teljes hozzáférésű agentek közvetlen futásához kapcsolódik második szerverként (`colony-terminal`); sandboxos agentek nem kapják meg, és a segédprogram elutasítja a sandboxos azonosítókat.
+  - Eszközök:
+    - `term_start(name, command, cwd?)`: terminál indítása a háttérben.
+    - `term_status(name?)`: az agent termináljainak listázása és állapota (running, finished, killed, error), futásidővel és kilépési kóddal.
+    - `term_output(name, lines?)`: az utolsó legfeljebb 1000 sor lekérése szűrve, biztonsági keretben: `<terminal_output name="...">...</terminal_output>` (a belső lezáró tag maszkolásával és adatvédelmi figyelmeztetéssel).
+    - `term_send(name, text)`: billentyűleütések küldése interaktív várakozásnál (`send-keys -l` + Enter).
+    - `term_kill(name)`: terminál leállítása.
+
+- **Befejezési esemény és ébresztés (`internal/modules/delivery/`)**:
+  - Az őr a befejezéskor rövid státuszüzenetet küld az érintett szálba az agent nevében: `⚙️ <név> kész · exit 0 · 43:12` (vagy hibánál `⚠️ <név> hibával állt le · exit <N> · <idő>`, leállításnál `⛔ <név> leállítva`), kimenet nélkül.
+  - Ébresztés küldése: `POST /api/v1/agent/terminal-events` végponton át a szerver új `terminal` típusú inbox elemet hoz létre `FlagWake` jelöléssel (az utolsó 40 sor / 8 KB kimenettel tárolva).
+  - A közvetlen agent következő futási promptjába beépül az ébresztő üzenet az utolsó sorokkal és a feladat folytatására vonatkozó utasítással.
+
+- **Emberi felület és közvetítő műveletek (Human view & relay ops)**:
+  - Efemer közvetítő műveletek a `POST /api/v1/agents/{agentId}/fs` végponton:
+    - `term_list`: az agent termináljainak lekérdezése.
+    - `term_output`: az utolsó legfeljebb 1000 sor lekérése.
+    - `term_kill`: terminál leállítása, kizárólag adminisztrátoroknak (`IsAdmin()`), auditálva (`audit: term kill`), a leállító kezelőnevével (`killed_by: "@" + handle`).
+  - Felület (`internal/httpserver/web/index.html`):
+    - Az Agent Overview panelen dedikált **"🖥 Terminálok"** szekció státuszjelvénnyel (`fut ⏳`, `kész ✅ exit 0`, `hiba ⚠️ exit N`, `leállítva ⛔`), kezdési idővel, futásidővel és szálhivatkozással.
+    - Teljes magasságú, csak olvasható monospace terminálnéző (`textContent`, szigorúan innerHTML nélkül), automatikus görgetéssel (amely felfelé görgetéskor szünetel), futás közben 2 másodpercenkénti automatikus frissítéssel.
+    - Adminisztrátori **Leállítás** gomb felületi megerősítéssel.
+    - Másolható SSH csatlakozási parancs: `tmux -L colonyhall attach -r -t colony-<handle>-<name>` a hosztgép nevével.
+    - A chatben megjelenő `⚙️ … kész` üzenetek közvetlen gombbal nyithatók meg a terminálnézőben; mobilon teljes képernyős sheet.
+    - Kétnyelvű nemzetköziesítés (`hu`, `en`).
+
 ### Biztonságos Markdown megjelenítés a felületen (2026-10-22, `feature/chat-markdown`)
 
 Minden chatüzenet (emberi és agent egyaránt) és a fájlnéző modál is egyetlen, közös, kliensoldali JavaScript modulon (`internal/httpserver/web/markdown.js`, globális `ColonyMarkdown`) keresztül jelenik meg formázottan.
