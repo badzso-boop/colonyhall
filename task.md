@@ -22,6 +22,8 @@
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
+- [ ] **Élő lépések: mit csinál az agent futás közben** — kiadva: `docs/handoff/22-live-progress-prompt.md` (a 21. kör után indítható). A „dolgozik…” helyett élő, összecsukható lépéslista (📖 olvas, ✏️ szerkeszt, ⚙️ parancs, 💭 gondolkodik, ✍️ válaszol…), a futás után a válasz alatt „▸ 14 lépés · 2:14”, és a futásnaplóban. Az őr `stream-json` módban indítja a klienseket (mindkettő tudja, mérve 2026-10-26). Csak lépés és rövid címke látszik (relatív útvonal, szűrt parancs), soha fájltartalom, eszközkimenet vagy gondolkodásszöveg; csak ember, aki a csatornát olvassa. Mellékhatás: az agy hívásonkénti tokenszámából az agy agentek valódi kontextusa is mérhető lesz, így náluk is visszakapcsolható a pontos munkamenet-mérés.
+
 - [ ] **Automatikus tömörítés (compaction) szálakban, DM-ekben és csatornákban** — terv, döntések (Norbi, 2026-10-26), kiadva: `docs/handoff/21-compaction-prompt.md`.
   - **Mit mér:** a beszélgetés szövegét a Colonyhallban, az utolsó tömörítés óta, egységenként: egy szál; egy DM fő folyama (DM-ben a szál nélküli üzenetek egy munkamenet); egy csatorna fő folyama. Becslés: karakter / 4 ≈ token. **Küszöb: 350 000 token alapból, állítható** (munkatér-szinten, csatornánként felülírható; a nagy kontextusú modellek órákig bírják, ezt finomhangolni kell). Mellé kézi „🗜 Tömörítés most” gomb.
   - **Ki tömörít:** egy külön, olcsó **jegyző agent** (pl. Claude Haiku vagy Gemini Flash Low), eszközök nélküli futásban; a beállításokban kijelölve. Bemenet: az előző kivonat + az azóta írt üzenetek, adatként.
