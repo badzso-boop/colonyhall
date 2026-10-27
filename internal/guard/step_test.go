@@ -318,3 +318,48 @@ func TestStreamHugeLine(t *testing.T) {
 		t.Errorf("expected text 'done', got %q", res.Text)
 	}
 }
+
+// TestAntigravityStreamRealFormat replays output captured from agy 1.4.7,
+// which nests each event's fields under the event name. Reading only the
+// flat fields failed every direct run with `run status ""`.
+func TestAntigravityStreamRealFormat(t *testing.T) {
+	fixture, err := os.ReadFile("testdata/antigravity_stream_real.jsonl")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var steps []Step
+	agy := &Antigravity{
+		Run: func(ctx context.Context, dir, name string, args, env []string) ([]byte, []byte, error) {
+			return fixture, nil, nil
+		},
+	}
+	res, err := agy.Direct(context.Background(), DirectRequest{Dir: "/workspace", OnStep: func(s Step) { steps = append(steps, s) }})
+	if err != nil {
+		t.Fatalf("Direct: %v", err)
+	}
+	if res.Text != "alma\n" {
+		t.Errorf("text = %q", res.Text)
+	}
+	if res.ConversationID != "aa1279cf-ac7e-4933-8fe6-fe852277a5e4" {
+		t.Errorf("conversation id = %q", res.ConversationID)
+	}
+	if res.Usage.Input != 21477 || res.Usage.Output != 107 {
+		t.Errorf("usage = %+v", res.Usage)
+	}
+	// The last model call's input is the real context.
+	if res.ContextTokens != 7319 {
+		t.Errorf("context tokens = %d", res.ContextTokens)
+	}
+	var read, cmd bool
+	for _, s := range steps {
+		if s.Kind == StepKindRead && s.Label == "note.txt" {
+			read = true
+		}
+		if s.Kind == StepKindCommand && s.Label == "ls" {
+			cmd = true
+		}
+	}
+	if !read || !cmd {
+		t.Errorf("missing read/command steps: %+v", steps)
+	}
+}

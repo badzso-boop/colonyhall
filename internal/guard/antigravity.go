@@ -53,6 +53,10 @@ type agyStreamLine struct {
 	DeniedActions   []struct {
 		Action string `json:"action"`
 	} `json:"denied_actions"`
+	// agy (1.4.x) nests each event's fields under a key named after the
+	// event: {"event":"result","result":{"status":...}}.
+	StepUpdate *agyStreamLine `json:"step_update"`
+	Result     *agyStreamLine `json:"result"`
 }
 
 type agyToolInfo struct {
@@ -177,6 +181,13 @@ func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, 
 		var sl agyStreamLine
 		if jerr := json.Unmarshal([]byte(line), &sl); jerr != nil {
 			return
+		}
+		if inner := sl.StepUpdate; inner != nil && sl.Event == "step_update" {
+			inner.Event = sl.Event
+			sl = *inner
+		} else if inner := sl.Result; inner != nil && sl.Event == "result" {
+			inner.Event = sl.Event
+			sl = *inner
 		}
 		if sl.Event == "" && (sl.Status != "" || sl.Response != "" || sl.ConversationID != "") {
 			sl.Event = "result"
