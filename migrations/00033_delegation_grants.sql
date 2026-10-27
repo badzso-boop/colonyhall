@@ -12,7 +12,9 @@ CREATE TABLE delegation_grant (
     last_used_at    timestamptz NOT NULL,
     expires_at      timestamptz NOT NULL,
     revoked_by      uuid REFERENCES actor(id),
-    revoked_at      timestamptz
+    revoked_at      timestamptz,
+    CHECK (agent_a_id < agent_b_id),
+    CHECK (expires_at > approved_at)
 );
 
 CREATE INDEX delegation_grant_active_idx ON delegation_grant(workspace_id, channel_id, agent_a_id, agent_b_id) WHERE revoked_at IS NULL;
@@ -20,14 +22,16 @@ CREATE INDEX delegation_grant_delegation_idx ON delegation_grant(delegation_id);
 
 CREATE TABLE delegation_settings (
     workspace_id       uuid PRIMARY KEY REFERENCES workspace(id) ON DELETE CASCADE,
-    grant_idle_minutes integer NOT NULL DEFAULT 60,
-    grant_max_hours    integer NOT NULL DEFAULT 12,
+    grant_idle_minutes integer NOT NULL DEFAULT 60 CHECK (grant_idle_minutes BETWEEN 5 AND 1440),
+    grant_max_hours    integer NOT NULL DEFAULT 12 CHECK (grant_max_hours BETWEEN 1 AND 72),
     updated_at         timestamptz NOT NULL
 );
 
 ALTER TABLE delivery ADD COLUMN via_grant boolean NOT NULL DEFAULT false;
+ALTER TABLE delegation ADD COLUMN via_grant boolean NOT NULL DEFAULT false;
 
 -- +goose Down
+ALTER TABLE delegation DROP COLUMN IF EXISTS via_grant;
 ALTER TABLE delivery DROP COLUMN IF EXISTS via_grant;
 DROP TABLE IF EXISTS delegation_settings;
 DROP TABLE IF EXISTS delegation_grant;

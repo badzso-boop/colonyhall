@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"colonyhall/internal/apispec"
+	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/server"
 )
 
@@ -730,4 +731,52 @@ func TestDelegationSandboxedUnchanged(t *testing.T) {
 		t.Fatalf("expected kind message for sandboxed, got %s", inBox.Items[0].Kind)
 	}
 	_ = targetID
+}
+
+// TestDelegationApprovedWithoutGrantNotLabelled: delegations approved before
+// grants existed (round 24) have no grant; the API must not report them as
+// approved by a grant.
+func TestDelegationApprovedWithoutGrantNotLabelled(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+
+	hostID, _ := e.enroll("machine-grant-old")
+	sourceID, sourceTok := createFullAccessAgent(e, hostID, "projects", "Projects Agent")
+	targetID, _ := createFullAccessAgent(e, hostID, "agy-homelab", "Homelab Agent")
+
+	var dmChan apispec.Channel
+	if s := e.do("POST", "/api/v1/dms", server.DevAdminToken, map[string]any{
+		"actor_ids": []string{sourceID, targetID},
+	}, &dmChan); s != http.StatusOK && s != http.StatusCreated {
+		t.Fatalf("open DM: %d", s)
+	}
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dmChan.Id), sourceTok, apispec.SendMessageRequest{
+		Body: "@agy-homelab please deploy",
+	}, nil)
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	var list apispec.DelegationList
+	e.do("GET", "/api/v1/delegations?state=pending", server.DevAdminToken, nil, &list)
+	if len(list.Delegations) != 1 {
+		t.Fatalf("expected 1 pending delegation, got %d", len(list.Delegations))
+	}
+	// Approve it the way round 24 did: a state change, no grant.
+	delID := ids.ID(list.Delegations[0].Id)
+	decider, err := ids.Parse(sourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.app.Delegation.Store.UpdateStateConditional(ctx, delID, "pending", "approved", &decider, e.clock.Now()); err != nil || n != 1 {
+		t.Fatalf("approve: n=%d err=%v", n, err)
+	}
+
+	e.do("GET", "/api/v1/delegations?state=approved", server.DevAdminToken, nil, &list)
+	if len(list.Delegations) != 1 {
+		t.Fatalf("expected 1 approved delegation, got %d", len(list.Delegations))
+	}
+	if g := list.Delegations[0].ApprovedByGrant; g != nil && *g {
+		t.Fatalf("a delegation approved without a grant is labelled approved_by_grant")
+	}
 }

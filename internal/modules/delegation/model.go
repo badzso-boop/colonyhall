@@ -55,6 +55,7 @@ type Delegation struct {
 	State        string
 	DecidedBy    *ids.ID
 	DecidedAt    *time.Time
+	ViaGrant     bool // approved through a conversation grant, not by an admin's answer
 	CreatedAt    time.Time
 }
 

@@ -136,6 +136,24 @@ func (s *Store) UpdateStateConditional(_ context.Context, id ids.ID, expectedSta
 	return 1, nil
 }
 
+func (s *Store) ApproveViaGrant(_ context.Context, id ids.ID, decidedBy ids.ID, decidedAt time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	d, ok := s.items[id]
+	if !ok || d.State != delegation.StatePending {
+		return 0, nil
+	}
+	d.State = delegation.StateApproved
+	by := decidedBy
+	d.DecidedBy = &by
+	at := decidedAt
+	d.DecidedAt = &at
+	d.ViaGrant = true
+	s.items[id] = d
+	return 1, nil
+}
+
 func (s *Store) ListByWorkspace(_ context.Context, workspaceID ids.ID, state *string) ([]delegation.Delegation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

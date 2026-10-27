@@ -221,6 +221,7 @@ type Delegation struct {
 	DecidedBy    *uuid.UUID
 	DecidedAt    *time.Time
 	CreatedAt    time.Time
+	ViaGrant     bool
 }
 
 type DelegationGrant struct {

@@ -210,6 +210,26 @@ func testDelegation(t *testing.T, b Backend) {
 		t.Fatalf("expected empty for other conversation, got %d", len(otherConvPending))
 	}
 
+	// ApproveViaGrant: only from pending, and the flag is stored.
+	if updated.ViaGrant {
+		t.Fatalf("an admin approval must not be marked via_grant")
+	}
+	aff, err = b.Delegation.ApproveViaGrant(ctx, dID, f.human.ID, now)
+	must(t, err)
+	if aff != 0 {
+		t.Fatalf("ApproveViaGrant on an approved delegation: expected 0 affected, got %d", aff)
+	}
+	aff, err = b.Delegation.ApproveViaGrant(ctx, d2ID, f.human.ID, now)
+	must(t, err)
+	if aff != 1 {
+		t.Fatalf("ApproveViaGrant: expected 1 affected, got %d", aff)
+	}
+	viaGrant, err := b.Delegation.GetByID(ctx, d2ID)
+	must(t, err)
+	if viaGrant.State != delegation.StateApproved || !viaGrant.ViaGrant || viaGrant.DecidedBy == nil || *viaGrant.DecidedBy != f.human.ID {
+		t.Fatalf("ApproveViaGrant: unexpected delegation %+v", viaGrant)
+	}
+
 	// -------------------------------------------------------------
 	// Settings
 	// -------------------------------------------------------------

@@ -24,6 +24,14 @@ SET state = $3,
     decided_at = $5
 WHERE id = $1 AND state = $2;
 
+-- name: ApproveDelegationViaGrant :execrows
+UPDATE delegation
+SET state = 'approved',
+    decided_by = $2,
+    decided_at = $3,
+    via_grant = true
+WHERE id = $1 AND state = 'pending';
+
 -- name: ListDelegationsByWorkspace :many
 SELECT * FROM delegation
 WHERE workspace_id = $1

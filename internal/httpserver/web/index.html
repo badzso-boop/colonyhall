@@ -423,6 +423,8 @@ const I18N = {
         delegationHint: "Engedély érvényessége: 5–1440 perc csend után lejár, legfeljebb 1–72 óráig.",
         delegationActiveGrants: "Aktív engedélyek", delegationNoActiveGrants: "Nincsenek aktív engedélyek.",
         delegationApprovedByGrant: "az engedély alapján",
+        grantYes: "Igen", grantIdleHours: "{n} óra", grantIdleMinutes: "{n} perc",
+        grantScope: "engedély ebben a beszélgetésben ({idle} csendig, legfeljebb {max} óráig)",
         grantActive: "engedély", grantExpires: "lejár", grantApprover: "jóváhagyta",
         grantRevoke: "Visszavonás", grantRevokeConfirm: "Biztosan visszavonod?",
         newAgent: "Új agent", createAgent: "Agent létrehozása", joinChannels: "Csatornák:",
@@ -506,6 +508,8 @@ const I18N = {
         delegationHint: "Grant validity: expires after 5–1440 minutes of silence, at most 1–72 hours.",
         delegationActiveGrants: "Active Grants", delegationNoActiveGrants: "No active grants.",
         delegationApprovedByGrant: "approved by grant",
+        grantYes: "Yes", grantIdleHours: "{n} h", grantIdleMinutes: "{n} min",
+        grantScope: "grant in this conversation (until {idle} of silence, at most {max} h)",
         grantActive: "grant", grantExpires: "expires", grantApprover: "approved by",
         grantRevoke: "Revoke", grantRevokeConfirm: "Are you sure you want to revoke?",
         newAgent: "New agent", createAgent: "Create agent", joinChannels: "Channels:",
@@ -1006,7 +1010,7 @@ function makeRevokeGrantButton(grantId, onRevoked) {
   const confirmText = el("span", { className: "warn", style: "font-size:12px;", textContent: L.grantRevokeConfirm || "Biztosan visszavonod?" });
   const yesBtn = el("button", {
     className: "small",
-    textContent: lang === "en" ? "Yes" : "Igen",
+    textContent: L.grantYes,
     style: "font-size:11px;padding:2px 8px;cursor:pointer;color:#b3261e;border-color:#b3261e;"
   });
   const noBtn = el("button", {
@@ -3672,11 +3676,9 @@ async function renderDelegationInline(m, span) {
       text = `✅ ${L.delegationApprovedByGrant || "az engedély alapján"}`;
     } else if (del.grant_idle_minutes && del.grant_max_hours) {
       const idleText = del.grant_idle_minutes >= 60 && del.grant_idle_minutes % 60 === 0
-        ? `${del.grant_idle_minutes / 60} ${lang === "en" ? (del.grant_idle_minutes === 60 ? "hour" : "hours") : "óra"}`
-        : `${del.grant_idle_minutes} ${lang === "en" ? "minutes" : "perc"}`;
-      const grantScopeText = lang === "en"
-        ? `grant in this conversation (up to ${idleText} silence, at most ${del.grant_max_hours} hours)`
-        : `engedély ebben a beszélgetésben (${idleText} csendig, legfeljebb ${del.grant_max_hours} óráig)`;
+        ? L.grantIdleHours.replace("{n}", del.grant_idle_minutes / 60)
+        : L.grantIdleMinutes.replace("{n}", del.grant_idle_minutes);
+      const grantScopeText = L.grantScope.replace("{idle}", idleText).replace("{max}", del.grant_max_hours);
       text = `✅ ${L.delegationApprovedBy || "Jóváhagyta"} ${who} — ${grantScopeText}`;
     } else {
       text = `✅ ${L.delegationApprovedBy || "Jóváhagyta"} ${who} ${timeStr}`.trim();

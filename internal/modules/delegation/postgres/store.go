@@ -47,6 +47,7 @@ func toModel(r sqlcgen.Delegation) delegation.Delegation {
 		State:       r.State,
 		DecidedBy:   fromUUIDPtr(r.DecidedBy),
 		DecidedAt:   r.DecidedAt,
+		ViaGrant:    r.ViaGrant,
 		CreatedAt:   r.CreatedAt,
 	}
 	if r.ThreadRootID != nil {
@@ -139,6 +140,15 @@ func (s *Store) UpdateStateConditional(ctx context.Context, id ids.ID, expectedS
 		State:     expectedState,
 		State_2:   newState,
 		DecidedBy: decBy,
+		DecidedAt: &decidedAt,
+	})
+}
+
+func (s *Store) ApproveViaGrant(ctx context.Context, id ids.ID, decidedBy ids.ID, decidedAt time.Time) (int64, error) {
+	by := uuid.UUID(decidedBy)
+	return s.q(ctx).ApproveDelegationViaGrant(ctx, sqlcgen.ApproveDelegationViaGrantParams{
+		ID:        uuid.UUID(id),
+		DecidedBy: &by,
 		DecidedAt: &decidedAt,
 	})
 }

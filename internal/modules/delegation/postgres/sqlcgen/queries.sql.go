@@ -12,6 +12,29 @@ import (
 	"github.com/google/uuid"
 )
 
+const approveDelegationViaGrant = `-- name: ApproveDelegationViaGrant :execrows
+UPDATE delegation
+SET state = 'approved',
+    decided_by = $2,
+    decided_at = $3,
+    via_grant = true
+WHERE id = $1 AND state = 'pending'
+`
+
+type ApproveDelegationViaGrantParams struct {
+	ID        uuid.UUID
+	DecidedBy *uuid.UUID
+	DecidedAt *time.Time
+}
+
+func (q *Queries) ApproveDelegationViaGrant(ctx context.Context, arg ApproveDelegationViaGrantParams) (int64, error) {
+	result, err := q.db.Exec(ctx, approveDelegationViaGrant, arg.ID, arg.DecidedBy, arg.DecidedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getActiveGrantByPairAndConversation = `-- name: GetActiveGrantByPairAndConversation :one
 SELECT id, workspace_id, channel_id, thread_root_id, agent_a_id, agent_b_id, delegation_id, approved_by, approved_at, last_used_at, expires_at, revoked_by, revoked_at FROM delegation_grant
 WHERE workspace_id = $1
@@ -66,7 +89,7 @@ func (q *Queries) GetActiveGrantByPairAndConversation(ctx context.Context, arg G
 }
 
 const getDelegationByID = `-- name: GetDelegationByID :one
-SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation WHERE id = $1
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation WHERE id = $1
 `
 
 func (q *Queries) GetDelegationByID(ctx context.Context, id uuid.UUID) (Delegation, error) {
@@ -85,12 +108,13 @@ func (q *Queries) GetDelegationByID(ctx context.Context, id uuid.UUID) (Delegati
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.ViaGrant,
 	)
 	return i, err
 }
 
 const getDelegationByMessageAndTarget = `-- name: GetDelegationByMessageAndTarget :one
-SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation WHERE message_id = $1 AND to_agent_id = $2
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation WHERE message_id = $1 AND to_agent_id = $2
 `
 
 type GetDelegationByMessageAndTargetParams struct {
@@ -114,12 +138,13 @@ func (q *Queries) GetDelegationByMessageAndTarget(ctx context.Context, arg GetDe
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.ViaGrant,
 	)
 	return i, err
 }
 
 const getDelegationByQuestionID = `-- name: GetDelegationByQuestionID :one
-SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation WHERE question_id = $1
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation WHERE question_id = $1
 `
 
 func (q *Queries) GetDelegationByQuestionID(ctx context.Context, questionID uuid.UUID) (Delegation, error) {
@@ -138,6 +163,7 @@ func (q *Queries) GetDelegationByQuestionID(ctx context.Context, questionID uuid
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.ViaGrant,
 	)
 	return i, err
 }
@@ -270,7 +296,7 @@ func (q *Queries) InsertGrant(ctx context.Context, arg InsertGrantParams) error 
 }
 
 const listDelegationsByWorkspace = `-- name: ListDelegationsByWorkspace :many
-SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation
 WHERE workspace_id = $1
   AND ($2::text IS NULL OR state = $2)
 ORDER BY created_at DESC
@@ -303,6 +329,7 @@ func (q *Queries) ListDelegationsByWorkspace(ctx context.Context, arg ListDelega
 			&i.DecidedBy,
 			&i.DecidedAt,
 			&i.CreatedAt,
+			&i.ViaGrant,
 		); err != nil {
 			return nil, err
 		}
@@ -365,7 +392,7 @@ func (q *Queries) ListGrantsByWorkspace(ctx context.Context, arg ListGrantsByWor
 }
 
 const listPendingByPairAndConversation = `-- name: ListPendingByPairAndConversation :many
-SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation
 WHERE workspace_id = $1
   AND (
       (from_agent_id = $2 AND to_agent_id = $3)
@@ -416,6 +443,7 @@ func (q *Queries) ListPendingByPairAndConversation(ctx context.Context, arg List
 			&i.DecidedBy,
 			&i.DecidedAt,
 			&i.CreatedAt,
+			&i.ViaGrant,
 		); err != nil {
 			return nil, err
 		}

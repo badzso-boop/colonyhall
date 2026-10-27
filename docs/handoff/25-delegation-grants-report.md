@@ -230,7 +230,7 @@ ok  	colonyhall/internal/e2e	76.544s
 1. **`internal/modules/delegation/conversation.go` & `conversation_test.go`:**
    A beszélgetési hatókör számításának tiszta logikája és a hozzá tartozó táblateszt.
 2. **`migrations/00033_delegation_grants.sql`:**
-   A táblaszerkezetek, ellenőrzési feltételek (bounds check) és a részleges egyedi index (`WHERE revoked_at IS NULL`).
+   A táblaszerkezetek és az ellenőrzési feltételek (a `CHECK`-eket és a `delegation.via_grant` oszlopot az átnézés tette hozzá; egyedi index nincs, lásd lent).
 3. **`internal/modules/question/service.go` (`CloseByGrant`):**
    A szűk, chatüzenet-mentes lezárási metódus, amely megelőzi a DM ébresztési áradatot.
 4. **`internal/modules/delegation/service.go` (`onMessageCreated`, `onQuestionAnswered`):**
@@ -239,3 +239,14 @@ ok  	colonyhall/internal/e2e	76.544s
    A `ViaGrant` mezőn alapuló megkülönböztetett prompt keretezés.
 6. **`internal/e2e/delegation_grants_test.go`:**
    A teljes szerződésre épülő, robusztus integrációs tesztsorozat (lejárat, visszavonás, jogosultságok, hatókör-izoláció).
+
+---
+
+## 7. Átnézés (Claude Code, 2026-10-27)
+
+Minden ellenőrzés zöld volt már átadáskor is (`make test`, `lint`, `gen-check`, `test-web`, `test-pg` gyorsítótár nélkül, `-race`). Rendben: az engedély keresése mindkét tárban rendezett párral megy (B→A irány is működik), a jogosultságok minden hívásnál ellenőrizve, `CloseByGrant` nem küld chatüzenetet. Javítva, mindegyikhez teszt, ami a javítás nélkül elbukik:
+
+1. **A felület JavaScript-hibával elszállt** (`lang is not defined`) a jóváhagyott kérdés engedély-feliratánál és a visszavonás „Igen” gombjánál; a szövegek ráadásul nem i18n kulcsokon mentek. Javítva i18n kulcsokkal (`grantYes`, `grantIdleHours`, `grantIdleMinutes`, `grantScope`); Playwrighttal kipróbálva: jóváhagyás → felirat és 🤝 sáv, a másik agent követő üzenete új kérdés nélkül megy, visszavonás a sávból, „Gépek” → Feladatátadás doboz.
+2. **„az engedély alapján” felirat a kézzel jóváhagyott delegációkon.** A lista utólag találgatta ki (jóváhagyott, de nincs hozzá engedély), így minden 24. körös, élesben már jóváhagyott delegáció ezt kapta volna. Most eltárolódik: `delegation.via_grant` (a `00033` migrációban, ami még nem futott élesben), új tármetódus `ApproveViaGrant` (csak `pending`-ből). Teszt: `TestDelegationApprovedWithoutGrantNotLabelled`, storetest.
+3. **Elnyelt hibák (`_ =`).** Az eseménykezelő tranzakcióban fut, de a hibák elnyelése miatt egy sikertelen írás után is commitolt volna (esemény nélküli állapotváltozás). Most minden hiba visszatér; a beállítás mentése és a visszavonás saját tranzakcióban fut az eseményével. Teszt: `TestRevokeGrantFailsWhenEventFails`.
+4. **Migráció:** a jelentés által említett ellenőrzések hiányoztak; hozzáadva: `agent_a_id < agent_b_id`, `expires_at > approved_at`, a beállítások határai. Egyedi index szándékosan nincs: a lejárt engedélyt semmi nem vonja vissza, így egy egyedi index megakadályozná az új engedélyt lejárat után; dupla engedély a gyakorlatban nem keletkezik, mert a delegációs eseménykezelő egy sorban dolgozik.

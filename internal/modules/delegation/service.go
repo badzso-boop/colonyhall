@@ -188,7 +188,9 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 		activeGrant, err := s.Store.GetActiveGrant(ctx, e.WorkspaceID, author.ID, rec.Actor.ID, conv.ChannelID, conv.ThreadRootID, now)
 		if err == nil && activeGrant.IsActive(now, st.GrantIdleMinutes) {
 			// Covered by active grant! Deliver directly without creating delegation or question.
-			_ = s.Store.UpdateGrantLastUsed(ctx, activeGrant.ID, now)
+			if err := s.Store.UpdateGrantLastUsed(ctx, activeGrant.ID, now); err != nil {
+				return err
+			}
 			_, err = s.Delivery.Insert(ctx, delivery.Delivery{
 				ID:          s.IDs.New(),
 				WorkspaceID: e.WorkspaceID,
@@ -358,7 +360,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 		}
 
 		ansIDStr := answerer.ID.String()
-		_ = s.recordEvent(ctx, del.WorkspaceID, answerer.ID, EventApproved, del.ID, EventPayload{
+		if err := s.recordEvent(ctx, del.WorkspaceID, answerer.ID, EventApproved, del.ID, EventPayload{
 			DelegationID: del.ID.String(),
 			MessageID:    del.MessageID.String(),
 			ChannelID:    del.ChannelID.String(),
@@ -368,7 +370,9 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 			QuestionID:   del.QuestionID.String(),
 			State:        StateApproved,
 			DecidedBy:    &ansIDStr,
-		})
+		}); err != nil {
+			return err
+		}
 
 		// Create active grant if none exists for pair & conversation
 		st, err := s.getSettings(ctx, del.WorkspaceID)
@@ -396,7 +400,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 			if err := s.Store.InsertGrant(ctx, grant); err != nil {
 				return err
 			}
-			_ = s.recordEvent(ctx, del.WorkspaceID, answerer.ID, EventGrantCreated, grantID, GrantEventPayload{
+			if err := s.recordEvent(ctx, del.WorkspaceID, answerer.ID, EventGrantCreated, grantID, GrantEventPayload{
 				GrantID:            grantID.String(),
 				WorkspaceID:        grant.WorkspaceID.String(),
 				ChannelID:          grant.ChannelID.String(),
@@ -408,23 +412,33 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 				ApprovedAt:         grant.ApprovedAt.Format(time.RFC3339),
 				ExpiresAt:          grant.ExpiresAt.Format(time.RFC3339),
 				EffectiveExpiresAt: grant.EffectiveExpiresAt(st.GrantIdleMinutes).Format(time.RFC3339),
-			})
+			}); err != nil {
+				return err
+			}
 		} else {
-			_ = s.Store.UpdateGrantLastUsed(ctx, existingGrant.ID, now)
+			if err := s.Store.UpdateGrantLastUsed(ctx, existingGrant.ID, now); err != nil {
+				return err
+			}
 		}
 
 		// Approve other pending delegations of the same pair in the same conversation
 		otherPending, err := s.Store.ListPendingByPairAndConversation(ctx, del.WorkspaceID, canonA, canonB, del.ChannelID, del.ThreadRootID)
-		if err == nil {
+		if err != nil {
+			return err
+		}
+		{
 			for _, otherDel := range otherPending {
 				if otherDel.ID == del.ID {
 					continue
 				}
-				aff, err := s.Store.UpdateStateConditional(ctx, otherDel.ID, StatePending, StateApproved, &answerer.ID, now)
-				if err != nil || aff == 0 {
+				aff, err := s.Store.ApproveViaGrant(ctx, otherDel.ID, answerer.ID, now)
+				if err != nil {
+					return err
+				}
+				if aff == 0 {
 					continue
 				}
-				_, _ = s.Delivery.Insert(ctx, delivery.Delivery{
+				if _, err := s.Delivery.Insert(ctx, delivery.Delivery{
 					ID:          s.IDs.New(),
 					WorkspaceID: otherDel.WorkspaceID,
 					RecipientID: otherDel.ToAgentID,
@@ -437,11 +451,15 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 					Flags:       delivery.FlagUnread | delivery.FlagWake,
 					EventSeq:    e.Seq,
 					CreatedAt:   now,
-				})
-				if otherDel.QuestionID != ids.Nil && s.Question != nil {
-					_ = s.Question.CloseByGrant(ctx, otherDel.QuestionID, answerer.ID, "az engedély alapján")
+				}); err != nil {
+					return err
 				}
-				_ = s.recordEvent(ctx, otherDel.WorkspaceID, answerer.ID, EventApproved, otherDel.ID, EventPayload{
+				if otherDel.QuestionID != ids.Nil && s.Question != nil {
+					if err := s.Question.CloseByGrant(ctx, otherDel.QuestionID, answerer.ID, "az engedély alapján"); err != nil {
+						return err
+					}
+				}
+				if err := s.recordEvent(ctx, otherDel.WorkspaceID, answerer.ID, EventApproved, otherDel.ID, EventPayload{
 					DelegationID: otherDel.ID.String(),
 					MessageID:    otherDel.MessageID.String(),
 					ChannelID:    otherDel.ChannelID.String(),
@@ -451,7 +469,9 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 					QuestionID:   otherDel.QuestionID.String(),
 					State:        StateApproved,
 					DecidedBy:    &ansIDStr,
-				})
+				}); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -690,9 +710,8 @@ func (s *Service) List(ctx context.Context, by identity.Actor, state *string, me
 			maxH := int((g.ExpiresAt.Sub(g.ApprovedAt) + time.Minute) / time.Hour)
 			v.GrantIdleMinutes = &idle
 			v.GrantMaxHours = &maxH
-		} else if it.State == StateApproved {
-			v.ApprovedByGrant = true
 		}
+		v.ApprovedByGrant = it.ViaGrant
 		views = append(views, v)
 	}
 	return views, nil
@@ -723,14 +742,19 @@ func (s *Service) UpdateSettings(ctx context.Context, by identity.Actor, idleMin
 		GrantMaxHours:    maxHours,
 		UpdatedAt:        s.Clock.Now(),
 	}
-	if err := s.Store.UpsertSettings(ctx, st); err != nil {
+	err := s.inTx(ctx, func(ctx context.Context) error {
+		if err := s.Store.UpsertSettings(ctx, st); err != nil {
+			return err
+		}
+		return s.recordEvent(ctx, by.WorkspaceID, by.ID, EventSettingsUpdated, by.WorkspaceID, SettingsEventPayload{
+			WorkspaceID:      by.WorkspaceID.String(),
+			GrantIdleMinutes: idleMinutes,
+			GrantMaxHours:    maxHours,
+		})
+	})
+	if err != nil {
 		return Settings{}, err
 	}
-	_ = s.recordEvent(ctx, by.WorkspaceID, by.ID, EventSettingsUpdated, by.WorkspaceID, SettingsEventPayload{
-		WorkspaceID:      by.WorkspaceID.String(),
-		GrantIdleMinutes: idleMinutes,
-		GrantMaxHours:    maxHours,
-	})
 	return st, nil
 }
 
@@ -809,34 +833,40 @@ func (s *Service) RevokeGrant(ctx context.Context, by identity.Actor, id ids.ID)
 	if !g.IsActive(now, st.GrantIdleMinutes) {
 		return GrantView{}, ErrGrantNotActive
 	}
-	aff, err := s.Store.RevokeGrantConditional(ctx, id, by.ID, now)
-	if err != nil {
-		return GrantView{}, err
-	}
-	if aff == 0 {
-		return GrantView{}, ErrGrantNotActive
-	}
-	updated, err := s.Store.GetGrantByID(ctx, id)
-	if err != nil {
-		return GrantView{}, err
-	}
-	rByStr := by.ID.String()
-	rAtStr := now.Format(time.RFC3339)
-	_ = s.recordEvent(ctx, by.WorkspaceID, by.ID, EventGrantRevoked, id, GrantEventPayload{
-		GrantID:            id.String(),
-		WorkspaceID:        updated.WorkspaceID.String(),
-		ChannelID:          updated.ChannelID.String(),
-		ThreadRootID:       updated.ThreadRootID.String(),
-		AgentAID:           updated.AgentAID.String(),
-		AgentBID:           updated.AgentBID.String(),
-		DelegationID:       updated.DelegationID.String(),
-		ApprovedBy:         updated.ApprovedBy.String(),
-		ApprovedAt:         updated.ApprovedAt.Format(time.RFC3339),
-		ExpiresAt:          updated.ExpiresAt.Format(time.RFC3339),
-		EffectiveExpiresAt: updated.EffectiveExpiresAt(st.GrantIdleMinutes).Format(time.RFC3339),
-		RevokedBy:          &rByStr,
-		RevokedAt:          &rAtStr,
+	var updated Grant
+	err = s.inTx(ctx, func(ctx context.Context) error {
+		aff, err := s.Store.RevokeGrantConditional(ctx, id, by.ID, now)
+		if err != nil {
+			return err
+		}
+		if aff == 0 {
+			return ErrGrantNotActive
+		}
+		updated, err = s.Store.GetGrantByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		rByStr := by.ID.String()
+		rAtStr := now.Format(time.RFC3339)
+		return s.recordEvent(ctx, by.WorkspaceID, by.ID, EventGrantRevoked, id, GrantEventPayload{
+			GrantID:            id.String(),
+			WorkspaceID:        updated.WorkspaceID.String(),
+			ChannelID:          updated.ChannelID.String(),
+			ThreadRootID:       updated.ThreadRootID.String(),
+			AgentAID:           updated.AgentAID.String(),
+			AgentBID:           updated.AgentBID.String(),
+			DelegationID:       updated.DelegationID.String(),
+			ApprovedBy:         updated.ApprovedBy.String(),
+			ApprovedAt:         updated.ApprovedAt.Format(time.RFC3339),
+			ExpiresAt:          updated.ExpiresAt.Format(time.RFC3339),
+			EffectiveExpiresAt: updated.EffectiveExpiresAt(st.GrantIdleMinutes).Format(time.RFC3339),
+			RevokedBy:          &rByStr,
+			RevokedAt:          &rAtStr,
+		})
 	})
+	if err != nil {
+		return GrantView{}, err
+	}
 
 	views, err := s.ListGrants(ctx, by, false)
 	if err == nil {
@@ -851,6 +881,14 @@ func (s *Service) RevokeGrant(ctx context.Context, by identity.Actor, id ids.ID)
 		ApproverHandle: by.Handle,
 		IdleMinutes:    st.GrantIdleMinutes,
 	}, nil
+}
+
+// inTx runs fn in one transaction when a TxRunner is set.
+func (s *Service) inTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.Tx == nil {
+		return fn(ctx)
+	}
+	return s.Tx.InTx(ctx, fn)
 }
 
 func (s *Service) recordEvent(ctx context.Context, workspaceID, actorID ids.ID, typ string, aggID ids.ID, payload any) error {
