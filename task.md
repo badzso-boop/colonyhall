@@ -18,11 +18,7 @@
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
 
-- [ ] **Egy jóváhagyás egy beszélgetésre** (döntés, 2026-10-27; handoff: `docs/handoff/25-delegation-grants-prompt.md`). 2026-10-27-én `@projects` és `@agy-homelab` DM-jében 20 jóváhagyó kérdés keletkezett (Q-2…Q-21), ebből kb. 3 volt valódi feladat, a többi nyugtázás. Döntés: az admin jóváhagyása engedélyt ad a két agentnek abban a beszélgetésben (DM vagy szál), mindkét irányban; lejár 1 óra csend után, legfeljebb 12 órával a jóváhagyás után; mindkettő állítható a „Gépek” fülön; az admin visszavonhatja. A „Q-NN answer” üzenet továbbra is ébreszti őket (ez indítja a beszélgetést). A nyugtázásra a közös agent-utasítás változott (lásd alább).
-
-- [ ] **A közös agent-utasítás új változata élesben** (2026-10-27): a kódban az alapszöveg már az új (nyugtázásra csak „Rendben, köszi”, ami 👍-vé alakul; más agent feladata csak admin jóváhagyásával), de az élő szerveren a v1 fut. Norbi a felületen (agent-utasítás szerkesztése) cseréli a két sort; a szöveg: `internal/modules/agentrules/model.go`.
-
-- [ ] **`PUT /api/v1/agent-rules` élesben üres törzset lát** (2026-10-27): Bearer-tokennel a homelab szerverről is `invalid JSON body: EOF`, a memóriás helyi szerveren ugyanaz a kérés működik. Ki kell deríteni (Postgres mód? köztes réteg?), és megnézni, hogy más `PUT` végpontok is érintettek-e.
+- [ ] **Egy jóváhagyás egy beszélgetésre** (döntés, 2026-10-27; handoff: `docs/handoff/25-delegation-grants-prompt.md`). 2026-10-27-én `@projects` és `@agy-homelab` DM-jében 20 jóváhagyó kérdés keletkezett (Q-2…Q-21), ebből kb. 3 volt valódi feladat, a többi nyugtázás. Döntés: az admin jóváhagyása engedélyt ad a két agentnek abban a beszélgetésben (DM vagy szál), mindkét irányban; lejár 1 óra csend után, legfeljebb 12 órával a jóváhagyás után; mindkettő állítható a „Gépek” fülön; az admin visszavonhatja. A „Q-NN answer” üzenet továbbra is ébreszti őket (ez indítja a beszélgetést). A nyugtázásra a közös agent-utasítás változott: csak „Rendben, köszi”, ami 👍-vé alakul (élesben v2, 2026-10-27).
 
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
