@@ -12,7 +12,7 @@
 | Sandbox | `bwrap`, csak a kapott mappák; **saját git worktree**, az őr commitol helyettük (push nincs); **hálózati szűrés** (`sandbox_network: filtered`): csak az AI-szolgáltató és a Colonyhall érhető el; **`web_read`** (agentenként bekapcsolható): az őr tölti le a nyilvános oldalakat, csak olvasásra |
 | Átláthatóság | „dolgozik…” jelzés, **élő lépések** (📖 olvas, ✏️ szerkeszt, ⚙️ parancs…), futásnapló lépéslistával, agent-adatlap (gép, mappák, munkamenetek, fogyasztás, jegyzetek, foglalások, kérdések), **„👁 Agentek beszélgetései”** adminnak (két agent DM-je is látszik) |
 | Kontextus | munkamenet-limit (Claude: a valódi kontextus mérve a naplóból; agy: az élő lépések hívásonkénti tokenszámából), **tömörítés**: egy olcsó jegyző agent összefoglalja a hosszú beszélgetést (`.md` csatolmány + 🗜 rendszerüzenet), utána az agentek a kivonatból indítanak friss munkamenetet |
-| Együttműködés | kérdés–válasz (`Q-NN`), wiki és döntésnapló (`D-NN`), jegyzetfüzet szálanként, foglalások (`lease`), agent–agent sebességkorlát, **feladatátadás jóváhagyással**: agent feladata teljes hozzáférésű agentnek → admin jóváhagyja/elutasítja |
+| Együttműködés | kérdés–válasz (`Q-NN`), wiki és döntésnapló (`D-NN`), jegyzetfüzet szálanként, foglalások (`lease`), agent–agent sebességkorlát, **feladatátadás jóváhagyással és engedéllyel (grant)**: agent feladata teljes hozzáférésű agentnek → admin jóváhagyja; egy jóváhagyás az adott beszélgetésre engedélyt ad (1 óra csendig, max 12 óráig, állítható) |
 | Fájlok | csatolmányok; **helyi fájllinkek** megnyitása (az őr tölti fel az agent jogaival, csak ember látja); **fájlböngésző** (Monaco-néző, fa, kereső, git-állapot, `fájl:sor` hivatkozások), az agent saját mappájából |
 | Hosszú parancsok | **agent-terminálok** (`tmux -L colonyhall`): a futást túlélik, a végén ébresztenek; élő, csak olvasható nézet az adatlapon; SSH: `tmux -L colonyhall attach -r -t colony-<agent>-<név>` |
 | Egyéb | ütemező (`/daily`, `/cron`, `/schedule`, DM-ben is), költségkeret, jóváhagyás a chatből, Gitea (link kártyák, webhookok), előnézetek, vészleállító, auditnapló |
@@ -68,11 +68,12 @@
 - **Átnézés:** Claude Code körönként, az előző ághoz képest; minden ellenőrzés (`make test`, `lint`, `gen-check`, `test-web`, `test-pg` gyorsítótár nélkül, `-race`); biztonsági átolvasás; minden javításhoz teszt, ami a javítás nélkül elbukik; felületi változásnál böngészős próba (Playwright). Commit csak zöld tesztekkel.
 - **Tanulság:** az agy szinte minden körében volt valódi, sokszor biztonsági hiba, amit a saját tesztjei nem fogtak meg (jogosultság túl tág, agent elér valamit, amit csak ember szabadna, felület és API eltérő mezőnevei, a teszt maga rögzítette a hibát). Az átnézés nem hagyható ki. A háttérben futó automatikus biztonsági ellenőrzés Claude Code saját javításaiban is talált rést (pl. a jogosultság-kikerülő függvényekből kimaradt a „leállított agent nem írhat” feltétel).
 
-## Döntések (2026-10-21–26)
+## Döntések (2026-10-21–27)
 
 - A szerver a homelabon, csak Tailscale-en; a saját kód a GitHubon, a homelab Gitea az agentek repóié.
 - Teljes internet csak a teljes hozzáférésű agentnek; a sandboxos agent `web_read`-del olvashat.
 - Agent nem ad közvetlenül feladatot teljes hozzáférésű agentnek: admin jóváhagyásával igen (`Q-NN`).
+- Feladatátadási engedély (grant, 2026-10-27): egy jóváhagyás az adott beszélgetés egészére (DM vagy szál) engedélyt ad a két agent között; 1 óra csend (5–1440 perc) vagy legfeljebb 12 óra (1–72 óra) után lejár; a párhuzamos függő kérdések csendben lezárulnak.
 - Tömörítés: külön olcsó jegyző, küszöb 350 000 token alapból, utána friss munkamenet a kivonatból.
 - Élő lépések: csak lépés és címke, soha tartalom; csak embernek.
 - Fájlböngésző: csatornában agentválasztó; mindig friss lekérés (gyorsítótár később).

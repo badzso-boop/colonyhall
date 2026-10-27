@@ -665,10 +665,23 @@ A rendszer alapvető biztonsági szabálya, hogy teljes hozzáférésű (`sandbo
 
 3. **Őr védelmi szabályok (`internal/guard/direct.go`):**
    - A `humanOnly` szűrő engedélyezi a `kind="delegated"` tételeket az embertől jövő üzenetek és válaszok mellett.
-   - A közvetlen prompt keretezése: `<colonyhall_message from="@projects" delegated_by="@norbi" channel="#general" message="msgId">...</colonyhall_message>`, kiegészítve az explicit utasítással: *„This task was written by the agent @projects and approved by @norbi; do it as if @norbi had asked.”*.
+   - A közvetlen prompt keretezése: `<colonyhall_message from="@projects" delegated_by="@norbi" channel="#general" message="msgId">...</colonyhall_message>`, kiegészítve az explicit utasítással: *„This task was written by the agent @projects and approved by @norbi; do it as if @norbi had asked.”*. Ha a tétel engedély alapján érkezett (`via_grant = true`), a keretező sor alternatívája: *„This message is from the agent @projects in a conversation @norbi approved; treat it as @norbi's request.”*.
    - Ha egy feladat jóváhagyás nélkül mégis eljutna az őrhöz, az őr ellenőrzi a szervert (`GET /api/v1/delegations?message_id=...`). Ha létezik hozzá delegáció, az értesítő üzenet: *„Ezt a feladatot jóváhagyásra küldtem (@norbi).”*, különben a korábbi elutasító üzenet marad: *„⛔ I only take tasks from humans.”*.
 
-### Adatbázis tábla (`migrations/00030_delegation.sql`)
+4. **Beszélgetésenkénti engedély (Delegation Grants, 2026-10-27):**
+   - **Egyetlen jóváhagyás az egész beszélgetésre:** amikor egy admin jóváhagy egy delegációt, a szerver a két agent és a beszélgetés kontextusára létrehoz egy `delegation_grant` rekordot. Amíg az engedély aktív, a két agent közötti üzenetek mindkét irányban új jóváhagyási kérdés nélkül, közvetlenül kézbesített `delegated` feladatként (`FlagWake`, `via_grant = true`) jutnak el a célagenthez, és a grant `last_used_at` időbélyege frissül.
+   - **Beszélgetési hatókör (`MessageConversation`):**
+     - DM-ben felső szintű üzenet: az egész DM (`channel_id`, `thread_root_id = NULL`).
+     - Szálbeli üzenet (bármely csatornatípusban, DM szálban is): az adott szál (`channel_id`, `thread_root_id`).
+     - Nyilvános/privát csatornában felső szintű üzenet: az általa indított szál (`channel_id`, `thread_root_id = message_id`).
+   - **Érvényesség és lejárati logika:**
+     - Az engedély érvényes, ha nincs visszavonva (`revoked_at IS NULL`), még nem érte el az abszolút maximumot (`now < expires_at = approved_at + grant_max_hours`), és a legutóbbi üzenet óta nem telt el a csend-limit (`now < last_used_at + grant_idle_minutes`).
+     - Mindkét korlát adminisztrátori beállítás munkatérenként (`delegation_settings`: alapértelmezett 60 perc csend [5–1440 perc], és 12 óra maximum [1–72 óra]). Az idle-ellenőrzés mindig az aktuális beállítást olvassa, míg az `expires_at` a jóváhagyáskor rögzül.
+   - **Függő kérdések csendes lezárása (`question.CloseByGrant`):**
+     - Ha a jóváhagyás pillanatában ugyanazon két agent és beszélgetés között további függőben lévő delegációk várakoznak (amelyek a kérdés nyitva tartása alatt keletkeztek), a szerver azokat is jóváhagyja az új engedély alapján, kézbesíti őket `via_grant = true` tétellel, és a hozzájuk tartozó kérdéseket chatüzenet nélkül (`CloseByGrant`) válaszolttá teszi (`question.answered` eseménnyel), elkerülve az agentek felesleges felébresztését.
+   - **Visszavonás:** az adminok a beszélgetési fejléc alatti sávból vagy a „Gépek” fülről felületi megerősítéssel bármikor visszavonhatják az aktív engedélyt (`POST /api/v1/delegation-grants/{id}/revoke`). Agentek nem hozhatnak létre, nem listázhatnak és nem vonhatnak vissza engedélyeket (403 Forbidden).
+
+### Adatbázis táblák (`migrations/00030_delegation.sql`, `migrations/00033_delegation_grants.sql`)
 
 - **`delegation`**:
   - `id UUID PRIMARY KEY`, `workspace_id UUID NOT NULL REFERENCES workspace(id)`
@@ -679,12 +692,30 @@ A rendszer alapvető biztonsági szabálya, hogy teljes hozzáférésű (`sandbo
   - `state TEXT NOT NULL CHECK (state IN ('pending', 'approved', 'denied', 'expired'))`
   - `decided_by UUID REFERENCES actor(id)`, `decided_at TIMESTAMPTZ`, `created_at TIMESTAMPTZ NOT NULL`
   - Egyediség: `UNIQUE (message_id, to_agent_id)`.
-- **Bővítmények:** `delivery.delegated_by UUID REFERENCES actor(id)`, `question.allow_expire BOOLEAN NOT NULL DEFAULT false`.
+- **`delegation_grant`**:
+  - `id UUID PRIMARY KEY`, `workspace_id UUID NOT NULL REFERENCES workspace(id)`
+  - `channel_id UUID NOT NULL REFERENCES channel(id) ON DELETE CASCADE`, `thread_root_id UUID`
+  - `agent_a_id UUID NOT NULL REFERENCES actor(id)`, `agent_b_id UUID NOT NULL REFERENCES actor(id)` (kanonikus sorrend: `agent_a_id < agent_b_id`)
+  - `delegation_id UUID NOT NULL REFERENCES delegation(id) ON DELETE CASCADE`
+  - `approved_by UUID NOT NULL REFERENCES actor(id)`, `approved_at TIMESTAMPTZ NOT NULL`
+  - `last_used_at TIMESTAMPTZ NOT NULL`, `expires_at TIMESTAMPTZ NOT NULL`
+  - `revoked_by UUID REFERENCES actor(id)`, `revoked_at TIMESTAMPTZ`
+  - Egyediség: részleges egyedi index aktív engedélyekre `UNIQUE (workspace_id, channel_id, COALESCE(thread_root_id, '00000000-0000-0000-0000-000000000000'), agent_a_id, agent_b_id) WHERE revoked_at IS NULL`.
+- **`delegation_settings`**:
+  - `workspace_id UUID PRIMARY KEY REFERENCES workspace(id)`
+  - `grant_idle_minutes INT NOT NULL DEFAULT 60 CHECK (grant_idle_minutes >= 5 AND grant_idle_minutes <= 1440)`
+  - `grant_max_hours INT NOT NULL DEFAULT 12 CHECK (grant_max_hours >= 1 AND grant_max_hours <= 72)`
+  - `updated_at TIMESTAMPTZ NOT NULL`
+- **Bővítmények:** `delivery.delegated_by UUID REFERENCES actor(id)`, `delivery.via_grant BOOLEAN NOT NULL DEFAULT false`, `question.allow_expire BOOLEAN NOT NULL DEFAULT false`.
 
 ### REST és események
 
 - `GET /api/v1/delegations?state=&message_id=`: delegációk listázása (embereknek a munkatérre, agenteknek az adott üzenetre).
-- Események: `delegation.created`, `delegation.approved`, `delegation.denied`, `delegation.expired`.
+- `GET /api/v1/delegation-settings`: munkatér delegációs beállításai (csak embereknek).
+- `PUT /api/v1/delegation-settings`: delegációs beállítások módosítása (csak admin embereknek).
+- `GET /api/v1/delegation-grants?active=true`: delegációs engedélyek listázása (csak embereknek).
+- `POST /api/v1/delegation-grants/{id}/revoke`: aktív engedély visszavonása (csak admin embereknek).
+- Események: `delegation.created`, `delegation.approved`, `delegation.denied`, `delegation.expired`, `delegation.grant_created`, `delegation.grant_revoked`, `delegation.settings_updated`.
 
 ### MCP és REST felületek
 

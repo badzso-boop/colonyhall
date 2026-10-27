@@ -18,13 +18,17 @@
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
 
-- [ ] **Egy jóváhagyás egy beszélgetésre** (döntés, 2026-10-27; handoff: `docs/handoff/25-delegation-grants-prompt.md`). 2026-10-27-én `@projects` és `@agy-homelab` DM-jében 20 jóváhagyó kérdés keletkezett (Q-2…Q-21), ebből kb. 3 volt valódi feladat, a többi nyugtázás. Döntés: az admin jóváhagyása engedélyt ad a két agentnek abban a beszélgetésben (DM vagy szál), mindkét irányban; lejár 1 óra csend után, legfeljebb 12 órával a jóváhagyás után; mindkettő állítható a „Gépek” fülön; az admin visszavonhatja. A „Q-NN answer” üzenet továbbra is ébreszti őket (ez indítja a beszélgetést). A nyugtázásra a közös agent-utasítás változott: csak „Rendben, köszi”, ami 👍-vé alakul (élesben v2, 2026-10-27).
-
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 ## Kész
+
+- [x] **Egy jóváhagyás egy beszélgetésre (delegation grants)** (2026-10-27, `docs/handoff/25-delegation-grants-prompt.md`, jelentés: `docs/handoff/25-delegation-grants-report.md`, ág: `feature/delegation-grants`):
+  - **Egyetlen jóváhagyás a beszélgetésre:** amikor egy admin jóváhagy egy delegációt, engedély (grant) jön létre a két agent között az adott beszélgetésben (DM egészére vagy adott szálra, `MessageConversation`). Amíg aktív, az üzenetek mindkét irányban új jóváhagyási kérdés nélkül, engedélyezett feladatként (`via_grant`, őrnél alternatív keretezéssel) futnak le.
+  - **Lejárat és beállítások:** 1 óra csend után (üzenetváltás nélkül a beszélgetésben) vagy legfeljebb 12 órával a jóváhagyás után lejár; mindkettő munkatér-szintű admin beállítás (`GET/PUT /api/v1/delegation-settings`, 5–1440 perc és 1–72 óra).
+  - **Függő kérdések csendes lezárása:** a jóváhagyás pillanatában ugyanazon beszélgetésben várakozó további delegációk az engedély alapján automatikusan jóváhagyásra és kézbesítésre kerülnek (`CloseByGrant`), felesleges ébresztő chatüzenetek nélkül.
+  - **Felület:** beszélgetési fejléc alatt élő állapotjelző sáv („🤝 @a ↔ @b: engedély, lejár 17:25”) in-page visszavonással (nem `confirm()`); a „Gépek” fülön „🤝 Feladatátadás” beállítódoboz és aktív engedélyek listája (`GET /api/v1/delegation-grants?active=true`, `POST /api/v1/delegation-grants/{id}/revoke`).
 
 - [x] **Agent-terminálok: hosszú parancsok, amik túlélik a futást** (2026-10-26, commitok: `d14a4ca`, `06e323c`, `50245f2`, `docs/handoff/23-agent-terminals-report.md`, ág: `feature/agent-terminals`):
   - **Őroldali terminálmenedzser:** dedikált `tmux -L colonyhall` socket, `colony-<handle>-<name>` elnevezés (névregex: `^[a-z0-9][a-z0-9-]{0,31}$`), lemezes állapot (`<state>/terminals/<handle>/<name>/`, 0700: `meta.json`, `output.log` 1 MB-ig vágva, `exit`), folyamatcsoport-túlélés (a közvetlen futás PGID terminálása nem öli meg a tmuxot), korlátok (max 5 futó / agent, max 20 / gép), `CheckGrant` gyökérkönyvtár ellenőrzés, 5 másodperces watcher és 7 napos megőrzési takarítás, halt szemantika (szüneteltetés/leállítás/vészleállító terminálja őket `killed_by: "halt"` jelöléssel), meglévő terminálok automatikus örökbefogadása őr újraindulásakor, vezérlőkarakter-szűrés (`FilterTerminalOutput`, ANSI és C0/C1 dobva, `\n`, `\r`, `\t` megtartva).
