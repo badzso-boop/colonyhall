@@ -127,7 +127,7 @@
   .link-card a { color:var(--accent); text-decoration:none; font-weight:500; }
   .link-card a:hover { text-decoration:underline; }
   .link-card .badge { border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:11px; background:var(--bg); }
-  #chanHeader { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid var(--line); background:var(--surface); gap:8px; }
+  #chanHeader { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid var(--line); background:var(--surface); gap:8px; flex-wrap:wrap; }
   #chanInfo { display:flex; align-items:baseline; gap:8px; min-width:0; overflow:hidden; }
   #chanTitle { font-weight:700; font-size:15px; white-space:nowrap; }
   #chanDesc { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -227,6 +227,7 @@
         </div>
         <button id="chanMembersBtn" style="display:none"></button>
       </div>
+      <div id="chanGrantBanner" style="display:none; width:100%; padding-top:6px; margin-top:4px; border-top:1px solid var(--line); font-size:12px;"></div>
     </div>
     <div id="feed"></div>
     <div id="hostsPanel"></div>
@@ -417,6 +418,13 @@ const I18N = {
         approvalPending: "jóváhagyásra vár", approvalAllowed: "engedélyezve", approvalDenied: "elutasítva", approvalExpired: "lejárt",
         delegationApprovedBy: "Jóváhagyta", delegationDeniedBy: "Elutasította", delegationExpired: "Lejárt",
         delegationApprove: "Jóváhagyom", delegationDeny: "Elutasítom",
+        delegationTitle: "Feladatátadás", delegationIdleMinutes: "Csend limit (perc):",
+        delegationMaxHours: "Maximális időtartam (óra):",
+        delegationHint: "Engedély érvényessége: 5–1440 perc csend után lejár, legfeljebb 1–72 óráig.",
+        delegationActiveGrants: "Aktív engedélyek", delegationNoActiveGrants: "Nincsenek aktív engedélyek.",
+        delegationApprovedByGrant: "az engedély alapján",
+        grantActive: "engedély", grantExpires: "lejár", grantApprover: "jóváhagyta",
+        grantRevoke: "Visszavonás", grantRevokeConfirm: "Biztosan visszavonod?",
         newAgent: "Új agent", createAgent: "Agent létrehozása", joinChannels: "Csatornák:",
         noHostAssign: "gép hozzárendelése később",
         hostModeTokenNote: "Megjegyzés: az agent tokenje gépes (host) módban nem szükséges — az őr automatikusan saját rövid lejáratú tokeneket kér a szervertől.",
@@ -493,6 +501,13 @@ const I18N = {
         approvalPending: "pending", approvalAllowed: "allowed", approvalDenied: "denied", approvalExpired: "expired",
         delegationApprovedBy: "Approved by", delegationDeniedBy: "Denied by", delegationExpired: "Expired",
         delegationApprove: "Approve", delegationDeny: "Deny",
+        delegationTitle: "Delegation Grants", delegationIdleMinutes: "Idle limit (minutes):",
+        delegationMaxHours: "Maximum duration (hours):",
+        delegationHint: "Grant validity: expires after 5–1440 minutes of silence, at most 1–72 hours.",
+        delegationActiveGrants: "Active Grants", delegationNoActiveGrants: "No active grants.",
+        delegationApprovedByGrant: "approved by grant",
+        grantActive: "grant", grantExpires: "expires", grantApprover: "approved by",
+        grantRevoke: "Revoke", grantRevokeConfirm: "Are you sure you want to revoke?",
         newAgent: "New agent", createAgent: "Create agent", joinChannels: "Channels:",
         noHostAssign: "assign host later",
         hostModeTokenNote: "Note: the agent token is not needed in host mode — the guard requests its own short-lived tokens from the server.",
@@ -980,9 +995,123 @@ async function updateCompactionStatus() {
   }
 }
 
-async function open(id) {
+function makeRevokeGrantButton(grantId, onRevoked) {
+  const container = el("span", { style: "display:inline-flex;gap:6px;align-items:center;" });
+  const revokeBtn = el("button", {
+    className: "secondary small",
+    textContent: L.grantRevoke || "Visszavonás",
+    style: "font-size:11px;padding:2px 8px;cursor:pointer;"
+  });
+  const confirmSpan = el("span", { style: "display:none;align-items:center;gap:6px;font-size:12px;" });
+  const confirmText = el("span", { className: "warn", style: "font-size:12px;", textContent: L.grantRevokeConfirm || "Biztosan visszavonod?" });
+  const yesBtn = el("button", {
+    className: "small",
+    textContent: lang === "en" ? "Yes" : "Igen",
+    style: "font-size:11px;padding:2px 8px;cursor:pointer;color:#b3261e;border-color:#b3261e;"
+  });
+  const noBtn = el("button", {
+    className: "secondary small",
+    textContent: L.cancel || "Mégse",
+    style: "font-size:11px;padding:2px 8px;cursor:pointer;"
+  });
+
+  revokeBtn.onclick = (e) => {
+    e.stopPropagation();
+    revokeBtn.style.display = "none";
+    confirmSpan.style.display = "inline-flex";
+  };
+  noBtn.onclick = (e) => {
+    e.stopPropagation();
+    confirmSpan.style.display = "none";
+    revokeBtn.style.display = "";
+  };
+  yesBtn.onclick = async (e) => {
+    e.stopPropagation();
+    yesBtn.disabled = true;
+    noBtn.disabled = true;
+    try {
+      await api(`/api/v1/delegation-grants/${grantId}/revoke`, { method: "POST" });
+      if (onRevoked) await onRevoked();
+    } catch (err) {
+      alert(err.message);
+      yesBtn.disabled = false;
+      noBtn.disabled = false;
+    }
+  };
+
+  confirmSpan.append(confirmText, yesBtn, noBtn);
+  container.append(revokeBtn, confirmSpan);
+  return container;
+}
+
+async function updateConversationGrantBanner() {
+  const banner = $("chanGrantBanner");
+  if (!banner) return;
+  if (!current || !me || me.kind !== "human") {
+    banner.style.display = "none";
+    banner.innerHTML = "";
+    return;
+  }
+  const c = channels.find(x => x.id === current) || overseen.find(x => x.id === current);
+  if (!c) {
+    banner.style.display = "none";
+    banner.innerHTML = "";
+    return;
+  }
+
+  try {
+    const res = await api("/api/v1/delegation-grants?active=true");
+    const grants = res.grants || [];
+    const matching = grants.filter(g => {
+      if (g.channel_id !== current) return false;
+      if (replyRoot) {
+        return g.thread_root_id === replyRoot;
+      } else {
+        return c.kind === "dm" && !g.thread_root_id;
+      }
+    });
+
+    if (matching.length === 0) {
+      banner.style.display = "none";
+      banner.innerHTML = "";
+      return;
+    }
+
+    banner.innerHTML = "";
+    banner.style.display = "flex";
+    banner.style.flexDirection = "column";
+    banner.style.gap = "4px";
+
+    const isAdmin = me.kind === "human" && (me.role === "admin" || me.role === "owner");
+
+    for (const g of matching) {
+      const row = el("div", { style: "display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;" });
+      const exp = new Date(g.effective_expires_at);
+      const timeStr = exp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const info = el("span", {
+        textContent: `🤝 @${g.agent_a_handle} ↔ @${g.agent_b_handle}: ${L.grantActive || "engedély"}, ${L.grantExpires || "lejár"} ${timeStr}`
+      });
+      row.append(info);
+
+      if (isAdmin) {
+        const btnRevoke = makeRevokeGrantButton(g.id, async () => {
+          await updateConversationGrantBanner();
+          if (hostsOpen) renderHosts();
+        });
+        row.append(btnRevoke);
+      }
+      banner.append(row);
+    }
+  } catch (e) {
+    banner.style.display = "none";
+    banner.innerHTML = "";
+  }
+}
+
+async function open(id, threadRootId = null) {
   if (openPanel) showPanel(null);
-  current = id; setReply(null); clearPendingFiles();
+  current = id; replyRoot = threadRootId; clearPendingFiles();
+  $("replybar").className = threadRootId ? "on" : "";
   const c = channels.find(x => x.id === id) || overseen.find(x => x.id === id);
   if (c) {
     c.unread = 0;
@@ -998,11 +1127,16 @@ async function open(id) {
   }
   const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
   msgs = new Map(r.messages.map(m => [m.id, m]));
+  if (threadRootId) {
+    const rootMsg = msgs.get(threadRootId);
+    $("replyto").textContent = L.replyIn + " " + (rootMsg ? ColonyMarkdown.plain(rootMsg.body).slice(0, 80) : "");
+  }
   renderFeed();
   await api(`/api/v1/channels/${id}/read`, { method: "POST" }).catch(() => {});
   renderChannels();
   renderActivity();
   updateCompactionStatus();
+  updateConversationGrantBanner();
   loadChannelProgress(id);
   loadRunsCache();
   if (fbOpen) openFileBrowser(id);
@@ -3533,9 +3667,23 @@ async function renderDelegationInline(m, span) {
   } else if (del.state === "approved") {
     const timeStr = del.decided_at ? new Date(del.decided_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
     const who = del.decided_by_handle ? "@" + del.decided_by_handle : (me.handle ? "@" + me.handle : "");
+    let text = "";
+    if (del.approved_by_grant) {
+      text = `✅ ${L.delegationApprovedByGrant || "az engedély alapján"}`;
+    } else if (del.grant_idle_minutes && del.grant_max_hours) {
+      const idleText = del.grant_idle_minutes >= 60 && del.grant_idle_minutes % 60 === 0
+        ? `${del.grant_idle_minutes / 60} ${lang === "en" ? (del.grant_idle_minutes === 60 ? "hour" : "hours") : "óra"}`
+        : `${del.grant_idle_minutes} ${lang === "en" ? "minutes" : "perc"}`;
+      const grantScopeText = lang === "en"
+        ? `grant in this conversation (up to ${idleText} silence, at most ${del.grant_max_hours} hours)`
+        : `engedély ebben a beszélgetésben (${idleText} csendig, legfeljebb ${del.grant_max_hours} óráig)`;
+      text = `✅ ${L.delegationApprovedBy || "Jóváhagyta"} ${who} — ${grantScopeText}`;
+    } else {
+      text = `✅ ${L.delegationApprovedBy || "Jóváhagyta"} ${who} ${timeStr}`.trim();
+    }
     const badge = el("span", {
       style: "color: #137333; font-weight: 500;",
-      textContent: `✅ ${L.delegationApprovedBy || "Jóváhagyta"} ${who} ${timeStr}`.trim()
+      textContent: text
     });
     container.append(badge);
   } else if (del.state === "denied") {
@@ -3733,6 +3881,7 @@ function setReply(rootId) {
   if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? ColonyMarkdown.plain(r.body).slice(0, 80) : ""); $("text").focus(); }
   renderActivity();
   updateCompactionStatus();
+  updateConversationGrantBanner();
 }
 $("replycancel").onclick = () => setReply(null);
 
@@ -3790,6 +3939,9 @@ function connectWS() {
       await refreshMessage(d.message_id);
     } else if (f.event_type.startsWith("approval.")) {
       await reloadCurrentFeed();
+    } else if (f.event_type.startsWith("delegation.")) {
+      updateConversationGrantBanner();
+      if (hostsOpen) renderHosts();
     } else if (f.event_type === "actor.created" || f.event_type.startsWith("channel.")) {
       await load();
     } else if (f.event_type.startsWith("host.") && hostsOpen) {
@@ -4363,6 +4515,119 @@ async function renderHosts() {
       }
     };
     panel.append(compBox);
+
+    const delCard = el("div", { className: "card" });
+    delCard.append(el("h3", { textContent: `🤝 ${L.delegationTitle || "Feladatátadás"}` }));
+
+    const delRow = el("div", { className: "row", style: "gap:16px;align-items:center;flex-wrap:wrap;" });
+    const idleLabel = el("label", {}, (L.delegationIdleMinutes || "Csend limit (perc):") + " ");
+    const idleInput = el("input", { type: "number", min: "5", max: "1440", style: "width:80px;" });
+    idleLabel.append(idleInput);
+
+    const maxLabel = el("label", {}, (L.delegationMaxHours || "Maximális időtartam (óra):") + " ");
+    const maxInput = el("input", { type: "number", min: "1", max: "72", style: "width:80px;" });
+    maxLabel.append(maxInput);
+
+    const saveDelBtn = el("button", { textContent: L.save || "Mentés" });
+    const delStatus = el("span", { className: "muted" });
+    delRow.append(idleLabel, maxLabel, saveDelBtn, delStatus);
+
+    const delHint = el("div", { className: "muted small", style: "margin-top:4px;", textContent: L.delegationHint || "Engedély érvényessége: 5–1440 perc csend után lejár, legfeljebb 1–72 óráig." });
+    delCard.append(delRow, delHint);
+
+    api("/api/v1/delegation-settings").then(st => {
+      idleInput.value = st.grant_idle_minutes || 60;
+      maxInput.value = st.grant_max_hours || 12;
+    }).catch(() => {});
+
+    saveDelBtn.onclick = async () => {
+      delStatus.textContent = "...";
+      saveDelBtn.disabled = true;
+      const iVal = parseInt(idleInput.value, 10);
+      const mVal = parseInt(maxInput.value, 10);
+      if (isNaN(iVal) || iVal < 5 || iVal > 1440) {
+        alert("Csend limit: 5 – 1440 perc");
+        saveDelBtn.disabled = false;
+        delStatus.textContent = "";
+        return;
+      }
+      if (isNaN(mVal) || mVal < 1 || mVal > 72) {
+        alert("Maximális időtartam: 1 – 72 óra");
+        saveDelBtn.disabled = false;
+        delStatus.textContent = "";
+        return;
+      }
+      try {
+        await api("/api/v1/delegation-settings", {
+          method: "PUT",
+          body: JSON.stringify({
+            grant_idle_minutes: iVal,
+            grant_max_hours: mVal
+          })
+        });
+        delStatus.textContent = "✓";
+        setTimeout(() => { delStatus.textContent = ""; }, 2000);
+      } catch (err) {
+        alert(err.message);
+        delStatus.textContent = "";
+      } finally {
+        saveDelBtn.disabled = false;
+      }
+    };
+
+    const grantsHeader = el("h4", { style: "margin-top:16px;margin-bottom:8px;", textContent: L.delegationActiveGrants || "Aktív engedélyek" });
+    const grantsContainer = el("div", { style: "display:flex;flex-direction:column;gap:8px;" });
+    delCard.append(grantsHeader, grantsContainer);
+
+    async function loadActiveGrants() {
+      grantsContainer.innerHTML = "";
+      try {
+        const res = await api("/api/v1/delegation-grants?active=true");
+        const grants = res.grants || [];
+        if (grants.length === 0) {
+          grantsContainer.append(el("div", { className: "muted small", textContent: L.delegationNoActiveGrants || "Nincsenek aktív engedélyek." }));
+          return;
+        }
+        for (const g of grants) {
+          const item = el("div", { className: "row", style: "justify-content:space-between;align-items:center;background:var(--bg);padding:6px 10px;border-radius:4px;border:1px solid var(--line);font-size:13px;" });
+          const left = el("div", { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap;" });
+          const pair = el("span", { style: "font-weight:600;", textContent: `@${g.agent_a_handle} ↔ @${g.agent_b_handle}` });
+
+          const c = channels.find(x => x.id === g.channel_id) || overseen.find(x => x.id === g.channel_id);
+          const cName = c ? chanLabel(c) : "csatorna";
+          const convLink = el("a", {
+            href: "#",
+            textContent: g.thread_root_id ? `${cName} (${L.inThread || "szál"})` : cName,
+            style: "color:var(--accent);text-decoration:none;",
+            onclick: (e) => {
+              e.preventDefault();
+              showPanel(null);
+              open(g.channel_id, g.thread_root_id || null);
+            }
+          });
+
+          const exp = new Date(g.effective_expires_at);
+          const timeStr = exp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const approver = g.approver_handle ? `@${g.approver_handle}` : "";
+          const meta = el("span", { className: "muted small", textContent: `(${L.grantApprover || "jóváhagyta"}: ${approver}, ${L.grantExpires || "lejár"}: ${timeStr})` });
+
+          left.append(pair, convLink, meta);
+          item.append(left);
+
+          const btnRevoke = makeRevokeGrantButton(g.id, async () => {
+            await loadActiveGrants();
+            await updateConversationGrantBanner();
+          });
+          item.append(btnRevoke);
+          grantsContainer.append(item);
+        }
+      } catch (e) {
+        grantsContainer.append(el("div", { className: "warn small", textContent: e.message }));
+      }
+    }
+    await loadActiveGrants();
+
+    panel.append(delCard);
   }
 }
 
