@@ -46,6 +46,7 @@ type Delivery struct {
 	ChannelID   ids.ID
 	FromActorID ids.ID // who caused it: the author, the reactor, …
 	DelegatedBy ids.ID // admin human who approved it (for delegated items)
+	ViaGrant    bool   // whether this delegated item was delivered via an active delegation grant
 	Flags       Flags
 	EventSeq    int64
 	CreatedAt   time.Time

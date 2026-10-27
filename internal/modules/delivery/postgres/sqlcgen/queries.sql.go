@@ -43,8 +43,8 @@ func (q *Queries) CountPending(ctx context.Context, recipientID uuid.UUID) (int6
 }
 
 const insertDelivery = `-- name: InsertDelivery :execrows
-INSERT INTO delivery (id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, from_actor_id, delegated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO delivery (id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, from_actor_id, delegated_by, via_grant)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (recipient_id, item_kind, item_id) DO NOTHING
 `
 
@@ -60,6 +60,7 @@ type InsertDeliveryParams struct {
 	CreatedAt   time.Time
 	FromActorID *uuid.UUID
 	DelegatedBy *uuid.UUID
+	ViaGrant    bool
 }
 
 func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) (int64, error) {
@@ -75,6 +76,7 @@ func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) 
 		arg.CreatedAt,
 		arg.FromActorID,
 		arg.DelegatedBy,
+		arg.ViaGrant,
 	)
 	if err != nil {
 		return 0, err
@@ -117,7 +119,7 @@ func (q *Queries) InsertTerminalEvent(ctx context.Context, arg InsertTerminalEve
 }
 
 const pending = `-- name: Pending :many
-SELECT id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, acked_at, from_actor_id, delegated_by FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL ORDER BY id LIMIT $2
+SELECT id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, acked_at, from_actor_id, delegated_by, via_grant FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL ORDER BY id LIMIT $2
 `
 
 type PendingParams struct {
@@ -147,6 +149,7 @@ func (q *Queries) Pending(ctx context.Context, arg PendingParams) ([]Delivery, e
 			&i.AckedAt,
 			&i.FromActorID,
 			&i.DelegatedBy,
+			&i.ViaGrant,
 		); err != nil {
 			return nil, err
 		}

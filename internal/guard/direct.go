@@ -291,8 +291,13 @@ func DirectPromptWithBranch(items []Item, branch string, exchangeDir ...string) 
 			if delBy != "" && !strings.HasPrefix(delBy, "@") {
 				delBy = "@" + delBy
 			}
-			fmt.Fprintf(&b, "This task was written by the agent %s and approved by %s; do it as if %s had asked.\n\n",
-				from, delBy, delBy)
+			if it.ViaGrant {
+				fmt.Fprintf(&b, "This message is from the agent %s in a conversation %s approved; treat it as %s's request.\n\n",
+					from, delBy, delBy)
+			} else {
+				fmt.Fprintf(&b, "This task was written by the agent %s and approved by %s; do it as if %s had asked.\n\n",
+					from, delBy, delBy)
+			}
 		}
 	}
 	b.WriteString("Carry out the request above as you would in your terminal: " +

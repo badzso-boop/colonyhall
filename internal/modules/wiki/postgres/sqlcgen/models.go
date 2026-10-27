@@ -223,6 +223,29 @@ type Delegation struct {
 	CreatedAt    time.Time
 }
 
+type DelegationGrant struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	AgentAID     uuid.UUID
+	AgentBID     uuid.UUID
+	DelegationID uuid.UUID
+	ApprovedBy   uuid.UUID
+	ApprovedAt   time.Time
+	LastUsedAt   time.Time
+	ExpiresAt    time.Time
+	RevokedBy    *uuid.UUID
+	RevokedAt    *time.Time
+}
+
+type DelegationSetting struct {
+	WorkspaceID      uuid.UUID
+	GrantIdleMinutes int32
+	GrantMaxHours    int32
+	UpdatedAt        time.Time
+}
+
 type Delivery struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -236,6 +259,7 @@ type Delivery struct {
 	AckedAt     *time.Time
 	FromActorID *uuid.UUID
 	DelegatedBy *uuid.UUID
+	ViaGrant    bool
 }
 
 type Event struct {

@@ -378,6 +378,25 @@ func TestDelegatedPromptAndExecution(t *testing.T) {
 		t.Fatalf("expected prompt to contain instruction line %q, got:\n%s", wantLine, prompt)
 	}
 
+	// 1b. DirectPrompt framing with ViaGrant
+	itemViaGrant := Item{
+		ID:           "i-del-grant",
+		ItemID:       "msg-del-grant",
+		Channel:      "general",
+		Author:       "projects",
+		AuthorKind:   "agent",
+		DelegatedBy:  "norbi",
+		ViaGrant:     true,
+		Kind:         "delegated",
+		Body:         "run the release pipeline via grant",
+		ThreadRootID: "thread-root-del",
+	}
+	promptGrant := DirectPrompt([]Item{itemViaGrant})
+	wantGrantLine := "This message is from the agent @projects in a conversation @norbi approved; treat it as @norbi's request."
+	if !strings.Contains(promptGrant, wantGrantLine) {
+		t.Fatalf("expected prompt to contain instruction line %q, got:\n%s", wantGrantLine, promptGrant)
+	}
+
 	// 2. Refusal note when delegation exists on server
 	var postedNotes []string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

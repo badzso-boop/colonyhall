@@ -61,6 +61,7 @@ type Item struct {
 	Author       string    `json:"author"`
 	AuthorKind   string    `json:"author_kind"`
 	DelegatedBy  string    `json:"delegated_by,omitempty"`
+	ViaGrant     bool      `json:"via_grant,omitempty"`
 	Body         string    `json:"body"`
 	Mentioned    bool      `json:"mentioned"`
 	DM           bool      `json:"dm"`

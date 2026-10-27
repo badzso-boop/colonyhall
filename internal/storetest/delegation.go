@@ -145,4 +145,196 @@ func testDelegation(t *testing.T, b Backend) {
 	if !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound for non-existent delegation, got %v", err)
 	}
+
+	// -------------------------------------------------------------
+	// ListPendingByPairAndConversation
+	// -------------------------------------------------------------
+	msg2 := conversation.Message{
+		ID:          gen.New(),
+		WorkspaceID: f.ws.ID,
+		ChannelID:   f.channel.ID,
+		AuthorID:    f.agent.ID,
+		Kind:        "text",
+		Body:        "Task 2",
+		CreatedAt:   t0.Add(2 * time.Minute),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, msg2))
+
+	q2ID := gen.New()
+	must(t, b.Question.Insert(ctx, question.Question{
+		ID:           q2ID,
+		Number:       num + 1,
+		WorkspaceID:  f.ws.ID,
+		AskedBy:      f.agent.ID,
+		ToHuman:      true,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: msg.ID,
+		Text:         "Approve task 2?",
+		Options:      []string{"Jóváhagyom", "Elutasítom"},
+		State:        question.StateOpen,
+		CreatedAt:    t0.Add(2 * time.Minute),
+	}))
+
+	d2ID := gen.New()
+	d2 := delegation.Delegation{
+		ID:           d2ID,
+		WorkspaceID:  f.ws.ID,
+		MessageID:    msg2.ID,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: msg.ID,
+		FromAgentID:  f.agent.ID,
+		ToAgentID:    agent2.ID,
+		QuestionID:   q2ID,
+		State:        delegation.StatePending,
+		CreatedAt:    t0.Add(2 * time.Minute),
+	}
+	must(t, b.Delegation.Insert(ctx, d2))
+
+	pendingPair, err := b.Delegation.ListPendingByPairAndConversation(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, msg.ID)
+	must(t, err)
+	if len(pendingPair) != 1 || pendingPair[0].ID != d2ID {
+		t.Fatalf("expected pendingPair to contain d2, got %+v", pendingPair)
+	}
+
+	// Unordered pair check (agent2, f.agent)
+	pendingPairRev, err := b.Delegation.ListPendingByPairAndConversation(ctx, f.ws.ID, agent2.ID, f.agent.ID, f.channel.ID, msg.ID)
+	must(t, err)
+	if len(pendingPairRev) != 1 || pendingPairRev[0].ID != d2ID {
+		t.Fatalf("expected reversed pair to find d2, got %+v", pendingPairRev)
+	}
+
+	// Different conversation returns empty
+	otherConvPending, err := b.Delegation.ListPendingByPairAndConversation(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, gen.New())
+	must(t, err)
+	if len(otherConvPending) != 0 {
+		t.Fatalf("expected empty for other conversation, got %d", len(otherConvPending))
+	}
+
+	// -------------------------------------------------------------
+	// Settings
+	// -------------------------------------------------------------
+	// GetSettings before insert returns ErrNotFound
+	_, err = b.Delegation.GetSettings(ctx, f.ws.ID)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for missing settings, got %v", err)
+	}
+
+	st := delegation.Settings{
+		WorkspaceID:      f.ws.ID,
+		GrantIdleMinutes: 45,
+		GrantMaxHours:    8,
+		UpdatedAt:        t0,
+	}
+	must(t, b.Delegation.UpsertSettings(ctx, st))
+
+	gotSt, err := b.Delegation.GetSettings(ctx, f.ws.ID)
+	must(t, err)
+	if gotSt.GrantIdleMinutes != 45 || gotSt.GrantMaxHours != 8 {
+		t.Fatalf("unexpected settings: %+v", gotSt)
+	}
+
+	// Update settings
+	st.GrantIdleMinutes = 30
+	must(t, b.Delegation.UpsertSettings(ctx, st))
+	gotSt, err = b.Delegation.GetSettings(ctx, f.ws.ID)
+	must(t, err)
+	if gotSt.GrantIdleMinutes != 30 {
+		t.Fatalf("expected updated idle minutes 30, got %d", gotSt.GrantIdleMinutes)
+	}
+
+	// -------------------------------------------------------------
+	// Grants
+	// -------------------------------------------------------------
+	canonA, canonB := delegation.CanonicalPair(f.agent.ID, agent2.ID)
+	grantID := gen.New()
+	grant := delegation.Grant{
+		ID:           grantID,
+		WorkspaceID:  f.ws.ID,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: msg.ID,
+		AgentAID:     canonA,
+		AgentBID:     canonB,
+		DelegationID: dID,
+		ApprovedBy:   f.human.ID,
+		ApprovedAt:   t0,
+		LastUsedAt:   t0,
+		ExpiresAt:    t0.Add(8 * time.Hour),
+	}
+	must(t, b.Delegation.InsertGrant(ctx, grant))
+
+	// GetGrantByID
+	gotGrant, err := b.Delegation.GetGrantByID(ctx, grantID)
+	must(t, err)
+	if gotGrant.ID != grantID || gotGrant.AgentAID != canonA || gotGrant.AgentBID != canonB {
+		t.Fatalf("unexpected grant retrieved: %+v", gotGrant)
+	}
+
+	// GetActiveGrant
+	activeG, err := b.Delegation.GetActiveGrant(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, msg.ID, t0.Add(time.Hour))
+	must(t, err)
+	if activeG.ID != grantID {
+		t.Fatalf("expected grant %s, got %s", grantID, activeG.ID)
+	}
+
+	// Reverse pair lookup works
+	activeGRev, err := b.Delegation.GetActiveGrant(ctx, f.ws.ID, agent2.ID, f.agent.ID, f.channel.ID, msg.ID, t0.Add(time.Hour))
+	must(t, err)
+	if activeGRev.ID != grantID {
+		t.Fatalf("expected grant %s on reverse lookup, got %s", grantID, activeGRev.ID)
+	}
+
+	// Different conversation returns not found
+	_, err = b.Delegation.GetActiveGrant(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, gen.New(), t0.Add(time.Hour))
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for wrong thread, got %v", err)
+	}
+
+	// Lookup after ExpiresAt returns ErrNotFound
+	_, err = b.Delegation.GetActiveGrant(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, msg.ID, t0.Add(9*time.Hour))
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after expires_at, got %v", err)
+	}
+
+	// Update last used
+	usedAt := t0.Add(2 * time.Hour)
+	must(t, b.Delegation.UpdateGrantLastUsed(ctx, grantID, usedAt))
+	gotGrant, err = b.Delegation.GetGrantByID(ctx, grantID)
+	must(t, err)
+	if !gotGrant.LastUsedAt.Equal(usedAt) {
+		t.Fatalf("expected lastUsedAt %v, got %v", usedAt, gotGrant.LastUsedAt)
+	}
+
+	// ListGrants
+	allGrants, err := b.Delegation.ListGrants(ctx, f.ws.ID, false, t0.Add(10*time.Hour))
+	must(t, err)
+	if len(allGrants) != 1 {
+		t.Fatalf("expected 1 grant in allGrants, got %d", len(allGrants))
+	}
+
+	activeGrants, err := b.Delegation.ListGrants(ctx, f.ws.ID, true, t0.Add(3*time.Hour))
+	must(t, err)
+	if len(activeGrants) != 1 {
+		t.Fatalf("expected 1 active grant at 3h, got %d", len(activeGrants))
+	}
+
+	// Revoke grant
+	revokeTime := t0.Add(3 * time.Hour)
+	affRevoke, err := b.Delegation.RevokeGrantConditional(ctx, grantID, f.human.ID, revokeTime)
+	must(t, err)
+	if affRevoke != 1 {
+		t.Fatalf("expected 1 affected row on revoke, got %d", affRevoke)
+	}
+
+	// Revoke again should fail (aff = 0)
+	affRevokeAgain, err := b.Delegation.RevokeGrantConditional(ctx, grantID, f.human.ID, revokeTime.Add(time.Minute))
+	must(t, err)
+	if affRevokeAgain != 0 {
+		t.Fatalf("expected 0 affected on second revoke, got %d", affRevokeAgain)
+	}
+
+	// GetActiveGrant now returns ErrNotFound
+	_, err = b.Delegation.GetActiveGrant(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, msg.ID, revokeTime)
+	if !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for revoked grant, got %v", err)
+	}
 }

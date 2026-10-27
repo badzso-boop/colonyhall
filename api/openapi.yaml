@@ -1246,6 +1246,85 @@ paths:
                 $ref: "#/components/schemas/DelegationList"
         "403": { $ref: "#/components/responses/Problem" }
 
+  /delegation-settings:
+    get:
+      operationId: getDelegationSettings
+      tags: [delegation]
+      description: Get delegation settings for the workspace.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Delegation settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DelegationSettings"
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateDelegationSettings
+      tags: [delegation]
+      description: Update delegation settings for the workspace (admin only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDelegationSettingsRequest"
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated delegation settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DelegationSettings"
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /delegation-grants:
+    get:
+      operationId: listDelegationGrants
+      tags: [delegation]
+      description: List delegation grants in the workspace.
+      parameters:
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "Filter active grants only"
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Delegation grants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DelegationGrantList"
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /delegation-grants/{id}/revoke:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: revokeDelegationGrant
+      tags: [delegation]
+      description: Revoke an active delegation grant (admin only).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Revoked delegation grant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DelegationGrant"
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /files/{fileId}:
     parameters:
       - name: fileId
@@ -1984,6 +2063,7 @@ components:
         dm: { type: boolean }
         at: { type: string, format: date-time }
         delegated_by: { type: string, description: "Handle of the approving admin for kind=delegated" }
+        via_grant: { type: boolean, description: "Whether this delegated item was delivered via an active delegation grant" }
     Inbox:
       type: object
       required: [items, total]
@@ -3256,6 +3336,15 @@ components:
         created_at:
           type: string
           format: date-time
+        approved_by_grant:
+          type: boolean
+          description: "Whether this delegation was approved through an existing grant"
+        grant_idle_minutes:
+          type: integer
+          description: "Grant idle limit in minutes (if it created a grant)"
+        grant_max_hours:
+          type: integer
+          description: "Grant max lifetime in hours (if it created a grant)"
 
     DelegationList:
       type: object
@@ -3265,6 +3354,127 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Delegation"
+
+    DelegationSettings:
+      type: object
+      required:
+        - grant_idle_minutes
+        - grant_max_hours
+        - updated_at
+      properties:
+        grant_idle_minutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+          description: "Idle expiry time in minutes (default 60, range 5-1440)"
+        grant_max_hours:
+          type: integer
+          minimum: 1
+          maximum: 72
+          description: "Maximum lifetime in hours (default 12, range 1-72)"
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateDelegationSettingsRequest:
+      type: object
+      required:
+        - grant_idle_minutes
+        - grant_max_hours
+      properties:
+        grant_idle_minutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+          description: "Idle expiry time in minutes (5-1440)"
+        grant_max_hours:
+          type: integer
+          minimum: 1
+          maximum: 72
+          description: "Maximum lifetime in hours (1-72)"
+
+    DelegationGrant:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - channel_id
+        - agent_a_id
+        - agent_a_handle
+        - agent_b_id
+        - agent_b_handle
+        - delegation_id
+        - approved_by
+        - approver_handle
+        - approved_at
+        - last_used_at
+        - expires_at
+        - effective_expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        channel_id:
+          type: string
+          format: uuid
+        thread_root_id:
+          type: string
+          format: uuid
+          nullable: true
+        agent_a_id:
+          type: string
+          format: uuid
+        agent_a_handle:
+          type: string
+        agent_b_id:
+          type: string
+          format: uuid
+        agent_b_handle:
+          type: string
+        delegation_id:
+          type: string
+          format: uuid
+        approved_by:
+          type: string
+          format: uuid
+        approver_handle:
+          type: string
+        approved_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        effective_expires_at:
+          type: string
+          format: date-time
+        revoked_by:
+          type: string
+          format: uuid
+          nullable: true
+        revoked_by_handle:
+          type: string
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DelegationGrantList:
+      type: object
+      required: [grants]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/DelegationGrant"
+
 
 
 

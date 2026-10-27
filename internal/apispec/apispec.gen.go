@@ -1665,6 +1665,8 @@ type DecisionsResponse struct {
 
 // Delegation defines model for Delegation.
 type Delegation struct {
+	// ApprovedByGrant Whether this delegation was approved through an existing grant
+	ApprovedByGrant *bool               `json:"approved_by_grant,omitempty"`
 	ApproverHandle  *string             `json:"approver_handle,omitempty"`
 	ChannelId       openapi_types.UUID  `json:"channel_id"`
 	CreatedAt       time.Time           `json:"created_at"`
@@ -1673,22 +1675,65 @@ type Delegation struct {
 	DecidedByHandle *string             `json:"decided_by_handle,omitempty"`
 	FromAgentHandle *string             `json:"from_agent_handle,omitempty"`
 	FromAgentId     openapi_types.UUID  `json:"from_agent_id"`
-	Id              openapi_types.UUID  `json:"id"`
-	MessageId       openapi_types.UUID  `json:"message_id"`
-	QuestionId      openapi_types.UUID  `json:"question_id"`
-	State           DelegationState     `json:"state"`
-	ThreadRootId    *openapi_types.UUID `json:"thread_root_id,omitempty"`
-	ToAgentHandle   *string             `json:"to_agent_handle,omitempty"`
-	ToAgentId       openapi_types.UUID  `json:"to_agent_id"`
-	WorkspaceId     openapi_types.UUID  `json:"workspace_id"`
+
+	// GrantIdleMinutes Grant idle limit in minutes (if it created a grant)
+	GrantIdleMinutes *int `json:"grant_idle_minutes,omitempty"`
+
+	// GrantMaxHours Grant max lifetime in hours (if it created a grant)
+	GrantMaxHours *int                `json:"grant_max_hours,omitempty"`
+	Id            openapi_types.UUID  `json:"id"`
+	MessageId     openapi_types.UUID  `json:"message_id"`
+	QuestionId    openapi_types.UUID  `json:"question_id"`
+	State         DelegationState     `json:"state"`
+	ThreadRootId  *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	ToAgentHandle *string             `json:"to_agent_handle,omitempty"`
+	ToAgentId     openapi_types.UUID  `json:"to_agent_id"`
+	WorkspaceId   openapi_types.UUID  `json:"workspace_id"`
 }
 
 // DelegationState defines model for Delegation.State.
 type DelegationState string
 
+// DelegationGrant defines model for DelegationGrant.
+type DelegationGrant struct {
+	AgentAHandle       string              `json:"agent_a_handle"`
+	AgentAId           openapi_types.UUID  `json:"agent_a_id"`
+	AgentBHandle       string              `json:"agent_b_handle"`
+	AgentBId           openapi_types.UUID  `json:"agent_b_id"`
+	ApprovedAt         time.Time           `json:"approved_at"`
+	ApprovedBy         openapi_types.UUID  `json:"approved_by"`
+	ApproverHandle     string              `json:"approver_handle"`
+	ChannelId          openapi_types.UUID  `json:"channel_id"`
+	DelegationId       openapi_types.UUID  `json:"delegation_id"`
+	EffectiveExpiresAt time.Time           `json:"effective_expires_at"`
+	ExpiresAt          time.Time           `json:"expires_at"`
+	Id                 openapi_types.UUID  `json:"id"`
+	LastUsedAt         time.Time           `json:"last_used_at"`
+	RevokedAt          *time.Time          `json:"revoked_at,omitempty"`
+	RevokedBy          *openapi_types.UUID `json:"revoked_by,omitempty"`
+	RevokedByHandle    *string             `json:"revoked_by_handle,omitempty"`
+	ThreadRootId       *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	WorkspaceId        openapi_types.UUID  `json:"workspace_id"`
+}
+
+// DelegationGrantList defines model for DelegationGrantList.
+type DelegationGrantList struct {
+	Grants []DelegationGrant `json:"grants"`
+}
+
 // DelegationList defines model for DelegationList.
 type DelegationList struct {
 	Delegations []Delegation `json:"delegations"`
+}
+
+// DelegationSettings defines model for DelegationSettings.
+type DelegationSettings struct {
+	// GrantIdleMinutes Idle expiry time in minutes (default 60, range 5-1440)
+	GrantIdleMinutes int `json:"grant_idle_minutes"`
+
+	// GrantMaxHours Maximum lifetime in hours (default 12, range 1-72)
+	GrantMaxHours int       `json:"grant_max_hours"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // EditWikiPageRequest defines model for EditWikiPageRequest.
@@ -2016,6 +2061,9 @@ type InboxItem struct {
 	Kind         string              `json:"kind"`
 	Mentioned    bool                `json:"mentioned"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+
+	// ViaGrant Whether this delegated item was delivered via an active delegation grant
+	ViaGrant *bool `json:"via_grant,omitempty"`
 }
 
 // InboxItemAuthorKind Who caused the item
@@ -2565,6 +2613,15 @@ type UpdateCompactionSummaryRequest struct {
 	Markdown string `json:"markdown"`
 }
 
+// UpdateDelegationSettingsRequest defines model for UpdateDelegationSettingsRequest.
+type UpdateDelegationSettingsRequest struct {
+	// GrantIdleMinutes Idle expiry time in minutes (5-1440)
+	GrantIdleMinutes int `json:"grant_idle_minutes"`
+
+	// GrantMaxHours Maximum lifetime in hours (1-72)
+	GrantMaxHours int `json:"grant_max_hours"`
+}
+
 // UpdateFileFetchSettingsRequest defines model for UpdateFileFetchSettingsRequest.
 type UpdateFileFetchSettingsRequest struct {
 	MaxFileMb  int `json:"max_file_mb"`
@@ -2689,6 +2746,12 @@ type ListMessagesParams struct {
 type ListDecisionsParams struct {
 	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Query *string `form:"query,omitempty" json:"query,omitempty"`
+}
+
+// ListDelegationGrantsParams defines parameters for ListDelegationGrants.
+type ListDelegationGrantsParams struct {
+	// Active Filter active grants only
+	Active *bool `form:"active,omitempty" json:"active,omitempty"`
 }
 
 // ListDelegationsParams defines parameters for ListDelegations.
@@ -2820,6 +2883,9 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // UpdateCompactionSummaryJSONRequestBody defines body for UpdateCompactionSummary for application/json ContentType.
 type UpdateCompactionSummaryJSONRequestBody = UpdateCompactionSummaryRequest
+
+// UpdateDelegationSettingsJSONRequestBody defines body for UpdateDelegationSettings for application/json ContentType.
+type UpdateDelegationSettingsJSONRequestBody = UpdateDelegationSettingsRequest
 
 // OpenDMJSONRequestBody defines body for OpenDM for application/json ContentType.
 type OpenDMJSONRequestBody = OpenDMRequest

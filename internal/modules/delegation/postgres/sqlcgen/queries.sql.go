@@ -12,6 +12,59 @@ import (
 	"github.com/google/uuid"
 )
 
+const getActiveGrantByPairAndConversation = `-- name: GetActiveGrantByPairAndConversation :one
+SELECT id, workspace_id, channel_id, thread_root_id, agent_a_id, agent_b_id, delegation_id, approved_by, approved_at, last_used_at, expires_at, revoked_by, revoked_at FROM delegation_grant
+WHERE workspace_id = $1
+  AND agent_a_id = $2
+  AND agent_b_id = $3
+  AND channel_id = $4
+  AND (
+      ($5::uuid IS NULL AND thread_root_id IS NULL)
+      OR (thread_root_id = $5::uuid)
+  )
+  AND revoked_at IS NULL
+  AND expires_at > $6::timestamptz
+ORDER BY approved_at DESC
+LIMIT 1
+`
+
+type GetActiveGrantByPairAndConversationParams struct {
+	WorkspaceID  uuid.UUID
+	AgentAID     uuid.UUID
+	AgentBID     uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Now          time.Time
+}
+
+func (q *Queries) GetActiveGrantByPairAndConversation(ctx context.Context, arg GetActiveGrantByPairAndConversationParams) (DelegationGrant, error) {
+	row := q.db.QueryRow(ctx, getActiveGrantByPairAndConversation,
+		arg.WorkspaceID,
+		arg.AgentAID,
+		arg.AgentBID,
+		arg.ChannelID,
+		arg.ThreadRootID,
+		arg.Now,
+	)
+	var i DelegationGrant
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ChannelID,
+		&i.ThreadRootID,
+		&i.AgentAID,
+		&i.AgentBID,
+		&i.DelegationID,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.RevokedBy,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getDelegationByID = `-- name: GetDelegationByID :one
 SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation WHERE id = $1
 `
@@ -89,6 +142,47 @@ func (q *Queries) GetDelegationByQuestionID(ctx context.Context, questionID uuid
 	return i, err
 }
 
+const getGrantByID = `-- name: GetGrantByID :one
+SELECT id, workspace_id, channel_id, thread_root_id, agent_a_id, agent_b_id, delegation_id, approved_by, approved_at, last_used_at, expires_at, revoked_by, revoked_at FROM delegation_grant WHERE id = $1
+`
+
+func (q *Queries) GetGrantByID(ctx context.Context, id uuid.UUID) (DelegationGrant, error) {
+	row := q.db.QueryRow(ctx, getGrantByID, id)
+	var i DelegationGrant
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ChannelID,
+		&i.ThreadRootID,
+		&i.AgentAID,
+		&i.AgentBID,
+		&i.DelegationID,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.RevokedBy,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getSettings = `-- name: GetSettings :one
+SELECT workspace_id, grant_idle_minutes, grant_max_hours, updated_at FROM delegation_settings WHERE workspace_id = $1
+`
+
+func (q *Queries) GetSettings(ctx context.Context, workspaceID uuid.UUID) (DelegationSetting, error) {
+	row := q.db.QueryRow(ctx, getSettings, workspaceID)
+	var i DelegationSetting
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.GrantIdleMinutes,
+		&i.GrantMaxHours,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertDelegation = `-- name: InsertDelegation :execrows
 INSERT INTO delegation (
     id, workspace_id, message_id, channel_id, thread_root_id,
@@ -130,6 +224,49 @@ func (q *Queries) InsertDelegation(ctx context.Context, arg InsertDelegationPara
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const insertGrant = `-- name: InsertGrant :exec
+INSERT INTO delegation_grant (
+    id, workspace_id, channel_id, thread_root_id,
+    agent_a_id, agent_b_id, delegation_id,
+    approved_by, approved_at, last_used_at, expires_at
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10, $11
+)
+`
+
+type InsertGrantParams struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	AgentAID     uuid.UUID
+	AgentBID     uuid.UUID
+	DelegationID uuid.UUID
+	ApprovedBy   uuid.UUID
+	ApprovedAt   time.Time
+	LastUsedAt   time.Time
+	ExpiresAt    time.Time
+}
+
+func (q *Queries) InsertGrant(ctx context.Context, arg InsertGrantParams) error {
+	_, err := q.db.Exec(ctx, insertGrant,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ChannelID,
+		arg.ThreadRootID,
+		arg.AgentAID,
+		arg.AgentBID,
+		arg.DelegationID,
+		arg.ApprovedBy,
+		arg.ApprovedAt,
+		arg.LastUsedAt,
+		arg.ExpiresAt,
+	)
+	return err
 }
 
 const listDelegationsByWorkspace = `-- name: ListDelegationsByWorkspace :many
@@ -177,6 +314,142 @@ func (q *Queries) ListDelegationsByWorkspace(ctx context.Context, arg ListDelega
 	return items, nil
 }
 
+const listGrantsByWorkspace = `-- name: ListGrantsByWorkspace :many
+SELECT id, workspace_id, channel_id, thread_root_id, agent_a_id, agent_b_id, delegation_id, approved_by, approved_at, last_used_at, expires_at, revoked_by, revoked_at FROM delegation_grant
+WHERE workspace_id = $1
+  AND (
+      NOT $2::boolean
+      OR (revoked_at IS NULL AND expires_at > $3::timestamptz)
+  )
+ORDER BY approved_at DESC
+`
+
+type ListGrantsByWorkspaceParams struct {
+	WorkspaceID uuid.UUID
+	ActiveOnly  bool
+	Now         time.Time
+}
+
+func (q *Queries) ListGrantsByWorkspace(ctx context.Context, arg ListGrantsByWorkspaceParams) ([]DelegationGrant, error) {
+	rows, err := q.db.Query(ctx, listGrantsByWorkspace, arg.WorkspaceID, arg.ActiveOnly, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DelegationGrant
+	for rows.Next() {
+		var i DelegationGrant
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.AgentAID,
+			&i.AgentBID,
+			&i.DelegationID,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
+			&i.LastUsedAt,
+			&i.ExpiresAt,
+			&i.RevokedBy,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingByPairAndConversation = `-- name: ListPendingByPairAndConversation :many
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at FROM delegation
+WHERE workspace_id = $1
+  AND (
+      (from_agent_id = $2 AND to_agent_id = $3)
+      OR (from_agent_id = $3 AND to_agent_id = $2)
+  )
+  AND channel_id = $4
+  AND (
+      ($5::uuid IS NULL AND thread_root_id IS NULL)
+      OR (thread_root_id = $5::uuid)
+  )
+  AND state = 'pending'
+ORDER BY created_at ASC
+`
+
+type ListPendingByPairAndConversationParams struct {
+	WorkspaceID  uuid.UUID
+	FromAgentID  uuid.UUID
+	ToAgentID    uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+}
+
+func (q *Queries) ListPendingByPairAndConversation(ctx context.Context, arg ListPendingByPairAndConversationParams) ([]Delegation, error) {
+	rows, err := q.db.Query(ctx, listPendingByPairAndConversation,
+		arg.WorkspaceID,
+		arg.FromAgentID,
+		arg.ToAgentID,
+		arg.ChannelID,
+		arg.ThreadRootID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Delegation
+	for rows.Next() {
+		var i Delegation
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.MessageID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.FromAgentID,
+			&i.ToAgentID,
+			&i.QuestionID,
+			&i.State,
+			&i.DecidedBy,
+			&i.DecidedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeGrantConditional = `-- name: RevokeGrantConditional :execrows
+UPDATE delegation_grant
+SET revoked_by = $2,
+    revoked_at = $3::timestamptz
+WHERE id = $1
+  AND revoked_at IS NULL
+  AND expires_at > $3::timestamptz
+`
+
+type RevokeGrantConditionalParams struct {
+	ID        uuid.UUID
+	RevokedBy *uuid.UUID
+	RevokedAt time.Time
+}
+
+func (q *Queries) RevokeGrantConditional(ctx context.Context, arg RevokeGrantConditionalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeGrantConditional, arg.ID, arg.RevokedBy, arg.RevokedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateDelegationStateConditional = `-- name: UpdateDelegationStateConditional :execrows
 UPDATE delegation
 SET state = $3,
@@ -205,4 +478,49 @@ func (q *Queries) UpdateDelegationStateConditional(ctx context.Context, arg Upda
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateGrantLastUsed = `-- name: UpdateGrantLastUsed :execrows
+UPDATE delegation_grant
+SET last_used_at = $2
+WHERE id = $1 AND revoked_at IS NULL
+`
+
+type UpdateGrantLastUsedParams struct {
+	ID         uuid.UUID
+	LastUsedAt time.Time
+}
+
+func (q *Queries) UpdateGrantLastUsed(ctx context.Context, arg UpdateGrantLastUsedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateGrantLastUsed, arg.ID, arg.LastUsedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const upsertSettings = `-- name: UpsertSettings :exec
+INSERT INTO delegation_settings (workspace_id, grant_idle_minutes, grant_max_hours, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id) DO UPDATE
+SET grant_idle_minutes = EXCLUDED.grant_idle_minutes,
+    grant_max_hours = EXCLUDED.grant_max_hours,
+    updated_at = EXCLUDED.updated_at
+`
+
+type UpsertSettingsParams struct {
+	WorkspaceID      uuid.UUID
+	GrantIdleMinutes int32
+	GrantMaxHours    int32
+	UpdatedAt        time.Time
+}
+
+func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) error {
+	_, err := q.db.Exec(ctx, upsertSettings,
+		arg.WorkspaceID,
+		arg.GrantIdleMinutes,
+		arg.GrantMaxHours,
+		arg.UpdatedAt,
+	)
+	return err
 }

@@ -382,6 +382,45 @@ func (s *Service) Answer(ctx context.Context, by identity.Actor, questionRef str
 	return updated, nil
 }
 
+// CloseByGrant answers/resolves an open question via an active delegation grant, without posting a chat message.
+func (s *Service) CloseByGrant(ctx context.Context, questionID ids.ID, closedBy ids.ID, answerText string) error {
+	q, err := s.Store.GetByID(ctx, questionID)
+	if err != nil {
+		return err
+	}
+	if q.State != StateOpen && q.State != StateEscalated {
+		return nil // already answered/closed
+	}
+	ans := strings.TrimSpace(answerText)
+	if ans == "" {
+		ans = "az engedély alapján"
+	}
+
+	now := s.Clock.Now()
+	evPayload := Event{
+		QuestionID:      q.ID.String(),
+		Number:          q.Number,
+		FormattedNumber: q.FormattedNumber(),
+		AskedBy:         q.AskedBy.String(),
+		ChannelID:       q.ChannelID.String(),
+		ThreadRootID:    q.ThreadRootID.String(),
+		State:           StateAnswered,
+		Answer:          ans,
+		AnsweredBy:      closedBy.String(),
+	}
+
+	return s.record(ctx, q.WorkspaceID, closedBy, EventAnswered, q.ID, evPayload, func(ctx context.Context) error {
+		_, ok, err := s.Store.Answer(ctx, q.ID, ans, &closedBy, now)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+		return nil
+	})
+}
+
 // Withdraw withdraws an open or escalated question. Only the asker may withdraw.
 func (s *Service) Withdraw(ctx context.Context, by identity.Actor, questionRef string) (Question, error) {
 	if by.Halted {
