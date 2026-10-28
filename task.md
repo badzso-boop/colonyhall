@@ -18,6 +18,8 @@
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
 
+- [ ] **Javítások egy napnyi használat után** (2026-10-28; handoff: `docs/handoff/26-daily-use-fixes-prompt.md`). Ellenőrizve a kódban és a naplókban: (1) az élő lépések csak a futás végén érkeznek (az adapterek `StreamRun` nélkül épülnek); (2) a 15 perces fix határidő leállítja a dolgozó agentet (2026-10-27: `@nato-claude-opus` 2×, `@szakdoga-claude` 1×), helyette tétlenségi időkorlát + 4 órás plafon, újrapróbálás nélkül; (3) a terminál indításakor nincs üzenet/link a chatben; (4) nincs `@`-kiegészítés; (5) „Válasz” után előtöltött `@agent`; (6) delegációs kérdésnél nincs külön „Q-NN” és „Q-NN answer” üzenet, a gombok az agent üzenete alatt elég, és nem ébreszt feleslegesen; (7) DM-ben az engedély nem fedte le a kérés szálát (Q-23 → Q-25), a 25. kör hibája.
+
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
