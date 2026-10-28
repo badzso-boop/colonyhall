@@ -114,6 +114,19 @@ func (s *Store) GetByMessageAndTarget(_ context.Context, messageID, toAgentID id
 	return clone(s.items[id]), nil
 }
 
+func (s *Store) ListByMessageID(_ context.Context, messageID ids.ID) ([]delegation.Delegation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var out []delegation.Delegation
+	for _, d := range s.items {
+		if d.MessageID == messageID {
+			out = append(out, clone(d))
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) UpdateStateConditional(_ context.Context, id ids.ID, expectedState, newState string, decidedBy *ids.ID, decidedAt time.Time) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

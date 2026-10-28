@@ -31,6 +31,8 @@ type Store interface {
 	Pending(ctx context.Context, recipientID ids.ID, limit int) ([]Delivery, int, error)
 	// Ack marks the recipient's deliveries as handled and returns how many changed.
 	Ack(ctx context.Context, recipientID ids.ID, idList []ids.ID, at time.Time) (int, error)
+	// AckByItemID marks all deliveries for itemID as handled.
+	AckByItemID(ctx context.Context, itemID ids.ID, at time.Time) (int, error)
 	// InsertTerminalEvent records a terminal completion event.
 	InsertTerminalEvent(ctx context.Context, te TerminalEvent) error
 	// TerminalEventsByIDs loads terminal events by their IDs.

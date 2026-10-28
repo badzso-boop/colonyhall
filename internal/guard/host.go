@@ -132,6 +132,7 @@ func (s *Supervisor) start(ctx context.Context) error {
 
 	stateDir := filepath.Dir(s.Cfg.SandboxDir)
 	s.terminals = NewTerminalManager(stateDir, s.roots, s.home)
+	s.terminals.SetOnStart(s.handleTerminalStart)
 	s.terminals.SetOnFinish(s.handleTerminalFinish)
 	_ = s.terminals.AdoptExisting()
 	s.terminals.StartWatcher(ctx, 5*time.Second)
@@ -658,10 +659,52 @@ func (s *Supervisor) stopAll() {
 	}
 }
 
+func (s *Supervisor) handleTerminalStart(meta *TerminalMeta) {
+	if meta == nil {
+		return
+	}
+	s.Log.Info("guard: terminal started", "agent", "@"+meta.Handle, "name", meta.Name, "command", Redact(clip(meta.Command, 120)), "cwd", meta.Cwd)
+
+	s.mu.Lock()
+	var client *Client
+	for _, m := range s.agents {
+		if m.conf.AgentID == meta.AgentID || cleanHandle(m.conf.Handle) == meta.Handle {
+			if m.agent != nil {
+				client = m.agent.Client
+			}
+			break
+		}
+	}
+	s.mu.Unlock()
+
+	if client == nil {
+		s.Log.Warn("guard: terminal started but agent client not found", "agent_id", meta.AgentID, "name", meta.Name)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := HandleTerminalStart(ctx, client, meta); err != nil {
+		s.Log.Warn("guard: handle terminal start failed", "agent_id", meta.AgentID, "name", meta.Name, "err", err)
+	}
+}
+
 func (s *Supervisor) handleTerminalFinish(meta *TerminalMeta) {
 	if meta == nil {
 		return
 	}
+	dur := meta.Duration(time.Now())
+	if meta.KilledBy != "" {
+		s.Log.Info("guard: terminal killed", "agent", "@"+meta.Handle, "name", meta.Name, "killed_by", meta.KilledBy, "duration", dur)
+	} else {
+		exitCode := -1
+		if meta.ExitCode != nil {
+			exitCode = *meta.ExitCode
+		}
+		s.Log.Info("guard: terminal finished", "agent", "@"+meta.Handle, "name", meta.Name, "exit_code", exitCode, "duration", dur)
+	}
+
 	s.mu.Lock()
 	var client *Client
 	for _, m := range s.agents {

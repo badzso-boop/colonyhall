@@ -624,11 +624,20 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 
 	a.workMu.Lock()
 	a.workCancel = rtc.Cancel
+	a.currentRunItems = group
+	a.currentRunChannelID = last.ChannelID
+	a.currentRunThreadID = last.ThreadRootID
+	a.currentRunRetracted = false
+	a.currentRetractedMsgID = ""
 	a.workMu.Unlock()
 	res, err := a.Adapter.Direct(rtc, req)
 	timedOut := rtc.Finish()
 	a.workMu.Lock()
+	wasRetracted := a.currentRunRetracted
+	retractedMsgID := a.currentRetractedMsgID
 	a.workCancel = nil
+	a.currentRunItems = nil
+	a.currentRunRetracted = false
 	a.workMu.Unlock()
 	steps := pr.Finish()
 
@@ -639,6 +648,13 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		if serr := state.Save(stateFile); serr != nil {
 			a.Log.Warn("guard: direct state save", "err", serr)
 		}
+	}
+
+	if wasRetracted {
+		a.Log.Info("guard: direct run stopped because message was retracted", "agent", a.logName(), "session_id", sessionID, "message_id", retractedMsgID)
+		_ = a.Client.CreateRetractNote(context.Background(), last.ChannelID, last.ThreadRootID, "⏹ Leállítottam: az üzenetet visszavonták.")
+		a.reportRun(context.Background(), "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "stopped", "", steps, "")
+		return nil
 	}
 
 	if ctx.Err() != nil {
@@ -934,6 +950,9 @@ func (a *Agent) threadRecap(ctx context.Context, threadRootID string) string {
 	}
 	var b strings.Builder
 	for _, m := range allMsgs {
+		if m.DeletedAt != nil {
+			continue
+		}
 		author := a.handleOf(ctx, m.AuthorID)
 		if !strings.HasPrefix(author, "@") {
 			author = "@" + author

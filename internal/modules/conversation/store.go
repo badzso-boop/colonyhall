@@ -50,4 +50,6 @@ type Store interface {
 	MainStreamMessages(ctx context.Context, channelID ids.ID) ([]Message, error)
 	// LastMessageNotBy returns the newest message in the channel by someone else.
 	LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (Message, error)
+	// RetractMessage marks a message as retracted (soft delete).
+	RetractMessage(ctx context.Context, id ids.ID, deletedBy ids.ID, at time.Time) error
 }

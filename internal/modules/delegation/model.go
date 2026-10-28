@@ -11,10 +11,11 @@ const ConsumerName = "delegation"
 
 // Delegation states.
 const (
-	StatePending  = "pending"
-	StateApproved = "approved"
-	StateDenied   = "denied"
-	StateExpired  = "expired"
+	StatePending   = "pending"
+	StateApproved  = "approved"
+	StateDenied    = "denied"
+	StateExpired   = "expired"
+	StateCancelled = "cancelled"
 )
 
 // Event types.

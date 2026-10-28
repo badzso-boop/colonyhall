@@ -65,6 +65,12 @@ type Agent struct {
 	workMu     sync.Mutex
 	workCancel context.CancelFunc
 
+	currentRunItems       []Item
+	currentRunChannelID   string
+	currentRunThreadID    string
+	currentRunRetracted   bool
+	currentRetractedMsgID string
+
 	// HostConfigVersion, when set (host mode), returns the host config version.
 	HostConfigVersion func() string
 
@@ -496,6 +502,28 @@ func (a *Agent) StopWork() {
 	}
 }
 
+// OnMessageRetracted cancels a running run if it includes the retracted message.
+func (a *Agent) OnMessageRetracted(messageID string) {
+	a.workMu.Lock()
+	defer a.workMu.Unlock()
+	contains := false
+	for _, it := range a.currentRunItems {
+		if it.ItemID == messageID {
+			contains = true
+			break
+		}
+	}
+	if !contains {
+		return
+	}
+	a.currentRunRetracted = true
+	a.currentRetractedMsgID = messageID
+	a.Log.Info("guard: stopping run because message was retracted", "agent", a.logName(), "message_id", messageID)
+	if a.workCancel != nil {
+		a.workCancel()
+	}
+}
+
 // fetchRules fetches the agent's instructions (rendered rules) from the server,
 // caching it and refetching when the host config version changes or every 10 minutes.
 // On error, the last good text is kept; if none, it runs without rules and logs a warning.
@@ -595,6 +623,11 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		rtc := newRunTimeoutContext(ctx, a.Cfg.IdleTimeout, a.Cfg.MaxRun)
 		a.workMu.Lock()
 		a.workCancel = rtc.Cancel
+		a.currentRunItems = []Item{it.Item}
+		a.currentRunChannelID = it.ChannelID
+		a.currentRunThreadID = it.ThreadRootID
+		a.currentRunRetracted = false
+		a.currentRetractedMsgID = ""
 		a.workMu.Unlock()
 		promptBranch := ""
 		if a.Sandbox && a.WorktreeBranch != "" {
@@ -648,13 +681,23 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		timedOut := rtc.Finish()
 		stopped := wasCanceled && timedOut == timeoutNone
 		a.workMu.Lock()
+		wasRetracted := a.currentRunRetracted
+		retractedMsgID := a.currentRetractedMsgID
 		a.workCancel = nil
+		a.currentRunItems = nil
+		a.currentRunRetracted = false
 		a.workMu.Unlock()
 		var visitedURLs []string
 		if tracker != nil {
 			visitedURLs = tracker.VisitedURLs()
 		}
 		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
+		if wasRetracted {
+			a.Log.Info("guard: work run stopped because message was retracted", "agent", a.logName(), "message_id", retractedMsgID)
+			_ = a.Client.CreateRetractNote(context.Background(), it.ChannelID, it.ThreadRootID, "⏹ Leállítottam: az üzenetet visszavonták.")
+			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "stopped", "", steps, "", visitedURLs)
+			return nil
+		}
 		if ctx.Err() != nil {
 			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", steps, "", visitedURLs)
 			return errHalted
@@ -851,6 +894,9 @@ func (a *Agent) threadContext(ctx context.Context, it Item) []ContextMsg {
 	for _, m := range msgs {
 		if m.ID == it.ItemID {
 			break
+		}
+		if m.DeletedAt != nil {
+			continue
 		}
 		earlier = append(earlier, m)
 	}

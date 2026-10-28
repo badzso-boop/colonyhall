@@ -13,6 +13,11 @@ SELECT * FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL ORDER BY id 
 UPDATE delivery SET acked_at = sqlc.arg(at)::timestamptz
 WHERE recipient_id = sqlc.arg(recipient_id) AND id = ANY(sqlc.arg(ids)::uuid[]) AND acked_at IS NULL;
 
+-- name: AckByItemID :execrows
+UPDATE delivery SET acked_at = sqlc.arg(at)::timestamptz
+WHERE item_id = sqlc.arg(item_id) AND acked_at IS NULL;
+
+
 -- name: InsertTerminalEvent :exec
 INSERT INTO terminal_event (id, workspace_id, agent_id, channel_id, thread_root_id, name, exit_code, duration_ms, tail, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);

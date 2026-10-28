@@ -70,9 +70,10 @@ type Item struct {
 
 // Message is a chat message (only what the guard needs).
 type Message struct {
-	ID       string `json:"id"`
-	AuthorID string `json:"author_id"`
-	Body     string `json:"body"`
+	ID        string     `json:"id"`
+	AuthorID  string     `json:"author_id"`
+	Body      string     `json:"body"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // APIError is a non-2xx answer.
@@ -246,6 +247,31 @@ func (c *Client) CreateTerminalEvent(ctx context.Context, name, channelID, threa
 		in["exit_code"] = *exitCode
 	}
 	return c.do(ctx, http.MethodPost, "/api/v1/agent/terminal-events", in, nil)
+}
+
+// CreateTerminalStart posts a terminal started message silently (wakes nobody).
+func (c *Client) CreateTerminalStart(ctx context.Context, name, body, channelID, threadRootID string) error {
+	in := map[string]any{
+		"name":       name,
+		"body":       body,
+		"channel_id": channelID,
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/terminal-start", in, nil)
+}
+
+// CreateRetractNote posts a short note when a message was retracted (wakes nobody).
+func (c *Client) CreateRetractNote(ctx context.Context, channelID, threadRootID, body string) error {
+	in := map[string]any{
+		"channel_id": channelID,
+		"body":       body,
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/retract-note", in, nil)
 }
 
 // Thread returns a thread's root and replies.

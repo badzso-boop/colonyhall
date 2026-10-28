@@ -3,6 +3,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -29,21 +30,25 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	out := apispec.Message{Id: m.ID, ChannelId: m.ChannelID, AuthorId: m.AuthorID,
 		ClientMsgId: httpx.Ptr(m.ClientMsgID), Kind: apispec.MessageKind(m.Kind), Body: m.Body,
 		ReplyCount: m.ReplyCount, LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
-		ThreadRootId: httpx.Ptr(m.ThreadRootID), Mentions: m.Mentions}
+		ThreadRootId: httpx.Ptr(m.ThreadRootID), Mentions: m.Mentions,
+		DeletedAt: m.DeletedAt, DeletedBy: m.DeletedBy}
+	if m.DeletedAt != nil {
+		out.Body = "🗑 Visszavonva"
+	}
 	if m.CompactionID != ids.Nil {
 		out.CompactionId = httpx.Ptr(m.CompactionID)
 	}
 	if out.Mentions == nil {
 		out.Mentions = []ids.ID{}
 	}
-	if len(m.Reactions) > 0 {
+	if len(m.Reactions) > 0 && m.DeletedAt == nil {
 		rs := make([]apispec.ReactionSummary, 0, len(m.Reactions))
 		for _, r := range m.Reactions {
 			rs = append(rs, apispec.ReactionSummary{Emoji: r.Emoji, Count: r.Count, ActorIds: r.ActorIDs})
 		}
 		out.Reactions = &rs
 	}
-	if len(m.Attachments) > 0 {
+	if len(m.Attachments) > 0 && m.DeletedAt == nil {
 		atts := make([]apispec.FileAttachment, 0, len(m.Attachments))
 		for _, a := range m.Attachments {
 			atts = append(atts, apispec.FileAttachment{
@@ -55,7 +60,7 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 		}
 		out.Attachments = &atts
 	}
-	if len(m.LinkCards) > 0 {
+	if len(m.LinkCards) > 0 && m.DeletedAt == nil {
 		lcs := make([]apispec.LinkCard, 0, len(m.LinkCards))
 		for _, lc := range m.LinkCards {
 			lcs = append(lcs, apispec.LinkCard{
@@ -244,19 +249,28 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		if !ok {
 			return
 		}
-		var in apispec.SendMessageRequest
+		var in struct {
+			apispec.SendMessageRequest
+			Silent *bool `json:"silent,omitempty"`
+		}
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)
+			return
+		}
+		actor := httpx.Actor(r)
+		if in.Silent != nil && *in.Silent && actor.Kind == identity.KindAgent {
+			httpx.Error(w, r, identity.ErrForbidden)
 			return
 		}
 		var fileIDs []ids.ID
 		if in.FileIds != nil {
 			fileIDs = *in.FileIds
 		}
-		res, err := svc.SendMessage(r.Context(), httpx.Actor(r), conversation.SendInput{
+		silent := in.Silent != nil && *in.Silent && actor.Kind != identity.KindAgent
+		res, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
 			ChannelID: channelID, ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil),
 			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body, Elaborate: httpx.Deref(in.Elaborate, false),
-			FileIDs: fileIDs,
+			FileIDs: fileIDs, Silent: silent,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -267,6 +281,65 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			status = http.StatusOK
 		}
 		httpx.JSON(w, status, SendResultToAPI(res))
+	}))
+
+	mux.Handle("POST /api/v1/agent/terminal-start", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.TerminalStartRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		actor := httpx.Actor(r)
+		if actor.Kind != identity.KindAgent {
+			httpx.Error(w, r, identity.ErrForbidden)
+			return
+		}
+		chID := in.ChannelId
+		threadRootID := httpx.Deref(in.ThreadRootId, ids.Nil)
+		body := ""
+		if in.Body != nil && *in.Body != "" {
+			body = *in.Body
+		} else if in.Command != nil && *in.Command != "" {
+			body = fmt.Sprintf("🖥 %s elindult: %s", in.Name, *in.Command)
+		} else {
+			body = fmt.Sprintf("🖥 %s elindult", in.Name)
+		}
+		_, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
+			ChannelID:    chID,
+			ThreadRootID: threadRootID,
+			Body:         body,
+			Silent:       true,
+		})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("POST /api/v1/agent/retract-note", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.RetractNoteRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		actor := httpx.Actor(r)
+		if actor.Kind != identity.KindAgent {
+			httpx.Error(w, r, identity.ErrForbidden)
+			return
+		}
+		threadRootID := httpx.Deref(in.ThreadRootId, ids.Nil)
+		_, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
+			ChannelID:    in.ChannelId,
+			ThreadRootID: threadRootID,
+			Body:         in.Body,
+			Silent:       true,
+		})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	mux.Handle("POST /api/v1/dms", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +408,18 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			return
 		}
 		if err := svc.MarkRead(r.Context(), httpx.Actor(r), channelID); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("POST /api/v1/messages/{id}/retract", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		if err := svc.RetractMessage(r.Context(), httpx.Actor(r), id); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}

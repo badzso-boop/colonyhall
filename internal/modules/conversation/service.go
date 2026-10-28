@@ -294,6 +294,8 @@ type SendInput struct {
 	// as a plain reply; set when the sender delivers it another way (a
 	// question's answer reaches the asker as its own answer item).
 	NoThreadFollow bool
+	// Silent posts the message without delivery to any actor (no inbox items, no wake).
+	Silent bool
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -427,6 +429,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		}
 		payload := MessageCreatedPayload(msg)
 		payload.NoThreadFollow = in.NoThreadFollow
+		payload.Silent = in.Silent
 		seq, err = s.appendEvent(ctx, by, c.ID, EventMessageCreated, "message", msg.ID, payload)
 		return err
 	})
@@ -637,7 +640,8 @@ func (s *Service) withCompactions(ctx context.Context, msgs []Message) ([]Messag
 	return msgs, nil
 }
 
-// MessagesInUnit returns messages in a unit (thread or main stream), oldest first.
+// MessagesInUnit returns messages in a unit (thread or main stream), oldest first,
+// excluding retracted messages.
 func (s *Service) MessagesInUnit(ctx context.Context, channelID, threadRootID ids.ID) ([]Message, error) {
 	var msgs []Message
 	var err error
@@ -649,6 +653,13 @@ func (s *Service) MessagesInUnit(ctx context.Context, channelID, threadRootID id
 	if err != nil {
 		return nil, err
 	}
+	active := msgs[:0]
+	for _, m := range msgs {
+		if m.DeletedAt == nil {
+			active = append(active, m)
+		}
+	}
+	msgs = active
 	msgs, err = s.withAttachments(ctx, msgs)
 	if err != nil {
 		return nil, err
@@ -988,4 +999,49 @@ func (s *Service) ThreadAuthorIDs(ctx context.Context, rootID ids.ID) ([]ids.ID,
 		}
 	}
 	return out, nil
+}
+
+// RetractMessage allows a human author to retract their own message.
+func (s *Service) RetractMessage(ctx context.Context, by identity.Actor, messageID ids.ID) error {
+	if by.Halted {
+		return ErrForbidden
+	}
+	if by.Kind != identity.KindHuman {
+		return ErrForbidden
+	}
+	m, err := s.Store.MessageByID(ctx, messageID)
+	if err != nil {
+		return err
+	}
+	if m.AuthorID != by.ID {
+		return ErrForbidden
+	}
+	if m.DeletedAt != nil {
+		return nil
+	}
+	now := s.Clock.Now()
+	payload := MessageRetracted{
+		MessageID:    m.ID.String(),
+		ChannelID:    m.ChannelID.String(),
+		ThreadRootID: m.ThreadRootID.String(),
+		AuthorID:     m.AuthorID.String(),
+		RetractedBy:  by.ID.String(),
+		At:           now,
+	}
+	var seq int64
+	err = s.Tx.InTx(ctx, func(txCtx context.Context) error {
+		if err := s.Store.RetractMessage(txCtx, m.ID, by.ID, now); err != nil {
+			return err
+		}
+		var err error
+		seq, err = s.appendEvent(txCtx, by, m.ChannelID, EventMessageRetracted, "message", m.ID, payload)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if seq > 0 && s.Bus != nil {
+		s.Bus.Notify(seq)
+	}
+	return nil
 }

@@ -395,7 +395,7 @@ func (s *Store) LastMessageNotBy(_ context.Context, channelID, actorID ids.ID) (
 	defer s.mu.RUnlock()
 	var best *conversation.Message
 	for _, m := range s.messages {
-		if m.ChannelID != channelID || m.AuthorID == actorID {
+		if m.ChannelID != channelID || m.AuthorID == actorID || m.DeletedAt != nil {
 			continue
 		}
 		if best == nil || bytes.Compare(m.ID[:], best.ID[:]) > 0 {
@@ -407,4 +407,23 @@ func (s *Store) LastMessageNotBy(_ context.Context, channelID, actorID ids.ID) (
 		return conversation.Message{}, db.ErrNotFound
 	}
 	return *best, nil
+}
+
+// RetractMessage marks a message as retracted.
+func (s *Store) RetractMessage(_ context.Context, id ids.ID, deletedBy ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.messages[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	if m.DeletedAt != nil {
+		return nil
+	}
+	delAt := at
+	delBy := deletedBy
+	m.DeletedAt = &delAt
+	m.DeletedBy = &delBy
+	s.messages[id] = m
+	return nil
 }

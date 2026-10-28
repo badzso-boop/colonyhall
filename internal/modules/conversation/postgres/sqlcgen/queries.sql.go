@@ -291,7 +291,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 }
 
 const lastMessageNotBy = `-- name: LastMessageNotBy :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1
 `
 
 type LastMessageNotByParams struct {
@@ -316,6 +316,7 @@ func (q *Queries) LastMessageNotBy(ctx context.Context, arg LastMessageNotByPara
 		&i.LastReplyAt,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.DeletedBy,
 	)
 	return i, err
 }
@@ -356,8 +357,8 @@ func (q *Queries) ListMembers(ctx context.Context, channelID uuid.UUID) ([]Chann
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM (
-    SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM (
+    SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message
     WHERE channel_id = $1 AND deleted_at IS NULL
       AND ($2::uuid IS NULL OR id < $2::uuid)
     ORDER BY id DESC
@@ -394,6 +395,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.LastReplyAt,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -406,7 +408,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const mainStreamMessages = `-- name: MainStreamMessages :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE channel_id = $1 AND thread_root_id IS NULL AND deleted_at IS NULL
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message WHERE channel_id = $1 AND thread_root_id IS NULL AND deleted_at IS NULL
 ORDER BY id
 `
 
@@ -433,6 +435,7 @@ func (q *Queries) MainStreamMessages(ctx context.Context, channelID uuid.UUID) (
 			&i.LastReplyAt,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -493,7 +496,7 @@ func (q *Queries) MemberIDs(ctx context.Context, channelID uuid.UUID) ([]uuid.UU
 }
 
 const messageByClientID = `-- name: MessageByClientID :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE author_id = $1 AND client_msg_id = $2
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message WHERE author_id = $1 AND client_msg_id = $2
 `
 
 type MessageByClientIDParams struct {
@@ -518,12 +521,13 @@ func (q *Queries) MessageByClientID(ctx context.Context, arg MessageByClientIDPa
 		&i.LastReplyAt,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const messageByID = `-- name: MessageByID :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE id = $1
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message WHERE id = $1
 `
 
 func (q *Queries) MessageByID(ctx context.Context, id uuid.UUID) (Message, error) {
@@ -543,12 +547,13 @@ func (q *Queries) MessageByID(ctx context.Context, id uuid.UUID) (Message, error
 		&i.LastReplyAt,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const messagesByIDs = `-- name: MessagesByIDs :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE id = ANY($1::uuid[]) ORDER BY id
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message WHERE id = ANY($1::uuid[]) ORDER BY id
 `
 
 func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message, error) {
@@ -574,6 +579,7 @@ func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message
 			&i.LastReplyAt,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -665,6 +671,27 @@ func (q *Queries) RemoveReaction(ctx context.Context, arg RemoveReactionParams) 
 	return result.RowsAffected(), nil
 }
 
+const retractMessage = `-- name: RetractMessage :execrows
+UPDATE message
+SET deleted_at = $1::timestamptz,
+    deleted_by = $2::uuid
+WHERE id = $3 AND deleted_at IS NULL
+`
+
+type RetractMessageParams struct {
+	DeletedAt time.Time
+	DeletedBy uuid.UUID
+	ID        uuid.UUID
+}
+
+func (q *Queries) RetractMessage(ctx context.Context, arg RetractMessageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retractMessage, arg.DeletedAt, arg.DeletedBy, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setSeen = `-- name: SetSeen :exec
 UPDATE channel_member SET msg_count = GREATEST(msg_count, $1::bigint), mention_count = 0
 WHERE channel_id = $2 AND actor_id = $3 AND left_at IS NULL
@@ -682,7 +709,7 @@ func (q *Queries) SetSeen(ctx context.Context, arg SetSeenParams) error {
 }
 
 const threadMessages = `-- name: ThreadMessages :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at FROM message WHERE (id = $1 OR thread_root_id = $1) AND deleted_at IS NULL
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by FROM message WHERE (id = $1 OR thread_root_id = $1) AND deleted_at IS NULL
 ORDER BY id
 `
 
@@ -709,6 +736,7 @@ func (q *Queries) ThreadMessages(ctx context.Context, rootID uuid.UUID) ([]Messa
 			&i.LastReplyAt,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}

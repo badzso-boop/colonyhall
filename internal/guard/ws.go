@@ -248,6 +248,15 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 				go a.serveFsRequest(connCtx, reqID)
 			}
 		case "event":
+			if frame.EventType == "message.retracted" {
+				var p struct {
+					MessageID string `json:"message_id"`
+				}
+				_ = json.Unmarshal(frame.Data, &p)
+				if p.MessageID != "" {
+					a.OnMessageRetracted(p.MessageID)
+				}
+			}
 			if frame.EventType == "file.fetch_requested" {
 				var p struct {
 					AgentID string `json:"agent_id"`

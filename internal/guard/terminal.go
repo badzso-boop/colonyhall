@@ -54,17 +54,18 @@ var (
 
 // TerminalMeta contains persistent metadata for an agent terminal.
 type TerminalMeta struct {
-	AgentID      string     `json:"agent_id"`
-	Handle       string     `json:"handle"`
-	Name         string     `json:"name"`
-	Command      string     `json:"command"`
-	Cwd          string     `json:"cwd"`
-	ChannelID    string     `json:"channel_id"`
-	ThreadRootID string     `json:"thread_root_id,omitempty"`
-	StartedAt    time.Time  `json:"started_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
-	ExitCode     *int       `json:"exit_code,omitempty"`
-	KilledBy     string     `json:"killed_by,omitempty"`
+	AgentID       string     `json:"agent_id"`
+	Handle        string     `json:"handle"`
+	Name          string     `json:"name"`
+	Command       string     `json:"command"`
+	Cwd           string     `json:"cwd"`
+	ChannelID     string     `json:"channel_id"`
+	ThreadRootID  string     `json:"thread_root_id,omitempty"`
+	StartedAt     time.Time  `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	ExitCode      *int       `json:"exit_code,omitempty"`
+	KilledBy      string     `json:"killed_by,omitempty"`
+	StartNotified bool       `json:"start_notified,omitempty"`
 }
 
 // IsRunning reports whether the terminal is currently active.
@@ -125,6 +126,7 @@ type TerminalManager struct {
 	roots      []string
 	home       string
 	clock      func() time.Time
+	onStart    func(m *TerminalMeta)
 	onFinish   func(m *TerminalMeta)
 	running    map[string]*TerminalMeta // key: handle + "/" + name
 }
@@ -149,6 +151,13 @@ func (tm *TerminalManager) SetSocketName(name string) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	tm.socketName = name
+}
+
+// SetOnStart registers a callback invoked whenever a terminal starts.
+func (tm *TerminalManager) SetOnStart(fn func(m *TerminalMeta)) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.onStart = fn
 }
 
 // SetOnFinish registers a callback invoked whenever a terminal completes or is killed.
@@ -304,6 +313,12 @@ func (tm *TerminalManager) Start(agentID, handle, name, command, cwd, channelID,
 	}
 
 	tm.running[key] = meta
+	if tm.onStart != nil && !meta.StartNotified {
+		meta.StartNotified = true
+		_ = tm.saveMetaLocked(meta)
+		cb := tm.onStart
+		go cb(meta)
+	}
 	return meta, nil
 }
 
@@ -587,15 +602,70 @@ func (tm *TerminalManager) AdoptExisting() error {
 	return nil
 }
 
+func (tm *TerminalManager) scanRunningLocked() []*TerminalMeta {
+	root := tm.terminalsDir()
+	hEntries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	var started []*TerminalMeta
+	for _, he := range hEntries {
+		if !he.IsDir() {
+			continue
+		}
+		hDir := filepath.Join(root, he.Name())
+		tEntries, err := os.ReadDir(hDir)
+		if err != nil {
+			continue
+		}
+		for _, te := range tEntries {
+			if !te.IsDir() {
+				continue
+			}
+			key := he.Name() + "/" + te.Name()
+			if _, exists := tm.running[key]; exists {
+				continue
+			}
+			meta, err := tm.loadMeta(he.Name(), te.Name())
+			if err != nil || meta == nil || meta.FinishedAt != nil {
+				continue
+			}
+			session := tm.sessionName(meta.Handle, meta.Name)
+			termDir := tm.terminalDir(meta.Handle, meta.Name)
+			exitPath := filepath.Join(termDir, "exit")
+			_, exitErr := os.ReadFile(exitPath)
+			hasExit := exitErr == nil
+			alive := tm.hasSession(session)
+			if alive && !hasExit {
+				tm.running[key] = meta
+				if !meta.StartNotified {
+					meta.StartNotified = true
+					_ = tm.saveMetaLocked(meta)
+					started = append(started, meta)
+				}
+			}
+		}
+	}
+	return started
+}
+
 // WatchTick checks active terminals once and cleans up aged records.
 func (tm *TerminalManager) WatchTick() {
 	tm.mu.Lock()
+	newStarted := tm.scanRunningLocked()
 	var active []*TerminalMeta
 	for _, m := range tm.running {
 		active = append(active, m)
 	}
 	now := tm.now()
 	tm.mu.Unlock()
+
+	if tm.onStart != nil && len(newStarted) > 0 {
+		cb := tm.onStart
+		for _, m := range newStarted {
+			cb(m)
+		}
+	}
 
 	var finished []*TerminalMeta
 
@@ -795,4 +865,13 @@ func HandleTerminalFinish(ctx context.Context, client *Client, tm *TerminalManag
 	}
 
 	return client.CreateTerminalEvent(ctx, meta.Name, meta.ChannelID, meta.ThreadRootID, meta.ExitCode, dur.Milliseconds(), tail)
+}
+
+// HandleTerminalStart posts the start message into the chat thread with silent=true (wakes nobody).
+func HandleTerminalStart(ctx context.Context, client *Client, meta *TerminalMeta) error {
+	if client == nil || meta == nil {
+		return nil
+	}
+	body := fmt.Sprintf("🖥 %s elindult: %s", meta.Name, Redact(clip(meta.Command, 120)))
+	return client.CreateTerminalStart(ctx, meta.Name, body, meta.ChannelID, meta.ThreadRootID)
 }

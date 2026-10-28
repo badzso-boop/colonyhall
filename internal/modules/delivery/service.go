@@ -48,6 +48,17 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
 		}
 		return s.onMessage(ctx, e, p)
+	case conversation.EventMessageRetracted:
+		var p conversation.MessageRetracted
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+		}
+		msgID, err := ids.Parse(p.MessageID)
+		if err != nil {
+			return nil
+		}
+		_, err = s.Store.AckByItemID(ctx, msgID, e.At)
+		return err
 	case conversation.EventReactionAdded:
 		var p conversation.ReactionEvent
 		if err := json.Unmarshal(e.Payload, &p); err != nil {
@@ -239,6 +250,9 @@ type Recipient struct {
 
 // FindRecipients computes which actors in a channel should receive an inbox item for the given message.
 func FindRecipients(ctx context.Context, conv conversation.Reader, dir identity.Directory, ch conversation.Channel, p conversation.MessageCreated) ([]Recipient, error) {
+	if p.Silent {
+		return nil, nil
+	}
 	mentioned := map[string]bool{}
 	for _, m := range p.Mentions {
 		mentioned[m] = true

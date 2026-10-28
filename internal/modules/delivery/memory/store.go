@@ -84,6 +84,22 @@ func (s *Store) Ack(_ context.Context, recipientID ids.ID, idList []ids.ID, at t
 	return n, nil
 }
 
+// AckByItemID marks all deliveries for itemID as handled.
+func (s *Store) AckByItemID(_ context.Context, itemID ids.ID, at time.Time) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for id, d := range s.rows {
+		if d.ItemID == itemID && d.AckedAt == nil {
+			t := at
+			d.AckedAt = &t
+			s.rows[id] = d
+			n++
+		}
+	}
+	return n, nil
+}
+
 // InsertTerminalEvent records a terminal event in memory.
 func (s *Store) InsertTerminalEvent(_ context.Context, te delivery.TerminalEvent) error {
 	s.mu.Lock()

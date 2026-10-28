@@ -51,6 +51,7 @@ type QuestionService interface {
 	Ask(ctx context.Context, by identity.Actor, in question.AskInput) (question.Question, error)
 	Reopen(ctx context.Context, id ids.ID) error
 	CloseByGrant(ctx context.Context, questionID ids.ID, closedBy ids.ID, answerText string) error
+	WithdrawSilently(ctx context.Context, questionID ids.ID) error
 }
 
 // DeliveryStore defines the delivery insert method needed by delegation.
@@ -114,6 +115,12 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 			return fmt.Errorf("delegation: bad %s payload: %w", e.Type, err)
 		}
 		return s.onQuestionExpired(ctx, e, p)
+	case conversation.EventMessageRetracted:
+		var p conversation.MessageRetracted
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delegation: bad %s payload: %w", e.Type, err)
+		}
+		return s.onMessageRetracted(ctx, e, p)
 	}
 	return nil
 }
@@ -130,7 +137,7 @@ func (s *Service) getSettings(ctx context.Context, workspaceID ids.ID) (Settings
 }
 
 func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conversation.MessageCreated) error {
-	if strings.HasPrefix(p.ClientMsgID, "q-") || p.Kind == "system" || p.NoThreadFollow || strings.HasPrefix(p.Body, "Q-") {
+	if p.Silent || strings.HasPrefix(p.ClientMsgID, "q-") || p.Kind == "system" || p.NoThreadFollow || strings.HasPrefix(p.Body, "Q-") {
 		return nil
 	}
 
@@ -247,6 +254,7 @@ func (s *Service) createDelegationAndQuestion(ctx context.Context, e eventlog.Ev
 		DeadlineMinutes:   &deadlineMin,
 		AllowMultipleOpen: true,
 		AllowExpire:       true,
+		NoMessage:         true,
 	})
 	if err != nil {
 		return fmt.Errorf("delegation: ask question: %w", err)
@@ -323,6 +331,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 			ThreadRootID:   sendThreadRoot,
 			Body:           "csak admin hagyhatja jóvá",
 			NoThreadFollow: true,
+			Silent:         true,
 		})
 		return nil
 	}
@@ -497,6 +506,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 		ThreadRootID:   sendThreadRoot,
 		Body:           denyText,
 		NoThreadFollow: true,
+		Silent:         true,
 	})
 	if err != nil {
 		return err
@@ -582,6 +592,7 @@ func (s *Service) onQuestionExpired(ctx context.Context, e eventlog.Event, p que
 		ThreadRootID:   sendThreadRoot,
 		Body:           "lejárt",
 		NoThreadFollow: true,
+		Silent:         true,
 	})
 	if err != nil {
 		return err
@@ -619,6 +630,32 @@ func (s *Service) onQuestionExpired(ctx context.Context, e eventlog.Event, p que
 		QuestionID:   del.QuestionID.String(),
 		State:        StateExpired,
 	})
+}
+
+func (s *Service) onMessageRetracted(ctx context.Context, e eventlog.Event, p conversation.MessageRetracted) error {
+	msgID, err := ids.Parse(p.MessageID)
+	if err != nil {
+		return nil
+	}
+	dels, err := s.Store.ListByMessageID(ctx, msgID)
+	if err != nil {
+		return err
+	}
+	now := s.Clock.Now()
+	for _, del := range dels {
+		if del.State != StatePending {
+			continue
+		}
+		retractorID, _ := ids.Parse(p.RetractedBy)
+		affected, err := s.Store.UpdateStateConditional(ctx, del.ID, StatePending, StateCancelled, &retractorID, now)
+		if err != nil {
+			return err
+		}
+		if affected > 0 && del.QuestionID != ids.Nil && s.Question != nil {
+			_ = s.Question.WithdrawSilently(ctx, del.QuestionID)
+		}
+	}
+	return nil
 }
 
 // List returns delegations in the workspace, optionally filtered by state and message ID.

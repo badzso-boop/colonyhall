@@ -105,3 +105,10 @@ ORDER BY id;
 
 -- name: LastMessageNotBy :one
 SELECT * FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1;
+
+-- name: RetractMessage :execrows
+UPDATE message
+SET deleted_at = sqlc.arg(deleted_at)::timestamptz,
+    deleted_by = sqlc.arg(deleted_by)::uuid
+WHERE id = sqlc.arg(id) AND deleted_at IS NULL;
+

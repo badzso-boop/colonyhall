@@ -410,16 +410,19 @@ func (e CreateScheduleRequestCatchUp) Valid() bool {
 
 // Defines values for DelegationState.
 const (
-	DelegationStateApproved DelegationState = "approved"
-	DelegationStateDenied   DelegationState = "denied"
-	DelegationStateExpired  DelegationState = "expired"
-	DelegationStatePending  DelegationState = "pending"
+	DelegationStateApproved  DelegationState = "approved"
+	DelegationStateCancelled DelegationState = "cancelled"
+	DelegationStateDenied    DelegationState = "denied"
+	DelegationStateExpired   DelegationState = "expired"
+	DelegationStatePending   DelegationState = "pending"
 )
 
 // Valid indicates whether the value is a known member of the DelegationState enum.
 func (e DelegationState) Valid() bool {
 	switch e {
 	case DelegationStateApproved:
+		return true
+	case DelegationStateCancelled:
 		return true
 	case DelegationStateDenied:
 		return true
@@ -2130,6 +2133,8 @@ type Message struct {
 	ClientMsgId  *string              `json:"client_msg_id,omitempty"`
 	CompactionId *openapi_types.UUID  `json:"compaction_id,omitempty"`
 	CreatedAt    time.Time            `json:"created_at"`
+	DeletedAt    *time.Time           `json:"deleted_at,omitempty"`
+	DeletedBy    *openapi_types.UUID  `json:"deleted_by,omitempty"`
 	Id           openapi_types.UUID   `json:"id"`
 	Kind         MessageKind          `json:"kind"`
 	LastReplyAt  *time.Time           `json:"last_reply_at,omitempty"`
@@ -2353,6 +2358,13 @@ type ReportRunRequestPhase string
 // ReportRunRequestStatus defines model for ReportRunRequest.Status.
 type ReportRunRequestStatus string
 
+// RetractNoteRequest defines model for RetractNoteRequest.
+type RetractNoteRequest struct {
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
 // Role defines model for Role.
 type Role string
 
@@ -2544,6 +2556,15 @@ type SidebarSection struct {
 // SidebarSectionList defines model for SidebarSectionList.
 type SidebarSectionList struct {
 	Sections []SidebarSection `json:"sections"`
+}
+
+// TerminalStartRequest defines model for TerminalStartRequest.
+type TerminalStartRequest struct {
+	Body         *string             `json:"body,omitempty"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	Command      *string             `json:"command,omitempty"`
+	Name         string              `json:"name"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // TerminalSummary defines model for TerminalSummary.
@@ -2839,11 +2860,17 @@ type AckInboxJSONRequestBody = AckRequest
 // ReportAgentProgressJSONRequestBody defines body for ReportAgentProgress for application/json ContentType.
 type ReportAgentProgressJSONRequestBody = AgentProgressRequest
 
+// ReportRetractNoteJSONRequestBody defines body for ReportRetractNote for application/json ContentType.
+type ReportRetractNoteJSONRequestBody = RetractNoteRequest
+
 // ReportRunJSONRequestBody defines body for ReportRun for application/json ContentType.
 type ReportRunJSONRequestBody = ReportRunRequest
 
 // CreateTerminalEventJSONRequestBody defines body for CreateTerminalEvent for application/json ContentType.
 type CreateTerminalEventJSONRequestBody = CreateTerminalEventRequest
+
+// ReportTerminalStartJSONRequestBody defines body for ReportTerminalStart for application/json ContentType.
+type ReportTerminalStartJSONRequestBody = TerminalStartRequest
 
 // RequestAgentFileFetchJSONRequestBody defines body for RequestAgentFileFetch for application/json ContentType.
 type RequestAgentFileFetchJSONRequestBody = CreateAgentFileFetchRequest

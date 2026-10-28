@@ -390,6 +390,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Clock:        opt.Clock,
 	}
 	dlSvc.Approval = dgSvc
+	qSvc.Delegation = dgSvc
 
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},

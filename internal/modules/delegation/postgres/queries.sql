@@ -17,6 +17,10 @@ SELECT * FROM delegation WHERE question_id = $1;
 -- name: GetDelegationByMessageAndTarget :one
 SELECT * FROM delegation WHERE message_id = $1 AND to_agent_id = $2;
 
+-- name: ListDelegationsByMessageID :many
+SELECT * FROM delegation WHERE message_id = $1;
+
+
 -- name: UpdateDelegationStateConditional :execrows
 UPDATE delegation
 SET state = $3,

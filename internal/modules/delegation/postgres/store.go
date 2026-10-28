@@ -129,6 +129,18 @@ func (s *Store) GetByMessageAndTarget(ctx context.Context, messageID, toAgentID 
 	return toModel(r), nil
 }
 
+func (s *Store) ListByMessageID(ctx context.Context, messageID ids.ID) ([]delegation.Delegation, error) {
+	rows, err := s.q(ctx).ListDelegationsByMessageID(ctx, uuid.UUID(messageID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]delegation.Delegation, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toModel(r))
+	}
+	return out, nil
+}
+
 func (s *Store) UpdateStateConditional(ctx context.Context, id ids.ID, expectedState, newState string, decidedBy *ids.ID, decidedAt time.Time) (int64, error) {
 	var decBy *uuid.UUID
 	if decidedBy != nil && *decidedBy != ids.Nil {

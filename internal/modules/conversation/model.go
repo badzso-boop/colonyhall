@@ -95,6 +95,8 @@ type Message struct {
 	ReplyCount   int
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
+	DeletedAt    *time.Time
+	DeletedBy    *ids.ID
 	Reactions    []ReactionSummary // filled on reads
 	Attachments  []Attachment      // filled on reads
 	LinkCards    []LinkCard        // filled on reads

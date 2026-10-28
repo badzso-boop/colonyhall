@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"colonyhall/internal/modules/conversation"
@@ -207,7 +208,7 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 func toMessage(r sqlcgen.Message) conversation.Message {
 	m := conversation.Message{ID: r.ID, WorkspaceID: r.WorkspaceID, ChannelID: r.ChannelID, AuthorID: r.AuthorID,
 		Kind: r.Kind, Body: r.Body, Mentions: r.Mentions, ReplyCount: int(r.ReplyCount),
-		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt}
+		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt, DeletedAt: r.DeletedAt, DeletedBy: r.DeletedBy}
 	if r.ThreadRootID != nil {
 		m.ThreadRootID = *r.ThreadRootID
 	}
@@ -290,4 +291,14 @@ func (s *Store) MainStreamMessages(ctx context.Context, channelID ids.ID) ([]con
 // LastMessageNotBy returns the newest message by someone else.
 func (s *Store) LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (conversation.Message, error) {
 	return oneMessage(s.q(ctx).LastMessageNotBy(ctx, sqlcgen.LastMessageNotByParams{ChannelID: channelID, AuthorID: actorID}))
+}
+
+// RetractMessage marks a message as retracted.
+func (s *Store) RetractMessage(ctx context.Context, id ids.ID, deletedBy ids.ID, at time.Time) error {
+	_, err := s.q(ctx).RetractMessage(ctx, sqlcgen.RetractMessageParams{
+		ID:        id,
+		DeletedBy: uuid.UUID(deletedBy),
+		DeletedAt: at,
+	})
+	return err
 }

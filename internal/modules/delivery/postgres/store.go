@@ -66,6 +66,12 @@ func (s *Store) Ack(ctx context.Context, recipientID ids.ID, idList []ids.ID, at
 	return int(n), err
 }
 
+// AckByItemID marks all deliveries for itemID as handled.
+func (s *Store) AckByItemID(ctx context.Context, itemID ids.ID, at time.Time) (int, error) {
+	n, err := s.q(ctx).AckByItemID(ctx, sqlcgen.AckByItemIDParams{At: at, ItemID: itemID})
+	return int(n), err
+}
+
 // InsertTerminalEvent stores a terminal completion event in postgres.
 func (s *Store) InsertTerminalEvent(ctx context.Context, te delivery.TerminalEvent) error {
 	var exitCode *int32

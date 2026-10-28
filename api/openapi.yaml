@@ -374,6 +374,19 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Removed }
 
+  /messages/{messageId}/retract:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: retractMessage
+      tags: [conversation]
+      description: Author only (humans). Retract a previously sent message.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Retracted }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /messages/{messageId}/file-fetch:
     parameters:
       - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -967,6 +980,30 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Updated }
+
+  /agent/terminal-start:
+    post:
+      operationId: reportTerminalStart
+      tags: [agents]
+      description: Agents only. Post a silent terminal start message to thread.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TerminalStartRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Posted }
+
+  /agent/retract-note:
+    post:
+      operationId: reportRetractNote
+      tags: [agents]
+      description: Agents only. Post a silent note when a running message was retracted.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RetractNoteRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Posted }
 
   /agent/progress:
     post:
@@ -2001,6 +2038,8 @@ components:
         reactions: { type: array, items: { $ref: "#/components/schemas/ReactionSummary" } }
         attachments: { type: array, items: { $ref: "#/components/schemas/FileAttachment" } }
         link_cards: { type: array, items: { $ref: "#/components/schemas/LinkCard" } }
+        deleted_at: { type: string, format: date-time, nullable: true }
+        deleted_by: { type: string, format: uuid, nullable: true }
     MessageList:
       type: object
       required: [messages]
@@ -2700,6 +2739,24 @@ components:
         duration_ms: { type: integer, format: int64 }
         tail: { type: string }
 
+    TerminalStartRequest:
+      type: object
+      required: [channel_id, name]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        body: { type: string }
+        command: { type: string }
+
+    RetractNoteRequest:
+      type: object
+      required: [channel_id, body]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        body: { type: string }
+
     TerminalSummary:
       type: object
       required: [name, status, command, cwd, channel_id, started_at, duration_ms]
@@ -3322,7 +3379,7 @@ components:
           format: uuid
         state:
           type: string
-          enum: [pending, approved, denied, expired]
+          enum: [pending, approved, denied, expired, cancelled]
         decided_by:
           type: string
           format: uuid

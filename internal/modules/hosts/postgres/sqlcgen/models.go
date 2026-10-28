@@ -386,6 +386,7 @@ type Message struct {
 	LastReplyAt  *time.Time
 	CreatedAt    time.Time
 	DeletedAt    *time.Time
+	DeletedBy    *uuid.UUID
 }
 
 type MessageFile struct {

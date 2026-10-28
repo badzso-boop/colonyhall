@@ -1872,3 +1872,113 @@ func TestDirectInactivityTimeoutAndMaxRun(t *testing.T) {
 		}
 	})
 }
+
+func TestDirectRetractStopsRunAndPostsNote(t *testing.T) {
+	stateDir := t.TempDir()
+	root := t.TempDir()
+	agentID := uuid.New().String()
+
+	var postedNotes []string
+	var ackedItems []string
+	var mu sync.Mutex
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		case strings.HasSuffix(r.URL.Path, "/actors"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"actors": []map[string]any{}})
+		case strings.Contains(r.URL.Path, "/messages/m1/thread"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"root":    map[string]any{"id": "m1", "author_id": "u1", "body": "task 1"},
+				"replies": []map[string]any{},
+			})
+		case strings.HasSuffix(r.URL.Path, "/agent/retract-note"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if txt, ok := body["body"].(string); ok {
+				postedNotes = append(postedNotes, txt)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasSuffix(r.URL.Path, "/ack"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if raw, ok := body["ids"].([]any); ok {
+				for _, it := range raw {
+					if s, ok := it.(string); ok {
+						ackedItems = append(ackedItems, s)
+					}
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer ts.Close()
+
+	started := make(chan struct{})
+	ad := &directTestAdapter{}
+	ad.impl = func(ctx context.Context, req DirectRequest) (RunResult, error) {
+		close(started)
+		<-ctx.Done()
+		return RunResult{}, ctx.Err()
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:      "claude-code",
+			IdleTimeout: 10 * time.Minute,
+			MaxRun:      1 * time.Hour,
+			HaltCheck:   time.Hour,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		RootDir:  root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+		me:       Me{ID: agentID, Handle: "bot"},
+	}
+
+	items := []Item{
+		{ID: "it-1", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "task 1"},
+		{ID: "it-2", AuthorKind: "human", ItemID: "m2", ChannelID: "c1", ThreadRootID: "m1", Body: "task 2"},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- agent.handleDirect(context.Background(), items)
+	}()
+
+	<-started
+	// Retract message m1 while run is actively executing
+	agent.OnMessageRetracted("m1")
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected nil error on retraction cancel, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("direct run did not stop promptly on message retraction")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Note was posted once
+	if len(postedNotes) != 1 {
+		t.Fatalf("expected exactly 1 retract note posted, got %d: %v", len(postedNotes), postedNotes)
+	}
+	if postedNotes[0] != "⏹ Leállítottam: az üzenetet visszavonták." {
+		t.Fatalf("unexpected note: %q", postedNotes[0])
+	}
+
+	// it-2 was NOT acked (stays pending)
+	if slices.Contains(ackedItems, "it-2") {
+		t.Fatalf("it-2 should stay pending and not be acked, got %v", ackedItems)
+	}
+}

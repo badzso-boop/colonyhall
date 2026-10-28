@@ -295,6 +295,44 @@ func (q *Queries) InsertGrant(ctx context.Context, arg InsertGrantParams) error 
 	return err
 }
 
+const listDelegationsByMessageID = `-- name: ListDelegationsByMessageID :many
+SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation WHERE message_id = $1
+`
+
+func (q *Queries) ListDelegationsByMessageID(ctx context.Context, messageID uuid.UUID) ([]Delegation, error) {
+	rows, err := q.db.Query(ctx, listDelegationsByMessageID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Delegation
+	for rows.Next() {
+		var i Delegation
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.MessageID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.FromAgentID,
+			&i.ToAgentID,
+			&i.QuestionID,
+			&i.State,
+			&i.DecidedBy,
+			&i.DecidedAt,
+			&i.CreatedAt,
+			&i.ViaGrant,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDelegationsByWorkspace = `-- name: ListDelegationsByWorkspace :many
 SELECT id, workspace_id, message_id, channel_id, thread_root_id, from_agent_id, to_agent_id, question_id, state, decided_by, decided_at, created_at, via_grant FROM delegation
 WHERE workspace_id = $1

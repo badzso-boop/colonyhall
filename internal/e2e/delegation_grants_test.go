@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -429,24 +430,23 @@ func TestDelegationGrantPendingBatchApproval(t *testing.T) {
 	}
 	_ = e.app.Drain(ctx)
 
-	// CRITICAL CHECK: In the DM, exactly ONE answer message was posted ("Q-1 answer: Jóváhagyom"),
-	// and NO extra chat messages were posted for Q-2 and Q-3!
+	// CRITICAL CHECK: In round 26 Part 6, delegation questions do NOT post Q-NN or Q-NN answer chat messages!
+	// So NO new chat messages were posted in the DM for Q-1, Q-2, or Q-3.
 	var msgsAfter struct {
 		Messages []any `json:"messages"`
 	}
 	e.do("GET", fmt.Sprintf("/api/v1/channels/%s/messages?limit=100", dmChan.Id), server.DevAdminToken, nil, &msgsAfter)
 	countAfter := len(msgsAfter.Messages)
-	// Exactly 1 new message (the answer to Q-1)
-	if countAfter != countBefore+1 {
-		t.Fatalf("expected exactly 1 new message in DM (Q-1 answer), but count increased by %d (before: %d, after: %d)",
+	if countAfter != countBefore {
+		t.Fatalf("expected 0 new messages in DM (delegation questions have no chat messages), but count changed by %d (before: %d, after: %d)",
 			countAfter-countBefore, countBefore, countAfter)
 	}
 
-	// Target gets 4 inbox items: 1 from Norbi's answer message in DM + 3 approved tasks (1 direct + 2 via grant)
+	// Target gets 3 inbox items (3 approved tasks: 1 direct + 2 via grant, 0 chat messages)
 	var inBox apispec.Inbox
 	e.do("GET", "/api/v1/agent/inbox", targetTok, nil, &inBox)
-	if inBox.Total != 4 {
-		t.Fatalf("expected target to receive 4 items (1 dm message + 3 tasks), got %d", inBox.Total)
+	if inBox.Total != 3 {
+		t.Fatalf("expected target to receive 3 items (3 delegated tasks, 0 dm chat messages), got %d", inBox.Total)
 	}
 	delegatedCount := 0
 	viaGrantCount := 0
@@ -893,5 +893,141 @@ func TestDelegationGrantDMThreadReply(t *testing.T) {
 	}
 	if threadReplyItem.ViaGrant == nil || !*threadReplyItem.ViaGrant {
 		t.Fatalf("expected via_grant = true for thread reply in DM")
+	}
+}
+
+// TestDelegationGrantDMDenyAndSilentOption verifies Part 6:
+// 1. Agent cannot set silent: true via public API (403 Forbidden).
+// 2. DM delegation creates question without posting any chat messages.
+// 3. Denying the question wakes source with 1 answer item, and wakes target with 0 items.
+// 4. Terminal start posts silently and wakes nobody.
+func TestDelegationGrantDMDenyAndSilentOption(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+
+	// Enroll host and agents
+	hID, _ := e.enroll("machine-deny")
+	sourceID, sourceTok := createFullAccessAgent(e, hID, "deny-source", "Deny Source")
+	targetID, targetTok := createFullAccessAgent(e, hID, "deny-target", "Deny Target")
+
+	// Open DM
+	var dmChan apispec.Channel
+	if s := e.do("POST", "/api/v1/dms", server.DevAdminToken, map[string]any{
+		"actor_ids": []string{sourceID, targetID},
+	}, &dmChan); s != http.StatusOK && s != http.StatusCreated {
+		t.Fatalf("open DM: %d", s)
+	}
+	_ = e.app.Drain(ctx)
+
+	silentTrue := true
+	status := e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dmChan.Id), sourceTok, map[string]any{
+		"body":   "dodging wakes",
+		"silent": silentTrue,
+	}, nil)
+	if status != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden when agent attempts silent send, got %d", status)
+	}
+
+	// 2. Agent delegates to full-access agent in DM
+	var msgsBefore struct {
+		Messages []any `json:"messages"`
+	}
+	e.do("GET", fmt.Sprintf("/api/v1/channels/%s/messages?limit=100", dmChan.Id), server.DevAdminToken, nil, &msgsBefore)
+	countBefore := len(msgsBefore.Messages)
+
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dmChan.Id), sourceTok, apispec.SendMessageRequest{
+		Body: "@deny-target do this dangerous task",
+	}, nil)
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	// In DM: exactly 1 message was added (the agent's request message itself)
+	// NO "Q-NN (to humans)" message was posted!
+	var msgsMid struct {
+		Messages []any `json:"messages"`
+	}
+	e.do("GET", fmt.Sprintf("/api/v1/channels/%s/messages?limit=100", dmChan.Id), server.DevAdminToken, nil, &msgsMid)
+	if len(msgsMid.Messages) != countBefore+1 {
+		t.Fatalf("expected exactly 1 message added (the original request), got %d (before: %d, now: %d)",
+			len(msgsMid.Messages)-countBefore, countBefore, len(msgsMid.Messages))
+	}
+
+	// Question is open in the "Válaszra vár" list
+	var qList apispec.QuestionList
+	e.do("GET", "/api/v1/questions?state=open", server.DevAdminToken, nil, &qList)
+	var qID string
+	for _, q := range qList.Questions {
+		if q.ChannelId.String() == dmChan.Id.String() {
+			qID = q.Id.String()
+			break
+		}
+	}
+	if qID == "" {
+		t.Fatalf("expected open question for delegation in DM, found none in %+v", qList.Questions)
+	}
+
+	// Target inbox has 0 items so far (waiting for approval)
+	var targetBox apispec.Inbox
+	e.do("GET", "/api/v1/agent/inbox", targetTok, nil, &targetBox)
+	if targetBox.Total != 0 {
+		t.Fatalf("expected 0 items in target inbox before decision, got %d", targetBox.Total)
+	}
+
+	// 3. Admin denies the question
+	if s := e.do("POST", fmt.Sprintf("/api/v1/questions/%s/answer", qID), server.DevAdminToken, apispec.AnswerQuestionRequest{
+		Answer: "Elutasítom",
+	}, nil); s != http.StatusOK {
+		t.Fatalf("deny question: %d", s)
+	}
+	_ = e.app.Drain(ctx)
+
+	// In DM: NO "Q-NN answer: ..." message was posted. The short deny note ("@norbi elutasította")
+	// is posted with Silent: true, waking nobody directly.
+	var msgsAfter struct {
+		Messages []apispec.Message `json:"messages"`
+	}
+	e.do("GET", fmt.Sprintf("/api/v1/channels/%s/messages?limit=100", dmChan.Id), server.DevAdminToken, nil, &msgsAfter)
+	if len(msgsAfter.Messages) != len(msgsMid.Messages)+1 {
+		t.Fatalf("expected 1 deny note posted in DM, got %d messages (was %d)", len(msgsAfter.Messages), len(msgsMid.Messages))
+	}
+	lastMsg := msgsAfter.Messages[len(msgsAfter.Messages)-1]
+	if !strings.Contains(lastMsg.Body, "elutasította") {
+		t.Fatalf("expected deny note '@... elutasította', got %q", lastMsg.Body)
+	}
+
+	// Target still has 0 items (never woken)
+	e.do("GET", "/api/v1/agent/inbox", targetTok, nil, &targetBox)
+	if targetBox.Total != 0 {
+		t.Fatalf("expected target to have 0 items on deny, got %d", targetBox.Total)
+	}
+
+	// Source receives exactly 1 answer item
+	var sourceBox apispec.Inbox
+	e.do("GET", "/api/v1/agent/inbox", sourceTok, nil, &sourceBox)
+	if sourceBox.Total != 1 {
+		t.Fatalf("expected source to have 1 item on deny, got %d", sourceBox.Total)
+	}
+	if sourceBox.Items[0].Kind != "answer" {
+		t.Fatalf("expected answer item for source, got %s", sourceBox.Items[0].Kind)
+	}
+
+	// 4. Terminal start endpoint posts silently and wakes nobody
+	e.do("POST", "/api/v1/agent/inbox/ack", sourceTok, map[string]any{"ids": []string{sourceBox.Items[0].Id.String()}}, nil)
+	e.do("POST", "/api/v1/agent/terminal-start", sourceTok, map[string]any{
+		"channel_id": dmChan.Id.String(),
+		"name":       "sim",
+		"command":    "ros2 launch turtlebot3_gazebo simulation.launch.py",
+	}, nil)
+	_ = e.app.Drain(ctx)
+
+	// Neither source nor target gets woken
+	e.do("GET", "/api/v1/agent/inbox", sourceTok, nil, &sourceBox)
+	if sourceBox.Total != 0 {
+		t.Fatalf("expected source to have 0 items after terminal start, got %d", sourceBox.Total)
+	}
+	e.do("GET", "/api/v1/agent/inbox", targetTok, nil, &targetBox)
+	if targetBox.Total != 0 {
+		t.Fatalf("expected target to have 0 items after terminal start, got %d", targetBox.Total)
 	}
 }

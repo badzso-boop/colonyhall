@@ -31,6 +31,24 @@ func (q *Queries) Ack(ctx context.Context, arg AckParams) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const ackByItemID = `-- name: AckByItemID :execrows
+UPDATE delivery SET acked_at = $1::timestamptz
+WHERE item_id = $2 AND acked_at IS NULL
+`
+
+type AckByItemIDParams struct {
+	At     time.Time
+	ItemID uuid.UUID
+}
+
+func (q *Queries) AckByItemID(ctx context.Context, arg AckByItemIDParams) (int64, error) {
+	result, err := q.db.Exec(ctx, ackByItemID, arg.At, arg.ItemID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countPending = `-- name: CountPending :one
 SELECT count(*) FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL
 `

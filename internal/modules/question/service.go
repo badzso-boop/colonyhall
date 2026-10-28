@@ -34,12 +34,18 @@ type Hosts interface {
 	IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error)
 }
 
+// DelegationChecker checks if a question is part of a delegation.
+type DelegationChecker interface {
+	IsDelegationQuestion(ctx context.Context, questionID ids.ID) (bool, error)
+}
+
 // Service provides question use cases.
 type Service struct {
 	Store        Store
 	Conversation Conversation
 	Directory    Directory
 	Hosts        Hosts
+	Delegation   DelegationChecker
 	Events       eventlog.Store
 	Bus          bus.Bus
 	Tx           db.TxRunner
@@ -58,6 +64,7 @@ type AskInput struct {
 	DeadlineMinutes   *int
 	AllowMultipleOpen bool
 	AllowExpire       bool
+	NoMessage         bool
 }
 
 // Ask asks a new question in a conversation thread.
@@ -216,21 +223,22 @@ func (s *Service) Ask(ctx context.Context, by identity.Actor, in AskInput) (Ques
 
 	qID := s.IDs.New()
 
-	// Post message to thread
-	sendRes, err := s.Conversation.SendMessage(ctx, by, conversation.SendInput{
-		ChannelID:    in.ChannelID,
-		ThreadRootID: in.ThreadRootID,
-		Body:         msgBody,
-		ClientMsgID:  fmt.Sprintf("q-%s", qID),
-		Elaborate:    true,
-	})
-	if err != nil {
-		return Question{}, err
-	}
-
 	threadRootID := in.ThreadRootID
-	if threadRootID == ids.Nil && sendRes.Message != nil {
-		threadRootID = sendRes.Message.ID
+	if !in.NoMessage {
+		// Post message to thread
+		sendRes, err := s.Conversation.SendMessage(ctx, by, conversation.SendInput{
+			ChannelID:    in.ChannelID,
+			ThreadRootID: in.ThreadRootID,
+			Body:         msgBody,
+			ClientMsgID:  fmt.Sprintf("q-%s", qID),
+			Elaborate:    true,
+		})
+		if err != nil {
+			return Question{}, err
+		}
+		if threadRootID == ids.Nil && sendRes.Message != nil {
+			threadRootID = sendRes.Message.ID
+		}
 	}
 
 	now := s.Clock.Now()
@@ -331,23 +339,29 @@ func (s *Service) Answer(ctx context.Context, by identity.Actor, questionRef str
 		return Question{}, ErrEmptyAnswer
 	}
 
-	// Post answer message to thread
-	msgBody := fmt.Sprintf("%s answer: %s", q.FormattedNumber(), ans)
-	sendRes, err := s.Conversation.SendMessage(ctx, by, conversation.SendInput{
-		ChannelID:    q.ChannelID,
-		ThreadRootID: q.ThreadRootID,
-		Body:         msgBody,
-		Elaborate:    true,
-		// The asker gets the answer as its own inbox item.
-		NoThreadFollow: true,
-	})
-	if err != nil {
-		return Question{}, err
+	isDel := false
+	if s.Delegation != nil {
+		isDel, _ = s.Delegation.IsDelegationQuestion(ctx, q.ID)
 	}
 
 	var answerMsgID string
-	if sendRes.Message != nil {
-		answerMsgID = sendRes.Message.ID.String()
+	if !isDel {
+		// Post answer message to thread
+		msgBody := fmt.Sprintf("%s answer: %s", q.FormattedNumber(), ans)
+		sendRes, err := s.Conversation.SendMessage(ctx, by, conversation.SendInput{
+			ChannelID:    q.ChannelID,
+			ThreadRootID: q.ThreadRootID,
+			Body:         msgBody,
+			Elaborate:    true,
+			// The asker gets the answer as its own inbox item.
+			NoThreadFollow: true,
+		})
+		if err != nil {
+			return Question{}, err
+		}
+		if sendRes.Message != nil {
+			answerMsgID = sendRes.Message.ID.String()
+		}
 	}
 
 	now := s.Clock.Now()
@@ -477,6 +491,31 @@ func (s *Service) Withdraw(ctx context.Context, by identity.Actor, questionRef s
 		return Question{}, err
 	}
 	return updated, nil
+}
+
+// WithdrawSilently withdraws an open question without posting any chat messages.
+func (s *Service) WithdrawSilently(ctx context.Context, questionID ids.ID) error {
+	q, err := s.Store.GetByID(ctx, questionID)
+	if err != nil {
+		return err
+	}
+	if q.State != StateOpen && q.State != StateEscalated {
+		return nil
+	}
+	now := s.Clock.Now()
+	evPayload := Event{
+		QuestionID:      q.ID.String(),
+		Number:          q.Number,
+		FormattedNumber: q.FormattedNumber(),
+		AskedBy:         q.AskedBy.String(),
+		ChannelID:       q.ChannelID.String(),
+		ThreadRootID:    q.ThreadRootID.String(),
+		State:           StateWithdrawn,
+	}
+	return s.record(ctx, q.WorkspaceID, q.AskedBy, EventWithdrawn, q.ID, evPayload, func(ctx context.Context) error {
+		_, _, err := s.Store.Withdraw(ctx, q.ID, now)
+		return err
+	})
 }
 
 // Get loads a question by its reference.

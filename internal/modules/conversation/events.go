@@ -4,12 +4,13 @@ import "time"
 
 // Event types emitted by the conversation module.
 const (
-	EventChannelCreated = "channel.created"
-	EventMemberAdded    = "channel.member_added"
-	EventMemberRemoved  = "channel.member_removed"
-	EventMessageCreated = "message.created"
-	EventReactionAdded  = "reaction.added"
-	EventReactionRemove = "reaction.removed"
+	EventChannelCreated   = "channel.created"
+	EventMemberAdded      = "channel.member_added"
+	EventMemberRemoved    = "channel.member_removed"
+	EventMessageCreated   = "message.created"
+	EventMessageRetracted = "message.retracted"
+	EventReactionAdded    = "reaction.added"
+	EventReactionRemove   = "reaction.removed"
 )
 
 // ReactionEvent is the payload of the reaction events.
@@ -54,6 +55,17 @@ type MessageCreated struct {
 	Mentions     []string `json:"mentions"`
 	// NoThreadFollow: delivered to the thread's agents another way.
 	NoThreadFollow bool         `json:"no_thread_follow,omitempty"`
+	Silent         bool         `json:"silent,omitempty"`
 	Attachments    []Attachment `json:"attachments,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
+}
+
+// MessageRetracted is the payload of EventMessageRetracted.
+type MessageRetracted struct {
+	MessageID    string    `json:"message_id"`
+	ChannelID    string    `json:"channel_id"`
+	ThreadRootID string    `json:"thread_root_id,omitempty"`
+	AuthorID     string    `json:"author_id"`
+	RetractedBy  string    `json:"retracted_by"`
+	At           time.Time `json:"at"`
 }
