@@ -592,9 +592,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			return err
 		}
 		rulesVer, rulesText := a.fetchRules(ctx)
-		wctx, cancel := context.WithTimeout(ctx, a.Cfg.WorkTimeout)
+		rtc := newRunTimeoutContext(ctx, a.Cfg.IdleTimeout, a.Cfg.MaxRun)
 		a.workMu.Lock()
-		a.workCancel = cancel
+		a.workCancel = rtc.Cancel
 		a.workMu.Unlock()
 		promptBranch := ""
 		if a.Sandbox && a.WorktreeBranch != "" {
@@ -621,7 +621,14 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		}
 		runKey := uuid.New().String()
 		pr := newProgressReporter(a.Client, it.ChannelID, it.ThreadRootID, runKey, a.Log)
-		res, err := a.Adapter.Work(wctx, WorkRequest{
+		origOnStep := pr.OnStep
+		onStep := func(s Step) {
+			rtc.Touch()
+			if origOnStep != nil {
+				origOnStep(s)
+			}
+		}
+		res, err := a.Adapter.Work(rtc, WorkRequest{
 			Prompt:         WorkPromptWithWebRead(a.getMe().Handle, promptBranch, p.AllowWebRead, it, task, p.Grants...),
 			Model:          a.Cfg.WorkModel,
 			Dir:            p.Dir,
@@ -633,11 +640,13 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			MCPConfigPath:  mcpConfigPath,
 			Rules:          rulesText,
 			RulesVersion:   rulesVer,
-			OnStep:         pr.OnStep,
+			OnStep:         onStep,
+			OnActivity:     rtc.Touch,
 		})
 		steps := pr.Finish()
-		stopped := errors.Is(wctx.Err(), context.Canceled)
-		cancel()
+		wasCanceled := errors.Is(rtc.Err(), context.Canceled)
+		timedOut := rtc.Finish()
+		stopped := wasCanceled && timedOut == timeoutNone
 		a.workMu.Lock()
 		a.workCancel = nil
 		a.workMu.Unlock()
@@ -649,6 +658,28 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		if ctx.Err() != nil {
 			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "halted", "", steps, "", visitedURLs)
 			return errHalted
+		}
+		if timedOut != timeoutNone {
+			var timeoutMsg string
+			if timedOut == timeoutIdle {
+				if a.Cfg.IdleTimeout >= time.Minute {
+					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d perce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Minutes()))
+				} else {
+					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d másodperce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Seconds()))
+				}
+			} else {
+				if a.Cfg.MaxRun >= time.Hour {
+					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d órás korlátot.", int(a.Cfg.MaxRun.Hours()))
+				} else if a.Cfg.MaxRun >= time.Minute {
+					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d perces korlátot.", int(a.Cfg.MaxRun.Minutes()))
+				} else {
+					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d másodperces korlátot.", int(a.Cfg.MaxRun.Seconds()))
+				}
+			}
+			a.Log.Warn("guard: work run killed due to timeout", "agent", a.logName(), "reason", timedOut.String(), "session", res.SessionID)
+			replyMsgID, replyErr := a.replyLongWithID(ctx, it.Item, timeoutMsg, "gw-"+it.ID)
+			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", "", steps, replyMsgID, visitedURLs)
+			return replyErr
 		}
 		text := res.Text
 		if err != nil && !stopped {

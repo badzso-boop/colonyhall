@@ -610,23 +610,23 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		}
 	}()
 
-	timeout := a.Cfg.WorkTimeout
-	if timeout == 0 {
-		timeout = 10 * time.Minute
-	}
-	if a.Cfg.Approvals == "chat" {
-		timeout += DefaultApprovalTimeout + 60*time.Second
-	}
+	rtc := newRunTimeoutContext(ctx, a.Cfg.IdleTimeout, a.Cfg.MaxRun)
 	runKey := uuid.New().String()
 	pr := newProgressReporter(a.Client, last.ChannelID, last.ThreadRootID, runKey, a.Log)
-	req.OnStep = pr.OnStep
+	origOnStep := pr.OnStep
+	req.OnStep = func(s Step) {
+		rtc.Touch()
+		if origOnStep != nil {
+			origOnStep(s)
+		}
+	}
+	req.OnActivity = rtc.Touch
 
-	dctx, cancel := context.WithTimeout(ctx, timeout)
 	a.workMu.Lock()
-	a.workCancel = cancel
+	a.workCancel = rtc.Cancel
 	a.workMu.Unlock()
-	res, err := a.Adapter.Direct(dctx, req)
-	cancel()
+	res, err := a.Adapter.Direct(rtc, req)
+	timedOut := rtc.Finish()
 	a.workMu.Lock()
 	a.workCancel = nil
 	a.workMu.Unlock()
@@ -644,6 +644,36 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	if ctx.Err() != nil {
 		a.reportRun(context.Background(), "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "halted", "", steps, "")
 		return errHalted
+	}
+	if timedOut != timeoutNone {
+		var timeoutMsg string
+		if timedOut == timeoutIdle {
+			if a.Cfg.IdleTimeout >= time.Minute {
+				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d perce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Minutes()))
+			} else {
+				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d másodperce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Seconds()))
+			}
+		} else {
+			if a.Cfg.MaxRun >= time.Hour {
+				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d órás korlátot.", int(a.Cfg.MaxRun.Hours()))
+			} else if a.Cfg.MaxRun >= time.Minute {
+				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d perces korlátot.", int(a.Cfg.MaxRun.Minutes()))
+			} else {
+				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d másodperces korlátot.", int(a.Cfg.MaxRun.Seconds()))
+			}
+		}
+		a.Log.Warn("guard: direct run killed due to timeout", "agent", a.logName(), "reason", timedOut.String(), "session", sessionID)
+		replyMsgID, replyErr := a.replyLongWithID(ctx, last, timeoutMsg, "gd-"+last.ID)
+		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", "", steps, replyMsgID)
+		if replyErr != nil && (errors.Is(replyErr, errHalted) || ctx.Err() != nil) {
+			return errHalted
+		}
+		var acked []string
+		for _, it := range group {
+			delete(a.attempts, it.ID)
+			acked = append(acked, it.ID)
+		}
+		return a.Client.Ack(ctx, acked)
 	}
 	if err != nil {
 		a.reportRun(ctx, "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "error", "", steps, "")

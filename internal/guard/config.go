@@ -68,6 +68,8 @@ type AgentConfig struct {
 	Batch            int           `yaml:"batch"`
 	DecideTimeout    time.Duration `yaml:"decide_timeout"`
 	WorkTimeout      time.Duration `yaml:"work_timeout"`
+	IdleTimeout      time.Duration `yaml:"idle_timeout"`
+	MaxRun           time.Duration `yaml:"max_run"`
 	HaltCheck        time.Duration `yaml:"halt_check"`
 }
 
@@ -170,6 +172,14 @@ func (a *AgentConfig) defaults() error {
 	def(&a.Debounce, 3*time.Second)
 	def(&a.DecideTimeout, 3*time.Minute)
 	def(&a.WorkTimeout, 15*time.Minute)
+	if a.IdleTimeout <= 0 {
+		if a.WorkTimeout > 0 && a.WorkTimeout != 15*time.Minute {
+			a.IdleTimeout = a.WorkTimeout
+		} else {
+			a.IdleTimeout = 15 * time.Minute
+		}
+	}
+	def(&a.MaxRun, 4*time.Hour)
 	def(&a.HaltCheck, 2*time.Second)
 	if a.Batch <= 0 {
 		a.Batch = 10

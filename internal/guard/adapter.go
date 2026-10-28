@@ -52,6 +52,7 @@ type WorkRequest struct {
 	AllowWebRead  bool
 	MCPConfigPath string
 	OnStep        func(Step)
+	OnActivity    func()
 }
 
 // DirectRequest is the input of a direct mode run: a full interactive session
@@ -71,6 +72,7 @@ type DirectRequest struct {
 	Rules                string
 	RulesVersion         int
 	OnStep               func(Step)
+	OnActivity           func()
 }
 
 // SummarizeRequest is the input of a summarization run.

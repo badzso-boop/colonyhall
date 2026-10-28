@@ -169,7 +169,7 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	}
 	args = withModel(args, req.Model)
 	baseDirs := append([]string{req.Dir}, req.AddDirs...)
-	res, out, err := c.execStream(ctx, req.Dir, req.Wrap, args, nil, baseDirs, req.OnStep)
+	res, out, err := c.execStream(ctx, req.Dir, req.Wrap, args, nil, baseDirs, req.OnStep, req.OnActivity)
 	res.Text = out.Result
 	return res, err
 }
@@ -199,7 +199,7 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 		args = withModel(args, req.Model)
 	}
 	baseDirs := append([]string{req.Dir}, req.AddDirs...)
-	res, out, err := c.execStream(ctx, req.Dir, nil, args, req.Env, baseDirs, req.OnStep)
+	res, out, err := c.execStream(ctx, req.Dir, nil, args, req.Env, baseDirs, req.OnStep, req.OnActivity)
 	res.Text = out.Result
 	if out.SessionID != "" {
 		res.SessionID = out.SessionID
@@ -207,7 +207,7 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	return res, err
 }
 
-func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, extraEnv []string, baseDirs []string, onStep func(Step)) (RunResult, claudeOutput, error) {
+func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, extraEnv []string, baseDirs []string, onStep func(Step), onActivity func()) (RunResult, claudeOutput, error) {
 	start := time.Now()
 	var (
 		name string
@@ -241,6 +241,9 @@ func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, a
 		line = strings.TrimSpace(line)
 		if line == "" {
 			return
+		}
+		if onActivity != nil {
+			onActivity()
 		}
 		var sl claudeStreamLine
 		if jerr := json.Unmarshal([]byte(line), &sl); jerr != nil {

@@ -1639,3 +1639,236 @@ func TestAntigravityErrorStatusWithAnswerKeepsTheAnswer(t *testing.T) {
 		t.Fatal("an ERROR without an answer must fail")
 	}
 }
+
+func TestDirectInactivityTimeoutAndMaxRun(t *testing.T) {
+	stateDir := t.TempDir()
+	root := t.TempDir()
+	agentID := uuid.New().String()
+
+	var postedReplies []string
+	var ackedItems []string
+	var mu sync.Mutex
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/me"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot", "state": "active"})
+		case strings.HasSuffix(r.URL.Path, "/actors"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"actors": []map[string]any{}})
+		case strings.Contains(r.URL.Path, "/messages/m1/thread"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"root":    map[string]any{"id": "m1", "author_id": "u1", "body": "task"},
+				"replies": []map[string]any{},
+			})
+		case strings.HasSuffix(r.URL.Path, "/messages"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if txt, ok := body["body"].(string); ok {
+				postedReplies = append(postedReplies, txt)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "reply-1"})
+		case strings.HasSuffix(r.URL.Path, "/ack"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if raw, ok := body["ids"].([]any); ok {
+				for _, it := range raw {
+					if s, ok := it.(string); ok {
+						ackedItems = append(ackedItems, s)
+					}
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer ts.Close()
+
+	// 1. Silent run killed after idle timeout; message posted once; items acked; no retry.
+	t.Run("silent run killed after idle timeout", func(t *testing.T) {
+		mu.Lock()
+		postedReplies = nil
+		ackedItems = nil
+		mu.Unlock()
+
+		ad := &directTestAdapter{}
+		ad.impl = func(ctx context.Context, req DirectRequest) (RunResult, error) {
+			<-ctx.Done()
+			return RunResult{}, ctx.Err()
+		}
+
+		agent := &Agent{
+			Cfg: AgentConfig{
+				Client:      "claude-code",
+				IdleTimeout: 100 * time.Millisecond,
+				MaxRun:      10 * time.Second,
+				HaltCheck:   time.Hour,
+			},
+			Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+			Adapter:  ad,
+			StateDir: stateDir,
+			RootDir:  root,
+			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			attempts: map[string]int{},
+			me:       Me{ID: agentID, Handle: "bot"},
+		}
+
+		items := []Item{{ID: "it-1", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "heavy task"}}
+		err := agent.handleDirect(context.Background(), items)
+		if err != nil {
+			t.Fatalf("expected nil error on timeout, got %v", err)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if len(postedReplies) != 1 {
+			t.Fatalf("expected exactly 1 reply posted, got %d: %v", len(postedReplies), postedReplies)
+		}
+		if !strings.HasPrefix(postedReplies[0], "⏱ Leállítottam:") || !strings.Contains(postedReplies[0], "nem jött semmi a klienstől") {
+			t.Fatalf("unexpected reply: %q", postedReplies[0])
+		}
+		if len(ackedItems) != 1 || ackedItems[0] != "it-1" {
+			t.Fatalf("expected item it-1 acked, got %v", ackedItems)
+		}
+		if len(agent.attempts) != 0 {
+			t.Fatalf("expected attempts cleared, got %v", agent.attempts)
+		}
+	})
+
+	// 2. Run emitting lines/activity beyond idle timeout is not killed
+	t.Run("active run beyond idle timeout survives", func(t *testing.T) {
+		mu.Lock()
+		postedReplies = nil
+		ackedItems = nil
+		mu.Unlock()
+
+		ad := &directTestAdapter{}
+		ad.impl = func(ctx context.Context, req DirectRequest) (RunResult, error) {
+			// Idle timeout is 60ms; run for 160ms touching activity every 25ms
+			ticker := time.NewTicker(25 * time.Millisecond)
+			defer ticker.Stop()
+			deadline := time.After(160 * time.Millisecond)
+			for {
+				select {
+				case <-ctx.Done():
+					return RunResult{}, ctx.Err()
+				case <-deadline:
+					return RunResult{Text: "all finished successfully"}, nil
+				case <-ticker.C:
+					if req.OnActivity != nil {
+						req.OnActivity()
+					}
+				}
+			}
+		}
+
+		agent := &Agent{
+			Cfg: AgentConfig{
+				Client:      "claude-code",
+				IdleTimeout: 60 * time.Millisecond,
+				MaxRun:      10 * time.Second,
+				HaltCheck:   time.Hour,
+			},
+			Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+			Adapter:  ad,
+			StateDir: stateDir,
+			RootDir:  root,
+			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			attempts: map[string]int{},
+			me:       Me{ID: agentID, Handle: "bot"},
+		}
+
+		items := []Item{{ID: "it-2", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "active task"}}
+		err := agent.handleDirect(context.Background(), items)
+		if err != nil {
+			t.Fatalf("expected successful run, got %v", err)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if len(postedReplies) != 1 || postedReplies[0] != "all finished successfully" {
+			t.Fatalf("expected 'all finished successfully', got %v", postedReplies)
+		}
+		if len(ackedItems) != 1 || ackedItems[0] != "it-2" {
+			t.Fatalf("expected item it-2 acked, got %v", ackedItems)
+		}
+	})
+
+	// 3. Max run cap kills even active run; message posted once; items acked; no retry.
+	t.Run("max run cap kills", func(t *testing.T) {
+		mu.Lock()
+		postedReplies = nil
+		ackedItems = nil
+		mu.Unlock()
+
+		ad := &directTestAdapter{}
+		ad.impl = func(ctx context.Context, req DirectRequest) (RunResult, error) {
+			ticker := time.NewTicker(20 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return RunResult{}, ctx.Err()
+				case <-ticker.C:
+					if req.OnActivity != nil {
+						req.OnActivity()
+					}
+				}
+			}
+		}
+
+		agent := &Agent{
+			Cfg: AgentConfig{
+				Client:      "claude-code",
+				IdleTimeout: 10 * time.Second,
+				MaxRun:      100 * time.Millisecond,
+				HaltCheck:   time.Hour,
+			},
+			Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+			Adapter:  ad,
+			StateDir: stateDir,
+			RootDir:  root,
+			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			attempts: map[string]int{},
+			me:       Me{ID: agentID, Handle: "bot"},
+		}
+
+		items := []Item{{ID: "it-3", AuthorKind: "human", ItemID: "m1", ChannelID: "c1", ThreadRootID: "m1", Body: "endless task"}}
+		err := agent.handleDirect(context.Background(), items)
+		if err != nil {
+			t.Fatalf("expected nil error on cap kill, got %v", err)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if len(postedReplies) != 1 {
+			t.Fatalf("expected exactly 1 reply posted, got %d: %v", len(postedReplies), postedReplies)
+		}
+		if !strings.HasPrefix(postedReplies[0], "⏱ Leállítottam:") || !strings.Contains(postedReplies[0], "korlátot") {
+			t.Fatalf("unexpected reply: %q", postedReplies[0])
+		}
+		if len(ackedItems) != 1 || ackedItems[0] != "it-3" {
+			t.Fatalf("expected item it-3 acked, got %v", ackedItems)
+		}
+		if len(agent.attempts) != 0 {
+			t.Fatalf("expected attempts cleared, got %v", agent.attempts)
+		}
+	})
+
+	// 4. Exact Hungarian message strings for default 15m and 4h
+	t.Run("hungarian message formatting for 15m and 4h", func(t *testing.T) {
+		idleDur := 15 * time.Minute
+		msgIdle := fmt.Sprintf("⏱ Leállítottam: %d perce nem jött semmi a klienstől.", int(idleDur.Minutes()))
+		if msgIdle != "⏱ Leállítottam: 15 perce nem jött semmi a klienstől." {
+			t.Fatalf("unexpected idle message: %q", msgIdle)
+		}
+
+		maxDur := 4 * time.Hour
+		msgCap := fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d órás korlátot.", int(maxDur.Hours()))
+		if msgCap != "⏱ Leállítottam: elérte a(z) 4 órás korlátot." {
+			t.Fatalf("unexpected cap message: %q", msgCap)
+		}
+	})
+}

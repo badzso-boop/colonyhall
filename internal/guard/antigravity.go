@@ -120,7 +120,7 @@ func (a *Antigravity) Work(ctx context.Context, req WorkRequest) (RunResult, err
 	}
 	args = withModel(args, req.Model)
 	baseDirs := append([]string{req.Dir}, req.AddDirs...)
-	res, out, err := a.execStream(ctx, req.Dir, req.Wrap, args, baseDirs, req.OnStep)
+	res, out, err := a.execStream(ctx, req.Dir, req.Wrap, args, baseDirs, req.OnStep, req.OnActivity)
 	res.Text = out.Response
 	return res, err
 }
@@ -144,13 +144,13 @@ func (a *Antigravity) Direct(ctx context.Context, req DirectRequest) (RunResult,
 		args = withModel(args, req.Model)
 	}
 	baseDirs := append([]string{req.Dir}, req.AddDirs...)
-	res, out, err := a.execStream(ctx, req.Dir, nil, args, baseDirs, req.OnStep)
+	res, out, err := a.execStream(ctx, req.Dir, nil, args, baseDirs, req.OnStep, req.OnActivity)
 	res.Text = out.Response
 	res.ConversationID = out.ConversationID
 	return res, err
 }
 
-func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, baseDirs []string, onStep func(Step)) (RunResult, agyOutput, error) {
+func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, baseDirs []string, onStep func(Step), onActivity func()) (RunResult, agyOutput, error) {
 	start := time.Now()
 	var (
 		name string
@@ -177,6 +177,9 @@ func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, 
 		line = strings.TrimSpace(line)
 		if line == "" {
 			return
+		}
+		if onActivity != nil {
+			onActivity()
 		}
 		var sl agyStreamLine
 		if jerr := json.Unmarshal([]byte(line), &sl); jerr != nil {
