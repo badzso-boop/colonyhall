@@ -199,6 +199,15 @@
     .terminal-viewer-panel { position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; border-left:none; z-index:25; }
     #fileViewerModal { padding:0; }
     #fileViewerModal .card { max-width:100%; width:100%; height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; border-radius:0; border:none; } }
+  .mention-popup { position:absolute; bottom:100%; left:16px; right:16px; max-height:240px; overflow-y:auto; background:var(--surface); border:1px solid var(--line); border-radius:6px; box-shadow:0 4px 14px rgba(0,0,0,0.25); margin-bottom:6px; z-index:100; }
+  .mention-item { display:flex; align-items:center; gap:8px; padding:6px 10px; cursor:pointer; font-size:13px; user-select:none; }
+  .mention-item:hover, .mention-item.active { background:var(--line); }
+  .toast-bar { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:6px 14px; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.2); margin:6px 16px; }
+  .toast-btn { background:none; border:1px solid var(--line); border-radius:4px; color:inherit; padding:2px 8px; font-size:12px; cursor:pointer; }
+  .toast-btn:hover { background:var(--line); }
+  .toast-confirm-btn { background:var(--warn, #e53935); color:#fff; border-color:transparent; }
+  .retract-btn { font-size:11px; padding:1px 6px; }
+  .confirm-retract-box { display:inline-flex; align-items:center; gap:4px; font-size:11px; }
 </style>
 </head>
 <body>
@@ -221,6 +230,7 @@
         <span id="chanDesc"></span>
       </div>
       <div id="chanActs">
+        <button id="chanTerminalsBtn" class="secondary" style="font-size:12px;display:none;"></button>
         <div id="chanCompaction" style="display:inline-flex;align-items:center;gap:8px;">
           <span id="chanCompactionCount" class="muted" style="font-size:12px;"></span>
           <button id="chanCompactBtn" class="secondary" style="font-size:12px;display:none;"></button>
@@ -237,10 +247,12 @@
     <div id="questionsPanel"></div>
     <div id="rulesPanel"></div>
     <div id="leasesPanel"></div>
-    <div>
+    <div style="position:relative;">
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <div id="activityBar" style="display:none; padding:4px 16px; font-size:12px; color:var(--muted); font-style:italic;"></div>
       <div id="attachedFiles"></div>
+      <div id="toastBar" class="toast-bar" style="display:none;"></div>
+      <div id="mentionPopup" class="mention-popup" style="display:none;"></div>
       <form id="send">
         <input type="file" id="fileinput" style="display:none">
         <button type="button" id="clipbtn" title="Fájl csatolása">📎</button>
@@ -401,6 +413,7 @@
   </div>
 </div>
 <script src="markdown.js"></script>
+<script src="mention.js"></script>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -487,6 +500,9 @@ const I18N = {
         terminalError: "hiba ⚠️ exit ", terminalKilled: "leállítva ⛔", autoRefreshNotice: "frissítés 2 mp-enként",
         stopTerminal: "Leállítás", confirmStopTerminal: "Biztosan leállítod a terminált?", terminalStopped: "Terminál leállítva.",
         sshAttach: "Csatlakozás SSH-val", onHost: (h) => `a(z) ${h} gépen`, viewTerminal: "Terminál megtekintése",
+        terminalsRunning: (n) => `${n} terminál fut`,
+        retract: "Visszavonás", confirmRetract: "Biztosan visszavonod?",
+        retractedPlaceholder: "🗑 Visszavonva", sentToast: "Elküldve",
         treeTab: "📁 Fa", fileTab: "📄 Fájl" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
@@ -572,6 +588,9 @@ const I18N = {
         terminalError: "error ⚠️ exit ", terminalKilled: "stopped ⛔", autoRefreshNotice: "refreshing every 2s",
         stopTerminal: "Stop", confirmStopTerminal: "Are you sure you want to stop this terminal?", terminalStopped: "Terminal stopped.",
         sshAttach: "Attach via SSH", onHost: (h) => `on ${h}`, viewTerminal: "View terminal",
+        terminalsRunning: (n) => `${n} terminals running`,
+        retract: "Retract", confirmRetract: "Are you sure you want to retract?",
+        retractedPlaceholder: "🗑 Retracted", sentToast: "Sent",
         treeTab: "📁 Tree", fileTab: "📄 File" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
@@ -587,6 +606,7 @@ let token = "", csrf = "", me = null, channels = [], actors = {}, current = null
 // Conversations an admin oversees without being a member (e.g. agent-to-agent DMs).
 let overseen = [];
 let msgs = new Map(), replyRoot = null, sidebarSections = [];
+let currentMembers = new Set(), agentHostMap = {}, runningTerminals = new Map();
 try { token = localStorage.getItem("colony_token") || ""; } catch {}
 
 // Plain-HTTP pages (e.g. over Tailscale) have no crypto.randomUUID.
@@ -653,6 +673,14 @@ async function load() {
   channels = c.channels.filter(x => x.is_member);
   const admin = me?.kind === "human" && (me.role === "admin" || me.role === "owner");
   overseen = admin ? c.channels.filter(x => !x.is_member) : [];
+  api("/api/v1/hosts").then(res => {
+    agentHostMap = {};
+    for (const h of res.hosts || []) {
+      for (const ag of h.agents || []) {
+        agentHostMap[ag.agent_id] = h.name;
+      }
+    }
+  }).catch(() => {});
   await Promise.all([loadSections(), loadDelegations()]);
   renderChannels();
   if (!current && channels.length) await open(channels[0].id);
@@ -1131,6 +1159,11 @@ async function open(id, threadRootId = null) {
   }
   const r = await api(`/api/v1/channels/${id}/messages?limit=100`);
   msgs = new Map(r.messages.map(m => [m.id, m]));
+  api(`/api/v1/channels/${id}/members`).then(res => {
+    currentMembers = new Set((res.members || []).map(m => m.actor_id));
+  }).catch(() => {
+    currentMembers = new Set();
+  });
   if (threadRootId) {
     const rootMsg = msgs.get(threadRootId);
     $("replyto").textContent = L.replyIn + " " + (rootMsg ? ColonyMarkdown.plain(rootMsg.body).slice(0, 80) : "");
@@ -1146,10 +1179,46 @@ async function open(id, threadRootId = null) {
   if (fbOpen) openFileBrowser(id);
 }
 
+function updateRunningTerminalsFromMsgs() {
+  runningTerminals.clear();
+  const sorted = [...msgs.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  for (const m of sorted) {
+    if (m.deleted_at) continue;
+    const startMatch = /^🖥\s+([a-z0-9][a-z0-9-]{0,31})\s+elindult:/.exec(m.body);
+    if (startMatch) {
+      runningTerminals.set(m.author_id + ":" + startMatch[1], {
+        agentId: m.author_id,
+        name: startMatch[1],
+        channelId: m.channel_id || current
+      });
+      continue;
+    }
+    const finishMatch = /^(⚙️|⚠️|⛔)\s+([a-z0-9][a-z0-9-]{0,31})\s+(kész|hibával állt le|leállítva)/.exec(m.body);
+    if (finishMatch) {
+      runningTerminals.delete(m.author_id + ":" + finishMatch[2]);
+    }
+  }
+  updateChanTerminalsHeader();
+}
+
+function updateChanTerminalsHeader() {
+  const btn = $("chanTerminalsBtn");
+  if (!btn) return;
+  const runningHere = [...runningTerminals.values()].filter(t => t.channelId === current);
+  if (runningHere.length > 0) {
+    btn.style.display = "inline-flex";
+    btn.textContent = "🖥 " + (typeof L.terminalsRunning === "function" ? L.terminalsRunning(runningHere.length) : `${runningHere.length} terminál fut`);
+    btn.onclick = () => openOverviewPanel(runningHere[0].agentId);
+  } else {
+    btn.style.display = "none";
+  }
+}
+
 function renderFeed() {
   $("feed").innerHTML = "";
   for (const m of msgs.values()) $("feed").appendChild(renderMsg(m));
   $("feed").scrollTop = $("feed").scrollHeight;
+  updateRunningTerminalsFromMsgs();
 }
 
 function stepIcon(kind) {
@@ -1315,6 +1384,14 @@ function renderMsg(m) {
   const bodyEl = div.querySelector(".body");
   bodyEl.textContent = "";
 
+  if (m.deleted_at) {
+    bodyEl.textContent = L.retractedPlaceholder || "🗑 Visszavonva";
+    bodyEl.style.color = "var(--muted)";
+    bodyEl.style.fontStyle = "italic";
+    div.querySelector(".acts").style.display = "none";
+    return div;
+  }
+
   const isAgent = a.kind === "agent";
   const curCh = channels.find(x => x.id === current) || overseen.find(x => x.id === current);
   const renderedFrag = ColonyMarkdown.render(ColonyMarkdown.parse(bodyText), {
@@ -1373,7 +1450,7 @@ function renderMsg(m) {
     bodyEl.append(" ", appSpan);
     renderApprovalInline(appRef[1], appSpan);
   }
-  const termMatch = /^(⚙️|⚠️|⛔)\s+([a-z0-9][a-z0-9-]{0,31})\s+(kész|hibával állt le|leállítva)/.exec(m.body);
+  const termMatch = /^(⚙️|⚠️|⛔|🖥)\s+([a-z0-9][a-z0-9-]{0,31})\s+(kész|hibával állt le|leállítva|elindult:)/.exec(m.body);
   if (termMatch && isAgent && me.kind === "human") {
     const termName = termMatch[2];
     const termBtn = el("button", {
@@ -1550,7 +1627,43 @@ function renderMsg(m) {
     div.querySelector(".chips").appendChild(chip);
   }
   div.querySelectorAll("[data-e]").forEach(b => b.onclick = () => toggleReaction(m, b.dataset.e));
-  div.querySelector("[data-r]").onclick = () => setReply(m.thread_root_id || m.id);
+  div.querySelector("[data-r]").onclick = () => setReply(m.thread_root_id || m.id, m);
+  if (me && me.kind === "human" && m.author_id === me.id) {
+    const retractBtn = el("button", {
+      textContent: L.retract || "Visszavonás",
+      className: "retract-btn"
+    });
+    retractBtn.onclick = (e) => {
+      e.stopPropagation();
+      const acts = retractBtn.parentElement;
+      if (!acts) return;
+      const confirmBox = el("span", { className: "confirm-retract-box" });
+      const confirmLabel = el("span", { textContent: (L.confirmRetract || "Biztosan visszavonod?") + " " });
+      const yesBtn = el("button", {
+        textContent: L.yes || "Igen",
+        style: "background:var(--warn, #e53935); color:#fff; border:none; padding:1px 6px; border-radius:3px; cursor:pointer;"
+      });
+      const noBtn = el("button", {
+        textContent: L.cancel || "Mégse",
+        style: "padding:1px 6px; border-radius:3px; cursor:pointer;"
+      });
+      yesBtn.onclick = async (ev) => {
+        ev.stopPropagation();
+        try {
+          await api(`/api/v1/messages/${m.id}/retract`, { method: "POST" });
+        } catch (err) {
+          alert(err.message);
+        }
+      };
+      noBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        confirmBox.replaceWith(retractBtn);
+      };
+      confirmBox.append(confirmLabel, yesBtn, noBtn);
+      retractBtn.replaceWith(confirmBox);
+    };
+    div.querySelector(".acts").appendChild(retractBtn);
+  }
   return div;
 }
 
@@ -3024,6 +3137,9 @@ async function refreshOverviewPanel() {
   }
 
   const act = ov.actor;
+  if (ov.assignment?.host_name) {
+    agentHostMap[act.id] = ov.assignment.host_name;
+  }
   $("overviewTitle").textContent = act.kind === "agent" ? L.agentOverview : L.userOverview;
 
   // Profile / Identity section
@@ -3808,7 +3924,17 @@ function renderActivity() {
     } else {
       bar.style.display = "block";
       bar.innerHTML = "";
-      bar.textContent = `${active.join(", ")} ${L.working}`;
+      bar.append(el("span", { textContent: `${active.join(", ")} ${L.working}` }));
+      const runningHere = [...runningTerminals.values()].filter(t => t.channelId === current);
+      if (runningHere.length > 0) {
+        const termBtn = el("button", {
+          type: "button",
+          style: "background:none; border:1px solid var(--line); border-radius:4px; font-size:11px; padding:1px 6px; margin-left:8px; cursor:pointer; color:var(--text);",
+          textContent: "🖥 " + (typeof L.terminalsRunning === "function" ? L.terminalsRunning(runningHere.length) : `${runningHere.length} terminál fut`),
+          onclick: () => openOverviewPanel(runningHere[0].agentId)
+        });
+        bar.append(termBtn);
+      }
     }
     return;
   }
@@ -3832,6 +3958,19 @@ function renderActivity() {
       style: "display:flex; justify-content:space-between; align-items:center; font-weight:500; font-size:12px; color:var(--text, #333);"
     });
     const titleSpan = el("span", { textContent: `${name} ${L.working}` });
+    const runningForAgent = [...runningTerminals.values()].filter(t => t.agentId === run.agent_id);
+    if (runningForAgent.length > 0) {
+      const termBtn = el("button", {
+        type: "button",
+        style: "background:none; border:1px solid var(--line); border-radius:4px; font-size:11px; padding:1px 6px; margin-left:6px; cursor:pointer; color:var(--text);",
+        textContent: "🖥 " + (typeof L.terminalsRunning === "function" ? L.terminalsRunning(runningForAgent.length) : `${runningForAgent.length} terminál fut`),
+        onclick: (e) => {
+          e.stopPropagation();
+          openOverviewPanel(run.agent_id);
+        }
+      });
+      titleSpan.append(" ", termBtn);
+    }
     const timerSpan = el("span", { className: "muted", style: "font-variant-numeric:tabular-nums; font-size:11px;", textContent: elapsedStr });
     header.append(titleSpan, timerSpan);
     runBlock.append(header);
@@ -3877,10 +4016,21 @@ function renderActivity() {
 }
 setInterval(renderActivity, 1000);
 
-function setReply(rootId) {
+function setReply(rootId, msg) {
   replyRoot = rootId;
   $("replybar").className = rootId ? "on" : "";
-  if (rootId) { const r = msgs.get(rootId); $("replyto").textContent = L.replyIn + " " + (r ? ColonyMarkdown.plain(r.body).slice(0, 80) : ""); $("text").focus(); }
+  if (rootId) {
+    const r = msgs.get(rootId);
+    $("replyto").textContent = L.replyIn + " " + (r ? ColonyMarkdown.plain(r.body).slice(0, 80) : "");
+    if (msg) {
+      const author = actors[msg.author_id];
+      if (author && author.kind === "agent" && author.id !== me.id) {
+        $("text").value = "@" + author.handle + " ";
+      }
+    }
+    $("text").focus();
+    $("text").selectionStart = $("text").selectionEnd = $("text").value.length;
+  }
   renderActivity();
   updateCompactionStatus();
   updateConversationGrantBanner();
@@ -3921,14 +4071,30 @@ function connectWS() {
     const d = f.data || {};
     if (f.event_type === "message.created") {
       if (d.channel_id === current) {
-        const m = { id: d.message_id, author_id: d.author_id, kind: d.kind || "text", body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, compaction_id: d.compaction_id || null, reactions: [], attachments: d.attachments || [] };
+        const m = { id: d.message_id, author_id: d.author_id, channel_id: d.channel_id, kind: d.kind || "text", body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, compaction_id: d.compaction_id || null, reactions: [], attachments: d.attachments || [] };
         msgs.set(m.id, m); $("feed").appendChild(renderMsg(m)); $("feed").scrollTop = $("feed").scrollHeight;
+        updateRunningTerminalsFromMsgs();
         api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
         updateCompactionStatus();
         setTimeout(loadRunsCache, 600);
       } else {
         const c = channels.find(x => x.id === d.channel_id);
         if (c) { c.unread++; renderChannels(); } else await load();
+      }
+    } else if (f.event_type === "message.retracted") {
+      if (d.channel_id === current) {
+        if (msgs.has(d.message_id)) {
+          const m = msgs.get(d.message_id);
+          m.deleted_at = d.retracted_at;
+          m.deleted_by = d.retracted_by;
+          m.body = "🗑 Visszavonva";
+          m.reactions = [];
+          m.attachments = [];
+          m.link_cards = [];
+        }
+        await reloadCurrentFeed();
+        loadDelegations();
+        renderQuestions($("questionsPanel"));
       }
     } else if (f.event_type.startsWith("compaction.")) {
       if (d.channel_id === current) {
@@ -5403,6 +5569,205 @@ $("fileinput").onchange = async () => {
   }
 };
 
+// --- Message Retract Toast -----------------------------------------------
+let retractToastTimer = null;
+function showRetractToast(messageId) {
+  if (retractToastTimer) {
+    clearTimeout(retractToastTimer);
+    retractToastTimer = null;
+  }
+  const toast = $("toastBar");
+  if (!toast) return;
+  toast.innerHTML = "";
+  toast.style.display = "flex";
+
+  const msgSpan = el("span", { textContent: (L.sentToast || "Elküldve") + " · " });
+  const retractBtn = el("button", {
+    type: "button",
+    textContent: L.retract || "Visszavonás",
+    className: "toast-btn"
+  });
+
+  retractBtn.onclick = () => {
+    toast.innerHTML = "";
+    const confirmSpan = el("span", { textContent: (L.confirmRetract || "Biztosan visszavonod?") + " " });
+    const yesBtn = el("button", {
+      type: "button",
+      textContent: L.yes || "Igen",
+      className: "toast-btn toast-confirm-btn"
+    });
+    const noBtn = el("button", {
+      type: "button",
+      textContent: L.cancel || "Mégse",
+      className: "toast-btn"
+    });
+    yesBtn.onclick = async () => {
+      try {
+        await api(`/api/v1/messages/${messageId}/retract`, { method: "POST" });
+        toast.style.display = "none";
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+    noBtn.onclick = () => {
+      toast.style.display = "none";
+    };
+    toast.append(confirmSpan, yesBtn, noBtn);
+  };
+
+  toast.append(msgSpan, retractBtn);
+
+  retractToastTimer = setTimeout(() => {
+    toast.style.display = "none";
+    retractToastTimer = null;
+  }, 10000);
+}
+
+// --- Mention Autocomplete -----------------------------------------------
+let mentionActiveIdx = 0;
+let mentionCandidates = [];
+let mentionMatchInfo = null;
+
+function closeMentionPopup() {
+  const p = $("mentionPopup");
+  if (p) p.style.display = "none";
+  mentionCandidates = [];
+  mentionMatchInfo = null;
+  mentionActiveIdx = 0;
+}
+
+function updateMentionPopupUI() {
+  const p = $("mentionPopup");
+  if (!p) return;
+  if (!mentionCandidates || mentionCandidates.length === 0) {
+    p.style.display = "none";
+    return;
+  }
+  p.innerHTML = "";
+  mentionCandidates.forEach((actor, idx) => {
+    const isAct = idx === mentionActiveIdx;
+    const row = el("div", {
+      className: "mention-item" + (isAct ? " active" : "")
+    });
+    const marker = el("span", {
+      className: `who ${actor.kind}`,
+      textContent: actor.kind === "agent" ? "🤖" : "👤",
+      style: "font-size:14px;"
+    });
+    const handleEl = el("span", {
+      style: "font-weight:600; font-family:ui-monospace, monospace; color:var(--text);",
+      textContent: "@" + actor.handle
+    });
+    const nameEl = el("span", {
+      className: "muted",
+      style: "font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px;",
+      textContent: actor.display_name || ""
+    });
+    row.append(marker, handleEl, nameEl);
+
+    const hostName = agentHostMap[actor.id];
+    if (actor.kind === "agent" && hostName) {
+      const machineBadge = el("span", {
+        className: "badge muted",
+        style: "font-size:11px; margin-left:auto; border:1px solid var(--line); padding:1px 5px; border-radius:4px;",
+        textContent: "🖥 " + hostName
+      });
+      row.append(machineBadge);
+    }
+
+    row.onpointerdown = (e) => {
+      e.preventDefault();
+      selectMentionCandidate(actor);
+    };
+
+    p.append(row);
+  });
+  p.style.display = "block";
+  const activeEl = p.children[mentionActiveIdx];
+  if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+}
+
+function selectMentionCandidate(actor) {
+  if (!actor || !mentionMatchInfo) {
+    closeMentionPopup();
+    return;
+  }
+  const input = $("text");
+  const val = input.value;
+  const before = val.slice(0, mentionMatchInfo.startPos);
+  const after = val.slice(mentionMatchInfo.endPos);
+  input.value = before + "@" + actor.handle + " " + after;
+  const newPos = before.length + actor.handle.length + 2;
+  closeMentionPopup();
+  input.focus();
+  input.selectionStart = input.selectionEnd = newPos;
+}
+
+function checkMentionTrigger() {
+  const input = $("text");
+  const val = input.value;
+  const cursor = input.selectionStart;
+  const textBefore = val.slice(0, cursor);
+
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(textBefore);
+  if (!match) {
+    closeMentionPopup();
+    return;
+  }
+  const query = match[1];
+  const atIndex = textBefore.lastIndexOf("@");
+  mentionMatchInfo = { query, startPos: atIndex, endPos: cursor };
+  mentionCandidates = ColonyMention.rankMentions(query, Object.values(actors), currentMembers);
+  if (mentionCandidates.length === 0) {
+    closeMentionPopup();
+    return;
+  }
+  if (mentionActiveIdx >= mentionCandidates.length) {
+    mentionActiveIdx = 0;
+  }
+  updateMentionPopupUI();
+}
+
+$("text").addEventListener("input", checkMentionTrigger);
+$("text").addEventListener("click", checkMentionTrigger);
+$("text").addEventListener("keyup", (e) => {
+  if (!["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(e.key)) {
+    checkMentionTrigger();
+  }
+});
+$("text").addEventListener("keydown", (e) => {
+  const popup = $("mentionPopup");
+  if (popup && popup.style.display !== "none" && mentionCandidates.length > 0) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      mentionActiveIdx = (mentionActiveIdx + 1) % mentionCandidates.length;
+      updateMentionPopupUI();
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      mentionActiveIdx = (mentionActiveIdx - 1 + mentionCandidates.length) % mentionCandidates.length;
+      updateMentionPopupUI();
+      return;
+    }
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      selectMentionCandidate(mentionCandidates[mentionActiveIdx]);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeMentionPopup();
+      return;
+    }
+  }
+});
+document.addEventListener("pointerdown", (e) => {
+  if (!e.target.closest("#mentionPopup") && e.target !== $("text")) {
+    closeMentionPopup();
+  }
+});
+
 $("send").onsubmit = async (e) => {
   e.preventDefault();
   let body = $("text").value.trim();
@@ -5440,7 +5805,10 @@ $("send").onsubmit = async (e) => {
   const req = { body, client_msg_id: uid() };
   if (fileIds.length > 0) req.file_ids = fileIds;
   if (replyRoot) req.thread_root_id = replyRoot;
-  await api(`/api/v1/channels/${current}/messages`, { method: "POST", body: JSON.stringify(req) }).catch(err => alert(err.message));
+  const res = await api(`/api/v1/channels/${current}/messages`, { method: "POST", body: JSON.stringify(req) }).catch(err => alert(err.message));
+  if (res && res.message && me && me.kind === "human") {
+    showRetractToast(res.message.id);
+  }
 };
 
 $("status").textContent = L.offline;

@@ -28,7 +28,7 @@ test:            ## Unit, contract (memory) and end-to-end tests
 	$(GO) test ./...
 
 test-web:        ## Frontend tests (Node)
-	node --test internal/httpserver/web/markdown.test.mjs
+	node --test internal/httpserver/web/*.test.mjs
 
 test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
