@@ -306,7 +306,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		// from an agent.
 		body := fmt.Sprintf("🖥 %s elindult", in.Name)
 		if cmd := firstLine(httpx.Deref(in.Command, "")); cmd != "" {
-			body += ": " + cmd
+			body += ": `" + inertCode(cmd) + "`"
 		}
 		_, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
 			ChannelID:    chID,
@@ -456,4 +456,11 @@ func firstLine(s string) string {
 		s = string(r[:199]) + "…"
 	}
 	return s
+}
+
+// inertCode makes agent-supplied text safe inside an inline code span: no
+// backtick can close the span, and no @ can become a mention.
+func inertCode(s string) string {
+	s = strings.ReplaceAll(s, "`", "'")
+	return strings.ReplaceAll(s, "@", "@\u200b")
 }

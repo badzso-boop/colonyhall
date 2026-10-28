@@ -771,12 +771,20 @@ func (s *Service) CanWrite(ctx context.Context, by identity.Actor, channelID ids
 
 // MessageByID implements Reader.
 func (s *Service) MessageByID(ctx context.Context, id ids.ID) (Message, error) {
-	return s.Store.MessageByID(ctx, id)
+	m, err := s.Store.MessageByID(ctx, id)
+	if err != nil {
+		return Message{}, err
+	}
+	return maskRetracted([]Message{m})[0], nil
 }
 
 // MessagesByIDs implements Reader.
 func (s *Service) MessagesByIDs(ctx context.Context, idList []ids.ID) ([]Message, error) {
-	return s.Store.MessagesByIDs(ctx, idList)
+	msgs, err := s.Store.MessagesByIDs(ctx, idList)
+	if err != nil {
+		return nil, err
+	}
+	return maskRetracted(msgs), nil
 }
 
 // MemberIDs implements Reader.

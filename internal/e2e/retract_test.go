@@ -272,7 +272,7 @@ func TestSilentAgentEndpointsCarryNoFreeText(t *testing.T) {
 		t.Fatalf("terminal-start with a bad name: %d, want 400", s)
 	}
 	if s := e.do("POST", "/api/v1/agent/terminal-start", agentTok, map[string]any{
-		"channel_id": general, "name": "build", "command": "make all\n@norbi second line",
+		"channel_id": general, "name": "build", "command": "make all @norbi `x`\n@norbi second line",
 	}, nil); s != http.StatusNoContent {
 		t.Fatalf("terminal-start: %d", s)
 	}
@@ -289,8 +289,13 @@ func TestSilentAgentEndpointsCarryNoFreeText(t *testing.T) {
 		bodies = append(bodies, m.Body)
 	}
 	all := strings.Join(bodies, "\n")
-	if !strings.Contains(all, "🖥 build elindult: make all") || strings.Contains(all, "second line") {
+	if !strings.Contains(all, "🖥 build elindult: `make all @\u200bnorbi 'x'`") || strings.Contains(all, "second line") {
 		t.Fatalf("terminal start text not built by the server: %q", all)
+	}
+	for _, m := range list.Messages {
+		if strings.Contains(m.Body, "elindult") && len(m.Mentions) > 0 {
+			t.Fatalf("the command text became a mention: %v", m.Mentions)
+		}
 	}
 	if !strings.Contains(all, "⏹ Leállítottam: az üzenetet visszavonták.") {
 		t.Fatalf("retract note missing: %q", all)
@@ -312,6 +317,15 @@ func TestRetractedTextHiddenFromAgentTools(t *testing.T) {
 	}
 	if s := e.do("POST", "/api/v1/messages/"+msg.ID+"/retract", server.DevAdminToken, nil, nil); s != http.StatusNoContent {
 		t.Fatalf("retract: %d", s)
+	}
+
+	// Other modules (inbox, notes, questions, files) read messages by id.
+	mid, _ := ids.Parse(msg.ID)
+	if m, err := e.app.Conversation.MessageByID(ctx, mid); err != nil || strings.Contains(m.Body, "secret plan") {
+		t.Fatalf("MessageByID shows the retracted text (err %v)", err)
+	}
+	if ms, err := e.app.Conversation.MessagesByIDs(ctx, []ids.ID{mid}); err != nil || len(ms) != 1 || strings.Contains(ms[0].Body, "secret plan") {
+		t.Fatalf("MessagesByIDs shows the retracted text (err %v)", err)
 	}
 
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", agentToken, nil)
