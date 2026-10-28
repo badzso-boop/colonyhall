@@ -1,11 +1,14 @@
 package e2e
 
 import (
+	"colonyhall/internal/fakeagent"
 	"context"
 	"fmt"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/guard"
@@ -243,4 +246,89 @@ func TestMessageRetractExcludedFromThreadContext(t *testing.T) {
 		}
 	}
 	_ = rootMsg
+}
+
+// TestSilentAgentEndpointsCarryNoFreeText: the guard's silent notes are built
+// by the server; an agent cannot use them to post its own text silently.
+func TestSilentAgentEndpointsCarryNoFreeText(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	hID, _ := e.enroll("machine-silent")
+	_, agentTok := createFullAccessAgent(e, hID, "silent-agent", "Silent Agent")
+
+	if s := e.do("POST", "/api/v1/agent/retract-note", agentTok, map[string]any{
+		"channel_id": general, "body": "@norbi anything I like",
+	}, nil); s != http.StatusBadRequest {
+		t.Fatalf("retract-note with free text: %d, want 400", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/terminal-start", agentTok, map[string]any{
+		"channel_id": general, "name": "build", "body": "anything I like",
+	}, nil); s != http.StatusBadRequest {
+		t.Fatalf("terminal-start with free text: %d, want 400", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/terminal-start", agentTok, map[string]any{
+		"channel_id": general, "name": "Not A Name!", "command": "make",
+	}, nil); s != http.StatusBadRequest {
+		t.Fatalf("terminal-start with a bad name: %d, want 400", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/terminal-start", agentTok, map[string]any{
+		"channel_id": general, "name": "build", "command": "make all\n@norbi second line",
+	}, nil); s != http.StatusNoContent {
+		t.Fatalf("terminal-start: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/agent/retract-note", agentTok, map[string]any{
+		"channel_id": general,
+	}, nil); s != http.StatusNoContent {
+		t.Fatalf("retract-note: %d", s)
+	}
+
+	var list apispec.MessageList
+	e.do("GET", "/api/v1/channels/"+general+"/messages?limit=5", server.DevAdminToken, nil, &list)
+	var bodies []string
+	for _, m := range list.Messages {
+		bodies = append(bodies, m.Body)
+	}
+	all := strings.Join(bodies, "\n")
+	if !strings.Contains(all, "🖥 build elindult: make all") || strings.Contains(all, "second line") {
+		t.Fatalf("terminal start text not built by the server: %q", all)
+	}
+	if !strings.Contains(all, "⏹ Leállítottam: az üzenetet visszavonták.") {
+		t.Fatalf("retract note missing: %q", all)
+	}
+}
+
+// TestRetractedTextHiddenFromAgentTools: agents read channels and threads
+// through MCP; a retracted message's text must not reach them there either.
+func TestRetractedTextHiddenFromAgentTools(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	e := newEnv(t)
+	general := e.generalID()
+	_, agentToken := e.createAgent("reader-bot", "Reader Bot")
+
+	msg, s := e.send(server.DevAdminToken, general, map[string]any{"body": "wrong channel: the secret plan"})
+	if s != http.StatusCreated {
+		t.Fatalf("send: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/messages/"+msg.ID+"/retract", server.DevAdminToken, nil, nil); s != http.StatusNoContent {
+		t.Fatalf("retract: %d", s)
+	}
+
+	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", agentToken, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = session.Close() }()
+	for _, args := range []map[string]any{{"channel": "general"}, {"thread": msg.ID}} {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "read", Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.IsError || len(res.Content) == 0 {
+			t.Fatalf("read %v failed: %+v", args, res)
+		}
+		if tc, _ := res.Content[0].(*mcp.TextContent); tc == nil || strings.Contains(tc.Text, "secret plan") {
+			t.Fatalf("read %v shows the retracted text", args)
+		}
+	}
 }

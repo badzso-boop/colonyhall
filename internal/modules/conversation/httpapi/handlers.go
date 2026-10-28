@@ -5,7 +5,9 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
@@ -294,15 +296,17 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			httpx.Error(w, r, identity.ErrForbidden)
 			return
 		}
+		if !terminalName.MatchString(in.Name) {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "invalid terminal name"})
+			return
+		}
 		chID := in.ChannelId
 		threadRootID := httpx.Deref(in.ThreadRootId, ids.Nil)
-		body := ""
-		if in.Body != nil && *in.Body != "" {
-			body = *in.Body
-		} else if in.Command != nil && *in.Command != "" {
-			body = fmt.Sprintf("🖥 %s elindult: %s", in.Name, *in.Command)
-		} else {
-			body = fmt.Sprintf("🖥 %s elindult", in.Name)
+		// The server builds the text: a silent message must not carry free text
+		// from an agent.
+		body := fmt.Sprintf("🖥 %s elindult", in.Name)
+		if cmd := firstLine(httpx.Deref(in.Command, "")); cmd != "" {
+			body += ": " + cmd
 		}
 		_, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
 			ChannelID:    chID,
@@ -332,7 +336,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		_, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
 			ChannelID:    in.ChannelId,
 			ThreadRootID: threadRootID,
-			Body:         in.Body,
+			Body:         RetractNoteText,
 			Silent:       true,
 		})
 		if err != nil {
@@ -434,4 +438,22 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) 
 		return ids.Nil, false
 	}
 	return id, true
+}
+
+// RetractNoteText is the only text of the guard's note after a retracted
+// message stopped a run.
+const RetractNoteText = "⏹ Leállítottam: az üzenetet visszavonták."
+
+var terminalName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+
+// firstLine keeps the first line of s, at most 200 characters.
+func firstLine(s string) string {
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.TrimSpace(s)
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[:199]) + "…"
+	}
+	return s
 }

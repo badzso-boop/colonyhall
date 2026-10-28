@@ -596,7 +596,7 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if err != nil {
 		return nil, err
 	}
-	return s.withCompactions(ctx, msgs)
+	return s.withCompactions(ctx, maskRetracted(msgs))
 }
 
 // withAttachments fills Message.Attachments for a slice of messages.
@@ -1044,4 +1044,19 @@ func (s *Service) RetractMessage(ctx context.Context, by identity.Actor, message
 		s.Bus.Notify(seq)
 	}
 	return nil
+}
+
+// maskRetracted drops what a retracted message said, for every reader
+// (the page, the API, agents' MCP tools); the row itself stays unchanged.
+func maskRetracted(msgs []Message) []Message {
+	for i := range msgs {
+		if msgs[i].DeletedAt != nil {
+			msgs[i].Body = ""
+			msgs[i].Mentions = nil
+			msgs[i].Reactions = nil
+			msgs[i].Attachments = nil
+			msgs[i].LinkCards = nil
+		}
+	}
+	return msgs
 }

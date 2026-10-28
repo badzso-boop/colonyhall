@@ -652,7 +652,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 
 	if wasRetracted {
 		a.Log.Info("guard: direct run stopped because message was retracted", "agent", a.logName(), "session_id", sessionID, "message_id", retractedMsgID)
-		_ = a.Client.CreateRetractNote(context.Background(), last.ChannelID, last.ThreadRootID, "⏹ Leállítottam: az üzenetet visszavonták.")
+		_ = a.Client.CreateRetractNote(context.Background(), last.ChannelID, last.ThreadRootID)
 		a.reportRun(context.Background(), "direct", req.Model, sessionID, last.ChannelID, last.ThreadRootID, len(group), res, "stopped", "", steps, "")
 		return nil
 	}

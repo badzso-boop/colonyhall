@@ -189,3 +189,15 @@ Tesztelve automatizált böngészővel headless Chromium alatt:
 4. [`internal/httpserver/web/mention.js`](file:///mnt/g/Projects/new-chat-worktrees/daily-use-fixes/internal/httpserver/web/mention.js) és [`internal/httpserver/web/index.html`](file:///mnt/g/Projects/new-chat-worktrees/daily-use-fixes/internal/httpserver/web/index.html):
    - Autocomplete fuzzy illesztő és felugró komponens.
    - Visszavonási megerősítések és toast.
+
+---
+
+## Átnézés (Claude Code, 2026-10-28)
+
+Átadáskor minden ellenőrzés zöld volt. Rendben: az élő lépések élesben is valódi streamet kapnak (`Adapters` → `ExecStreamRunner`), a tétlenségi időkorlát minden kimeneti sorra újraindul, időtúllépés után nincs újrapróbálás; a visszavonás csak a szerzőé (ember), egy tranzakcióban az eseménnyel, a futó futást az őr a WebSocket-eseményre leállítja; a DM-engedély az egész DM-re szól; delegációs kérdésnél nincs külön chatüzenet. Böngészőben kipróbálva (Playwright, `pageerror` nélkül): terminálindítás üzenete gombbal és „🖥 1 terminál fut” a fejlécben, `@`-lista fuzzy kereséssel (`@ahm` → `@agy-homelab`), „Válasz” előtöltés, visszavonás felirattal, megerősítéssel és „Visszavonva” helyettesítővel.
+
+Javítva, mindegyikhez teszt, ami a javítás nélkül elbukik:
+
+1. **Csendes üzenet szabad szöveggel agenttől.** A `POST /api/v1/agent/terminal-start` és `/agent/retract-note` agent-tokennel hívható, és tetszőleges `body`-t elfogadott — bármely agent ébresztés nélküli üzenetet küldhetett, amit a prompt tiltott. Most a szöveget a szerver rakja össze: a terminálnév `^[a-z0-9][a-z0-9-]{0,31}$`, a parancsból az első sor, legfeljebb 200 karakter; a visszavonási jegyzet fix szöveg. Teszt: `TestSilentAgentEndpointsCarryNoFreeText`.
+2. **A visszavont szöveg az agentek MCP-eszközén át látszott.** Csak a HTTP-réteg cserélte „🗑 Visszavonva”-ra; a `read` MCP-eszköz (csatorna és szál) az eredeti szöveget adta. Most a szolgáltatás (`ListMessages`, `Thread`) üríti a visszavont üzenet tartalmát minden olvasónak. Teszt: `TestRetractedTextHiddenFromAgentTools`.
+3. **Elveszhetett a kliens utolsó sora.** Az `ExecStreamRunner` `StdoutPipe`-ot használt, amit a `Wait` a folyamat kilépésekor bezár — ha a lépésfeldolgozó éppen lassú, a még ki nem olvasott `result` sor elveszik („missing result event”, újrapróbálás). Most `io.Pipe` megy a kimenetre, a `Wait` megvárja a másolást, a háttérben nyitva maradt gyerekfolyamatot továbbra is a `WaitDelay` zárja. Teszt: `TestExecStreamRunnerKeepsLastLine`.

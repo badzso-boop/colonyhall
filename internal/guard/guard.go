@@ -694,7 +694,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
 		if wasRetracted {
 			a.Log.Info("guard: work run stopped because message was retracted", "agent", a.logName(), "message_id", retractedMsgID)
-			_ = a.Client.CreateRetractNote(context.Background(), it.ChannelID, it.ThreadRootID, "⏹ Leállítottam: az üzenetet visszavonták.")
+			_ = a.Client.CreateRetractNote(context.Background(), it.ChannelID, it.ThreadRootID)
 			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "stopped", "", steps, "", visitedURLs)
 			return nil
 		}

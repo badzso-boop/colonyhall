@@ -2358,9 +2358,8 @@ type ReportRunRequestPhase string
 // ReportRunRequestStatus defines model for ReportRunRequest.Status.
 type ReportRunRequestStatus string
 
-// RetractNoteRequest defines model for RetractNoteRequest.
+// RetractNoteRequest The note text is fixed by the server; agents cannot post free text silently.
 type RetractNoteRequest struct {
-	Body         string              `json:"body"`
 	ChannelId    openapi_types.UUID  `json:"channel_id"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
@@ -2560,8 +2559,9 @@ type SidebarSectionList struct {
 
 // TerminalStartRequest defines model for TerminalStartRequest.
 type TerminalStartRequest struct {
-	Body         *string             `json:"body,omitempty"`
-	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ChannelId openapi_types.UUID `json:"channel_id"`
+
+	// Command The command as the guard redacted it; the server keeps the first line, at most 200 characters, and builds the message itself.
 	Command      *string             `json:"command,omitempty"`
 	Name         string              `json:"name"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`

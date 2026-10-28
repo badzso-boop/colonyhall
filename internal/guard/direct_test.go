@@ -1898,8 +1898,8 @@ func TestDirectRetractStopsRunAndPostsNote(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/agent/retract-note"):
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			if txt, ok := body["body"].(string); ok {
-				postedNotes = append(postedNotes, txt)
+			if _, free := body["body"]; !free { // the server builds the text
+				postedNotes = append(postedNotes, fmt.Sprint(body["channel_id"]))
 			}
 			w.WriteHeader(http.StatusNoContent)
 		case strings.HasSuffix(r.URL.Path, "/ack"):
@@ -1973,8 +1973,8 @@ func TestDirectRetractStopsRunAndPostsNote(t *testing.T) {
 	if len(postedNotes) != 1 {
 		t.Fatalf("expected exactly 1 retract note posted, got %d: %v", len(postedNotes), postedNotes)
 	}
-	if postedNotes[0] != "⏹ Leállítottam: az üzenetet visszavonták." {
-		t.Fatalf("unexpected note: %q", postedNotes[0])
+	if postedNotes[0] != "c1" {
+		t.Fatalf("note posted to channel %q, want c1", postedNotes[0])
 	}
 
 	// it-2 was NOT acked (stays pending)

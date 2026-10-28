@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"sort"
 	"strings"
@@ -141,10 +142,13 @@ func ExecStreamRunner(ctx context.Context, dir, name string, args []string, env 
 	setProcessGroup(cmd)
 	cmd.WaitDelay = 2 * time.Second
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
+	// An io.Pipe, not StdoutPipe: Wait closes a StdoutPipe as soon as the
+	// process exits, dropping lines the reader has not taken yet (the client's
+	// final result line while a step callback is busy). With a pipe writer,
+	// Wait waits for the copy to finish; WaitDelay still bounds it when a
+	// background child keeps stdout open.
+	stdout, pw := io.Pipe()
+	cmd.Stdout = pw
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	if err := cmd.Start(); err != nil {
@@ -154,6 +158,7 @@ func ExecStreamRunner(ctx context.Context, dir, name string, args []string, env 
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
+		defer func() { _, _ = io.Copy(io.Discard, stdout) }() // never block the writer
 		reader := bufio.NewReader(stdout)
 		for {
 			line, rerr := reader.ReadString('\n')
@@ -167,7 +172,8 @@ func ExecStreamRunner(ctx context.Context, dir, name string, args []string, env 
 		}
 	}()
 
-	err = cmd.Wait()
+	err := cmd.Wait()
+	_ = pw.Close()
 	<-readDone
 
 	if ctx.Err() != nil {

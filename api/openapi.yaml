@@ -2745,17 +2745,16 @@ components:
       properties:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid, nullable: true }
-        name: { type: string }
-        body: { type: string }
-        command: { type: string }
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,31}$" }
+        command: { type: string, description: "The command as the guard redacted it; the server keeps the first line, at most 200 characters, and builds the message itself." }
 
     RetractNoteRequest:
+      description: The note text is fixed by the server; agents cannot post free text silently.
       type: object
-      required: [channel_id, body]
+      required: [channel_id]
       properties:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid, nullable: true }
-        body: { type: string }
 
     TerminalSummary:
       type: object

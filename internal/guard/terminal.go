@@ -872,6 +872,5 @@ func HandleTerminalStart(ctx context.Context, client *Client, meta *TerminalMeta
 	if client == nil || meta == nil {
 		return nil
 	}
-	body := fmt.Sprintf("🖥 %s elindult: %s", meta.Name, Redact(clip(meta.Command, 120)))
-	return client.CreateTerminalStart(ctx, meta.Name, body, meta.ChannelID, meta.ThreadRootID)
+	return client.CreateTerminalStart(ctx, meta.Name, Redact(clip(meta.Command, 120)), meta.ChannelID, meta.ThreadRootID)
 }

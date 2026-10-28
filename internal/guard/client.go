@@ -250,10 +250,10 @@ func (c *Client) CreateTerminalEvent(ctx context.Context, name, channelID, threa
 }
 
 // CreateTerminalStart posts a terminal started message silently (wakes nobody).
-func (c *Client) CreateTerminalStart(ctx context.Context, name, body, channelID, threadRootID string) error {
+func (c *Client) CreateTerminalStart(ctx context.Context, name, command, channelID, threadRootID string) error {
 	in := map[string]any{
 		"name":       name,
-		"body":       body,
+		"command":    command,
 		"channel_id": channelID,
 	}
 	if threadRootID != "" {
@@ -263,10 +263,9 @@ func (c *Client) CreateTerminalStart(ctx context.Context, name, body, channelID,
 }
 
 // CreateRetractNote posts a short note when a message was retracted (wakes nobody).
-func (c *Client) CreateRetractNote(ctx context.Context, channelID, threadRootID, body string) error {
+func (c *Client) CreateRetractNote(ctx context.Context, channelID, threadRootID string) error {
 	in := map[string]any{
 		"channel_id": channelID,
-		"body":       body,
 	}
 	if threadRootID != "" {
 		in["thread_root_id"] = threadRootID
