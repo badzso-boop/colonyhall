@@ -40,7 +40,7 @@ func TestMessageConversation(t *testing.T) {
 			threadRootID: threadID,
 			want: delegation.ConversationKey{
 				ChannelID:    chanID,
-				ThreadRootID: threadID,
+				ThreadRootID: ids.Nil,
 			},
 		},
 		{

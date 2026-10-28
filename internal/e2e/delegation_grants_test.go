@@ -780,3 +780,118 @@ func TestDelegationApprovedWithoutGrantNotLabelled(t *testing.T) {
 		t.Fatalf("a delegation approved without a grant is labelled approved_by_grant")
 	}
 }
+
+// TestDelegationGrantDMThreadReply reproduces the 2026-10-27 production incident (Q-23 -> Q-25):
+// top-level request in a DM, approval -> active grant for the DM.
+// The target agent replies in the request message's thread -> no new question, delivered via grant.
+func TestDelegationGrantDMThreadReply(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+
+	hostID, _ := e.enroll("machine-grant-dm-thread")
+	sourceID, sourceTok := createFullAccessAgent(e, hostID, "visegrad-agy", "Visegrad Agent")
+	targetID, targetTok := createFullAccessAgent(e, hostID, "agy-homelab", "Homelab Agent")
+
+	var dmChan apispec.Channel
+	if s := e.do("POST", "/api/v1/dms", server.DevAdminToken, map[string]any{
+		"actor_ids": []string{sourceID, targetID},
+	}, &dmChan); s != http.StatusOK && s != http.StatusCreated {
+		t.Fatalf("open DM: %d", s)
+	}
+
+	// 1. Top-level request message in DM
+	var sendRes apispec.SendResult
+	if s := e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dmChan.Id), sourceTok, apispec.SendMessageRequest{
+		Body: "@agy-homelab mi maradt meg a teendokbol?",
+	}, &sendRes); s != http.StatusCreated {
+		t.Fatalf("send request message: %d", s)
+	}
+	if sendRes.Message == nil {
+		t.Fatal("expected created message in response")
+	}
+	topReqMsgID := sendRes.Message.Id
+
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	// Question Q-23 is created
+	var qList apispec.QuestionList
+	e.do("GET", "/api/v1/questions?state=open", server.DevAdminToken, nil, &qList)
+	if len(qList.Questions) != 1 {
+		t.Fatalf("expected 1 open question, got %d", len(qList.Questions))
+	}
+	q := qList.Questions[0]
+
+	// 2. Admin approves -> grant created for (DM, nil)
+	var answered apispec.Question
+	if s := e.do("POST", fmt.Sprintf("/api/v1/questions/%s/answer", q.Id), server.DevAdminToken, apispec.AnswerQuestionRequest{
+		Answer: "Jóváhagyom",
+	}, &answered); s != http.StatusOK {
+		t.Fatalf("answer question: %d", s)
+	}
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	// Target receives the task
+	var inBox apispec.Inbox
+	e.do("GET", "/api/v1/agent/inbox", targetTok, nil, &inBox)
+	var taskItem *apispec.InboxItem
+	for i := range inBox.Items {
+		if inBox.Items[i].Kind == "delegated" {
+			taskItem = &inBox.Items[i]
+			break
+		}
+	}
+	if taskItem == nil {
+		t.Fatalf("expected delegated item for target, got %+v", inBox.Items)
+	}
+
+	// Ack target's inbox
+	ackIDs := make([]string, len(inBox.Items))
+	for i, it := range inBox.Items {
+		ackIDs[i] = it.Id.String()
+	}
+	e.do("POST", "/api/v1/agent/inbox/ack", targetTok, map[string]any{"ids": ackIDs}, nil)
+
+	// Verify grant is active
+	var grantList apispec.DelegationGrantList
+	e.do("GET", "/api/v1/delegation-grants?active=true", server.DevAdminToken, nil, &grantList)
+	if len(grantList.Grants) != 1 {
+		t.Fatalf("expected 1 active grant, got %d", len(grantList.Grants))
+	}
+
+	// 3. Target replies in the request's thread (ThreadRootId = topReqMsgID)
+	topReqUUID := topReqMsgID
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dmChan.Id), targetTok, apispec.SendMessageRequest{
+		Body:         "@visegrad-agy itt a jelentes a teendokrol",
+		ThreadRootId: &topReqUUID,
+	}, nil)
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	// Assert: NO new question is created (would have been Q-25 in the incident)
+	e.do("GET", "/api/v1/questions?state=open", server.DevAdminToken, nil, &qList)
+	if len(qList.Questions) != 0 {
+		t.Fatalf("expected 0 open questions with active DM grant, got %d", len(qList.Questions))
+	}
+
+	// Source agent gets a delegated item with via_grant = true
+	var sourceBox apispec.Inbox
+	e.do("GET", "/api/v1/agent/inbox", sourceTok, nil, &sourceBox)
+	var threadReplyItem *apispec.InboxItem
+	for i := range sourceBox.Items {
+		if sourceBox.Items[i].Kind == "delegated" {
+			threadReplyItem = &sourceBox.Items[i]
+			break
+		}
+	}
+	if threadReplyItem == nil {
+		t.Fatalf("expected delegated item in source inbox for thread reply, got %+v", sourceBox.Items)
+	}
+	if threadReplyItem.ViaGrant == nil || !*threadReplyItem.ViaGrant {
+		t.Fatalf("expected via_grant = true for thread reply in DM")
+	}
+}
