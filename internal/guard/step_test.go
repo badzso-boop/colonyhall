@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRedact(t *testing.T) {
@@ -361,5 +362,108 @@ func TestAntigravityStreamRealFormat(t *testing.T) {
 	}
 	if !read || !cmd {
 		t.Errorf("missing read/command steps: %+v", steps)
+	}
+}
+
+func TestStreamLiveStepsBeforeReturn(t *testing.T) {
+	lines := []string{
+		`{"type":"system","subtype":"init"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking"}],"usage":{"input_tokens":10,"output_tokens":5}}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/workspace/a.txt"}}]},"usage":{"input_tokens":20,"output_tokens":10}}`,
+		`{"type":"result","result":"all done","session_id":"s1","is_error":false,"usage":{"input_tokens":30,"output_tokens":15}}`,
+	}
+
+	streamer := func(ctx context.Context, dir, name string, args, env []string, onStdoutLine func(string)) error {
+		for i, l := range lines {
+			if i > 0 {
+				time.Sleep(30 * time.Millisecond)
+			}
+			onStdoutLine(l)
+		}
+		return nil
+	}
+
+	cc := &ClaudeCode{
+		Bin:       "claude",
+		StreamRun: streamer,
+	}
+
+	var stepTimes []time.Time
+	req := DirectRequest{
+		Dir: "/workspace",
+		OnStep: func(s Step) {
+			stepTimes = append(stepTimes, time.Now())
+		},
+	}
+
+	start := time.Now()
+	res, err := cc.Direct(context.Background(), req)
+	finish := time.Now()
+	if err != nil {
+		t.Fatalf("Direct: %v", err)
+	}
+	if res.Text != "all done" {
+		t.Fatalf("expected 'all done', got %q", res.Text)
+	}
+	if len(stepTimes) < 2 {
+		t.Fatalf("expected at least 2 steps, got %d", len(stepTimes))
+	}
+	if finish.Sub(stepTimes[0]) < 40*time.Millisecond {
+		t.Errorf("expected first step to arrive live during execution, finish-step0 was only %v", finish.Sub(stepTimes[0]))
+	}
+	if stepTimes[0].Before(start) {
+		t.Errorf("step time %v before start %v", stepTimes[0], start)
+	}
+
+	// Also verify Antigravity thinking step
+	agyLines := []string{
+		`{"event":"init","conversation_id":"c1"}`,
+		`{"event":"step_update","step_type":"agent_response","state":"ACTIVE"}`,
+		`{"event":"result","status":"SUCCESS","response":"agy done","conversation_id":"c1","usage":{"input_tokens":10,"output_tokens":5}}`,
+	}
+	var agySteps []Step
+	agyStreamer := func(ctx context.Context, dir, name string, args, env []string, onStdoutLine func(string)) error {
+		for _, l := range agyLines {
+			onStdoutLine(l)
+		}
+		return nil
+	}
+	agy := &Antigravity{
+		Bin:       "agy",
+		StreamRun: agyStreamer,
+	}
+	_, err = agy.Direct(context.Background(), DirectRequest{Dir: "/workspace", OnStep: func(s Step) { agySteps = append(agySteps, s) }})
+	if err != nil {
+		t.Fatalf("agy Direct: %v", err)
+	}
+	foundThink := false
+	for _, s := range agySteps {
+		if s.Kind == StepKindThink && s.Label == "Gondolkodik…" {
+			foundThink = true
+		}
+	}
+	if !foundThink {
+		t.Errorf("expected StepKindThink for agy agent_response ACTIVE, got steps: %+v", agySteps)
+	}
+}
+
+func TestExecStreamRunnerHangingChild(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var lines []string
+	start := time.Now()
+	err := ExecStreamRunner(ctx, "", "sh", []string{"-c", "python3 -c 'import os, time; os.fork() and os._exit(0); time.sleep(30)' & echo started"}, nil, func(line string) {
+		lines = append(lines, line)
+	})
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ExecStreamRunner failed: %v", err)
+	}
+	if elapsed > 6*time.Second {
+		t.Fatalf("ExecStreamRunner hung too long (%v), WaitDelay should have unblocked it within ~2-3s", elapsed)
+	}
+	if len(lines) == 0 || lines[0] != "started" {
+		t.Errorf("expected line 'started', got %v", lines)
 	}
 }

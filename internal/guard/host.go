@@ -44,7 +44,9 @@ func Enroll(ctx context.Context, server, code, name, tokenFile string) error {
 type Supervisor struct {
 	Cfg Config
 	Run Runner
-	Log *slog.Logger
+	// StreamRun overrides the stream runner for adapters (tests).
+	StreamRun StreamRunner
+	Log       *slog.Logger
 	// NewAdapter overrides the adapter registry (tests).
 	NewAdapter func(ac AgentConfig) Adapter
 	// DockerRunner overrides the docker compose runner (tests).
@@ -427,7 +429,18 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			s.Log.Error("guard: unknown client", "agent", "@"+ha.Handle, "client", ha.Client)
 			return
 		}
-		newAdapter = func(ac AgentConfig) Adapter { return factory(ac, agentRunner) }
+		newAdapter = func(ac AgentConfig) Adapter {
+			ad := factory(ac, agentRunner)
+			if s.StreamRun != nil {
+				switch a := ad.(type) {
+				case *ClaudeCode:
+					a.StreamRun = s.StreamRun
+				case *Antigravity:
+					a.StreamRun = s.StreamRun
+				}
+			}
+			return ad
+		}
 	}
 	if ha.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox && ha.Client != "claude-code" {
 		// Only Claude Code can run a decision without any tools; other

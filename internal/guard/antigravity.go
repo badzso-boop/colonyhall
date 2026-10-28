@@ -203,7 +203,11 @@ func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, 
 			case "agent_response":
 				if strings.ToUpper(sl.State) == "ACTIVE" {
 					if onStep != nil {
-						onStep(Step{Kind: StepKindAnswer, Label: "Válaszol…", State: StepStateActive, StartedAt: time.Now()})
+						if sl.TextDelta != "" {
+							onStep(Step{Kind: StepKindAnswer, Label: "Válaszol…", State: StepStateActive, StartedAt: time.Now()})
+						} else {
+							onStep(Step{Kind: StepKindThink, Label: "Gondolkodik…", State: StepStateActive, StartedAt: time.Now()})
+						}
 					}
 				} else if strings.ToUpper(sl.State) == "DONE" {
 					if sl.Usage != nil {

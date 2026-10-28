@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -136,6 +137,8 @@ func ExecStreamRunner(ctx context.Context, dir, name string, args []string, env 
 		cmd.Env = env
 	}
 	setProcessGroup(cmd)
+	cmd.WaitDelay = 2 * time.Second
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -145,22 +148,30 @@ func ExecStreamRunner(ctx context.Context, dir, name string, args []string, env 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	reader := bufio.NewReader(stdout)
-	for {
-		line, rerr := reader.ReadString('\n')
-		line = strings.TrimRight(line, "\r\n")
-		if len(line) > 0 && onStdoutLine != nil {
-			onStdoutLine(line)
+
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		reader := bufio.NewReader(stdout)
+		for {
+			line, rerr := reader.ReadString('\n')
+			line = strings.TrimRight(line, "\r\n")
+			if len(line) > 0 && onStdoutLine != nil {
+				onStdoutLine(line)
+			}
+			if rerr != nil {
+				break
+			}
 		}
-		if rerr != nil {
-			break
-		}
-	}
+	}()
+
 	err = cmd.Wait()
+	<-readDone
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err != nil {
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
 		return fmt.Errorf("%s: %w: %s", name, err, clip(strings.TrimSpace(errb.String()), 300))
 	}
 	return nil
@@ -192,8 +203,12 @@ type Factory func(cfg AgentConfig, run Runner) Adapter
 
 // Adapters is the registry of client adapters by name.
 var Adapters = map[string]Factory{
-	"claude-code": func(cfg AgentConfig, run Runner) Adapter { return &ClaudeCode{Bin: cfg.Command, Run: run} },
-	"antigravity": func(cfg AgentConfig, run Runner) Adapter { return &Antigravity{Bin: cfg.Command, Run: run} },
+	"claude-code": func(cfg AgentConfig, run Runner) Adapter {
+		return &ClaudeCode{Bin: cfg.Command, Run: run, StreamRun: ExecStreamRunner}
+	},
+	"antigravity": func(cfg AgentConfig, run Runner) Adapter {
+		return &Antigravity{Bin: cfg.Command, Run: run, StreamRun: ExecStreamRunner}
+	},
 }
 
 // AdapterNames lists the registered adapters.
