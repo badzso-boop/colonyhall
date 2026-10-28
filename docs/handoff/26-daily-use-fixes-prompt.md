@@ -1,4 +1,4 @@
-# Handoff prompt 26: fixes from a day of real use (live steps, long runs, terminals, mentions, replies, delegation questions)
+# Handoff prompt 26: fixes from a day of real use (live steps, long runs, terminals, mentions, replies, delegation questions, retracting a message)
 
 ```sh
 cd /mnt/g/Projects/new-chat && git switch main && git pull --ff-only
@@ -76,10 +76,25 @@ After each part: `gofmt`, `make test`, `make lint`, `make test-web` if the page 
 
 **Fix:** in a DM the conversation is **the whole DM, any thread** (`MessageConversation` returns `thread_root = nil` for every DM message). Channels stay as they are. Existing grants in production already use `(DM, nil)`, so no data change. Update the table test, and an e2e test that reproduces the incident: top-level request in a DM, approval, the target replies in the request's thread → no new question, the source gets a `delegated` item with `via_grant`.
 
+## 8. Retract a sent message and stop the agent it woke (feature)
+
+**Why (Norbi, 2026-10-28):** a message sometimes goes to the wrong place or is sent half-written, and the agent then works on it for minutes; today the only way out is to wait for the whole run (or pause the agent). **Finding:** there is no message deletion at all (no endpoint, no `deleted_at` on messages); the guard can cancel a running run (`Agent.StopWork`, `workCancel`), which nothing triggers for a single message.
+
+**Decision:**
+- A human can **retract their own message** ("Visszavonás" in the message's actions, confirmed in the page, not `confirm()`; right after sending, also a small "Elküldve · Visszavonás" toast for ~10 s). Agents cannot retract messages (not through the API, not through MCP).
+- Append-only rule (`CLAUDE.md` 4): the message row is never deleted or rewritten; a new migration adds `deleted_at`, `deleted_by` (expand pattern), set in one transaction with a `message.retracted` event. The API and the page show it as "🗑 Visszavonva" without the body, to everyone; the thread under it stays.
+- **Effects, all from the event:**
+  - every pending inbox item for that message is acked/removed, so no agent starts on it;
+  - a pending delegation for it is cancelled and its question withdrawn (no chat message, see the `silent` option in part 6);
+  - **a running run that includes the message is stopped:** the guard learns it over its WebSocket (`message.retracted`), and if the current direct or work run's items contain that message, it cancels the run the way `StopWork` does (whole process group). Other items of the same run that were not retracted stay pending and run again without the retracted one. A run that already finished is not touched; the agent's reply, if any, stays.
+  - the guard posts one short note in the thread, waking nobody: "⏹ Leállítottam: az üzenetet visszavonták." and logs it;
+  - a retracted message never appears in later prompt context (thread context, compaction input, inbox).
+- Tests: retract by the author → item gone, the event, "Visszavonva" in the API, the body not returned; by another human or an agent → 403; a running fake-agent run that contains the message is cancelled (guard test with a fake stream runner that blocks until ctx ends) and the note is posted once; a run with two items where one is retracted → the other runs again; a pending delegation is cancelled; the retracted text is absent from the next prompt's thread context. Browser-check the button, the toast and the placeholder.
+
 ## Out of scope (say so in the report)
 
 Interactive browser terminals (decision 2026-10-26: SSH only), mention autocomplete for channels (`#`), changing who may approve.
 
 ## Docs
 
-Hungarian: `docs/01-terv.md` (timeouts: inactivity + cap; terminal start message; mention autocomplete; reply pre-fill; delegation questions without chat messages; DM grant scope), `docs/02-muszaki-specifikacio.md` (`StreamRunner` in production, `idle_timeout`/`max_run`, the `silent` send option and who may set it, the DM conversation rule), `docs/06-allapot-es-uzemeltetes.md` (the table rows and `guard.yaml` keys), `guard.example.yaml` (`idle_timeout`, `max_run`), `task.md` (move the item to "Kész" with the date and commit ids). Then the report `docs/handoff/26-daily-use-fixes-report.md` (Hungarian): commits, the decisions where this prompt was open (where `silent` lives; how the stream runner avoids hanging), what is left out, the outputs of `make test`, `make lint`, `make test-web`, `make test-pg` (uncached), `make gen-check`, the `-race` run, a manual check on the dev stack with a browser (live steps appear while a fake agent runs; a terminal start message with its button; mention list with fuzzy matches; reply pre-fill; an agent–agent DM delegation with no extra messages), and what the reviewer should look at first.
+Hungarian: `docs/01-terv.md` (timeouts: inactivity + cap; terminal start message; mention autocomplete; reply pre-fill; delegation questions without chat messages; DM grant scope; retracting a message), `docs/02-muszaki-specifikacio.md` (`StreamRunner` in production, `idle_timeout`/`max_run`, the `silent` send option and who may set it, the DM conversation rule, `deleted_at` on messages and the `message.retracted` event), `docs/06-allapot-es-uzemeltetes.md` (the table rows and `guard.yaml` keys), `guard.example.yaml` (`idle_timeout`, `max_run`), `task.md` (move the item to "Kész" with the date and commit ids). Then the report `docs/handoff/26-daily-use-fixes-report.md` (Hungarian): commits, the decisions where this prompt was open (where `silent` lives; how the stream runner avoids hanging), what is left out, the outputs of `make test`, `make lint`, `make test-web`, `make test-pg` (uncached), `make gen-check`, the `-race` run, a manual check on the dev stack with a browser (live steps appear while a fake agent runs; retracting a message stops the run; a terminal start message with its button; mention list with fuzzy matches; reply pre-fill; an agent–agent DM delegation with no extra messages), and what the reviewer should look at first.
