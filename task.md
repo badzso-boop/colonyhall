@@ -18,13 +18,21 @@
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
 
-- [ ] **Javítások egy napnyi használat után** (2026-10-28; handoff: `docs/handoff/26-daily-use-fixes-prompt.md`). Ellenőrizve a kódban és a naplókban: (1) az élő lépések csak a futás végén érkeznek (az adapterek `StreamRun` nélkül épülnek); (2) a 15 perces fix határidő leállítja a dolgozó agentet (2026-10-27: `@nato-claude-opus` 2×, `@szakdoga-claude` 1×), helyette tétlenségi időkorlát + 4 órás plafon, újrapróbálás nélkül; (3) a terminál indításakor nincs üzenet/link a chatben; (4) nincs `@`-kiegészítés; (5) „Válasz” után előtöltött `@agent`; (6) delegációs kérdésnél nincs külön „Q-NN” és „Q-NN answer” üzenet, a gombok az agent üzenete alatt elég, és nem ébreszt feleslegesen; (7) DM-ben az engedély nem fedte le a kérés szálát (Q-23 → Q-25), a 25. kör hibája; (8) elküldött üzenet visszavonása, ami leállítja az általa indított agentfutást (2026-10-28, Norbi kérése).
-
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 ## Kész
+
+- [x] **Javítások egy napnyi éles használat után** (2026-10-28, commitok: `cfdca73`, `b378a74`, `f3b8fc4`, és a záró commitok, `docs/handoff/26-daily-use-fixes-report.md`, ág: `feature/daily-use-fixes`):
+  - **Élő lépések folyamatos továbbítása:** a Claude Code és Antigravity adapterek `StreamRunner`-t kaptak élesben (`guard.go`, `host.go`), a lépések azonnal látszanak folyamatjelzésben; `cmd.WaitDelay` védi a kimenetet nyitva hagyó háttérfolyamatok ellen; gondolkodási fázis megjelenítése.
+  - **Inaktivitási időkorlát és kemény plafon:** fix 15 perces határidő helyett inaktivitási figyelő (`idle_timeout: 15m`) és 4 órás maximális korlát (`max_run: 4h`), leálláskor nincs automatikus retry, a szálba rövid leállító üzenet kerül, a tételek nyugtázva lesznek.
+  - **Terminál indítási üzenet és állapotjelzés:** terminál indulásakor (`term_start`) csendes szálüzenet („🖥 <name> elindult: <command>”) „Terminál megtekintése” gombbal; futó terminálok kijelzése a csatorna fejlécében és az aktivitásjelző mellett; naplózás a guard logban.
+  - **`@` megemlítés kiegészítő (autocomplete):** fuzzy keresés handle-re és display névre, csatornatagok előre rangsorolva, leállított ágensek kizárva, legfeljebb 8 elem, billentyűzetes és mobilos kezelés a szövegmező kitakarása nélkül.
+  - **Válasz előtöltés (reply pre-fill):** ágens üzenetére kattintva a „Válasz” előtölti a `@<ágens> ` címzést a szerkesztőbe a kurzorral utána.
+  - **Delegációs jóváhagyások csevegési üzenet nélkül:** az eredeti ágensüzenet alatti gombok elegendőek, megszűnt a felesleges Q-chat üzenet; belső `silent` opció biztosítja, hogy a könyvelési és státuszüzenetek ne ébresszenek senkit a DM-ben; ágensek a publikus API-n nem küldhetnek silent üzenetet.
+  - **DM engedélyek szálfüggetlen kiterjesztése:** DM-ben az engedély az egész DM-re érvényes (`thread_root = nil`), a szálban küldött válaszok nem kérnek új jóváhagyást.
+  - **Üzenet visszavonása (retract):** a felhasználó visszavonhatja saját üzenetét (toastból 10s-ig vagy üzenet menüből); a futó ágensfutást az őr azonnal leállítja (`message.retracted`, egész folyamatcsoport) és leállító jegyzetet ír a szálba; a visszavont üzenet „🗑 Visszavonva” lesz, a postaláda és delegáció törlődik, a prompt kontextusból és tömörítésből kimarad.
 
 - [x] **Egy jóváhagyás egy beszélgetésre (delegation grants)** (2026-10-27, `docs/handoff/25-delegation-grants-prompt.md`, jelentés: `docs/handoff/25-delegation-grants-report.md`, ág: `feature/delegation-grants`):
   - **Egyetlen jóváhagyás a beszélgetésre:** amikor egy admin jóváhagy egy delegációt, engedély (grant) jön létre a két agent között az adott beszélgetésben (DM egészére vagy adott szálra, `MessageConversation`). Amíg aktív, az üzenetek mindkét irányban új jóváhagyási kérdés nélkül, engedélyezett feladatként (`via_grant`, őrnél alternatív keretezéssel) futnak le.

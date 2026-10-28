@@ -1146,6 +1146,36 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
 - **Futások és Áttekintés nézet:** A „Futások” fülön és az Agent Overview panelen a futás sorában lévő lépésszámláló gombbal az archív lépéslista közvetlenül megtekinthető.
 - **XSS védelem:** Minden lépésszöveg kizárólag DOM `textContent` és biztonságos elemlétrehozás útján kerül renderelésre.
 
+## Mindennapi éles használat javításai (2026-10-28, feature/daily-use-fixes)
+
+### 1. Folyamatos StreamRunner produkcióban és gyermekfolyamat védelem (`internal/guard`)
+- **Valódi StreamRunner:** Az adapterek (`ClaudeCode`, `Antigravity`) éles környezetben valódi `StreamRunner`-t kapnak a gyáron keresztül (`guard.go`, `host.go`), így a lépések (`AgentStep`) streamelése valós időben fut, nem a parancs kilépése után.
+- **Folyamatcsoport és beragadás elleni védelem:** Az `ExecStreamRunner` saját folyamatcsoportban fut (`Setpgid: true`), és leálláskor a teljes csoportot megszakítja (`syscall.Kill(-pgid, syscall.SIGKILL)`). Amennyiben egy elindított háttérfolyamat (pl. dev szerver) nyitva tartaná az stdout csövet, a `cmd.WaitDelay` (1 mp) és aszinkron olvasás garantálja, hogy a `Wait` nem blokkol a végtelenségig.
+- **Gondolkodási fázis (thinking):** Claude Code esetén a stream-json gondolkodási blokkok, Antigravity esetén az `agent_response` ACTIVE állapota külön "gondolkodik…" lépésként jut el a folyamatjelzőhöz.
+
+### 2. Inaktivitási időkorlát és kemény plafon (`idle_timeout`, `max_run`)
+- **Fix határidő helyett inaktivitás:** A közvetlen és munkafutások fix (15 perces) korlátja megszűnt. A futást kizárólag az szakítja meg, ha a klienstől `idle_timeout` (alapértelmezetten 15 perc, `guard.yaml`) ideig semmilyen stream sor nem érkezik, vagy a futás összköltsége eléri a `max_run` (alapértelmezetten 4 óra, `guard.yaml`) abszolút plafont.
+- **Nincs automatikus újrapróbálkozás:** Időtúllépés miatti megszakításkor az érintett tételek nyugtázásra kerülnek, és nem indul újabb futási kísérlet a nehéz feladattal. Az őr egyszeri tájékoztató üzenetet küld a szálba ("⏱ Leállítottam: 15 perce nem jött semmi a klienstől." / "⏱ Leállítottam: elérte a 4 órás korlátot."), és a hibát belsőleg naplózza.
+
+### 3. Szerver belső csendes küldés (`Silent` opció)
+- **Könyvelési üzenetek izolációja:** A `conversation.SendInput` és az esemény (`MessageCreated`) bővült a belső `Silent bool` mezővel.
+- **Kézbesítés:** A `delivery.FindRecipients` csendes üzeneteknél üres listát ad vissza (`nil, nil`), így nem keletkezik postaláda-bejegyzés és senki (emberek, ágensek) nem ébred fel.
+- **Biztonsági szabály:** A `silent` mezőt a publikus API és MCP réteg szándékosan nem teszi elérhetővé az ágensek számára (403 Forbidden vagy figyelmen kívül hagyás). Kizárólag a szerver belső logikája és hitelesített őrvégpontok (`POST /api/v1/agent/terminal-start`, `POST /api/v1/agent/retract-note`) állíthatják be.
+
+### 4. DM engedélyek szálfüggetlen kiterjesztése (`internal/modules/delegation`)
+- **Egységes DM hatókör:** A feladat-delegációs engedélyek hatókör-számításánál (`MessageConversation`) közvetlen üzenetváltásban (DM) a kontextus a teljes DM (`thread_root = nil`), míg csatornákban megmarad a szálankénti izoláció (`thread_root = rootID`).
+- **Gyakorlati hatás:** Egy DM fő szintjén jóváhagyott kérés szálában folytatott válaszok, végrehajtások és jelentések nem generálnak új `Q-NN` jóváhagyási kérdéseket, amíg a grant aktív.
+
+### 5. Üzenet visszavonása és futó ágens leállítása (`message.retracted`)
+- **Adatbázis sémabővítés:** A `message` tábla kiegészült `deleted_by uuid REFERENCES actor(id)` mezővel és indexszel (`migrations/00034_message_retract.sql`), a meglévő `deleted_at` mező mellett (append-only minta: sor sosem törlődik).
+- **Végpont és jogosultság:** `POST /api/v1/messages/{messageId}/retract` végpont. Kizárólag emberi felhasználó vonhatja vissza a saját üzenetét (más ember vagy ágens 403-at kap).
+- **Megjelenítés:** A `MessageToAPI` a visszavont üzenet törzsét mindenki számára maszkolja: `"🗑 Visszavonva"`, a csatolmányokat, reakciókat és link-kártyákat kiüríti, és beállítja a `deleted_at` és `deleted_by` mezőket. A kontextus-összeállítás (`MessagesInUnit`, `threadContext`, `threadRecap`) szigorúan szűri és kihagyja a visszavont üzeneteket.
+- **Esemény és hatások:** Az atomi tranzakcióban rögzített `message.retracted` esemény hatására:
+  - a `delivery` modul visszavonja/törli a függőben lévő postaláda-tételeket az adott üzenethez (`AckByItemID`);
+  - a `delegation` modul `cancelled` állapotba lépteti a függő delegációt és csendben visszavonja a kérdését;
+  - az őr WebSocketen értesülve megszakítja a futó futást (`a.workCancel()`, egész folyamatcsoport), ha az tartalmazta a visszavont üzenetet;
+  - az őr egyszeri csendes jegyzetet ír a szálba: `"⏹ Leállítottam: az üzenetet visszavonták."`, és leállítottként jelenti a futást.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.
