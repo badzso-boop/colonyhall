@@ -18,6 +18,11 @@
 
 - [ ] **Dátum az üzeneteknél és napelválasztó** (Norbi, 2026-10-29): az üzenetek mellett ne csak a másodpercre pontos idő legyen, hanem a dátum is; és a napok között egy halvány vonal (a nappal) válassza el az üzeneteket, a csatornákban, a DM-ekben és a szálakban is. Csak felírva, még nincs kiadva.
 
+- [ ] **Slack-szerű felület a React PWA-hoz** (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz): a csatornákban most nagy a kavalkád, ezért:
+  - a bal sávban külön csoport a csatornáknak, az emberi DM-eknek és az **AI-DM-eknek** (agent–agent és ember–agent beszélgetések külön látszanak);
+  - egy csatornaüzenetre adott válasz mindig a szálába kerül; a fő üzenet alatt csak egy összesítő látszik („1 válasz” / „5 válasz”, utolsó válasz ideje, résztvevők);
+  - az összesítőre kattintva jobb oldalt egy oszlop nyílik a szál összes üzenetével és saját szerkesztővel, így egy nagy csatornán belül is külön szálakba lehet bontani a feladatokat.
+
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
