@@ -100,6 +100,7 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			OutputTokens:     in.OutputTokens,
 			CacheReadTokens:  in.CacheReadTokens,
 			CacheWriteTokens: in.CacheWriteTokens,
+			ContextTokens:    httpx.Deref(in.ContextTokens, 0),
 			DurationMS:       in.DurationMs,
 			Status:           string(in.Status),
 			ErrorID:          httpx.Deref(in.ErrorId, ids.Nil),
@@ -182,6 +183,10 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			}
 			if item.ErrorID != ids.Nil {
 				ar.ErrorId = &item.ErrorID
+			}
+			if item.ContextTokens > 0 {
+				ct := item.ContextTokens
+				ar.ContextTokens = &ct
 			}
 			if item.ReplyMessageID != ids.Nil {
 				ar.ReplyMessageId = &item.ReplyMessageID

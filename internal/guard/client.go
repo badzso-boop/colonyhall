@@ -508,6 +508,7 @@ type ReportRunInput struct {
 	OutputTokens     int64    `json:"output_tokens"`
 	CacheReadTokens  int64    `json:"cache_read_tokens"`
 	CacheWriteTokens int64    `json:"cache_write_tokens"`
+	ContextTokens    int64    `json:"context_tokens,omitempty"`
 	DurationMS       int      `json:"duration_ms"`
 	Status           string   `json:"status"`
 	ErrorID          string   `json:"error_id,omitempty"`

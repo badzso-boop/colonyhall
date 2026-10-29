@@ -88,12 +88,12 @@ INSERT INTO agent_run (
     id, workspace_id, agent_id, host_id, phase, client, model, session_id,
     channel_id, thread_root_id, items, input_tokens, output_tokens,
     cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at,
-    web_reads, steps, reply_message_id
+    web_reads, steps, reply_message_id, context_tokens
 ) VALUES (
-    $1, $2, $3, $18, $4, $5, $6, $7,
-    $19, $20, $8, $9, $10,
-    $11, $12, $13, $14, $21, $15,
-    $16, $17, $22
+    $1, $2, $3, $19, $4, $5, $6, $7,
+    $20, $21, $8, $9, $10,
+    $11, $12, $13, $14, $22, $15,
+    $16, $17, $23, $18
 )
 `
 
@@ -115,6 +115,7 @@ type InsertRunParams struct {
 	CreatedAt        time.Time
 	WebReads         []string
 	Steps            []byte
+	ContextTokens    int64
 	HostID           *uuid.UUID
 	ChannelID        *uuid.UUID
 	ThreadRootID     *uuid.UUID
@@ -141,6 +142,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 		arg.CreatedAt,
 		arg.WebReads,
 		arg.Steps,
+		arg.ContextTokens,
 		arg.HostID,
 		arg.ChannelID,
 		arg.ThreadRootID,
@@ -151,7 +153,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id FROM agent_run
+SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id, context_tokens FROM agent_run
 WHERE workspace_id = $1
   AND ($3::uuid IS NULL OR agent_id = $3::uuid)
 ORDER BY created_at DESC
@@ -196,6 +198,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]AgentRun,
 			&i.WebReads,
 			&i.Steps,
 			&i.ReplyMessageID,
+			&i.ContextTokens,
 		); err != nil {
 			return nil, err
 		}

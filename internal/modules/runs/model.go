@@ -77,13 +77,16 @@ type Run struct {
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
-	DurationMS       int
-	Status           string
-	ErrorID          ids.ID
-	CreatedAt        time.Time
-	WebReads         []string
-	Steps            []Step
-	ReplyMessageID   ids.ID
+	// ContextTokens is the session's context size after the run as the
+	// client measured it; 0 when unknown.
+	ContextTokens  int64
+	DurationMS     int
+	Status         string
+	ErrorID        ids.ID
+	CreatedAt      time.Time
+	WebReads       []string
+	Steps          []Step
+	ReplyMessageID ids.ID
 }
 
 // DayUsage is the daily aggregated token usage and run count for one agent in Europe/Budapest.

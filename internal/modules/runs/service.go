@@ -126,6 +126,7 @@ type ReportRunInput struct {
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
+	ContextTokens    int64
 	DurationMS       int
 	Status           string
 	ErrorID          ids.ID
@@ -158,6 +159,9 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 		return Run{}, ErrInvalidRun
 	}
 	if in.CacheWriteTokens < 0 || in.CacheWriteTokens > MaxTokens {
+		return Run{}, ErrInvalidRun
+	}
+	if in.ContextTokens < 0 || in.ContextTokens > MaxTokens {
 		return Run{}, ErrInvalidRun
 	}
 	if in.DurationMS < 0 || in.DurationMS > MaxDurationMS {
@@ -202,6 +206,7 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 		OutputTokens:     in.OutputTokens,
 		CacheReadTokens:  in.CacheReadTokens,
 		CacheWriteTokens: in.CacheWriteTokens,
+		ContextTokens:    in.ContextTokens,
 		DurationMS:       in.DurationMS,
 		Status:           in.Status,
 		ErrorID:          in.ErrorID,

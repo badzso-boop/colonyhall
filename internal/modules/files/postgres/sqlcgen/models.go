@@ -87,6 +87,7 @@ type AgentRun struct {
 	WebReads         []string
 	Steps            []byte
 	ReplyMessageID   *uuid.UUID
+	ContextTokens    int64
 }
 
 type ApiToken struct {

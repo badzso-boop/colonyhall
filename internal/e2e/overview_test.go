@@ -163,6 +163,7 @@ func TestOverviewE2E(t *testing.T) {
 		"output_tokens":      5000,
 		"cache_read_tokens":  2000,
 		"cache_write_tokens": 1000,
+		"context_tokens":     12500,
 		"duration_ms":        2500,
 		"status":             "ok",
 	}, nil)
@@ -258,6 +259,10 @@ func TestOverviewE2E(t *testing.T) {
 	th := (*agentOverview.Threads)[0]
 	if th.SessionId != "sess-abc-123" || th.LastRunTokens != 18000 || th.MaxSessionTokens != 150000 {
 		t.Fatalf("unexpected thread context: %+v", th)
+	}
+	// The session limit compares the context size, not the summed usage.
+	if th.ContextTokens == nil || *th.ContextTokens != 12500 {
+		t.Fatalf("thread context_tokens: got %v, want 12500", th.ContextTokens)
 	}
 
 	// Collaboration

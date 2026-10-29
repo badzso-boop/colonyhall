@@ -2645,6 +2645,12 @@ components:
         output_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         cache_read_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         cache_write_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        context_tokens:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000000
+          description: Context size of the session after the run, as the client measured it; 0 or absent when unknown.
         duration_ms: { type: integer, minimum: 0, maximum: 86400000 }
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }
@@ -2684,6 +2690,7 @@ components:
         output_tokens: { type: integer, format: int64 }
         cache_read_tokens: { type: integer, format: int64 }
         cache_write_tokens: { type: integer, format: int64 }
+        context_tokens: { type: integer, format: int64, description: "Context size after the run; 0 when unknown." }
         duration_ms: { type: integer }
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }
@@ -3427,6 +3434,10 @@ components:
         thread_root_id: { type: string, format: uuid, nullable: true }
         session_id: { type: string }
         last_run_tokens: { type: integer, format: int64 }
+        context_tokens:
+          type: integer
+          format: int64
+          description: Context size of the session after its last run; 0 when the client did not measure it.
         max_session_tokens: { type: integer }
 
     OverviewRun:

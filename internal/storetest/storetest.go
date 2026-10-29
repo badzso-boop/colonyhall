@@ -709,6 +709,7 @@ func testRuns(t *testing.T, b Backend) {
 		OutputTokens:     50,
 		CacheReadTokens:  10,
 		CacheWriteTokens: 5,
+		ContextTokens:    9000,
 		DurationMS:       1200,
 		Status:           runs.StatusOk,
 		CreatedAt:        tDay1,
@@ -775,6 +776,9 @@ func testRuns(t *testing.T, b Backend) {
 	}
 	if len(allRuns[2].Steps) != 1 || allRuns[2].Steps[0].Label != "main.go" {
 		t.Fatalf("ListRuns steps: got %+v want [{Label:main.go}]", allRuns[2].Steps)
+	}
+	if allRuns[2].ContextTokens != 9000 || allRuns[1].ContextTokens != 0 {
+		t.Fatalf("ListRuns context tokens: got %d and %d, want 9000 and 0 (unknown)", allRuns[2].ContextTokens, allRuns[1].ContextTokens)
 	}
 
 	agentRuns, err := b.Runs.ListRuns(ctx, f.ws.ID, f.agent.ID, 10)

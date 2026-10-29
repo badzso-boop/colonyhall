@@ -1188,6 +1188,7 @@ func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelI
 		OutputTokens:     int64(res.Usage.Output),
 		CacheReadTokens:  int64(res.Usage.CacheRead),
 		CacheWriteTokens: int64(res.Usage.CacheWrite),
+		ContextTokens:    int64(a.contextTokens(res)),
 		DurationMS:       dur,
 		Status:           status,
 		ErrorID:          errorID,
@@ -1198,6 +1199,20 @@ func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelI
 	if err != nil && a.Log != nil {
 		a.Log.Warn("guard: could not report run", "phase", phase, "err", err)
 	}
+}
+
+// contextTokens is the session's context size after a run: what the client
+// measured, or for clients that report per-call usage, the input side of
+// that usage. Antigravity without a measurement reports 0 (unknown), since
+// its usage sums every call of the run.
+func (a *Agent) contextTokens(res RunResult) int {
+	if res.ContextTokens > 0 {
+		return res.ContextTokens
+	}
+	if a.Cfg.Client == "antigravity" {
+		return 0
+	}
+	return res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
 }
 
 func formatWebReadFooter(urls []string) string {

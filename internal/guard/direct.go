@@ -771,11 +771,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	}
 	// The rotation compares the context size, not the run's summed usage:
 	// a run with many tool calls sums the same context once per call.
-	contextTokens := res.ContextTokens
-	if contextTokens <= 0 && a.Cfg.Client != "antigravity" {
-		contextTokens = res.Usage.Input + res.Usage.CacheRead + res.Usage.CacheWrite
-	}
-	state.LastRunTokens[threadRoot] = contextTokens
+	state.LastRunTokens[threadRoot] = a.contextTokens(res)
 	if serr := state.Save(stateFile); serr != nil {
 		a.Log.Warn("guard: direct state save", "err", serr)
 	}

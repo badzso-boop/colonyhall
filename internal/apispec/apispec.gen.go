@@ -2298,8 +2298,11 @@ type OverviewRun struct {
 
 // OverviewThread defines model for OverviewThread.
 type OverviewThread struct {
-	ChannelId        openapi_types.UUID  `json:"channel_id"`
-	ChannelName      *string             `json:"channel_name,omitempty"`
+	ChannelId   openapi_types.UUID `json:"channel_id"`
+	ChannelName *string            `json:"channel_name,omitempty"`
+
+	// ContextTokens Context size of the session after its last run; 0 when the client did not measure it.
+	ContextTokens    *int64              `json:"context_tokens,omitempty"`
 	LastRunTokens    int64               `json:"last_run_tokens"`
 	MaxSessionTokens int                 `json:"max_session_tokens"`
 	SessionId        string              `json:"session_id"`
@@ -2501,18 +2504,21 @@ type ReplyOrigin struct {
 
 // ReportRunRequest defines model for ReportRunRequest.
 type ReportRunRequest struct {
-	CacheReadTokens  int64                 `json:"cache_read_tokens"`
-	CacheWriteTokens int64                 `json:"cache_write_tokens"`
-	ChannelId        *openapi_types.UUID   `json:"channel_id,omitempty"`
-	Client           string                `json:"client"`
-	DurationMs       int                   `json:"duration_ms"`
-	ErrorId          *openapi_types.UUID   `json:"error_id,omitempty"`
-	HostId           *openapi_types.UUID   `json:"host_id,omitempty"`
-	InputTokens      int64                 `json:"input_tokens"`
-	Items            int                   `json:"items"`
-	Model            string                `json:"model"`
-	OutputTokens     int64                 `json:"output_tokens"`
-	Phase            ReportRunRequestPhase `json:"phase"`
+	CacheReadTokens  int64               `json:"cache_read_tokens"`
+	CacheWriteTokens int64               `json:"cache_write_tokens"`
+	ChannelId        *openapi_types.UUID `json:"channel_id,omitempty"`
+	Client           string              `json:"client"`
+
+	// ContextTokens Context size of the session after the run, as the client measured it; 0 or absent when unknown.
+	ContextTokens *int64                `json:"context_tokens,omitempty"`
+	DurationMs    int                   `json:"duration_ms"`
+	ErrorId       *openapi_types.UUID   `json:"error_id,omitempty"`
+	HostId        *openapi_types.UUID   `json:"host_id,omitempty"`
+	InputTokens   int64                 `json:"input_tokens"`
+	Items         int                   `json:"items"`
+	Model         string                `json:"model"`
+	OutputTokens  int64                 `json:"output_tokens"`
+	Phase         ReportRunRequestPhase `json:"phase"`
 
 	// ReplyMessageId Message ID of the reply posted by the agent.
 	ReplyMessageId *openapi_types.UUID    `json:"reply_message_id,omitempty"`
@@ -2549,23 +2555,26 @@ type Run struct {
 	CacheWriteTokens int64               `json:"cache_write_tokens"`
 	ChannelId        *openapi_types.UUID `json:"channel_id,omitempty"`
 	Client           string              `json:"client"`
-	CreatedAt        time.Time           `json:"created_at"`
-	DurationMs       int                 `json:"duration_ms"`
-	ErrorId          *openapi_types.UUID `json:"error_id,omitempty"`
-	HostId           *openapi_types.UUID `json:"host_id,omitempty"`
-	Id               openapi_types.UUID  `json:"id"`
-	InputTokens      int64               `json:"input_tokens"`
-	Items            int                 `json:"items"`
-	Model            string              `json:"model"`
-	OutputTokens     int64               `json:"output_tokens"`
-	Phase            RunPhase            `json:"phase"`
-	ReplyMessageId   *openapi_types.UUID `json:"reply_message_id,omitempty"`
-	SessionId        string              `json:"session_id"`
-	Status           RunStatus           `json:"status"`
-	Steps            *[]AgentStep        `json:"steps,omitempty"`
-	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
-	WebReads         *[]string           `json:"web_reads,omitempty"`
-	WorkspaceId      openapi_types.UUID  `json:"workspace_id"`
+
+	// ContextTokens Context size after the run; 0 when unknown.
+	ContextTokens  *int64              `json:"context_tokens,omitempty"`
+	CreatedAt      time.Time           `json:"created_at"`
+	DurationMs     int                 `json:"duration_ms"`
+	ErrorId        *openapi_types.UUID `json:"error_id,omitempty"`
+	HostId         *openapi_types.UUID `json:"host_id,omitempty"`
+	Id             openapi_types.UUID  `json:"id"`
+	InputTokens    int64               `json:"input_tokens"`
+	Items          int                 `json:"items"`
+	Model          string              `json:"model"`
+	OutputTokens   int64               `json:"output_tokens"`
+	Phase          RunPhase            `json:"phase"`
+	ReplyMessageId *openapi_types.UUID `json:"reply_message_id,omitempty"`
+	SessionId      string              `json:"session_id"`
+	Status         RunStatus           `json:"status"`
+	Steps          *[]AgentStep        `json:"steps,omitempty"`
+	ThreadRootId   *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	WebReads       *[]string           `json:"web_reads,omitempty"`
+	WorkspaceId    openapi_types.UUID  `json:"workspace_id"`
 }
 
 // RunPhase defines model for Run.Phase.

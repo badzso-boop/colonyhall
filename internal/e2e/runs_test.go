@@ -90,6 +90,10 @@ func TestRunLoggingFromGuard(t *testing.T) {
 	if r.DurationMs != 350 {
 		t.Fatalf("run duration: got %d want 350", r.DurationMs)
 	}
+	// Claude Code reports per-call usage: the context is its input side.
+	if r.ContextTokens == nil || *r.ContextTokens != 140 {
+		t.Fatalf("run context_tokens: got %v want 140", r.ContextTokens)
+	}
 
 	// Filter by agent_id
 	var filtered apispec.RunList
@@ -244,6 +248,15 @@ func TestRunLoggingValidation(t *testing.T) {
 	tooManyTokens["input_tokens"] = 1_000_000_001
 	if s := e.do("POST", "/api/v1/agent/runs", server.DevAgentToken, tooManyTokens, nil); s != http.StatusBadRequest {
 		t.Fatalf("excessive tokens: got %d want 400", s)
+	}
+
+	// Context size out of range
+	for _, v := range []int64{-1, 1_000_000_001} {
+		badContext := copyMap(baseRun)
+		badContext["context_tokens"] = v
+		if s := e.do("POST", "/api/v1/agent/runs", server.DevAgentToken, badContext, nil); s != http.StatusBadRequest {
+			t.Fatalf("context_tokens %d: got %d want 400", v, s)
+		}
 	}
 
 	// Bad phase

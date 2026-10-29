@@ -255,6 +255,9 @@ func registerOverview(
 				trID = &u
 			}
 			tokens := r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheWriteTokens
+			// The context size is what the session limit compares; the summed
+			// usage counts the same context once per tool call.
+			contextTokens := r.ContextTokens
 			maxSess := 0
 			if overviewAssignment != nil {
 				maxSess = overviewAssignment.MaxSessionTokens
@@ -265,6 +268,7 @@ func registerOverview(
 				ThreadRootId:     trID,
 				SessionId:        r.SessionID,
 				LastRunTokens:    tokens,
+				ContextTokens:    &contextTokens,
 				MaxSessionTokens: maxSess,
 			})
 		}
