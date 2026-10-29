@@ -144,6 +144,7 @@ func registerOverview(
 			overviewAssignment = &apispec.OverviewAssignment{
 				HostId:           asgn.HostID,
 				HostName:         strPtr(hostName),
+				ClaudeLimits:     host.Report.ClaudeLimits,
 				Client:           asgn.Client,
 				Model:            asgn.Model,
 				WorkModel:        strPtr(asgn.WorkModel),

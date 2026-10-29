@@ -39,6 +39,9 @@ type Config struct {
 	Defaults        AgentConfig `yaml:"defaults"`      // poll, debounce, batch, timeouts for host-mode agents
 	PreviewPorts    string      `yaml:"preview_ports"` // port range for previews, e.g. 41000-41999
 	PreviewHost     string      `yaml:"preview_host"`  // address where previews are published
+
+	RateLimitReserve int `yaml:"rate_limit_reserve"` // default 90 (%)
+	RateLimitWarn    int `yaml:"rate_limit_warn"`    // default 80 (%)
 }
 
 // HostMode reports whether the server manages this machine's agents.
@@ -88,6 +91,12 @@ func LoadConfig(path string) (Config, error) {
 
 // Validate fills defaults and checks the config.
 func (c *Config) Validate() error {
+	if c.RateLimitReserve <= 0 {
+		c.RateLimitReserve = 90
+	}
+	if c.RateLimitWarn <= 0 {
+		c.RateLimitWarn = 80
+	}
 	if c.Server == "" {
 		return fmt.Errorf("guard: server is required")
 	}

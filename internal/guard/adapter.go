@@ -54,6 +54,7 @@ type WorkRequest struct {
 	MCPConfigPath string
 	OnStep        func(Step)
 	OnActivity    func()
+	OnRateLimit   func(RateLimit)
 }
 
 // DirectRequest is the input of a direct mode run: a full interactive session
@@ -74,6 +75,7 @@ type DirectRequest struct {
 	RulesVersion         int
 	OnStep               func(Step)
 	OnActivity           func()
+	OnRateLimit          func(RateLimit)
 }
 
 // SummarizeRequest is the input of a summarization run.
@@ -124,6 +126,8 @@ type RunResult struct {
 	// Denied lists actions the client refused because a headless run
 	// cannot ask for permission (Antigravity reports them).
 	Denied []string
+	// RateLimit contains Claude rate limit event info when reported.
+	RateLimit *RateLimit
 }
 
 // Runner executes a command; tests replace it.

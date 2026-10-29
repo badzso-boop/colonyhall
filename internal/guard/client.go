@@ -282,6 +282,20 @@ func (c *Client) CreateRetractNote(ctx context.Context, channelID, threadRootID 
 	return c.do(ctx, http.MethodPost, "/api/v1/agent/retract-note", in, nil)
 }
 
+// PostRateLimitNote posts a silent rate limit note to a thread.
+func (c *Client) PostRateLimitNote(ctx context.Context, channelID, threadRootID, window string, utilization int, resetsAt time.Time) error {
+	in := map[string]any{
+		"channel_id":  channelID,
+		"window":      window,
+		"utilization": utilization,
+		"resets_at":   resetsAt.UTC().Format(time.RFC3339),
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/ratelimit-note", in, nil)
+}
+
 // Thread returns a thread's root and replies.
 func (c *Client) Thread(ctx context.Context, messageID string) (Message, []Message, error) {
 	var r struct {
@@ -382,16 +396,17 @@ type HostConfig struct {
 
 // HostReport is what the guard tells the server about this machine.
 type HostReport struct {
-	GuardVersion     string         `json:"guard_version"`
-	OS               string         `json:"os"`
-	Roots            []string       `json:"roots"`
-	Clients          []ReportClient `json:"clients"`
-	Sandbox          string         `json:"sandbox"`
-	AllowUnsandboxed bool           `json:"allow_unsandboxed"`
-	ExchangeDir      string         `json:"exchange_dir,omitempty"`
-	ExchangeOK       bool           `json:"exchange_ok"`
-	Rejected         []Rejected     `json:"rejected"`
-	Worktrees        []Worktree     `json:"worktrees,omitempty"`
+	GuardVersion     string                `json:"guard_version"`
+	OS               string                `json:"os"`
+	Roots            []string              `json:"roots"`
+	Clients          []ReportClient        `json:"clients"`
+	Sandbox          string                `json:"sandbox"`
+	AllowUnsandboxed bool                  `json:"allow_unsandboxed"`
+	ExchangeDir      string                `json:"exchange_dir,omitempty"`
+	ExchangeOK       bool                  `json:"exchange_ok"`
+	Rejected         []Rejected            `json:"rejected"`
+	Worktrees        []Worktree            `json:"worktrees,omitempty"`
+	ClaudeLimits     *apispec.ClaudeLimits `json:"claude_limits,omitempty"`
 }
 
 // Worktree is an active git worktree on this machine.

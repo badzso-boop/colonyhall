@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -86,6 +87,9 @@ type Agent struct {
 
 	Terminals *TerminalManager
 
+	ClaudeLimiter         *ClaudeLimiter
+	notedRateLimitThreads map[string]bool
+
 	fileFetchMu       sync.Mutex
 	fileFetchInFlight map[string]bool
 
@@ -101,6 +105,21 @@ type Agent struct {
 	handles  map[string]string
 	failures int
 	attempts map[string]int // item id → failed decision runs
+
+	wakeMu sync.Mutex
+	wakeCh chan struct{}
+}
+
+// Wake wakes the agent's main loop immediately.
+func (a *Agent) Wake() {
+	a.wakeMu.Lock()
+	defer a.wakeMu.Unlock()
+	if a.wakeCh != nil {
+		select {
+		case a.wakeCh <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // IsHalted reports whether the agent is known to be paused/halted.
@@ -146,6 +165,14 @@ func (a *Agent) Run(ctx context.Context) error {
 	a.Log.Info("guard: watching", "agent", "@"+me.Handle, "client", a.Cfg.Client, "model", a.Cfg.Model)
 
 	wakeCh := make(chan struct{}, 1)
+	a.wakeMu.Lock()
+	a.wakeCh = wakeCh
+	a.wakeMu.Unlock()
+	defer func() {
+		a.wakeMu.Lock()
+		a.wakeCh = nil
+		a.wakeMu.Unlock()
+	}()
 	fileFetchWakeCh := make(chan struct{}, 1)
 	fileFetchWakeCh <- struct{}{} // initial check on startup
 	go a.runFileFetchLoop(ctx, fileFetchWakeCh)
@@ -184,6 +211,15 @@ func (a *Agent) Run(ctx context.Context) error {
 }
 
 func (a *Agent) waitInterval() time.Duration {
+	if a.isClaudeClient() && a.ClaudeLimiter != nil && a.ClaudeLimiter.IsPaused(a.now()) {
+		until := a.ClaudeLimiter.PauseUntil()
+		if !until.IsZero() && a.now().Before(until) {
+			d := a.until(until)
+			if d > 0 {
+				return d
+			}
+		}
+	}
 	if !a.budgetExhaustedUntil.IsZero() && a.now().Before(a.budgetExhaustedUntil) {
 		d := a.until(a.budgetExhaustedUntil)
 		if d > 0 {
@@ -287,6 +323,14 @@ func (a *Agent) Tick(ctx context.Context) error {
 	}
 	items = chatItems
 
+	if a.isClaudeClient() && a.ClaudeLimiter != nil {
+		if a.ClaudeLimiter.IsPaused(a.now()) {
+			a.postRateLimitNotes(ctx, items)
+			return nil
+		}
+		a.notedRateLimitThreads = nil
+	}
+
 	if a.Mode == "direct" || (a.Mode == "" && a.Cfg.Mode == "direct") {
 		if err := a.handleDirect(ctx, items); err != nil {
 			return err
@@ -342,6 +386,11 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 	runCtx, stop := a.watchHalt(ctx)
 	defer stop()
 
+	if a.isClaudeClient() && a.ClaudeLimiter != nil && a.ClaudeLimiter.IsPaused(a.now()) {
+		a.postRateLimitNotes(ctx, items)
+		return nil
+	}
+
 	if len(items) > 0 {
 		ok, err := a.checkBudget(runCtx, items[0])
 		if err != nil {
@@ -369,7 +418,15 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		}
 	}
 	a.reportRun(ctx, "decide", a.Cfg.Model, "", "", "", len(items), res, decideStatus, "", nil, "")
+	if a.isClaudeClient() && a.ClaudeLimiter != nil && res.RateLimit != nil {
+		a.ClaudeLimiter.Update(*res.RateLimit)
+	}
 	if err != nil {
+		if a.isClaudeClient() && a.ClaudeLimiter != nil && isClaudeLimitMessage(err.Error()) {
+			a.ClaudeLimiter.RecordLimitFailure(err.Error(), a.now())
+			a.postRateLimitNotes(ctx, items)
+			return nil
+		}
 		if runCtx.Err() != nil && ctx.Err() == nil {
 			a.Log.Warn("guard: run stopped, agent halted", "agent", a.logName())
 			return nil
@@ -414,6 +471,11 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 // giveUpAfterRetries keeps failed items for a retry, but acknowledges them
 // after maxAttempts so a broken client cannot loop on them.
 func (a *Agent) giveUpAfterRetries(ctx context.Context, items []Item, cause error) error {
+	if a.isClaudeClient() && a.ClaudeLimiter != nil && isClaudeLimitMessage(cause.Error()) {
+		a.ClaudeLimiter.RecordLimitFailure(cause.Error(), a.now())
+		a.postRateLimitNotes(ctx, items)
+		return nil
+	}
 	if a.attempts == nil {
 		a.attempts = map[string]int{}
 	}
@@ -675,6 +737,11 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			RulesVersion:   rulesVer,
 			OnStep:         onStep,
 			OnActivity:     rtc.Touch,
+			OnRateLimit: func(rl RateLimit) {
+				if a.ClaudeLimiter != nil {
+					a.ClaudeLimiter.Update(rl)
+				}
+			},
 		})
 		steps := pr.Finish()
 		wasCanceled := errors.Is(rtc.Err(), context.Canceled)
@@ -725,6 +792,21 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			return replyErr
 		}
 		text := res.Text
+		if a.isClaudeClient() && a.ClaudeLimiter != nil {
+			if res.RateLimit != nil {
+				a.ClaudeLimiter.Update(*res.RateLimit)
+			}
+			if isClaudeLimitMessage(res.Text) {
+				a.ClaudeLimiter.RecordLimitFailure(res.Text, a.now())
+				a.postRateLimitNotes(ctx, []Item{it.Item})
+				return nil
+			}
+			if err != nil && isClaudeLimitMessage(err.Error()) {
+				a.ClaudeLimiter.RecordLimitFailure(err.Error(), a.now())
+				a.postRateLimitNotes(ctx, []Item{it.Item})
+				return nil
+			}
+		}
 		if err != nil && !stopped {
 			errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
 			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", errID, steps, "", visitedURLs)
@@ -1061,6 +1143,43 @@ func summarize(d Decision) string {
 	return strings.Join(parts, " ")
 }
 
+func (a *Agent) isClaudeClient() bool {
+	return a.Cfg.Client == "claude-code"
+}
+
+func (a *Agent) postRateLimitNotes(ctx context.Context, items []Item) {
+	if a.ClaudeLimiter == nil || a.Client == nil {
+		return
+	}
+	if a.notedRateLimitThreads == nil {
+		a.notedRateLimitThreads = make(map[string]bool)
+	}
+	info := a.ClaudeLimiter.PauseInfo()
+
+	for _, it := range items {
+		targetChannelID := it.ChannelID
+		targetThreadID := it.ThreadRootID
+		if it.ReplyOrigin != nil {
+			targetChannelID = it.ReplyOrigin.ChannelID
+			targetThreadID = it.ReplyOrigin.ThreadRootID
+		} else if targetThreadID == "" && !it.DM {
+			targetThreadID = it.ItemID
+			if targetThreadID == "" {
+				targetThreadID = it.ID
+			}
+		}
+		key := targetChannelID + "/" + targetThreadID
+		if a.notedRateLimitThreads[key] {
+			continue
+		}
+		if err := a.Client.PostRateLimitNote(ctx, targetChannelID, targetThreadID, info.Window, info.Utilization, info.ResetsAt); err != nil {
+			a.Log.Warn("guard: post rate limit note failed", "channel_id", targetChannelID, "thread_root_id", targetThreadID, "err", err)
+		} else {
+			a.notedRateLimitThreads[key] = true
+		}
+	}
+}
+
 func sleep(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
 	defer t.Stop()
@@ -1082,6 +1201,18 @@ func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error
 			exchangeOK = true
 		}
 	}
+	var claudeLimiter *ClaudeLimiter
+	for _, ac := range cfg.Agents {
+		if ac.Client == "claude-code" {
+			stateDir := cfg.SandboxDir
+			if stateDir == "" {
+				home, _ := os.UserHomeDir()
+				stateDir = filepath.Join(home, ".local", "share", "colonyhall", "sandbox")
+			}
+			claudeLimiter = NewClaudeLimiter(filepath.Join(filepath.Dir(stateDir), "claude_usage.json"), cfg.RateLimitReserve, cfg.RateLimitWarn, log, nil)
+			break
+		}
+	}
 	var wg sync.WaitGroup
 	errs := make(chan error, len(cfg.Agents))
 	for _, ac := range cfg.Agents {
@@ -1090,12 +1221,13 @@ func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error
 			return err
 		}
 		agent := &Agent{
-			Cfg:         ac,
-			Client:      &Client{BaseURL: cfg.Server, Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}},
-			Adapter:     Adapters[ac.Client](ac, run),
-			Log:         log,
-			ExchangeDir: cfg.ExchangeDir,
-			ExchangeOK:  exchangeOK,
+			Cfg:           ac,
+			Client:        &Client{BaseURL: cfg.Server, Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}},
+			Adapter:       Adapters[ac.Client](ac, run),
+			Log:           log,
+			ExchangeDir:   cfg.ExchangeDir,
+			ExchangeOK:    exchangeOK,
+			ClaudeLimiter: claudeLimiter,
 		}
 		wg.Add(1)
 		go func() {

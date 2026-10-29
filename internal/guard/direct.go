@@ -386,6 +386,10 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 	if len(group) == 0 {
 		return nil
 	}
+	if a.isClaudeClient() && a.ClaudeLimiter != nil && a.ClaudeLimiter.IsPaused(a.now()) {
+		a.postRateLimitNotes(ctx, group)
+		return nil
+	}
 	threadRoot := ThreadRoot(group[0])
 	actChanID := group[0].ChannelID
 	actThreadID := threadRoot
@@ -651,6 +655,11 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		}
 	}
 	req.OnActivity = rtc.Touch
+	req.OnRateLimit = func(rl RateLimit) {
+		if a.ClaudeLimiter != nil {
+			a.ClaudeLimiter.Update(rl)
+		}
+	}
 
 	a.workMu.Lock()
 	a.workCancel = rtc.Cancel
@@ -729,6 +738,21 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			acked = append(acked, it.ID)
 		}
 		return a.Client.Ack(ctx, acked)
+	}
+	if a.isClaudeClient() && a.ClaudeLimiter != nil {
+		if res.RateLimit != nil {
+			a.ClaudeLimiter.Update(*res.RateLimit)
+		}
+		if isClaudeLimitMessage(res.Text) {
+			a.ClaudeLimiter.RecordLimitFailure(res.Text, a.now())
+			a.postRateLimitNotes(ctx, group)
+			return nil
+		}
+		if err != nil && isClaudeLimitMessage(err.Error()) {
+			a.ClaudeLimiter.RecordLimitFailure(err.Error(), a.now())
+			a.postRateLimitNotes(ctx, group)
+			return nil
+		}
 	}
 	if err != nil {
 		a.reportRun(ctx, "direct", req.Model, sessionID, targetChannelID, targetThreadID, len(group), res, "error", "", steps, "")

@@ -51,13 +51,16 @@ type Supervisor struct {
 	NewAdapter func(ac AgentConfig) Adapter
 	// DockerRunner overrides the docker compose runner (tests).
 	DockerRunner DockerRunner
+	// Now overrides time.Now (tests).
+	Now func() time.Time
 
-	host      *Client
-	roots     []string
-	home      string
-	sandbox   *Sandbox
-	previews  *PreviewSupervisor
-	terminals *TerminalManager
+	host          *Client
+	claudeLimiter *ClaudeLimiter
+	roots         []string
+	home          string
+	sandbox       *Sandbox
+	previews      *PreviewSupervisor
+	terminals     *TerminalManager
 
 	mu               sync.Mutex
 	lastOK           time.Time
@@ -136,6 +139,21 @@ func (s *Supervisor) start(ctx context.Context) error {
 	s.terminals.SetOnFinish(s.handleTerminalFinish)
 	_ = s.terminals.AdoptExisting()
 	s.terminals.StartWatcher(ctx, 5*time.Second)
+
+	usageFile := filepath.Join(stateDir, "claude_usage.json")
+	nowFn := time.Now
+	if s.Now != nil {
+		nowFn = s.Now
+	}
+	if s.claudeLimiter == nil {
+		s.claudeLimiter = NewClaudeLimiter(usageFile, s.Cfg.RateLimitReserve, s.Cfg.RateLimitWarn, s.Log, nowFn)
+		s.claudeLimiter.SetOnPauseChange(func(paused bool) {
+			s.report(context.Background())
+			if !paused {
+				s.WakeAll()
+			}
+		})
+	}
 	return nil
 }
 
@@ -495,11 +513,13 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			defer s.mu.Unlock()
 			return s.version
 		},
-		Sandbox:      ha.Sandbox,
-		AllowWebRead: ha.AllowWebRead,
-		WebReadAllow: s.Cfg.WebReadAllow,
-		WebReadDeny:  s.Cfg.WebReadDeny,
-		Roots:        s.roots,
+		Sandbox:       ha.Sandbox,
+		AllowWebRead:  ha.AllowWebRead,
+		WebReadAllow:  s.Cfg.WebReadAllow,
+		WebReadDeny:   s.Cfg.WebReadDeny,
+		Roots:         s.roots,
+		ClaudeLimiter: s.claudeLimiter,
+		Now:           s.Now,
 		GrantsFunc: func() []Grant {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -659,6 +679,17 @@ func (s *Supervisor) stopAll() {
 	}
 }
 
+// WakeAll wakes all managed agents immediately.
+func (s *Supervisor) WakeAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.agents {
+		if m.agent != nil {
+			m.agent.Wake()
+		}
+	}
+}
+
 func (s *Supervisor) handleTerminalStart(meta *TerminalMeta) {
 	if meta == nil {
 		return
@@ -744,6 +775,9 @@ func (s *Supervisor) report(ctx context.Context) {
 	}
 	if s.sandbox != nil {
 		r.Sandbox = s.sandbox.Version
+	}
+	if s.claudeLimiter != nil {
+		r.ClaudeLimits = s.claudeLimiter.ReportLimits()
 	}
 	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
 	r.ExchangeDir = s.Cfg.ExchangeDir

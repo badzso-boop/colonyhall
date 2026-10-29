@@ -16,9 +16,10 @@ import (
 // turns off every tool, MCP server and settings file, and keeps no session:
 // a wake-up costs about 1.3k tokens instead of ~15k with the defaults.
 type ClaudeCode struct {
-	Bin       string // default "claude"
-	Run       Runner
-	StreamRun StreamRunner
+	Bin         string // default "claude"
+	Run         Runner
+	StreamRun   StreamRunner
+	OnRateLimit func(RateLimit)
 
 	helpMu                 sync.Mutex
 	hasAppendPromptChecked bool
@@ -41,20 +42,34 @@ type claudeOutput struct {
 }
 
 type claudeStreamLine struct {
-	Type      string               `json:"type"`
-	Subtype   string               `json:"subtype"`
-	Message   *claudeStreamMessage `json:"message"`
-	Content   []claudeStreamBlock  `json:"content"`
-	Result    string               `json:"result"`
-	SessionID string               `json:"session_id"`
-	IsError   bool                 `json:"is_error"`
-	NumTurns  int                  `json:"num_turns"`
-	Usage     struct {
+	Type          string               `json:"type"`
+	Subtype       string               `json:"subtype"`
+	Message       *claudeStreamMessage `json:"message"`
+	Content       []claudeStreamBlock  `json:"content"`
+	Result        string               `json:"result"`
+	SessionID     string               `json:"session_id"`
+	IsError       bool                 `json:"is_error"`
+	NumTurns      int                  `json:"num_turns"`
+	RateLimitInfo *claudeRateLimitInfo `json:"rate_limit_info,omitempty"`
+	Usage         struct {
 		Input      int `json:"input_tokens"`
 		Output     int `json:"output_tokens"`
 		CacheRead  int `json:"cache_read_input_tokens"`
 		CacheWrite int `json:"cache_creation_input_tokens"`
 	} `json:"usage"`
+}
+
+type claudeRateLimitWindowInfo struct {
+	Utilization *float64 `json:"utilization,omitempty"`
+	ResetsAt    *int64   `json:"resetsAt,omitempty"`
+	Status      string   `json:"status,omitempty"`
+}
+
+type claudeRateLimitInfo struct {
+	Status         string                               `json:"status,omitempty"`
+	ResetsAt       *int64                               `json:"resetsAt,omitempty"`
+	RateLimitType  string                               `json:"rateLimitType,omitempty"`
+	UnifiedWindows map[string]claudeRateLimitWindowInfo `json:"unifiedWindows,omitempty"`
 }
 
 type claudeStreamMessage struct {
@@ -169,7 +184,7 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	}
 	args = withModel(args, req.Model)
 	baseDirs := append([]string{req.Dir}, req.AddDirs...)
-	res, out, err := c.execStream(ctx, req.Dir, req.Wrap, args, nil, baseDirs, req.OnStep, req.OnActivity)
+	res, out, err := c.execStream(ctx, req.Dir, req.Wrap, args, nil, baseDirs, req.OnStep, req.OnActivity, req.OnRateLimit)
 	res.Text = out.Result
 	return res, err
 }
@@ -199,7 +214,7 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 		args = withModel(args, req.Model)
 	}
 	baseDirs := append([]string{req.Dir}, req.AddDirs...)
-	res, out, err := c.execStream(ctx, req.Dir, nil, args, req.Env, baseDirs, req.OnStep, req.OnActivity)
+	res, out, err := c.execStream(ctx, req.Dir, nil, args, req.Env, baseDirs, req.OnStep, req.OnActivity, req.OnRateLimit)
 	res.Text = out.Result
 	if out.SessionID != "" {
 		res.SessionID = out.SessionID
@@ -207,7 +222,7 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	return res, err
 }
 
-func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, extraEnv []string, baseDirs []string, onStep func(Step), onActivity func()) (RunResult, claudeOutput, error) {
+func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, args []string, extraEnv []string, baseDirs []string, onStep func(Step), onActivity func(), onRateLimit ...func(RateLimit)) (RunResult, claudeOutput, error) {
 	start := time.Now()
 	var (
 		name string
@@ -248,6 +263,21 @@ func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, a
 		var sl claudeStreamLine
 		if jerr := json.Unmarshal([]byte(line), &sl); jerr != nil {
 			return
+		}
+		if sl.Type == "rate_limit_event" || sl.RateLimitInfo != nil {
+			rl := parseClaudeRateLimit(sl, line)
+			res.RateLimit = &rl
+			if c.OnRateLimit != nil {
+				c.OnRateLimit(rl)
+			}
+			for _, cb := range onRateLimit {
+				if cb != nil {
+					cb(rl)
+				}
+			}
+			if sl.Type == "rate_limit_event" {
+				return
+			}
 		}
 		if sl.Type == "result" || sl.IsError || sl.Result != "" || (sl.Type == "" && sl.SessionID != "") {
 			resultLineFound = true
@@ -491,4 +521,48 @@ func withModel(args []string, model string) []string {
 		return append(args, "--model", model)
 	}
 	return args
+}
+
+func parseClaudeRateLimit(sl claudeStreamLine, raw string) RateLimit {
+	rl := RateLimit{
+		Raw: raw,
+	}
+	if sl.RateLimitInfo == nil {
+		return rl
+	}
+	info := sl.RateLimitInfo
+	rl.Status = info.Status
+	if info.ResetsAt != nil && *info.ResetsAt > 0 {
+		rl.ResetsAt = time.Unix(*info.ResetsAt, 0)
+	}
+	if info.UnifiedWindows != nil {
+		if fh, ok := info.UnifiedWindows["five_hour"]; ok {
+			w := &RateLimitWindow{
+				Status: fh.Status,
+			}
+			if fh.Utilization != nil {
+				w.Utilization = *fh.Utilization
+			}
+			if fh.ResetsAt != nil && *fh.ResetsAt > 0 {
+				w.ResetsAt = time.Unix(*fh.ResetsAt, 0)
+			}
+			rl.FiveHour = w
+		}
+		if sd, ok := info.UnifiedWindows["seven_day"]; ok {
+			w := &RateLimitWindow{
+				Status: sd.Status,
+			}
+			if sd.Utilization != nil {
+				w.Utilization = *sd.Utilization
+			}
+			if sd.ResetsAt != nil && *sd.ResetsAt > 0 {
+				w.ResetsAt = time.Unix(*sd.ResetsAt, 0)
+			}
+			rl.SevenDay = w
+		}
+	}
+	if rl.ResetsAt.IsZero() && rl.FiveHour != nil && !rl.FiveHour.ResetsAt.IsZero() {
+		rl.ResetsAt = rl.FiveHour.ResetsAt
+	}
+	return rl
 }
