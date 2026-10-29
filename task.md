@@ -14,6 +14,8 @@
 
 ## Nyitott
 
+- [ ] **Kiadva (2026-10-29, `docs/handoff/29-sandbox-planner-tools-prompt.md`, ág: `feature/sandbox-planner-tools`):** (1) a sandboxos agent (pl. `@aszisztens`) nem éri el a `planner_read`/`calendar_read` eszközt, mert a sandboxos munkafutás nem kap Colonyhall MCP-t — megoldás a `web_read` mintájára, csak olvasó, a token a guardban marad; (2) a sandboxos agent döntő lépése alatt (8–51 mp) nem látszik a „dolgozik…”.
+
 - [ ] **Dátum az üzeneteknél és napelválasztó** (Norbi, 2026-10-29): az üzenetek mellett ne csak a másodpercre pontos idő legyen, hanem a dátum is; és a napok között egy halvány vonal (a nappal) válassza el az üzeneteket, a csatornákban, a DM-ekben és a szálakban is. Csak felírva, még nincs kiadva.
 
 - [ ] **Slack-szerű felület a React PWA-hoz** (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz). **A PWA legyen reszponzív, telefonon is teljes értékűen használható** (a részleteket később fejtjük ki: oszlopok, szál- és terminálpanel telefonon). A csatornákban most nagy a kavalkád, ezért:
@@ -22,7 +24,7 @@
   - az összesítőre kattintva jobb oldalt egy oszlop nyílik a szál összes üzenetével és saját szerkesztővel, így egy nagy csatornán belül is külön szálakba lehet bontani a feladatokat.
   - **Terminál:** lent, a fájlok gombja mellett egy „Terminál” gomb; a terminál ugyanúgy jobb oldali oszlopban nyílik. Ha a jobb oldalt már egy szál van nyitva, és onnan nyit meg valaki egy terminált, a szál ne záródjon be: a terminál a **bal oldali oszlop** helyén nyíljon meg (ahol a csatornák vannak), és az oszlop ehhez kiszélesedik; bezáráskor visszaáll a csatornalista.
 
-- [ ] **Vállalkozási asszisztens (29. kör, Norbi döntése, 2026-10-29):** havi számlázási emlékeztető ügyfelenként, az alanyi adómentesség értékhatárának figyelése (a bevételt és a határt Norbi adja meg). Csak terv.
+- [ ] **Vállalkozási asszisztens (későbbi kör, Norbi döntése, 2026-10-29):** havi számlázási emlékeztető ügyfelenként, az alanyi adómentesség értékhatárának figyelése (a bevételt és a határt Norbi adja meg). Csak terv.
 
 - [ ] **Később az asszisztenshez (csak ötletek, Norbi egyelőre nem kéri, 2026-10-29):** napközbeni javaslatok, tanulás a reakciókból, gazdagabb feladatmezők (határidő, becsült idő), gyors rögzítés a chatből, Colonyhall-ügyek a reggeli összefoglalóban.
 
