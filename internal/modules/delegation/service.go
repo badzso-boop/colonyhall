@@ -198,7 +198,7 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 			if err := s.Store.UpdateGrantLastUsed(ctx, activeGrant.ID, now); err != nil {
 				return err
 			}
-			_, err = s.Delivery.Insert(ctx, delivery.Delivery{
+			err = s.deliver(ctx, delivery.Delivery{
 				ID:          s.IDs.New(),
 				WorkspaceID: e.WorkspaceID,
 				RecipientID: rec.Actor.ID,
@@ -350,7 +350,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 		}
 
 		// Target agent gets exactly one 'delegated' inbox item carrying the approver
-		_, err = s.Delivery.Insert(ctx, delivery.Delivery{
+		err = s.deliver(ctx, delivery.Delivery{
 			ID:          s.IDs.New(),
 			WorkspaceID: del.WorkspaceID,
 			RecipientID: del.ToAgentID,
@@ -447,7 +447,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 				if aff == 0 {
 					continue
 				}
-				if _, err := s.Delivery.Insert(ctx, delivery.Delivery{
+				if err := s.deliver(ctx, delivery.Delivery{
 					ID:          s.IDs.New(),
 					WorkspaceID: otherDel.WorkspaceID,
 					RecipientID: otherDel.ToAgentID,
@@ -518,7 +518,7 @@ func (s *Service) onQuestionAnswered(ctx context.Context, e eventlog.Event, p qu
 	}
 
 	// Source agent gets an answer item
-	_, err = s.Delivery.Insert(ctx, delivery.Delivery{
+	err = s.deliver(ctx, delivery.Delivery{
 		ID:          s.IDs.New(),
 		WorkspaceID: del.WorkspaceID,
 		RecipientID: del.FromAgentID,
@@ -604,7 +604,7 @@ func (s *Service) onQuestionExpired(ctx context.Context, e eventlog.Event, p que
 	}
 
 	// Source agent gets an answer item
-	_, err = s.Delivery.Insert(ctx, delivery.Delivery{
+	err = s.deliver(ctx, delivery.Delivery{
 		ID:          s.IDs.New(),
 		WorkspaceID: del.WorkspaceID,
 		RecipientID: del.FromAgentID,
@@ -926,6 +926,27 @@ func (s *Service) inTx(ctx context.Context, fn func(ctx context.Context) error) 
 		return fn(ctx)
 	}
 	return s.Tx.InTx(ctx, fn)
+}
+
+// deliver writes an inbox item and, when it is new and should wake, tells
+// the recipient's guard right away (delivery.EventItemCreated). The item is
+// written by this consumer after the event that caused it (an answered
+// question, an expiry), so a guard woken by that event found the inbox still
+// empty and waited for its fallback poll, up to a minute.
+func (s *Service) deliver(ctx context.Context, d delivery.Delivery) error {
+	inserted, err := s.Delivery.Insert(ctx, d)
+	if err != nil || !inserted || !d.Flags.Has(delivery.FlagWake) {
+		return err
+	}
+	by := d.DelegatedBy
+	if by == ids.Nil {
+		by = d.FromActorID
+	}
+	return s.recordEvent(ctx, d.WorkspaceID, by, delivery.EventItemCreated, d.ID, delivery.ItemCreated{
+		RecipientID: d.RecipientID.String(),
+		ItemKind:    d.ItemKind,
+		ChannelID:   d.ChannelID.String(),
+	})
 }
 
 func (s *Service) recordEvent(ctx context.Context, workspaceID, actorID ids.ID, typ string, aggID ids.ID, payload any) error {

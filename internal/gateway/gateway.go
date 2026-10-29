@@ -34,6 +34,7 @@ import (
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
@@ -613,6 +614,14 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 	}
 	if c.actor.IsAdmin() {
 		return true, nil
+	}
+	if e.Type == delivery.EventItemCreated {
+		// An inbox signal is for its recipient alone.
+		var p delivery.ItemCreated
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return false, nil
+		}
+		return p.RecipientID == c.actor.ID.String(), nil
 	}
 	if e.ChannelID == ids.Nil {
 		// Workspace-wide announcements (e.g. the emergency stop) reach

@@ -36,6 +36,21 @@ const (
 	ItemTerminal     = "terminal"      // finished terminal wake; wakes
 )
 
+// EventItemCreated announces a waking inbox item to its recipient alone. The
+// delivery consumer's own items follow the event that caused them, which the
+// recipient already sees; an item written later by another module (an
+// approved delegation) needs its own signal, or the recipient's guard would
+// wait for its fallback poll. The gateway shows it only to the recipient.
+const EventItemCreated = "delivery.item_created"
+
+// ItemCreated is the payload of EventItemCreated: no content, only enough
+// for the recipient's guard to check its inbox.
+type ItemCreated struct {
+	RecipientID string `json:"recipient_id"`
+	ItemKind    string `json:"item_kind"`
+	ChannelID   string `json:"channel_id,omitempty"`
+}
+
 // Delivery is one inbox row.
 type Delivery struct {
 	ID          ids.ID

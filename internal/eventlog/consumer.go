@@ -80,7 +80,23 @@ func (c *Consumer) Drain(ctx context.Context) error {
 				return fmt.Errorf("%s: event %d (%s): %w", c.Name, e.Seq, e.Type, err)
 			}
 		}
+		c.notifyCommitted(ctx, events[len(events)-1].Seq)
 	}
+}
+
+// notifyCommitted announces events a handler appended. A handler runs inside
+// the consumer's transaction, so a Bus.Notify it sends itself fires before
+// the commit, and a reader woken by it (the WebSocket gateway) finds nothing
+// yet; without this the events would wait for the next unrelated signal.
+func (c *Consumer) notifyCommitted(ctx context.Context, processed int64) {
+	if c.Bus == nil {
+		return
+	}
+	head, err := c.Store.Head(ctx)
+	if err != nil || head <= processed {
+		return
+	}
+	c.Bus.Notify(head)
 }
 
 func (c *Consumer) logger() *slog.Logger {
