@@ -799,7 +799,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				defer func() { _ = mcpSrv.Close() }()
 			}
 		}
-		allowPlanner := (p.AllowPlanner || a.Sandbox) && p.AgentDir != ""
+		allowPlanner := p.AllowPlanner && p.AgentDir != ""
 		if allowPlanner {
 			sockPath := filepath.Join(p.AgentDir, "planner.sock")
 			ps, err := StartPlannerMCPServer(sockPath, a.Client, "", a.logName(), a.Log)

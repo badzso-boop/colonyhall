@@ -374,3 +374,35 @@ func TestPlannerMCP_WorkPrompt(t *testing.T) {
 		t.Errorf("expected prompt with both to contain planner tools note")
 	}
 }
+
+// A sandboxed agent whose machine runs with sandbox_network: open gets no
+// bridge, so the work run must not be offered the planner tools (the policy
+// says AllowPlanner false), even though the agent is sandboxed.
+func TestPlannerMCP_NotOfferedWithoutPolicy(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"id": "m1"}})
+	}))
+	defer ts.Close()
+	agentDir := t.TempDir()
+	var got WorkRequest
+	agent := &Agent{
+		Cfg:    AgentConfig{Client: "claude-code", WorkTimeout: 5 * time.Second},
+		Client: &Client{BaseURL: ts.URL, Token: "test-token", HTTP: ts.Client()},
+		Adapter: &scriptedAdapter{workFn: func(_ context.Context, req WorkRequest) (RunResult, error) {
+			got = req
+			return RunResult{Text: "ok"}, nil
+		}},
+		Sandbox: true,
+		Policy: func() WorkPolicy {
+			return WorkPolicy{Allowed: true, Dir: agentDir, AgentDir: agentDir, AllowPlanner: false, NoExec: true}
+		},
+	}
+	agent.me = Me{Handle: "bot", ID: "bot-id"}
+	it := PromptItem{Item: Item{ID: "i1", ItemID: "m0", Author: "alice", Body: "tasks?", ChannelID: "c1", ThreadRootID: "t1"}}
+	if err := agent.work(context.Background(), it, "tasks?"); err != nil {
+		t.Fatal(err)
+	}
+	if got.AllowPlanner || strings.Contains(got.Prompt, "planner_read") {
+		t.Fatalf("planner tools offered without the policy: allow=%v prompt=%q", got.AllowPlanner, got.Prompt)
+	}
+}
