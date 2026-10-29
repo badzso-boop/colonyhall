@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
@@ -39,6 +40,13 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	}
 	if m.CompactionID != ids.Nil {
 		out.CompactionId = httpx.Ptr(m.CompactionID)
+	}
+	if m.OriginChannelID != ids.Nil && m.OriginThreadID != ids.Nil {
+		out.Origin = &apispec.MessageOrigin{
+			ChannelId: m.OriginChannelID,
+			Channel:   m.OriginChannel,
+			ThreadId:  m.OriginThreadID,
+		}
 	}
 	if out.Mentions == nil {
 		out.Mentions = []ids.ID{}
@@ -337,6 +345,55 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			ChannelID:    in.ChannelId,
 			ThreadRootID: threadRootID,
 			Body:         RetractNoteText,
+			Silent:       true,
+		})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("POST /api/v1/agent/ratelimit-note", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.RateLimitNoteRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		actor := httpx.Actor(r)
+		if actor.Kind != identity.KindAgent {
+			httpx.Error(w, r, identity.ErrForbidden)
+			return
+		}
+		loc, err := time.LoadLocation("Europe/Budapest")
+		if err != nil {
+			loc = time.UTC
+		}
+		resetTime := in.ResetsAt.In(loc).Format("15:04")
+		var body string
+		switch in.Window {
+		case apispec.FiveHour:
+			body = fmt.Sprintf("⏸ A Claude 5 órás kerete %d%%-on, %s-kor folytatom.", in.Utilization, resetTime)
+		case apispec.SevenDay:
+			dayNames := map[time.Weekday]string{
+				time.Monday:    "hétfőn",
+				time.Tuesday:   "kedden",
+				time.Wednesday: "szerdán",
+				time.Thursday:  "csütörtökön",
+				time.Friday:    "pénteken",
+				time.Saturday:  "szombaton",
+				time.Sunday:    "vasárnap",
+			}
+			dayName := dayNames[in.ResetsAt.In(loc).Weekday()]
+			body = fmt.Sprintf("⏸ A Claude heti kerete %d%%-on, %s %s-kor folytatom.", in.Utilization, dayName, resetTime)
+		default:
+			body = fmt.Sprintf("⏸ A Claude kerete %d%%-on, %s-kor folytatom.", in.Utilization, resetTime)
+		}
+		threadRootID := httpx.Deref(in.ThreadRootId, ids.Nil)
+		_, err = svc.SendMessage(r.Context(), actor, conversation.SendInput{
+			ChannelID:    in.ChannelId,
+			ThreadRootID: threadRootID,
+			Body:         body,
 			Silent:       true,
 		})
 		if err != nil {

@@ -51,6 +51,9 @@ func (m *mockConvReader) CanWrite(_ context.Context, _ identity.Actor, _ ids.ID)
 func (m *mockConvReader) MessagesInUnit(_ context.Context, _, _ ids.ID) ([]conversation.Message, error) {
 	return nil, nil
 }
+func (m *mockConvReader) LatestTopLevelMessageByAuthor(_ context.Context, _, _ ids.ID) (conversation.Message, error) {
+	return conversation.Message{}, nil
+}
 func (m *mockConvReader) PostSystemMessage(_ context.Context, _, _, _, _ ids.ID, _ string, _ []ids.ID) (conversation.Message, error) {
 	return conversation.Message{}, nil
 }

@@ -396,7 +396,17 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 		handles[a.ID] = a.Handle
 		kinds[a.ID] = string(a.Kind)
 	}
-	channelNames := map[ids.ID]string{}
+	channelCache := map[ids.ID]conversation.Channel{}
+	getChannel := func(id ids.ID) (conversation.Channel, error) {
+		if c, ok := channelCache[id]; ok {
+			return c, nil
+		}
+		c, err := s.Conversation.ChannelByID(ctx, id)
+		if err == nil {
+			channelCache[id] = c
+		}
+		return c, err
+	}
 	items := make([]InboxItem, 0, len(ds))
 	for _, d := range ds {
 		item := InboxItem{Delivery: d}
@@ -406,6 +416,41 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 			item.AuthorKind = kinds[m.AuthorID]
 			item.ThreadRootID = m.ThreadRootID
 			item.MessageAt = m.CreatedAt
+
+			if by.Kind == identity.KindAgent && d.ItemKind == ItemMessage {
+				var reqMsg *conversation.Message
+				if m.ThreadRootID != ids.Nil {
+					root, err := s.Conversation.MessageByID(ctx, m.ThreadRootID)
+					if err == nil && root.AuthorID == by.ID && root.OriginChannelID != ids.Nil && root.OriginThreadID != ids.Nil {
+						reqMsg = &root
+					}
+				} else {
+					ch, err := getChannel(d.ChannelID)
+					if err == nil && ch.Kind == conversation.KindDM {
+						latest, err := s.Conversation.LatestTopLevelMessageByAuthor(ctx, d.ChannelID, by.ID)
+						if err == nil && latest.OriginChannelID != ids.Nil && latest.OriginThreadID != ids.Nil && !latest.CreatedAt.After(m.CreatedAt) {
+							reqMsg = &latest
+						}
+					}
+				}
+				if reqMsg != nil && reqMsg.DeletedAt == nil {
+					canRead, err := s.Conversation.CanRead(ctx, by, reqMsg.OriginChannelID)
+					if err == nil && canRead {
+						origThread, err := s.Conversation.MessageByID(ctx, reqMsg.OriginThreadID)
+						if err == nil && origThread.DeletedAt == nil && origThread.ChannelID == reqMsg.OriginChannelID {
+							origChan, err := getChannel(reqMsg.OriginChannelID)
+							if err == nil {
+								item.ReplyOrigin = &ReplyOrigin{
+									ChannelID:        reqMsg.OriginChannelID,
+									Channel:          origChan.Name,
+									ThreadRootID:     reqMsg.OriginThreadID,
+									RequestMessageID: reqMsg.ID,
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 		if d.FromActorID != ids.Nil {
 			item.AuthorHandle = handles[d.FromActorID]
@@ -437,14 +482,11 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 			item.AuthorHandle = "system"
 			item.AuthorKind = "system"
 		}
-		if _, ok := channelNames[d.ChannelID]; !ok {
-			ch, err := s.Conversation.ChannelByID(ctx, d.ChannelID)
-			if err != nil {
-				return nil, 0, err
-			}
-			channelNames[d.ChannelID] = ch.Name
+		ch, err := getChannel(d.ChannelID)
+		if err != nil {
+			return nil, 0, err
 		}
-		item.ChannelName = channelNames[d.ChannelID]
+		item.ChannelName = ch.Name
 		items = append(items, item)
 	}
 	return items, total, nil

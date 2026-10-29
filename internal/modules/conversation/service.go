@@ -296,6 +296,10 @@ type SendInput struct {
 	NoThreadFollow bool
 	// Silent posts the message without delivery to any actor (no inbox items, no wake).
 	Silent bool
+	// OriginChannelID and OriginThreadID record where an agent request came from.
+	// Set by agents through MCP send when target differs from origin.
+	OriginChannelID ids.ID
+	OriginThreadID  ids.ID
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -334,6 +338,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			}
 			msgs := []Message{existing}
 			s.enrichLinkCards(ctx, msgs)
+			s.enrichOrigins(ctx, msgs)
 			return SendResult{Message: &msgs[0]}, nil
 		}
 		if !errors.Is(err, db.ErrNotFound) {
@@ -365,6 +370,19 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			return SendResult{}, err
 		}
 	}
+	var originChannelID, originThreadID ids.ID
+	if by.Kind == identity.KindAgent && in.OriginChannelID != ids.Nil && in.OriginThreadID != ids.Nil {
+		// Store origin only when target differs from origin.
+		if c.ID != in.OriginChannelID || in.ThreadRootID != in.OriginThreadID {
+			// Ignore origin if agent is not a member of the origin channel or thread does not exist.
+			if origMem, err := s.membership(ctx, in.OriginChannelID, by.ID); err == nil && origMem.IsMember {
+				if origThread, err := s.Store.MessageByID(ctx, in.OriginThreadID); err == nil && origThread.ChannelID == in.OriginChannelID {
+					originChannelID = in.OriginChannelID
+					originThreadID = in.OriginThreadID
+				}
+			}
+		}
+	}
 	var msg Message
 	var seq int64
 	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -393,6 +411,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, ChannelID: c.ID, ThreadRootID: in.ThreadRootID,
 			AuthorID: by.ID, ClientMsgID: in.ClientMsgID, Kind: "text", Body: body,
 			Mentions: mentions, CreatedAt: now,
+			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -441,8 +460,24 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	}
 	msgs := []Message{msg}
 	s.enrichLinkCards(ctx, msgs)
+	s.enrichOrigins(ctx, msgs)
 	msg = msgs[0]
 	return SendResult{Message: &msg}, nil
+}
+
+func (s *Service) enrichOrigins(ctx context.Context, msgs []Message) {
+	for i := range msgs {
+		if msgs[i].OriginChannelID != ids.Nil && msgs[i].OriginChannel == "" {
+			if ch, err := s.Store.ChannelByID(ctx, msgs[i].OriginChannelID); err == nil {
+				msgs[i].OriginChannel = ch.Name
+			}
+		}
+	}
+}
+
+// LatestTopLevelMessageByAuthor returns the newest top-level message in the channel by the author.
+func (s *Service) LatestTopLevelMessageByAuthor(ctx context.Context, channelID, authorID ids.ID) (Message, error) {
+	return s.Store.LatestTopLevelMessageByAuthor(ctx, channelID, authorID)
 }
 
 func (s *Service) enrichLinkCards(ctx context.Context, msgs []Message) {
@@ -528,6 +563,12 @@ func MessageCreatedPayload(m Message) MessageCreated {
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()
 	}
+	if m.OriginChannelID != ids.Nil {
+		p.OriginChannelID = m.OriginChannelID.String()
+	}
+	if m.OriginThreadID != ids.Nil {
+		p.OriginThreadID = m.OriginThreadID.String()
+	}
 	for _, id := range m.Mentions {
 		p.Mentions = append(p.Mentions, id.String())
 	}
@@ -596,6 +637,7 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if err != nil {
 		return nil, err
 	}
+	s.enrichOrigins(ctx, msgs)
 	return s.withCompactions(ctx, maskRetracted(msgs))
 }
 

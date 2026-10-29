@@ -27,6 +27,15 @@ func ToAPI(it delivery.InboxItem) apispec.InboxItem {
 	if it.ViaGrant {
 		viaGrant = httpx.Ptr(true)
 	}
+	var replyOrigin *apispec.ReplyOrigin
+	if it.ReplyOrigin != nil {
+		replyOrigin = &apispec.ReplyOrigin{
+			ChannelId:        it.ReplyOrigin.ChannelID,
+			Channel:          it.ReplyOrigin.Channel,
+			ThreadRootId:     it.ReplyOrigin.ThreadRootID,
+			RequestMessageId: it.ReplyOrigin.RequestMessageID,
+		}
+	}
 	return apispec.InboxItem{
 		Id: it.ID, Kind: it.ItemKind, ItemId: it.ItemID, Channel: it.ChannelName,
 		ChannelId: it.ChannelID, ThreadRootId: httpx.Ptr(it.ThreadRootID), Author: it.AuthorHandle,
@@ -34,6 +43,7 @@ func ToAPI(it delivery.InboxItem) apispec.InboxItem {
 		Mentioned: it.Flags.Has(delivery.FlagMentioned), Dm: it.Flags.Has(delivery.FlagDM), At: it.MessageAt,
 		DelegatedBy: delegatedBy,
 		ViaGrant:    viaGrant,
+		ReplyOrigin: replyOrigin,
 	}
 }
 

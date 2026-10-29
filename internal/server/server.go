@@ -428,7 +428,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
-		convmcp.Register(s, cvSvc, idSvc, current)
+		convmcp.Register(s, cvSvc, idSvc, current, r)
 		appmcp.Register(s, apSvc, current, r.Header)
 		wikimcp.Register(s, wiSvc, current)
 		qmcp.Register(s, qSvc, cvSvc, current)

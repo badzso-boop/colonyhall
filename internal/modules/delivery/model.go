@@ -53,6 +53,14 @@ type Delivery struct {
 	AckedAt     *time.Time
 }
 
+// ReplyOrigin describes the origin thread where an agent's request originated.
+type ReplyOrigin struct {
+	ChannelID        ids.ID
+	Channel          string
+	ThreadRootID     ids.ID
+	RequestMessageID ids.ID
+}
+
 // InboxItem is a delivery joined with what an agent needs to act on it.
 type InboxItem struct {
 	Delivery
@@ -65,6 +73,7 @@ type InboxItem struct {
 	ThreadRootID ids.ID
 	MessageAt    time.Time
 	DelegatedBy  string // handle of the approving admin (for delegated items)
+	ReplyOrigin  *ReplyOrigin
 }
 
 // Limits.

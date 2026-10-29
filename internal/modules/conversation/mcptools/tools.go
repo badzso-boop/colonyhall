@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -44,7 +45,7 @@ type ReactInput struct {
 type CurrentActor func(ctx context.Context) (identity.Actor, error)
 
 // Register adds the messaging tools.
-func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, current CurrentActor) {
+func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, current CurrentActor, r *http.Request) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "send",
 		Description: "Post a message to a channel or a direct message (@handle), optionally as a thread reply. " +
@@ -73,9 +74,22 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 			}
 			fileIDs = append(fileIDs, fid)
 		}
+		var origChanID, origThreadID ids.ID
+		if r != nil {
+			if cStr := strings.TrimSpace(r.Header.Get("X-Colonyhall-Channel")); cStr != "" {
+				if parsed, err := ids.Parse(cStr); err == nil {
+					origChanID = parsed
+				}
+			}
+			if tStr := strings.TrimSpace(r.Header.Get("X-Colonyhall-Thread")); tStr != "" {
+				if parsed, err := ids.Parse(tStr); err == nil {
+					origThreadID = parsed
+				}
+			}
+		}
 		res, err := svc.SendMessage(ctx, actor, conversation.SendInput{
 			ChannelID: ch.ID, ThreadRootID: root, ClientMsgID: in.ClientMsgID, Body: in.Text, Elaborate: in.Elaborate,
-			FileIDs: fileIDs,
+			FileIDs: fileIDs, OriginChannelID: origChanID, OriginThreadID: origThreadID,
 		})
 		if err != nil {
 			return nil, nil, err
