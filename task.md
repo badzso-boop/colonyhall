@@ -24,6 +24,12 @@
   - az összesítőre kattintva jobb oldalt egy oszlop nyílik a szál összes üzenetével és saját szerkesztővel, így egy nagy csatornán belül is külön szálakba lehet bontani a feladatokat.
   - **Terminál:** lent, a fájlok gombja mellett egy „Terminál” gomb; a terminál ugyanúgy jobb oldali oszlopban nyílik. Ha a jobb oldalt már egy szál van nyitva, és onnan nyit meg valaki egy terminált, a szál ne záródjon be: a terminál a **bal oldali oszlop** helyén nyíljon meg (ahol a csatornák vannak), és az oszlop ehhez kiszélesedik; bezáráskor visszaáll a csatornalista.
 
+- [ ] **Saját jegyzetfüzet és naptár, összegző asszisztenssel** (Norbi, 2026-10-29). Kiadva a fejlesztői oldalra: `docs/handoff/28-planner-calendar-prompt.md`, ág: `feature/planner`. A PWA-ban:
+  - **Jegyzetfüzet:** csak az ember írja. Feladatok fontossági sorrendben (húzással rendezhető), mindegyikhez részletes leírás, és kész jelölés.
+  - **Naptár:** feliratkozás külső naptárakra ICS-linkkel, napi és heti nézettel.
+  - **Ki olvashatja:** a jegyzetfüzetet alapból minden agent, a naptárat csak a kiválasztott agentek, mindkettőt szigorúan csak olvasásra.
+  - **Asszisztens:** egy olcsó agent a homelabon 2–3 óránként átnézi a jegyzetfüzetet és a naptárat, és DM-ben javasol 1–3 feladatot. Figyelembe veszi, hol van Norbi, és mi jön a naptárában.
+
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
