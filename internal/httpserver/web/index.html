@@ -503,7 +503,14 @@ const I18N = {
         terminalsRunning: (n) => `${n} terminál fut`,
         retract: "Visszavonás", confirmRetract: "Biztosan visszavonod?",
         retractedPlaceholder: "🗑 Visszavonva", sentToast: "Elküldve",
-        treeTab: "📁 Fa", fileTab: "📄 Fájl" },
+        treeTab: "📁 Fa", fileTab: "📄 Fájl",
+        fromThread: (ch) => `↩ a #${ch} szálból`,
+        replyToDM: (agent) => `↪ válasz @${agent} DM-jére`,
+        claude5h: "Claude 5 óra:",
+        claudeWeekly: "heti",
+        claudePausedBadge: "⏸ szünetel",
+        resetsAtPrefix: "újraindul",
+        claudeLimitsLabel: "Claude limitek:" },
   en: { handle: "handle", password: "password", login: "Log in", logout: "Log out", send: "Send", message: "Message… (@name to mention)",
         online: "live", offline: "offline", reconnecting: "reconnecting…", reply: "Reply", replyIn: "Replying in thread:", inThread: "in thread:",
         hosts: "Machines", chat: "Chat", schedules: "Schedules", wiki: "Wiki", questions: "Waiting for answer", pair: "Pairing code", pairHelp: "Run on the machine (valid for 10 minutes):", revoke: "Revoke",
@@ -591,7 +598,14 @@ const I18N = {
         terminalsRunning: (n) => `${n} terminals running`,
         retract: "Retract", confirmRetract: "Are you sure you want to retract?",
         retractedPlaceholder: "🗑 Retracted", sentToast: "Sent",
-        treeTab: "📁 Tree", fileTab: "📄 File" },
+        treeTab: "📁 Tree", fileTab: "📄 File",
+        fromThread: (ch) => `↩ from #${ch} thread`,
+        replyToDM: (agent) => `↪ reply to @${agent}'s DM`,
+        claude5h: "Claude 5h:",
+        claudeWeekly: "weekly",
+        claudePausedBadge: "⏸ paused",
+        resetsAtPrefix: "resets at",
+        claudeLimitsLabel: "Claude limits:" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
 const $ = (id) => document.getElementById(id);
@@ -1378,9 +1392,11 @@ function renderMsg(m) {
   // "[error:<id>]" from the guard: details are for humans, shown on demand.
   const ref = /\[error:([0-9a-f-]{36})\]/.exec(m.body);
   const appRef = /\[approval:([0-9a-f-]{36})\]/.exec(m.body);
+  const dmReplyMatch = /\[dm_reply:([0-9a-f-]{36}):([0-9a-f-]{36}):(@?[a-zA-Z0-9_-]+)\]/.exec(m.body);
   let bodyText = m.body;
   if (ref) bodyText = bodyText.replace(ref[0], "").trim();
   if (appRef) bodyText = bodyText.replace(appRef[0], "").trim();
+  if (dmReplyMatch) bodyText = bodyText.replace(dmReplyMatch[0], "").trim();
   const bodyEl = div.querySelector(".body");
   bodyEl.textContent = "";
 
@@ -1617,6 +1633,38 @@ function renderMsg(m) {
     const stepsDrawer = el("div", { className: "run-steps-drawer", "data-msg-id": m.id });
     div.append(stepsDrawer);
     renderStepDrawerForMsg(m.id, stepsDrawer);
+  }
+  if (m.origin) {
+    const origDiv = el("div", { className: "msg-origin-link", style: "font-size:12px; margin-top:4px;" });
+    const link = el("a", {
+      href: "#",
+      style: "color:var(--accent); text-decoration:none; cursor:pointer;",
+      textContent: typeof L.fromThread === "function" ? L.fromThread(m.origin.channel) : `↩ a #${m.origin.channel} szálból`
+    });
+    link.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      open(m.origin.channel_id, m.origin.thread_id);
+    };
+    origDiv.append(link);
+    div.querySelector(".chips").before(origDiv);
+  }
+  if (dmReplyMatch) {
+    const dmChannelId = dmReplyMatch[1];
+    const targetAuthor = dmReplyMatch[3].replace(/^@/, "");
+    const dmDiv = el("div", { className: "msg-dm-reply-link", style: "font-size:12px; margin-top:4px;" });
+    const link = el("a", {
+      href: "#",
+      style: "color:var(--accent); text-decoration:none; cursor:pointer;",
+      textContent: typeof L.replyToDM === "function" ? L.replyToDM(targetAuthor) : `↪ válasz @${targetAuthor} DM-jére`
+    });
+    link.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      open(dmChannelId);
+    };
+    dmDiv.append(link);
+    div.querySelector(".chips").before(dmDiv);
   }
   for (const r of m.reactions || []) {
     const chip = document.createElement("button");
@@ -3108,6 +3156,68 @@ async function refreshMembersModal() {
   }
 }
 
+function renderClaudeLimitsElement(limits) {
+  if (!limits) return null;
+  const fh = limits.five_hour;
+  const sd = limits.seven_day;
+  if (!fh && !sd && !limits.paused) return null;
+
+  const warnPct = limits.rate_limit_warn || 80;
+  const reservePct = limits.rate_limit_reserve || 90;
+
+  const parts = [];
+  let isWarn = false;
+  let isPaused = !!limits.paused;
+
+  if (fh && fh.utilization != null) {
+    const pct = Math.round(fh.utilization * 100);
+    if (pct >= warnPct) isWarn = true;
+    if (pct >= reservePct) isPaused = true;
+    let s = `${L.claude5h || "Claude 5 óra:"} ${pct}%`;
+    if (fh.resets_at) {
+      const d = new Date(fh.resets_at);
+      if (!isNaN(d.getTime())) {
+        const resetTime = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        s += ` · ${L.resetsAtPrefix || "újraindul"} ${resetTime}`;
+      }
+    }
+    parts.push(s);
+  }
+
+  if (sd && sd.utilization != null) {
+    const pct = Math.round(sd.utilization * 100);
+    if (pct >= warnPct) isWarn = true;
+    if (pct >= reservePct) isPaused = true;
+    let s = `${L.claudeWeekly || "heti"} ${pct}%`;
+    parts.push(s);
+  }
+
+  if (!parts.length && !isPaused) return null;
+
+  const container = el("div", {
+    className: "claude-limits-row" + (isPaused ? " paused" : (isWarn ? " warn" : "")),
+    style: "margin-top:4px; font-size:12px; display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap;"
+  });
+
+  if (isPaused) {
+    container.style.color = "var(--warn, #e06c75)";
+    const badge = el("span", {
+      className: "badge badge-warn",
+      style: "background:rgba(224,108,117,0.15); border:1px solid rgba(224,108,117,0.4); padding:1px 6px; border-radius:4px; font-weight:bold;",
+      textContent: L.claudePausedBadge || "⏸ szünetel"
+    });
+    container.append(badge);
+  } else if (isWarn) {
+    container.style.color = "var(--warn, #e5c07b)";
+  }
+
+  if (parts.length) {
+    const textSpan = el("span", { textContent: parts.join(" · ") });
+    container.append(textSpan);
+  }
+  return container;
+}
+
 let currentOverviewActorId = null;
 
 async function openOverviewPanel(actorId) {
@@ -3319,6 +3429,15 @@ async function refreshOverviewPanel() {
       el("span", { className: "muted", textContent: "Token limitek:" }),
       el("span", { textContent: `max session: ${asgn.max_session_tokens || "–"}, napi: ${asgn.daily_token_limit || "–"}` })
     );
+    if (asgn.claude_limits) {
+      const limEl = renderClaudeLimitsElement(asgn.claude_limits);
+      if (limEl) {
+        grid.append(
+          el("span", { className: "muted", textContent: L.claudeLimitsLabel || "Claude limitek:" }),
+          limEl
+        );
+      }
+    }
     asgnSec.append(grid);
 
     // Folder grants
@@ -4338,6 +4457,10 @@ async function renderHosts() {
     const c = el("div", { className: "card" });
     const seen = h.last_seen_at ? new Date(h.last_seen_at).toLocaleString() : L.never;
     c.append(el("h3", { textContent: `${h.name} · ${h.state}` }), el("div", { className: "muted", textContent: `${L.lastSeen}: ${seen} · ${h.report.os || ""} · guard ${h.report.guard_version || "?"}` }));
+    if (h.report && h.report.claude_limits) {
+      const limEl = renderClaudeLimitsElement(h.report.claude_limits);
+      if (limEl) c.append(limEl);
+    }
     c.append(el("div", { className: "muted", textContent: `${L.roots}: ${(h.report.roots || []).join(", ") || L.none}` }));
     const exStatus = h.report.exchange_dir ? `${h.report.exchange_dir} (${h.report.exchange_ok ? "ok" : L.exchangeNotOk})` : L.none;
     c.append(el("div", { className: "muted", textContent: `${L.clients}: ${(h.report.clients || []).map(x => x.name + (x.version ? " " + x.version : "")).join(", ") || L.none} · ${L.sandbox}: ${h.report.sandbox || L.none} · ${L.allowUnsandboxed}: ${h.report.allow_unsandboxed ? L.yes : L.no} · ${L.exchange}: ${exStatus}` }));
