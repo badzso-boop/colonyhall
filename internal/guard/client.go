@@ -50,22 +50,31 @@ type Me struct {
 	Halted bool   `json:"halted"`
 }
 
+// ReplyOrigin is the origin thread where an agent's request originated.
+type ReplyOrigin struct {
+	ChannelID        string `json:"channel_id"`
+	Channel          string `json:"channel"`
+	ThreadRootID     string `json:"thread_root_id"`
+	RequestMessageID string `json:"request_message_id"`
+}
+
 // Item is one inbox item.
 type Item struct {
-	ID           string    `json:"id"`
-	Kind         string    `json:"kind"`
-	ItemID       string    `json:"item_id"`
-	Channel      string    `json:"channel"`
-	ChannelID    string    `json:"channel_id"`
-	ThreadRootID string    `json:"thread_root_id"`
-	Author       string    `json:"author"`
-	AuthorKind   string    `json:"author_kind"`
-	DelegatedBy  string    `json:"delegated_by,omitempty"`
-	ViaGrant     bool      `json:"via_grant,omitempty"`
-	Body         string    `json:"body"`
-	Mentioned    bool      `json:"mentioned"`
-	DM           bool      `json:"dm"`
-	At           time.Time `json:"at"`
+	ID           string       `json:"id"`
+	Kind         string       `json:"kind"`
+	ItemID       string       `json:"item_id"`
+	Channel      string       `json:"channel"`
+	ChannelID    string       `json:"channel_id"`
+	ThreadRootID string       `json:"thread_root_id"`
+	Author       string       `json:"author"`
+	AuthorKind   string       `json:"author_kind"`
+	DelegatedBy  string       `json:"delegated_by,omitempty"`
+	ViaGrant     bool         `json:"via_grant,omitempty"`
+	Body         string       `json:"body"`
+	Mentioned    bool         `json:"mentioned"`
+	DM           bool         `json:"dm"`
+	At           time.Time    `json:"at"`
+	ReplyOrigin  *ReplyOrigin `json:"reply_origin,omitempty"`
 }
 
 // Message is a chat message (only what the guard needs).

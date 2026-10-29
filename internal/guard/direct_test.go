@@ -1982,3 +1982,224 @@ func TestDirectRetractStopsRunAndPostsNote(t *testing.T) {
 		t.Fatalf("it-2 should stay pending and not be acked, got %v", ackedItems)
 	}
 }
+
+func TestReplyRoutingThreadRootAndPrompt(t *testing.T) {
+	it := Item{
+		ID:        "it-1",
+		ChannelID: "dm-channel-1",
+		ItemID:    "dm-reply-1",
+		DM:        true,
+		Author:    "otherbot",
+		Body:      "30/30 zöld",
+		ReplyOrigin: &ReplyOrigin{
+			ChannelID:        "orig-chan-1",
+			Channel:          "visegradevent",
+			ThreadRootID:     "thread-root-1",
+			RequestMessageID: "req-msg-1",
+		},
+	}
+
+	if root := ThreadRoot(it); root != "thread-root-1" {
+		t.Fatalf("ThreadRoot: got %q, want thread-root-1", root)
+	}
+
+	prompt := DirectPrompt([]Item{it})
+	if !strings.Contains(prompt, `answers_your_request="req-msg-1"`) {
+		t.Fatalf("prompt missing answers_your_request attribute: %s", prompt)
+	}
+	if !strings.Contains(prompt, "This answers the request you sent from this thread; record the result and continue the task here.") {
+		t.Fatalf("prompt missing reply routing instruction: %s", prompt)
+	}
+}
+
+func TestReplyRoutingHumanOnlyKeepsReplyOrigin(t *testing.T) {
+	agent := &Agent{
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	items := []Item{
+		{ID: "it-human", AuthorKind: "human", Body: "hello"},
+		{ID: "it-bot-task", AuthorKind: "agent", Body: "do something"},
+		{
+			ID:         "it-bot-reply",
+			AuthorKind: "agent",
+			Body:       "result from test",
+			ReplyOrigin: &ReplyOrigin{
+				ChannelID:        "c1",
+				ThreadRootID:     "t1",
+				RequestMessageID: "r1",
+			},
+		},
+	}
+	kept := agent.humanOnly(context.Background(), items)
+	var keptIDs []string
+	for _, it := range kept {
+		keptIDs = append(keptIDs, it.ID)
+	}
+	if !slices.Contains(keptIDs, "it-human") || !slices.Contains(keptIDs, "it-bot-reply") {
+		t.Fatalf("expected it-human and it-bot-reply to be kept, got %v", keptIDs)
+	}
+	if slices.Contains(keptIDs, "it-bot-task") {
+		t.Fatalf("it-bot-task should have been refused, got %v", keptIDs)
+	}
+}
+
+func TestReplyRoutingDirectExecution(t *testing.T) {
+	base := t.TempDir()
+	stateDir := filepath.Join(base, "state")
+	root := filepath.Join(base, "project")
+	_ = os.MkdirAll(stateDir, 0o700)
+	_ = os.MkdirAll(root, 0o700)
+	agentID := uuid.New().String()
+
+	var mu sync.Mutex
+	var sentMessages []struct {
+		ChannelID    string `json:"channel_id"`
+		ThreadRootID string `json:"thread_root_id"`
+		Body         string `json:"body"`
+	}
+	var reactions []string
+	var ackedItems []string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/api/v1/me":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": agentID, "handle": "bot"})
+		case r.Method == "GET" && r.URL.Path == "/api/v1/auth/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "new-tok", "expires_at": time.Now().Add(time.Hour).Format(time.RFC3339)})
+		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/v1/channels/") && strings.HasSuffix(r.URL.Path, "/messages"):
+			var in struct {
+				ThreadRootID string `json:"thread_root_id"`
+				Body         string `json:"body"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			parts := strings.Split(r.URL.Path, "/")
+			chanID := parts[4]
+			sentMessages = append(sentMessages, struct {
+				ChannelID    string `json:"channel_id"`
+				ThreadRootID string `json:"thread_root_id"`
+				Body         string `json:"body"`
+			}{ChannelID: chanID, ThreadRootID: in.ThreadRootID, Body: in.Body})
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"id": "msg-reply-1"}})
+		case r.Method == "PUT" && strings.Contains(r.URL.Path, "/reactions/"):
+			reactions = append(reactions, r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "POST" && r.URL.Path == "/api/v1/agent/ack":
+			var in struct {
+				IDs []string `json:"ids"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			ackedItems = append(ackedItems, in.IDs...)
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == "POST" && r.URL.Path == "/api/v1/agent/runs":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "run-1"})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer ts.Close()
+
+	var directReq DirectRequest
+	var mcpBytes []byte
+	ad := &directTestAdapter{
+		impl: func(ctx context.Context, req DirectRequest) (RunResult, error) {
+			directReq = req
+			if req.MCPConfigPath != "" {
+				mcpBytes, _ = os.ReadFile(req.MCPConfigPath)
+			}
+			return RunResult{Text: "all tests passed in origin thread", SessionID: req.SessionID}, nil
+		},
+	}
+
+	agent := &Agent{
+		Cfg: AgentConfig{
+			Client:    "claude-code",
+			HaltCheck: time.Hour,
+		},
+		Client:   &Client{BaseURL: ts.URL, Token: "tok-1", HTTP: ts.Client()},
+		Adapter:  ad,
+		StateDir: stateDir,
+		RootDir:  root,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		attempts: map[string]int{},
+		me:       Me{ID: agentID, Handle: "bot"},
+	}
+
+	origChanID := uuid.New().String()
+	origThreadID := uuid.New().String()
+	dmChanID := uuid.New().String()
+	dmMsgID := uuid.New().String()
+	reqMsgID := uuid.New().String()
+
+	item := Item{
+		ID:           "it-reply-1",
+		Kind:         "message",
+		ItemID:       dmMsgID,
+		ChannelID:    dmChanID,
+		ThreadRootID: reqMsgID,
+		Author:       "otherbot",
+		AuthorKind:   "agent",
+		Body:         "tests are green",
+		ReplyOrigin: &ReplyOrigin{
+			ChannelID:        origChanID,
+			Channel:          "visegradevent",
+			ThreadRootID:     origThreadID,
+			RequestMessageID: reqMsgID,
+		},
+	}
+
+	expectedSessionID, _ := DirectSessionID(agentID, origThreadID)
+
+	if err := agent.handleDirect(context.Background(), []Item{item}); err != nil {
+		t.Fatalf("handleDirect failed: %v", err)
+	}
+
+	// 1. Session ID was derived from origin thread ID
+	if directReq.SessionID != expectedSessionID {
+		t.Fatalf("expected session ID %s, got %s", expectedSessionID, directReq.SessionID)
+	}
+
+	// 2. Sent reply posted to origin channel and thread, with [dm_reply:...] attribution
+	mu.Lock()
+	defer mu.Unlock()
+	if len(sentMessages) != 1 {
+		t.Fatalf("expected 1 sent message, got %d: %+v", len(sentMessages), sentMessages)
+	}
+	reply := sentMessages[0]
+	if reply.ChannelID != origChanID {
+		t.Fatalf("reply posted to channel %s, want origin %s", reply.ChannelID, origChanID)
+	}
+	if reply.ThreadRootID != origThreadID {
+		t.Fatalf("reply posted to thread %s, want origin thread %s", reply.ThreadRootID, origThreadID)
+	}
+	expectedAttribution := fmt.Sprintf("[dm_reply:%s:%s:@otherbot]", dmChanID, dmMsgID)
+	if !strings.Contains(reply.Body, expectedAttribution) {
+		t.Fatalf("reply body missing attribution %q, got: %s", expectedAttribution, reply.Body)
+	}
+
+	// 3. 👍 reaction added to DM message
+	if len(reactions) != 1 || !strings.Contains(reactions[0], dmMsgID) {
+		t.Fatalf("expected 👍 reaction on DM message %s, got: %v", dmMsgID, reactions)
+	}
+
+	// 4. MCP config headers contained X-Colonyhall-Thread: origThreadID
+	if len(mcpBytes) == 0 {
+		t.Fatal("MCP config was not read during run")
+	}
+	var mcpCfg struct {
+		MCPServers map[string]struct {
+			Headers map[string]string `json:"headers"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(mcpBytes, &mcpCfg); err != nil {
+		t.Fatalf("failed to unmarshal MCP config: %v", err)
+	}
+	chHeaders := mcpCfg.MCPServers["colonyhall"].Headers
+	if chHeaders["X-Colonyhall-Channel"] != origChanID {
+		t.Fatalf("MCP header X-Colonyhall-Channel: got %q, want %q", chHeaders["X-Colonyhall-Channel"], origChanID)
+	}
+	if chHeaders["X-Colonyhall-Thread"] != origThreadID {
+		t.Fatalf("MCP header X-Colonyhall-Thread: got %q, want %q", chHeaders["X-Colonyhall-Thread"], origThreadID)
+	}
+}

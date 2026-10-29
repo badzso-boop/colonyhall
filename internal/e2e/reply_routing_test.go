@@ -1,0 +1,636 @@
+package e2e
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"colonyhall/internal/apispec"
+	"colonyhall/internal/fakeagent"
+	"colonyhall/internal/guard"
+	"colonyhall/internal/server"
+)
+
+func (e *env) getMessages(channelID string) []apispec.Message {
+	var list apispec.MessageList
+	e.do("GET", "/api/v1/channels/"+channelID+"/messages", server.DevAdminToken, nil, &list)
+	return list.Messages
+}
+
+func TestReplyRoutingIncidentReproduction(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = e.app.Run(ctx) }()
+
+	// 1. Create #visegradevent channel
+	privKind := apispec.Private
+	var visegradChan apispec.Channel
+	status := e.do("POST", "/api/v1/channels", server.DevAdminToken, apispec.CreateChannelRequest{
+		Name: "visegradevent",
+		Kind: &privKind,
+	}, &visegradChan)
+	if status != http.StatusCreated {
+		t.Fatalf("create channel: status %d", status)
+	}
+
+	// 2. Create @visegrad-claude and @visegrad-agy agents
+	claudeID, claudeToken := e.createActor("agent", "visegrad-claude", "member")
+	agyID, agyToken := e.createActor("agent", "visegrad-agy", "member")
+
+	// 3. Add both agents to #visegradevent
+	canWrite := true
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{
+		ActorId:  uuid.MustParse(claudeID),
+		CanWrite: &canWrite,
+	}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{
+		ActorId:  uuid.MustParse(agyID),
+		CanWrite: &canWrite,
+	}, nil)
+
+	// 4. Admin pairs machine and sets up direct mode guard for @visegrad-claude
+	base := t.TempDir()
+	root := filepath.Join(base, "project")
+	_ = os.MkdirAll(root, 0o700)
+	var pc struct{ Code string }
+	e.do("POST", "/api/v1/hosts/pairing-codes", server.DevAdminToken, nil, &pc)
+	tokenFile := filepath.Join(base, "host.token")
+	if err := guard.Enroll(ctx, e.srv.URL, pc.Code, "claude-box", tokenFile); err != nil {
+		t.Fatal(err)
+	}
+	var hosts struct{ Hosts []struct{ ID string } }
+	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &hosts)
+	hostID := hosts.Hosts[0].ID
+
+	e.do("PUT", "/api/v1/agents/"+claudeID+"/host", server.DevAdminToken, map[string]any{
+		"host_id":         hostID,
+		"client":          "claude-code",
+		"mode":            "direct",
+		"root_dir":        root,
+		"sandbox":         true,
+		"permission_mode": "auto",
+	}, nil)
+
+	var mu sync.Mutex
+	var directReqs []guard.DirectRequest
+	var mcpConfigs [][]byte
+	ad := &scriptedAdapter{
+		direct: func(ctx context.Context, req guard.DirectRequest) (guard.RunResult, error) {
+			mu.Lock()
+			directReqs = append(directReqs, req)
+			if req.MCPConfigPath != "" {
+				cfg, _ := os.ReadFile(req.MCPConfigPath)
+				mcpConfigs = append(mcpConfigs, cfg)
+			}
+			mu.Unlock()
+			return guard.RunResult{Text: "Test runs completed: 30/30 green in visegradevent", SessionID: req.SessionID}, nil
+		},
+	}
+
+	off := false
+	sup := &guard.Supervisor{
+		Cfg: guard.Config{
+			Server:           e.srv.URL,
+			HostTokenFile:    tokenFile,
+			Roots:            []string{root},
+			SandboxDir:       filepath.Join(base, "sandbox"),
+			RequireSandbox:   &off,
+			AllowUnsandboxed: true,
+			ConfigPoll:       20 * time.Millisecond,
+			Defaults: guard.AgentConfig{
+				Poll:      20 * time.Millisecond,
+				Debounce:  time.Millisecond,
+				HaltCheck: 10 * time.Millisecond,
+			},
+		},
+		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NewAdapter: func(guard.AgentConfig) guard.Adapter { return ad },
+	}
+	if err := sup.Cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = sup.RunHost(ctx) }()
+
+	// 5. Admin starts thread T in #visegradevent
+	qT, _ := e.send(server.DevAdminToken, visegradChan.Id.String(), map[string]any{
+		"body": "Norbi: @visegrad-claude please implement feature and send test runs to @visegrad-agy by DM",
+	})
+	threadT := qT.ID
+
+	// Wait for Claude's initial run in thread T
+	eventually(t, "claude initial run in thread T", func() bool {
+		msgs := e.messages(visegradChan.Id.String())
+		for _, m := range msgs {
+			if m.ThreadRootID == threadT && m.AuthorID == claudeID {
+				return true
+			}
+		}
+		return false
+	})
+
+	// 6. @visegrad-claude in thread T sends DM to @visegrad-agy with origin headers
+	claudeSession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, headerTripper{
+		headers: map[string]string{
+			"X-Colonyhall-Channel": visegradChan.Id.String(),
+			"X-Colonyhall-Thread":  threadT,
+		},
+		base: http.DefaultTransport,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = claudeSession.Close() }()
+
+	res, err := claudeSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "send",
+		Arguments: map[string]any{
+			"channel": "@visegrad-agy",
+			"text":    "Please run test suite for feature",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("claude send result: isErr=%v, content=%+v", res.IsError, res.Content)
+	if res.IsError {
+		t.Fatalf("MCP send failed: %+v", res)
+	}
+
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// 7. Verify the DM message has origin attached
+	var dmChan struct{ ID string }
+	e.do("POST", "/api/v1/dms", claudeToken, map[string]any{"actor_ids": []string{agyID}}, &dmChan)
+	dmMsgs := e.getMessages(dmChan.ID)
+	if len(dmMsgs) != 1 {
+		t.Fatalf("expected 1 DM message, got %d", len(dmMsgs))
+	}
+	dmReqFull := dmMsgs[0]
+	if dmReqFull.Origin == nil {
+		t.Fatal("expected origin on DM message, got nil")
+	}
+	if dmReqFull.Origin.ChannelId != visegradChan.Id || dmReqFull.Origin.ThreadId.String() != threadT {
+		t.Fatalf("origin mismatch: got %+v", dmReqFull.Origin)
+	}
+
+	// 8. @visegrad-agy replies in the thread of that DM message
+	agySession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", agyToken, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = agySession.Close() }()
+
+	res, err = agySession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "send",
+		Arguments: map[string]any{
+			"channel": "@visegrad-claude",
+			"thread":  dmReqFull.Id.String(),
+			"text":    "30/30 zöld",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("agy send result: isErr=%v, content=%s", res.IsError, res.Content[0].(*mcp.TextContent).Text)
+	if res.IsError {
+		t.Fatalf("agy MCP reply failed: %+v", res)
+	}
+
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// 9. Get Agy's reply message from the DM
+	dmMsgs = e.getMessages(dmChan.ID)
+	if len(dmMsgs) != 2 {
+		t.Fatalf("expected 2 messages in DM (Claude request + Agy reply), got %d", len(dmMsgs))
+	}
+	agyReplyMsg := dmMsgs[1]
+
+	// 10. The guard wakes @visegrad-claude and runs in thread T's session
+	expectedSessionID, _ := guard.DirectSessionID(claudeID, threadT)
+	eventually(t, "claude guard runs reply in thread T session", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, req := range directReqs {
+			if req.SessionID == expectedSessionID && strings.Contains(req.Prompt, `answers_your_request="`+dmReqFull.Id.String()+`"`) {
+				return true
+			}
+		}
+		return false
+	})
+
+	// Verify MCP config headers carry X-Colonyhall-Thread: threadT
+	mu.Lock()
+	if len(mcpConfigs) < 2 {
+		t.Fatalf("expected at least 2 runs with MCP configs, got %d", len(mcpConfigs))
+	}
+	lastMCP := mcpConfigs[len(mcpConfigs)-1]
+	mu.Unlock()
+
+	var mcpParsed struct {
+		MCPServers map[string]struct {
+			Headers map[string]string `json:"headers"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(lastMCP, &mcpParsed); err != nil {
+		t.Fatalf("parse MCP config: %v", err)
+	}
+	if mcpParsed.MCPServers["colonyhall"].Headers["X-Colonyhall-Thread"] != threadT {
+		t.Fatalf("expected X-Colonyhall-Thread header %s, got %+v", threadT, mcpParsed.MCPServers["colonyhall"].Headers)
+	}
+
+	// 11. Verify the answer was posted into thread T in #visegradevent, NOT in the DM
+	eventually(t, "answer posted into thread T", func() bool {
+		msgs := e.messages(visegradChan.Id.String())
+		expectedAttribution := fmt.Sprintf("[dm_reply:%s:%s:@visegrad-agy]", dmChan.ID, agyReplyMsg.Id)
+		for _, m := range msgs {
+			if m.ThreadRootID == threadT && strings.Contains(m.Body, "Test runs completed") && strings.Contains(m.Body, expectedAttribution) {
+				return true
+			}
+		}
+		return false
+	})
+
+	// Verify NO text message was posted in DM by Claude in response to the reply
+	dmMsgsAfter := e.messages(dmChan.ID)
+	// Only 2 messages: Claude's request and Agy's reply
+	if len(dmMsgsAfter) != 2 {
+		t.Fatalf("expected 2 messages in DM (no text reply in DM), got %d: %+v", len(dmMsgsAfter), dmMsgsAfter)
+	}
+
+	// 12. Verify 👍 reaction was added in the DM on Agy's reply message
+	eventually(t, "thumbs up reaction added to reply in DM", func() bool {
+		msgs := e.getMessages(dmChan.ID)
+		for _, m := range msgs {
+			if m.Id == agyReplyMsg.Id && m.Reactions != nil {
+				for _, r := range *m.Reactions {
+					if r.Emoji == "👍" {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	})
+}
+
+func TestReplyRoutingTopLevelDMReply(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	privKind := apispec.Private
+	var visegradChan apispec.Channel
+	e.do("POST", "/api/v1/channels", server.DevAdminToken, apispec.CreateChannelRequest{
+		Name: "channel-top",
+		Kind: &privKind,
+	}, &visegradChan)
+
+	claudeID, claudeToken := e.createActor("agent", "claude-top", "member")
+	agyID, agyToken := e.createActor("agent", "agy-top", "member")
+
+	canWrite := true
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(claudeID), CanWrite: &canWrite}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(agyID), CanWrite: &canWrite}, nil)
+
+	qT, _ := e.send(server.DevAdminToken, visegradChan.Id.String(), map[string]any{"body": "Start work in thread"})
+	threadT := qT.ID
+
+	// Claude sends DM to Agy with origin headers
+	claudeSession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, headerTripper{
+		headers: map[string]string{
+			"X-Colonyhall-Channel": visegradChan.Id.String(),
+			"X-Colonyhall-Thread":  threadT,
+		},
+		base: http.DefaultTransport,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = claudeSession.Close() }()
+
+	_, err = claudeSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "send",
+		Arguments: map[string]any{"channel": "@agy-top", "text": "Top level request"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var dmChan struct{ ID string }
+	e.do("POST", "/api/v1/dms", claudeToken, map[string]any{"actor_ids": []string{agyID}}, &dmChan)
+	reqMsgID := e.messages(dmChan.ID)[0].ID
+
+	// Agy replies TOP-LEVEL in the DM (not in a thread)
+	agySession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", agyToken, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = agySession.Close() }()
+
+	_, err = agySession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "send",
+		Arguments: map[string]any{"channel": "@claude-top", "text": "Top level answer"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify Claude's inbox item gets reply_origin
+	var claudeInbox apispec.Inbox
+	e.do("GET", "/api/v1/agent/inbox", claudeToken, nil, &claudeInbox)
+	if len(claudeInbox.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(claudeInbox.Items))
+	}
+	it := claudeInbox.Items[0]
+	if it.ReplyOrigin == nil {
+		t.Fatalf("expected reply_origin for top-level DM reply, got nil")
+	}
+	if it.ReplyOrigin.ChannelId != visegradChan.Id || it.ReplyOrigin.ThreadRootId.String() != threadT || it.ReplyOrigin.RequestMessageId.String() != reqMsgID {
+		t.Fatalf("unexpected reply_origin: %+v", it.ReplyOrigin)
+	}
+}
+
+func TestReplyRoutingNegativeCases(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	privKind := apispec.Private
+	var testChan apispec.Channel
+	e.do("POST", "/api/v1/channels", server.DevAdminToken, apispec.CreateChannelRequest{
+		Name: "test-channel",
+		Kind: &privKind,
+	}, &testChan)
+
+	claudeID, claudeToken := e.createActor("agent", "claude-neg", "member")
+	agyID, agyToken := e.createActor("agent", "agy-neg", "member")
+
+	canWrite := true
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(claudeID), CanWrite: &canWrite}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(agyID), CanWrite: &canWrite}, nil)
+
+	qT, _ := e.send(server.DevAdminToken, testChan.Id.String(), map[string]any{"body": "Thread T"})
+	threadT := qT.ID
+
+	var dmChan struct{ ID string }
+	e.do("POST", "/api/v1/dms", claudeToken, map[string]any{"actor_ids": []string{agyID}}, &dmChan)
+
+	// Negative Case A: A human sent the request -> no reply_origin
+	{
+		hReq, _ := e.send(server.DevAdminToken, dmChan.ID, map[string]any{"body": "Human request"})
+		// Agy replies in the thread of human request
+		e.send(agyToken, dmChan.ID, map[string]any{"body": "Agy answer to human", "thread_root_id": hReq.ID})
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var inbox apispec.Inbox
+		e.do("GET", "/api/v1/agent/inbox", claudeToken, nil, &inbox)
+		for _, item := range inbox.Items {
+			if item.ReplyOrigin != nil {
+				t.Fatalf("expected nil reply_origin when human sent request, got %+v", item.ReplyOrigin)
+			}
+		}
+		// Clear inbox
+		var ackIDs []string
+		for _, it := range inbox.Items {
+			ackIDs = append(ackIDs, it.Id.String())
+		}
+		if len(ackIDs) > 0 {
+			e.do("POST", "/api/v1/agent/inbox/ack", claudeToken, map[string]any{"ids": ackIDs}, nil)
+		}
+	}
+
+	// Negative Case B: Origin message is retracted -> no reply_origin
+	{
+		claudeSession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, headerTripper{
+			headers: map[string]string{
+				"X-Colonyhall-Channel": testChan.Id.String(),
+				"X-Colonyhall-Thread":  threadT,
+			},
+			base: http.DefaultTransport,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = claudeSession.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "send",
+			Arguments: map[string]any{"channel": "@agy-neg", "text": "Will be retracted"},
+		})
+		_ = claudeSession.Close()
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		// Find the message and retract it directly via store
+		msgs := e.messages(dmChan.ID)
+		reqMsg := msgs[len(msgs)-1]
+		if err := e.app.Conversation.Store.RetractMessage(ctx, uuid.MustParse(reqMsg.ID), uuid.MustParse(claudeID), time.Now()); err != nil {
+			t.Fatal(err)
+		}
+
+		// Agy replies in the thread of the retracted message
+		e.send(agyToken, dmChan.ID, map[string]any{"body": "Answer after retract", "thread_root_id": reqMsg.ID})
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		var inbox apispec.Inbox
+		e.do("GET", "/api/v1/agent/inbox", claudeToken, nil, &inbox)
+		for _, item := range inbox.Items {
+			if item.ReplyOrigin != nil {
+				t.Fatalf("expected nil reply_origin when request was retracted, got %+v", item.ReplyOrigin)
+			}
+		}
+		// Clear inbox
+		var ackIDs []string
+		for _, it := range inbox.Items {
+			ackIDs = append(ackIDs, it.Id.String())
+		}
+		if len(ackIDs) > 0 {
+			e.do("POST", "/api/v1/agent/inbox/ack", claudeToken, map[string]any{"ids": ackIDs}, nil)
+		}
+	}
+
+	// Negative Case C: Agent left origin channel -> no reply_origin
+	{
+		claudeSession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, headerTripper{
+			headers: map[string]string{
+				"X-Colonyhall-Channel": testChan.Id.String(),
+				"X-Colonyhall-Thread":  threadT,
+			},
+			base: http.DefaultTransport,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = claudeSession.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "send",
+			Arguments: map[string]any{"channel": "@agy-neg", "text": "Before leaving channel"},
+		})
+		_ = claudeSession.Close()
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		msgs := e.messages(dmChan.ID)
+		reqMsg := msgs[len(msgs)-1]
+
+		// Claude is removed from testChan
+		e.do("DELETE", fmt.Sprintf("/api/v1/channels/%s/members/%s", testChan.Id, claudeID), server.DevAdminToken, nil, nil)
+
+		// Agy replies in thread
+		e.send(agyToken, dmChan.ID, map[string]any{"body": "Answer after Claude left", "thread_root_id": reqMsg.ID})
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		var inbox apispec.Inbox
+		e.do("GET", "/api/v1/agent/inbox", claudeToken, nil, &inbox)
+		for _, item := range inbox.Items {
+			if item.ReplyOrigin != nil {
+				t.Fatalf("expected nil reply_origin when agent left channel, got %+v", item.ReplyOrigin)
+			}
+		}
+		// Clear inbox
+		var ackIDs []string
+		for _, it := range inbox.Items {
+			ackIDs = append(ackIDs, it.Id.String())
+		}
+		if len(ackIDs) > 0 {
+			e.do("POST", "/api/v1/agent/inbox/ack", claudeToken, map[string]any{"ids": ackIDs}, nil)
+		}
+
+		// Re-add Claude to channel for subsequent tests
+		e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(claudeID), CanWrite: &canWrite}, nil)
+	}
+
+	// Negative Case D: Agent posted newer top-level DM message without origin -> no reply_origin
+	{
+		// 1. Claude posts top-level with origin
+		claudeSessionWithHdr, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, headerTripper{
+			headers: map[string]string{
+				"X-Colonyhall-Channel": testChan.Id.String(),
+				"X-Colonyhall-Thread":  threadT,
+			},
+			base: http.DefaultTransport,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = claudeSessionWithHdr.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "send",
+			Arguments: map[string]any{"channel": "@agy-neg", "text": "Top-level with origin"},
+		})
+		_ = claudeSessionWithHdr.Close()
+
+		// 2. Claude posts newer top-level WITHOUT origin
+		claudeSessionPlain, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = claudeSessionPlain.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "send",
+			Arguments: map[string]any{"channel": "@agy-neg", "text": "Newer top-level without origin"},
+		})
+		_ = claudeSessionPlain.Close()
+
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		// 3. Agy replies top-level in DM
+		e.send(agyToken, dmChan.ID, map[string]any{"body": "Top level reply after newer message"})
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		var inbox apispec.Inbox
+		e.do("GET", "/api/v1/agent/inbox", claudeToken, nil, &inbox)
+		for _, item := range inbox.Items {
+			if item.ReplyOrigin != nil {
+				t.Fatalf("expected nil reply_origin when newer top-level message had no origin, got %+v", item.ReplyOrigin)
+			}
+		}
+	}
+}
+
+func TestReplyRoutingForgePrevention(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Admin creates a secret channel where agent is NOT a member
+	privKind := apispec.Private
+	var secretChan apispec.Channel
+	e.do("POST", "/api/v1/channels", server.DevAdminToken, apispec.CreateChannelRequest{
+		Name: "secret-chan",
+		Kind: &privKind,
+	}, &secretChan)
+
+	qSecret, _ := e.send(server.DevAdminToken, secretChan.Id.String(), map[string]any{"body": "Secret thread"})
+
+	// Create agents
+	_, claudeToken := e.createActor("agent", "claude-forge", "member")
+	agyID, _ := e.createActor("agent", "agy-forge", "member")
+
+	// Claude attempts to send DM with origin headers pointing to secretChan where Claude is NOT a member
+	claudeSession, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", claudeToken, headerTripper{
+		headers: map[string]string{
+			"X-Colonyhall-Channel": secretChan.Id.String(),
+			"X-Colonyhall-Thread":  qSecret.ID,
+		},
+		base: http.DefaultTransport,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = claudeSession.Close() }()
+
+	_, err = claudeSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "send",
+		Arguments: map[string]any{"channel": "@agy-forge", "text": "Forge attempt"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Message in DM must NOT store forged origin
+	var dmChan struct{ ID string }
+	e.do("POST", "/api/v1/dms", claudeToken, map[string]any{"actor_ids": []string{agyID}}, &dmChan)
+	msgs := e.getMessages(dmChan.ID)
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 DM message, got %d", len(msgs))
+	}
+	if msgs[0].Origin != nil {
+		t.Fatalf("expected nil origin for forged channel, got %+v", msgs[0].Origin)
+	}
+}
