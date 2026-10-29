@@ -22,16 +22,14 @@
   - az összesítőre kattintva jobb oldalt egy oszlop nyílik a szál összes üzenetével és saját szerkesztővel, így egy nagy csatornán belül is külön szálakba lehet bontani a feladatokat.
   - **Terminál:** lent, a fájlok gombja mellett egy „Terminál” gomb; a terminál ugyanúgy jobb oldali oszlopban nyílik. Ha a jobb oldalt már egy szál van nyitva, és onnan nyit meg valaki egy terminált, a szál ne záródjon be: a terminál a **bal oldali oszlop** helyén nyíljon meg (ahol a csatornák vannak), és az oszlop ehhez kiszélesedik; bezáráskor visszaáll a csatornalista.
 
-- [ ] **Saját jegyzetfüzet és naptár, összegző asszisztenssel** (Norbi, 2026-10-29). Kiadva a fejlesztői oldalra: `docs/handoff/28-planner-calendar-prompt.md`, ág: `feature/planner`. A PWA-ban:
-  - **Jegyzetfüzet:** csak az ember írja. Feladatok fontossági sorrendben (húzással rendezhető), mindegyikhez részletes leírás, és kész jelölés.
-  - **Naptár:** feliratkozás külső naptárakra ICS-linkkel, napi és heti nézettel.
-  - **Ki olvashatja:** a jegyzetfüzetet alapból minden agent, a naptárat csak a kiválasztott agentek, mindkettőt szigorúan csak olvasásra.
-  - **Asszisztens:** egy olcsó agent a homelabon reggel (7:30) összefoglalót, este (21:00) zárást küld, napközben (9–19, kétóránként) csak akkor ír, ha van szabad idősáv és illő feladat; 22–7 között csend, napi legfeljebb 5 üzenet. Figyelembe veszi, hol van Norbi, és mi jön a naptárában.
-  - **Tanulás és csend (Norbi döntése, 2026-10-29):** 👍/👎 a javaslatokra, „⏰ Ne most” a feladatokon; az asszisztens a jegyzetébe írja, mit szoktál elfogadni; ha nincs mondanivalója, `NO_MESSAGE`-dzsel csendben marad (a guard ilyenkor nem ír semmit).
+- [ ] **Saját feladatlista és naptár, reggeli összefoglalóval** (Norbi, 2026-10-29, szűkítve). Kiadva a fejlesztői oldalra: `docs/handoff/28-planner-calendar-prompt.md`, ág: `feature/planner`. A PWA-ban is:
+  - **Feladatok:** cím, leírás, állapot (ütemezve / elkezdve / befejezve), mindent Norbi állít; az agentek csak olvassák.
+  - **Naptár:** feliratkozás külső naptárakra ICS-linkkel, mai és 7 napos nézet; csak a kiválasztott agentek olvashatják.
+  - **Reggeli összefoglaló (7:30, napi egy üzenet):** mai naptáresemények (a naptár csak nagyjából pontos, nem tervez köré), tegnap befejezett / elkezdett / áthozott feladatok, mai feladatok. Napközben nincs üzenet, nincs tanulás.
 
 - [ ] **Vállalkozási asszisztens (29. kör, Norbi döntése, 2026-10-29):** havi számlázási emlékeztető ügyfelenként, az alanyi adómentesség értékhatárának figyelése (a bevételt és a határt Norbi adja meg). Csak terv.
 
-- [ ] **Később az asszisztenshez (ötletek, 2026-10-29):** gazdagabb feladatmezők (határidő, becsült idő, energiaszint, kontextus, projekt, ismétlődés), gyors rögzítés a chatből javaslatként („Felveszem / Elvetem”), Colonyhall-tudás a reggeli összefoglalóban (nyitott jóváhagyások, rád váró kérdések, agentek kész munkái), heti áttekintés vasárnap.
+- [ ] **Később az asszisztenshez (csak ötletek, Norbi egyelőre nem kéri, 2026-10-29):** napközbeni javaslatok, tanulás a reakciókból, gazdagabb feladatmezők (határidő, becsült idő), gyors rögzítés a chatből, Colonyhall-ügyek a reggeli összefoglalóban.
 
 - [ ] **Jóváhagyás után akár egy perc késéssel ébred az agent** (2026-10-29, a 27. kör átnézésekor): a guard bármelyik WebSocket-eseményre megnézi a postafiókot; ha a jóváhagyás eseményére még azelőtt néz, hogy a jóváhagyott (`delegated`) tétel beíródott, a következő eseményig vagy a 60 mp-es tartalék lekérdezésig vár. Javítás: a tétel beírásakor menjen egy saját esemény (pl. `delivery.item_created` a címzettnek), vagy a guard egy ébresztés után rövid idővel nézzen rá még egyszer.
 
