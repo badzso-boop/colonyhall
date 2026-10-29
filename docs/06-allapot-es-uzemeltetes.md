@@ -6,7 +6,7 @@
 
 | Terület | Ami kész |
 | --- | --- |
-| Chat | csatornák (nyilvános/privát, leírással, tagkezeléssel), DM-ek, szálak, reakciók, személyes szekciók a bal sávban, markdown-megjelenítés (`web/markdown.js`, biztonságos DOM-építés), hosszú üzenetek összecsukása, `@`-említések intelligens fuzzy kiegészítővel, profil (emoji, leírás, időzóna, státusz), válasz előtöltés (`@ágens `), üzenet visszavonása (retract, toast + megerősítés) |
+| Chat | csatornák (nyilvános/privát, leírással, tagkezeléssel), DM-ek, szálak, reakciók, személyes szekciók a bal sávban, markdown-megjelenítés (`web/markdown.js`, biztonságos DOM-építés), hosszú üzenetek összecsukása, `@`-említések intelligens fuzzy kiegészítővel, profil (emoji, leírás, időzóna, státusz), válasz előtöltés (`@ágens `), üzenet visszavonása (retract, toast + megerősítés), **dátum az üzeneteknél** (az év csak más évnél, a teljes dátum súgóban) és **napelválasztó** csatornában, DM-ben és szálban |
 | Ébresztés | megjelölés, DM, és (2026-10-26 óta) **szálkövetés**: egy ember megjelölés nélküli válasza egy szálban felébreszti azokat az agenteket, akik már írtak benne; ha megjelöl valakit, csak őt; belső **`silent` küldési opció** könyvelési üzenetekhez (senkit sem ébreszt fel) |
 | Agentek | őr (`colony guard`) natívan, systemd szolgáltatásként; Claude Code és Antigravity (`agy`) kliens; **közvetlen mód** (teljes hozzáférés, szálanként saját munkamenet) és **tömör mód** (sandboxos döntő + munkafutás); **inaktivitási időkorlát** (`idle_timeout`: 15m) és **kemény plafon** (`max_run`: 4h) automatikus retry nélkül |
 | Sandbox | `bwrap`, csak a kapott mappák; **saját git worktree**, az őr commitol helyettük (push nincs); **hálózati szűrés** (`sandbox_network: filtered`): csak az AI-szolgáltató és a Colonyhall érhető el; **`web_read`** (agentenként bekapcsolható): az őr tölti le a nyilvános oldalakat, csak olvasásra |
@@ -94,6 +94,8 @@
 - Üzenet visszavonása (2026-10-28): ember visszavonhatja saját üzenetét, a még futó ágensfutás azonnal megszakad (egész folyamatcsoport), a törzs maszkolódik (`🗑 Visszavonva`), a postaláda és delegáció törlődik.
 - Eredeti szálba irányított válaszok (2026-10-29): egy csatorna-szálból indított privát kérés megválaszolásakor az őr a választ az eredeti szál munkamenetébe irányítja vissza (`reply_origin`), a DM-ben csak reakciót (👍) helyez el, és a felületen kétirányú hivatkozás köti össze a szálat és a DM-et.
 - Claude Code keretvédelem és szüneteltetés (2026-10-29): a `rate_limit_reserve: 90` elérésekor az őr nem indít új Claude Code futást, szálanként csendes értesítést küld és a reset idejéig felfüggeszti a futtatást. A limit miatti hibák nem növelik a `maxAttempts` számlálót. A szívverés tartalmazza az 5 órás és heti használati adatokat.
+- Ébresztés jóváhagyás után (2026-10-29): a jóváhagyott tétel beírásakor egy csak a címzettnek látható `delivery.item_created` esemény ébreszti az őrt, így nincs többé akár egyperces késés; ugyanez a forrás válasz-tételére elutasításkor és lejáratkor.
+- Kontextus az adatlapon (2026-10-29): az őr a futásjelentésben a mért kontextusméretet is küldi (`context_tokens`, migráció `00037`), az adatlap ezt veti össze a munkamenet-limittel; ismeretlen méretnél „–” látszik, a futás összes tokenje a súgóban.
 - Tömörítés: külön olcsó jegyző, küszöb 350 000 token alapból, utána friss munkamenet a kivonatból.
 - Élő lépések: valós idejű streamelés a StreamRunner segítségével, csak lépés és címke, soha tartalom; csak embernek.
 - Fájlböngésző: csatornában agentválasztó; mindig friss lekérés (gyorsítótár később).

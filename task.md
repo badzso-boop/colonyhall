@@ -14,8 +14,6 @@
 
 ## Nyitott
 
-- [ ] **Dátum az üzeneteknél és napelválasztó** (Norbi, 2026-10-29): az üzenetek mellett ne csak a másodpercre pontos idő legyen, hanem a dátum is; és a napok között egy halvány vonal (a nappal) válassza el az üzeneteket, a csatornákban, a DM-ekben és a szálakban is. Csak felírva, még nincs kiadva.
-
 - [ ] **Slack-szerű felület a React PWA-hoz** (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz). **A PWA legyen reszponzív, telefonon is teljes értékűen használható** (a részleteket később fejtjük ki: oszlopok, szál- és terminálpanel telefonon). A csatornákban most nagy a kavalkád, ezért:
   - a bal sávban külön csoport a csatornáknak, az emberi DM-eknek és az **AI-DM-eknek** (agent–agent és ember–agent beszélgetések külön látszanak);
   - egy csatornaüzenetre adott válasz mindig a szálába kerül; a fő üzenet alatt csak egy összesítő látszik („1 válasz” / „5 válasz”, utolsó válasz ideje, résztvevők);
@@ -26,11 +24,7 @@
 
 - [ ] **Később az asszisztenshez (csak ötletek, Norbi egyelőre nem kéri, 2026-10-29):** napközbeni javaslatok, tanulás a reakciókból, gazdagabb feladatmezők (határidő, becsült idő), gyors rögzítés a chatből, Colonyhall-ügyek a reggeli összefoglalóban.
 
-- [ ] **Jóváhagyás után akár egy perc késéssel ébred az agent** (2026-10-29, a 27. kör átnézésekor): a guard bármelyik WebSocket-eseményre megnézi a postafiókot; ha a jóváhagyás eseményére még azelőtt néz, hogy a jóváhagyott (`delegated`) tétel beíródott, a következő eseményig vagy a 60 mp-es tartalék lekérdezésig vár. Javítás: a tétel beírásakor menjen egy saját esemény (pl. `delivery.item_created` a címzettnek), vagy a guard egy ébresztés után rövid idővel nézzen rá még egyszer.
-
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
-
-- [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
 
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
@@ -41,6 +35,10 @@
 - [x] **Planner eszközök sandboxos agenteknek és döntési fázis „dolgozik…” jelzése** (2026-10-29, commitok: `cc5b7bc`, `6108e68`, `docs/handoff/29-sandbox-planner-tools-report.md`, ág: `feature/sandbox-planner-tools`):
   - **Planner MCP eszközök sandboxos munkafutásoknak:** az őr a sandboxos agentek munkafutásának idejére gazdagép-oldali Streamable HTTP MCP szervert indít (`colony-planner`, `<agent_dir>/planner.sock`), amely szigorúan csak a `planner_read` és `calendar_read` eszközöket szolgálja ki; a belső híd a sandbox belső `127.0.0.1:3130` portját köti a socketre; az MCP hívásokat az őr a memóriában lévő ágens-token segítségével közvetíti a Colonyhall szerver `/mcp` végpontja felé (a token soha nem lép be a sandboxba); Claude Code (`mcp.json` és `--allowedTools`) és Antigravity (`config/mcp_config.json` és `settings.json` `perms["allow"] = ["mcp(colony-planner/*)"]`) konfiguráció; a munkafelszólításban 1 soros tájékoztató megjegyzés.
   - **Döntési fázis aktivitásjelzése és villogásmentes átmenet:** az őr a `handle` döntési fázisa (`Decide`) alatt is `working` állapotot jelent az érintett csatorna/szál párokra; közvetlenül utána induló munkafutás esetén a referenciaszámlált `startActivity` megelőzi a köztes `idle` villogást; főági DM esetén a csatorna ID a szálazonosító.
+- [x] **Dátum az üzeneteknél, napelválasztó, ébresztés jóváhagyás után, kontextus az adatlapon** (2026-10-29, Claude Code, ág: `feature/dates-wake-context`, commitok: `4ffcbd8`, `0a22c25`, `7d1813e`, a biztonsági átnézés után `c255c27`; jelentés: `docs/handoff/30-dates-wake-context-report.md`):
+  - **Dátum és napelválasztó:** az üzenetek mellett dátum és idő (az év csak más évnél, a teljes dátum a hétköznappal súgóban), napváltáskor halvány vonal a nappal („Ma”, „Tegnap”, különben dátum és hét napja) csatornában, DM-ben és szálban, élő üzenetnél is. Közös, tesztelt formázó: `web/format.js`.
+  - **Ébresztés jóváhagyás után:** a jóváhagyott tétel (és elutasításkor/lejáratkor a forrás válasz-tétele) beírásakor egy csak a címzettnek látható `delivery.item_created` esemény; a fogyasztó a commit után jelez a busznak.
+  - **Kontextus az adatlapon:** `context_tokens` a futásjelentésben (migráció `00037`), az adatlap ezt veti össze a limittel; ismeretlennél „–”, a futás összes tokenje súgóban.
 
 - [x] **Saját feladatlista és naptár, reggeli összefoglalóval** (2026-10-29, `docs/handoff/28-planner-calendar-report.md`, ág: `feature/planner`; Claude Code fejezte be). A PWA-ban is kell majd:
   - **Feladatok:** cím, leírás, állapot (ütemezve / elkezdve / befejezve), mindent Norbi állít; az agentek csak olvassák.
