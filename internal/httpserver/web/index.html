@@ -86,6 +86,8 @@
   .msg { padding:6px 0; }
   .who { font-weight:600; } .who.agent { color:var(--agent); } .who.system { color:var(--accent); }
   .at { color:var(--muted); font-size:12px; margin-left:6px; }
+  .day-sep { display:flex; align-items:center; gap:10px; margin:14px 0 6px; color:var(--muted); font-size:11px; }
+  .day-sep::before, .day-sep::after { content:""; flex:1; border-top:1px solid var(--line); opacity:.7; }
   .body { overflow-wrap:anywhere; }
   form { display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); }
   form input { flex:1; }
@@ -416,6 +418,7 @@
 </div>
 <script src="markdown.js"></script>
 <script src="mention.js"></script>
+<script src="format.js"></script>
 <script>
 const I18N = {
   hu: { handle: "név", password: "jelszó", login: "Belépés", logout: "Kilépés", send: "Küldés", message: "Üzenet… (@név megemlít)",
@@ -425,7 +428,8 @@ const I18N = {
         rejected: "Elutasított engedély", assign: "Agent hozzárendelése", work: "munka", grant: "Mappa engedélyezése",
         read: "olvas", write: "ír", unassign: "Levétel", outside: "a gép gyökérmappáin kívül esik", noHosts: "Még nincs párosított gép.",
         allowUnsandboxed: "sandbox nélkül engedélyezve", yes: "igen", no: "nem", errorDetails: "Hiba részletei",
-        runs: "Futások", today: "Ma", last7Days: "Elmúlt 7 nap", period: "Időszak", tokensIn: "In", tokensOut: "Out",
+        runs: "Futások", today: "Ma", yesterday: "Tegnap",
+        contextUnknown: "A kontextus mérete ismeretlen (a kliens nem mérte).", contextRunTokens: "a futás összesen", last7Days: "Elmúlt 7 nap", period: "Időszak", tokensIn: "In", tokensOut: "Out",
         tokensTotal: "Összes", runsCount: "Futás", errorsCount: "Hiba", recentRuns: "Legutóbbi 20 futás", time: "Idő",
         agent: "Agent", phase: "Fázis", model: "Modell", duration: "Időtartam", status: "Állapot", details: "Részletek",
         noRuns: "Nincs futási adat.",
@@ -527,7 +531,8 @@ const I18N = {
         rejected: "Refused grant", assign: "Assign agent", work: "work", grant: "Grant folder",
         read: "read", write: "write", unassign: "Remove", outside: "outside the machine's roots", noHosts: "No machine paired yet.",
         allowUnsandboxed: "unsandboxed allowed", yes: "yes", no: "no", errorDetails: "Error details",
-        runs: "Runs", today: "Today", last7Days: "Last 7 days", period: "Period", tokensIn: "In", tokensOut: "Out",
+        runs: "Runs", today: "Today", yesterday: "Yesterday",
+        contextUnknown: "Context size unknown (the client did not measure it).", contextRunTokens: "run total", last7Days: "Last 7 days", period: "Period", tokensIn: "In", tokensOut: "Out",
         tokensTotal: "Total", runsCount: "Runs", errorsCount: "Errors", recentRuns: "Last 20 runs", time: "Time",
         agent: "Agent", phase: "Phase", model: "Model", duration: "Duration", status: "Status", details: "Details",
         noRuns: "No runs recorded.",
@@ -624,6 +629,8 @@ const I18N = {
         claudeLimitsLabel: "Claude limits:" },
 };
 const L = I18N[(navigator.language || "hu").slice(0, 2)] || I18N.hu;
+// Dates follow the page language, not the browser's region.
+const LOCALE = L === I18N.en ? "en-GB" : "hu-HU";
 const $ = (id) => document.getElementById(id);
 $("handle").placeholder = L.handle; $("password").placeholder = L.password; $("loginbtn").textContent = L.login;
 $("logout").textContent = L.logout; $("text").placeholder = L.message; document.querySelector("#send button:last-of-type").textContent = L.send;
@@ -1244,11 +1251,39 @@ function updateChanTerminalsHeader() {
   }
 }
 
+// feedLastDay is the local day of the newest message in the feed, so a live
+// message on a new day gets its separator too.
+let feedLastDay = null;
+
+function daySeparator(label, day) {
+  const sep = el("div", { className: "day-sep", textContent: label, title: day });
+  sep.setAttribute("role", "separator");
+  return sep;
+}
+
 function renderFeed() {
   $("feed").innerHTML = "";
-  for (const m of msgs.values()) $("feed").appendChild(renderMsg(m));
+  feedLastDay = null;
+  const now = new Date();
+  for (const it of ColonyFormat.feedItems([...msgs.values()], now, LOCALE, L)) {
+    if (it.separator) {
+      $("feed").appendChild(daySeparator(it.label, it.day));
+      feedLastDay = it.day;
+    } else {
+      $("feed").appendChild(renderMsg(it.message));
+    }
+  }
   $("feed").scrollTop = $("feed").scrollHeight;
   updateRunningTerminalsFromMsgs();
+}
+
+function appendFeedMsg(m) {
+  const day = ColonyFormat.dayKey(m.created_at);
+  if (day && day !== feedLastDay) {
+    $("feed").appendChild(daySeparator(ColonyFormat.dayLabel(m.created_at, new Date(), LOCALE, L), day));
+    feedLastDay = day;
+  }
+  $("feed").appendChild(renderMsg(m));
 }
 
 function stepIcon(kind) {
@@ -1404,7 +1439,8 @@ function renderMsg(m) {
     div.querySelector(".who").title = L.overview || "Áttekintés";
     div.querySelector(".who").onclick = () => openOverviewPanel(m.author_id);
   }
-  div.querySelector(".at").textContent = new Date(m.created_at).toLocaleTimeString();
+  div.querySelector(".at").textContent = ColonyFormat.messageTime(m.created_at, new Date(), LOCALE);
+  div.querySelector(".at").title = ColonyFormat.fullTime(m.created_at, LOCALE);
   // "[error:<id>]" from the guard: details are for humans, shown on demand.
   const ref = /\[error:([0-9a-f-]{36})\]/.exec(m.body);
   const appRef = /\[approval:([0-9a-f-]{36})\]/.exec(m.body);
@@ -3519,7 +3555,8 @@ async function refreshOverviewPanel() {
     thSec.append(el("h4", { textContent: L.contextThreads || "Munkamenetek szálanként" }));
     const thList = el("div", { style: "display:flex; flex-direction:column; gap:6px;" });
     for (const t of threads) {
-      const isNearLimit = t.max_session_tokens > 0 && t.last_run_tokens >= t.max_session_tokens * 0.8;
+      const sc = ColonyFormat.sessionContext(t);
+      const isNearLimit = sc.near;
       const thItem = el("div", { style: "border:1px solid var(--line); border-radius:6px; padding:6px; font-size:12px;" },
         el("div", { style: "display:flex; justify-content:space-between; align-items:center;" },
           el("a", {
@@ -3534,7 +3571,8 @@ async function refreshOverviewPanel() {
           }),
           el("span", {
             className: isNearLimit ? "warn" : "muted",
-            textContent: `${Math.round(t.last_run_tokens/1000)}k / ${t.max_session_tokens ? Math.round(t.max_session_tokens/1000) + 'k' : '∞'}`
+            textContent: sc.text,
+            title: (sc.known ? "" : L.contextUnknown + " ") + `${L.contextRunTokens}: ${sc.runTokens}`
           })
         ),
         el("div", { className: "muted", style: "font-size:11px; margin-top:2px;", textContent: `session: ${t.session_id}` })
@@ -4206,7 +4244,7 @@ function connectWS() {
     if (f.event_type === "message.created") {
       if (d.channel_id === current) {
         const m = { id: d.message_id, author_id: d.author_id, channel_id: d.channel_id, kind: d.kind || "text", body: d.body, created_at: d.created_at, thread_root_id: d.thread_root_id, compaction_id: d.compaction_id || null, reactions: [], attachments: d.attachments || [] };
-        msgs.set(m.id, m); $("feed").appendChild(renderMsg(m)); $("feed").scrollTop = $("feed").scrollHeight;
+        msgs.set(m.id, m); appendFeedMsg(m); $("feed").scrollTop = $("feed").scrollHeight;
         updateRunningTerminalsFromMsgs();
         api(`/api/v1/channels/${current}/read`, { method: "POST" }).catch(() => {});
         updateCompactionStatus();
