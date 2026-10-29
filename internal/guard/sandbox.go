@@ -76,6 +76,7 @@ func colonyBinaryPath() (string, error) {
 // SandboxOptions configures optional features for a sandboxed command.
 type SandboxOptions struct {
 	AllowWebRead bool
+	AllowPlanner bool
 }
 
 // Command builds the bwrap command line around the client command, after
@@ -91,6 +92,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 	// web_read reaches the guard only through the in-sandbox bridge; without
 	// network isolation 127.0.0.1:3129 would be the machine's own loopback.
 	webRead := opts.AllowWebRead && netIsolated
+	planner := opts.AllowPlanner && netIsolated
 	a := []string{"--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts"}
 	if netIsolated {
 		a = append(a, "--unshare-net")
@@ -166,7 +168,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 		a = append(a, "--tmpfs", s.Root)
 	}
 	a = append(a, "--bind", agentDir, agentDir)
-	mounts, clientEnv, err := s.clientMounts(client, agentDir, webRead)
+	mounts, clientEnv, err := s.clientMounts(client, agentDir, webRead, planner)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -189,7 +191,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 	}
 	if netIsolated {
 		noProxy := ""
-		if webRead {
+		if webRead || planner {
 			noProxy = "127.0.0.1,localhost"
 		}
 		env = append(env,
@@ -212,6 +214,10 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 			webreadSock := filepath.Join(agentDir, "webread.sock")
 			bridgeArgs = append(bridgeArgs, "-webread-sock", webreadSock, "-webread-port", "3129")
 		}
+		if planner {
+			plannerSock := filepath.Join(agentDir, "planner.sock")
+			bridgeArgs = append(bridgeArgs, "-planner-sock", plannerSock, "-planner-port", "3130")
+		}
 		bridgeArgs = append(bridgeArgs, "--", name)
 		bridgeArgs = append(bridgeArgs, args...)
 		a = append(a, "--chdir", workDir, "--", colonyBin)
@@ -230,7 +236,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 // which refuses to follow links out of it. Login tokens are copied in fresh
 // for every run and never written back: a run cannot plant its own
 // credentials into the user's real login.
-func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead bool) ([]string, []string, error) {
+func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlanner bool) ([]string, []string, error) {
 	cfgRoot := agentDir + ".config"
 	if err := os.MkdirAll(cfgRoot, 0o700); err != nil {
 		return nil, nil, err
@@ -245,10 +251,26 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead bool) ([]st
 					return err
 				}
 			}
-			if allowWebRead {
-				mcpCfg := []byte("{\n  \"mcpServers\": {\n    \"colony-web\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:3129/mcp\"\n    }\n  }\n}\n")
+			if allowWebRead || allowPlanner {
+				servers := map[string]any{}
+				if allowWebRead {
+					servers["colony-web"] = map[string]any{
+						"type": "http",
+						"url":  "http://127.0.0.1:3129/mcp",
+					}
+				}
+				if allowPlanner {
+					servers["colony-planner"] = map[string]any{
+						"type": "http",
+						"url":  "http://127.0.0.1:3130/mcp",
+					}
+				}
+				mcpCfg, err := json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
+				if err != nil {
+					return err
+				}
 				_ = r.Remove("mcp.json")
-				if err := r.WriteFile("mcp.json", mcpCfg, 0o600); err != nil {
+				if err := r.WriteFile("mcp.json", append(mcpCfg, '\n'), 0o600); err != nil {
 					return err
 				}
 			} else {
@@ -279,13 +301,31 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead bool) ([]st
 					return err
 				}
 			}
-			if err := denyCommands(r, "antigravity-cli/settings.json", allowWebRead); err != nil {
+			if err := denyCommands(r, "antigravity-cli/settings.json", allowWebRead, allowPlanner); err != nil {
 				return err
 			}
-			if allowWebRead {
-				mcpCfg := []byte("{\n  \"mcpServers\": {\n    \"colony-web\": {\n      \"disabled\": false,\n      \"url\": \"http://127.0.0.1:3129/mcp\",\n      \"serverUrl\": \"http://127.0.0.1:3129/mcp\"\n    }\n  }\n}\n")
+			if allowWebRead || allowPlanner {
+				servers := map[string]any{}
+				if allowWebRead {
+					servers["colony-web"] = map[string]any{
+						"disabled":  false,
+						"url":       "http://127.0.0.1:3129/mcp",
+						"serverUrl": "http://127.0.0.1:3129/mcp",
+					}
+				}
+				if allowPlanner {
+					servers["colony-planner"] = map[string]any{
+						"disabled":  false,
+						"url":       "http://127.0.0.1:3130/mcp",
+						"serverUrl": "http://127.0.0.1:3130/mcp",
+					}
+				}
+				mcpCfg, err := json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
+				if err != nil {
+					return err
+				}
 				_ = r.Remove("config/mcp_config.json")
-				if err := r.WriteFile("config/mcp_config.json", mcpCfg, 0o600); err != nil {
+				if err := r.WriteFile("config/mcp_config.json", append(mcpCfg, '\n'), 0o600); err != nil {
 					return err
 				}
 			} else {
@@ -385,9 +425,9 @@ func exists(p string) bool {
 // allow rules at all (any inherited rule could permit running something),
 // and command(*) denied. A headless run denies whatever is not allowed, so
 // with accept-edits the agent can read and edit files and nothing else.
-// When allowWebRead is true, the colony-web MCP server is configured and allowed.
+// When allowWebRead or allowPlanner is true, the corresponding MCP server is configured and allowed.
 // Doing it every run also undoes any change a run made to its copy.
-func denyCommands(r *os.Root, name string, allowWebRead bool) error {
+func denyCommands(r *os.Root, name string, allowWebRead, allowPlanner bool) error {
 	settings := map[string]any{}
 	if raw, err := r.ReadFile(name); err == nil {
 		if err := json.Unmarshal(raw, &settings); err != nil {
@@ -398,20 +438,36 @@ func denyCommands(r *os.Root, name string, allowWebRead bool) error {
 	if perms == nil {
 		perms = map[string]any{}
 	}
-	perms["allow"] = []any{}
+	var allowList []any
 	if allowWebRead {
-		perms["allow"] = []any{"mcp(colony-web/*)"}
+		allowList = append(allowList, "mcp(colony-web/*)")
 	}
+	if allowPlanner {
+		allowList = append(allowList, "mcp(colony-planner/*)")
+	}
+	if allowList == nil {
+		allowList = []any{}
+	}
+	perms["allow"] = allowList
 	perms["deny"] = []any{"command(*)"}
 	settings["permissions"] = perms
-	if allowWebRead {
-		settings["mcpServers"] = map[string]any{
-			"colony-web": map[string]any{
+	if allowWebRead || allowPlanner {
+		servers := map[string]any{}
+		if allowWebRead {
+			servers["colony-web"] = map[string]any{
 				"disabled":  false,
 				"url":       "http://127.0.0.1:3129/mcp",
 				"serverUrl": "http://127.0.0.1:3129/mcp",
-			},
+			}
 		}
+		if allowPlanner {
+			servers["colony-planner"] = map[string]any{
+				"disabled":  false,
+				"url":       "http://127.0.0.1:3130/mcp",
+				"serverUrl": "http://127.0.0.1:3130/mcp",
+			}
+		}
+		settings["mcpServers"] = servers
 	} else {
 		delete(settings, "mcpServers")
 	}

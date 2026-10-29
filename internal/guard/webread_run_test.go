@@ -131,7 +131,7 @@ func TestWebRead_SandboxConfig(t *testing.T) {
 	}
 
 	// 1. Claude code without AllowWebRead: mcp.json should not exist
-	_, _, err := sb.clientMounts("claude-code", agentDir, false)
+	_, _, err := sb.clientMounts("claude-code", agentDir, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestWebRead_SandboxConfig(t *testing.T) {
 	}
 
 	// 2. Claude code with AllowWebRead: mcp.json should exist with colony-web
-	_, _, err = sb.clientMounts("claude-code", agentDir, true)
+	_, _, err = sb.clientMounts("claude-code", agentDir, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestWebRead_SandboxConfig(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(geminiHome, "antigravity-cli"), 0o755)
 	_ = os.WriteFile(filepath.Join(geminiHome, "antigravity-cli", "settings.json"), []byte(`{}`), 0o600)
 
-	_, _, err = sb.clientMounts("antigravity", agentDir, true)
+	_, _, err = sb.clientMounts("antigravity", agentDir, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestWebRead_SandboxConfig(t *testing.T) {
 	}
 
 	// 4. Antigravity without AllowWebRead: cleans up mcp_config.json and settings.json
-	_, _, err = sb.clientMounts("antigravity", agentDir, false)
+	_, _, err = sb.clientMounts("antigravity", agentDir, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

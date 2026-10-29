@@ -566,6 +566,7 @@ type WorkPolicy struct {
 	NoExec       bool
 	AgentDir     string
 	AllowWebRead bool
+	AllowPlanner bool
 }
 
 func (a *Agent) policy() WorkPolicy {
@@ -781,6 +782,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		}
 		var tracker *RunWebReadTracker
 		var mcpSrv *WebReadServer
+		var plannerSrv *PlannerServer
 		var mcpConfigPath string
 		if p.AllowWebRead && p.AgentDir != "" {
 			tracker = &RunWebReadTracker{}
@@ -796,6 +798,19 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				mcpSrv = srv
 				defer func() { _ = mcpSrv.Close() }()
 			}
+		}
+		allowPlanner := (p.AllowPlanner || a.Sandbox) && p.AgentDir != ""
+		if allowPlanner {
+			sockPath := filepath.Join(p.AgentDir, "planner.sock")
+			ps, err := StartPlannerMCPServer(sockPath, a.Client, "", a.logName(), a.Log)
+			if err != nil {
+				a.Log.Error("guard: start planner mcp server", "err", err)
+			} else {
+				plannerSrv = ps
+				defer func() { _ = plannerSrv.Close() }()
+			}
+		}
+		if (p.AllowWebRead || allowPlanner) && p.AgentDir != "" {
 			mcpConfigPath = filepath.Join(p.AgentDir+".config", "claude", "mcp.json")
 		}
 		runKey := uuid.New().String()
@@ -808,7 +823,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			}
 		}
 		res, err := a.Adapter.Work(rtc, WorkRequest{
-			Prompt:         WorkPromptWithWebRead(a.getMe().Handle, promptBranch, p.AllowWebRead, it, task, p.Grants...),
+			Prompt:         WorkPromptWithTools(a.getMe().Handle, promptBranch, p.AllowWebRead, allowPlanner, it, task, p.Grants...),
 			Model:          a.Cfg.WorkModel,
 			Dir:            p.Dir,
 			PermissionMode: a.Cfg.PermissionMode,
@@ -816,6 +831,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			Wrap:           p.Wrap,
 			NoExec:         p.NoExec,
 			AllowWebRead:   p.AllowWebRead,
+			AllowPlanner:   allowPlanner,
 			MCPConfigPath:  mcpConfigPath,
 			Rules:          rulesText,
 			RulesVersion:   rulesVer,

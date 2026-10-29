@@ -51,6 +51,7 @@ type WorkRequest struct {
 	Rules         string
 	RulesVersion  int
 	AllowWebRead  bool
+	AllowPlanner  bool
 	MCPConfigPath string
 	OnStep        func(Step)
 	OnActivity    func()

@@ -148,16 +148,21 @@ func runSandboxBridge(ctx context.Context, args []string) error {
 	port := fs.Int("port", 3128, "local TCP port to listen on")
 	webreadSock := fs.String("webread-sock", "", "path to webread unix domain socket")
 	webreadPort := fs.Int("webread-port", 3129, "local TCP port for webread")
+	plannerSock := fs.String("planner-sock", "", "path to planner unix domain socket")
+	plannerPort := fs.Int("planner-port", 3130, "local TCP port for planner")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if *sock == "" || len(rest) == 0 {
-		return fmt.Errorf("usage: colony sandbox-bridge -sock <path> [-port <port>] [-webread-sock <path>] [-webread-port <port>] -- <client> <args...>")
+		return fmt.Errorf("usage: colony sandbox-bridge -sock <path> [-port <port>] [-webread-sock <path>] [-webread-port <port>] [-planner-sock <path>] [-planner-port <port>] -- <client> <args...>")
 	}
 	mappings := []guard.BridgeMapping{
 		{SockPath: *sock, Port: *port},
 	}
 	if *webreadSock != "" {
 		mappings = append(mappings, guard.BridgeMapping{SockPath: *webreadSock, Port: *webreadPort})
+	}
+	if *plannerSock != "" {
+		mappings = append(mappings, guard.BridgeMapping{SockPath: *plannerSock, Port: *plannerPort})
 	}
 	return guard.RunMultiBridgeCommand(ctx, mappings, rest[0], rest[1:])
 }

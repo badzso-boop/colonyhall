@@ -176,8 +176,15 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 	if req.NoExec {
 		args = append(args, "--tools", ClaudeFileTools, "--disallowedTools", "Bash")
 	}
+	var allowedTools []string
 	if req.AllowWebRead {
-		args = append(args, "--allowedTools", "mcp__colony-web__web_read")
+		allowedTools = append(allowedTools, "mcp__colony-web__web_read")
+	}
+	if req.AllowPlanner {
+		allowedTools = append(allowedTools, "mcp__colony-planner__planner_read", "mcp__colony-planner__calendar_read")
+	}
+	if len(allowedTools) > 0 {
+		args = append(args, "--allowedTools", strings.Join(allowedTools, ","))
 		if req.MCPConfigPath != "" {
 			args = append(args, "--mcp-config", req.MCPConfigPath, "--strict-mcp-config")
 		}
