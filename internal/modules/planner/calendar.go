@@ -22,7 +22,8 @@ const (
 	MaxRedirects     = 3
 	maxDescription   = 1000
 	maxOccurrences   = 2000
-	maxRuleSteps     = 100000 // rule iterations per recurring event
+	maxRuleSteps     = 100000  // rule iterations per recurring event
+	maxTotalSteps    = 1000000 // rule iterations per calendar, all events together
 	maxEventLength   = 31 * 24 * time.Hour
 )
 
@@ -146,7 +147,11 @@ func ParseCalendar(data []byte, loc *time.Location, from, to time.Time) ([]Event
 		}
 		masters = append(masters, ev)
 	}
+	budget := maxTotalSteps
 	for _, ev := range masters {
+		if budget <= 0 {
+			break
+		}
 		if cancelled(ev) {
 			continue
 		}
@@ -173,7 +178,8 @@ func ParseCalendar(data []byte, loc *time.Location, from, to time.Time) ([]Event
 		// rule (FREQ=SECONDLY, a start decades ago) cannot allocate or spin
 		// without bound; Between would build the whole list first.
 		next := set.Iterator()
-		for steps := 0; steps < maxRuleSteps && len(out) < maxOccurrences; steps++ {
+		for steps := 0; steps < maxRuleSteps && budget > 0 && len(out) < maxOccurrences; steps++ {
+			budget--
 			start, ok := next()
 			if !ok || !start.Before(to) {
 				break

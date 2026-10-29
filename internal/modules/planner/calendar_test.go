@@ -2,6 +2,7 @@ package planner
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -123,5 +124,23 @@ func TestParseBoundsHostileRules(t *testing.T) {
 	}
 	if len(evs) > maxOccurrences || time.Since(start) > 5*time.Second {
 		t.Fatalf("unbounded: %d events in %v", len(evs), time.Since(start))
+	}
+}
+
+// Many hostile rules share one budget: the whole file stays bounded.
+func TestParseBoundsManyHostileRules(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n")
+	for i := 0; i < 500; i++ {
+		fmt.Fprintf(&b, "BEGIN:VEVENT\r\nUID:spam%d\r\nDTSTART:19900101T000000Z\r\nDTEND:19900101T000001Z\r\nRRULE:FREQ=SECONDLY\r\nSUMMARY:x\r\nEND:VEVENT\r\n", i)
+	}
+	b.WriteString("END:VCALENDAR\r\n")
+	from := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	start := time.Now()
+	if _, err := ParseCalendar([]byte(b.String()), time.UTC, from, from.AddDate(0, 0, 60)); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("500 hostile rules took %v", d)
 	}
 }
