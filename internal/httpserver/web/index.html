@@ -1392,11 +1392,9 @@ function renderMsg(m) {
   // "[error:<id>]" from the guard: details are for humans, shown on demand.
   const ref = /\[error:([0-9a-f-]{36})\]/.exec(m.body);
   const appRef = /\[approval:([0-9a-f-]{36})\]/.exec(m.body);
-  const dmReplyMatch = /\[dm_reply:([0-9a-f-]{36}):([0-9a-f-]{36}):(@?[a-zA-Z0-9_-]+)\]/.exec(m.body);
   let bodyText = m.body;
   if (ref) bodyText = bodyText.replace(ref[0], "").trim();
   if (appRef) bodyText = bodyText.replace(appRef[0], "").trim();
-  if (dmReplyMatch) bodyText = bodyText.replace(dmReplyMatch[0], "").trim();
   const bodyEl = div.querySelector(".body");
   bodyEl.textContent = "";
 
@@ -1649,9 +1647,10 @@ function renderMsg(m) {
     origDiv.append(link);
     div.querySelector(".chips").before(origDiv);
   }
-  if (dmReplyMatch) {
-    const dmChannelId = dmReplyMatch[1];
-    const targetAuthor = dmReplyMatch[3].replace(/^@/, "");
+  if (m.answers) {
+    // Set by the server from a checked field, never parsed from the body.
+    const dmChannelId = m.answers.channel_id;
+    const targetAuthor = actors[m.answers.author_id]?.handle || "?";
     const dmDiv = el("div", { className: "msg-dm-reply-link", style: "font-size:12px; margin-top:4px;" });
     const link = el("a", {
       href: "#",

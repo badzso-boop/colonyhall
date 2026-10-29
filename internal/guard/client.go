@@ -75,6 +75,9 @@ type Item struct {
 	DM           bool         `json:"dm"`
 	At           time.Time    `json:"at"`
 	ReplyOrigin  *ReplyOrigin `json:"reply_origin,omitempty"`
+	// AnswersMessageID is set by the guard on a reply target: the DM reply
+	// the answer in the origin thread responds to. Never from the server.
+	AnswersMessageID string `json:"-"`
 }
 
 // Message is a chat message (only what the guard needs).
@@ -214,7 +217,16 @@ func (c *Client) Send(ctx context.Context, channelID, threadRootID, body, client
 // SendLong posts a message; elaborate allows an agent's message to be
 // longer than the usual limit (a report someone asked for). It returns the created message ID if available.
 func (c *Client) SendLong(ctx context.Context, channelID, threadRootID, body, clientMsgID string, elaborate bool) (string, error) {
+	return c.SendAnswer(ctx, channelID, threadRootID, body, clientMsgID, elaborate, "")
+}
+
+// SendAnswer is SendLong with answersMessageID: the message (in another
+// channel) this one answers; the server keeps it only if the agent can read it.
+func (c *Client) SendAnswer(ctx context.Context, channelID, threadRootID, body, clientMsgID string, elaborate bool, answersMessageID string) (string, error) {
 	in := map[string]any{"body": body, "client_msg_id": clientMsgID}
+	if answersMessageID != "" {
+		in["answers_message_id"] = answersMessageID
+	}
 	if elaborate {
 		in["elaborate"] = true
 	}

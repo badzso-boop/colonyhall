@@ -265,23 +265,26 @@ func DirectPromptWithBranch(items []Item, branch string, exchangeDir ...string) 
 			answers = true
 			continue
 		}
+		// An answer to the agent's own request carries the request id, also
+		// when it arrives approved ("delegated"), as agent replies to a
+		// full-access agent always do.
+		var extraAttr string
+		if it.ReplyOrigin != nil && it.ReplyOrigin.RequestMessageID != "" {
+			extraAttr = fmt.Sprintf(" answers_your_request=%q", attr(it.ReplyOrigin.RequestMessageID))
+		}
 		if it.Kind == "delegated" {
 			delBy := it.DelegatedBy
 			if delBy != "" && !strings.HasPrefix(delBy, "@") {
 				delBy = "@" + delBy
 			}
-			fmt.Fprintf(&b, "<colonyhall_message from=%q delegated_by=%q channel=%q message=%q>\n%s\n</colonyhall_message>\n\n",
-				attr(from), attr(delBy), attr(ch), attr(msgID), text(it.Body, maxItemBody))
+			fmt.Fprintf(&b, "<colonyhall_message from=%q delegated_by=%q channel=%q message=%q%s>\n%s\n</colonyhall_message>\n\n",
+				attr(from), attr(delBy), attr(ch), attr(msgID), extraAttr, text(it.Body, maxItemBody))
 			delegatedItems = append(delegatedItems, it)
 			continue
 		}
 		if it.Kind == "terminal" {
 			fmt.Fprintf(&b, "%s\n\n", it.Body)
 			continue
-		}
-		var extraAttr string
-		if it.ReplyOrigin != nil && it.ReplyOrigin.RequestMessageID != "" {
-			extraAttr = fmt.Sprintf(" answers_your_request=%q", attr(it.ReplyOrigin.RequestMessageID))
 		}
 		fmt.Fprintf(&b, "<colonyhall_message from=%q channel=%q message=%q%s>\n%s\n</colonyhall_message>\n\n",
 			attr(from), attr(ch), attr(msgID), extraAttr, text(it.Body, maxItemBody))
@@ -743,11 +746,6 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		if res.RateLimit != nil {
 			a.ClaudeLimiter.Update(*res.RateLimit)
 		}
-		if isClaudeLimitMessage(res.Text) {
-			a.ClaudeLimiter.RecordLimitFailure(res.Text, a.now())
-			a.postRateLimitNotes(ctx, group)
-			return nil
-		}
 		if err != nil && isClaudeLimitMessage(err.Error()) {
 			a.ClaudeLimiter.RecordLimitFailure(err.Error(), a.now())
 			a.postRateLimitNotes(ctx, group)
@@ -787,6 +785,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		replyTarget.ChannelID = targetChannelID
 		replyTarget.ThreadRootID = targetThreadID
 		replyTarget.DM = false
+		replyTarget.AnswersMessageID = last.ItemID
 	}
 	// Never stay silent: an empty answer means the run got stuck, and the
 	// person who asked would otherwise think the agent never saw it.
@@ -808,15 +807,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			return rerr
 		}
 	} else {
-		replyText := res.Text
-		if last.ReplyOrigin != nil {
-			author := last.Author
-			if !strings.HasPrefix(author, "@") {
-				author = "@" + author
-			}
-			replyText += fmt.Sprintf("\n\n[dm_reply:%s:%s:%s]", last.ChannelID, last.ItemID, author)
-		}
-		replyMsgID, err := a.replyLongWithID(ctx, replyTarget, replyText, "gd-"+last.ID)
+		replyMsgID, err := a.replyLongWithID(ctx, replyTarget, res.Text, "gd-"+last.ID)
 		if err != nil {
 			if errors.Is(err, errHalted) || ctx.Err() != nil {
 				a.reportRun(ctx, "direct", req.Model, sessionID, targetChannelID, targetThreadID, len(group), res, "halted", "", steps, "")
@@ -931,7 +922,7 @@ func lastTranscriptContext(path string) (int, bool) {
 func (a *Agent) humanOnly(ctx context.Context, items []Item) []Item {
 	var keep, refused []Item
 	for _, it := range items {
-		if it.AuthorKind == "human" || it.Kind == "answer" || it.Kind == "delegated" || it.Kind == "terminal" || it.ReplyOrigin != nil {
+		if it.AuthorKind == "human" || it.Kind == "answer" || it.Kind == "delegated" || it.Kind == "terminal" {
 			keep = append(keep, it)
 		} else {
 			refused = append(refused, it)

@@ -97,12 +97,17 @@ type Message struct {
 	CreatedAt       time.Time
 	DeletedAt       *time.Time
 	DeletedBy       *ids.ID
-	OriginChannelID ids.ID            // origin channel if sent by agent with an origin
-	OriginChannel   string            // channel name, filled on reads
-	OriginThreadID  ids.ID            // origin thread root if sent by agent with an origin
-	Reactions       []ReactionSummary // filled on reads
-	Attachments     []Attachment      // filled on reads
-	LinkCards       []LinkCard        // filled on reads
+	OriginChannelID ids.ID // origin channel if sent by agent with an origin
+	OriginChannel   string // channel name, filled on reads
+	OriginThreadID  ids.ID // origin thread root if sent by agent with an origin
+	// AnswersMessageID is the DM reply an agent's answer in its origin
+	// thread responds to (set by the guard, checked on send).
+	AnswersMessageID ids.ID
+	AnswersChannelID ids.ID            // filled on reads
+	AnswersAuthorID  ids.ID            // filled on reads
+	Reactions        []ReactionSummary // filled on reads
+	Attachments      []Attachment      // filled on reads
+	LinkCards        []LinkCard        // filled on reads
 }
 
 // LinkCard is unfurled metadata for a link in a message.

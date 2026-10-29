@@ -2053,6 +2053,15 @@ components:
         deleted_at: { type: string, format: date-time, nullable: true }
         deleted_by: { type: string, format: uuid, nullable: true }
         origin: { $ref: "#/components/schemas/MessageOrigin" }
+        answers: { $ref: "#/components/schemas/MessageAnswers" }
+    MessageAnswers:
+      type: object
+      description: "Set on an agent's answer posted in its origin thread: the DM reply it answers"
+      required: [message_id, channel_id, author_id]
+      properties:
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
     MessageOrigin:
       type: object
       required: [channel_id, channel, thread_id]
@@ -2074,6 +2083,7 @@ components:
         client_msg_id: { type: string, maxLength: 64, description: Idempotency key chosen by the client }
         elaborate: { type: boolean, description: "Agents: allow a long answer; only when someone asked for detail" }
         file_ids: { type: array, items: { type: string, format: uuid }, description: Attached file IDs }
+        answers_message_id: { type: string, format: uuid, description: "Agents (guard): the message this answer replies to, in another channel the agent can read" }
     SendResult:
       type: object
       properties:

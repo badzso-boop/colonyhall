@@ -796,11 +796,6 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			if res.RateLimit != nil {
 				a.ClaudeLimiter.Update(*res.RateLimit)
 			}
-			if isClaudeLimitMessage(res.Text) {
-				a.ClaudeLimiter.RecordLimitFailure(res.Text, a.now())
-				a.postRateLimitNotes(ctx, []Item{it.Item})
-				return nil
-			}
 			if err != nil && isClaudeLimitMessage(err.Error()) {
 				a.ClaudeLimiter.RecordLimitFailure(err.Error(), a.now())
 				a.postRateLimitNotes(ctx, []Item{it.Item})
@@ -880,7 +875,7 @@ func (a *Agent) replyWithID(ctx context.Context, it Item, text, clientID string)
 	text = strings.TrimSpace(text)
 	fullLinks := FileLinks(text)
 	clipped := clip(text, MaxReplyLen)
-	msgID, err := a.Client.SendLong(ctx, it.ChannelID, thread, clipped, clientID, false)
+	msgID, err := a.Client.SendAnswer(ctx, it.ChannelID, thread, clipped, clientID, false, it.AnswersMessageID)
 	if err := halted(err); err != nil {
 		return "", err
 	}
@@ -913,7 +908,7 @@ func (a *Agent) replyLongWithID(ctx context.Context, it Item, text, clientID str
 	}
 	fullLinks := FileLinks(text)
 	clipped := clip(text, MaxLongReply)
-	msgID, err := a.Client.SendLong(ctx, it.ChannelID, thread, clipped, clientID, true)
+	msgID, err := a.Client.SendAnswer(ctx, it.ChannelID, thread, clipped, clientID, true, it.AnswersMessageID)
 	if err := halted(err); err != nil {
 		return "", err
 	}

@@ -444,8 +444,13 @@ func testThreadsAndReactions(t *testing.T, b Backend, f fixture, msgs []conversa
 		Body:         "thread reply",
 		Mentions:     []ids.ID{},
 		CreatedAt:    t0.Add(3 * time.Hour),
+		// The answer link to another message survives a round trip.
+		AnswersMessageID: mWithOrigin.ID,
 	}
 	must(t, b.Conversation.InsertMessage(ctx, replyMsg))
+	if got, err := b.Conversation.MessageByID(ctx, replyMsg.ID); err != nil || got.AnswersMessageID != mWithOrigin.ID {
+		t.Fatalf("answers_message_id not preserved: %v %v", got.AnswersMessageID, err)
+	}
 	latestTopAfterReply, err := b.Conversation.LatestTopLevelMessageByAuthor(ctx, f.channel.ID, f.agent.ID)
 	must(t, err)
 	if latestTopAfterReply.ID != mWithOrigin.ID {

@@ -373,22 +373,23 @@ type Lease struct {
 }
 
 type Message struct {
-	ID              uuid.UUID
-	WorkspaceID     uuid.UUID
-	ChannelID       uuid.UUID
-	ThreadRootID    *uuid.UUID
-	AuthorID        uuid.UUID
-	ClientMsgID     *string
-	Kind            string
-	Body            string
-	Mentions        []uuid.UUID
-	ReplyCount      int32
-	LastReplyAt     *time.Time
-	CreatedAt       time.Time
-	DeletedAt       *time.Time
-	DeletedBy       *uuid.UUID
-	OriginChannelID *uuid.UUID
-	OriginThreadID  *uuid.UUID
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	ChannelID        uuid.UUID
+	ThreadRootID     *uuid.UUID
+	AuthorID         uuid.UUID
+	ClientMsgID      *string
+	Kind             string
+	Body             string
+	Mentions         []uuid.UUID
+	ReplyCount       int32
+	LastReplyAt      *time.Time
+	CreatedAt        time.Time
+	DeletedAt        *time.Time
+	DeletedBy        *uuid.UUID
+	OriginChannelID  *uuid.UUID
+	OriginThreadID   *uuid.UUID
+	AnswersMessageID *uuid.UUID
 }
 
 type MessageFile struct {

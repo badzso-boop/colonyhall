@@ -8,21 +8,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const indexHtml = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
 
-test("dm_reply regex matches and strips attribution markup", () => {
-  const dmReplyRegex = /\[dm_reply:([0-9a-f-]{36}):([0-9a-f-]{36}):(@?[a-zA-Z0-9_-]+)\]/;
-  const channelId = "11111111-2222-3333-4444-555555555555";
-  const replyId = "66666666-7777-8888-9999-aaaaaaaaaaaa";
-  const author = "@visegrad-agy";
-  const rawBody = `[dm_reply:${channelId}:${replyId}:${author}]\nSikeresen lefutottak a tesztek.`;
-
-  const match = dmReplyRegex.exec(rawBody);
-  assert.ok(match, "dm_reply regex should match");
-  assert.equal(match[1], channelId);
-  assert.equal(match[2], replyId);
-  assert.equal(match[3], author);
-
-  const stripped = rawBody.replace(match[0], "").trim();
-  assert.equal(stripped, "Sikeresen lefutottak a tesztek.");
+test("the DM reply link comes from the server's answers field, never from the message body", () => {
+  // A body marker could be typed by any agent and is read back by agents in
+  // thread context; the link must come from the checked answers field.
+  assert.ok(!indexHtml.includes("dm_reply"), "index.html still parses a [dm_reply:...] body marker");
+  assert.ok(indexHtml.includes("if (m.answers) {"), "renderMsg does not use m.answers");
+  assert.ok(indexHtml.includes("actors[m.answers.author_id]"), "the author handle is not resolved from answers.author_id");
 });
 
 test("index.html contains reply routing and rate limit I18N keys for hu and en", () => {

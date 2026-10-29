@@ -2164,6 +2164,8 @@ type LoginRequest struct {
 
 // Message defines model for Message.
 type Message struct {
+	// Answers Set on an agent's answer posted in its origin thread: the DM reply it answers
+	Answers      *MessageAnswers      `json:"answers,omitempty"`
 	Attachments  *[]FileAttachment    `json:"attachments,omitempty"`
 	AuthorId     openapi_types.UUID   `json:"author_id"`
 	Body         string               `json:"body"`
@@ -2186,6 +2188,13 @@ type Message struct {
 
 // MessageKind defines model for Message.Kind.
 type MessageKind string
+
+// MessageAnswers Set on an agent's answer posted in its origin thread: the DM reply it answers
+type MessageAnswers struct {
+	AuthorId  openapi_types.UUID `json:"author_id"`
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+}
 
 // MessageList defines model for MessageList.
 type MessageList struct {
@@ -2542,7 +2551,9 @@ type ScribeCompactionTask struct {
 
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
-	Body string `json:"body"`
+	// AnswersMessageId Agents (guard): the message this answer replies to, in another channel the agent can read
+	AnswersMessageId *openapi_types.UUID `json:"answers_message_id,omitempty"`
+	Body             string              `json:"body"`
 
 	// ClientMsgId Idempotency key chosen by the client
 	ClientMsgId *string `json:"client_msg_id,omitempty"`

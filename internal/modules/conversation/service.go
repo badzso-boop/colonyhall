@@ -300,6 +300,9 @@ type SendInput struct {
 	// Set by agents through MCP send when target differs from origin.
 	OriginChannelID ids.ID
 	OriginThreadID  ids.ID
+	// AnswersMessageID links an agent's answer to the message it responds
+	// to in another channel; kept only if the agent can read that message.
+	AnswersMessageID ids.ID
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -383,6 +386,14 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			}
 		}
 	}
+	var answersID ids.ID
+	if by.Kind == identity.KindAgent && in.AnswersMessageID != ids.Nil {
+		if ref, err := s.Store.MessageByID(ctx, in.AnswersMessageID); err == nil && ref.DeletedAt == nil && ref.ChannelID != c.ID {
+			if refMem, err := s.membership(ctx, ref.ChannelID, by.ID); err == nil && refMem.IsMember {
+				answersID = ref.ID
+			}
+		}
+	}
 	var msg Message
 	var seq int64
 	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -412,6 +423,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			AuthorID: by.ID, ClientMsgID: in.ClientMsgID, Kind: "text", Body: body,
 			Mentions: mentions, CreatedAt: now,
 			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
+			AnswersMessageID: answersID,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -467,6 +479,12 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 
 func (s *Service) enrichOrigins(ctx context.Context, msgs []Message) {
 	for i := range msgs {
+		if msgs[i].AnswersMessageID != ids.Nil && msgs[i].AnswersChannelID == ids.Nil {
+			if ref, err := s.Store.MessageByID(ctx, msgs[i].AnswersMessageID); err == nil {
+				msgs[i].AnswersChannelID = ref.ChannelID
+				msgs[i].AnswersAuthorID = ref.AuthorID
+			}
+		}
 		if msgs[i].OriginChannelID != ids.Nil && msgs[i].OriginChannel == "" {
 			if ch, err := s.Store.ChannelByID(ctx, msgs[i].OriginChannelID); err == nil {
 				msgs[i].OriginChannel = ch.Name

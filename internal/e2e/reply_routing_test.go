@@ -80,7 +80,7 @@ func TestReplyRoutingIncidentReproduction(t *testing.T) {
 		"client":          "claude-code",
 		"mode":            "direct",
 		"root_dir":        root,
-		"sandbox":         true,
+		"sandbox":         false, // full access, as @visegrad-claude in production
 		"permission_mode": "auto",
 	}, nil)
 
@@ -114,6 +114,10 @@ func TestReplyRoutingIncidentReproduction(t *testing.T) {
 				Poll:      20 * time.Millisecond,
 				Debounce:  time.Millisecond,
 				HaltCheck: 10 * time.Millisecond,
+				// The approved item is written after the approval event the
+				// guard may wake on; poll so the test does not wait for the
+				// next event.
+				FallbackPoll: 50 * time.Millisecond,
 			},
 		},
 		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -215,6 +219,22 @@ func TestReplyRoutingIncidentReproduction(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// 8b. @visegrad-claude has full access, so an agent's message reaches it
+	// only after an admin approves it: it arrives as a "delegated" item. This
+	// is the path the 2026-10-28 reply took.
+	var qList apispec.QuestionList
+	e.do("GET", "/api/v1/questions?state=open", server.DevAdminToken, nil, &qList)
+	if len(qList.Questions) != 1 {
+		t.Fatalf("expected 1 approval question for the reply, got %d", len(qList.Questions))
+	}
+	if s := e.do("POST", fmt.Sprintf("/api/v1/questions/%s/answer", qList.Questions[0].Id), server.DevAdminToken,
+		apispec.AnswerQuestionRequest{Answer: "Jóváhagyom"}, nil); s != http.StatusOK {
+		t.Fatalf("approve reply: %d", s)
+	}
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
 	// 9. Get Agy's reply message from the DM
 	dmMsgs = e.getMessages(dmChan.ID)
 	if len(dmMsgs) != 2 {
@@ -256,11 +276,15 @@ func TestReplyRoutingIncidentReproduction(t *testing.T) {
 	}
 
 	// 11. Verify the answer was posted into thread T in #visegradevent, NOT in the DM
+	// The link to the DM reply is a checked field, not text in the body.
 	eventually(t, "answer posted into thread T", func() bool {
-		msgs := e.messages(visegradChan.Id.String())
-		expectedAttribution := fmt.Sprintf("[dm_reply:%s:%s:@visegrad-agy]", dmChan.ID, agyReplyMsg.Id)
-		for _, m := range msgs {
-			if m.ThreadRootID == threadT && strings.Contains(m.Body, "Test runs completed") && strings.Contains(m.Body, expectedAttribution) {
+		var thread apispec.Thread
+		e.do("GET", "/api/v1/messages/"+threadT+"/thread", server.DevAdminToken, nil, &thread)
+		for _, m := range thread.Replies {
+			if m.AuthorId.String() == claudeID && strings.Contains(m.Body, "Test runs completed") &&
+				!strings.Contains(m.Body, "dm_reply") && m.Answers != nil &&
+				m.Answers.MessageId == agyReplyMsg.Id && m.Answers.ChannelId.String() == dmChan.ID &&
+				m.Answers.AuthorId.String() == agyID {
 				return true
 			}
 		}
@@ -632,5 +656,77 @@ func TestReplyRoutingForgePrevention(t *testing.T) {
 	}
 	if msgs[0].Origin != nil {
 		t.Fatalf("expected nil origin for forged channel, got %+v", msgs[0].Origin)
+	}
+}
+
+// A top-level DM message counts as the answer to the recipient's latest
+// request only within delivery.ReplyOriginWindow (12 h, the grant cap): a much
+// later, unrelated DM must not be routed into an old work thread.
+func TestReplyRoutingTopLevelDMReplyWindow(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	general := e.generalID()
+	askerID, askerTok := e.createActor("agent", "asker", "member")
+	_, helperTok := e.createActor("agent", "helper", "member")
+	canWrite := true
+	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, apispec.AddMemberRequest{
+		ActorId: uuid.MustParse(askerID), CanWrite: &canWrite,
+	}, nil)
+	root, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "@asker please coordinate"})
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	askerMCP, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", askerTok, headerTripper{
+		headers: map[string]string{"X-Colonyhall-Channel": general, "X-Colonyhall-Thread": root.ID},
+		base:    http.DefaultTransport,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = askerMCP.Close() }()
+	helperMCP, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", helperTok, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = helperMCP.Close() }()
+
+	call := func(s *mcp.ClientSession, channel, text string) {
+		t.Helper()
+		res, err := s.CallTool(ctx, &mcp.CallToolParams{Name: "send", Arguments: map[string]any{"channel": channel, "text": text}})
+		if err != nil || res.IsError {
+			t.Fatalf("send to %s: %v %+v", channel, err, res)
+		}
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	latestOrigin := func() *apispec.ReplyOrigin {
+		t.Helper()
+		var ib apispec.Inbox
+		e.do("GET", "/api/v1/agent/inbox", askerTok, nil, &ib)
+		var last *apispec.InboxItem
+		for i := range ib.Items {
+			if ib.Items[i].Author == "helper" {
+				last = &ib.Items[i]
+			}
+		}
+		if last == nil {
+			t.Fatalf("no item from helper in %+v", ib.Items)
+		}
+		return last.ReplyOrigin
+	}
+
+	call(askerMCP, "@helper", "please run the tests")
+	e.clock.Advance(11 * time.Hour)
+	call(helperMCP, "@asker", "30/30 green")
+	if ro := latestOrigin(); ro == nil || ro.ThreadRootId.String() != root.ID {
+		t.Fatalf("reply after 11 h: expected origin thread %s, got %+v", root.ID, ro)
+	}
+
+	e.clock.Advance(2 * time.Hour) // 13 h after the request
+	call(helperMCP, "@asker", "unrelated: are you free tomorrow?")
+	if ro := latestOrigin(); ro != nil {
+		t.Fatalf("a DM 13 h after the request was routed to the old thread: %+v", ro)
 	}
 }

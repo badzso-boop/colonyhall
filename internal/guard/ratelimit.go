@@ -161,11 +161,14 @@ func (l *ClaudeLimiter) evaluatePause(now time.Time) (bool, string, time.Time) {
 	var pauseFH, pauseSD bool
 	var fhUntil, sdUntil time.Time
 
+	// Only "rejected" stops runs on its own: Claude reports
+	// "allowed_warning" well before the reserve, which the reserve handles.
+
 	// Check 5-hour window
 	if fh := l.state.FiveHour; fh != nil {
 		resetPassed := !fh.ResetsAt.IsZero() && !now.Before(fh.ResetsAt.Add(1*time.Minute))
 		if !resetPassed {
-			if (fh.Status != "" && fh.Status != "allowed") || fh.Utilization*100 >= reservePct-1e-6 {
+			if fh.Status == "rejected" || fh.Utilization*100 >= reservePct-1e-6 {
 				pauseFH = true
 				fhUntil = fh.ResetsAt.Add(1 * time.Minute)
 				if fhUntil.Before(now) {
@@ -179,7 +182,7 @@ func (l *ClaudeLimiter) evaluatePause(now time.Time) (bool, string, time.Time) {
 	if sd := l.state.SevenDay; sd != nil {
 		resetPassed := !sd.ResetsAt.IsZero() && !now.Before(sd.ResetsAt.Add(1*time.Minute))
 		if !resetPassed {
-			if (sd.Status != "" && sd.Status != "allowed") || sd.Utilization*100 >= reservePct-1e-6 {
+			if sd.Status == "rejected" || sd.Utilization*100 >= reservePct-1e-6 {
 				pauseSD = true
 				sdUntil = sd.ResetsAt.Add(1 * time.Minute)
 				if sdUntil.Before(now) {

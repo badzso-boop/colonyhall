@@ -48,6 +48,13 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 			ThreadId:  m.OriginThreadID,
 		}
 	}
+	if m.AnswersMessageID != ids.Nil && m.AnswersChannelID != ids.Nil {
+		out.Answers = &apispec.MessageAnswers{
+			MessageId: m.AnswersMessageID,
+			ChannelId: m.AnswersChannelID,
+			AuthorId:  m.AnswersAuthorID,
+		}
+	}
 	if out.Mentions == nil {
 		out.Mentions = []ids.ID{}
 	}
@@ -281,6 +288,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			ChannelID: channelID, ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil),
 			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body, Elaborate: httpx.Deref(in.Elaborate, false),
 			FileIDs: fileIDs, Silent: silent,
+			AnswersMessageID: httpx.Deref(in.AnswersMessageId, ids.Nil),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)

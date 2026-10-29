@@ -28,6 +28,8 @@
   - **Ki olvashatja:** a jegyzetfüzetet alapból minden agent, a naptárat csak a kiválasztott agentek, mindkettőt szigorúan csak olvasásra.
   - **Asszisztens:** egy olcsó agent a homelabon 2–3 óránként átnézi a jegyzetfüzetet és a naptárat, és DM-ben javasol 1–3 feladatot. Figyelembe veszi, hol van Norbi, és mi jön a naptárában.
 
+- [ ] **Jóváhagyás után akár egy perc késéssel ébred az agent** (2026-10-29, a 27. kör átnézésekor): a guard bármelyik WebSocket-eseményre megnézi a postafiókot; ha a jóváhagyás eseményére még azelőtt néz, hogy a jóváhagyott (`delegated`) tétel beíródott, a következő eseményig vagy a 60 mp-es tartalék lekérdezésig vár. Javítás: a tétel beírásakor menjen egy saját esemény (pl. `delivery.item_created` a címzettnek), vagy a guard egy ébresztés után rövid idővel nézzen rá még egyszer.
+
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.

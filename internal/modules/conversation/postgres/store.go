@@ -138,6 +138,7 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		AuthorID: m.AuthorID, ClientMsgID: nullString(m.ClientMsgID), Kind: m.Kind, Body: m.Body,
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
 		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
+		AnswersMessageID: nullID(m.AnswersMessageID),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -221,6 +222,9 @@ func toMessage(r sqlcgen.Message) conversation.Message {
 	}
 	if r.OriginThreadID != nil {
 		m.OriginThreadID = *r.OriginThreadID
+	}
+	if r.AnswersMessageID != nil {
+		m.AnswersMessageID = *r.AnswersMessageID
 	}
 	return m
 }

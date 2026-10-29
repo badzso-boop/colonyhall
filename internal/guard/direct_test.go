@@ -2020,9 +2020,11 @@ func TestReplyRoutingHumanOnlyKeepsReplyOrigin(t *testing.T) {
 		{ID: "it-human", AuthorKind: "human", Body: "hello"},
 		{ID: "it-bot-task", AuthorKind: "agent", Body: "do something"},
 		{
-			ID:         "it-bot-reply",
-			AuthorKind: "agent",
-			Body:       "result from test",
+			ID:          "it-bot-reply",
+			Kind:        "delegated",
+			DelegatedBy: "norbi",
+			AuthorKind:  "agent",
+			Body:        "result from test",
 			ReplyOrigin: &ReplyOrigin{
 				ChannelID:        "c1",
 				ThreadRootID:     "t1",
@@ -2056,6 +2058,7 @@ func TestReplyRoutingDirectExecution(t *testing.T) {
 		ChannelID    string `json:"channel_id"`
 		ThreadRootID string `json:"thread_root_id"`
 		Body         string `json:"body"`
+		Answers      string `json:"answers_message_id"`
 	}
 	var reactions []string
 	var ackedItems []string
@@ -2072,6 +2075,7 @@ func TestReplyRoutingDirectExecution(t *testing.T) {
 			var in struct {
 				ThreadRootID string `json:"thread_root_id"`
 				Body         string `json:"body"`
+				Answers      string `json:"answers_message_id"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&in)
 			parts := strings.Split(r.URL.Path, "/")
@@ -2080,7 +2084,8 @@ func TestReplyRoutingDirectExecution(t *testing.T) {
 				ChannelID    string `json:"channel_id"`
 				ThreadRootID string `json:"thread_root_id"`
 				Body         string `json:"body"`
-			}{ChannelID: chanID, ThreadRootID: in.ThreadRootID, Body: in.Body})
+				Answers      string `json:"answers_message_id"`
+			}{ChannelID: chanID, ThreadRootID: in.ThreadRootID, Body: in.Body, Answers: in.Answers})
 			_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"id": "msg-reply-1"}})
 		case r.Method == "PUT" && strings.Contains(r.URL.Path, "/reactions/"):
 			reactions = append(reactions, r.URL.Path)
@@ -2134,7 +2139,8 @@ func TestReplyRoutingDirectExecution(t *testing.T) {
 
 	item := Item{
 		ID:           "it-reply-1",
-		Kind:         "message",
+		Kind:         "delegated",
+		DelegatedBy:  "norbi",
 		ItemID:       dmMsgID,
 		ChannelID:    dmChanID,
 		ThreadRootID: reqMsgID,
@@ -2160,7 +2166,8 @@ func TestReplyRoutingDirectExecution(t *testing.T) {
 		t.Fatalf("expected session ID %s, got %s", expectedSessionID, directReq.SessionID)
 	}
 
-	// 2. Sent reply posted to origin channel and thread, with [dm_reply:...] attribution
+	// 2. Sent reply posted to origin channel and thread; the DM reply it
+	// answers travels as answers_message_id, never as text in the body.
 	mu.Lock()
 	defer mu.Unlock()
 	if len(sentMessages) != 1 {
@@ -2173,9 +2180,11 @@ func TestReplyRoutingDirectExecution(t *testing.T) {
 	if reply.ThreadRootID != origThreadID {
 		t.Fatalf("reply posted to thread %s, want origin thread %s", reply.ThreadRootID, origThreadID)
 	}
-	expectedAttribution := fmt.Sprintf("[dm_reply:%s:%s:@otherbot]", dmChanID, dmMsgID)
-	if !strings.Contains(reply.Body, expectedAttribution) {
-		t.Fatalf("reply body missing attribution %q, got: %s", expectedAttribution, reply.Body)
+	if reply.Answers != dmMsgID {
+		t.Fatalf("reply answers_message_id = %q, want the DM reply %s", reply.Answers, dmMsgID)
+	}
+	if strings.Contains(reply.Body, "dm_reply") || strings.Contains(reply.Body, dmChanID) {
+		t.Fatalf("reply body carries routing markup: %s", reply.Body)
 	}
 
 	// 3. 👍 reaction added to DM message

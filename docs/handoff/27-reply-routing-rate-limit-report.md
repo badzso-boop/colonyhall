@@ -226,3 +226,21 @@ ok  	colonyhall/internal/e2e	81.643s
    - Az új futások elkerülése, a `no-ack` és `attempts` számláló védelme a keret elérése vagy limit miatti leállás esetén, a szálankénti csendes értesítés, és a reaktív felébresztés.
 5. **`internal/httpserver/web/index.html`:**
    - A `renderMsg` linkelési logikája (`origin` és `dmReplyMatch`), valamint a `renderClaudeLimitsElement` beillesztése a gép és az agent felületekre.
+
+---
+
+## 6. Átnézés utáni javítások (Claude Code, 2026-10-29)
+
+Hét hiba, mindegyikhez teszt, ami a javítás nélkül elbukik:
+
+1. **A tegnapi esetet nem fedte le:** a `reply_origin` csak sima üzenetnél jött, a teljes hozzáférésű agenthez érkező agent-válasz viszont mindig jóváhagyott (`delegated`) tétel. Most mindkettő megkapja (`delivery.replyOrigin`), és a guard a jóváhagyott tétel promptjába is beírja az `answers_your_request` attribútumot. Teszt: `TestReplyRoutingIncidentReproduction` most a valós úton megy (teljes hozzáférésű `@visegrad-claude`, jóváhagyott válasz).
+2. **A sikeres válasz szövegét is limitüzenetnek nézte** („rate limit”, „usage limit”): egy erről író agent leállította volna a gép összes Claude agentjét, és a válasza elveszett volna. Most csak a hibával végződő futás hibaüzenete számít. Teszt: `TestAgent_AnswerMentioningLimitsIsNotALimitFailure`.
+3. **Törölt meglévő teszt:** az `internal/e2e/ratelimit_test.go` felülírása elvitte a 14. kör `TestAgentRateLimitAndParallelMentionsE2E` tesztjét. Visszaállítva; az új e2e tesztek az `internal/e2e/claude_limits_test.go`-ba kerültek.
+4. **`allowed_warning` is megállított:** csak a `rejected` állapot (vagy a tartalék) állít meg. Teszt: `TestClaudeLimiter_AllowedWarningBelowReserveKeepsRunning`.
+5. **`humanOnly` kiskapu:** a `reply_origin`-nel érkező agent-üzenet jóváhagyás nélkül átment a guard szűrőjén. Kivéve; teljes hozzáférésű agenthez agent üzenete csak `delegated` tételként jut el. Teszt: `TestHumanOnlyRefusesAgentReplyWithOriginUnlessDelegated`.
+6. **`[dm_reply:…]` a válasz szövegében:** hamisítható volt, és az agentek a szál előzményeiben olvasták. Helyette `answers_message_id` a küldésnél (a 00035-ös migrációban `answers_message_id` oszlop, a szerver csak akkor tárolja, ha a küldő tagja a hivatkozott csatornának) és `answers` az üzenetben; a felület ebből rajzolja a linket. Tesztek: a guard és az e2e incidens-teszt a mezőt nézi, a webes teszt pedig azt, hogy az oldal nem olvas jelölést a szövegből.
+7. **A szál nélküli DM-válasz időkorlát nélkül kötődött a régi kéréshez:** most legfeljebb 12 óráig (`delivery.ReplyOriginWindow`, az engedély felső korlátja). Teszt: `TestReplyRoutingTopLevelDMReplyWindow`.
+
+**Megfigyelés (nem ebben a körben keletkezett):** a guard bármelyik WebSocket-eseményre megnézi a postafiókot. Ha a jóváhagyás eseményére még azelőtt néz, hogy a jóváhagyott tétel beíródott, a következő eseményig vagy a 60 mp-es tartalék lekérdezésig vár. Élesben ez legfeljebb egy perc késés jóváhagyás után; felírva a `task.md`-be.
+
+Ellenőrzés a javítások után: `make test`, `make lint` (0 issues), `make test-web` (27/27), `make test-pg` (gyorsítótár nélkül, újra létrehozott `colony_test`), `go test -race ./internal/guard/ ./internal/e2e/`, `make gen-check` (commit után) — mind hibátlan.

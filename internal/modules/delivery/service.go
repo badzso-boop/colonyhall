@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/compaction"
@@ -417,39 +418,8 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 			item.ThreadRootID = m.ThreadRootID
 			item.MessageAt = m.CreatedAt
 
-			if by.Kind == identity.KindAgent && d.ItemKind == ItemMessage {
-				var reqMsg *conversation.Message
-				if m.ThreadRootID != ids.Nil {
-					root, err := s.Conversation.MessageByID(ctx, m.ThreadRootID)
-					if err == nil && root.AuthorID == by.ID && root.OriginChannelID != ids.Nil && root.OriginThreadID != ids.Nil {
-						reqMsg = &root
-					}
-				} else {
-					ch, err := getChannel(d.ChannelID)
-					if err == nil && ch.Kind == conversation.KindDM {
-						latest, err := s.Conversation.LatestTopLevelMessageByAuthor(ctx, d.ChannelID, by.ID)
-						if err == nil && latest.OriginChannelID != ids.Nil && latest.OriginThreadID != ids.Nil && !latest.CreatedAt.After(m.CreatedAt) {
-							reqMsg = &latest
-						}
-					}
-				}
-				if reqMsg != nil && reqMsg.DeletedAt == nil {
-					canRead, err := s.Conversation.CanRead(ctx, by, reqMsg.OriginChannelID)
-					if err == nil && canRead {
-						origThread, err := s.Conversation.MessageByID(ctx, reqMsg.OriginThreadID)
-						if err == nil && origThread.DeletedAt == nil && origThread.ChannelID == reqMsg.OriginChannelID {
-							origChan, err := getChannel(reqMsg.OriginChannelID)
-							if err == nil {
-								item.ReplyOrigin = &ReplyOrigin{
-									ChannelID:        reqMsg.OriginChannelID,
-									Channel:          origChan.Name,
-									ThreadRootID:     reqMsg.OriginThreadID,
-									RequestMessageID: reqMsg.ID,
-								}
-							}
-						}
-					}
-				}
+			if by.Kind == identity.KindAgent && (d.ItemKind == ItemMessage || d.ItemKind == ItemDelegated) {
+				item.ReplyOrigin = s.replyOrigin(ctx, by, d, m, getChannel)
 			}
 		}
 		if d.FromActorID != ids.Nil {
@@ -553,4 +523,54 @@ func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, na
 	}
 	_, err := s.Store.Insert(ctx, d)
 	return err
+}
+
+// ReplyOriginWindow bounds how long a top-level DM message still counts as
+// the answer to the recipient's latest request in that DM (the grant cap).
+const ReplyOriginWindow = 12 * time.Hour
+
+// replyOrigin finds the thread an agent's request was sent from when m answers
+// it: m is in the thread of the request, or m is a top-level DM message after
+// the request and within ReplyOriginWindow. Approved replies ("delegated"
+// items) count as well: that is how an agent's answer reaches a full-access
+// agent.
+func (s *Service) replyOrigin(ctx context.Context, by identity.Actor, d Delivery, m conversation.Message, getChannel func(ids.ID) (conversation.Channel, error)) *ReplyOrigin {
+	var req conversation.Message
+	if m.ThreadRootID != ids.Nil {
+		root, err := s.Conversation.MessageByID(ctx, m.ThreadRootID)
+		if err != nil || root.AuthorID != by.ID {
+			return nil
+		}
+		req = root
+	} else {
+		ch, err := getChannel(d.ChannelID)
+		if err != nil || ch.Kind != conversation.KindDM {
+			return nil
+		}
+		latest, err := s.Conversation.LatestTopLevelMessageByAuthor(ctx, d.ChannelID, by.ID)
+		if err != nil || latest.CreatedAt.After(m.CreatedAt) || m.CreatedAt.Sub(latest.CreatedAt) > ReplyOriginWindow {
+			return nil
+		}
+		req = latest
+	}
+	if req.OriginChannelID == ids.Nil || req.OriginThreadID == ids.Nil || req.DeletedAt != nil {
+		return nil
+	}
+	if canRead, err := s.Conversation.CanRead(ctx, by, req.OriginChannelID); err != nil || !canRead {
+		return nil
+	}
+	origThread, err := s.Conversation.MessageByID(ctx, req.OriginThreadID)
+	if err != nil || origThread.DeletedAt != nil || origThread.ChannelID != req.OriginChannelID {
+		return nil
+	}
+	origChan, err := getChannel(req.OriginChannelID)
+	if err != nil {
+		return nil
+	}
+	return &ReplyOrigin{
+		ChannelID:        req.OriginChannelID,
+		Channel:          origChan.Name,
+		ThreadRootID:     req.OriginThreadID,
+		RequestMessageID: req.ID,
+	}
 }
