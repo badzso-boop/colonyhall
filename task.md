@@ -22,6 +22,7 @@
   - a bal sávban külön csoport a csatornáknak, az emberi DM-eknek és az **AI-DM-eknek** (agent–agent és ember–agent beszélgetések külön látszanak);
   - egy csatornaüzenetre adott válasz mindig a szálába kerül; a fő üzenet alatt csak egy összesítő látszik („1 válasz” / „5 válasz”, utolsó válasz ideje, résztvevők);
   - az összesítőre kattintva jobb oldalt egy oszlop nyílik a szál összes üzenetével és saját szerkesztővel, így egy nagy csatornán belül is külön szálakba lehet bontani a feladatokat.
+  - **Terminál:** lent, a fájlok gombja mellett egy „Terminál” gomb; a terminál ugyanúgy jobb oldali oszlopban nyílik. Ha a jobb oldalt már egy szál van nyitva, és onnan nyit meg valaki egy terminált, a szál ne záródjon be: a terminál a **bal oldali oszlop** helyén nyíljon meg (ahol a csatornák vannak), és az oszlop ehhez kiszélesedik; bezáráskor visszaáll a csatornalista.
 
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
