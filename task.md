@@ -14,8 +14,6 @@
 
 ## Nyitott
 
-- [ ] **Kiadva (2026-10-29, `docs/handoff/29-sandbox-planner-tools-prompt.md`, ág: `feature/sandbox-planner-tools`):** (1) a sandboxos agent (pl. `@aszisztens`) nem éri el a `planner_read`/`calendar_read` eszközt, mert a sandboxos munkafutás nem kap Colonyhall MCP-t — megoldás a `web_read` mintájára, csak olvasó, a token a guardban marad; (2) a sandboxos agent döntő lépése alatt (8–51 mp) nem látszik a „dolgozik…”.
-
 - [ ] **Dátum az üzeneteknél és napelválasztó** (Norbi, 2026-10-29): az üzenetek mellett ne csak a másodpercre pontos idő legyen, hanem a dátum is; és a napok között egy halvány vonal (a nappal) válassza el az üzeneteket, a csatornákban, a DM-ekben és a szálakban is. Csak felírva, még nincs kiadva.
 
 - [ ] **Slack-szerű felület a React PWA-hoz** (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz). **A PWA legyen reszponzív, telefonon is teljes értékűen használható** (a részleteket később fejtjük ki: oszlopok, szál- és terminálpanel telefonon). A csatornákban most nagy a kavalkád, ezért:
@@ -39,6 +37,10 @@
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 ## Kész
+
+- [x] **Planner eszközök sandboxos agenteknek és döntési fázis „dolgozik…” jelzése** (2026-10-29, commitok: `cc5b7bc`, `6108e68`, `docs/handoff/29-sandbox-planner-tools-report.md`, ág: `feature/sandbox-planner-tools`):
+  - **Planner MCP eszközök sandboxos munkafutásoknak:** az őr a sandboxos agentek munkafutásának idejére gazdagép-oldali Streamable HTTP MCP szervert indít (`colony-planner`, `<agent_dir>/planner.sock`), amely szigorúan csak a `planner_read` és `calendar_read` eszközöket szolgálja ki; a belső híd a sandbox belső `127.0.0.1:3130` portját köti a socketre; az MCP hívásokat az őr a memóriában lévő ágens-token segítségével közvetíti a Colonyhall szerver `/mcp` végpontja felé (a token soha nem lép be a sandboxba); Claude Code (`mcp.json` és `--allowedTools`) és Antigravity (`config/mcp_config.json` és `settings.json` `perms["allow"] = ["mcp(colony-planner/*)"]`) konfiguráció; a munkafelszólításban 1 soros tájékoztató megjegyzés.
+  - **Döntési fázis aktivitásjelzése és villogásmentes átmenet:** az őr a `handle` döntési fázisa (`Decide`) alatt is `working` állapotot jelent az érintett csatorna/szál párokra; közvetlenül utána induló munkafutás esetén a referenciaszámlált `startActivity` megelőzi a köztes `idle` villogást; főági DM esetén a csatorna ID a szálazonosító.
 
 - [x] **Saját feladatlista és naptár, reggeli összefoglalóval** (2026-10-29, `docs/handoff/28-planner-calendar-report.md`, ág: `feature/planner`; Claude Code fejezte be). A PWA-ban is kell majd:
   - **Feladatok:** cím, leírás, állapot (ütemezve / elkezdve / befejezve), mindent Norbi állít; az agentek csak olvassák.

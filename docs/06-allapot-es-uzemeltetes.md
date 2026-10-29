@@ -63,7 +63,7 @@
 **Agent létrehozása:** „Gépek” → „Új agent”. Sandbox nélküli agentnek kötelező a `root dir`; `compact` választásakor a sandbox magától bepipálódik. Ha a géphez rendelés hibát dob, ugyanazzal a névvel újrapróbálható (az űrlap a meglévő agentet használja). Új gyökérmappa a gép `guard.yaml` `roots` listájába kell (pl. a szakdoga mappa 2026-10-22-én), utána őr-újraindítás.
 
 **Reggeli összefoglaló (asszisztens):**
-1. „Gépek” → új agent `@asszisztens` a homelab gépen: sandbox, Antigravity flash-low, mappa nem kell.
+1. „Gépek” → új agent `@asszisztens` a homelab gépen: sandbox, Antigravity flash-low, „munka” bepipálva (hogy munkafutásban elérje a naptárat és a feladatokat), mappa nem kell.
 2. 📅 Naptár fül → „Ki olvashatja”: a naptárnál pipáld be `@asszisztens`-t (a feladatokat alapból minden agent olvashatja).
 3. A vele közös DM-ben: `/cron "30 7 * * *" Reggeli összefoglaló.`
 4. Az első üzenetbe vagy az agent leírásába ezt az utasítást másold be:
