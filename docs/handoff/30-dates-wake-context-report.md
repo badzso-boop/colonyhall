@@ -69,3 +69,7 @@ Külön Sonnet-agent nézte át a `9ef0dce..HEAD` változásokat. Közepes vagy 
 1. A `internal/gateway/gateway.go` `visible()` új ága: csak a címzett kapja meg a jelzést.
 2. Az `internal/eventlog/consumer.go` `notifyCommitted` függvénye: nem okozhat-e jelzésvihart a fogyasztók között (a teszt az üres körre is ellenőrzi).
 3. A migráció sorszáma (`00037`): ha a 29. kör is ad migrációt, beolvasztáskor át kell számozni.
+
+## Átnézés (Claude Code, 2026-10-29)
+
+Javítani való nem volt. Az átjáró a `delivery.item_created` jelzést csak a címzettnek (és az adminoknak) adja ki; a fogyasztó csak akkor jelez, ha a kezelője új eseményt írt, így nincs jelzésvihar; a tétel és az esemény egy tranzakcióban íródik. A 29. kör után rebase (csak `task.md` ütközött). A pótolt `make test-pg` (gyorsítótár nélkül, új `colony_test`) zöld, a `-race` futás (`guard`, `e2e`, `eventlog`, `gateway`) is.

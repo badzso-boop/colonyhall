@@ -122,3 +122,7 @@ Az e2e teszt hitelesíti, hogy:
 
 - Egyéb Colonyhall eszközök (pl. `send`, `ack`, `wiki_*`) biztosítása sandboxos agenteknek — a sandboxos agentek továbbra is kizárólag a végső szöveges válaszukon keresztül felelnek.
 - Jóváhagyás utáni késői ébredés vizsgálata (`task.md`, 2026-10-29).
+
+## Átnézés (Claude Code, 2026-10-29)
+
+Egy javítás (`acb0e86`): a munkafutás minden sandboxos agentnek elindította a planner-szervert és megnevezte a két eszközt a promptban (`p.AllowPlanner || a.Sandbox`), a sandbox viszont csak elszigetelt hálózatnál (nem `sandbox_network: open`) köti be a hidat. Most csak a gép szabálya (`AllowPlanner`) dönt. Teszt: `TestPlannerMCP_NotOfferedWithoutPolicy` (a javítás nélkül elbukik). A token a guardban marad, a sandbox csak a `127.0.0.1:3130` címet kapja; ezt a meglévő tesztek nézik.
