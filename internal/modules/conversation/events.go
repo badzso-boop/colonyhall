@@ -54,12 +54,10 @@ type MessageCreated struct {
 	Body         string   `json:"body"`
 	Mentions     []string `json:"mentions"`
 	// NoThreadFollow: delivered to the thread's agents another way.
-	NoThreadFollow  bool         `json:"no_thread_follow,omitempty"`
-	Silent          bool         `json:"silent,omitempty"`
-	OriginChannelID string       `json:"origin_channel_id,omitempty"`
-	OriginThreadID  string       `json:"origin_thread_id,omitempty"`
-	Attachments     []Attachment `json:"attachments,omitempty"`
-	CreatedAt       time.Time    `json:"created_at"`
+	NoThreadFollow bool         `json:"no_thread_follow,omitempty"`
+	Silent         bool         `json:"silent,omitempty"`
+	Attachments    []Attachment `json:"attachments,omitempty"`
+	CreatedAt      time.Time    `json:"created_at"`
 }
 
 // MessageRetracted is the payload of EventMessageRetracted.

@@ -341,7 +341,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			}
 			msgs := []Message{existing}
 			s.enrichLinkCards(ctx, msgs)
-			s.enrichOrigins(ctx, msgs)
+			s.enrichOrigins(ctx, by, msgs)
 			return SendResult{Message: &msgs[0]}, nil
 		}
 		if !errors.Is(err, db.ErrNotFound) {
@@ -387,12 +387,8 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		}
 	}
 	var answersID ids.ID
-	if by.Kind == identity.KindAgent && in.AnswersMessageID != ids.Nil {
-		if ref, err := s.Store.MessageByID(ctx, in.AnswersMessageID); err == nil && ref.DeletedAt == nil && ref.ChannelID != c.ID {
-			if refMem, err := s.membership(ctx, ref.ChannelID, by.ID); err == nil && refMem.IsMember {
-				answersID = ref.ID
-			}
-		}
+	if by.Kind == identity.KindAgent && in.AnswersMessageID != ids.Nil && in.ThreadRootID != ids.Nil {
+		answersID = s.checkedAnswers(ctx, by, c.ID, in.ThreadRootID, in.AnswersMessageID)
 	}
 	var msg Message
 	var seq int64
@@ -472,22 +468,73 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	}
 	msgs := []Message{msg}
 	s.enrichLinkCards(ctx, msgs)
-	s.enrichOrigins(ctx, msgs)
+	s.enrichOrigins(ctx, by, msgs)
 	msg = msgs[0]
 	return SendResult{Message: &msg}, nil
 }
 
-func (s *Service) enrichOrigins(ctx context.Context, msgs []Message) {
+// checkedAnswers returns refID only if it is another actor's reply, in a DM
+// the agent belongs to, to the agent's own request that was sent from exactly
+// this channel and thread (the reply-routing case). Anything else is dropped,
+// so an agent cannot attach a link to an unrelated message.
+func (s *Service) checkedAnswers(ctx context.Context, by identity.Actor, channelID, threadRootID, refID ids.ID) ids.ID {
+	ref, err := s.Store.MessageByID(ctx, refID)
+	if err != nil || ref.DeletedAt != nil || ref.AuthorID == by.ID {
+		return ids.Nil
+	}
+	refCh, err := s.Store.ChannelByID(ctx, ref.ChannelID)
+	if err != nil || refCh.Kind != KindDM {
+		return ids.Nil
+	}
+	if mem, err := s.membership(ctx, ref.ChannelID, by.ID); err != nil || !mem.IsMember {
+		return ids.Nil
+	}
+	var req Message
+	if ref.ThreadRootID != ids.Nil {
+		req, err = s.Store.MessageByID(ctx, ref.ThreadRootID)
+	} else {
+		req, err = s.Store.LatestTopLevelMessageByAuthor(ctx, ref.ChannelID, by.ID)
+		if err == nil && req.CreatedAt.After(ref.CreatedAt) {
+			return ids.Nil
+		}
+	}
+	if err != nil || req.AuthorID != by.ID || req.OriginChannelID != channelID || req.OriginThreadID != threadRootID {
+		return ids.Nil
+	}
+	return ref.ID
+}
+
+// enrichOrigins fills the origin channel name and the answered message for
+// the viewer, and hides both when the viewer cannot read that channel: a DM
+// reader must not learn about a private channel, nor a channel reader about
+// a DM.
+func (s *Service) enrichOrigins(ctx context.Context, by identity.Actor, msgs []Message) {
+	readable := map[ids.ID]bool{}
+	canRead := func(channelID ids.ID) bool {
+		if ok, seen := readable[channelID]; seen {
+			return ok
+		}
+		ok, err := s.CanRead(ctx, by, channelID)
+		readable[channelID] = err == nil && ok
+		return readable[channelID]
+	}
 	for i := range msgs {
-		if msgs[i].AnswersMessageID != ids.Nil && msgs[i].AnswersChannelID == ids.Nil {
-			if ref, err := s.Store.MessageByID(ctx, msgs[i].AnswersMessageID); err == nil {
+		if msgs[i].AnswersMessageID != ids.Nil {
+			ref, err := s.Store.MessageByID(ctx, msgs[i].AnswersMessageID)
+			if err == nil && ref.DeletedAt == nil && canRead(ref.ChannelID) {
 				msgs[i].AnswersChannelID = ref.ChannelID
 				msgs[i].AnswersAuthorID = ref.AuthorID
+			} else {
+				msgs[i].AnswersMessageID = ids.Nil
 			}
 		}
-		if msgs[i].OriginChannelID != ids.Nil && msgs[i].OriginChannel == "" {
-			if ch, err := s.Store.ChannelByID(ctx, msgs[i].OriginChannelID); err == nil {
+		if msgs[i].OriginChannelID != ids.Nil {
+			ch, err := s.Store.ChannelByID(ctx, msgs[i].OriginChannelID)
+			if err == nil && canRead(ch.ID) {
 				msgs[i].OriginChannel = ch.Name
+			} else {
+				msgs[i].OriginChannelID = ids.Nil
+				msgs[i].OriginThreadID = ids.Nil
 			}
 		}
 	}
@@ -581,12 +628,6 @@ func MessageCreatedPayload(m Message) MessageCreated {
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()
 	}
-	if m.OriginChannelID != ids.Nil {
-		p.OriginChannelID = m.OriginChannelID.String()
-	}
-	if m.OriginThreadID != ids.Nil {
-		p.OriginThreadID = m.OriginThreadID.String()
-	}
 	for _, id := range m.Mentions {
 		p.Mentions = append(p.Mentions, id.String())
 	}
@@ -655,7 +696,7 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if err != nil {
 		return nil, err
 	}
-	s.enrichOrigins(ctx, msgs)
+	s.enrichOrigins(ctx, by, msgs)
 	return s.withCompactions(ctx, maskRetracted(msgs))
 }
 

@@ -730,3 +730,123 @@ func TestReplyRoutingTopLevelDMReplyWindow(t *testing.T) {
 		t.Fatalf("a DM 13 h after the request was routed to the old thread: %+v", ro)
 	}
 }
+
+// The answer link (answers) and the request origin (origin) are kept only for
+// a real reply to the agent's own request from that thread, and are shown
+// only to viewers who can read the channel they point to.
+func TestReplyRoutingLinksRespectAccess(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	privKind := apispec.Private
+	var secret apispec.Channel
+	if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, apispec.CreateChannelRequest{Name: "secret", Kind: &privKind}, &secret); s != http.StatusCreated {
+		t.Fatalf("create channel: %d", s)
+	}
+	askerID, askerTok := e.createActor("agent", "asker", "member")
+	helperID, helperTok := e.createActor("agent", "helper", "member")
+	otherID, otherTok := e.createActor("agent", "other", "member")
+	viewerID, viewerTok := e.createUser("viewer", "Viewer")
+	canWrite := true
+	for _, id := range []string{askerID, viewerID} {
+		e.do("POST", "/api/v1/channels/"+secret.Id.String()+"/members", server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(id), CanWrite: &canWrite}, nil)
+	}
+	root, _ := e.send(server.DevAdminToken, secret.Id.String(), map[string]any{"body": "@asker coordinate the tests"})
+	root2, _ := e.send(server.DevAdminToken, secret.Id.String(), map[string]any{"body": "another topic"})
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	mcpSend := func(tok string, headers map[string]string, args map[string]any) {
+		t.Helper()
+		var rt http.RoundTripper
+		if headers != nil {
+			rt = headerTripper{headers: headers, base: http.DefaultTransport}
+		}
+		s, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", tok, rt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = s.Close() }()
+		res, err := s.CallTool(ctx, &mcp.CallToolParams{Name: "send", Arguments: args})
+		if err != nil || res.IsError {
+			t.Fatalf("send %v: %v %+v", args, err, res)
+		}
+		if err := e.app.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// asker asks helper from the root thread; helper answers in the DM thread.
+	mcpSend(askerTok, map[string]string{"X-Colonyhall-Channel": secret.Id.String(), "X-Colonyhall-Thread": root.ID},
+		map[string]any{"channel": "@helper", "text": "please run the tests"})
+	var dm struct{ ID string }
+	e.do("POST", "/api/v1/dms", askerTok, map[string]any{"actor_ids": []string{helperID}}, &dm)
+	request := e.getMessages(dm.ID)[0]
+	mcpSend(helperTok, nil, map[string]any{"channel": "@asker", "thread": request.Id.String(), "text": "30/30 green"})
+	var reply apispec.Message
+	for _, m := range e.getMessages(dm.ID) {
+		if m.Body == "30/30 green" {
+			reply = m
+		}
+	}
+	// An unrelated DM message from another agent.
+	mcpSend(otherTok, nil, map[string]any{"channel": "@asker", "text": "unrelated"})
+	var dmOther struct{ ID string }
+	e.do("POST", "/api/v1/dms", askerTok, map[string]any{"actor_ids": []string{otherID}}, &dmOther)
+	unrelated := e.getMessages(dmOther.ID)[0]
+
+	post := func(thread string, answers uuid.UUID) apispec.Message {
+		t.Helper()
+		var res apispec.SendResult
+		if s := e.do("POST", "/api/v1/channels/"+secret.Id.String()+"/messages", askerTok, map[string]any{
+			"body": "result", "thread_root_id": thread, "answers_message_id": answers.String(),
+		}, &res); s != http.StatusCreated || res.Message == nil {
+			t.Fatalf("post answer: %d %+v", s, res)
+		}
+		return *res.Message
+	}
+	if m := post(root.ID, reply.Id); m.Answers == nil || m.Answers.MessageId != reply.Id {
+		t.Fatalf("a real reply to the asker's request from this thread lost its link: %+v", m.Answers)
+	}
+	if m := post(root.ID, unrelated.Id); m.Answers != nil {
+		t.Fatalf("a link to an unrelated DM message was stored: %+v", m.Answers)
+	}
+	if m := post(root2.ID, reply.Id); m.Answers != nil {
+		t.Fatalf("a link from a thread the request did not come from was stored: %+v", m.Answers)
+	}
+
+	// Readers: the viewer is in #secret but not in the DM; helper is in the
+	// DM but not in #secret. The admin can read both.
+	answersIn := func(tok string) bool {
+		var th apispec.Thread
+		e.do("GET", "/api/v1/messages/"+root.ID+"/thread", tok, nil, &th)
+		for _, m := range th.Replies {
+			if m.Answers != nil {
+				return true
+			}
+		}
+		return false
+	}
+	if !answersIn(server.DevAdminToken) {
+		t.Fatal("the admin should see the answer link")
+	}
+	if answersIn(viewerTok) {
+		t.Fatal("a viewer who cannot read the DM sees the answer link")
+	}
+	originFor := func(tok string) *apispec.MessageOrigin {
+		var list apispec.MessageList
+		e.do("GET", "/api/v1/channels/"+dm.ID+"/messages", tok, nil, &list)
+		for _, m := range list.Messages {
+			if m.Id == request.Id {
+				return m.Origin
+			}
+		}
+		t.Fatalf("request not visible")
+		return nil
+	}
+	if originFor(server.DevAdminToken) == nil {
+		t.Fatal("the admin should see the request's origin")
+	}
+	if o := originFor(helperTok); o != nil {
+		t.Fatalf("helper, not in #secret, sees the origin channel: %+v", o)
+	}
+}

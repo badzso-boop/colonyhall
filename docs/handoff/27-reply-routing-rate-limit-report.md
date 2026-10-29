@@ -241,6 +241,8 @@ Hét hiba, mindegyikhez teszt, ami a javítás nélkül elbukik:
 6. **`[dm_reply:…]` a válasz szövegében:** hamisítható volt, és az agentek a szál előzményeiben olvasták. Helyette `answers_message_id` a küldésnél (a 00035-ös migrációban `answers_message_id` oszlop, a szerver csak akkor tárolja, ha a küldő tagja a hivatkozott csatornának) és `answers` az üzenetben; a felület ebből rajzolja a linket. Tesztek: a guard és az e2e incidens-teszt a mezőt nézi, a webes teszt pedig azt, hogy az oldal nem olvas jelölést a szövegből.
 7. **A szál nélküli DM-válasz időkorlát nélkül kötődött a régi kéréshez:** most legfeljebb 12 óráig (`delivery.ReplyOriginWindow`, az engedély felső korlátja). Teszt: `TestReplyRoutingTopLevelDMReplyWindow`.
 
+**Biztonsági utójavítás (automatikus biztonsági átnézés nyomán):** az `answers_message_id`-t a szerver csak valódi válaszként fogadja el (a küldő saját, ebből a szálból indított kérésére adott válasz egy DM-ben), és az `answers`/`origin` csak annak látszik, aki a hivatkozott csatornát olvashatja; a `message.created` esemény nem viszi az eredetet. Teszt: `TestReplyRoutingLinksRespectAccess`.
+
 **Megfigyelés (nem ebben a körben keletkezett):** a guard bármelyik WebSocket-eseményre megnézi a postafiókot. Ha a jóváhagyás eseményére még azelőtt néz, hogy a jóváhagyott tétel beíródott, a következő eseményig vagy a 60 mp-es tartalék lekérdezésig vár. Élesben ez legfeljebb egy perc késés jóváhagyás után; felírva a `task.md`-be.
 
 Ellenőrzés a javítások után: `make test`, `make lint` (0 issues), `make test-web` (27/27), `make test-pg` (gyorsítótár nélkül, újra létrehozott `colony_test`), `go test -race ./internal/guard/ ./internal/e2e/`, `make gen-check` (commit után) — mind hibátlan.

@@ -37,7 +37,7 @@ func (s *Service) Thread(ctx context.Context, by identity.Actor, messageID ids.I
 	if err != nil {
 		return Message{}, nil, err
 	}
-	s.enrichOrigins(ctx, all)
+	s.enrichOrigins(ctx, by, all)
 	all = maskRetracted(all)
 	var root Message
 	var replies []Message
