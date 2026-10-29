@@ -22,11 +22,6 @@
   - az összesítőre kattintva jobb oldalt egy oszlop nyílik a szál összes üzenetével és saját szerkesztővel, így egy nagy csatornán belül is külön szálakba lehet bontani a feladatokat.
   - **Terminál:** lent, a fájlok gombja mellett egy „Terminál” gomb; a terminál ugyanúgy jobb oldali oszlopban nyílik. Ha a jobb oldalt már egy szál van nyitva, és onnan nyit meg valaki egy terminált, a szál ne záródjon be: a terminál a **bal oldali oszlop** helyén nyíljon meg (ahol a csatornák vannak), és az oszlop ehhez kiszélesedik; bezáráskor visszaáll a csatornalista.
 
-- [ ] **Saját feladatlista és naptár, reggeli összefoglalóval** (Norbi, 2026-10-29, szűkítve). Kiadva a fejlesztői oldalra: `docs/handoff/28-planner-calendar-prompt.md`, ág: `feature/planner`. A PWA-ban is:
-  - **Feladatok:** cím, leírás, állapot (ütemezve / elkezdve / befejezve), mindent Norbi állít; az agentek csak olvassák.
-  - **Naptár:** feliratkozás külső naptárakra ICS-linkkel, mai és 7 napos nézet; csak a kiválasztott agentek olvashatják.
-  - **Reggeli összefoglaló (7:30, napi egy üzenet):** mai naptáresemények (a naptár csak nagyjából pontos, nem tervez köré), tegnap befejezett / elkezdett / áthozott feladatok, mai feladatok. Napközben nincs üzenet, nincs tanulás.
-
 - [ ] **Vállalkozási asszisztens (29. kör, Norbi döntése, 2026-10-29):** havi számlázási emlékeztető ügyfelenként, az alanyi adómentesség értékhatárának figyelése (a bevételt és a határt Norbi adja meg). Csak terv.
 
 - [ ] **Később az asszisztenshez (csak ötletek, Norbi egyelőre nem kéri, 2026-10-29):** napközbeni javaslatok, tanulás a reakciókból, gazdagabb feladatmezők (határidő, becsült idő), gyors rögzítés a chatből, Colonyhall-ügyek a reggeli összefoglalóban.
@@ -42,6 +37,11 @@
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 ## Kész
+
+- [x] **Saját feladatlista és naptár, reggeli összefoglalóval** (2026-10-29, `docs/handoff/28-planner-calendar-report.md`, ág: `feature/planner`; Claude Code fejezte be). A PWA-ban is kell majd:
+  - **Feladatok:** cím, leírás, állapot (ütemezve / elkezdve / befejezve), mindent Norbi állít; az agentek csak olvassák.
+  - **Naptár:** feliratkozás külső naptárakra ICS-linkkel, mai és 7 napos nézet; csak a kiválasztott agentek olvashatják.
+  - **Reggeli összefoglaló (7:30, napi egy üzenet):** mai naptáresemények (a naptár csak nagyjából pontos, nem tervez köré), tegnap befejezett / elkezdett / áthozott feladatok, mai feladatok. Napközben nincs üzenet, nincs tanulás.
 
 - [x] **Válasz-irányítás az eredeti szálba és Claude használati keretvédelem** (2026-10-29, commitok: `a70cfd9`, `c40c5bf`, `e9c9f16`, `f6c7b9f`, `2080ae0`, átnézés utáni javítások `1126a67`, `963ba34`, `docs/handoff/27-reply-routing-rate-limit-report.md`, ág: `feature/reply-routing`):
   - **Válasz-irányítás az eredeti szálba (reply routing):** csatorna-szálból indított DM kérések (`origin_channel_id`, `origin_thread_id`; a válasz hivatkozása `answers_message_id`) megválaszolásakor az őr a választ az eredeti szál munkamenetében (`sessionKey`) és generációjában futtatja; a válasz szövege, az élő lépések és az MCP környezet az eredeti szálba mennek (`note_get` az eredeti jegyzetet adja vissza); a DM-ben csupán egy reakciót (👍) helyez el; prompt szabály rögzíti, hogy a válasz nem csak nyugtázandó, hanem a munka folytatandó; a felületen kattintható oda-vissza linkek jelennek meg.

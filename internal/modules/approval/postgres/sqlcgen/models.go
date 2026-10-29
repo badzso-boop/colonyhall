@@ -398,6 +398,54 @@ type MessageFile struct {
 	Position  int32
 }
 
+type PlannerAccess struct {
+	OwnerID      uuid.UUID
+	WorkspaceID  uuid.UUID
+	TaskAll      bool
+	TaskAgentIds []uuid.UUID
+	CalAgentIds  []uuid.UUID
+	UpdatedAt    time.Time
+}
+
+type PlannerCalendar struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	OwnerID       uuid.UUID
+	Name          string
+	Url           string
+	Colour        string
+	LastFetchedAt *time.Time
+	LastError     string
+	CreatedAt     time.Time
+}
+
+type PlannerCalendarEvent struct {
+	CalendarID  uuid.UUID
+	OwnerID     uuid.UUID
+	Title       string
+	StartsAt    time.Time
+	EndsAt      time.Time
+	AllDay      bool
+	Location    string
+	Description string
+}
+
+type PlannerTask struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	OwnerID         uuid.UUID
+	Title           string
+	Description     string
+	Status          string
+	Position        float64
+	StartedAt       *time.Time
+	DoneAt          *time.Time
+	StatusChangedAt time.Time
+	DeletedAt       *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type Preview struct {
 	ID           uuid.UUID
 	WorkspaceID  uuid.UUID

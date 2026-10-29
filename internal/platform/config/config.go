@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 // Config is the runtime configuration of the server.
@@ -36,6 +37,8 @@ type Config struct {
 	GiteaPublicURL string
 	// GiteaWebhookSecret is the HMAC secret for verifying incoming webhooks.
 	GiteaWebhookSecret string
+	// CalendarRefresh is how often subscribed calendars are fetched (default 15m).
+	CalendarRefresh time.Duration
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
@@ -46,7 +49,14 @@ func FromEnv() (Config, error) {
 			maxUpload = n
 		}
 	}
+	calRefresh := 15 * time.Minute
+	if v := os.Getenv("COLONY_CALENDAR_REFRESH"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
+			calRefresh = d
+		}
+	}
 	c := Config{
+		CalendarRefresh:    calRefresh,
 		Role:               getenv("COLONY_ROLE", "all"),
 		HTTPAddr:           getenv("COLONY_HTTP_ADDR", ":8080"),
 		Store:              getenv("COLONY_STORE", "postgres"),

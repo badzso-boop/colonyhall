@@ -15,6 +15,7 @@
 | Együttműködés | kérdés–válasz (`Q-NN`), wiki és döntésnapló (`D-NN`), jegyzetfüzet szálanként, foglalások (`lease`), agent–agent sebességkorlát, **feladatátadás jóváhagyással és engedéllyel (grant)**: agent feladata teljes hozzáférésű agentnek → admin jóváhagyja az eredeti üzenet alatt (külön Q-chat üzenet nélkül); DM-ben az engedély az egész DM-re kiterjed (szálfüggetlen) |
 | Fájlok | csatolmányok; **helyi fájllinkek** megnyitása (az őr tölti fel az agent jogaival, csak ember látja); **fájlböngésző** (Monaco-néző, fa, kereső, git-állapot, `fájl:sor` hivatkozások), az agent saját mappájából |
 | Hosszú parancsok | **agent-terminálok** (`tmux -L colonyhall`): indításkor csendes szálüzenet (`🖥 <név> elindult: <parancs>`), a futást túlélik, a végén ébresztenek; fejlécben és aktivitásjelző mellett futó terminálok számlálója; élő, csak olvasható nézet az adatlapon; SSH: `tmux -L colonyhall attach -r -t colony-<agent>-<név>` |
+| Saját feladatok és naptár | **📝 Feladatok** (cím, leírás, állapot: ütemezve / elkezdve / befejezve, sorrend húzással vagy ↑/↓) és **📅 Naptár** (feliratkozás ICS-linkre, mai és 7 napos nézet). Csak a tulajdonos írja; az agentek a `planner_read` és `calendar_read` MCP-eszközzel olvashatják, ha a tulajdonos engedi (feladatok: alapból minden agent, naptár: alapból senki). |
 | Egyéb | ütemező (`/daily`, `/cron`, `/schedule`, DM-ben is), költségkeret, jóváhagyás a chatből, Gitea (link kártyák, webhookok), előnézetek, vészleállító, auditnapló |
 
 ## Hol fut
@@ -60,6 +61,16 @@
 **Tömörítés beállítása:** a jegyző agent legyen géphez rendelve (`compact` mód + sandbox, olcsó modell); „Gépek” fül → tömörítés: küszöb (alapból 350 000 token, 20 000–2 000 000), jegyző. Beragadt (`pending`) tömörítés 15 perc után lejár; a „🗜 Tömörítés most” újat indít.
 
 **Agent létrehozása:** „Gépek” → „Új agent”. Sandbox nélküli agentnek kötelező a `root dir`; `compact` választásakor a sandbox magától bepipálódik. Ha a géphez rendelés hibát dob, ugyanazzal a névvel újrapróbálható (az űrlap a meglévő agentet használja). Új gyökérmappa a gép `guard.yaml` `roots` listájába kell (pl. a szakdoga mappa 2026-10-22-én), utána őr-újraindítás.
+
+**Reggeli összefoglaló (asszisztens):**
+1. „Gépek” → új agent `@asszisztens` a homelab gépen: sandbox, Antigravity flash-low, mappa nem kell.
+2. 📅 Naptár fül → „Ki olvashatja”: a naptárnál pipáld be `@asszisztens`-t (a feladatokat alapból minden agent olvashatja).
+3. A vele közös DM-ben: `/cron "30 7 * * *" Reggeli összefoglaló.`
+4. Az első üzenetbe vagy az agent leírásába ezt az utasítást másold be:
+
+   > Minden reggel egy üzenetet írsz magyarul, legfeljebb kb. 12 sorban. Hívd meg a `planner_read`-et és a `calendar_read`-et. Részek: **Ma a naptárban:** a mai események egyszerű listában (idő, cím, helyszín); a naptár csak nagyjából pontos, ne tervezz köré és ne figyelmeztess ütközésekre. **Tegnap:** mit fejeztem be, mit kezdtem el, és mi az, amit korábban kezdtem el és még nyitott (áthozva mára). **Mai feladatok:** előbb az elkezdettek, aztán az első néhány ütemezett, az én sorrendemben. Ne találj ki prioritást, ne adj tanácsot. Ha egy rész üres, hagyd ki.
+
+**Naptárfrissítés:** a szerver 15 percenként tölti le a naptárakat (`COLONY_CALENDAR_REFRESH`, pl. `30m`; legalább 1 perc). A link titok: a felület csak maszkolva mutatja, naplóba és agenthez nem kerül.
 
 **Claude Code keretvédelem (`guard.yaml`):**
 - `rate_limit_reserve`: 90 (alapértelmezett). Ha a Claude 5 órás vagy heti kerete eléri ezt a százalékot, az őr egyetlen új Claude Code futást sem indít el. A feladatok nem vesznek el, az inboxban várakoznak, az `attempts` számláló nem nő, és a szálba szálanként egyszer csendes üzenet kerül ki. Az újraindulás (`resets_at + 1m`) után a feldolgozás automatikusan folytatódik.

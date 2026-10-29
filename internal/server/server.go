@@ -88,6 +88,12 @@ import (
 	notesmcp "colonyhall/internal/modules/notes/mcptools"
 	notesmem "colonyhall/internal/modules/notes/memory"
 	notespg "colonyhall/internal/modules/notes/postgres"
+	"colonyhall/internal/modules/planner"
+	plannerfetch "colonyhall/internal/modules/planner/fetch"
+	plannerhttp "colonyhall/internal/modules/planner/httpapi"
+	plannermcp "colonyhall/internal/modules/planner/mcptools"
+	plannermem "colonyhall/internal/modules/planner/memory"
+	plannerpg "colonyhall/internal/modules/planner/postgres"
 	"colonyhall/internal/modules/preview"
 	previewhttp "colonyhall/internal/modules/preview/httpapi"
 	previewmcp "colonyhall/internal/modules/preview/mcptools"
@@ -151,6 +157,11 @@ type Options struct {
 	GiteaPublicURL     string
 	GiteaWebhookSecret string
 	GitProvider        provider.GitProvider
+
+	// CalendarRefresh is how often subscribed calendars are fetched
+	// (default 15 minutes); CalendarFetcher replaces the safe fetcher in tests.
+	CalendarRefresh time.Duration
+	CalendarFetcher planner.Fetcher
 }
 
 // App is a wired-up Colonyhall server.
@@ -170,6 +181,7 @@ type App struct {
 	Preview      *preview.Service
 	AgentRules   *agentrules.Service
 	Notes        *notes.Service
+	Planner      *planner.Service
 	Decisions    *decision.Service
 	Leases       *lease.Service
 	Sidebar      *sidebar.Service
@@ -178,6 +190,7 @@ type App struct {
 	Runs         *runs.Service
 	Gateway      *gateway.Gateway
 	logger       *slog.Logger
+	calRefresh   time.Duration
 	Consumers    []*eventlog.Consumer
 	Events       eventlog.Store
 	Bus          bus.Bus
@@ -218,6 +231,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore        preview.Store
 		rlStore        agentrules.Store
 		ntStore        notes.Store
+		plStore        planner.Store
 		dcStore        decision.Store
 		lsStore        lease.Store
 		sbStore        sidebar.Store
@@ -240,6 +254,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = previewmem.New()
 		rlStore = rulesmem.New()
 		ntStore = notesmem.New()
+		plStore = plannermem.New()
 		dcStore = decmem.New()
 		lsStore = leasesmem.New()
 		sbStore = sidebarmem.New()
@@ -277,6 +292,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = &previewpg.Store{DB: pg}
 		rlStore = &rulespg.Store{DB: pg}
 		ntStore = &notespg.Store{DB: pg}
+		plStore = &plannerpg.Store{DB: pg}
 		dcStore = &decpg.Store{DB: pg}
 		lsStore = &leasespg.Store{DB: pg}
 		sbStore = &sidebarpg.Store{DB: pg}
@@ -420,6 +436,13 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	githttp.Register(mux, gitSvc, idSvc)
 	ruleshttp.Register(mux, rlSvc, idSvc)
 	noteshttp.Register(mux, ntSvc, idSvc)
+	calFetcher := opt.CalendarFetcher
+	if calFetcher == nil {
+		calFetcher = plannerfetch.Safe{}
+	}
+	plSvc := &planner.Service{Store: plStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock,
+		Fetcher: calFetcher}
+	plannerhttp.Register(mux, plSvc, idSvc)
 	dechttp.Register(mux, dcSvc, idSvc)
 	leaseshttp.Register(mux, lsSvc, idSvc)
 	sidebarhttp.Register(mux, sbSvc, idSvc)
@@ -436,6 +459,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		gitmcp.Register(s, gitSvc, current)
 		previewmcp.Register(s, prSvc, current)
 		notesmcp.Register(s, ntSvc, current, r)
+		plannermcp.Register(s, plSvc, current)
 		decmcp.Register(s, dcSvc, current, r)
 		leasesmcp.Register(s, lsSvc, current)
 	}, rlSvc.InstructionsForActor, opt.Logger)
@@ -514,6 +538,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Preview:      prSvc,
 		AgentRules:   rlSvc,
 		Notes:        ntSvc,
+		Planner:      plSvc,
+		calRefresh:   opt.CalendarRefresh,
 		Decisions:    dcSvc,
 		Leases:       lsSvc,
 		Sidebar:      sbSvc,
@@ -541,6 +567,11 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		a.Question.Loop(ctx, 15*time.Second, a.logger.Info)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Planner.Loop(ctx, a.calRefresh)
 	}()
 	wg.Add(1)
 	go func() {

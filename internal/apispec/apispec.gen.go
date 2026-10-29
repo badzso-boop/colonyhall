@@ -753,6 +753,27 @@ func (e MessageKind) Valid() bool {
 	}
 }
 
+// Defines values for PlannerTaskStatus.
+const (
+	PlannerTaskStatusDone      PlannerTaskStatus = "done"
+	PlannerTaskStatusScheduled PlannerTaskStatus = "scheduled"
+	PlannerTaskStatusStarted   PlannerTaskStatus = "started"
+)
+
+// Valid indicates whether the value is a known member of the PlannerTaskStatus enum.
+func (e PlannerTaskStatus) Valid() bool {
+	switch e {
+	case PlannerTaskStatusDone:
+		return true
+	case PlannerTaskStatusScheduled:
+		return true
+	case PlannerTaskStatusStarted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PreviewState.
 const (
 	PreviewStateFailed    PreviewState = "failed"
@@ -1151,6 +1172,15 @@ type ActorList struct {
 type AddMemberRequest struct {
 	ActorId  openapi_types.UUID `json:"actor_id"`
 	CanWrite *bool              `json:"can_write,omitempty"`
+}
+
+// AddPlannerCalendarRequest defines model for AddPlannerCalendarRequest.
+type AddPlannerCalendarRequest struct {
+	Colour *string `json:"colour,omitempty"`
+	Name   string  `json:"name"`
+
+	// Url https:// or webcal:// ICS link (a secret: never returned)
+	Url string `json:"url"`
 }
 
 // AdminStatus defines model for AdminStatus.
@@ -1613,6 +1643,12 @@ type CreateChannelRequest struct {
 type CreateFileFetchRequest struct {
 	Path    string `json:"path"`
 	Refresh *bool  `json:"refresh,omitempty"`
+}
+
+// CreatePlannerTaskRequest defines model for CreatePlannerTaskRequest.
+type CreatePlannerTaskRequest struct {
+	Description *string `json:"description,omitempty"`
+	Title       string  `json:"title"`
 }
 
 // CreateScheduleRequest defines model for CreateScheduleRequest.
@@ -2283,6 +2319,69 @@ type PairingCode struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+// PlannerAccess defines model for PlannerAccess.
+type PlannerAccess struct {
+	CalAgentIds  []openapi_types.UUID `json:"cal_agent_ids"`
+	TaskAgentIds []openapi_types.UUID `json:"task_agent_ids"`
+
+	// TaskAll Every agent of the workspace may read the tasks
+	TaskAll bool `json:"task_all"`
+}
+
+// PlannerCalendar defines model for PlannerCalendar.
+type PlannerCalendar struct {
+	Colour        string             `json:"colour"`
+	CreatedAt     time.Time          `json:"created_at"`
+	Id            openapi_types.UUID `json:"id"`
+	LastError     string             `json:"last_error"`
+	LastFetchedAt *time.Time         `json:"last_fetched_at,omitempty"`
+	Name          string             `json:"name"`
+	UrlMasked     string             `json:"url_masked"`
+}
+
+// PlannerCalendarList defines model for PlannerCalendarList.
+type PlannerCalendarList struct {
+	Calendars []PlannerCalendar `json:"calendars"`
+}
+
+// PlannerEvent defines model for PlannerEvent.
+type PlannerEvent struct {
+	AllDay      bool               `json:"all_day"`
+	CalendarId  openapi_types.UUID `json:"calendar_id"`
+	Description string             `json:"description"`
+	End         time.Time          `json:"end"`
+	Location    string             `json:"location"`
+	Start       time.Time          `json:"start"`
+	Title       string             `json:"title"`
+}
+
+// PlannerEventList defines model for PlannerEventList.
+type PlannerEventList struct {
+	Events []PlannerEvent `json:"events"`
+}
+
+// PlannerTask defines model for PlannerTask.
+type PlannerTask struct {
+	CreatedAt       time.Time          `json:"created_at"`
+	Description     string             `json:"description"`
+	DoneAt          *time.Time         `json:"done_at,omitempty"`
+	Id              openapi_types.UUID `json:"id"`
+	Position        float64            `json:"position"`
+	StartedAt       *time.Time         `json:"started_at,omitempty"`
+	Status          PlannerTaskStatus  `json:"status"`
+	StatusChangedAt time.Time          `json:"status_changed_at"`
+	Title           string             `json:"title"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+}
+
+// PlannerTaskList defines model for PlannerTaskList.
+type PlannerTaskList struct {
+	Tasks []PlannerTask `json:"tasks"`
+}
+
+// PlannerTaskStatus defines model for PlannerTaskStatus.
+type PlannerTaskStatus string
+
 // Preview defines model for Preview.
 type Preview struct {
 	AgentId      openapi_types.UUID  `json:"agent_id"`
@@ -2727,6 +2826,18 @@ type UpdateFileFetchSettingsRequest struct {
 	MaxImageMb int `json:"max_image_mb"`
 }
 
+// UpdatePlannerTaskRequest defines model for UpdatePlannerTaskRequest.
+type UpdatePlannerTaskRequest struct {
+	AfterId     *openapi_types.UUID `json:"after_id,omitempty"`
+	BeforeId    *openapi_types.UUID `json:"before_id,omitempty"`
+	Description *string             `json:"description,omitempty"`
+
+	// Move Move the task between after_id and before_id (either may be omitted at the ends)
+	Move   *bool              `json:"move,omitempty"`
+	Status *PlannerTaskStatus `json:"status,omitempty"`
+	Title  *string            `json:"title,omitempty"`
+}
+
 // UpdateSidebarSectionRequest defines model for UpdateSidebarSectionRequest.
 type UpdateSidebarSectionRequest struct {
 	Collapsed *bool   `json:"collapsed,omitempty"`
@@ -2864,6 +2975,12 @@ type ListDelegationsParams struct {
 
 // ListDelegationsParamsState defines parameters for ListDelegations.
 type ListDelegationsParamsState string
+
+// ListPlannerEventsParams defines parameters for ListPlannerEvents.
+type ListPlannerEventsParams struct {
+	From time.Time `form:"from" json:"from"`
+	To   time.Time `form:"to" json:"to"`
+}
 
 // ListPreviewsParams defines parameters for ListPreviews.
 type ListPreviewsParams struct {
@@ -3015,6 +3132,18 @@ type SetHostStateJSONRequestBody = SetHostStateRequest
 
 // RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
 type RequestFileFetchJSONRequestBody = CreateFileFetchRequest
+
+// PutPlannerAccessJSONRequestBody defines body for PutPlannerAccess for application/json ContentType.
+type PutPlannerAccessJSONRequestBody = PlannerAccess
+
+// AddPlannerCalendarJSONRequestBody defines body for AddPlannerCalendar for application/json ContentType.
+type AddPlannerCalendarJSONRequestBody = AddPlannerCalendarRequest
+
+// CreatePlannerTaskJSONRequestBody defines body for CreatePlannerTask for application/json ContentType.
+type CreatePlannerTaskJSONRequestBody = CreatePlannerTaskRequest
+
+// UpdatePlannerTaskJSONRequestBody defines body for UpdatePlannerTask for application/json ContentType.
+type UpdatePlannerTaskJSONRequestBody = UpdatePlannerTaskRequest
 
 // AnswerQuestionJSONRequestBody defines body for AnswerQuestion for application/json ContentType.
 type AnswerQuestionJSONRequestBody = AnswerQuestionRequest

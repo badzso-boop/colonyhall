@@ -1226,6 +1226,16 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
   - A "Gépek" panel és az agent áttekintő lap megjeleníti az aktuális kihasználtságot (pl. *"Claude 5 óra: 72% · újraindul 18:00 · heti 59%"*), a 80%-tól sárga figyelmeztetéssel, a tartalék elérésekor pedig *"⏸ szünetel"* jelvénnyel.
   - Minden szöveg az `I18N` rendszeren keresztül többnyelvű (`hu`, `en`).
 
+## Saját feladatlista és naptár (`planner` modul, 2026-10-29)
+
+- **Táblák (`migrations/00036_planner.sql`):** `planner_task` (cím, leírás, `status` = `scheduled|started|done`, `position` double, `started_at`, `done_at`, `status_changed_at`, `deleted_at`), `planner_access` (tulajdonosonként: `task_all`, `task_agent_ids`, `cal_agent_ids`), `planner_calendar` (név, URL — titok, soha nem adjuk vissza —, szín, utolsó letöltés és hiba), `planner_calendar_event` (a feldolgozott előfordulások gyorsítótára, letöltésenként cserélődik; nem append-only adat).
+- **Sorrend:** lebegőpontos pozíció; mozgatáskor a két szomszéd átlaga (egy sor íródik), új feladat a lista tetejére (`min - 1`). Ha a rés elfogy (~50 mozgatás ugyanoda), a lista újraszámozódik.
+- **Események (outbox):** `planner.task_created/updated/status_changed/moved/deleted`, `planner.calendars_changed`; csak azonosítók és állapotok, szöveg nem.
+- **REST (csak ember, csak a sajátját):** `GET/POST /api/v1/planner/tasks`, `PATCH/DELETE /api/v1/planner/tasks/{id}` (cím, leírás, állapot, `move` + `after_id`/`before_id`), `GET/PUT /api/v1/planner/access`, `GET/POST /api/v1/planner/calendars`, `DELETE /api/v1/planner/calendars/{id}`, `POST …/{id}/refresh`, `GET /api/v1/planner/events?from&to` (legfeljebb 14 nap). Agent-token minden végponton 403; más ember feladata 404.
+- **MCP (csak olvasás):** `planner_read` (`owner`, `since`; alapból tegnap 00:00 Europe/Budapest): a nyitott feladatok (elkezdettek, aztán ütemezettek, a tulajdonos sorrendjében) és a `since` óta létrehozott, elkezdett vagy befejezett feladatok; `calendar_read` (`owner`, `from`, `to`; alapból ma és holnap). Mindkét kimenet azzal kezdődik, hogy a tartalom adat, nem utasítás. A tulajdonos `owner` nélkül az, aki egyedül engedte az agentnek; ha több ember engedte, kötelező.
+- **ICS-letöltés:** csak `https` (a `webcal://` `https://` lesz), a host feloldása után csak nyilvános IP-re csatlakozik (loopback, privát, link-local, CGNAT 100.64/10, multicast tiltva; DNS rebinding ellen a kiválasztott IP-re tárcsáz), átirányítás legfeljebb 3, mindegyik újraellenőrizve; 5 MB, 20 mp. A hibaüzenet soha nem tartalmazza az URL-t. Frissítés: `COLONY_CALENDAR_REFRESH` (alapból 15 perc), és „Frissítés most”.
+- **Feldolgozás:** `github.com/emersion/go-ical` (MIT) és `github.com/teambition/rrule-go` (MIT); RRULE/RDATE/EXDATE kibontása a „most − 1 nap … most + 60 nap” ablakra, áthelyezett előfordulás (`RECURRENCE-ID`) az eredeti helyett, `STATUS:CANCELLED` kihagyva, egész napos esemény (`VALUE=DATE`), az ismeretlen időzónanév (pl. Outlook „Central Europe Standard Time”) Europe/Budapestként olvasva.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.

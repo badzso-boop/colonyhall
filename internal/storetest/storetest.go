@@ -26,6 +26,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/lease"
 	"colonyhall/internal/modules/notes"
+	"colonyhall/internal/modules/planner"
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
@@ -55,6 +56,7 @@ type Backend struct {
 	Preview      preview.Store
 	AgentRules   agentrules.Store
 	Notes        notes.Store
+	Planner      planner.Store
 	Decisions    decision.Store
 	Leases       lease.Store
 	Sidebar      sidebar.Store
@@ -80,6 +82,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
 	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })
 	t.Run("notes", func(t *testing.T) { testNotes(t, newBackend(t)) })
+	t.Run("planner", func(t *testing.T) { testPlanner(t, newBackend(t)) })
 	t.Run("decisions", func(t *testing.T) { testDecisions(t, newBackend(t)) })
 	t.Run("leases", func(t *testing.T) { testLeases(t, newBackend(t)) })
 	t.Run("sidebar", func(t *testing.T) { testSidebar(t, newBackend(t)) })
@@ -2703,5 +2706,117 @@ func testCompaction(t *testing.T, b Backend) {
 	must(t, err)
 	if gotFail.State != compaction.StateFailed || gotFail.ErrorCode != "agent_error" {
 		t.Fatalf("expected failed compaction, got %+v", gotFail)
+	}
+}
+
+func testPlanner(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	st := b.Planner
+	owner := f.human.ID
+
+	if _, ok, err := st.MinPosition(ctx, owner); err != nil || ok {
+		t.Fatalf("empty min position: %v %v", ok, err)
+	}
+	done := t0.Add(-20 * 24 * time.Hour)
+	recentDone := t0.Add(-time.Hour)
+	mk := func(title, status string, pos float64, doneAt *time.Time) planner.Task {
+		tk := planner.Task{ID: gen.New(), WorkspaceID: f.ws.ID, OwnerID: owner, Title: title, Status: status,
+			Position: pos, DoneAt: doneAt, StatusChangedAt: t0, CreatedAt: t0, UpdatedAt: t0}
+		must(t, st.InsertTask(ctx, tk))
+		return tk
+	}
+	a := mk("a", planner.StatusScheduled, 2, nil)
+	bTask := mk("b", planner.StatusStarted, 1, nil)
+	mk("old done", planner.StatusDone, 0, &done)
+	c := mk("recent done", planner.StatusDone, 3, &recentDone)
+	if err := st.InsertTask(ctx, a); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("duplicate task: %v", err)
+	}
+	got, err := st.Tasks(ctx, owner, t0.Add(-14*24*time.Hour))
+	must(t, err)
+	if len(got) != 3 || got[0].ID != bTask.ID || got[1].ID != a.ID || got[2].ID != c.ID {
+		t.Fatalf("tasks order/filter: %+v", got)
+	}
+	if minPos, ok, err := st.MinPosition(ctx, owner); err != nil || !ok || minPos != 0 {
+		t.Fatalf("min position: %v %v %v", minPos, ok, err)
+	}
+	started := t0.Add(time.Minute)
+	a.Status, a.StartedAt, a.Title, a.Position = planner.StatusStarted, &started, "a2", 0.5
+	must(t, st.UpdateTask(ctx, a))
+	ga, err := st.TaskByID(ctx, a.ID)
+	must(t, err)
+	if ga.Title != "a2" || ga.Status != planner.StatusStarted || ga.StartedAt == nil || !ga.StartedAt.Equal(started) || ga.Position != 0.5 {
+		t.Fatalf("updated task: %+v", ga)
+	}
+	del := t0.Add(2 * time.Minute)
+	a.DeletedAt = &del
+	must(t, st.UpdateTask(ctx, a))
+	got, _ = st.Tasks(ctx, owner, t0.Add(-14*24*time.Hour))
+	if len(got) != 2 {
+		t.Fatalf("deleted task still listed: %+v", got)
+	}
+	if err := st.UpdateTask(ctx, planner.Task{ID: gen.New()}); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("update missing: %v", err)
+	}
+	if _, err := st.TaskByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("missing task: %v", err)
+	}
+
+	if _, err := st.Access(ctx, owner); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("missing access: %v", err)
+	}
+	acc := planner.Access{OwnerID: owner, WorkspaceID: f.ws.ID, TaskAll: false, TaskAgentIDs: []ids.ID{f.agent.ID}, UpdatedAt: t0}
+	must(t, st.PutAccess(ctx, acc))
+	acc.CalAgentIDs = []ids.ID{f.agent.ID}
+	must(t, st.PutAccess(ctx, acc))
+	ga2, err := st.Access(ctx, owner)
+	must(t, err)
+	if ga2.TaskAll || len(ga2.TaskAgentIDs) != 1 || len(ga2.CalAgentIDs) != 1 || ga2.CalAgentIDs[0] != f.agent.ID {
+		t.Fatalf("access: %+v", ga2)
+	}
+	list, err := st.AccessList(ctx, f.ws.ID)
+	must(t, err)
+	if len(list) != 1 || list[0].OwnerID != owner {
+		t.Fatalf("access list: %+v", list)
+	}
+
+	cal := planner.Calendar{ID: gen.New(), WorkspaceID: f.ws.ID, OwnerID: owner, Name: "work", URL: "https://example.com/x.ics", Colour: "#112233", CreatedAt: t0}
+	must(t, st.InsertCalendar(ctx, cal))
+	due, err := st.CalendarsDue(ctx, t0)
+	must(t, err)
+	if len(due) != 1 {
+		t.Fatalf("never fetched calendar is due: %+v", due)
+	}
+	must(t, st.SetCalendarFetch(ctx, cal.ID, t0, "HTTP 404"))
+	gc, err := st.CalendarByID(ctx, cal.ID)
+	must(t, err)
+	if gc.LastFetchedAt == nil || gc.LastError != "HTTP 404" || gc.URL != cal.URL {
+		t.Fatalf("calendar fetch state: %+v", gc)
+	}
+	if due, _ = st.CalendarsDue(ctx, t0); len(due) != 0 {
+		t.Fatalf("just fetched calendar is due: %+v", due)
+	}
+	day := t0.Truncate(24 * time.Hour)
+	evs := []planner.Event{
+		{CalendarID: cal.ID, OwnerID: owner, Title: "standup", Start: day.Add(9 * time.Hour), End: day.Add(10 * time.Hour)},
+		{CalendarID: cal.ID, OwnerID: owner, Title: "holiday", Start: day, End: day.Add(24 * time.Hour), AllDay: true},
+		{CalendarID: cal.ID, OwnerID: owner, Title: "next week", Start: day.Add(7 * 24 * time.Hour), End: day.Add(7*24*time.Hour + time.Hour)},
+	}
+	must(t, st.ReplaceEvents(ctx, cal.ID, evs))
+	must(t, st.ReplaceEvents(ctx, cal.ID, evs)) // replacing must not duplicate
+	got2, err := st.Events(ctx, owner, day, day.Add(24*time.Hour))
+	must(t, err)
+	if len(got2) != 2 || got2[0].Title != "holiday" || got2[1].Title != "standup" || !got2[0].AllDay {
+		t.Fatalf("events: %+v", got2)
+	}
+	cals, err := st.Calendars(ctx, owner)
+	must(t, err)
+	if len(cals) != 1 {
+		t.Fatalf("calendars: %+v", cals)
+	}
+	must(t, st.DeleteCalendar(ctx, cal.ID))
+	if got2, _ = st.Events(ctx, owner, day, day.Add(24*time.Hour)); len(got2) != 0 {
+		t.Fatalf("events kept after calendar delete: %+v", got2)
 	}
 }

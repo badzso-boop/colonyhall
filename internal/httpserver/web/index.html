@@ -111,8 +111,8 @@
   #login input { width:9em; }
   details summary { cursor:pointer; color:var(--muted); font-size:12px; }
   .dmbox { display:flex; gap:4px; margin-top:8px; } .dmbox input { width:100%; }
-  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel, #rulesPanel, #leasesPanel { overflow:auto; padding:12px 16px; display:none; }
-  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on, #rulesPanel.on, #leasesPanel.on { display:block; } #feed.off { display:none; }
+  #hostsPanel, #schedPanel, #runsPanel, #wikiPanel, #questionsPanel, #rulesPanel, #leasesPanel, #planPanel, #calPanel { overflow:auto; padding:12px 16px; display:none; }
+  #schedPanel.on, #hostsPanel.on, #runsPanel.on, #wikiPanel.on, #questionsPanel.on, #rulesPanel.on, #leasesPanel.on, #planPanel.on, #calPanel.on { display:block; } #feed.off { display:none; }
   table.tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
   table.tbl th, table.tbl td { padding:6px 8px; border:1px solid var(--line); text-align:left; }
   table.tbl th { background:var(--bg); font-weight:600; }
@@ -218,7 +218,7 @@
     <button id="loginbtn"></button>
     <details><summary>token</summary><input id="token" type="password" size="20" autocomplete="off"></details>
   </form>
-  <span id="me"></span><nav id="tabs"><button id="chatbtn" hidden></button><button id="runsbtn" hidden></button><button id="schedbtn" hidden></button><button id="questionsbtn" hidden></button><button id="wikibtn" hidden></button><button id="rulesbtn" hidden></button><button id="leasesbtn" hidden></button><button id="hostsbtn" hidden></button></nav><button id="logout" hidden></button>
+  <span id="me"></span><nav id="tabs"><button id="chatbtn" hidden></button><button id="runsbtn" hidden></button><button id="schedbtn" hidden></button><button id="questionsbtn" hidden></button><button id="wikibtn" hidden></button><button id="rulesbtn" hidden></button><button id="leasesbtn" hidden></button><button id="planbtn" hidden></button><button id="calbtn" hidden></button><button id="hostsbtn" hidden></button></nav><button id="logout" hidden></button>
   <span id="status"></span>
 </header>
 <main>
@@ -247,6 +247,8 @@
     <div id="questionsPanel"></div>
     <div id="rulesPanel"></div>
     <div id="leasesPanel"></div>
+    <div id="planPanel"></div>
+    <div id="calPanel"></div>
     <div style="position:relative;">
       <div id="replybar"><span id="replyto"></span><button id="replycancel">✕</button></div>
       <div id="activityBar" style="display:none; padding:4px 16px; font-size:12px; color:var(--muted); font-style:italic;"></div>
@@ -449,7 +451,14 @@ const I18N = {
         giteaMappings: "Gitea tárak hozzárendelése", noGiteaMappings: "Még nincs Gitea tár hozzárendelve.", addMapping: "Hozzáadás",
         previews: "Előnézetek", noPreviews: "Nincs előnézet.", expires: "Lejárat", stop: "Leállítás",
         agentRules: "Agent szabályok", save: "Mentés", version: "Verzió", history: "Előzmények",
-        leases: "Foglalások", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés",
+        leases: "Foglalások",
+        plTasks: "Feladatok", plAdd: "Hozzáadás", plNewTitle: "Új feladat…", plStarted: "Elkezdve", plScheduled: "Ütemezve", plDone: "Befejezve",
+        plStatus: { scheduled: "Ütemezve", started: "Elkezdve", done: "Befejezve" }, plDesc: "Leírás", plEdit: "Szerkesztés", plSave: "Mentés", plCancel: "Mégse",
+        plDelete: "Törlés", plSure: "Biztosan törlöd?", plYes: "Igen", plEmpty: "Nincs feladat.", plUp: "Feljebb", plDown: "Lejjebb",
+        calTitle: "Naptár", calSubs: "Feliratkozások", calName: "Név", calURL: "ICS-link (https:// vagy webcal://)", calAdd: "Feliratkozás",
+        calRefresh: "Frissítés most", calNever: "még nem töltöttem le", calFetched: "letöltve", calAgenda: "Ma és a következő 7 nap", calNoEvents: "Nincs esemény.",
+        calAllDay: "egész nap", plAccess: "Ki olvashatja (agentek, csak olvasás)", plAccessTasks: "Feladatok", plAccessAll: "minden agent",
+        plAccessCal: "Naptár", plAccessSaved: "Mentve.", plNoAgents: "Nincs agent.", release: "Feloldás", noLeases: "Nincs aktív foglalás.", resource: "Erőforrás", holder: "Birtokos", note: "Megjegyzés",
         removeFromSection: "Kivétel szekcióból", moveToSection: "Áthelyezés szekcióba…", rename: "Átnevezés", deleteLabel: "Törlés", removeLabel: "Eltávolítás",
         agentOverview: "Agent adatlap", userOverview: "Felhasználó adatlap", noCommonChannels: "Nincs közös csatorna.", activity: "Aktivitás", idle: "tétlen",
         administration: "Adminisztráció", confirmStopAgent: "Biztosan leállítod az agentet?", restart: "Újraindítás",
@@ -544,7 +553,14 @@ const I18N = {
         giteaMappings: "Gitea repository mappings", noGiteaMappings: "No Gitea repository mappings yet.", addMapping: "Add",
         previews: "Previews", noPreviews: "No previews.", expires: "Expires", stop: "Stop",
         agentRules: "Agent rules", save: "Save", version: "Version", history: "History",
-        leases: "Leases", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note",
+        leases: "Leases",
+        plTasks: "Tasks", plAdd: "Add", plNewTitle: "New task…", plStarted: "Started", plScheduled: "Scheduled", plDone: "Done",
+        plStatus: { scheduled: "Scheduled", started: "Started", done: "Done" }, plDesc: "Description", plEdit: "Edit", plSave: "Save", plCancel: "Cancel",
+        plDelete: "Delete", plSure: "Delete it?", plYes: "Yes", plEmpty: "No tasks.", plUp: "Up", plDown: "Down",
+        calTitle: "Calendar", calSubs: "Subscriptions", calName: "Name", calURL: "ICS link (https:// or webcal://)", calAdd: "Subscribe",
+        calRefresh: "Refresh now", calNever: "not fetched yet", calFetched: "fetched", calAgenda: "Today and the next 7 days", calNoEvents: "No events.",
+        calAllDay: "all day", plAccess: "Who may read (agents, read-only)", plAccessTasks: "Tasks", plAccessAll: "every agent",
+        plAccessCal: "Calendar", plAccessSaved: "Saved.", plNoAgents: "No agents.", release: "Release", noLeases: "No active leases.", resource: "Resource", holder: "Holder", note: "Note",
         removeFromSection: "Remove from section", moveToSection: "Move to section…", rename: "Rename", deleteLabel: "Delete", removeLabel: "Remove",
         agentOverview: "Agent overview", userOverview: "User overview", noCommonChannels: "No channels in common.", activity: "Activity", idle: "idle",
         administration: "Administration", confirmStopAgent: "Stop this agent?", restart: "Restart",
@@ -4258,12 +4274,14 @@ $("questionsbtn").textContent = "❓ " + L.questions;
 $("wikibtn").textContent = "📖 " + L.wiki;
 $("rulesbtn").textContent = "📜 " + L.agentRules;
 $("leasesbtn").textContent = "🔒 " + L.leases;
+$("planbtn").textContent = "📝 " + L.plTasks;
+$("calbtn").textContent = "📅 " + L.calTitle;
 // One side panel at a time (machines, schedules, runs, wiki); the chat
 // feed shows when none is open. Returns whether the panel is now open.
 let openPanel = null;
 // The header tabs are fixed: each button keeps its label, the active one is
 // highlighted, and "Chat" (or a channel in the sidebar) goes back to the feed.
-const panelButtons = { hosts: "hostsbtn", sched: "schedbtn", runs: "runsbtn", wiki: "wikibtn", questions: "questionsbtn", rules: "rulesbtn", leases: "leasesbtn" };
+const panelButtons = { hosts: "hostsbtn", sched: "schedbtn", runs: "runsbtn", wiki: "wikibtn", questions: "questionsbtn", rules: "rulesbtn", leases: "leasesbtn", plan: "planbtn", cal: "calbtn" };
 function showPanel(name) {
   openPanel = name;
   for (const p of Object.keys(panelButtons)) $(p + "Panel").className = openPanel === p ? "on" : "";
@@ -4937,6 +4955,8 @@ async function start() {
   $("wikibtn").hidden = false;
   $("rulesbtn").hidden = me.kind !== "human";
   $("leasesbtn").hidden = me.kind !== "human";
+  $("planbtn").hidden = me.kind !== "human";
+  $("calbtn").hidden = me.kind !== "human";
   await load(); if (!ws) connectWS();
 }
 
@@ -5584,6 +5604,211 @@ async function renderAgentRules() {
 
 // --- Leases ------------------------------------------------------------------
 $("leasesbtn").onclick = () => { if (!togglePanel("leases")) return; renderLeases(); };
+
+// Personal planner: the owner's tasks and subscribed calendars. Agents can
+// only read them through MCP; everything here is the owner's own data.
+$("planbtn").onclick = () => { if (!togglePanel("plan")) return; renderPlanner(); };
+$("calbtn").onclick = () => { if (!togglePanel("cal")) return; renderCalendar(); };
+
+let plTasks = [];
+async function renderPlanner() {
+  const panel = $("planPanel");
+  let data;
+  try { data = await api("/api/v1/planner/tasks"); }
+  catch (err) { panel.replaceChildren(el("div", { className: "warn", textContent: String(err.message || err) })); return; }
+  plTasks = data.tasks;
+  const card = el("div", { className: "card" }, el("h3", { textContent: "📝 " + L.plTasks }));
+  const title = el("input", { placeholder: L.plNewTitle, maxLength: 300, style: "flex:1; min-width:0;" });
+  const add = async () => {
+    if (!title.value.trim()) return;
+    try { await api("/api/v1/planner/tasks", { method: "POST", body: JSON.stringify({ title: title.value }) }); }
+    catch (err) { alertInline(card, err); return; }
+    renderPlanner();
+  };
+  title.onkeydown = e => { if (e.key === "Enter") add(); };
+  card.append(el("div", { style: "display:flex; gap:6px; margin-bottom:10px;" }, title, el("button", { textContent: L.plAdd, onclick: add })));
+  const groups = [["started", L.plStarted], ["scheduled", L.plScheduled]];
+  for (const [st, label] of groups) {
+    const list = plTasks.filter(t => t.status === st);
+    card.append(el("h4", { textContent: `${label} (${list.length})`, style: "margin:10px 0 4px;" }), plList(list));
+  }
+  const done = plTasks.filter(t => t.status === "done");
+  const det = el("details", {}, el("summary", { textContent: `${L.plDone} (${done.length})` }), plList(done));
+  card.append(det);
+  panel.replaceChildren(card);
+}
+
+function alertInline(parent, err) {
+  parent.append(el("div", { className: "warn", textContent: String(err.message || err) }));
+}
+
+async function plPatch(id, body) {
+  await api("/api/v1/planner/tasks/" + id, { method: "PATCH", body: JSON.stringify(body) });
+  renderPlanner();
+}
+
+// plMove places task t between the two tasks around index i of the same
+// group (after a, before b; either may be missing at the ends).
+function plMove(t, a, b) {
+  const body = { move: true };
+  if (a) body.after_id = a.id;
+  if (b) body.before_id = b.id;
+  plPatch(t.id, body).catch(err => alertInline($("planPanel"), err));
+}
+
+function plList(list) {
+  const box = el("div", { style: "display:flex; flex-direction:column; gap:4px;" });
+  if (!list.length) { box.append(el("div", { className: "muted", textContent: L.plEmpty })); return box; }
+  list.forEach((t, i) => {
+    const row = el("div", { className: "card", draggable: true, style: "padding:6px 8px; margin:0;" });
+    row.ondragstart = e => e.dataTransfer.setData("text/plain", t.id);
+    row.ondragover = e => e.preventDefault();
+    row.ondrop = e => {
+      e.preventDefault();
+      const id = e.dataTransfer.getData("text/plain");
+      const moving = list.find(x => x.id === id);
+      if (!moving || moving.id === t.id) return;
+      const rest = list.filter(x => x.id !== id);
+      const at = rest.findIndex(x => x.id === t.id);
+      plMove(moving, rest[at - 1], rest[at]);
+    };
+    const titleSpan = el("span", { textContent: t.title, style: "flex:1; min-width:0; cursor:text; overflow-wrap:anywhere;" + (t.status === "done" ? " text-decoration:line-through; opacity:.7;" : "") });
+    titleSpan.onclick = () => {
+      const inp = el("input", { value: t.title, maxLength: 300, style: "flex:1; min-width:0;" });
+      inp.onkeydown = e => {
+        if (e.key === "Enter") plPatch(t.id, { title: inp.value }).catch(err => alertInline(row, err));
+        if (e.key === "Escape") renderPlanner();
+      };
+      titleSpan.replaceWith(inp); inp.focus();
+    };
+    const sel = el("select", {});
+    for (const st of ["scheduled", "started", "done"]) sel.append(el("option", { value: st, textContent: L.plStatus[st], selected: st === t.status }));
+    sel.onchange = () => plPatch(t.id, { status: sel.value }).catch(err => alertInline(row, err));
+    const others = list.filter(x => x.id !== t.id);
+    const up = el("button", { textContent: "↑", title: L.plUp, disabled: i === 0, onclick: () => plMove(t, others[i - 2], others[i - 1]) });
+    const down = el("button", { textContent: "↓", title: L.plDown, disabled: i === list.length - 1, onclick: () => plMove(t, others[i], others[i + 1]) });
+    const descBox = el("div", { hidden: true, style: "margin-top:6px;" });
+    const toggle = el("button", { textContent: t.description ? "▸" : "▹", title: L.plDesc });
+    toggle.onclick = () => { descBox.hidden = !descBox.hidden; toggle.textContent = descBox.hidden ? (t.description ? "▸" : "▹") : "▾"; if (!descBox.hidden) plShowDesc(t, descBox); };
+    const del = el("button", { textContent: "🗑", title: L.plDelete });
+    del.onclick = () => {
+      const yes = el("button", { textContent: L.plYes, onclick: () => api("/api/v1/planner/tasks/" + t.id, { method: "DELETE" }).then(renderPlanner, err => alertInline(row, err)) });
+      const no = el("button", { textContent: L.plCancel, onclick: () => confirmBox.remove() });
+      const confirmBox = el("span", { style: "display:inline-flex; gap:4px; align-items:center;" }, el("span", { textContent: L.plSure }), yes, no);
+      del.after(confirmBox);
+    };
+    row.append(el("div", { style: "display:flex; gap:6px; align-items:center; flex-wrap:wrap;" }, toggle, titleSpan, sel, up, down, del), descBox);
+    box.append(row);
+  });
+  return box;
+}
+
+function plShowDesc(t, box) {
+  const view = el("div", {});
+  if (t.description) view.append(ColonyMarkdown.render(ColonyMarkdown.parse(t.description), { inChat: true }));
+  const edit = el("button", { textContent: L.plEdit });
+  edit.onclick = () => {
+    const ta = el("textarea", { value: t.description, rows: 6, maxLength: 20000, style: "width:100%; box-sizing:border-box;" });
+    const save = el("button", { textContent: L.plSave, onclick: () => plPatch(t.id, { description: ta.value }).catch(err => alertInline(box, err)) });
+    const cancel = el("button", { textContent: L.plCancel, onclick: () => plShowDesc(t, box) });
+    box.replaceChildren(ta, el("div", { style: "display:flex; gap:6px; margin-top:4px;" }, save, cancel));
+    ta.focus();
+  };
+  box.replaceChildren(view, edit);
+}
+
+async function renderCalendar() {
+  const panel = $("calPanel");
+  const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+  const day8 = new Date(day0); day8.setDate(day8.getDate() + 8);
+  let cals, evs, acc;
+  try {
+    [cals, evs, acc] = await Promise.all([
+      api("/api/v1/planner/calendars"),
+      api(`/api/v1/planner/events?from=${encodeURIComponent(day0.toISOString())}&to=${encodeURIComponent(day8.toISOString())}`),
+      api("/api/v1/planner/access"),
+    ]);
+  } catch (err) { panel.replaceChildren(el("div", { className: "warn", textContent: String(err.message || err) })); return; }
+  const colour = Object.fromEntries(cals.calendars.map(c => [c.id, c.colour]));
+
+  const agenda = el("div", { className: "card" }, el("h3", { textContent: "📅 " + L.calAgenda }));
+  if (!evs.events.length) agenda.append(el("div", { className: "muted", textContent: L.calNoEvents }));
+  const byDay = new Map();
+  for (const e of evs.events) {
+    const key = new Date(e.start) < day0 ? day0.toDateString() : new Date(e.start).toDateString();
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(e);
+  }
+  for (const [key, list] of byDay) {
+    list.sort((a, b) => (b.all_day - a.all_day) || (new Date(a.start) - new Date(b.start)));
+    agenda.append(el("h4", { textContent: new Date(key).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }), style: "margin:10px 0 4px;" }));
+    for (const e of list) {
+      const when = e.all_day ? L.calAllDay : new Date(e.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + "–" + new Date(e.end).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      agenda.append(el("div", { style: "display:flex; gap:8px; align-items:baseline; overflow-wrap:anywhere;" },
+        el("span", { textContent: "●", style: `color:${colour[e.calendar_id] || "var(--accent)"}` }),
+        el("span", { textContent: when, className: "muted", style: "white-space:nowrap;" }),
+        el("span", { textContent: e.title + (e.location ? " · " + e.location : "") })));
+    }
+  }
+
+  const subs = el("div", { className: "card" }, el("h3", { textContent: L.calSubs }));
+  for (const c of cals.calendars) {
+    const status = c.last_fetched_at ? `${L.calFetched} ${new Date(c.last_fetched_at).toLocaleString()}` : L.calNever;
+    const refresh = el("button", { textContent: L.calRefresh, onclick: () => api(`/api/v1/planner/calendars/${c.id}/refresh`, { method: "POST" }).then(renderCalendar, err => alertInline(subs, err)) });
+    const del = el("button", { textContent: "🗑", title: L.plDelete });
+    del.onclick = () => {
+      const yes = el("button", { textContent: L.plYes, onclick: () => api("/api/v1/planner/calendars/" + c.id, { method: "DELETE" }).then(renderCalendar, err => alertInline(subs, err)) });
+      del.after(el("span", { style: "display:inline-flex; gap:4px;" }, el("span", { textContent: L.plSure }), yes));
+    };
+    subs.append(el("div", { style: "display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:4px 0;" },
+      el("span", { textContent: "●", style: `color:${c.colour}` }), el("b", { textContent: c.name }),
+      el("span", { className: "muted", textContent: c.url_masked, style: "overflow-wrap:anywhere;" }),
+      el("span", { className: "muted", textContent: status }),
+      c.last_error ? el("span", { className: "warn", textContent: c.last_error }) : "", refresh, del));
+  }
+  const name = el("input", { placeholder: L.calName, maxLength: 100 });
+  const url = el("input", { placeholder: L.calURL, type: "url", style: "flex:1; min-width:0;" });
+  const col = el("input", { type: "color", value: "#3b82f6" });
+  const addBtn = el("button", { textContent: L.calAdd });
+  addBtn.onclick = async () => {
+    addBtn.disabled = true;
+    try { await api("/api/v1/planner/calendars", { method: "POST", body: JSON.stringify({ name: name.value, url: url.value, colour: col.value }) }); }
+    catch (err) { addBtn.disabled = false; alertInline(subs, err); return; }
+    renderCalendar();
+  };
+  subs.append(el("div", { style: "display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;" }, name, url, col, addBtn));
+
+  const agents = Object.values(actors).filter(a => a.kind === "agent").sort((a, b) => a.handle.localeCompare(b.handle));
+  const access = el("div", { className: "card" }, el("h3", { textContent: L.plAccess }));
+  const picker = (selected) => {
+    const box = el("div", { style: "display:flex; flex-wrap:wrap; gap:4px 12px;" });
+    if (!agents.length) box.append(el("span", { className: "muted", textContent: L.plNoAgents }));
+    for (const a of agents) {
+      const cb = el("input", { type: "checkbox", checked: selected.includes(a.id), value: a.id });
+      box.append(el("label", { style: "white-space:nowrap;" }, cb, " @" + a.handle));
+    }
+    box.ids = () => [...box.querySelectorAll("input:checked")].map(x => x.value);
+    return box;
+  };
+  const all = el("input", { type: "checkbox", checked: acc.task_all });
+  const taskPick = picker(acc.task_agent_ids);
+  taskPick.hidden = acc.task_all;
+  all.onchange = () => { taskPick.hidden = all.checked; };
+  const calPick = picker(acc.cal_agent_ids);
+  const saved = el("span", { className: "muted" });
+  const save = el("button", { textContent: L.plSave });
+  save.onclick = async () => {
+    try {
+      await api("/api/v1/planner/access", { method: "PUT", body: JSON.stringify({ task_all: all.checked, task_agent_ids: all.checked ? [] : taskPick.ids(), cal_agent_ids: calPick.ids() }) });
+      saved.textContent = L.plAccessSaved;
+    } catch (err) { alertInline(access, err); }
+  };
+  access.append(el("h4", { textContent: L.plAccessTasks, style: "margin:8px 0 4px;" }), el("label", {}, all, " " + L.plAccessAll), taskPick,
+    el("h4", { textContent: L.plAccessCal, style: "margin:8px 0 4px;" }), calPick,
+    el("div", { style: "display:flex; gap:8px; align-items:center; margin-top:8px;" }, save, saved));
+
+  panel.replaceChildren(agenda, subs, access);
+}
 
 async function renderLeases() {
   const panel = $("leasesPanel");

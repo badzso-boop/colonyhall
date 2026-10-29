@@ -1492,6 +1492,136 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
 
+  /planner/tasks:
+    get:
+      operationId: listPlannerTasks
+      tags: [planner]
+      description: Humans only. The caller's open tasks in their order, then tasks done in the last 14 days.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Tasks
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerTaskList" } } }
+    post:
+      operationId: createPlannerTask
+      tags: [planner]
+      description: Humans only. Adds a scheduled task at the top of the caller's list.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreatePlannerTaskRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201":
+          description: Created task
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerTask" } } }
+
+  /planner/tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updatePlannerTask
+      tags: [planner]
+      description: Humans only, own tasks. Change title, description or status, or move the task between two others.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdatePlannerTaskRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Updated task
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerTask" } } }
+    delete:
+      operationId: deletePlannerTask
+      tags: [planner]
+      description: Humans only, own tasks. Soft-deletes the task.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+
+  /planner/access:
+    get:
+      operationId: getPlannerAccess
+      tags: [planner]
+      description: Humans only. Which agents may read the caller's tasks and calendars.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Access settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerAccess" } } }
+    put:
+      operationId: putPlannerAccess
+      tags: [planner]
+      description: Humans only. Replaces who may read the caller's tasks and calendars.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PlannerAccess" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Access settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerAccess" } } }
+
+  /planner/calendars:
+    get:
+      operationId: listPlannerCalendars
+      tags: [planner]
+      description: Humans only. The caller's subscribed calendars; the URL is never returned, only a masked form.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Calendars
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerCalendarList" } } }
+    post:
+      operationId: addPlannerCalendar
+      tags: [planner]
+      description: Humans only. Subscribes to an https or webcal ICS link and fetches it once.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AddPlannerCalendarRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201":
+          description: Calendar
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerCalendar" } } }
+
+  /planner/calendars/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deletePlannerCalendar
+      tags: [planner]
+      description: Humans only, own calendars. Removes the subscription and its cached events.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+
+  /planner/calendars/{id}/refresh:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: refreshPlannerCalendar
+      tags: [planner]
+      description: Humans only, own calendars. Fetches the calendar now.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Calendar
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerCalendar" } } }
+
+  /planner/events:
+    get:
+      operationId: listPlannerEvents
+      tags: [planner]
+      description: Humans only. The caller's calendar occurrences overlapping [from, to), at most 14 days.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: Events
+          content: { application/json: { schema: { $ref: "#/components/schemas/PlannerEventList" } } }
+
   /agent-rules:
     get:
       operationId: getAgentRules
@@ -1781,6 +1911,90 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+
+    PlannerTaskStatus:
+      type: string
+      enum: [scheduled, started, done]
+    PlannerTask:
+      type: object
+      required: [id, title, description, status, position, status_changed_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/PlannerTaskStatus" }
+        position: { type: number, format: double }
+        started_at: { type: string, format: date-time }
+        done_at: { type: string, format: date-time }
+        status_changed_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PlannerTaskList:
+      type: object
+      required: [tasks]
+      properties:
+        tasks: { type: array, items: { $ref: "#/components/schemas/PlannerTask" } }
+    CreatePlannerTaskRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+    UpdatePlannerTaskRequest:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/PlannerTaskStatus" }
+        move: { type: boolean, description: "Move the task between after_id and before_id (either may be omitted at the ends)" }
+        after_id: { type: string, format: uuid }
+        before_id: { type: string, format: uuid }
+    PlannerAccess:
+      type: object
+      required: [task_all, task_agent_ids, cal_agent_ids]
+      properties:
+        task_all: { type: boolean, description: "Every agent of the workspace may read the tasks" }
+        task_agent_ids: { type: array, items: { type: string, format: uuid } }
+        cal_agent_ids: { type: array, items: { type: string, format: uuid } }
+    PlannerCalendar:
+      type: object
+      required: [id, name, url_masked, colour, last_error, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url_masked: { type: string }
+        colour: { type: string }
+        last_fetched_at: { type: string, format: date-time }
+        last_error: { type: string }
+        created_at: { type: string, format: date-time }
+    PlannerCalendarList:
+      type: object
+      required: [calendars]
+      properties:
+        calendars: { type: array, items: { $ref: "#/components/schemas/PlannerCalendar" } }
+    AddPlannerCalendarRequest:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string, description: "https:// or webcal:// ICS link (a secret: never returned)" }
+        colour: { type: string }
+    PlannerEvent:
+      type: object
+      required: [calendar_id, title, start, end, all_day, location, description]
+      properties:
+        calendar_id: { type: string, format: uuid }
+        title: { type: string }
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        all_day: { type: boolean }
+        location: { type: string }
+        description: { type: string }
+    PlannerEventList:
+      type: object
+      required: [events]
+      properties:
+        events: { type: array, items: { $ref: "#/components/schemas/PlannerEvent" } }
 
     ActorKind:
       type: string

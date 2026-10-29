@@ -106,6 +106,7 @@ func run(logger *slog.Logger) error {
 		SecureCookies:      cfg.SecureCookies,
 		FilesDir:           cfg.FilesDir,
 		MaxUploadMB:        cfg.MaxUploadMB,
+		CalendarRefresh:    cfg.CalendarRefresh,
 		GiteaURL:           cfg.GiteaURL,
 		GiteaToken:         cfg.GiteaToken,
 		GiteaPublicURL:     cfg.GiteaPublicURL,

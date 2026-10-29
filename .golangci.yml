@@ -107,6 +107,11 @@ linters:
             - pkg: colonyhall/internal/modules/notes/memory
             - pkg: colonyhall/internal/modules/notes/httpapi
             - pkg: colonyhall/internal/modules/notes/mcptools
+            - pkg: colonyhall/internal/modules/planner/postgres
+            - pkg: colonyhall/internal/modules/planner/memory
+            - pkg: colonyhall/internal/modules/planner/httpapi
+            - pkg: colonyhall/internal/modules/planner/mcptools
+            - pkg: colonyhall/internal/modules/planner/fetch
             - pkg: colonyhall/internal/modules/decision/postgres
             - pkg: colonyhall/internal/modules/decision/memory
             - pkg: colonyhall/internal/modules/decision/httpapi

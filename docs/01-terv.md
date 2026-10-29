@@ -1108,6 +1108,13 @@ A rendszer akkor sikeres, ha több feladat végződik sikeresen, miközben a ker
 
 **Mire jó:** a 0. fázis kapujánál (megéri-e) és később agentek összehasonlításánál. Például: az új `backend-claude` verzió kevesebb kerettel csinálja ugyanazt? Mivel minden változás új agentverzió, a két verzió számai tisztán összevethetők.
 
+## Saját feladatlista, naptár és reggeli összefoglaló (döntés, 2026-10-29)
+
+- **Feladatok:** egy embernek saját feladatlistája van: cím, leírás (markdown), állapot (ütemezve / elkezdve / befejezve) és sorrend. Csak ő írja; az állapotváltás ideje megmarad (`started_at`, `done_at`), ebből látszik, mit fejezett be vagy kezdett el tegnap.
+- **Naptár:** külső naptárakra ICS-linkkel lehet feliratkozni (Google „titkos iCal-cím”, Outlook közzétett link, `webcal://`). A szerver tölti le (csak nyilvános https-cím, SSRF-védelemmel), a link titok.
+- **Ki olvashatja:** az agentek csak olvashatják, MCP-n (`planner_read`, `calendar_read`); írni nem tudnak. A feladatokat alapból minden agent olvashatja, a naptárat csak az, akit a tulajdonos kiválaszt. A naptár szövegét (meghívókat) más is írhatja: adat, soha nem utasítás.
+- **Reggeli összefoglaló:** egy olcsó, sandboxos agent minden reggel egy üzenetet küld (`/cron`): mai naptáresemények, tegnap befejezett / elkezdett / áthozott feladatok, mai feladatok. Napközben nem ír, nem tanul, nem javasol (Norbi döntése: „sok AI-üzenet inkább túl sok info lenne”). A naptár csak nagyjából pontos, ezért nem tervez köré.
+
 ## Későbbre hagyott döntések
 
 Ezek most nem kellenek, de a terv úgy készül, hogy később átírás nélkül hozzáadhatók legyenek.
