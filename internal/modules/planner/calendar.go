@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"sort"
 	"strings"
@@ -21,6 +22,8 @@ const (
 	MaxRedirects     = 3
 	maxDescription   = 1000
 	maxOccurrences   = 2000
+	maxRuleSteps     = 100000 // rule iterations per recurring event
+	maxEventLength   = 31 * 24 * time.Hour
 )
 
 // Fetcher downloads a calendar (the fetch package has the safe one).
@@ -59,22 +62,40 @@ func MaskURL(raw string) string {
 	return u.Host + "/…" + tail
 }
 
-var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
+// nonPublic lists the IANA special-purpose ranges a calendar host must not
+// resolve to. NAT64, 6to4 and Teredo are refused whole: they can embed any
+// IPv4 address, and no calendar provider needs them.
+var nonPublic = func() []netip.Prefix {
+	var out []netip.Prefix
+	for _, p := range []string{
+		"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
+		"192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15",
+		"198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+		"::/128", "::1/128", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/23", "2001:db8::/32",
+		"2002::/16", "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8",
+	} {
+		out = append(out, netip.MustParsePrefix(p))
+	}
+	return out
+}()
 
-// PublicIP reports whether ip is a public unicast address (not loopback,
-// private, link-local, CGNAT 100.64/10, 0.0.0.0/8 or multicast).
+// PublicIP reports whether ip is a public unicast address: not in any of
+// the special-purpose ranges above (IPv4-mapped IPv6 is checked as IPv4).
 func PublicIP(ip net.IP) bool {
-	if ip4 := ip.To4(); ip4 != nil {
-		ip = ip4
-		if ip4[0] == 0 || cgnat.Contains(ip4) {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, p := range nonPublic {
+		if p.Contains(addr) {
 			return false
 		}
 	}
-	return !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsUnspecified() && !ip.IsLinkLocalUnicast() &&
-		!ip.IsLinkLocalMulticast() && !ip.IsInterfaceLocalMulticast() && !ip.IsMulticast()
+	return true
 }
 
-// fetchError turns a fetch failure into a message for the owner that never
+// FetchError turns a fetch failure into a message for the owner that never
 // contains the URL (it carries a token).
 func FetchError(err error) string {
 	var uerr *url.Error
@@ -144,19 +165,25 @@ func ParseCalendar(data []byte, loc *time.Location, from, to time.Time) ([]Event
 			continue
 		}
 		dur := base.End.Sub(base.Start)
+		if dur > maxEventLength {
+			dur = maxEventLength
+		}
 		uid, _ := ev.Props.Text(ical.PropUID)
-		for _, start := range set.Between(from.Add(-dur), to, true) {
-			if overridden[key{uid, start.Unix()}] {
+		// Walk the rule with an iterator and a step budget, so a hostile
+		// rule (FREQ=SECONDLY, a start decades ago) cannot allocate or spin
+		// without bound; Between would build the whole list first.
+		next := set.Iterator()
+		for steps := 0; steps < maxRuleSteps && len(out) < maxOccurrences; steps++ {
+			start, ok := next()
+			if !ok || !start.Before(to) {
+				break
+			}
+			if !start.Add(dur).After(from) || overridden[key{uid, start.Unix()}] {
 				continue
 			}
 			e := base
 			e.Start, e.End = start, start.Add(dur)
-			if e.End.After(from) && e.Start.Before(to) {
-				out = append(out, e)
-			}
-			if len(out) >= maxOccurrences {
-				break
-			}
+			out = append(out, e)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })

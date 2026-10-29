@@ -107,3 +107,21 @@ func TestMaskURLHidesToken(t *testing.T) {
 		t.Fatalf("masked: %q", m)
 	}
 }
+
+// A hostile rule (every second since 1990) stays bounded: the parse returns
+// quickly with at most maxOccurrences events.
+func TestParseBoundsHostileRules(t *testing.T) {
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n" +
+		"BEGIN:VEVENT\r\nUID:spam\r\nDTSTART:19900101T000000Z\r\nDTEND:19900101T000001Z\r\nRRULE:FREQ=SECONDLY\r\nSUMMARY:x\r\nEND:VEVENT\r\n" +
+		"BEGIN:VEVENT\r\nUID:soon\r\nDTSTART:20261020T000000Z\r\nDTEND:20261020T000001Z\r\nRRULE:FREQ=SECONDLY\r\nSUMMARY:y\r\nEND:VEVENT\r\n" +
+		"END:VCALENDAR\r\n"
+	from := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	start := time.Now()
+	evs, err := ParseCalendar([]byte(ics), time.UTC, from, from.AddDate(0, 0, 60))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) > maxOccurrences || time.Since(start) > 5*time.Second {
+		t.Fatalf("unbounded: %d events in %v", len(evs), time.Since(start))
+	}
+}
