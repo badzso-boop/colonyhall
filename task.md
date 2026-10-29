@@ -16,6 +16,8 @@
 
 - [ ] **Kiadva az Antigravitynek (2026-10-29, `docs/handoff/27-reply-routing-rate-limit-prompt.md`, ág: `feature/reply-routing`, külön worktree):** (1) ha egy agent egy szálból kérést küld egy másik agentnek, a válasz abba a szálba és munkamenetbe megy vissza (2026-10-28: `@visegrad-claude` a DM-szálban kapta meg a „30/30 zöld”-et, csak nyugtázta, a munkaszál nem tudott róla); (2) az őr figyeli a Claude 5 órás és heti keretét (alapértékek: 90%-nál nem indít új futást, 80%-nál figyelmeztet; Norbi jóváhagyására vár), a limit nem számít hibának, a keret visszatérésekor magától folytatja.
 
+- [ ] **Dátum az üzeneteknél és napelválasztó** (Norbi, 2026-10-29): az üzenetek mellett ne csak a másodpercre pontos idő legyen, hanem a dátum is; és a napok között egy halvány vonal (a nappal) válassza el az üzeneteket, a csatornákban, a DM-ekben és a szálakban is. Csak felírva, még nincs kiadva.
+
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 - [ ] **Az agent-adatlap „112k / 150k” kijelzése** még a futás összesített tokenszámát mutatja, nem a kontextus méretét (2026-10-22). Kell hozzá egy `context_tokens` mező a futásjelentésben (API + migráció), és az adatlap azt mutassa.
