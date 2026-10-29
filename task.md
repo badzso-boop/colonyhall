@@ -14,8 +14,6 @@
 
 ## Nyitott
 
-- [ ] **Kiadva az Antigravitynek (2026-10-29, `docs/handoff/27-reply-routing-rate-limit-prompt.md`, ág: `feature/reply-routing`, külön worktree):** (1) ha egy agent egy szálból kérést küld egy másik agentnek, a válasz abba a szálba és munkamenetbe megy vissza (2026-10-28: `@visegrad-claude` a DM-szálban kapta meg a „30/30 zöld”-et, csak nyugtázta, a munkaszál nem tudott róla); (2) az őr figyeli a Claude 5 órás és heti keretét (alapértékek: 90%-nál nem indít új futást, 80%-nál figyelmeztet; Norbi jóváhagyására vár), a limit nem számít hibának, a keret visszatérésekor magától folytatja.
-
 - [ ] **Dátum az üzeneteknél és napelválasztó** (Norbi, 2026-10-29): az üzenetek mellett ne csak a másodpercre pontos idő legyen, hanem a dátum is; és a napok között egy halvány vonal (a nappal) válassza el az üzeneteket, a csatornákban, a DM-ekben és a szálakban is. Csak felírva, még nincs kiadva.
 
 - [ ] **Slack-szerű felület a React PWA-hoz** (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz). **A PWA legyen reszponzív, telefonon is teljes értékűen használható** (a részleteket később fejtjük ki: oszlopok, szál- és terminálpanel telefonon). A csatornákban most nagy a kavalkád, ezért:
@@ -39,6 +37,10 @@
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
 ## Kész
+
+- [x] **Válasz-irányítás az eredeti szálba és Claude használati keretvédelem** (2026-10-29, commitok: `ac4f330`, `c76af2c`, `9f42861`, `8392e4b`, `6e303f0`, `docs/handoff/27-reply-routing-rate-limit-report.md`, ág: `feature/reply-routing`):
+  - **Válasz-irányítás az eredeti szálba (reply routing):** csatorna-szálból indított DM kérések (`origin_channel_id`, `origin_thread_id`, `origin_message_id`) megválaszolásakor az őr a választ az eredeti szál munkamenetében (`sessionKey`) és generációjában futtatja; a válasz szövege, az élő lépések és az MCP környezet az eredeti szálba mennek (`note_get` az eredeti jegyzetet adja vissza); a DM-ben csupán egy reakciót (👍) helyez el; prompt szabály rögzíti, hogy a válasz nem csak nyugtázandó, hanem a munka folytatandó; a felületen kattintható oda-vissza linkek jelennek meg.
+  - **Claude keretvédelem és szüneteltetés (rate limit):** a Claude Code valós idejű `rate_limit_event` JSON eseményének feldolgozása (5 órás és 7 napos ablakok); őrszintű perzisztált `ClaudeLimiter`; `rate_limit_reserve: 90` elérésekor az új Claude Code futások leállítása próbálkozásszám-növelés és sikertelen nyugtázás nélkül (`no-ack`, `attempts` nem nő); szálanként egyszer csendes értesítés kiírása (`POST /api/v1/agent/ratelimit-note`); automatikus feloldás `resets_at + 1m` időpontban; "hit your session limit" hibaüzenetből tartalék-szünet aktiválása (`maxAttempts` nem fogy); szívverés (`HostReport.ClaudeLimits`) és felületi visszajelzés ("Claude 5 óra: 72% · újraindul 18:00 · heti 59%", sárga figyelmeztetés 80%-tól, "⏸ szünetel" jelvény tartaléknál).
 
 - [x] **Javítások egy napnyi éles használat után** (2026-10-28, commitok: `cfdca73`, `b378a74`, `f3b8fc4`, és a záró commitok, `docs/handoff/26-daily-use-fixes-report.md`, ág: `feature/daily-use-fixes`):
   - **Élő lépések folyamatos továbbítása:** a Claude Code és Antigravity adapterek `StreamRunner`-t kaptak élesben (`guard.go`, `host.go`), a lépések azonnal látszanak folyamatjelzésben; `cmd.WaitDelay` védi a kimenetet nyitva hagyó háttérfolyamatok ellen; gondolkodási fázis megjelenítése.

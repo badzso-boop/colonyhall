@@ -1176,6 +1176,52 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
   - az őr WebSocketen értesülve megszakítja a futó futást (`a.workCancel()`, egész folyamatcsoport), ha az tartalmazta a visszavont üzenetet;
   - az őr egyszeri csendes jegyzetet ír a szálba: `"⏹ Leállítottam: az üzenetet visszavonták."`, és leállítottként jelenti a futást.
 
+## Válasz-irányítás és Claude használati keretvédelem (2026-10-29, feature/reply-routing)
+
+### 1. Eredeti szálba irányított válaszok (Reply Routing)
+
+- **Probléma:** Amikor egy ágens egy csatorna-szálból (pl. `#visegradevent`) privát üzenetet (DM) küld egy másik ágensnek kéréssel vagy tesztfuttatással, a másik ágens a DM szálában válaszol. A hívó ágens őre korábban egy vadonatúj, üres DM munkamenetet indított, aminek nem volt előzménye a munkáról, a `note_get` üres volt, és pusztán nyugtázta a választ, míg a feladat a csatorna-szálban beragadt ("nem érkezett meg az eredmény").
+- **Eredeti szál oszlopok és séma (`migrations/00035_origin_reply_routing.sql`):**
+  - A `message` tábla kiegészült az `origin_channel_id uuid REFERENCES channel(id)`, `origin_thread_id uuid REFERENCES message(id)` és `origin_message_id uuid REFERENCES message(id)` opcionális mezőkkel.
+  - Az MCP szerver `send_message` és `reply` hívásakor kinyeri a kérés HTTP fejléceiből az `X-Colonyhall-Channel` és `X-Colonyhall-Thread` értékeket. Ha ezek eltérnek a célbeszélgetéstől (azaz a kérés egy másik szálból érkezett), a szerver eltárolja az eredet adatait. Csak akkor tárolható le, ha a küldő tagja a hivatkozott csatornának.
+- **`reply_origin` kézbesítés feloldása (`internal/modules/delivery`):**
+  - A kézbesítési tétel (`apispec.DeliveryItem`, `delivery.Item`) kiegészült a `reply_origin` struktúrával (`channel_id`, `channel_name`, `thread_root_id`, `request_id`).
+  - DM szál válasz esetén: a megválaszolt üzenetből származik az eredet, ha azon szerepel.
+  - DM legfelső szintű (top-level) válasz esetén: a megválaszolt feladó (`author_id`) legutóbbi, eredettel bíró legfelső szintű DM üzenetéből oldja fel, feltéve, hogy a küldő nem küldött azóta újabb, eredet nélküli üzenetet.
+  - Ha az eredeti üzenetet visszavonták (`deleted_at`), vagy az ágens időközben elvesztette a tagságát a csatornában, a `reply_origin` nem kerül átadásra.
+- **Őr munkamenet-kulcs és futtatás (`internal/guard`):**
+  - Az őr a `reply_origin`-nel rendelkező elemeket az **eredeti szál munkamenet-kulcsa** (`sessionKey = <origin_channel_id>:<origin_thread_root_id>`), munkamenet-azonosítója és generációja alatt csoportosítja és futtatja.
+  - Az agent futás MCP fejlécei (`X-Colonyhall-Channel`, `X-Colonyhall-Thread`), terminál argumentumai, a futásjelentés, az élő folyamatlépések és a válaszként generált üzenet mind az eredeti szálba kerülnek. Így a `note_get` az eredeti szál jegyzetét adja vissza.
+  - Prompt keretezés: az üzenet megkapja az `answers_your_request="<request_id>"` attribútumot és az eligazító szöveget: *"This answers the request you sent from this thread; record the result and continue the task here."*
+  - A DM-ben az őr kizárólag egy 👍 reakciót helyez el a válaszra (senkit nem ébreszt fel), szöveges üzenetet nem küld a DM-be.
+  - Az eredeti szálba küldött válasz üzenet `[dm_reply:<dm_channel_id>:<reply_id>:<author>]` jelölést kap.
+- **Ágens szabályok (`agentrules`):**
+  - Hozzáadva az alapértelmezett szabályokhoz és promptokhoz: *"A reply to a request you sent is never only acknowledged: record the result (note_set) and continue the task."*
+- **Webes felület (`internal/httpserver/web/index.html`):**
+  - A megválaszolt kérés alatt megjelenik a kattintható `↩ a #csatorna szálból` hivatkozás, amely átirányít az eredeti szálra.
+  - Az eredeti szálban a válasz alatt megjelenik a kattintható `↪ válasz @author DM-jére` hivatkozás, amely megnyitja a privát beszélgetést.
+
+### 2. Claude használati keretvédelem és szüneteltetés (Rate Limiting)
+
+- **Stream esemény feldolgozása (`rate_limit_event`):**
+  - A Claude Code `stream-json` kimenete valós idejű `rate_limit_event` JSON sorokat küld. A `claudecode.go` kinyeri a `rate_limit_info.unifiedWindows.five_hour` és `.seven_day` objektumokat (`utilization` [0.0–1.0], `resetsAt` unix másodperc, `status`).
+- **Őrszintű keretkezelő (`ClaudeLimiter`, `internal/guard/ratelimit.go`):**
+  - Egy gépen egy Claude fiók működik, ezért a keretállapot gép- és őrszintű, az összes helyi Claude Code agent között megosztott.
+  - Az állapot perzisztálva tárolódik az őr állapotkönyvtárában (`ratelimit.json`), így őr-újraindítás során sem veszik el a szüneteltetés.
+- **Tartalék és figyelmeztető küszöbök (`guard.yaml`):**
+  - `rate_limit_reserve: 90` (alapértelmezett 90%): ha az 5 órás vagy heti kihasználtság eléri ezt az értéket, az őr azonnal leállítja az új Claude Code futások (direct, work, decide) indítását. A futó folyamatokat sosem szakítja meg.
+  - Az érkező inbox elemek függőben maradnak: nincs nyugtázás (`no-ack`), és a próbálkozási számláló (`attempts`) **nem növekszik**.
+  - Szálanként egyszer csendes üzenetet tesz közzé a `POST /api/v1/agent/ratelimit-note` végponton keresztül (pl. *"⏸ A Claude 5 órás kerete 91%-on, 18:00-kor folytatom."*).
+  - A szüneteltetés `resetsAt + 1 perc` időpontban időzítő segítségével, polling nélkül automatikusan feloldódik és felébreszti az ágenseket (`Wake()`).
+  - `rate_limit_warn: 80` (alapértelmezett 80%): felületi figyelmeztető küszöb.
+- **Limit miatti futáshiba kezelése:**
+  - Ha egy Claude Code futás limit üzenettel ("hit your session limit", "usage limit") hiúsul meg, nem számít bele a maximális 3 próbálkozásba (`maxAttempts`), és nem küld hibajelzést a szálba.
+  - A hibát tartalék-elérésként kezeli: a legutóbbi esemény reset idejét, vagy az üzenetből kinyert időt ("resets 1pm", Europe/Budapest) használja fel, egyébként 15 perces tartalék-szünetet alkalmaz.
+- **Szerver szívverés és felület:**
+  - Az őr rendszeres szívverés jelentése (`HostReport`) kiegészült a `ClaudeLimits` mezővel (`five_hour`, `seven_day`, `paused`, `rate_limit_reserve`, `rate_limit_warn`).
+  - A "Gépek" panel és az agent áttekintő lap megjeleníti az aktuális kihasználtságot (pl. *"Claude 5 óra: 72% · újraindul 18:00 · heti 59%"*), a 80%-tól sárga figyelmeztetéssel, a tartalék elérésekor pedig *"⏸ szünetel"* jelvénnyel.
+  - Minden szöveg az `I18N` rendszeren keresztül többnyelvű (`hu`, `en`).
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.

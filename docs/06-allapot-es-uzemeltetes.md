@@ -61,6 +61,10 @@
 
 **Agent létrehozása:** „Gépek” → „Új agent”. Sandbox nélküli agentnek kötelező a `root dir`; `compact` választásakor a sandbox magától bepipálódik. Ha a géphez rendelés hibát dob, ugyanazzal a névvel újrapróbálható (az űrlap a meglévő agentet használja). Új gyökérmappa a gép `guard.yaml` `roots` listájába kell (pl. a szakdoga mappa 2026-10-22-én), utána őr-újraindítás.
 
+**Claude Code keretvédelem (`guard.yaml`):**
+- `rate_limit_reserve`: 90 (alapértelmezett). Ha a Claude 5 órás vagy heti kerete eléri ezt a százalékot, az őr egyetlen új Claude Code futást sem indít el. A feladatok nem vesznek el, az inboxban várakoznak, az `attempts` számláló nem nő, és a szálba szálanként egyszer csendes üzenet kerül ki. Az újraindulás (`resets_at + 1m`) után a feldolgozás automatikusan folytatódik.
+- `rate_limit_warn`: 80 (alapértelmezett). A felületen 80%-tól figyelmeztető kiemelés jelzi a keret fogyását.
+
 ## Munkamódszer
 
 - **Tervezés és döntés:** Norbi dönt, Claude Code megírja a tervet a `task.md` „Tervezendő” részébe és a handoff promptot (`docs/handoff/NN-…-prompt.md`, alapszabályok: `00-ground-rules.md`).
@@ -68,7 +72,7 @@
 - **Átnézés:** Claude Code körönként, az előző ághoz képest; minden ellenőrzés (`make test`, `lint`, `gen-check`, `test-web`, `test-pg` gyorsítótár nélkül, `-race`); biztonsági átolvasás; minden javításhoz teszt, ami a javítás nélkül elbukik; felületi változásnál böngészős próba (Playwright). Commit csak zöld tesztekkel.
 - **Tanulság:** az agy szinte minden körében volt valódi, sokszor biztonsági hiba, amit a saját tesztjei nem fogtak meg (jogosultság túl tág, agent elér valamit, amit csak ember szabadna, felület és API eltérő mezőnevei, a teszt maga rögzítette a hibát). Az átnézés nem hagyható ki. A háttérben futó automatikus biztonsági ellenőrzés Claude Code saját javításaiban is talált rést (pl. a jogosultság-kikerülő függvényekből kimaradt a „leállított agent nem írhat” feltétel).
 
-## Döntések (2026-10-21–28)
+## Döntések (2026-10-21–29)
 
 - A szerver a homelabon, csak Tailscale-en; a saját kód a GitHubon, a homelab Gitea az agentek repóié.
 - Teljes internet csak a teljes hozzáférésű agentnek; a sandboxos agent `web_read`-del olvashat.
@@ -77,6 +81,8 @@
 - Delegációs kérdések chat üzenet nélkül (2026-10-28): az eredeti ágensüzenet alatti gombok elegendőek, nem készül külön Q-chat üzenet; belső `silent` küldési opció biztosítja, hogy a könyvelési üzenetek ne ébresszenek senkit.
 - Inaktivitási időkorlát (2026-10-28): a dolgozó ágenst fix óra nem állítja le; inaktivitási figyelő (`idle_timeout`, alapértelmezetten 15m) és végső kemény plafon (`max_run`, alapértelmezetten 4h) lép életbe automatikus újrapróbálkozás nélkül.
 - Üzenet visszavonása (2026-10-28): ember visszavonhatja saját üzenetét, a még futó ágensfutás azonnal megszakad (egész folyamatcsoport), a törzs maszkolódik (`🗑 Visszavonva`), a postaláda és delegáció törlődik.
+- Eredeti szálba irányított válaszok (2026-10-29): egy csatorna-szálból indított privát kérés megválaszolásakor az őr a választ az eredeti szál munkamenetébe irányítja vissza (`reply_origin`), a DM-ben csak reakciót (👍) helyez el, és a felületen kétirányú hivatkozás köti össze a szálat és a DM-et.
+- Claude Code keretvédelem és szüneteltetés (2026-10-29): a `rate_limit_reserve: 90` elérésekor az őr nem indít új Claude Code futást, szálanként csendes értesítést küld és a reset idejéig felfüggeszti a futtatást. A limit miatti hibák nem növelik a `maxAttempts` számlálót. A szívverés tartalmazza az 5 órás és heti használati adatokat.
 - Tömörítés: külön olcsó jegyző, küszöb 350 000 token alapból, utána friss munkamenet a kivonatból.
 - Élő lépések: valós idejű streamelés a StreamRunner segítségével, csak lépés és címke, soha tartalom; csak embernek.
 - Fájlböngésző: csatornában agentválasztó; mindig friss lekérés (gyorsítótár később).
