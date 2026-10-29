@@ -26,7 +26,12 @@
   - **Jegyzetfüzet:** csak az ember írja. Feladatok fontossági sorrendben (húzással rendezhető), mindegyikhez részletes leírás, és kész jelölés.
   - **Naptár:** feliratkozás külső naptárakra ICS-linkkel, napi és heti nézettel.
   - **Ki olvashatja:** a jegyzetfüzetet alapból minden agent, a naptárat csak a kiválasztott agentek, mindkettőt szigorúan csak olvasásra.
-  - **Asszisztens:** egy olcsó agent a homelabon 2–3 óránként átnézi a jegyzetfüzetet és a naptárat, és DM-ben javasol 1–3 feladatot. Figyelembe veszi, hol van Norbi, és mi jön a naptárában.
+  - **Asszisztens:** egy olcsó agent a homelabon reggel (7:30) összefoglalót, este (21:00) zárást küld, napközben (9–19, kétóránként) csak akkor ír, ha van szabad idősáv és illő feladat; 22–7 között csend, napi legfeljebb 5 üzenet. Figyelembe veszi, hol van Norbi, és mi jön a naptárában.
+  - **Tanulás és csend (Norbi döntése, 2026-10-29):** 👍/👎 a javaslatokra, „⏰ Ne most” a feladatokon; az asszisztens a jegyzetébe írja, mit szoktál elfogadni; ha nincs mondanivalója, `NO_MESSAGE`-dzsel csendben marad (a guard ilyenkor nem ír semmit).
+
+- [ ] **Vállalkozási asszisztens (29. kör, Norbi döntése, 2026-10-29):** havi számlázási emlékeztető ügyfelenként, az alanyi adómentesség értékhatárának figyelése (a bevételt és a határt Norbi adja meg). Csak terv.
+
+- [ ] **Később az asszisztenshez (ötletek, 2026-10-29):** gazdagabb feladatmezők (határidő, becsült idő, energiaszint, kontextus, projekt, ismétlődés), gyors rögzítés a chatből javaslatként („Felveszem / Elvetem”), Colonyhall-tudás a reggeli összefoglalóban (nyitott jóváhagyások, rád váró kérdések, agentek kész munkái), heti áttekintés vasárnap.
 
 - [ ] **Jóváhagyás után akár egy perc késéssel ébred az agent** (2026-10-29, a 27. kör átnézésekor): a guard bármelyik WebSocket-eseményre megnézi a postafiókot; ha a jóváhagyás eseményére még azelőtt néz, hogy a jóváhagyott (`delegated`) tétel beíródott, a következő eseményig vagy a 60 mp-es tartalék lekérdezésig vár. Javítás: a tétel beírásakor menjen egy saját esemény (pl. `delivery.item_created` a címzettnek), vagy a guard egy ébresztés után rövid idővel nézzen rá még egyszer.
 

@@ -1,4 +1,4 @@
-# Handoff prompt 28: a personal notebook and subscribed calendars, read-only for agents, with a scheduled assistant
+# Handoff prompt 28: a personal notebook and subscribed calendars, read-only for agents, with a scheduled assistant that learns and stays quiet
 
 ```sh
 cd /mnt/g/Projects/new-chat && git switch main && git pull --ff-only
@@ -32,6 +32,7 @@ New module `internal/modules/planner/` (model, events, service, store port, `mem
   - `details` (markdown, max 20 000 characters, optional);
   - `position` (the priority order; pick a scheme that reorders one item without rewriting all, e.g. fractional/lexical rank, and explain it in the report);
   - `done_at`, `deleted_at` (soft delete, rule 4 spirit);
+  - `snoozed_until` (optional): set by the owner with "⏰ Ne most" (see part 5); the assistant does not suggest the item before that time;
   - `created_at`, `updated_at`.
 - Each change writes an event in the same transaction (`planner.item_created/updated/moved/done/deleted`; outbox). The events carry ids only, no text: the text is the owner's.
 - **REST:** list (open items in order, then done items of the last 14 days), create, update title/details, move (before/after another item), done/undone, delete.
@@ -44,6 +45,7 @@ New module `internal/modules/planner/` (model, events, service, store port, `mem
   - Click a title to edit it.
   - A ▸ toggle opens the details: rendered with `ColonyMarkdown`, with an edit button.
   - A checkbox marks an item done. A collapsed "Kész" group shows done items.
+  - A "⏰ Ne most" button on each item with three choices: 3 órára, ma már ne (until 06:00 tomorrow), holnap estig (until 18:00 tomorrow). A snoozed item shows "⏰ <time>-ig" and can be woken early.
   - Delete asks for confirmation in the page (no `confirm()`).
   - Changes appear live in a second open tab (WebSocket event to the owner only).
   - Strings via I18N (hu, en).
@@ -74,7 +76,8 @@ New module `internal/modules/planner/` (model, events, service, store port, `mem
 
 ## 3. Read-only MCP tools for agents
 
-- **`planner_read`:** the open notebook items in priority order (title, details clipped to 2 000 characters each, `position` index, `updated_at`), plus items done in the last 3 days.
+- **`planner_read`:** the open notebook items in priority order (title, details clipped to 2 000 characters each, `position` index, `updated_at`, `snoozed_until` when in the future), plus items done in the last 3 days (with `done_at`).
+  - It also returns `messages_to_owner_today`: how many messages the calling agent posted today (Europe/Budapest) in its DM with the owner. The assistant uses it for the daily cap (part 5).
   - Optional `owner` (handle). The default is the only human who granted this agent access; if several did, `owner` is required.
   - Only agents the owner allowed, otherwise an error without details.
 - **`calendar_read`:** occurrences in `from`…`to` (default: now … +2 days, max 14 days, max 200 events): calendar name, title, start, end, all-day, location and description.
@@ -95,18 +98,42 @@ The flow:
 What to do in this round:
 - Make sure a sandboxed agent can call `planner_read` and `calendar_read`: they are server MCP tools, so the network filter must not block them. Test with the fake agent.
 - **Do not create the production agent** (only an admin creates agents). In `docs/06-allapot-es-uzemeltetes.md` write the recipe:
-  - create `@asszisztens` on the homelab machine (sandbox, flash-low);
+  - create `@asszisztens` on the homelab machine (sandbox, flash-high: the suggestions need judgement, and it runs only ~8 times a day);
   - in the 📝/📅 panel allow it to read the notebook and the calendar;
-  - in the DM with it: `/cron "0 8-20/3 * * *" Nézd át a jegyzetfüzetemet és a naptáramat, és javasolj 1–3 feladatot, amit most meg tudok csinálni.`
-- **The assistant's instructions** go into that recipe as the text Norbi pastes into the agent's description or first message:
-  - suggest at most 3 items, each with one reason (priority, free time until the next event, where Norbi is according to the calendar location);
-  - at most 6 lines;
-  - say "most nincs javaslat" if nothing fits;
-  - never repeat the whole list;
-  - Hungarian.
+  - in the DM with it, three schedules (Norbi's choice, 2026-10-29: morning, evening, and in between only when useful; nothing between 22:00 and 07:00):
+    - `/cron "30 7 * * *" Reggeli összefoglaló.`
+    - `/cron "0 21 * * *" Esti zárás.`
+    - `/cron "0 9-19/2 * * *" Napközbeni ellenőrzés.`
+- **The assistant's instructions** go into that recipe as the text Norbi pastes into the agent's description or first message (Hungarian answers):
+  - **Reggeli összefoglaló:** today's events (time, title, location), the 3 most important open items that fit the day, deadlines in the next 3 days. At most 8 lines.
+  - **Esti zárás:** what was done today (`done_at` today), what is left of the morning's 3, one suggestion for tomorrow morning. At most 6 lines.
+  - **Napközbeni ellenőrzés:** write only if there is a free slot of at least 30 minutes before the next event and an open, not snoozed item fits it; then at most 3 items, each with one reason (priority, free time until the next event, where Norbi is according to the calendar location), at most 6 lines. Otherwise answer exactly `NO_MESSAGE` (part 5).
+  - Never repeat the whole list; never suggest a snoozed item; follow the learning rules of part 5.
 - **Fake-agent scenario** (`scenarios/`): it receives the cron message, calls both tools and answers. Add an e2e test that runs it against the memory server.
 
+## 5. Learning and silence (Norbi's choice, 2026-10-29)
+
+The assistant must not become noise. It writes only when it has something useful, and it learns from Norbi's reactions.
+
+- **Choosing silence (guard):**
+  - If a direct run's final answer, trimmed, is exactly `NO_MESSAGE`, the guard posts nothing, acks the items, logs `guard: run ended silently` and reports the run with status `silent` (new status; contract first; the run log on the page shows it as "🤫 csendben maradt").
+  - This is an explicit choice, not the "run ended without an answer" case: an empty answer is still an error as today.
+  - The sentinel is allowed for every agent (it saves noise everywhere), and it is documented in the shared rules as: "If nothing needs saying, answer exactly NO_MESSAGE."
+  - Tests: `NO_MESSAGE` → no message, items acked, status `silent`; `NO_MESSAGE` inside a longer answer → posted as normal text; empty answer → error as before.
+- **Daily cap:** at most 5 messages a day in the DM with the owner, the morning and evening reports included; when `messages_to_owner_today` from `planner_read` is 5 or more, the daytime check answers `NO_MESSAGE`. The morning report is always sent.
+- **Feedback by reaction:**
+  - Norbi reacts on a suggestion: 👍 (useful), 👎 (not useful). A 👎 already reaches the agent as a `reaction_down` item at its next run; a 👍 is visible through `read` (reactions are listed).
+  - The assistant reads its own last ~20 messages in the DM with `read` at the start of each run and checks the reactions.
+  - It keeps a short preference note with `note_set` in its DM thread (e.g. "esténként ne javasolj mély munkát", "a szakdoga reggel jön be", "hétköznap 8–16 munkahelyen van"), at most 15 lines, updated when a reaction or a pattern teaches something new; it reads it with `note_get` before suggesting.
+  - When a run is woken only by a `reaction_down` item, it updates the note and answers `NO_MESSAGE`.
+  - Snoozes ("⏰ Ne most") are also a signal: an item snoozed twice in the same time of day is not suggested in that time of day again (note it).
+- **Fake-agent tests:** a scenario where the daytime check finds no free slot and answers `NO_MESSAGE` (nothing posted, run `silent`); a scenario where a 👎 wakes it, it calls `note_set` and stays silent.
+
 ## Out of scope (say so in the report)
+
+- Richer item fields (deadline, estimated time, energy level, context, project, recurring items) and quick capture from the chat as a proposal: later, Norbi decides.
+- Colonyhall knowledge in the reports (open approvals, questions waiting for Norbi, agents' finished work): later.
+- Business side (monthly invoicing reminders, tracking the AAM threshold): round 29.
 
 - Writing to calendars and two-way sync.
 - CalDAV login.
@@ -119,12 +146,13 @@ What to do in this round:
 Hungarian:
 - `docs/01-terv.md`: notebook, calendars, who may read them, the assistant.
 - `docs/02-muszaki-specifikacio.md`: the `planner` module, tables, events, REST and MCP, the ICS fetch rules.
-- `docs/06-allapot-es-uzemeltetes.md`: `COLONY_CALENDAR_REFRESH` and the assistant recipe.
+- `docs/06-allapot-es-uzemeltetes.md`: `COLONY_CALENDAR_REFRESH` and the assistant recipe (agent, permissions, the three `/cron` lines, the instruction text).
+- `internal/modules/agentrules/model.go` default rules and `internal/mcpserver/mcpserver.go`: the `NO_MESSAGE` line (the reviewer publishes the live rules after the deploy).
 - `task.md`: move the item to "Kész" with the date and commit ids.
 
 Then the report `docs/handoff/28-planner-calendar-report.md` (Hungarian) with:
 - the commits and the decisions where this prompt was open (rank scheme, ICS library and licence, where the URL is stored);
 - what is left out;
 - the outputs of `make test`, `make lint`, `make test-web`, `make test-pg` (uncached), `make gen-check` and the `-race` run;
-- a manual browser check on the dev stack: add, reorder, done, details; a subscription served from a local fixture through a test-only allowlist (never weaken the SSRF rules in production code); the agenda; the fake assistant's answer;
+- a manual browser check on the dev stack: add, reorder, done, details, "⏰ Ne most"; a subscription served from a local fixture through a test-only allowlist (never weaken the SSRF rules in production code); the agenda; the fake assistant's answer and a silent run in the run log;
 - what the reviewer should look at first.
