@@ -137,6 +137,7 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		ID: m.ID, WorkspaceID: m.WorkspaceID, ChannelID: m.ChannelID, ThreadRootID: nullID(m.ThreadRootID),
 		AuthorID: m.AuthorID, ClientMsgID: nullString(m.ClientMsgID), Kind: m.Kind, Body: m.Body,
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
+		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -215,6 +216,12 @@ func toMessage(r sqlcgen.Message) conversation.Message {
 	if r.ClientMsgID != nil {
 		m.ClientMsgID = *r.ClientMsgID
 	}
+	if r.OriginChannelID != nil {
+		m.OriginChannelID = *r.OriginChannelID
+	}
+	if r.OriginThreadID != nil {
+		m.OriginThreadID = *r.OriginThreadID
+	}
 	return m
 }
 
@@ -291,6 +298,11 @@ func (s *Store) MainStreamMessages(ctx context.Context, channelID ids.ID) ([]con
 // LastMessageNotBy returns the newest message by someone else.
 func (s *Store) LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (conversation.Message, error) {
 	return oneMessage(s.q(ctx).LastMessageNotBy(ctx, sqlcgen.LastMessageNotByParams{ChannelID: channelID, AuthorID: actorID}))
+}
+
+// LatestTopLevelMessageByAuthor returns the newest top-level message in the channel by the author.
+func (s *Store) LatestTopLevelMessageByAuthor(ctx context.Context, channelID, authorID ids.ID) (conversation.Message, error) {
+	return oneMessage(s.q(ctx).LatestTopLevelMessageByAuthor(ctx, sqlcgen.LatestTopLevelMessageByAuthorParams{ChannelID: channelID, AuthorID: authorID}))
 }
 
 // RetractMessage marks a message as retracted.

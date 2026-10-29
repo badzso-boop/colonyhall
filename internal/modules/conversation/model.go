@@ -82,24 +82,27 @@ type Attachment struct {
 
 // Message is one chat message. Rows are append-only.
 type Message struct {
-	ID           ids.ID
-	WorkspaceID  ids.ID
-	ChannelID    ids.ID
-	ThreadRootID ids.ID // ids.Nil for a top-level message
-	AuthorID     ids.ID
-	ClientMsgID  string // set by the client for idempotent sends; may be empty
-	Kind         string // "text" or "system"
-	Body         string
-	CompactionID ids.ID // set for compaction system messages
-	Mentions     []ids.ID
-	ReplyCount   int
-	LastReplyAt  *time.Time
-	CreatedAt    time.Time
-	DeletedAt    *time.Time
-	DeletedBy    *ids.ID
-	Reactions    []ReactionSummary // filled on reads
-	Attachments  []Attachment      // filled on reads
-	LinkCards    []LinkCard        // filled on reads
+	ID              ids.ID
+	WorkspaceID     ids.ID
+	ChannelID       ids.ID
+	ThreadRootID    ids.ID // ids.Nil for a top-level message
+	AuthorID        ids.ID
+	ClientMsgID     string // set by the client for idempotent sends; may be empty
+	Kind            string // "text" or "system"
+	Body            string
+	CompactionID    ids.ID // set for compaction system messages
+	Mentions        []ids.ID
+	ReplyCount      int
+	LastReplyAt     *time.Time
+	CreatedAt       time.Time
+	DeletedAt       *time.Time
+	DeletedBy       *ids.ID
+	OriginChannelID ids.ID            // origin channel if sent by agent with an origin
+	OriginChannel   string            // channel name, filled on reads
+	OriginThreadID  ids.ID            // origin thread root if sent by agent with an origin
+	Reactions       []ReactionSummary // filled on reads
+	Attachments     []Attachment      // filled on reads
+	LinkCards       []LinkCard        // filled on reads
 }
 
 // LinkCard is unfurled metadata for a link in a message.

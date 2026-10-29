@@ -409,6 +409,26 @@ func (s *Store) LastMessageNotBy(_ context.Context, channelID, actorID ids.ID) (
 	return *best, nil
 }
 
+// LatestTopLevelMessageByAuthor returns the newest top-level message in the channel by the author.
+func (s *Store) LatestTopLevelMessageByAuthor(_ context.Context, channelID, authorID ids.ID) (conversation.Message, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var best *conversation.Message
+	for _, m := range s.messages {
+		if m.ChannelID != channelID || m.AuthorID != authorID || m.ThreadRootID != ids.Nil {
+			continue
+		}
+		if best == nil || m.CreatedAt.After(best.CreatedAt) || (m.CreatedAt.Equal(best.CreatedAt) && bytes.Compare(m.ID[:], best.ID[:]) > 0) {
+			m := m
+			best = &m
+		}
+	}
+	if best == nil {
+		return conversation.Message{}, db.ErrNotFound
+	}
+	return *best, nil
+}
+
 // RetractMessage marks a message as retracted.
 func (s *Store) RetractMessage(_ context.Context, id ids.ID, deletedBy ids.ID, at time.Time) error {
 	s.mu.Lock()

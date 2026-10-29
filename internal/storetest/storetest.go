@@ -404,6 +404,58 @@ func testThreadsAndReactions(t *testing.T, b Backend, f fixture, msgs []conversa
 	if ok, err := b.Conversation.AddReaction(ctx, r); err != nil || !ok {
 		t.Fatalf("re-add: %v %v", ok, err)
 	}
+
+	// Origin message fields and LatestTopLevelMessageByAuthor
+	origChanID := f.channel.ID
+	origThreadID := msgs[0].ID
+	mWithOrigin := conversation.Message{
+		ID:              gen.New(),
+		WorkspaceID:     f.ws.ID,
+		ChannelID:       f.channel.ID,
+		AuthorID:        f.agent.ID,
+		Kind:            "text",
+		Body:            "origin request",
+		Mentions:        []ids.ID{},
+		OriginChannelID: origChanID,
+		OriginThreadID:  origThreadID,
+		CreatedAt:       t0.Add(2 * time.Hour),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, mWithOrigin))
+	gotWithOrigin, err := b.Conversation.MessageByID(ctx, mWithOrigin.ID)
+	must(t, err)
+	if gotWithOrigin.OriginChannelID != origChanID || gotWithOrigin.OriginThreadID != origThreadID {
+		t.Fatalf("message origin not preserved: got channel %v, thread %v", gotWithOrigin.OriginChannelID, gotWithOrigin.OriginThreadID)
+	}
+
+	latestTop, err := b.Conversation.LatestTopLevelMessageByAuthor(ctx, f.channel.ID, f.agent.ID)
+	must(t, err)
+	if latestTop.ID != mWithOrigin.ID {
+		t.Fatalf("expected latest top level message %s, got %s", mWithOrigin.ID, latestTop.ID)
+	}
+
+	// A reply in thread does not overwrite the latest top-level message
+	replyMsg := conversation.Message{
+		ID:           gen.New(),
+		WorkspaceID:  f.ws.ID,
+		ChannelID:    f.channel.ID,
+		ThreadRootID: origThreadID,
+		AuthorID:     f.agent.ID,
+		Kind:         "text",
+		Body:         "thread reply",
+		Mentions:     []ids.ID{},
+		CreatedAt:    t0.Add(3 * time.Hour),
+	}
+	must(t, b.Conversation.InsertMessage(ctx, replyMsg))
+	latestTopAfterReply, err := b.Conversation.LatestTopLevelMessageByAuthor(ctx, f.channel.ID, f.agent.ID)
+	must(t, err)
+	if latestTopAfterReply.ID != mWithOrigin.ID {
+		t.Fatalf("thread reply should not be latest top-level: expected %s, got %s", mWithOrigin.ID, latestTopAfterReply.ID)
+	}
+
+	// Unknown author or channel returns ErrNotFound
+	if _, err := b.Conversation.LatestTopLevelMessageByAuthor(ctx, f.channel.ID, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for unknown author, got %v", err)
+	}
 }
 
 func testDelivery(t *testing.T, b Backend) {

@@ -1005,6 +1005,18 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Posted }
 
+  /agent/ratelimit-note:
+    post:
+      operationId: reportRateLimitNote
+      tags: [agents]
+      description: Agents only. Post a silent note when Claude usage hits reserve or reset pause.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RateLimitNoteRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Posted }
+
   /agent/progress:
     post:
       operationId: reportAgentProgress
@@ -2040,6 +2052,14 @@ components:
         link_cards: { type: array, items: { $ref: "#/components/schemas/LinkCard" } }
         deleted_at: { type: string, format: date-time, nullable: true }
         deleted_by: { type: string, format: uuid, nullable: true }
+        origin: { $ref: "#/components/schemas/MessageOrigin" }
+    MessageOrigin:
+      type: object
+      required: [channel_id, channel, thread_id]
+      properties:
+        channel_id: { type: string, format: uuid }
+        channel: { type: string }
+        thread_id: { type: string, format: uuid }
     MessageList:
       type: object
       required: [messages]
@@ -2103,6 +2123,15 @@ components:
         at: { type: string, format: date-time }
         delegated_by: { type: string, description: "Handle of the approving admin for kind=delegated" }
         via_grant: { type: boolean, description: "Whether this delegated item was delivered via an active delegation grant" }
+        reply_origin: { $ref: "#/components/schemas/ReplyOrigin" }
+    ReplyOrigin:
+      type: object
+      required: [channel_id, channel, thread_root_id, request_message_id]
+      properties:
+        channel_id: { type: string, format: uuid }
+        channel: { type: string }
+        thread_root_id: { type: string, format: uuid }
+        request_message_id: { type: string, format: uuid }
     Inbox:
       type: object
       required: [items, total]
@@ -2219,6 +2248,7 @@ components:
               agent_id: { type: string }
               path: { type: string }
               branch: { type: string }
+        claude_limits: { $ref: "#/components/schemas/ClaudeLimits" }
     FolderGrant:
       type: object
       required: [id, path, mode, created_at]
@@ -2756,6 +2786,34 @@ components:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid, nullable: true }
 
+    RateLimitNoteRequest:
+      description: Agents only. The server builds the silent rate limit note text.
+      type: object
+      required: [channel_id, window, utilization, resets_at]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid, nullable: true }
+        window: { type: string, enum: [five_hour, seven_day] }
+        utilization: { type: integer }
+        resets_at: { type: string, format: date-time }
+
+    ClaudeLimits:
+      type: object
+      properties:
+        paused: { type: boolean }
+        rate_limit_reserve: { type: integer }
+        rate_limit_warn: { type: integer }
+        five_hour: { $ref: "#/components/schemas/ClaudeRateLimitWindow" }
+        seven_day: { $ref: "#/components/schemas/ClaudeRateLimitWindow" }
+
+    ClaudeRateLimitWindow:
+      type: object
+      required: [utilization, status]
+      properties:
+        utilization: { type: number, description: "Ratio between 0.0 and 1.0 (e.g. 0.72 for 72%)" }
+        resets_at: { type: string, format: date-time }
+        status: { type: string }
+
     TerminalSummary:
       type: object
       required: [name, status, command, cwd, channel_id, started_at, duration_ms]
@@ -3134,6 +3192,7 @@ components:
         grants:
           type: array
           items: { $ref: "#/components/schemas/FolderGrant" }
+        claude_limits: { $ref: "#/components/schemas/ClaudeLimits" }
 
     OverviewThread:
       type: object

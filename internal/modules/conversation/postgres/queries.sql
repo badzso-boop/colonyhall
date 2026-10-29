@@ -46,8 +46,14 @@ ORDER BY joined_at ASC;
 
 -- name: InsertMessage :exec
 INSERT INTO message (id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body,
-                     mentions, reply_count, last_reply_at, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+                     mentions, reply_count, last_reply_at, created_at, origin_channel_id, origin_thread_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+
+-- name: LatestTopLevelMessageByAuthor :one
+SELECT * FROM message
+WHERE channel_id = $1 AND author_id = $2 AND thread_root_id IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
 
 -- name: MessageByID :one
 SELECT * FROM message WHERE id = $1;

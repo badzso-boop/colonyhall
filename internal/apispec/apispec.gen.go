@@ -804,6 +804,24 @@ func (e QuestionState) Valid() bool {
 	}
 }
 
+// Defines values for RateLimitNoteRequestWindow.
+const (
+	FiveHour RateLimitNoteRequestWindow = "five_hour"
+	SevenDay RateLimitNoteRequestWindow = "seven_day"
+)
+
+// Valid indicates whether the value is a known member of the RateLimitNoteRequestWindow enum.
+func (e RateLimitNoteRequestWindow) Valid() bool {
+	switch e {
+	case FiveHour:
+		return true
+	case SevenDay:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReportRunRequestPhase.
 const (
 	ReportRunRequestPhaseDecide ReportRunRequestPhase = "decide"
@@ -1463,6 +1481,24 @@ type ChannelProgressResponse struct {
 	Runs []ActiveRunProgress `json:"runs"`
 }
 
+// ClaudeLimits defines model for ClaudeLimits.
+type ClaudeLimits struct {
+	FiveHour         *ClaudeRateLimitWindow `json:"five_hour,omitempty"`
+	Paused           *bool                  `json:"paused,omitempty"`
+	RateLimitReserve *int                   `json:"rate_limit_reserve,omitempty"`
+	RateLimitWarn    *int                   `json:"rate_limit_warn,omitempty"`
+	SevenDay         *ClaudeRateLimitWindow `json:"seven_day,omitempty"`
+}
+
+// ClaudeRateLimitWindow defines model for ClaudeRateLimitWindow.
+type ClaudeRateLimitWindow struct {
+	ResetsAt *time.Time `json:"resets_at,omitempty"`
+	Status   string     `json:"status"`
+
+	// Utilization Ratio between 0.0 and 1.0 (e.g. 0.72 for 72%)
+	Utilization float32 `json:"utilization"`
+}
+
 // Compaction defines model for Compaction.
 type Compaction struct {
 	ChannelId            openapi_types.UUID  `json:"channel_id"`
@@ -2010,7 +2046,8 @@ type HostPreviewReportState string
 // HostReport defines model for HostReport.
 type HostReport struct {
 	// AllowUnsandboxed True when guard.yaml permits agents with sandbox: false
-	AllowUnsandboxed *bool `json:"allow_unsandboxed,omitempty"`
+	AllowUnsandboxed *bool         `json:"allow_unsandboxed,omitempty"`
+	ClaudeLimits     *ClaudeLimits `json:"claude_limits,omitempty"`
 	Clients          []struct {
 		Name    string  `json:"name"`
 		Version *string `json:"version,omitempty"`
@@ -2063,6 +2100,7 @@ type InboxItem struct {
 	ItemId       openapi_types.UUID  `json:"item_id"`
 	Kind         string              `json:"kind"`
 	Mentioned    bool                `json:"mentioned"`
+	ReplyOrigin  *ReplyOrigin        `json:"reply_origin,omitempty"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 
 	// ViaGrant Whether this delegated item was delivered via an active delegation grant
@@ -2140,6 +2178,7 @@ type Message struct {
 	LastReplyAt  *time.Time           `json:"last_reply_at,omitempty"`
 	LinkCards    *[]LinkCard          `json:"link_cards,omitempty"`
 	Mentions     []openapi_types.UUID `json:"mentions"`
+	Origin       *MessageOrigin       `json:"origin,omitempty"`
 	Reactions    *[]ReactionSummary   `json:"reactions,omitempty"`
 	ReplyCount   int                  `json:"reply_count"`
 	ThreadRootId *openapi_types.UUID  `json:"thread_root_id,omitempty"`
@@ -2153,6 +2192,13 @@ type MessageList struct {
 	Messages []Message `json:"messages"`
 }
 
+// MessageOrigin defines model for MessageOrigin.
+type MessageOrigin struct {
+	Channel   string             `json:"channel"`
+	ChannelId openapi_types.UUID `json:"channel_id"`
+	ThreadId  openapi_types.UUID `json:"thread_id"`
+}
+
 // OpenDMRequest defines model for OpenDMRequest.
 type OpenDMRequest struct {
 	ActorIds []openapi_types.UUID `json:"actor_ids"`
@@ -2162,6 +2208,7 @@ type OpenDMRequest struct {
 type OverviewAssignment struct {
 	AllowWebRead     *bool              `json:"allow_web_read,omitempty"`
 	Approvals        string             `json:"approvals"`
+	ClaudeLimits     *ClaudeLimits      `json:"claude_limits,omitempty"`
 	Client           string             `json:"client"`
 	DailyTokenLimit  int64              `json:"daily_token_limit"`
 	Grants           []FolderGrant      `json:"grants"`
@@ -2300,6 +2347,18 @@ type QuestionList struct {
 // QuestionState defines model for QuestionState.
 type QuestionState string
 
+// RateLimitNoteRequest Agents only. The server builds the silent rate limit note text.
+type RateLimitNoteRequest struct {
+	ChannelId    openapi_types.UUID         `json:"channel_id"`
+	ResetsAt     time.Time                  `json:"resets_at"`
+	ThreadRootId *openapi_types.UUID        `json:"thread_root_id,omitempty"`
+	Utilization  int                        `json:"utilization"`
+	Window       RateLimitNoteRequestWindow `json:"window"`
+}
+
+// RateLimitNoteRequestWindow defines model for RateLimitNoteRequest.Window.
+type RateLimitNoteRequestWindow string
+
 // Reaction defines model for Reaction.
 type Reaction struct {
 	ActorId   openapi_types.UUID `json:"actor_id"`
@@ -2322,6 +2381,14 @@ type ReorderSidebarItemsRequest struct {
 // ReorderSidebarSectionsRequest defines model for ReorderSidebarSectionsRequest.
 type ReorderSidebarSectionsRequest struct {
 	SectionIds []openapi_types.UUID `json:"section_ids"`
+}
+
+// ReplyOrigin defines model for ReplyOrigin.
+type ReplyOrigin struct {
+	Channel          string             `json:"channel"`
+	ChannelId        openapi_types.UUID `json:"channel_id"`
+	RequestMessageId openapi_types.UUID `json:"request_message_id"`
+	ThreadRootId     openapi_types.UUID `json:"thread_root_id"`
 }
 
 // ReportRunRequest defines model for ReportRunRequest.
@@ -2859,6 +2926,9 @@ type AckInboxJSONRequestBody = AckRequest
 
 // ReportAgentProgressJSONRequestBody defines body for ReportAgentProgress for application/json ContentType.
 type ReportAgentProgressJSONRequestBody = AgentProgressRequest
+
+// ReportRateLimitNoteJSONRequestBody defines body for ReportRateLimitNote for application/json ContentType.
+type ReportRateLimitNoteJSONRequestBody = RateLimitNoteRequest
 
 // ReportRetractNoteJSONRequestBody defines body for ReportRetractNote for application/json ContentType.
 type ReportRetractNoteJSONRequestBody = RetractNoteRequest
