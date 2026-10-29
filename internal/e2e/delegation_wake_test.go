@@ -53,17 +53,20 @@ func eventsUntilMessage(t *testing.T, ctx context.Context, ws *websocket.Conn, b
 	}
 }
 
-func itemCreatedFor(frames []frame, recipientID string) int {
+func itemCreatedFor(t *testing.T, frames []frame, recipientID string) int {
+	t.Helper()
 	n := 0
 	for _, f := range frames {
 		if f.EventType != "delivery.item_created" {
 			continue
 		}
-		var p struct {
-			RecipientID string `json:"recipient_id"`
-		}
+		var p map[string]any
 		_ = json.Unmarshal(f.Data, &p)
-		if p.RecipientID == recipientID {
+		if p["recipient_id"] == recipientID {
+			// The signal names no channel: the recipient need not be a member.
+			if len(p) != 2 || p["item_kind"] == nil {
+				t.Fatalf("delivery.item_created carries more than recipient_id and item_kind: %s", f.Data)
+			}
 			n++
 		}
 	}
@@ -115,7 +118,7 @@ func TestApprovedDelegationSignalsTheTarget(t *testing.T) {
 	}
 
 	targetFrames := eventsUntilMessage(t, ctx, targetWS, sentinel)
-	if n := itemCreatedFor(targetFrames, targetID); n != 1 {
+	if n := itemCreatedFor(t, targetFrames, targetID); n != 1 {
 		t.Fatalf("target got %d delivery.item_created signals, want 1 (events: %v)", n, eventTypes(targetFrames))
 	}
 	// When the signal arrives the item is already in the inbox.
@@ -168,7 +171,7 @@ func TestDeniedDelegationSignalsTheSource(t *testing.T) {
 	const sentinel = "sentinel after denial"
 	e.send(server.DevAdminToken, general, map[string]any{"body": sentinel})
 
-	if n := itemCreatedFor(eventsUntilMessage(t, ctx, sourceWS, sentinel), sourceID); n != 1 {
+	if n := itemCreatedFor(t, eventsUntilMessage(t, ctx, sourceWS, sentinel), sourceID); n != 1 {
 		t.Fatalf("source got %d answer signals, want 1", n)
 	}
 	for _, f := range eventsUntilMessage(t, ctx, targetWS, sentinel) {

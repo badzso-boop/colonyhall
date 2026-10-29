@@ -43,12 +43,12 @@ const (
 // wait for its fallback poll. The gateway shows it only to the recipient.
 const EventItemCreated = "delivery.item_created"
 
-// ItemCreated is the payload of EventItemCreated: no content, only enough
-// for the recipient's guard to check its inbox.
+// ItemCreated is the payload of EventItemCreated: no content and no channel,
+// only enough for the recipient's guard to check its inbox. A channel id
+// would name a channel to a recipient that may not be a member of it.
 type ItemCreated struct {
 	RecipientID string `json:"recipient_id"`
 	ItemKind    string `json:"item_kind"`
-	ChannelID   string `json:"channel_id,omitempty"`
 }
 
 // Delivery is one inbox row.

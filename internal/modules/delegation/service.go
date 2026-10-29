@@ -945,7 +945,6 @@ func (s *Service) deliver(ctx context.Context, d delivery.Delivery) error {
 	return s.recordEvent(ctx, d.WorkspaceID, by, delivery.EventItemCreated, d.ID, delivery.ItemCreated{
 		RecipientID: d.RecipientID.String(),
 		ItemKind:    d.ItemKind,
-		ChannelID:   d.ChannelID.String(),
 	})
 }
 
