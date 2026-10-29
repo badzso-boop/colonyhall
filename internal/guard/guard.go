@@ -93,6 +93,9 @@ type Agent struct {
 	fileFetchMu       sync.Mutex
 	fileFetchInFlight map[string]bool
 
+	activityMu     sync.Mutex
+	activeActivity map[string]*activityEntry
+
 	rulesMu             sync.Mutex
 	cachedRulesVer      int
 	cachedRulesText     string
@@ -401,6 +404,20 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		}
 	}
 
+	decideStops := make(map[string]func())
+	for _, it := range items {
+		ch, th := a.activityTarget(it)
+		k := ch + ":" + th
+		if _, ok := decideStops[k]; !ok {
+			decideStops[k] = a.startActivity(ch, th)
+		}
+	}
+	defer func() {
+		for _, s := range decideStops {
+			s()
+		}
+	}()
+
 	pitems := make([]PromptItem, 0, len(items))
 	for _, it := range items {
 		pitems = append(pitems, PromptItem{Item: it, Context: a.threadContext(runCtx, it)})
@@ -465,6 +482,12 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		}
 		acked = append(acked, it.ID)
 	}
+
+	for k, s := range decideStops {
+		delete(decideStops, k)
+		s()
+	}
+
 	return a.Client.Ack(ctx, acked)
 }
 
@@ -631,39 +654,100 @@ func (a *Agent) fetchRules(ctx context.Context) (int, string) {
 	return a.cachedRulesVer, a.cachedRulesText
 }
 
-func (a *Agent) withActivity(ctx context.Context, channelID, threadRootID string, run func() error) error {
-	send := func(state string) {
-		actCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := a.Client.SetActivity(actCtx, channelID, threadRootID, state); err != nil {
-			a.Log.Warn("guard: activity report failed", "state", state, "err", err)
+type activityEntry struct {
+	channelID     string
+	threadRootID  string
+	refs          int
+	stopHeartbeat chan struct{}
+}
+
+func (a *Agent) activityTarget(it Item) (string, string) {
+	if it.ReplyOrigin != nil && it.ReplyOrigin.ChannelID != "" {
+		return it.ReplyOrigin.ChannelID, it.ReplyOrigin.ThreadRootID
+	}
+	chID := it.ChannelID
+	thID := it.ThreadRootID
+	if it.DM && thID == "" {
+		thID = ThreadRoot(it)
+	}
+	return chID, thID
+}
+
+func (a *Agent) startActivity(channelID, threadRootID string) func() {
+	key := channelID + ":" + threadRootID
+	a.activityMu.Lock()
+	if a.activeActivity == nil {
+		a.activeActivity = make(map[string]*activityEntry)
+	}
+	entry, exists := a.activeActivity[key]
+	if !exists {
+		entry = &activityEntry{
+			channelID:     channelID,
+			threadRootID:  threadRootID,
+			refs:          1,
+			stopHeartbeat: make(chan struct{}),
 		}
+		a.activeActivity[key] = entry
+		a.activityMu.Unlock()
+
+		actCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := a.Client.SetActivity(actCtx, channelID, threadRootID, "working"); err != nil {
+			a.Log.Warn("guard: activity report failed", "state", "working", "err", err)
+		}
+		cancel()
+
+		go func(e *activityEntry) {
+			ticker := time.NewTicker(20 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-e.stopHeartbeat:
+					return
+				case <-ticker.C:
+					hCtx, hCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if err := a.Client.SetActivity(hCtx, e.channelID, e.threadRootID, "working"); err != nil {
+						a.Log.Warn("guard: activity report failed", "state", "working", "err", err)
+					}
+					hCancel()
+				}
+			}
+		}(entry)
+	} else {
+		entry.refs++
+		a.activityMu.Unlock()
 	}
 
-	send("working")
-	defer send("idle")
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			a.activityMu.Lock()
+			entry.refs--
+			if entry.refs <= 0 {
+				delete(a.activeActivity, key)
+				close(entry.stopHeartbeat)
+				a.activityMu.Unlock()
 
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
-	stopHeartbeat := make(chan struct{})
-	defer close(stopHeartbeat)
-
-	go func() {
-		for {
-			select {
-			case <-stopHeartbeat:
-				return
-			case <-ticker.C:
-				send("working")
+				actCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if err := a.Client.SetActivity(actCtx, channelID, threadRootID, "idle"); err != nil {
+					a.Log.Warn("guard: activity report failed", "state", "idle", "err", err)
+				}
+				cancel()
+			} else {
+				a.activityMu.Unlock()
 			}
-		}
-	}()
+		})
+	}
+}
 
+func (a *Agent) withActivity(ctx context.Context, channelID, threadRootID string, run func() error) error {
+	stop := a.startActivity(channelID, threadRootID)
+	defer stop()
 	return run()
 }
 
 func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
-	return a.withActivity(ctx, it.ChannelID, it.ThreadRootID, func() error {
+	chID, thID := a.activityTarget(it.Item)
+	return a.withActivity(ctx, chID, thID, func() error {
 		p := a.policy()
 		if !p.Allowed {
 			return a.reply(ctx, it.Item, p.Reason, "g-"+it.ID)
