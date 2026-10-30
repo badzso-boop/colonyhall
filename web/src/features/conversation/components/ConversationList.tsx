@@ -152,3 +152,16 @@ export function useMentionTotal(): number {
   const channels = useChannels();
   return (channels.data ?? []).reduce((n, c) => n + c.mentions, 0);
 }
+
+/** The conversations in sidebar order (keyboard navigation, the command palette). */
+export function useConversationOrder(): SidebarRow[] {
+  const channels = useChannels();
+  const sections = useSections();
+  const actors = useActors();
+  const session = useSession();
+  const meId = session.data?.actor.id ?? "";
+  return useMemo(
+    () => (channels.data && actors.data ? buildSidebar(channels.data, sections.data ?? [], actors.data, meId).flatMap((g) => g.rows) : []),
+    [channels.data, sections.data, actors.data, meId],
+  );
+}

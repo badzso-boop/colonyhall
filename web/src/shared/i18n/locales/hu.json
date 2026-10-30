@@ -20,5 +20,29 @@
     "terminal": "Terminálok",
     "files": "Fájlok",
     "agent": "Áttekintés"
+  },
+  "shortcuts": {
+    "title": "Billentyűparancsok",
+    "filter": "Szűrés…",
+    "scopes": {
+      "global": "Mindenhol",
+      "conversation": "Beszélgetés",
+      "composer": "Szerkesztő",
+      "pane": "Panelek",
+      "page": "Oldal"
+    },
+    "palette": "Parancspaletta megnyitása",
+    "help": "Billentyűparancsok súgója",
+    "prevConversation": "Előző beszélgetés",
+    "nextConversation": "Következő beszélgetés",
+    "prevUnread": "Előző olvasatlan beszélgetés",
+    "nextUnread": "Következő olvasatlan beszélgetés",
+    "closePane": "A legfelső panel bezárása",
+    "replyThread": "Válasz szálban (kijelölt üzenetnél)",
+    "files": "Fájlok megnyitása",
+    "terminals": "Terminálok megnyitása",
+    "send": "Küldés",
+    "newline": "Új sor",
+    "lastMessage": "Az utolsó üzenetre (üres szerkesztőben)"
   }
 }

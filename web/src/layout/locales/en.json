@@ -38,5 +38,14 @@
     "showThread": "Thread",
     "showWork": "Work pane",
     "back": "Back"
-  }
+  },
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Jump to a conversation, agent or page…",
+    "conversations": "Conversations",
+    "agents": "Agents",
+    "pages": "Pages",
+    "none": "No results."
+  },
+  "shortcutsMenu": "Keyboard shortcuts"
 }

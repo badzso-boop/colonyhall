@@ -9,6 +9,7 @@ import { conversationTitle, useChannels } from "@/features/conversation";
 import { useClaudeLimits } from "@/features/hosts";
 import { useActors, useSession } from "@/features/identity";
 import { useOpenQuestions } from "@/features/questions";
+import { openOverlay } from "../overlays";
 import { UserMenu } from "./UserMenu";
 
 function Breadcrumb() {
@@ -89,6 +90,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         ) : (
           <button
             type="button"
+            onClick={() => openOverlay("palette")}
             className="mx-auto hidden h-8 min-w-0 flex-[0_1_26rem] items-center gap-2 rounded-md border border-border bg-surface-sunken px-2.5 text-ui text-fg-subtle hover:border-border-strong md:flex"
           >
             <Search aria-hidden className="size-4 shrink-0" />

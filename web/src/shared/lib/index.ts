@@ -4,3 +4,4 @@ export { parse as parseMarkdown, plain as plainText, sanitizeUrl, type Block, ty
 export { commandList, parseCommand, type Command } from "./commands";
 export { activeMention, fuzzyScore, insertMention, rankMentions, type MentionCandidate } from "./mention";
 export { insertIntoComposer, useComposerInsert } from "./composerInsert";
+export { comboOf, handleKey, installShortcuts, keyLabels, registerShortcut, useShortcut, useShortcuts, type Scope, type Shortcut } from "./shortcuts";

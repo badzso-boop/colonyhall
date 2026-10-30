@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
 import { Hash, Lock } from "lucide-react";
+import { useShortcut } from "@/shared/lib";
 import { usePanes } from "@/shared/panes";
 import { EmptyState, Skeleton } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
@@ -30,6 +31,11 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
   const mine = members.data?.find((m) => m.actor_id === meId);
   // Read only: an observer, or a member without write access (admins observing a DM can write).
   const readOnly = session.data?.actor.role === "observer" || (mine !== undefined && !mine.can_write);
+
+  useShortcut("mod+shift+f", "conversation", "files", () => agent && dispatch(openFiles(agent.id)), Boolean(agent));
+  // Ctrl+Shift+T is the browser's "reopen tab" and cannot be taken: X for terminals.
+  useShortcut("mod+shift+x", "conversation", "terminals", () => agent && dispatch(openTerminals(agent.id)), Boolean(agent));
+  useShortcut("r", "conversation", "replyThread");
 
   const handlers = {
     onOpenThread: (rootId: string) => dispatch({ type: "openThread", rootId }),

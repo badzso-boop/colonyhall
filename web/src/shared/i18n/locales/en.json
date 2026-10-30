@@ -20,5 +20,29 @@
     "terminal": "Terminals",
     "files": "Files",
     "agent": "Overview"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "filter": "Filter…",
+    "scopes": {
+      "global": "Everywhere",
+      "conversation": "Conversation",
+      "composer": "Composer",
+      "pane": "Panes",
+      "page": "Page"
+    },
+    "palette": "Open the command palette",
+    "help": "Keyboard shortcut help",
+    "prevConversation": "Previous conversation",
+    "nextConversation": "Next conversation",
+    "prevUnread": "Previous unread conversation",
+    "nextUnread": "Next unread conversation",
+    "closePane": "Close the topmost pane",
+    "replyThread": "Reply in thread (focused message)",
+    "files": "Open files",
+    "terminals": "Open terminals",
+    "send": "Send",
+    "newline": "New line",
+    "lastMessage": "To the last message (empty composer)"
   }
 }

@@ -71,3 +71,28 @@ test("the style guide is public", async () => {
   renderAt("/design");
   expect(await screen.findByRole("heading", { name: "Design system" })).toBeTruthy();
 });
+
+test("Ctrl+K opens the palette and ? the shortcut help with the registered shortcuts", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (req: Request) => {
+      const path = new URL(req.url).pathname;
+      if (path.endsWith("/auth/session")) return json(session);
+      if (path.endsWith("/actors")) return json({ actors: [session.actor] });
+      if (path.endsWith("/channels")) return json({ channels: [] });
+      if (path.endsWith("/sidebar/sections")) return json({ sections: [] });
+      if (path.endsWith("/questions")) return json({ questions: [] });
+      return json({});
+    }),
+  );
+  renderAt("/");
+  await screen.findByRole("button", { name: "Felhasználói menü" });
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  expect(await screen.findByRole("dialog", { name: "Parancspaletta" })).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  fireEvent.keyDown(window, { key: "?", shiftKey: true });
+  const help = await screen.findByRole("dialog", { name: "Billentyűparancsok" });
+  expect(help.textContent).toContain("Parancspaletta megnyitása");
+  expect(help.textContent).toContain("Következő olvasatlan beszélgetés");
+});

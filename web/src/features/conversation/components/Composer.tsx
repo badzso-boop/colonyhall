@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, insertMention, parseCommand, rankMentions, useComposerInsert } from "@/shared/lib";
+import { activeMention, cn, commandList, insertMention, parseCommand, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
@@ -80,6 +80,11 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     setText((s) => (s && !s.endsWith(" ") ? `${s} ` : s) + insert.text + " ");
     area.current?.focus();
   }, [insert, target]);
+
+  // Listed in the help; the composer handles them in onKeyDown.
+  useShortcut("enter", "composer", "send", undefined, !threadRootId);
+  useShortcut("shift+enter", "composer", "newline", undefined, !threadRootId);
+  useShortcut("arrowup", "composer", "lastMessage", undefined, !threadRootId);
 
   const mention = activeMention(text, caret);
   const mentionList = useMemo(
@@ -164,6 +169,14 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       if (e.key === "Escape") {
         e.preventDefault();
         setText((s) => s + " ");
+        return;
+      }
+    }
+    if (e.key === "ArrowUp" && !text) {
+      const last = [...document.querySelectorAll<HTMLElement>("[data-message-id]")].pop();
+      if (last) {
+        e.preventDefault();
+        last.focus();
         return;
       }
     }

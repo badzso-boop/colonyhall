@@ -1,15 +1,19 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation } from "react-router";
 import { ArrowLeft } from "lucide-react";
-import { cn } from "@/shared/lib";
+import { cn, useShortcut } from "@/shared/lib";
 import { useLocalStorage, useWidth } from "@/shared/hooks";
 import { place, usePanes } from "@/shared/panes";
-import { ThreadPane, useMentionTotal } from "@/features/conversation";
+import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
 import { BottomBar } from "./BottomBar";
+import { CommandPalette } from "./CommandPalette";
 import { ConnectionBar } from "./ConnectionBar";
 import { Header } from "./header/Header";
 import { WorkPane } from "./panes/WorkPane";
+import { openOverlay } from "./overlays";
+import { ShortcutHelp } from "./ShortcutHelp";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useDocumentTitle } from "./useDocumentTitle";
 
@@ -30,6 +34,27 @@ export function Shell() {
   const location = useLocation();
   const home = location.pathname === "/" && placement.screen === "main";
   useDocumentTitle(useMentionTotal(), t("common:appName"));
+  const navigate = useNavigate();
+  const order = useConversationOrder();
+
+  // Shortcuts of the frame (round 31 part 8); Radix closes dialogs on Esc itself.
+  useShortcut("mod+k", "global", "palette", () => openOverlay("palette"));
+  useShortcut("?", "global", "help", () => openOverlay("help"));
+  const step = (dir: 1 | -1, unreadOnly: boolean) => {
+    const current = order.findIndex((r) => location.pathname === `/c/${r.channel.id}`);
+    for (let i = 1; i <= order.length; i++) {
+      const r = order[(current + dir * i + order.length * 2) % order.length];
+      if (r && (!unreadOnly || r.channel.unread > 0)) return navigate(`/c/${r.channel.id}${location.search}`);
+    }
+  };
+  useShortcut("alt+arrowup", "global", "prevConversation", () => step(-1, false));
+  useShortcut("alt+arrowdown", "global", "nextConversation", () => step(1, false));
+  useShortcut("alt+shift+arrowup", "global", "prevUnread", () => step(-1, true));
+  useShortcut("alt+shift+arrowdown", "global", "nextUnread", () => step(1, true));
+  useShortcut("escape", "pane", "closePane", () => {
+    if (panes.thread && (placement.right === "thread" || placement.screen === "thread")) dispatch({ type: "closeThread" });
+    else if (panes.tabs.length) dispatch({ type: "closeWork" });
+  });
 
   // Rule 6: while the work pane holds the left slot, the sidebar is a drawer.
   const sidebarAsDrawer = placement.left === "work";
@@ -108,6 +133,8 @@ export function Shell() {
         ) : null}
       </div>
       {placement.screen === "main" ? <BottomBar /> : null}
+      <CommandPalette />
+      <ShortcutHelp />
     </div>
   );
 }

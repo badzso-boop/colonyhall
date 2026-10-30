@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { Check, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Keyboard, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { languages, setLanguage } from "@/shared/i18n";
 import { applyTheme, readTheme, type Theme } from "@/shared/theme";
 import { Avatar, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/shared/ui";
 import { useLogout, useSession } from "@/features/identity";
+import { openOverlay } from "../overlays";
 
 const themeIcons = { system: Monitor, light: Sun, dark: Moon } as const;
 
@@ -52,6 +53,9 @@ export function UserMenu() {
           </MenuItem>
         ))}
         <MenuSeparator />
+        <MenuItem onSelect={() => openOverlay("help")} icon={<Keyboard aria-hidden className="size-4" />}>
+          {t("shortcutsMenu")}
+        </MenuItem>
         <MenuItem
           onSelect={() => logout.mutate(undefined, { onSettled: () => navigate("/login", { replace: true }) })}
           icon={<LogOut aria-hidden className="size-4" />}

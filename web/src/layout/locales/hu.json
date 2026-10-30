@@ -38,5 +38,14 @@
     "showThread": "Szál",
     "showWork": "Munkapanel",
     "back": "Vissza"
-  }
+  },
+  "palette": {
+    "title": "Parancspaletta",
+    "placeholder": "Ugrás beszélgetésre, agentre vagy oldalra…",
+    "conversations": "Beszélgetések",
+    "agents": "Agentek",
+    "pages": "Oldalak",
+    "none": "Nincs találat."
+  },
+  "shortcutsMenu": "Billentyűparancsok"
 }

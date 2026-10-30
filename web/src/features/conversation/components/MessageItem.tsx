@@ -45,8 +45,16 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   return (
     <article
       data-message-id={m.id}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        // "r": reply in thread on the focused message (listed in the shortcut help).
+        if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey && summary && onOpenThread && e.target === e.currentTarget) {
+          e.preventDefault();
+          onOpenThread(m.id);
+        }
+      }}
       className={cn(
-        "group grid grid-cols-[36px_1fr] gap-x-2.5 px-4 py-1.5 hover:bg-surface-sunken",
+        "group grid grid-cols-[36px_1fr] gap-x-2.5 px-4 py-1.5 outline-none hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:shadow-[inset_2px_0_0_var(--color-focus-ring)]",
         mentionsMe && "bg-accent-soft shadow-[inset_2px_0_0_var(--color-accent)] hover:bg-accent-soft",
       )}
     >

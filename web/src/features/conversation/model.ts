@@ -41,6 +41,7 @@ export function conversationTitle(ch: Channel, actors: Map<string, Actor>, meId:
   return peers.map((a) => (a.kind === "agent" || agentAgent ? `@${a.handle}` : a.display_name || a.handle)).join(agentAgent ? " ↔ " : ", ");
 }
 
+export type { SidebarRow as ConversationRow };
 export type SidebarRow = { channel: Channel; kind: ConversationKind; title: string; observed: boolean };
 export type SidebarGroup = { id: string; title: string | null; custom: boolean; collapsed: boolean; rows: SidebarRow[] };
 
