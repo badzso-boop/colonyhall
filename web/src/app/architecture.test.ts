@@ -11,6 +11,12 @@ async function rules(file: string, code: string): Promise<string[]> {
   return (result?.messages ?? []).map((m) => m.ruleId ?? m.message);
 }
 
+// The first lint loads the config, the plugins and the TypeScript resolver,
+// which can take long while the other test files run in parallel.
+beforeAll(async () => {
+  await rules("src/shared/lib/warmup.ts", "export const w = 1;");
+}, 180_000);
+
 const cases: Array<[string, string, string, string | null]> = [
   ["feature → another feature's internals", "src/features/demo/x.ts", 'import P from "@/features/scaffold/pages/ScaffoldPage";\nexport const a = P;', "boundaries/dependencies"],
   ["feature → another feature's index", "src/features/demo/x.ts", 'import { ScaffoldPage } from "@/features/scaffold";\nexport const a = ScaffoldPage;', null],
@@ -30,4 +36,4 @@ test.each(cases)("%s", async (_name, file, code, want) => {
   const got = await rules(file, code);
   if (want) expect(got).toContain(want);
   else expect(got).toEqual([]);
-}, 30_000);
+}, 60_000);
