@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colonyhall – lebegő ablakok (mockup)</title>
+<!--
+  UI mockup for handoff prompt 32, part 1: floating windows over the chat.
+  Feladatok: open, "Normál" opacity. Naptár: open, "Áttetsző" opacity
+  (55 % while the cursor is elsewhere; hover it). Jegyzetek: minimised to
+  a circle. Plain HTML + CSS, no JS; shared styles in mockup.css.
+-->
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+
+<!-- Icon sprite (simple strokes, 24px grid) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-q" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M9 17v1a3 3 0 0 0 6 0v-1M6 8a6 6 0 0 1 9.5-4.9M18 9.5V13l2 4H7M3 3l18 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-msgs" viewBox="0 0 24 24"><path d="M4 5h12v9H8l-4 3z"/><path d="M8 17h8l4 3V9h-2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-3-7z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 9"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 8v8M18 11c0 4-6 3-10 6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-threads" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/></symbol>
+  <!-- The Colonyhall mark: an ant seen from above (head, thorax, abdomen, antennae, legs) -->
+  <symbol id="logo" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+      <path d="M10.6 3.6 8.6 1.2M13.4 3.6l2-2.4"/>
+      <path d="M10.5 9.2 6.4 7.2M10.4 10.8H5.8M10.5 12.3l-4 2.6M13.5 9.2l4.1-2M13.6 10.8h4.6M13.5 12.3l4 2.6"/>
+    </g>
+    <circle cx="12" cy="5" r="2.2" fill="currentColor"/>
+    <ellipse cx="12" cy="10.8" rx="2" ry="2.6" fill="currentColor"/>
+    <ellipse cx="12" cy="17.6" rx="3.6" ry="4.6" fill="currentColor"/>
+  </symbol>
+</svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-fade" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></symbol>
+  <symbol id="i-fade-full" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></symbol>
+  <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 17h12"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+</svg>
+
+<div class="app">
+
+  <!-- ===== Header ===== -->
+  <header class="header">
+    <button class="icon-btn" aria-label="Oldalsáv"><svg class="i i20"><use href="#i-menu"/></svg></button>
+    <a class="brand" href="#" aria-label="Colonyhall">
+      <svg style="color:var(--accent)"><use href="#logo"/></svg>
+      <span class="wsname">Colonyhall</span>
+    </a>
+    <div class="crumb" style="margin-left:10px">
+      <svg class="i"><use href="#i-hash"/></svg><b>general</b>
+    </div>
+
+    <button class="search" aria-label="Keresés vagy parancs">
+      <svg class="i"><use href="#i-search"/></svg>
+      <span>Keresés vagy parancs…</span>
+      <kbd>Ctrl</kbd><kbd>K</kbd>
+    </button>
+
+    <div class="hright">
+      <button class="icon-btn" aria-label="Válaszra vár: 2"><svg class="i i20"><use href="#i-q"/></svg><span class="badge">2</span></button>
+      <button class="pill"><svg class="i" style="color:var(--accent)"><use href="#i-zap"/></svg><span class="num">1</span><span class="lbl">dolgozik</span></button>
+      <button class="icon-btn" aria-label="Claude 5 óra: 72%"><span class="ring"></span></button>
+      <div class="dock" aria-label="Lebegő ablakok">
+        <button class="icon-btn open" aria-label="Feladatok (nyitva)" title="Feladatok"><svg class="i"><use href="#i-check"/></svg></button>
+        <button class="icon-btn open" aria-label="Naptár (nyitva)" title="Naptár"><svg class="i"><use href="#i-cal"/></svg></button>
+        <button class="icon-btn" aria-label="Jegyzetek (kicsinyítve)" title="Jegyzetek · kicsinyítve"><svg class="i"><use href="#i-note"/></svg></button>
+      </div>
+      <button class="stop"><svg class="i"><use href="#i-shield"/></svg><span class="lbl">Mind áll</span></button>
+      <button class="me" aria-label="Felhasználói menü">N</button>
+    </div>
+  </header>
+
+  <div class="body no-pane">
+
+    <!-- ===== Sidebar ===== -->
+    <nav class="sidebar" aria-label="Beszélgetések">
+      <a class="row" href="#"><svg class="i glyph"><use href="#i-threads"/></svg><span class="name">Szálak</span></a>
+      <div class="grp">
+        <div class="grp-h">Munkaterület</div>
+        <a class="row" href="#" title="Kiugrasztva"><svg class="i glyph"><use href="#i-check"/></svg><span class="name">Feladatok</span><span class="meta" style="color:var(--accent)">●</span></a>
+        <a class="row" href="#" title="Kiugrasztva"><svg class="i glyph"><use href="#i-cal"/></svg><span class="name">Naptár</span><span class="meta" style="color:var(--accent)">●</span></a>
+        <a class="row" href="#"><svg class="i glyph"><use href="#i-note"/></svg><span class="name">Jegyzetek</span></a>
+        <a class="row" href="#"><svg class="i glyph"><use href="#i-clock"/></svg><span class="name">Ütemezések</span></a>
+        <a class="row" href="#"><svg class="i glyph"><use href="#i-book"/></svg><span class="name">Wiki</span></a>
+        <a class="row" href="#"><svg class="i glyph"><use href="#i-key"/></svg><span class="name">Foglalások</span></a>
+      </div>
+      <div class="grp">
+        <div class="grp-h">Csatornák</div>
+        <a class="row active" href="#" aria-current="page"><svg class="i glyph"><use href="#i-hash"/></svg><span class="name">general</span></a>
+        <a class="row" href="#"><svg class="i glyph"><use href="#i-hash"/></svg><span class="name">backend</span></a>
+        <a class="row unread" href="#"><svg class="i glyph"><use href="#i-lock"/></svg><span class="name">ops</span><span class="count">2</span></a>
+        <a class="row muted" href="#"><svg class="i glyph"><use href="#i-hash"/></svg><span class="name">random</span><span class="meta"><svg class="i" style="width:14px;height:14px"><use href="#i-bell-off"/></svg></span></a>
+      </div>
+      <div class="grp">
+        <div class="grp-h">AI-beszélgetések</div>
+        <div class="sub">Te és az agentek</div>
+        <a class="row" href="#"><span class="av a sm blue">🛠️<span class="dot work"></span></span><span class="name handle">@backend-claude</span></a>
+        <a class="row unread" href="#"><span class="av a sm teal">🗓️<span class="dot"></span></span><span class="name handle">@asszisztens</span><span class="count">1</span></a>
+      </div>
+    </nav>
+
+    <!-- ===== Main: channel feed ===== -->
+    <main class="main">
+      <div class="chan-h">
+        <h1><svg class="i i20" style="color:var(--fg-subtle)"><use href="#i-hash"/></svg>general</h1>
+        <span class="desc">Általános beszélgetés emberek és agentek között.</span>
+        <div class="stack"><span class="av h">N</span><span class="av h">A</span><span class="av a sm blue">🛠️</span><span class="av a sm teal">🗓️</span></div>
+        <button class="icon-btn" aria-label="Csatorna beállításai"><svg class="i i20"><use href="#i-gear"/></svg></button>
+      </div>
+
+      <div class="feed">
+        <div class="day">Ma</div>
+
+        <article class="msg">
+          <span class="av a lg teal">🗓️</span>
+          <div>
+            <div class="who"><b>Asszisztens</b><span class="handle" style="color:var(--fg-muted)">@asszisztens</span><span class="chip-host teal">homelab</span><span class="t num">07:30</span></div>
+            <div class="text">
+              <p><b>Jó reggelt!</b> Ma 3 naptáresemény van: 10:00 sprint review, 14:30 fogorvos, és egész nap a release nap.</p>
+              <p>Tegnap befejezted: <i>Changelog 1.4</i>. Elkezdve: <i>PWA design system</i>, <i>Homelab mentés ellenőrzése</i>.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="msg">
+          <span class="av h lg" style="background:var(--accent);color:var(--accent-fg);border:0">N</span>
+          <div>
+            <div class="who"><b>Norbi</b><span class="t num">09:20</span></div>
+            <div class="text"><p>Köszi! A review után nézzük át a PWA mockupokat.</p></div>
+            <a class="summary" href="#"><span class="stack"><span class="av h sm">A</span><span class="av a sm blue">🛠️</span></span><span class="n">2 válasz</span><span>· utolsó 09:41</span></a>
+          </div>
+        </article>
+
+        <article class="msg">
+          <span class="av h lg">A</span>
+          <div>
+            <div class="who"><b>Anna Kovács</b><span class="t num">09:44</span></div>
+            <div class="text"><p>A lebegő ablakok nagyon jók, főleg hogy áttetszővé válnak, amikor nem rajtuk van a kurzor. Így a chatet is látom mögöttük.</p></div>
+          </div>
+        </article>
+
+        <article class="msg">
+          <span class="av a lg blue">🛠️</span>
+          <div>
+            <div class="who"><b>Backend</b><span class="handle" style="color:var(--fg-muted)">@backend-claude</span><span class="chip-host blue">pc-wsl</span><span class="t num">09:52</span></div>
+            <div class="text"><p>A release 1.4 tagje kész, a push jóváhagyásra vár a <a href="#" style="color:var(--accent)">#backend szálban</a>.</p></div>
+            <span class="steps"><svg class="i" style="width:14px;height:14px"><use href="#i-chev"/></svg>6 lépés · <span class="num">2:08</span></span>
+          </div>
+        </article>
+      </div>
+
+      <div class="composer">
+        <label class="sr" for="m">Üzenet</label>
+        <textarea id="m" rows="2" placeholder="Üzenet a #general csatornába…"></textarea>
+        <div class="tools">
+          <button class="tool" aria-label="Csatolás, ütemezés"><svg class="i"><use href="#i-plus"/></svg></button>
+          <button class="tool"><svg class="i"><use href="#i-folder"/></svg>Fájlok</button>
+          <button class="tool"><svg class="i"><use href="#i-term"/></svg>Terminál</button>
+          <button class="send" aria-label="Küldés"><svg class="i"><use href="#i-send"/></svg></button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== Floating window: Feladatok (Normál) ===== -->
+<section class="fw" role="dialog" aria-modal="false" aria-labelledby="fw-tasks-t" style="right:24px; top:68px; width:340px; height:440px">
+  <div class="fw-title">
+    <span class="ttl" id="fw-tasks-t"><svg class="i"><use href="#i-check"/></svg>Feladatok <small>· 2 elkezdve</small></span>
+    <button class="wbtn" aria-label="Halványítás: Normál" title="Halványítás: Normál → Áttetsző → Halvány"><svg class="i"><use href="#i-fade-full"/></svg></button>
+    <button class="wbtn" aria-label="Kis méret" title="Kis méret"><svg class="i"><use href="#i-min"/></svg></button>
+    <button class="wbtn" aria-label="Teljes oldal" title="Teljes oldal (bezárja az ablakot)"><svg class="i"><use href="#i-max"/></svg></button>
+    <button class="wbtn close" aria-label="Bezárás" title="Bezárás"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="fw-body">
+    <div class="quick"><svg class="i"><use href="#i-plus"/></svg>Új feladat… <kbd style="margin-left:auto">Enter</kbd></div>
+
+    <div class="tgrp">
+      <div class="tgrp-h">Elkezdve · 2</div>
+      <div class="task"><span class="st started" title="Elkezdve"></span><div><div class="tt">PWA design system</div><div class="td">Tokenek, Inter + JetBrains Mono, logó, sötét/világos</div></div></div>
+      <div class="task"><span class="st started" title="Elkezdve"></span><div><div class="tt">Homelab mentés ellenőrzése</div><div class="td">Visszaállítási próba a Postgres dumpból</div></div></div>
+    </div>
+
+    <div class="tgrp">
+      <div class="tgrp-h">Ütemezve · 3</div>
+      <div class="task"><span class="st" title="Ütemezve"></span><div><div class="tt">Release 1.4 kiadása</div><div class="td">A push jóváhagyása után tag, changelog</div></div></div>
+      <div class="task"><span class="st" title="Ütemezve"></span><div><div class="tt">Tulajdonosi API-kulcs cseréje</div><div class="td">35. kör: vezetett kulcscsere</div></div></div>
+      <div class="task"><span class="st" title="Ütemezve"></span><div><div class="tt">Számlázási emlékeztető</div><div class="td"></div></div></div>
+    </div>
+
+    <div class="tgrp">
+      <div class="tgrp-h"><svg class="i" style="width:12px;height:12px"><use href="#i-chev"/></svg>Befejezve · 4</div>
+      <div class="task done-row"><span class="st done" title="Befejezve"></span><div><div class="tt">Changelog 1.4</div></div></div>
+    </div>
+  </div>
+  <span class="fw-resize" aria-hidden="true"></span>
+</section>
+
+<!-- ===== Floating window: Naptár (Áttetsző) ===== -->
+<span class="note-tag" style="left:300px; top:428px">Áttetsző mód: vidd rá a kurzort</span>
+<section class="fw fade-auto" role="dialog" aria-modal="false" aria-labelledby="fw-cal-t" style="left:300px; top:456px; width:330px; height:320px">
+  <div class="fw-title">
+    <span class="ttl" id="fw-cal-t"><svg class="i"><use href="#i-cal"/></svg>Naptár <small>· 10:00 sprint review</small></span>
+    <button class="wbtn on" aria-label="Halványítás: Áttetsző" title="Halványítás: Áttetsző (Normál → Áttetsző → Halvány)"><svg class="i"><use href="#i-fade"/></svg></button>
+    <button class="wbtn" aria-label="Kis méret"><svg class="i"><use href="#i-min"/></svg></button>
+    <button class="wbtn" aria-label="Teljes oldal"><svg class="i"><use href="#i-max"/></svg></button>
+    <button class="wbtn close" aria-label="Bezárás"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="fw-body">
+    <div class="mm-h">2026. október
+      <span class="nav">
+        <button class="wbtn" aria-label="Előző hónap"><svg class="i"><use href="#i-left"/></svg></button>
+        <button class="wbtn" aria-label="Következő hónap"><svg class="i"><use href="#i-chev"/></svg></button>
+      </span>
+    </div>
+    <div class="mm" aria-label="2026. október">
+      <span class="wd">H</span><span class="wd">K</span><span class="wd">Sze</span><span class="wd">Cs</span><span class="wd">P</span><span class="wd">Szo</span><span class="wd">V</span>
+      <span class="d o">28</span><span class="d o">29</span><span class="d o">30</span><span class="d">1</span><span class="d has-ev">2</span><span class="d">3</span><span class="d">4</span>
+      <span class="d has-ev">5</span><span class="d">6</span><span class="d">7</span><span class="d has-ev">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span>
+      <span class="d has-ev">12</span><span class="d">13</span><span class="d has-ev">14</span><span class="d">15</span><span class="d">16</span><span class="d">17</span><span class="d">18</span>
+      <span class="d has-ev">19</span><span class="d">20</span><span class="d">21</span><span class="d has-ev">22</span><span class="d">23</span><span class="d">24</span><span class="d">25</span>
+      <span class="d has-ev">26</span><span class="d">27</span><span class="d">28</span><span class="d has-ev">29</span><span class="d today has-ev" aria-current="date">30</span><span class="d has-ev">31</span><span class="d o has-ev">1</span>
+    </div>
+
+    <div class="ag">
+      <div class="ag-day">Ma · péntek, okt. 30.</div>
+      <div class="allday">Release nap</div>
+      <div class="ev blue"><span class="tm">10:00</span><span class="nm">Sprint review <span class="next-soon">12 perc múlva</span></span><span class="loc">Meet</span></div>
+      <div class="ev teal"><span class="tm">14:30</span><span class="nm">Fogorvos</span><span class="loc">Budapest, Váci út 12.</span></div>
+      <div class="ag-day">Holnap · szombat, okt. 31.</div>
+      <div class="ev violet"><span class="tm">19:00</span><span class="nm">Halloween parti</span></div>
+      <div class="ag-day">Hétfő, nov. 2.</div>
+      <div class="ev blue"><span class="tm">09:00</span><span class="nm">Heti tervezés</span></div>
+    </div>
+  </div>
+  <span class="fw-resize" aria-hidden="true"></span>
+</section>
+
+<!-- ===== Minimised: Jegyzetek ===== -->
+<button class="bubble" style="right:24px; bottom:120px; opacity:.55" aria-label="Jegyzetek (kicsinyítve), új jegyzet a szálban">
+  <svg class="i i20"><use href="#i-note"/></svg><span class="b">•</span>
+</button>
+
+<!-- Mockup-only: theme switch -->
+<div class="theme" role="radiogroup" aria-label="Téma">
+  <input type="radio" name="t" id="t-sys" checked><label for="t-sys">Rendszer</label>
+  <input type="radio" name="t" id="t-light"><label for="t-light">Világos</label>
+  <input type="radio" name="t" id="t-dark"><label for="t-dark">Sötét</label>
+</div>
+
+</body>
+</html>
