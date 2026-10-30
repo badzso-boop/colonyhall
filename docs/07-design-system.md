@@ -184,7 +184,39 @@ Ikonok: **Lucide** (`lucide-react`), sűrű helyen 16 px, máshol 20 px. A logó
   - szál-összesítő: résztvevők, „N válasz” `accent-text`-tel, utolsó válasz ideje.
 - **Billentyűparancsok:** a `?` súgó felsorolja mindet. Ctrl K, `?`, Alt ↑/↓, Alt Shift ↑/↓ (olvasatlanok), Esc (panel), `r` (válasz szálban), Ctrl Shift F (fájlok), Ctrl Shift X (terminálok; a Ctrl Shift T a böngészőé), ↑ üres szerkesztőben.
 
-## 10. Ami még jön
+## 10. Lebegő ablak és oldalfejléc (32. kör)
 
-- **32. kör:** a lebegő ablak részletei.
+### Lebegő ablak (`layout/windows`, állapot: `shared/windows`)
+
+- **Kinek van:** Feladatok, Naptár, Jegyzetek; fajtánként legfeljebb egy, több fajta lehet egyszerre nyitva. Megnyitás: az oldalsáv ⧉ gombja (hoverre látszik), a fejléc dokkja, az oldal fejlécének ⧉ gombja vagy a parancspaletta.
+- **Méret:** alapból 340×440 (jegyzetek 360×420), legalább 280×200, legfeljebb a nézet. A címsor 34 px, `surface-raised`, `border-strong` keret, `shadow-overlay`, `rounded-lg`.
+- **Elhelyezés:** az első jobbra fent nyílik; ha egy nyitott ablak már ott van, az új **mellé balra** kerül, ha nincs hely, egy címsornyit lépcsőzetesen eltolva. Ahova a felhasználó húzta, ott marad (böngészőnként, `localStorage`).
+- **Mozgatás, méretezés:** címsorral húzható, a címsor mindig elérhető marad, 16 px-en belül a szélekhez tapad; méretezés mind a 8 élről és sarokról. Billentyűzet: fókuszált címsoron Alt+nyilak mozgat, Alt+Shift+nyilak méretez (16 px lépés).
+- **Gombok** (balról jobbra): Halványítás, Kis méret (—), Teljes oldal (□, az oldalra visz és bezárja az ablakot; a címsor dupla kattintása ugyanez), Bezárás (×).
+- **Áttetszőség** (a Halványítás gomb lépteti):
+
+  | Mód | Ha a kurzor/fókusz nincs rajta | Ikon |
+  | --- | --- | --- |
+  | Normál | 100 % | kör |
+  | Áttetsző (alapérték) | 55 % | félkör |
+  | Halvány | 20 % | szaggatott kör |
+
+  Hover vagy fókusz mindig 100 %-ra hozza; 200 ms átmenet, `prefers-reduced-motion` mellett azonnali. Az áttetsző ablak is kap kattintást (nincs átkattintás).
+- **Rétegzés:** a kattintott ablak kerül előre, `z-index`-szel; a DOM-sorrend **nem** változik (különben a böngésző elnyeli az előrehozó kattintást).
+- **Kicsinyítve:** 48 px-es kör az ablak Lucide-ikonjával, `border-strong` gyűrűvel, hírnél piros gyűrűvel és jelvénnyel (Feladatok: elkezdett feladatok száma; Naptár: perc a következő eseményig, ha egy órán belül van, pl. „12p”; Jegyzetek: pötty új jegyzetnél). Húzható, a közelebbi oldalszélhez tapad; kattintásra (vagy Enterre) ugyanott nyílik vissza.
+- **Telefonon** nincs lebegő ablak: a legfelső nyitott ablak tartalma alsó Sheetben jelenik meg.
+- **Egy tartalom-komponens funkciónként:** az ablak és az oldal ugyanazt használja, az ablak tömör változatban (pl. a naptár mini-hónap + napirend).
+
+Képek: `docs/handoff/32-screens/windows-*.png`.
+
+### Oldalfejléc (`shared/ui/PageHeader`)
+
+Minden munkaterület-oldal tetején: ikon (20 px) és cím (`text-page`), jobbra az oldal műveletei (nézetváltó, szűrők, „Új …” elsődleges gomb), legjobbra a ⧉ kiugrasztás, ha az oldalnak van lebegő ablaka. Magassága és alsó vonala a beszélgetés fejlécével egyezik. Nézetváltó: `radiogroup` szegmensekkel, a kiválasztott `accent-soft`.
+
+### Diff (`shared/ui/DiffView`)
+
+Sor szintű különbség (saját LCS, `shared/lib/diff.ts`): törölt sor `danger-soft` háttér, áthúzva, „−”; új sor `success-soft`, „+”; a hosszú változatlan szakaszok „… N változatlan sor …” sorrá csukódnak, a változások körül 2 sor marad. A wiki előzményei és a szabályok használják.
+
+## 11. Ami még jön
+
 - **33. kör:** a gépek és agentek színpalettája, a nagy beállítóablak, a mappaválasztó.
