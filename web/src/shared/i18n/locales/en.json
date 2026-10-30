@@ -45,6 +45,12 @@
     "newline": "New line",
     "lastMessage": "To the last message (empty composer)",
     "moveWindow": "Move the window",
-    "resizeWindow": "Resize the window"
+    "resizeWindow": "Resize the window",
+    "calMonth": "Calendar: month view",
+    "calWeek": "Calendar: week view",
+    "calDay": "Calendar: day view",
+    "calPrev": "Calendar: previous range",
+    "calNext": "Calendar: next range",
+    "calToday": "Calendar: today"
   }
 }

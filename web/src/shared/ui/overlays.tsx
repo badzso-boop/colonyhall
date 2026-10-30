@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Dialog as RDialog, DropdownMenu as RMenu, Tabs as RTabs, Tooltip as RTooltip } from "radix-ui";
+import { Dialog as RDialog, DropdownMenu as RMenu, Popover as RPopover, Tabs as RTabs, Tooltip as RTooltip } from "radix-ui";
 import { X } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { IconButton } from "./IconButton";
@@ -142,6 +142,28 @@ export function MenuItem({ children, onSelect, danger, icon }: { children: React
 
 export function MenuSeparator() {
   return <RMenu.Separator className="my-1 h-px bg-border" />;
+}
+
+/* ---------- Popover ---------- */
+
+export const Popover = RPopover.Root;
+export const PopoverTrigger = RPopover.Trigger;
+
+/** A small anchored panel (event detail, a calendar list); Esc and an outside click close it. */
+export function PopoverContent({ children, label, align = "start", className }: { children: ReactNode; label: string; align?: "start" | "center" | "end"; className?: string }) {
+  return (
+    <RPopover.Portal>
+      <RPopover.Content
+        aria-label={label}
+        align={align}
+        sideOffset={6}
+        collisionPadding={12}
+        className={cn("z-(--z-overlay) w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface-raised p-3 text-ui shadow-overlay", className)}
+      >
+        {children}
+      </RPopover.Content>
+    </RPopover.Portal>
+  );
 }
 
 /* ---------- Tabs ---------- */

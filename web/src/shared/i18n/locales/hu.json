@@ -45,6 +45,12 @@
     "newline": "Új sor",
     "lastMessage": "Az utolsó üzenetre (üres szerkesztőben)",
     "moveWindow": "Ablak mozgatása",
-    "resizeWindow": "Ablak méretezése"
+    "resizeWindow": "Ablak méretezése",
+    "calMonth": "Naptár: havi nézet",
+    "calWeek": "Naptár: heti nézet",
+    "calDay": "Naptár: napi nézet",
+    "calPrev": "Naptár: előző időszak",
+    "calNext": "Naptár: következő időszak",
+    "calToday": "Naptár: ma"
   }
 }

@@ -46,6 +46,49 @@ export function useDeleteTask() {
   });
 }
 
+export function useCalendars() {
+  return useQuery({ queryKey: plannerKeys.calendars, queryFn: async () => unwrap(await api.GET("/planner/calendars")).calendars });
+}
+
+/** The occurrences in [from, to); the calendars are cached on the server, so a minute is fresh enough. */
+export function useEvents(from: Date, to: Date, enabled = true) {
+  const f = from.toISOString();
+  const t = to.toISOString();
+  return useQuery({
+    queryKey: plannerKeys.events(f, t),
+    queryFn: async () => unwrap(await api.GET("/planner/events", { params: { query: { from: f, to: t } } })).events,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+    enabled,
+  });
+}
+
+export function useAddCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["AddPlannerCalendarRequest"]) => unwrap(await api.POST("/planner/calendars", { body })),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["planner"] }),
+  });
+}
+
+export function useRefreshCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => unwrap(await api.POST("/planner/calendars/{id}/refresh", { params: { path: { id } } })),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["planner"] }),
+  });
+}
+
+export function useDeleteCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      unwrap(await api.DELETE("/planner/calendars/{id}", { params: { path: { id } } }));
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["planner"] }),
+  });
+}
+
 /** Tasks and calendars change in another tab too: refetch on their events. */
 export function registerPlannerEvents(qc: QueryClient): () => void {
   const tasks = () => void qc.invalidateQueries({ queryKey: plannerKeys.tasks });

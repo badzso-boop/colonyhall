@@ -42,6 +42,13 @@
   /* The same in both themes: backgrounds for showing the brand (logo, icons). */
   --color-brand-paper: #faf8f7;
   --color-brand-ink: #0b0a0a;
+  /* The colours offered for a new calendar subscription (stored as hex on the server). */
+  --color-cal-1: #c1121f;
+  --color-cal-2: #2f5f9e;
+  --color-cal-3: #2a7046;
+  --color-cal-4: #b7791f;
+  --color-cal-5: #7c3aed;
+  --color-cal-6: #0e7490;
 
   --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

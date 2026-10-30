@@ -44,6 +44,8 @@ export default defineConfig({
     // (a new feature's locales/*.json would be missing from the tests).
     fsModuleCache: false,
     environment: "jsdom",
+    // The calendar's tests need a zone with a clock change (Europe/Budapest).
+    env: { TZ: "Europe/Budapest" },
     globals: true,
     include: ["src/**/*.test.{ts,tsx,mjs}"],
     setupFiles: ["src/app/test-setup.ts"],

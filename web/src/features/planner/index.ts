@@ -5,3 +5,4 @@ export { useWindowBadge } from "./badges";
 export { CalendarWindow } from "./components/CalendarWindow";
 export { TasksWindow } from "./components/TasksWindow";
 export const TasksPage = lazy(() => import("./pages/TasksPage"));
+export const CalendarPage = lazy(() => import("./pages/CalendarPage"));
