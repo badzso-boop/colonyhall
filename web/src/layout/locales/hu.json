@@ -12,7 +12,23 @@
   "workingNone": "Most senki nem dolgozik",
   "workingIn": "#{{channel}}",
   "claude": "Claude 5 óra: {{five}} % · újraindul {{reset}} · heti {{week}} %",
-  "windows": "Lebegő ablakok",
+  "windows": {
+    "tasks": "Feladatok",
+    "calendar": "Naptár",
+    "notes": "Jegyzetek",
+    "opacity": {
+      "normal": "Halványítás: Normál",
+      "auto": "Halványítás: Áttetsző",
+      "dim": "Halványítás: Halvány"
+    },
+    "minimize": "Kis méret",
+    "fullPage": "Teljes oldal",
+    "close": "Bezárás",
+    "restore": "{{name}} visszaállítása",
+    "popOut": "{{name}} kiugrasztása",
+    "dock": "Lebegő ablakok",
+    "move": "Ablak mozgatása (Alt+nyilak), méretezés (Alt+Shift+nyilak)"
+  },
   "stop": "Mind áll",
   "stopHint": "Nyomd és tartsd 2 másodpercig: minden agent leáll",
   "stopped": "Vészleállítás aktív",

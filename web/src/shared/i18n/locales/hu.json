@@ -43,6 +43,8 @@
     "terminals": "Terminálok megnyitása",
     "send": "Küldés",
     "newline": "Új sor",
-    "lastMessage": "Az utolsó üzenetre (üres szerkesztőben)"
+    "lastMessage": "Az utolsó üzenetre (üres szerkesztőben)",
+    "moveWindow": "Ablak mozgatása",
+    "resizeWindow": "Ablak méretezése"
   }
 }

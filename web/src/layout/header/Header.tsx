@@ -10,6 +10,7 @@ import { useClaudeLimits } from "@/features/hosts";
 import { useActors, useSession } from "@/features/identity";
 import { useOpenQuestions } from "@/features/questions";
 import { openOverlay } from "../overlays";
+import { WindowDock } from "../windows/WindowDock";
 import { UserMenu } from "./UserMenu";
 
 function Breadcrumb() {
@@ -113,7 +114,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             </span>
           </Tooltip>
           {admin ? <ClaudeMeter enabled={admin} /> : null}
-          <span aria-label={t("windows")} className="mx-1 hidden h-6 w-px bg-border md:block" />
+          <WindowDock />
           {admin && !stopped ? (
             <HoldButton
               label={t("stop")}

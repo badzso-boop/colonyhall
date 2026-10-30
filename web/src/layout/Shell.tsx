@@ -16,6 +16,7 @@ import { openOverlay } from "./overlays";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useDocumentTitle } from "./useDocumentTitle";
+import { FloatingWindows } from "./windows/FloatingWindows";
 
 /**
  * The app frame (docs/handoff/31, parts 4–5): header, sidebar, main column
@@ -108,7 +109,7 @@ export function Shell() {
           </div>
         ) : null}
         {placement.screen === "main" ? (
-          <main id="main" className={cn("min-w-0 flex-1 bg-bg", home && "max-md:hidden")}>
+          <main id="main" tabIndex={-1} className={cn("min-w-0 flex-1 bg-bg outline-none", home && "max-md:hidden")}>
             <Outlet />
           </main>
         ) : (
@@ -133,6 +134,7 @@ export function Shell() {
         ) : null}
       </div>
       {placement.screen === "main" ? <BottomBar /> : null}
+      <FloatingWindows />
       <CommandPalette />
       <ShortcutHelp />
     </div>

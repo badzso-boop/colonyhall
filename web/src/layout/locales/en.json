@@ -12,7 +12,23 @@
   "workingNone": "Nobody is working now",
   "workingIn": "#{{channel}}",
   "claude": "Claude 5 h: {{five}} % · resets {{reset}} · weekly {{week}} %",
-  "windows": "Floating windows",
+  "windows": {
+    "tasks": "Tasks",
+    "calendar": "Calendar",
+    "notes": "Notes",
+    "opacity": {
+      "normal": "Fading: Normal",
+      "auto": "Fading: Translucent",
+      "dim": "Fading: Dim"
+    },
+    "minimize": "Minimise",
+    "fullPage": "Full page",
+    "close": "Close",
+    "restore": "Restore {{name}}",
+    "popOut": "Pop out {{name}}",
+    "dock": "Floating windows",
+    "move": "Move the window (Alt+arrows), resize (Alt+Shift+arrows)"
+  },
   "stop": "Stop all",
   "stopHint": "Press and hold for 2 seconds: every agent stops",
   "stopped": "Emergency stop active",

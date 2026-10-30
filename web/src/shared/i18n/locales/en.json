@@ -43,6 +43,8 @@
     "terminals": "Open terminals",
     "send": "Send",
     "newline": "New line",
-    "lastMessage": "To the last message (empty composer)"
+    "lastMessage": "To the last message (empty composer)",
+    "moveWindow": "Move the window",
+    "resizeWindow": "Resize the window"
   }
 }
