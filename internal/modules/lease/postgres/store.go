@@ -183,6 +183,25 @@ func (s *Store) ListActive(ctx context.Context, workspaceID ids.ID, now time.Tim
 	return res, nil
 }
 
+func (s *Store) ListSince(ctx context.Context, workspaceID ids.ID, since time.Time) ([]lease.Lease, error) {
+	rows, err := s.q(ctx).ListLeasesSince(ctx, sqlcgen.ListLeasesSinceParams{WorkspaceID: workspaceID, Since: since})
+	if err != nil {
+		return nil, err
+	}
+	res := make([]lease.Lease, len(rows))
+	for i, r := range rows {
+		var note string
+		if r.Note != nil {
+			note = *r.Note
+		}
+		res[i] = lease.Lease{
+			ID: r.ID, WorkspaceID: r.WorkspaceID, Resource: r.Resource, HolderID: r.HolderID, HolderHandle: r.HolderHandle,
+			Note: note, AcquiredAt: r.AcquiredAt, ExpiresAt: r.ExpiresAt, ReleasedAt: r.ReleasedAt, ReleasedBy: r.ReleasedBy,
+		}
+	}
+	return res, nil
+}
+
 func (s *Store) ReleaseActiveByWorkspace(ctx context.Context, workspaceID ids.ID, releasedBy ids.ID, now time.Time) ([]lease.Lease, error) {
 	var relBy *ids.ID
 	if releasedBy != ids.Nil {

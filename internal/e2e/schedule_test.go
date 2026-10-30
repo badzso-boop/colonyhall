@@ -170,3 +170,70 @@ func TestScheduleDelayedAndPausedCreator(t *testing.T) {
 		t.Fatalf("the failed run must be recorded: %+v", list.Schedules)
 	}
 }
+
+type schedPreviewOut struct {
+	Cron     string   `json:"cron"`
+	Timezone string   `json:"timezone"`
+	NextRuns []string `json:"next_runs"`
+}
+
+// TestSchedulePreview: the builder's preview uses the same rules as create,
+// shows five runs in the schedule's time zone (DST included), refuses bad
+// input, writes nothing, and is for humans only.
+func TestSchedulePreview(t *testing.T) {
+	e := newEnv(t)
+	preview := func(token string, body map[string]any) (schedPreviewOut, int) {
+		var out schedPreviewOut
+		s := e.do("POST", "/api/v1/schedules/preview", token, body, &out)
+		return out, s
+	}
+
+	// The clock is 2026-10-15 09:00 UTC (11:00 in Budapest): today's 09:00 is past.
+	daily, s := preview(server.DevAdminToken, map[string]any{"cron": "0 9 * * *"})
+	if s != http.StatusOK || daily.Timezone != "Europe/Budapest" || daily.Cron != "0 9 * * *" {
+		t.Fatalf("daily: %d %+v", s, daily)
+	}
+	want := []string{"2026-10-16T07:00:00Z", "2026-10-17T07:00:00Z", "2026-10-18T07:00:00Z", "2026-10-19T07:00:00Z", "2026-10-20T07:00:00Z"}
+	if strings.Join(daily.NextRuns, ",") != strings.Join(want, ",") {
+		t.Fatalf("daily runs: %v", daily.NextRuns)
+	}
+
+	weekdays, _ := preview(server.DevAdminToken, map[string]any{"cron": "30 8 * * 1-5"})
+	// Thu 15 (08:30 local already past), Fri 16, Mon 19, Tue 20, Wed 21, Thu 22.
+	if weekdays.NextRuns[0] != "2026-10-16T06:30:00Z" || weekdays.NextRuns[1] != "2026-10-19T06:30:00Z" || len(weekdays.NextRuns) != 5 {
+		t.Fatalf("weekdays: %v", weekdays.NextRuns)
+	}
+
+	// Across the end of summer time (Sunday 25 October): 09:00 local stays 09:00.
+	e.clock.Advance(8 * 24 * time.Hour) // 2026-10-23 09:00 UTC
+	dst, _ := preview(server.DevAdminToken, map[string]any{"cron": "0 9 * * *"})
+	if dst.NextRuns[0] != "2026-10-24T07:00:00Z" || dst.NextRuns[1] != "2026-10-25T08:00:00Z" {
+		t.Fatalf("DST: %v", dst.NextRuns)
+	}
+
+	oneOff, s := preview(server.DevAdminToken, map[string]any{"at": "2026-11-02 09:00"})
+	if s != http.StatusOK || oneOff.Cron != "" || len(oneOff.NextRuns) != 1 || oneOff.NextRuns[0] != "2026-11-02T08:00:00Z" {
+		t.Fatalf("one-off: %d %+v", s, oneOff)
+	}
+
+	for _, bad := range []map[string]any{
+		{"cron": "61 * * * *"},
+		{"cron": "0 9 * * *", "at": "2026-11-02 09:00"},
+		{},
+		{"cron": "0 9 * * *", "timezone": "Mars/Olympus"},
+		{"at": "2020-01-01 09:00"},
+	} {
+		if _, s := preview(server.DevAdminToken, bad); s != http.StatusBadRequest {
+			t.Fatalf("bad input %v: status %d, want 400", bad, s)
+		}
+	}
+	if _, s := preview(server.DevAgentToken, map[string]any{"cron": "0 9 * * *"}); s != http.StatusForbidden {
+		t.Fatalf("agent: status %d, want 403", s)
+	}
+
+	var list struct{ Schedules []schedOut }
+	e.do("GET", "/api/v1/schedules", server.DevAdminToken, nil, &list)
+	if len(list.Schedules) != 0 {
+		t.Fatalf("preview stored a schedule: %+v", list.Schedules)
+	}
+}

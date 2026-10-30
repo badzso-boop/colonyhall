@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/fakeagent"
 	"colonyhall/internal/server"
 )
@@ -394,5 +395,47 @@ func TestWikiSlugCollisions(t *testing.T) {
 	}
 	if !strings.HasSuffix(p4.Slug, "-2") {
 		t.Fatalf("expected -2 suffix on collision: %s", p4.Slug)
+	}
+}
+
+// TestWikiIndexForumFields: the index carries what the forum view needs,
+// so it takes one request: the opener, the post count (opening post plus
+// appends, not edits), the newest author and the participants.
+func TestWikiIndexForumFields(t *testing.T) {
+	e := newEnv(t)
+	var page struct{ Slug string }
+	if s := e.do("POST", "/api/v1/wiki", server.DevAdminToken, map[string]any{"title": "Telepítés", "body": "Hogyan telepítünk?"}, &page); s != http.StatusCreated {
+		t.Fatalf("create: %d", s)
+	}
+	for _, step := range []struct{ token, text string }{
+		{server.DevAgentToken, "Így: make dev."},
+		{server.DevAgentToken, "És a guard: systemctl."},
+		{server.DevAdminToken, "Köszi!"},
+	} {
+		if s := e.do("POST", "/api/v1/wiki/"+page.Slug+"/append", step.token, map[string]any{"text": step.text}, nil); s != http.StatusOK {
+			t.Fatalf("append: %d", s)
+		}
+	}
+	if s := e.do("PUT", "/api/v1/wiki/"+page.Slug, server.DevAdminToken, map[string]any{"title": "Telepítés", "body": "Átírva.", "base_rev": 4}, nil); s != http.StatusOK {
+		t.Fatalf("edit: %d", s)
+	}
+
+	var admin, agent struct{ ID string }
+	e.do("GET", "/api/v1/me", server.DevAdminToken, nil, &admin)
+	e.do("GET", "/api/v1/me", server.DevAgentToken, nil, &agent)
+	var index apispec.WikiPageIndexList
+	e.do("GET", "/api/v1/wiki", server.DevAdminToken, nil, &index)
+	if len(index.Pages) != 1 {
+		t.Fatalf("index: %+v", index.Pages)
+	}
+	p := index.Pages[0]
+	if p.PostCount == nil || *p.PostCount != 4 {
+		t.Fatalf("post_count: %v, want 4 (the edit does not count)", p.PostCount)
+	}
+	if p.CreatedBy == nil || p.CreatedBy.String() != admin.ID || p.LastAuthorId == nil || p.LastAuthorId.String() != admin.ID {
+		t.Fatalf("created_by / last_author_id: %v %v", p.CreatedBy, p.LastAuthorId)
+	}
+	if p.ParticipantIds == nil || len(*p.ParticipantIds) != 2 || (*p.ParticipantIds)[0].String() != admin.ID || (*p.ParticipantIds)[1].String() != agent.ID {
+		t.Fatalf("participant_ids: %v", p.ParticipantIds)
 	}
 }

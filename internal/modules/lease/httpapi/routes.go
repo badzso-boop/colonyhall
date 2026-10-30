@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"time"
+
 	"net/http"
 
 	"github.com/google/uuid"
@@ -14,7 +16,7 @@ import (
 
 func init() {
 	httpx.RegisterForbidden(lease.ErrForbidden, lease.ErrNotHolder)
-	httpx.RegisterValidation(lease.ErrInvalidResource, lease.ErrInvalidTTL, lease.ErrNoteTooLong)
+	httpx.RegisterValidation(lease.ErrInvalidResource, lease.ErrInvalidTTL, lease.ErrNoteTooLong, lease.ErrBadState, lease.ErrBadSince)
 	httpx.RegisterStatus(http.StatusNotFound, lease.ErrLeaseNotFound)
 }
 
@@ -48,7 +50,16 @@ func Register(mux *http.ServeMux, svc *lease.Service, auth identity.RequestAuthe
 
 	mux.Handle("GET /api/v1/leases", wrap(func(w http.ResponseWriter, r *http.Request) {
 		actor := httpx.Actor(r)
-		leasesList, err := svc.ListActive(r.Context(), actor)
+		var since *time.Time
+		if v := r.URL.Query().Get("since"); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				httpx.Error(w, r, lease.ErrBadSince)
+				return
+			}
+			since = &t
+		}
+		leasesList, err := svc.List(r.Context(), actor, r.URL.Query().Get("state"), since)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return

@@ -1184,6 +1184,24 @@ func testWiki(t *testing.T, b Backend) {
 	if _, err := st.ListRevisions(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("ListRevisions non-existent: %v", err)
 	}
+	// PostAuthors: create and append revisions per author; edits do not count.
+	forum := wiki.Page{ID: gen.New(), WorkspaceID: f.ws.ID, Slug: "forum", Title: "Forum", Tags: []string{}, CreatedBy: f.human.ID, CreatedAt: t0}
+	must(t, st.CreatePage(ctx, forum, wiki.Revision{PageID: forum.ID, Rev: 1, Body: "q", Kind: wiki.RevisionCreate, AuthorID: f.human.ID, CreatedAt: t0}))
+	for rev, who := range map[int]ids.ID{2: f.agent.ID, 3: f.agent.ID} {
+		must(t, st.AddRevision(ctx, wiki.Revision{PageID: forum.ID, Rev: rev, Body: "q+", Kind: wiki.RevisionAppend, AuthorID: who, CreatedAt: t0}))
+	}
+	must(t, st.AddRevision(ctx, wiki.Revision{PageID: forum.ID, Rev: 4, Body: "q++", Kind: wiki.RevisionEdit, AuthorID: f.human.ID, CreatedAt: t0}))
+	authors, err := st.PostAuthors(ctx, f.ws.ID)
+	must(t, err)
+	posts := map[ids.ID]wiki.PostAuthor{}
+	for _, a := range authors {
+		if a.PageID == forum.ID {
+			posts[a.AuthorID] = a
+		}
+	}
+	if len(posts) != 2 || posts[f.human.ID].Posts != 1 || posts[f.human.ID].LastRev != 1 || posts[f.agent.ID].Posts != 2 || posts[f.agent.ID].LastRev != 3 {
+		t.Fatalf("PostAuthors: %+v", posts)
+	}
 }
 
 func testQuestion(t *testing.T, b Backend) {
@@ -2459,6 +2477,36 @@ func testLeases(t *testing.T, b Backend) {
 	must(t, err)
 	if len(activeList) != 0 {
 		t.Fatalf("expected 0 active leases, got %d", len(activeList))
+	}
+
+	// 11. ListSince: ended (released or expired) at or after since, newest acquired first.
+	old := lease.Lease{ID: gen.New(), WorkspaceID: f.ws.ID, Resource: "old:thing", HolderID: f.agent.ID, HolderHandle: f.agent.Handle,
+		AcquiredAt: t0.Add(-3 * time.Hour), ExpiresAt: t0.Add(-2 * time.Hour)}
+	running := lease.Lease{ID: gen.New(), WorkspaceID: f.ws.ID, Resource: "now:thing", HolderID: f.agent.ID, HolderHandle: f.agent.Handle,
+		AcquiredAt: t0.Add(time.Minute), ExpiresAt: t0.Add(time.Hour)}
+	must(t, st.Create(ctx, old))
+	must(t, st.Create(ctx, running))
+	since, err := st.ListSince(ctx, f.ws.ID, t0.Add(-time.Minute))
+	must(t, err)
+	// l1 (released at t0+40m), l2 and l3 (released at t0) and the running one; not old (expired before since).
+	if len(since) != 4 {
+		t.Fatalf("ListSince: %d leases, want 4: %+v", len(since), since)
+	}
+	for _, l := range since {
+		if l.Resource == "old:thing" {
+			t.Fatalf("ListSince returned a lease that ended before since: %+v", l)
+		}
+		if l.HolderHandle == "" {
+			t.Fatalf("ListSince lost the holder handle: %+v", l)
+		}
+	}
+	if since[0].Resource != "now:thing" {
+		t.Fatalf("ListSince: newest acquired first, got %s first", since[0].Resource)
+	}
+	all, err := st.ListSince(ctx, f.ws.ID, t0.Add(-4*time.Hour))
+	must(t, err)
+	if len(all) != 5 {
+		t.Fatalf("ListSince over everything: %d leases, want 5", len(all))
 	}
 }
 

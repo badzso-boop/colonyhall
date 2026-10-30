@@ -155,6 +155,41 @@ func (s *Store) populateLatest(p wiki.Page) wiki.Page {
 	return p
 }
 
+// PostAuthors summarises the posts per page and author.
+func (s *Store) PostAuthors(_ context.Context, workspaceID ids.ID) ([]wiki.PostAuthor, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	type key struct{ page, author ids.ID }
+	agg := map[key]*wiki.PostAuthor{}
+	var order []key
+	for pageID, revs := range s.revisions {
+		if p, ok := s.pages[pageID]; !ok || p.WorkspaceID != workspaceID {
+			continue
+		}
+		for _, r := range revs {
+			if r.Kind != wiki.RevisionCreate && r.Kind != wiki.RevisionAppend {
+				continue
+			}
+			k := key{pageID, r.AuthorID}
+			a, ok := agg[k]
+			if !ok {
+				a = &wiki.PostAuthor{PageID: pageID, AuthorID: r.AuthorID}
+				agg[k] = a
+				order = append(order, k)
+			}
+			a.Posts++
+			if r.Rev > a.LastRev {
+				a.LastRev = r.Rev
+			}
+		}
+	}
+	out := make([]wiki.PostAuthor, 0, len(order))
+	for _, k := range order {
+		out = append(out, *agg[k])
+	}
+	return out, nil
+}
+
 // ListPages lists all pages in a workspace, ordered by title ascending.
 func (s *Store) ListPages(_ context.Context, workspaceID ids.ID, includeDeleted bool) ([]wiki.Page, error) {
 	s.mu.Lock()

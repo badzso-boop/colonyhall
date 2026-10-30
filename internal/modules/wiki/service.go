@@ -369,20 +369,34 @@ func (s *Service) List(ctx context.Context, by identity.Actor, query string, inc
 		return nil, err
 	}
 
+	authors, err := s.Store.PostAuthors(ctx, by.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	byPage := map[ids.ID][]PostAuthor{}
+	for _, a := range authors {
+		byPage[a.PageID] = append(byPage[a.PageID], a)
+	}
+
 	qLower := strings.ToLower(strings.TrimSpace(query))
 	var out []PageIndex
 	for _, p := range pages {
 		if qLower != "" && !matchesQuery(p, qLower) {
 			continue
 		}
+		count, last, participants := PostSummary(byPage[p.ID])
 		out = append(out, PageIndex{
-			Slug:      p.Slug,
-			Title:     p.Title,
-			Tags:      p.Tags,
-			Excerpt:   Excerpt(p.Body),
-			CreatedAt: p.CreatedAt,
-			UpdatedAt: p.UpdatedAt,
-			DeletedAt: p.DeletedAt,
+			Slug:           p.Slug,
+			Title:          p.Title,
+			Tags:           p.Tags,
+			Excerpt:        Excerpt(p.Body),
+			CreatedAt:      p.CreatedAt,
+			UpdatedAt:      p.UpdatedAt,
+			DeletedAt:      p.DeletedAt,
+			CreatedBy:      p.CreatedBy,
+			PostCount:      count,
+			LastAuthorID:   last,
+			ParticipantIDs: participants,
 		})
 	}
 

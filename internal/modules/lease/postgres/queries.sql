@@ -48,6 +48,15 @@ WHERE l.workspace_id = $1
   AND l.expires_at > $2
 ORDER BY l.resource ASC;
 
+-- name: ListLeasesSince :many
+-- Leases still running, or that ended (released or expired) at or after since; newest first.
+SELECT l.id, l.workspace_id, l.resource, l.holder_id, l.note, l.acquired_at, l.expires_at, l.released_at, l.released_by, a.handle AS holder_handle
+FROM lease l
+JOIN actor a ON a.id = l.holder_id
+WHERE l.workspace_id = $1
+  AND COALESCE(l.released_at, l.expires_at) >= sqlc.arg(since)::timestamptz
+ORDER BY l.acquired_at DESC, l.id DESC;
+
 -- name: ReleaseActiveLeasesByWorkspace :many
 UPDATE lease
 SET released_at = $2,

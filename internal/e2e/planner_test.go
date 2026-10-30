@@ -218,6 +218,13 @@ func TestPlannerAgentsReadOnly(t *testing.T) {
 	if s := e.do("GET", "/api/v1/planner/events?from=2026-10-18T00:00:00Z&to=2026-10-19T00:00:00Z", owner, nil, &evs); s != http.StatusOK || len(evs.Events) != 2 {
 		t.Fatalf("events: %d %+v", s, evs)
 	}
+	// A month view reads up to six weeks; one day more is refused.
+	if s := e.do("GET", "/api/v1/planner/events?from=2026-09-28T00:00:00Z&to=2026-11-09T00:00:00Z", owner, nil, &evs); s != http.StatusOK {
+		t.Fatalf("42-day window: %d", s)
+	}
+	if s := e.do("GET", "/api/v1/planner/events?from=2026-09-28T00:00:00Z&to=2026-11-10T00:00:00Z", owner, nil, nil); s != http.StatusBadRequest {
+		t.Fatalf("43-day window: %d, want 400", s)
+	}
 	// A failing calendar keeps a message without the URL.
 	var broken apispec.PlannerCalendar
 	e.do("POST", "/api/v1/planner/calendars", owner, map[string]any{"name": "Rossz", "url": "https://example.com/broken-SECRET.ics"}, &broken)

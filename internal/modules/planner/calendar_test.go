@@ -144,3 +144,17 @@ func TestParseBoundsManyHostileRules(t *testing.T) {
 		t.Fatalf("500 hostile rules took %v", d)
 	}
 }
+
+func TestCacheWindow(t *testing.T) {
+	loc, _ := time.LoadLocation("Europe/Budapest")
+	now := time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC)
+	from, to := CacheWindow(now, loc)
+	if !from.Equal(time.Date(2026, 9, 1, 0, 0, 0, 0, loc)) || !to.Equal(now.Add(120*24*time.Hour)) {
+		t.Fatalf("window: %v – %v", from, to)
+	}
+	// January looks back into December of the year before.
+	from, _ = CacheWindow(time.Date(2027, 1, 3, 12, 0, 0, 0, time.UTC), loc)
+	if !from.Equal(time.Date(2026, 12, 1, 0, 0, 0, 0, loc)) {
+		t.Fatalf("january: %v", from)
+	}
+}

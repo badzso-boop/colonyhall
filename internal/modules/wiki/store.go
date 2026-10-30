@@ -18,6 +18,9 @@ type Store interface {
 	PageBySlug(ctx context.Context, workspaceID ids.ID, slug string) (Page, error)
 	PageByID(ctx context.Context, id ids.ID) (Page, error)
 	ListPages(ctx context.Context, workspaceID ids.ID, includeDeleted bool) ([]Page, error)
+	// PostAuthors returns, per page and author, the number of posts (create
+	// and append revisions) and the author's newest such revision.
+	PostAuthors(ctx context.Context, workspaceID ids.ID) ([]PostAuthor, error)
 	ListRevisions(ctx context.Context, pageID ids.ID) ([]Revision, error)
 	SlugExists(ctx context.Context, workspaceID ids.ID, slug string) (bool, error)
 }

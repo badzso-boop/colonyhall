@@ -246,6 +246,65 @@ func (q *Queries) ListActiveLeases(ctx context.Context, arg ListActiveLeasesPara
 	return items, nil
 }
 
+const listLeasesSince = `-- name: ListLeasesSince :many
+SELECT l.id, l.workspace_id, l.resource, l.holder_id, l.note, l.acquired_at, l.expires_at, l.released_at, l.released_by, a.handle AS holder_handle
+FROM lease l
+JOIN actor a ON a.id = l.holder_id
+WHERE l.workspace_id = $1
+  AND COALESCE(l.released_at, l.expires_at) >= $2::timestamptz
+ORDER BY l.acquired_at DESC, l.id DESC
+`
+
+type ListLeasesSinceParams struct {
+	WorkspaceID uuid.UUID
+	Since       time.Time
+}
+
+type ListLeasesSinceRow struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	Resource     string
+	HolderID     uuid.UUID
+	Note         *string
+	AcquiredAt   time.Time
+	ExpiresAt    time.Time
+	ReleasedAt   *time.Time
+	ReleasedBy   *uuid.UUID
+	HolderHandle string
+}
+
+// Leases still running, or that ended (released or expired) at or after since; newest first.
+func (q *Queries) ListLeasesSince(ctx context.Context, arg ListLeasesSinceParams) ([]ListLeasesSinceRow, error) {
+	rows, err := q.db.Query(ctx, listLeasesSince, arg.WorkspaceID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLeasesSinceRow
+	for rows.Next() {
+		var i ListLeasesSinceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Resource,
+			&i.HolderID,
+			&i.Note,
+			&i.AcquiredAt,
+			&i.ExpiresAt,
+			&i.ReleasedAt,
+			&i.ReleasedBy,
+			&i.HolderHandle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const releaseActiveLeasesByHolder = `-- name: ReleaseActiveLeasesByHolder :many
 UPDATE lease
 SET released_at = $3,

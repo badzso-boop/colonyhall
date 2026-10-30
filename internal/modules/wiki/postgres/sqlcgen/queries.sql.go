@@ -256,6 +256,46 @@ func (q *Queries) PageBySlug(ctx context.Context, arg PageBySlugParams) (WikiPag
 	return i, err
 }
 
+const postAuthors = `-- name: PostAuthors :many
+SELECT r.page_id, r.author_id, count(*)::int AS posts, max(r.rev)::int AS last_rev
+FROM wiki_revision r
+JOIN wiki_page p ON p.id = r.page_id
+WHERE p.workspace_id = $1 AND r.kind IN ('create', 'append')
+GROUP BY r.page_id, r.author_id
+`
+
+type PostAuthorsRow struct {
+	PageID   uuid.UUID
+	AuthorID uuid.UUID
+	Posts    int32
+	LastRev  int32
+}
+
+func (q *Queries) PostAuthors(ctx context.Context, workspaceID uuid.UUID) ([]PostAuthorsRow, error) {
+	rows, err := q.db.Query(ctx, postAuthors, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PostAuthorsRow
+	for rows.Next() {
+		var i PostAuthorsRow
+		if err := rows.Scan(
+			&i.PageID,
+			&i.AuthorID,
+			&i.Posts,
+			&i.LastRev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const restorePage = `-- name: RestorePage :exec
 UPDATE wiki_page
 SET deleted_at = NULL

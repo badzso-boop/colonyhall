@@ -16,6 +16,8 @@ var (
 	ErrLeaseNotFound   = errors.New("lease not found")
 	ErrForbidden       = errors.New("forbidden")
 	ErrNotHolder       = errors.New("only the holder may release this lease")
+	ErrBadState        = errors.New("state must be active or all")
+	ErrBadSince        = errors.New("since must be within the last 7 days")
 )
 
 var resourceRegexp = regexp.MustCompile(`^[a-z0-9._:/-]+$`)

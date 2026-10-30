@@ -111,6 +111,37 @@ func (s *Service) Create(ctx context.Context, by identity.Actor, in CreateInput)
 	return sc, err
 }
 
+// PreviewRuns is how many runs Preview shows.
+const PreviewRuns = 5
+
+// Preview returns the next runs of a schedule as Create would make it,
+// without storing anything: the schedule builder shows them before saving.
+func (s *Service) Preview(_ context.Context, by identity.Actor, in CreateInput) ([]time.Time, CreateInput, error) {
+	if err := human(by); err != nil {
+		return nil, in, err
+	}
+	if in.Timezone == "" {
+		in.Timezone = DefaultTimezone
+	}
+	if _, err := time.LoadLocation(in.Timezone); err != nil {
+		return nil, in, ErrBadZone
+	}
+	in.Cron = strings.TrimSpace(in.Cron)
+	now := s.Clock.Now()
+	switch {
+	case in.At != nil && in.Cron == "":
+		if in.At.Before(now.Add(-time.Minute)) {
+			return nil, in, ErrBadTime
+		}
+		return []time.Time{in.At.UTC()}, in, nil
+	case in.At == nil && in.Cron != "":
+		runs, err := NextRuns(in.Cron, in.Timezone, now, PreviewRuns)
+		return runs, in, err
+	default:
+		return nil, in, ErrBadTime
+	}
+}
+
 // List returns the schedules the caller may see: admins all, others their own.
 func (s *Service) List(ctx context.Context, by identity.Actor) ([]Schedule, error) {
 	if by.Kind != identity.KindHuman {

@@ -85,6 +85,26 @@ func Register(mux *http.ServeMux, svc *schedule.Service, auth identity.RequestAu
 		httpx.JSON(w, http.StatusCreated, toAPI(sc))
 	}))
 
+	mux.Handle("POST /api/v1/schedules/preview", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.SchedulePreviewRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		zone := httpx.Deref(in.Timezone, "")
+		at, err := parseAt(httpx.Deref(in.At, ""), zone)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		runs, used, err := svc.Preview(r.Context(), httpx.Actor(r), schedule.CreateInput{At: at, Cron: httpx.Deref(in.Cron, ""), Timezone: zone})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.SchedulePreview{Cron: used.Cron, Timezone: used.Timezone, NextRuns: runs})
+	}))
+
 	mux.Handle("GET /api/v1/schedules", wrap(func(w http.ResponseWriter, r *http.Request) {
 		list, err := svc.List(r.Context(), httpx.Actor(r))
 		if err != nil {

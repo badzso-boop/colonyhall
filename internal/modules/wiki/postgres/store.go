@@ -160,6 +160,19 @@ func (s *Store) PageByID(ctx context.Context, id ids.ID) (wiki.Page, error) {
 	return res, nil
 }
 
+// PostAuthors summarises the posts per page and author.
+func (s *Store) PostAuthors(ctx context.Context, workspaceID ids.ID) ([]wiki.PostAuthor, error) {
+	rows, err := s.q(ctx).PostAuthors(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wiki.PostAuthor, len(rows))
+	for i, r := range rows {
+		out[i] = wiki.PostAuthor{PageID: r.PageID, AuthorID: r.AuthorID, Posts: int(r.Posts), LastRev: int(r.LastRev)}
+	}
+	return out, nil
+}
+
 // ListPages lists all pages in a workspace, ordered by title ascending.
 func (s *Store) ListPages(ctx context.Context, workspaceID ids.ID, includeDeleted bool) ([]wiki.Page, error) {
 	rows, err := s.q(ctx).ListPages(ctx, sqlcgen.ListPagesParams{

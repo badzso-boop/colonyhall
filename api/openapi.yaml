@@ -889,12 +889,16 @@ paths:
     get:
       operationId: listActiveLeases
       tags: [leases]
-      description: List active leases on shared resources (humans only).
+      description: "Leases on shared resources (humans only): the active ones, or with state=all every lease still running or ended since `since` (default the last 24 hours, at most 7 days back), newest first."
+      parameters:
+        - { name: state, in: query, required: false, schema: { type: string, enum: [active, all], default: active } }
+        - { name: since, in: query, required: false, schema: { type: string, format: date-time } }
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200":
           description: List of active leases
           content: { application/json: { schema: { $ref: "#/components/schemas/LeasesResponse" } } }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
   /leases/{id}/release:
@@ -1137,6 +1141,20 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "201": { description: Scheduled, content: { application/json: { schema: { $ref: "#/components/schemas/Schedule" } } } }
+
+  /schedules/preview:
+    post:
+      operationId: previewSchedule
+      tags: [schedule]
+      description: Humans. The next runs of a schedule before saving it (the schedule builder). No side effects, no event. Same time rules as create.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SchedulePreviewRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: The next runs, content: { application/json: { schema: { $ref: "#/components/schemas/SchedulePreview" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /schedules/{scheduleId}:
     parameters:
@@ -1612,7 +1630,7 @@ paths:
     get:
       operationId: listPlannerEvents
       tags: [planner]
-      description: Humans only. The caller's calendar occurrences overlapping [from, to), at most 14 days.
+      description: "Humans only. The caller's calendar occurrences overlapping [from, to), at most 42 days (a month view). The server keeps the calendars from the first day of the previous month to 120 days ahead."
       parameters:
         - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
         - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
@@ -2877,6 +2895,19 @@ components:
         used_today: { type: integer, format: int64, description: "Total tokens consumed today (input + output + cache_read + cache_write)" }
         remaining: { type: integer, format: int64, description: "Remaining tokens today (0 if limit is 0 or exceeded)" }
         resets_at: { type: string, format: date-time, description: "When the budget resets (next midnight in Europe/Budapest)" }
+    SchedulePreviewRequest:
+      type: object
+      properties:
+        at: { type: string, description: "One-off: RFC 3339, or local time in `timezone` as YYYY-MM-DD HH:MM" }
+        cron: { type: string, description: "Repeating: 5-field cron expression in `timezone`" }
+        timezone: { type: string, description: "IANA zone, default Europe/Budapest" }
+    SchedulePreview:
+      type: object
+      required: [cron, timezone, next_runs]
+      properties:
+        cron: { type: string, description: The cron expression as the server reads it; empty for a one-off }
+        timezone: { type: string }
+        next_runs: { type: array, items: { type: string, format: date-time }, description: "Up to 5 runs, earliest first (one for a one-off)" }
     CreateScheduleRequest:
       type: object
       required: [channel_id, body]
@@ -2965,6 +2996,10 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         deleted_at: { type: string, format: date-time, nullable: true }
+        created_by: { type: string, format: uuid, description: Who opened the topic }
+        post_count: { type: integer, description: "The opening post plus the appended sections (the forum view's replies)" }
+        last_author_id: { type: string, format: uuid, description: The author of the newest post }
+        participant_ids: { type: array, items: { type: string, format: uuid }, description: "Up to 5 post authors, the most recent first" }
     WikiPageIndexList:
       type: object
       required: [pages]

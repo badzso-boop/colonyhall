@@ -2,6 +2,7 @@ package wiki
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -75,6 +76,40 @@ type PageIndex struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
+	// The forum view (round 32): who opened it, how many posts (the
+	// opening one and the appends), the newest post's author, and up to
+	// MaxParticipants authors, the most recent first.
+	CreatedBy      ids.ID
+	PostCount      int
+	LastAuthorID   ids.ID
+	ParticipantIDs []ids.ID
+}
+
+// MaxParticipants is how many post authors the index lists per page.
+const MaxParticipants = 5
+
+// PostAuthor is one author's posts (create and append revisions) on a page.
+type PostAuthor struct {
+	PageID   ids.ID
+	AuthorID ids.ID
+	Posts    int
+	LastRev  int
+}
+
+// PostSummary folds the post authors of one page into the index fields.
+func PostSummary(authors []PostAuthor) (count int, last ids.ID, participants []ids.ID) {
+	sorted := append([]PostAuthor(nil), authors...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].LastRev > sorted[j].LastRev })
+	for _, a := range sorted {
+		count += a.Posts
+		if len(participants) < MaxParticipants {
+			participants = append(participants, a.AuthorID)
+		}
+	}
+	if len(sorted) > 0 {
+		last = sorted[0].AuthorID
+	}
+	return count, last, participants
 }
 
 // FoldAccents replaces Hungarian and common accented vowels with their ASCII base.

@@ -37,7 +37,7 @@ var (
 	ErrCalendarColor = errors.New("colour must look like #1a2b3c")
 	ErrCalendarURL   = errors.New("calendar URL must be an https or webcal link to a public host")
 	ErrOwnerRequired = errors.New("more than one person shared their planner with you: pass owner")
-	ErrBadRange      = errors.New("to must be after from, at most 14 days later")
+	ErrBadRange      = errors.New("to must be after from, at most 42 days later")
 )
 
 // Task is one item of a person's task list.

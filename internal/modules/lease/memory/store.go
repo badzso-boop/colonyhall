@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"sort"
 	"sync"
@@ -99,6 +100,28 @@ func (s *Store) ListActive(_ context.Context, workspaceID ids.ID, now time.Time)
 	}
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].Resource < res[j].Resource
+	})
+	return res, nil
+}
+
+func (s *Store) ListSince(_ context.Context, workspaceID ids.ID, since time.Time) ([]lease.Lease, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var res []lease.Lease
+	for _, l := range s.leases {
+		end := l.ExpiresAt
+		if l.ReleasedAt != nil {
+			end = *l.ReleasedAt
+		}
+		if l.WorkspaceID == workspaceID && !end.Before(since) {
+			res = append(res, l)
+		}
+	}
+	sort.Slice(res, func(i, j int) bool {
+		if !res[i].AcquiredAt.Equal(res[j].AcquiredAt) {
+			return res[i].AcquiredAt.After(res[j].AcquiredAt)
+		}
+		return bytes.Compare(res[i].ID[:], res[j].ID[:]) > 0
 	})
 	return res, nil
 }

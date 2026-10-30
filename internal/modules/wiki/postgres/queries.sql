@@ -56,6 +56,13 @@ WHERE p.workspace_id = $1
   AND (sqlc.arg(include_deleted)::boolean OR p.deleted_at IS NULL)
 ORDER BY p.title ASC;
 
+-- name: PostAuthors :many
+SELECT r.page_id, r.author_id, count(*)::int AS posts, max(r.rev)::int AS last_rev
+FROM wiki_revision r
+JOIN wiki_page p ON p.id = r.page_id
+WHERE p.workspace_id = $1 AND r.kind IN ('create', 'append')
+GROUP BY r.page_id, r.author_id;
+
 -- name: CheckSlugExists :one
 SELECT EXISTS (
     SELECT 1 FROM wiki_page

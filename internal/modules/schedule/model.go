@@ -65,6 +65,23 @@ var (
 
 var parser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
+// NextRuns returns the first n runs of a cron expression after t, in zone.
+func NextRuns(expr, zone string, t time.Time, n int) ([]time.Time, error) {
+	out := make([]time.Time, 0, n)
+	for len(out) < n {
+		next, err := Next(expr, zone, t)
+		if err != nil {
+			return nil, err
+		}
+		if next.IsZero() {
+			break // an expression that never fires again
+		}
+		out = append(out, next)
+		t = next
+	}
+	return out, nil
+}
+
 // Next returns the first run of a cron expression after t, in zone.
 func Next(expr, zone string, t time.Time) (time.Time, error) {
 	loc, err := time.LoadLocation(zone)

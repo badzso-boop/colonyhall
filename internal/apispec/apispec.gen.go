@@ -1104,6 +1104,24 @@ func (e ListDelegationsParamsState) Valid() bool {
 	}
 }
 
+// Defines values for ListActiveLeasesParamsState.
+const (
+	ListActiveLeasesParamsStateActive ListActiveLeasesParamsState = "active"
+	ListActiveLeasesParamsStateAll    ListActiveLeasesParamsState = "all"
+)
+
+// Valid indicates whether the value is a known member of the ListActiveLeasesParamsState enum.
+func (e ListActiveLeasesParamsState) Valid() bool {
+	switch e {
+	case ListActiveLeasesParamsStateActive:
+		return true
+	case ListActiveLeasesParamsStateAll:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWikiPagesParamsDeleted.
 const (
 	N0 ListWikiPagesParamsDeleted = 0
@@ -2650,6 +2668,28 @@ type ScheduleList struct {
 	Schedules []Schedule `json:"schedules"`
 }
 
+// SchedulePreview defines model for SchedulePreview.
+type SchedulePreview struct {
+	// Cron The cron expression as the server reads it; empty for a one-off
+	Cron string `json:"cron"`
+
+	// NextRuns Up to 5 runs, earliest first (one for a one-off)
+	NextRuns []time.Time `json:"next_runs"`
+	Timezone string      `json:"timezone"`
+}
+
+// SchedulePreviewRequest defines model for SchedulePreviewRequest.
+type SchedulePreviewRequest struct {
+	// At One-off: RFC 3339, or local time in `timezone` as YYYY-MM-DD HH:MM
+	At *string `json:"at,omitempty"`
+
+	// Cron Repeating: 5-field cron expression in `timezone`
+	Cron *string `json:"cron,omitempty"`
+
+	// Timezone IANA zone, default Europe/Budapest
+	Timezone *string `json:"timezone,omitempty"`
+}
+
 // ScribeCompactionTask defines model for ScribeCompactionTask.
 type ScribeCompactionTask struct {
 	ChannelId       openapi_types.UUID      `json:"channel_id"`
@@ -2878,13 +2918,25 @@ type WikiPage struct {
 
 // WikiPageIndex defines model for WikiPageIndex.
 type WikiPageIndex struct {
-	CreatedAt time.Time  `json:"created_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-	Excerpt   string     `json:"excerpt"`
-	Slug      string     `json:"slug"`
-	Tags      []string   `json:"tags"`
-	Title     string     `json:"title"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// CreatedBy Who opened the topic
+	CreatedBy *openapi_types.UUID `json:"created_by,omitempty"`
+	DeletedAt *time.Time          `json:"deleted_at,omitempty"`
+	Excerpt   string              `json:"excerpt"`
+
+	// LastAuthorId The author of the newest post
+	LastAuthorId *openapi_types.UUID `json:"last_author_id,omitempty"`
+
+	// ParticipantIds Up to 5 post authors, the most recent first
+	ParticipantIds *[]openapi_types.UUID `json:"participant_ids,omitempty"`
+
+	// PostCount The opening post plus the appended sections (the forum view's replies)
+	PostCount *int      `json:"post_count,omitempty"`
+	Slug      string    `json:"slug"`
+	Tags      []string  `json:"tags"`
+	Title     string    `json:"title"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // WikiPageIndexList defines model for WikiPageIndexList.
@@ -2987,6 +3039,15 @@ type ListDelegationsParams struct {
 
 // ListDelegationsParamsState defines parameters for ListDelegations.
 type ListDelegationsParamsState string
+
+// ListActiveLeasesParams defines parameters for ListActiveLeases.
+type ListActiveLeasesParams struct {
+	State *ListActiveLeasesParamsState `form:"state,omitempty" json:"state,omitempty"`
+	Since *time.Time                   `form:"since,omitempty" json:"since,omitempty"`
+}
+
+// ListActiveLeasesParamsState defines parameters for ListActiveLeases.
+type ListActiveLeasesParamsState string
 
 // ListPlannerEventsParams defines parameters for ListPlannerEvents.
 type ListPlannerEventsParams struct {
@@ -3162,6 +3223,9 @@ type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest
+
+// PreviewScheduleJSONRequestBody defines body for PreviewSchedule for application/json ContentType.
+type PreviewScheduleJSONRequestBody = SchedulePreviewRequest
 
 // UpdateCompactionSettingsJSONRequestBody defines body for UpdateCompactionSettings for application/json ContentType.
 type UpdateCompactionSettingsJSONRequestBody = UpdateCompactionSettingsRequest

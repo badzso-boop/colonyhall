@@ -238,3 +238,53 @@ func TestLeasesE2E(t *testing.T) {
 		t.Fatalf("expected 0 active leases after emergency stop, got %d", len(humanLeases.Leases))
 	}
 }
+
+// TestLeaseHistory: state=all lists released leases too (the leases page's
+// history), within the allowed window, for humans only.
+func TestLeaseHistory(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_, token := e.createAgent("agent-hist", "Agent Hist")
+	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", token, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = session.Close() }()
+	for _, res := range []string{"deploy:a", "deploy:b"} {
+		if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "lease_acquire", Arguments: map[string]any{"resource": res, "ttl_minutes": 30}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "lease_release", Arguments: map[string]any{"resource": "deploy:a"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var active, all apispec.LeasesResponse
+	e.do("GET", "/api/v1/leases", server.DevAdminToken, nil, &active)
+	if len(active.Leases) != 1 || active.Leases[0].Resource != "deploy:b" {
+		t.Fatalf("active: %+v", active.Leases)
+	}
+	if s := e.do("GET", "/api/v1/leases?state=all", server.DevAdminToken, nil, &all); s != http.StatusOK || len(all.Leases) != 2 {
+		t.Fatalf("all: %d %+v", s, all.Leases)
+	}
+	released := 0
+	for _, l := range all.Leases {
+		if l.ReleasedAt != nil {
+			released++
+		}
+	}
+	if released != 1 {
+		t.Fatalf("history should include the released lease: %+v", all.Leases)
+	}
+
+	tooOld := e.clock.Now().Add(-8 * 24 * time.Hour).Format(time.RFC3339)
+	for _, q := range []string{"?state=all&since=" + tooOld, "?state=gone", "?state=all&since=yesterday"} {
+		if s := e.do("GET", "/api/v1/leases"+q, server.DevAdminToken, nil, nil); s != http.StatusBadRequest {
+			t.Fatalf("%s: status %d, want 400", q, s)
+		}
+	}
+	if s := e.do("GET", "/api/v1/leases?state=all", server.DevAgentToken, nil, nil); s != http.StatusForbidden {
+		t.Fatalf("agent: status %d, want 403", s)
+	}
+}

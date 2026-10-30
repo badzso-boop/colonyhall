@@ -351,6 +351,34 @@ func (s *Service) ListActive(ctx context.Context, actor identity.Actor) ([]Lease
 	return s.store.ListActive(ctx, actor.WorkspaceID, s.clock.Now())
 }
 
+// History is how far back state=all may look.
+const History = 7 * 24 * time.Hour
+
+// List returns the active leases (state "active"), or every lease still
+// running or ended since `since` (state "all"; default the last 24 hours,
+// at most History back). Humans only.
+func (s *Service) List(ctx context.Context, actor identity.Actor, state string, since *time.Time) ([]Lease, error) {
+	switch state {
+	case "", "active":
+		return s.ListActive(ctx, actor)
+	case "all":
+	default:
+		return nil, ErrBadState
+	}
+	if actor.Kind != identity.KindHuman || actor.Halted {
+		return nil, ErrForbidden
+	}
+	now := s.clock.Now()
+	from := now.Add(-24 * time.Hour)
+	if since != nil {
+		from = *since
+	}
+	if from.Before(now.Add(-History)) || from.After(now) {
+		return nil, ErrBadSince
+	}
+	return s.store.ListSince(ctx, actor.WorkspaceID, from)
+}
+
 // HandleEvent handles background events: agent halted/deleted or emergency stop.
 func (s *Service) HandleEvent(ctx context.Context, ev eventlog.Event) error {
 	now := s.clock.Now()

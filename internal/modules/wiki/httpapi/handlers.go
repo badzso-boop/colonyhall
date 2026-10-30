@@ -8,6 +8,7 @@ import (
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/wiki"
+	"colonyhall/internal/platform/ids"
 )
 
 func init() {
@@ -56,7 +57,24 @@ func toIndexAPI(idx wiki.PageIndex) apispec.WikiPageIndex {
 		CreatedAt: idx.CreatedAt,
 		UpdatedAt: idx.UpdatedAt,
 		DeletedAt: idx.DeletedAt,
+		PostCount: &idx.PostCount,
+		ParticipantIds: func() *[]ids.ID {
+			p := idx.ParticipantIDs
+			if p == nil {
+				p = []ids.ID{}
+			}
+			return &p
+		}(),
+		CreatedBy:    nilIfZero(idx.CreatedBy),
+		LastAuthorId: nilIfZero(idx.LastAuthorID),
 	}
+}
+
+func nilIfZero(id ids.ID) *ids.ID {
+	if id == ids.Nil {
+		return nil
+	}
+	return &id
 }
 
 func toRevisionAPI(rev wiki.Revision) apispec.WikiRevision {

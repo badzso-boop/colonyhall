@@ -17,13 +17,23 @@ import (
 	"colonyhall/internal/platform/ids"
 )
 
-// Calendar window cached per fetch, and the default refresh period.
+// Calendar window cached per fetch (see CacheWindow), the default refresh
+// period, and the longest range one read may ask for: six weeks, the
+// month view of the PWA (round 32).
 const (
-	CacheBefore    = 24 * time.Hour
-	CacheAfter     = 60 * 24 * time.Hour
+	CacheAfter     = 120 * 24 * time.Hour
 	DefaultRefresh = 15 * time.Minute
-	MaxReadRange   = 14 * 24 * time.Hour
+	MaxReadRange   = 42 * 24 * time.Hour
 )
+
+// CacheWindow is the part of a calendar kept after a fetch: from the first
+// day of the previous month (the month view can look back) to CacheAfter
+// ahead.
+func CacheWindow(now time.Time, loc *time.Location) (time.Time, time.Time) {
+	local := now.In(loc)
+	from := time.Date(local.Year(), local.Month()-1, 1, 0, 0, 0, 0, loc)
+	return from, now.Add(CacheAfter)
+}
 
 // Service implements the planner use cases. Only a human writes their own
 // tasks and calendars; agents read through ReadTasks / ReadEvents.
@@ -516,7 +526,8 @@ func (s *Service) refresh(ctx context.Context, c Calendar) {
 		_ = s.Store.SetCalendarFetch(ctx, c.ID, now, FetchError(err))
 		return
 	}
-	evs, err := ParseCalendar(data, s.loc(), now.Add(-CacheBefore), now.Add(CacheAfter))
+	from, to := CacheWindow(now, s.loc())
+	evs, err := ParseCalendar(data, s.loc(), from, to)
 	if err != nil {
 		_ = s.Store.SetCalendarFetch(ctx, c.ID, now, "not a valid calendar (ICS)")
 		return

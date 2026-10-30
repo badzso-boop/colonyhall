@@ -933,7 +933,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List active leases on shared resources (humans only). */
+        /** @description Leases on shared resources (humans only): the active ones, or with state=all every lease still running or ended since `since` (default the last 24 hours, at most 7 days back), newest first. */
         get: operations["listActiveLeases"];
         put?: never;
         post?: never;
@@ -1273,6 +1273,23 @@ export interface paths {
         put?: never;
         /** @description Humans. At the given time the server posts the message in your name (one-off with `at`, repeating with `cron`). */
         post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Humans. The next runs of a schedule before saving it (the schedule builder). No side effects, no event. Same time rules as create. */
+        post: operations["previewSchedule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1769,7 +1786,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Humans only. The caller's calendar occurrences overlapping [from, to), at most 14 days. */
+        /** @description Humans only. The caller's calendar occurrences overlapping [from, to), at most 42 days (a month view). The server keeps the calendars from the first day of the previous month to 120 days ahead. */
         get: operations["listPlannerEvents"];
         put?: never;
         post?: never;
@@ -2982,6 +2999,21 @@ export interface components {
              */
             resets_at: string;
         };
+        SchedulePreviewRequest: {
+            /** @description One-off: RFC 3339, or local time in `timezone` as YYYY-MM-DD HH:MM */
+            at?: string;
+            /** @description Repeating: 5-field cron expression in `timezone` */
+            cron?: string;
+            /** @description IANA zone, default Europe/Budapest */
+            timezone?: string;
+        };
+        SchedulePreview: {
+            /** @description The cron expression as the server reads it; empty for a one-off */
+            cron: string;
+            timezone: string;
+            /** @description Up to 5 runs, earliest first (one for a one-off) */
+            next_runs: string[];
+        };
         CreateScheduleRequest: {
             /** Format: uuid */
             channel_id: string;
@@ -3088,6 +3120,20 @@ export interface components {
             updated_at: string;
             /** Format: date-time */
             deleted_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Who opened the topic
+             */
+            created_by?: string;
+            /** @description The opening post plus the appended sections (the forum view's replies) */
+            post_count?: number;
+            /**
+             * Format: uuid
+             * @description The author of the newest post
+             */
+            last_author_id?: string;
+            /** @description Up to 5 post authors, the most recent first */
+            participant_ids?: string[];
         };
         WikiPageIndexList: {
             pages: components["schemas"]["WikiPageIndex"][];
@@ -5476,7 +5522,10 @@ export interface operations {
     };
     listActiveLeases: {
         parameters: {
-            query?: never;
+            query?: {
+                state?: "active" | "all";
+                since?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5492,6 +5541,7 @@ export interface operations {
                     "application/json": components["schemas"]["LeasesResponse"];
                 };
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
@@ -5992,6 +6042,33 @@ export interface operations {
                     "application/json": components["schemas"]["Schedule"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    previewSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The next runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulePreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
