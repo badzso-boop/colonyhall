@@ -25,6 +25,9 @@ import { FloatingWindows } from "./windows/FloatingWindows";
  *  medium: one right slot with a switcher; the sidebar is a column from 1024, a drawer below;
  *  narrow (< 768): one screen at a time with a back button, a bottom bar.
  */
+// The pages that exist so far (round 32 adds them one by one).
+const readyPages = new Set(["tasks", "design"]);
+
 export function Shell() {
   const { t } = useTranslation("layout");
   const width = useWidth();
@@ -100,7 +103,7 @@ export function Shell() {
             if ((e.target as HTMLElement).closest("a")) setDrawer(false);
           }}
         >
-          <Sidebar />
+          <Sidebar ready={readyPages} />
         </aside>
         {drawer ? <div aria-hidden className="absolute inset-0 z-(--z-pane) bg-overlay" onClick={() => setDrawer(false)} /> : null}
         {placement.left === "work" ? (

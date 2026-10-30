@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { Bot, Hash, MessageSquare, Palette } from "lucide-react";
+import { Bot, Hash, MessageSquare } from "lucide-react";
 import { cn, fuzzyScore } from "@/shared/lib";
 import { usePanes } from "@/shared/panes";
 import { Dialog, Input } from "@/shared/ui";
 import { useConversationOrder } from "@/features/conversation";
 import { useActors } from "@/features/identity";
 import { openOverlay, useAppOverlay } from "./overlays";
+import { pages } from "./sidebar/pages";
 
 type Item = { id: string; group: "conversations" | "agents" | "pages"; label: string; icon: typeof Hash; run: () => void };
 
@@ -32,7 +33,7 @@ export function CommandPalette() {
         id: `a-${a.id}`, group: "agents" as const, label: `@${a.handle}`, icon: Bot,
         run: () => dispatch({ type: "openWork", tab: { kind: "agent", agentId: a.id, ref: "" } }),
       })),
-      { id: "p-design", group: "pages" as const, label: t("pages.design"), icon: Palette, run: () => navigate("/design") },
+      ...pages.map((p) => ({ id: `p-${p.id}`, group: "pages" as const, label: t(`pages.${p.id}`), icon: p.icon, run: () => navigate(p.route) })),
     ];
     const query = q.trim();
     if (!query) return all.slice(0, 30);

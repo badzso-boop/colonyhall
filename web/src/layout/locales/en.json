@@ -4,6 +4,14 @@
   "toggleSidebar": "Show or hide the sidebar",
   "workspace": "Workspace",
   "pages": {
+    "tasks": "Tasks",
+    "calendar": "Calendar",
+    "notes": "Notes",
+    "schedules": "Schedules",
+    "wiki": "Wiki",
+    "decisions": "Decisions",
+    "leases": "Leases",
+    "rules": "Rules",
     "design": "Design system"
   },
   "search": "Search or command…",

@@ -4,6 +4,14 @@
   "toggleSidebar": "Oldalsáv megjelenítése vagy elrejtése",
   "workspace": "Munkaterület",
   "pages": {
+    "tasks": "Feladatok",
+    "calendar": "Naptár",
+    "notes": "Jegyzetek",
+    "schedules": "Ütemezések",
+    "wiki": "Wiki",
+    "decisions": "Döntések",
+    "leases": "Foglalások",
+    "rules": "Szabályok",
     "design": "Design system"
   },
   "search": "Keresés vagy parancs…",

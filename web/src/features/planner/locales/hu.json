@@ -1,1 +1,42 @@
-{}
+{
+  "tasks": {
+    "title": "Feladatok",
+    "list": "Lista",
+    "board": "Tábla",
+    "view": "Nézet",
+    "add": "Új feladat…",
+    "addHint": "Enter: hozzáadás",
+    "groups": {
+      "started": "Elkezdve",
+      "scheduled": "Ütemezve",
+      "done": "Befejezve (14 nap)"
+    },
+    "status": {
+      "scheduled": "Ütemezve",
+      "started": "Elkezdve",
+      "done": "Befejezve"
+    },
+    "up": "Feljebb",
+    "down": "Lejjebb",
+    "open": "Megnyitás",
+    "empty": "Nincs feladat.",
+    "emptyGroup": "Húzz ide egy feladatot.",
+    "statusLabel": "Állapot",
+    "cycle": "Állapot léptetése: {{status}}",
+    "titleLabel": "Cím",
+    "description": "Leírás",
+    "rendered": "Formázott",
+    "edit": "Szerkesztés",
+    "save": "Mentés",
+    "cancel": "Mégse",
+    "delete": "Törlés",
+    "deleteTitle": "Törlöd a feladatot?",
+    "deleteBody": "„{{title}}” törlődik.",
+    "startedAt": "Elkezdve: {{when}}",
+    "doneAt": "Befejezve: {{when}}",
+    "popOut": "Feladatok kiugrasztása",
+    "copy": "Másolás",
+    "copied": "Másolva",
+    "noDescription": "Nincs leírás."
+  }
+}

@@ -1,1 +1,42 @@
-{}
+{
+  "tasks": {
+    "title": "Tasks",
+    "list": "List",
+    "board": "Board",
+    "view": "View",
+    "add": "New task…",
+    "addHint": "Enter: add",
+    "groups": {
+      "started": "Started",
+      "scheduled": "Scheduled",
+      "done": "Done (14 days)"
+    },
+    "status": {
+      "scheduled": "Scheduled",
+      "started": "Started",
+      "done": "Done"
+    },
+    "up": "Up",
+    "down": "Down",
+    "open": "Open",
+    "empty": "No tasks.",
+    "emptyGroup": "Drop a task here.",
+    "statusLabel": "Status",
+    "cycle": "Next status: {{status}}",
+    "titleLabel": "Title",
+    "description": "Description",
+    "rendered": "Rendered",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleteTitle": "Delete the task?",
+    "deleteBody": "“{{title}}” is deleted.",
+    "startedAt": "Started: {{when}}",
+    "doneAt": "Done: {{when}}",
+    "popOut": "Pop out tasks",
+    "copy": "Copy",
+    "copied": "Copied",
+    "noDescription": "No description."
+  }
+}

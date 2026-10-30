@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router";
 import { ConversationPage } from "@/features/conversation";
 import { DesignPage } from "@/features/design";
 import { LoginPage } from "@/features/identity";
+import { TasksPage } from "@/features/planner";
 import { Shell } from "@/layout";
 import { Home } from "./Home";
 import { RequireSession } from "./session";
@@ -22,6 +23,7 @@ export function AppRoutes() {
       >
         <Route index element={<Home />} />
         <Route path="c/:channelId" element={<ConversationPage />} />
+        <Route path="tasks" element={<TasksPage />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

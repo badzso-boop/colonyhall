@@ -8,6 +8,7 @@ export { IconButton } from "./IconButton";
 export { Lightbox, type LightboxImage } from "./Lightbox";
 export { Markdown, type MarkdownProps } from "./Markdown";
 export { EmptyState, Kbd, Skeleton } from "./misc";
+export { PageHeader } from "./PageHeader";
 export {
   Dialog,
   Menu,
