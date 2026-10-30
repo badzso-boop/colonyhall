@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, insertMention, parseCommand, rankMentions } from "@/shared/lib";
+import { activeMention, cn, commandList, insertMention, parseCommand, rankMentions, useComposerInsert } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
@@ -69,6 +69,17 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
+
+  // A line reference (or other text) sent here from elsewhere, e.g. the file browser.
+  const insert = useComposerInsert();
+  const target = threadRootId ? "thread" : "main";
+  const seen = useRef(insert.nonce);
+  useEffect(() => {
+    if (insert.nonce === seen.current || insert.target !== target) return;
+    seen.current = insert.nonce;
+    setText((s) => (s && !s.endsWith(" ") ? `${s} ` : s) + insert.text + " ");
+    area.current?.focus();
+  }, [insert, target]);
 
   const mention = activeMention(text, caret);
   const mentionList = useMemo(

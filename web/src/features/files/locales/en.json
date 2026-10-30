@@ -1,3 +1,35 @@
 {
-  "title": "Files"
+  "title": "Files",
+  "search": "Search file names…",
+  "refresh": "Refresh",
+  "branch": "branch: {{branch}}",
+  "aheadBehind": "↑{{ahead}} ↓{{behind}}",
+  "empty": "This folder is empty.",
+  "truncated": "Only the first 500 entries are shown.",
+  "heavy": "large folder, collapsed",
+  "noResults": "No results.",
+  "pick": "Pick a file in the tree.",
+  "loading": "Loading the file…",
+  "rendered": "Rendered",
+  "raw": "Raw",
+  "wrap": "Wrap",
+  "start": "Start",
+  "end": "End",
+  "largeFile": "Large file ({{size}}): showing 1 MB of the {{part}}.",
+  "insertRef": "Insert reference",
+  "copyLink": "Copy link",
+  "copied": "Copied",
+  "back": "Back to the tree",
+  "download": "Download",
+  "noChannel": "You share no channel with this agent.",
+  "retry": "Retry",
+  "errors": {
+    "host_offline": "The machine is not reachable now.",
+    "timeout": "The machine did not answer in time.",
+    "denied": "This file or folder cannot be opened.",
+    "not_found": "Not found.",
+    "too_large": "The file is too large to open.",
+    "not_a_file": "This is not a file.",
+    "generic": "The request failed."
+  }
 }

@@ -1,3 +1,35 @@
 {
-  "title": "Fájlok"
+  "title": "Fájlok",
+  "search": "Keresés a fájlnevek között…",
+  "refresh": "Frissítés",
+  "branch": "ág: {{branch}}",
+  "aheadBehind": "↑{{ahead}} ↓{{behind}}",
+  "empty": "Ez a mappa üres.",
+  "truncated": "Csak az első 500 bejegyzés látszik.",
+  "heavy": "nagy mappa, összecsukva",
+  "noResults": "Nincs találat.",
+  "pick": "Válassz egy fájlt a fában.",
+  "loading": "Fájl betöltése…",
+  "rendered": "Formázott",
+  "raw": "Nyers",
+  "wrap": "Sortörés",
+  "start": "Eleje",
+  "end": "Vége",
+  "largeFile": "Nagy fájl ({{size}}): {{part}} 1 MB látszik.",
+  "insertRef": "Hivatkozás beszúrása",
+  "copyLink": "Link másolása",
+  "copied": "Vágólapra másolva",
+  "back": "Vissza a fához",
+  "download": "Letöltés",
+  "noChannel": "Nincs közös csatornád ezzel az agenttel.",
+  "retry": "Újra",
+  "errors": {
+    "host_offline": "A gép most nem elérhető.",
+    "timeout": "A gép nem válaszolt időben.",
+    "denied": "Ez a fájl vagy mappa nem nyitható meg.",
+    "not_found": "Nem található.",
+    "too_large": "A fájl túl nagy a megnyitáshoz.",
+    "not_a_file": "Ez nem fájl.",
+    "generic": "A kérés nem sikerült."
+  }
 }
