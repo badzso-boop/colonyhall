@@ -1,0 +1,3 @@
+# The web stage of deploy/Dockerfile installs and builds the PWA itself.
+web/node_modules
+web/dist

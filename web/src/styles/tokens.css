@@ -1,0 +1,49 @@
+/*
+ * Colonyhall design tokens: semantic colours only, components never use raw
+ * values. Light is the base; `.dark` on <html> switches the values (set
+ * before first paint by index.html). Starting values from the mockups in
+ * ui/ui-mockup/ and handoff prompt 31 part 2; round 31 completes the set
+ * (contrast test, host palette, typography scale).
+ */
+@theme {
+  --color-bg: #faf8f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f3efed;
+  --color-border: #e6e0de;
+  --color-border-strong: #cfc6c3;
+  --color-fg: #141111;
+  --color-fg-muted: #6b6262;
+  --color-fg-subtle: #988e8c;
+  --color-accent: #c1121f;
+  --color-accent-hover: #a40f1a;
+  --color-accent-fg: #ffffff;
+  --color-accent-soft: #fbe9ea;
+  --color-warning: #9a6a00;
+  --color-success: #2f7d4f;
+  --color-terminal-bg: #0f0d0d;
+  --color-terminal-fg: #e9e4e3;
+
+  --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  .dark {
+    --color-bg: #0b0a0a;
+    --color-surface: #141212;
+    --color-surface-raised: #1c1919;
+    --color-surface-sunken: #0f0d0d;
+    --color-border: #2a2525;
+    --color-border-strong: #3b3434;
+    --color-fg: #f2eeee;
+    --color-fg-muted: #a39a9a;
+    --color-fg-subtle: #766d6d;
+    --color-accent: #e5383b;
+    --color-accent-hover: #f25c5f;
+    --color-accent-soft: #3a1416;
+    --color-warning: #e0a63a;
+    --color-success: #5cc286;
+    color-scheme: dark;
+  }
+}

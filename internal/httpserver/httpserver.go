@@ -1,6 +1,6 @@
 // Package httpserver adds the cross-cutting HTTP parts around the module
-// routes: health checks, request logging, panic recovery and the
-// development web page.
+// routes: health checks, request logging, panic recovery, the development
+// web page at / and the PWA at /app/.
 package httpserver
 
 import (
@@ -14,12 +14,14 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"colonyhall/web"
 )
 
 //go:embed web
 var webFS embed.FS
 
-// New wraps the module routes with health endpoints, the dev page and middleware.
+// New wraps the module routes with health endpoints, the dev page, the PWA and middleware.
 func New(api *http.ServeMux, ready func(context.Context) error, logger *slog.Logger) http.Handler {
 	api.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -39,6 +41,11 @@ func New(api *http.ServeMux, ready func(context.Context) error, logger *slog.Log
 		panic(err)
 	}
 	api.Handle("GET /", http.FileServerFS(static))
+	dist, err := fs.Sub(web.Dist, "dist")
+	if err != nil {
+		panic(err)
+	}
+	api.Handle("GET /app/", appHandler(dist))
 	return recoverer(logger, logRequests(logger, api))
 }
 

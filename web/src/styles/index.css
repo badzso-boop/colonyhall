@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* `dark:` follows the .dark class on <html>, not only the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}

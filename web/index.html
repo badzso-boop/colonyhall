@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0a0a" />
+    <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
+    <title>Colonyhall</title>
+    <script>
+      // Apply the theme before the first paint (no flash). "system" is the default.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem("colony.theme"); } catch (e) { /* storage blocked */ }
+        var dark = t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

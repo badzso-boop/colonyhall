@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Colonyhall"
+  },
+  "scaffold": {
+    "title": "A PWA alapja kész",
+    "body": "Ez a React + Vite + TypeScript + Tailwind váz. A felületet (design system, oldalsáv, szálak, panelek) a 31. kör építi rá.",
+    "devPage": "Fejlesztői oldal megnyitása"
+  },
+  "theme": {
+    "label": "Téma",
+    "system": "Rendszer",
+    "light": "Világos",
+    "dark": "Sötét"
+  },
+  "language": {
+    "label": "Nyelv"
+  }
+}

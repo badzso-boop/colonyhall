@@ -5,7 +5,9 @@
 # Build output
 /bin/
 /dist/
-web/dist/
+# The PWA build; dist/.keep stays so `go build` works without Node.
+web/dist/*
+!web/dist/.keep
 web/node_modules/
 
 # Test and coverage

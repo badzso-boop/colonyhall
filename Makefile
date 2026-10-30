@@ -3,7 +3,7 @@ COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
-.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check
+.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -27,8 +27,19 @@ fake-agent:      ## Run the fake agent against the local server
 test:            ## Unit, contract (memory) and end-to-end tests
 	$(GO) test ./...
 
-test-web:        ## Frontend tests (Node)
+WEB_DEPS = web/node_modules/.package-lock.json
+
+$(WEB_DEPS): web/package.json web/package-lock.json
+	npm --prefix web ci --no-audit --no-fund
+
+web: $(WEB_DEPS) ## Build the PWA into web/dist (embedded, served at /app/)
+	npm --prefix web run build
+
+test-web: $(WEB_DEPS) ## Frontend tests: dev page (Node) and PWA (typecheck, lint, Vitest)
 	node --test internal/httpserver/web/*.test.mjs
+	npm --prefix web run typecheck
+	npm --prefix web run lint
+	npm --prefix web test
 
 test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
