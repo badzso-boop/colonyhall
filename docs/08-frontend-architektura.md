@@ -87,7 +87,7 @@ web/
     │   ├── Shell.tsx          # fejléc + oldalsáv + fő oszlop + panelhelyek
     │   ├── header/            # Header, Breadcrumb, CommandPalette, ActivityPopover…
     │   ├── sidebar/           # az oldalsáv kerete és csoportjai
-    │   ├── panes/             # panes.ts (tiszta reducer + URL-leképezés), PaneHost.tsx
+    │   ├── panes/             # WorkPane.tsx: a munkapanel fülsávja (a szabályok a shared/panes-ben)
     │   └── windows/           # windows.ts (tiszta reducer), FloatingWindow.tsx
     │
     ├── features/
@@ -117,6 +117,8 @@ web/
         ├── ui/                # a design system komponensei (Button, Dialog, Sheet, Avatar…)
         ├── lib/               # tiszta függvények: format, markdown, mention, fuzzy, shortcuts, cn
         ├── hooks/             # általános hookok (useMediaQuery, useLocalStorage…)
+        ├── panes/             # a panelkezelő: tiszta reducer, place(), URL-leképezés, usePanes()
+        ├── pwa/               # a service worker regisztrálása
         ├── i18n/              # i18next beállítás, nyelvváltás, közös szövegek (locales/)
         ├── theme/             # téma (rendszer / világos / sötét)
         └── styles/            # tokens.css, index.css
@@ -187,7 +189,7 @@ Kis funkciónál a fájlok elhagyhatók (például nincs `store.ts`), de a megl�
 
 ### Felület-állapot: Zustand, bennük tiszta reducerrel
 
-- A **szabályok tiszta függvények**, például `layout/panes/panes.ts` (állapot + művelet → új állapot, állapot ↔ URL) és `layout/windows/windows.ts`. Ezeket Vitest teszteli, React nélkül.
+- A **szabályok tiszta függvények**, például `shared/panes/panes.ts` (állapot + művelet → új állapot, állapot ↔ URL) és `layout/windows/windows.ts`. A panelkezelő a `shared`-ben van, mert funkciók is nyitnak panelt (a szál-összesítőre kattintva), a funkciók pedig nem importálhatnak a `layout`-ból; a kirajzolás a `layout`-ban marad. Ezeket Vitest teszteli, React nélkül.
 - A Zustand store csak becsomagolja őket: tárol, értesít, perzisztál.
 - **Ami megosztható, az az URL-ben van:** a megnyitott csatorna, a szál, a munkapanelek, egy beállítóablak füle. A link, az újratöltés és a vissza gomb így ugyanoda visz.
 - `localStorage` csak nézőnkénti kényelemre való (összecsukott csoport, téma, lebegő ablak helye). Mindig `try/catch`-ben, és nélküle is működnie kell.
@@ -235,7 +237,7 @@ Kis funkciónál a fájlok elhagyhatók (például nincs `store.ts`), de a megl�
 
 - Az útvonalakat az `app/routes.tsx` sorolja fel. A funkció oldalait a funkció `index.ts`-éből veszi, **lustán betöltve** (`React.lazy`), így minden funkció külön kódcsomag.
 - Az alapútvonal `/app` (`BrowserRouter basename="/app"`). A szerver minden `/app/…` útvonalra az `index.html`-t adja (`internal/httpserver/app.go`).
-- A paneleket és ablakokat leíró URL-paraméterek formáját a `layout/panes/panes.ts` határozza meg, a funkciók nem találnak ki sajátot.
+- A paneleket és ablakokat leíró URL-paraméterek formáját a `shared/panes/panes.ts` határozza meg, a funkciók nem találnak ki sajátot (`?thread=…&work=kind:agent:ref,…&tab=…`).
 
 ---
 
@@ -297,8 +299,8 @@ A `make test-web` blokkol, ahogy a backendnél a `make lint`. Részei:
 | típusok | `tsc --noEmit` (`strict`, `noUncheckedIndexedAccess`) |
 | nyelvi kulcsok egyezése minden névtérben | `src/app/i18n.test.ts` |
 | nyers színek tilalma | `src/shared/styles/no-raw-colors.test.ts` |
-| tokenek kontrasztja (WCAG AA) | a 31. kör adja hozzá |
-| generált API-típusok frissessége | `make gen-check` (a 31. kör adja hozzá) |
+| tokenek kontrasztja (WCAG AA) | `src/shared/styles/contrast.test.ts` |
+| generált API-típusok frissessége | `make gen-check` (`web/src/shared/api/schema.d.ts`) |
 
 Szabályt megkerülni (`eslint-disable`, `@ts-ignore`, `as any`) csak indoklással szabad, egy soros kommentben. Minden ilyet a jelentésben is fel kell sorolni.
 
@@ -313,6 +315,13 @@ Szabályt megkerülni (`eslint-disable`, `@ts-ignore`, `as any`) csak indokláss
 5. Az eseményekre az `events.ts` iratkozik fel, az `app/` regisztrálja.
 6. A tiszta logikához teszt, a fontos komponensekhez viselkedésteszt.
 7. `make test-web` zöld, a képernyők böngészőben megnézve.
+
+## 13/b. Tapasztalatok a 31. körből
+
+- **Vitest:** a `fsModuleCache` ki van kapcsolva (`vite.config.ts`), mert elavult `import.meta.glob`-eredményt tartott meg, így egy új funkció nyelvi fájljait nem látták a tesztek.
+- **Vitest és CSS:** a CSS-importok a tesztekben üresek, még `?raw`-val is. A CSS-t olvasó tesztek a lemezről olvasnak (`// @vitest-environment node`).
+- **Fájlnév-tesztek:** a nyers színeket kereső teszt a `.d.ts` fájlokat kihagyja, mert a generált `schema.d.ts` leírásai bármit tartalmazhatnak.
+- **Szöveg máshonnan a szerkesztőbe:** például sorhivatkozás a fájlböngészőből. Ez a `shared/lib/composerInsert.ts`-en át megy, nem közvetlen importtal.
 
 ## 14. Amit soha
 

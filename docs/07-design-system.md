@@ -157,8 +157,34 @@ Ikonok: **Lucide** (`lucide-react`), sűrű helyen 16 px, máshol 20 px. A logó
 
 ---
 
-## 9. Ami még jön
+## 9. A keret (31. kör)
 
-- **A 31. kör további részei:** a logó és az ikonok véglegesítése (PWA-ikonok, maszkolható ikon), a keret (fejléc, oldalsáv), a panelkezelő, a hírfolyam, a szerkesztő, a terminál- és fájlpanel, a billentyűparancsok súgója. Mindegyik ide is bekerül.
+- **Fejléc (48 px):**
+  - ☰, logó és munkaterület, morzsasor;
+  - középen a kereső, ami a parancspalettát nyitja (Ctrl K);
+  - jobbra: Válaszra vár (számláló), „⚡ N dolgozik”, adminnak a Claude-keret gyűrűje (borostyán 80 %-tól) és a „Mind áll” `HoldButton`, végül a felhasználói menü.
+  - Vészleállításkor az egész fejléc `accent` színű, „Feloldás” gombbal.
+- **Oldalsáv (260 px):**
+  - a Munkaterület oldalai, majd a saját szekciók;
+  - Csatornák (`#` vagy lakat);
+  - Közvetlen üzenetek (kör avatar);
+  - AI-beszélgetések: „Te és az agentek” (négyzet avatar állapotpöttyel), „Agentek egymás közt” (két átfedő avatar, `@a ↔ @b`, szem ikon, ha csak megfigyelés).
+  - Olvasatlan: félkövér; megemlítés: piros számláló; aktív sor: `accent-soft` háttér és 2 px piros bal csík.
+- **Panelek** (a szabályok: `shared/panes/panes.ts`):
+  - **széles (≥ 1280 px):** a szál jobbra kerül (440 px). A munkapanel (fülekkel: terminál, fájlok, agent-áttekintő) jobbra kerül, ha ott üres; ha a szál nyitva van, balra, az oldalsáv helyére (560 px), és ilyenkor az oldalsáv fiókként nyílik.
+  - **közepes:** egy jobb oldali hely, az elrejtett panelre egy váltósávval lehet visszaváltani.
+  - **telefon:** egymás után nyíló képernyők, „Vissza” gombbal.
+- **Szerkesztő:**
+  - lekerekített keret;
+  - a „+” menü (fájl, telefonon kamera), Fájlok és Terminál gomb, súgó (csak ha elfér), piros küldés gomb;
+  - fölötte a tálca (chipek folyamatjelző csíkkal) és a felugró listák (`@`, `/`).
+- **Üzenet:**
+  - 36 px avatar, név, agentnél `@handle` monóban, idő a teljes dátummal súgóban;
+  - ha téged említenek: `accent-soft` háttér és 2 px piros bal csík;
+  - szál-összesítő: résztvevők, „N válasz” `accent-text`-tel, utolsó válasz ideje.
+- **Billentyűparancsok:** a `?` súgó felsorolja mindet. Ctrl K, `?`, Alt ↑/↓, Alt Shift ↑/↓ (olvasatlanok), Esc (panel), `r` (válasz szálban), Ctrl Shift F (fájlok), Ctrl Shift X (terminálok; a Ctrl Shift T a böngészőé), ↑ üres szerkesztőben.
+
+## 10. Ami még jön
+
 - **32. kör:** a lebegő ablak részletei.
 - **33. kör:** a gépek és agentek színpalettája, a nagy beállítóablak, a mappaválasztó.
