@@ -1,3 +1,34 @@
 {
-  "title": "Terminals"
+  "title": "Terminals",
+  "empty": "This agent has no terminals.",
+  "status": {
+    "running": "running ⏳",
+    "finished": "done ✅ exit {{code}}",
+    "error": "error ⚠️ exit {{code}}",
+    "killed": "stopped ⛔"
+  },
+  "started": "started {{when}}",
+  "thread": "Thread",
+  "output": "Output",
+  "jumpEnd": "↓ Jump to the end",
+  "copyOutput": "Copy the output",
+  "copySsh": "Copy the SSH command",
+  "ssh": "Attach on the machine ({{host}}):",
+  "copied": "Copied",
+  "stop": "Stop",
+  "stopTitle": "Stop the terminal {{name}}?",
+  "stopBody": "The running command and its children stop. This cannot be undone.",
+  "cancel": "Cancel",
+  "stopped": "The terminal stopped.",
+  "truncated": "Only the last 1000 lines are shown.",
+  "refreshing": "Refreshes every 2 seconds",
+  "noChannel": "You share no channel with this agent.",
+  "errors": {
+    "host_offline": "The machine is not reachable now.",
+    "timeout": "The machine did not answer in time.",
+    "denied": "You are not allowed to do this.",
+    "not_found": "This terminal does not exist.",
+    "generic": "The request failed."
+  },
+  "retry": "Retry"
 }
