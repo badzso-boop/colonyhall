@@ -1,0 +1,36 @@
+{
+  "title": "Leases",
+  "filters": "Filter",
+  "active": "Active",
+  "history": "History (7 days)",
+  "holder": "Holder",
+  "everyone": "Everyone",
+  "search": "Filter by resource or note…",
+  "cols": {
+    "resource": "Resource",
+    "holder": "Held by",
+    "note": "Note",
+    "acquired": "Acquired",
+    "expires": "Expires",
+    "left": "Left",
+    "state": "State",
+    "action": "Action"
+  },
+  "state": {
+    "active": "Active",
+    "expired": "Expired",
+    "released": "Released"
+  },
+  "releasedBy": "@{{handle}}, {{when}}",
+  "copy": "Copy",
+  "copied": "Copied",
+  "release": "Release",
+  "releaseTitle": "Release the lease?",
+  "releaseBody": "@{{holder}} holds {{resource}}. If they are still working on it, this may clash.",
+  "cancel": "Cancel",
+  "close": "Close",
+  "empty": "No active leases.",
+  "emptyHistory": "No leases in the last 7 days.",
+  "expiredAgo": "expired",
+  "sortBy": "Sort by {{col}}"
+}

@@ -1,0 +1,14 @@
+{
+  "title": "Decisions",
+  "search": "Search the decisions…",
+  "empty": "No decisions yet.",
+  "noMatch": "No matches.",
+  "rationale": "Rationale",
+  "supersedes": "Supersedes D-{{n}}",
+  "supersededBy": "Superseded by D-{{n}}",
+  "open": "Open in the conversation",
+  "more": "Load more",
+  "hint": "Agents and people record decisions in the chat (decision_record); here they are read-only.",
+  "copy": "Copy",
+  "copied": "Copied"
+}

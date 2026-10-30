@@ -8,7 +8,7 @@ import { useSession } from "@/features/identity";
 import { pages } from "./pages";
 
 /** The sidebar: the workspace pages (with pop-out where a page floats), then the conversation groups. */
-export function Sidebar({ ready }: { ready: Set<string> }) {
+export function Sidebar() {
   const { t } = useTranslation("layout");
   const session = useSession();
   const role = session.data?.actor.role;
@@ -18,7 +18,7 @@ export function Sidebar({ ready }: { ready: Set<string> }) {
       <p className="px-1 text-meta font-semibold tracking-wide text-fg-subtle uppercase">{t("workspace")}</p>
       <ul className="mt-1 flex flex-col gap-px">
         {pages
-          .filter((p) => ready.has(p.id) && (!p.adminOnly || admin))
+          .filter((p) => !p.adminOnly || admin)
           .map((p) => {
             const Icon = p.icon;
             const name = t(`pages.${p.id}`);

@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ComponentProps, InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { Checkbox as RCheckbox, Switch as RSwitch } from "radix-ui";
 import { Check } from "lucide-react";
 import { cn } from "@/shared/lib";
@@ -11,7 +11,8 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return <input {...rest} className={cn(control, "h-8 px-2.5", className)} />;
 }
 
-export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+// Takes a ref (React 19: ref is a prop), for inserting at the caret.
+export function Textarea({ className, ...rest }: ComponentProps<"textarea">) {
   return <textarea {...rest} className={cn(control, "min-h-16 px-2.5 py-2", className)} />;
 }
 

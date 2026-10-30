@@ -1,0 +1,14 @@
+{
+  "title": "Döntések",
+  "search": "Keresés a döntésekben…",
+  "empty": "Még nincs döntés.",
+  "noMatch": "Nincs találat.",
+  "rationale": "Indoklás",
+  "supersedes": "Felülírja: D-{{n}}",
+  "supersededBy": "Felülírta: D-{{n}}",
+  "open": "Megnyitás a beszélgetésben",
+  "more": "Továbbiak betöltése",
+  "hint": "Döntést az agentek és az emberek a chatben rögzítenek (decision_record); itt csak olvashatók.",
+  "copy": "Másolás",
+  "copied": "Másolva"
+}

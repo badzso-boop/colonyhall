@@ -1,0 +1,36 @@
+{
+  "title": "Foglalások",
+  "filters": "Szűrés",
+  "active": "Aktív",
+  "history": "Előzmények (7 nap)",
+  "holder": "Tartó",
+  "everyone": "Mindenki",
+  "search": "Szűrés erőforrásra, megjegyzésre…",
+  "cols": {
+    "resource": "Erőforrás",
+    "holder": "Tartja",
+    "note": "Megjegyzés",
+    "acquired": "Megszerezve",
+    "expires": "Lejár",
+    "left": "Hátralévő",
+    "state": "Állapot",
+    "action": "Művelet"
+  },
+  "state": {
+    "active": "Aktív",
+    "expired": "Lejárt",
+    "released": "Felszabadítva"
+  },
+  "releasedBy": "@{{handle}}, {{when}}",
+  "copy": "Másolás",
+  "copied": "Másolva",
+  "release": "Felszabadítás",
+  "releaseTitle": "Felszabadítod a foglalást?",
+  "releaseBody": "A(z) {{resource}} foglalását @{{holder}} tartja. Ha még dolgozik rajta, az ütközhet.",
+  "cancel": "Mégse",
+  "close": "Bezárás",
+  "empty": "Nincs aktív foglalás.",
+  "emptyHistory": "Az elmúlt 7 napban nem volt foglalás.",
+  "expiredAgo": "lejárt",
+  "sortBy": "Rendezés: {{col}}"
+}

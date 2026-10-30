@@ -1,8 +1,11 @@
 import { Route, Routes } from "react-router";
 import { ConversationPage } from "@/features/conversation";
+import { DecisionsPage } from "@/features/decisions";
 import { DesignPage } from "@/features/design";
 import { LoginPage } from "@/features/identity";
+import { LeasesPage } from "@/features/leases";
 import { NotesPage } from "@/features/notes";
+import { RulesPage } from "@/features/rules";
 import { SchedulesPage } from "@/features/schedules";
 import { WikiIndexPage, WikiTopicPage } from "@/features/wiki";
 import { CalendarPage, TasksPage } from "@/features/planner";
@@ -32,6 +35,9 @@ export function AppRoutes() {
         <Route path="schedules" element={<SchedulesPage />} />
         <Route path="wiki" element={<WikiIndexPage />} />
         <Route path="wiki/:slug" element={<WikiTopicPage />} />
+        <Route path="leases" element={<LeasesPage />} />
+        <Route path="rules" element={<RulesPage />} />
+        <Route path="decisions" element={<DecisionsPage />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>
