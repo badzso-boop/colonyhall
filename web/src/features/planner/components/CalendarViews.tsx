@@ -110,7 +110,7 @@ export function TimeGrid({ days, byDay, calendars, now, wide }: ViewProps & { wi
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // 07:00 at the top; 0–24 stays scrollable.
-    if (scroller.current) scroller.current.scrollTop = 7 * HourPx;
+    if (scroller.current) scroller.current.scrollTop = 7 * HourPx - 12;
   }, []);
   const today = dayKey(now);
   const cols = { gridTemplateColumns: `3.5rem repeat(${days.length}, minmax(0, 1fr))` };

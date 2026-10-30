@@ -46,7 +46,14 @@ export default function SchedulesPage() {
   };
   const copy = (s: Schedule) =>
     openScheduleBuilder({ body: s.body, channelId: s.channel_id, threadRootId: s.thread_root_id, cron: s.cron || undefined, timezone: s.timezone, catchUp: s.catch_up });
-  const when = (iso?: string) => (iso ? <time title={fullTime(iso, locale)}>{relativeTime(iso, now, locale)}</time> : t("never"));
+  const when = (iso?: string) =>
+    iso ? (
+      <time dateTime={iso} title={`${fullTime(iso, locale)} (${relativeTime(iso, now, locale)})`}>
+        {new Date(iso).toLocaleString(locale, { month: "short", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" })}
+      </time>
+    ) : (
+      t("never")
+    );
 
   return (
     <div className="flex h-full flex-col">
