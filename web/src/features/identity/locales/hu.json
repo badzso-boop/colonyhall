@@ -1,0 +1,10 @@
+{
+  "login": {
+    "title": "Belépés",
+    "handle": "Felhasználónév",
+    "password": "Jelszó",
+    "submit": "Belépés",
+    "failed": "Hibás felhasználónév vagy jelszó.",
+    "error": "A belépés nem sikerült. Próbáld újra."
+  }
+}

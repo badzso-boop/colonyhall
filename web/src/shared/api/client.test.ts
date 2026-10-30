@@ -1,4 +1,4 @@
-import { ApiError, createApi, unwrap } from "./client";
+import { ApiError, createApi, onUnauthorized, setCsrfToken, unwrap } from "./client";
 
 // Tests run outside a page, so the client needs an absolute base URL.
 const api = createApi("http://localhost/api/v1");
@@ -40,4 +40,31 @@ test("unwrap throws an ApiError with the problem detail", async () => {
     expect((e as ApiError).status).toBe(403);
     expect((e as ApiError).message).toBe("not allowed in this channel");
   }
+});
+
+test("state-changing requests carry the CSRF token, reads do not", async () => {
+  setCsrfToken("csrf-1");
+  const seen: Array<[string, string | null]> = [];
+  const fetchMock = vi.fn(async (req: Request) => {
+    seen.push([req.method, req.headers.get("X-CSRF-Token")]);
+    return new Response("{}", { headers: { "Content-Type": "application/json" } });
+  });
+  await api.GET("/me", { fetch: fetchMock });
+  await api.POST("/auth/logout", { fetch: fetchMock });
+  expect(seen).toEqual([
+    ["GET", null],
+    ["POST", "csrf-1"],
+  ]);
+  setCsrfToken("");
+});
+
+test("a 401 calls the unauthorized handler, except for the login itself", async () => {
+  const handler = vi.fn();
+  onUnauthorized(handler);
+  const fetch401 = vi.fn(async () => new Response("{}", { status: 401, headers: { "Content-Type": "application/json" } }));
+  await api.GET("/me", { fetch: fetch401 });
+  expect(handler).toHaveBeenCalledOnce();
+  await api.POST("/auth/login", { body: { handle: "x", password: "y" }, fetch: fetch401 });
+  expect(handler).toHaveBeenCalledOnce();
+  onUnauthorized(() => {});
 });

@@ -4,8 +4,36 @@ import type { components, paths } from "./schema";
 // The typed REST client: paths, parameters and bodies come from the
 // generated schema.d.ts (api/openapi.yaml → `make gen`), never by hand.
 // The browser sends the session cookie; scripts use Bearer tokens.
-export function createApi(baseUrl = "/api/v1") {
-  return createClient<paths>({ baseUrl, credentials: "same-origin" });
+let csrfToken = "";
+let unauthorized: () => void = () => {};
+
+/** The CSRF token of the cookie session (from /auth/session or /auth/login). */
+export function setCsrfToken(token: string): void {
+  csrfToken = token;
+}
+
+/** Called on any 401 (the session expired): the app sends the user to /login. */
+export function onUnauthorized(handler: () => void): void {
+  unauthorized = handler;
+}
+
+export function createApi(baseUrl = `${globalThis.location?.origin ?? ""}/api/v1`) {
+  // fetch is looked up on each call (not captured here), so tests can stub it.
+  const client = createClient<paths>({ baseUrl, credentials: "same-origin", fetch: (req) => globalThis.fetch(req) });
+  client.use({
+    onRequest({ request }) {
+      // Browser requests that change state carry the session's CSRF token.
+      if (request.method !== "GET" && request.method !== "HEAD" && csrfToken) {
+        request.headers.set("X-CSRF-Token", csrfToken);
+      }
+      return request;
+    },
+    onResponse({ response, request }) {
+      if (response.status === 401 && !new URL(request.url).pathname.endsWith("/auth/login")) unauthorized();
+      return response;
+    },
+  });
+  return client;
 }
 
 export const api = createApi();

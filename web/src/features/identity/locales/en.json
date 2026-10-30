@@ -1,0 +1,10 @@
+{
+  "login": {
+    "title": "Sign in",
+    "handle": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "failed": "Wrong username or password.",
+    "error": "Signing in failed. Try again."
+  }
+}

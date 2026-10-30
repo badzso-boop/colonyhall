@@ -2443,7 +2443,8 @@ export interface components {
         WsHello: {
             /** @enum {string} */
             type: "hello";
-            token: string;
+            /** @description Agents and scripts: a Bearer token. Browsers omit it; the session cookie of the upgrade request authenticates them. */
+            token?: string;
             /**
              * Format: int64
              * @description Last event seq the client has; omit on first connect

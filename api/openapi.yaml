@@ -2380,10 +2380,10 @@ components:
     # WebSocket frames on /ws/ui (not REST, listed here so both sides share the types).
     WsHello:
       type: object
-      required: [type, token]
+      required: [type]
       properties:
         type: { type: string, enum: [hello] }
-        token: { type: string }
+        token: { type: string, description: "Agents and scripts: a Bearer token. Browsers omit it; the session cookie of the upgrade request authenticates them." }
         last_seq: { type: integer, format: int64, description: Last event seq the client has; omit on first connect }
     WsWelcome:
       type: object
