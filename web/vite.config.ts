@@ -45,7 +45,7 @@ export default defineConfig({
     fsModuleCache: false,
     environment: "jsdom",
     globals: true,
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx,mjs}"],
     setupFiles: ["src/app/test-setup.ts"],
   },
 });
