@@ -50,7 +50,8 @@
     "readOnly": "You can only read this conversation.",
     "mentions": "People and agents to mention",
     "commandsLabel": "Commands",
-    "noAgent": "There is no agent in this conversation."
+    "noAgent": "There is no agent in this conversation.",
+    "schedule": "Schedule…"
   },
   "commands": {
     "schedule": "A one-off scheduled message",

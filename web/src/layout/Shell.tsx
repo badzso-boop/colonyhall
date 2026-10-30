@@ -7,6 +7,7 @@ import { cn, useShortcut } from "@/shared/lib";
 import { useLocalStorage, useWidth } from "@/shared/hooks";
 import { place, usePanes } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
+import { ScheduleBuilderHost } from "@/features/schedules";
 import { BottomBar } from "./BottomBar";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionBar } from "./ConnectionBar";
@@ -26,7 +27,7 @@ import { FloatingWindows } from "./windows/FloatingWindows";
  *  narrow (< 768): one screen at a time with a back button, a bottom bar.
  */
 // The pages that exist so far (round 32 adds them one by one).
-const readyPages = new Set(["tasks", "calendar", "notes", "design"]);
+const readyPages = new Set(["tasks", "calendar", "notes", "schedules", "design"]);
 
 export function Shell() {
   const { t } = useTranslation("layout");
@@ -138,6 +139,7 @@ export function Shell() {
       </div>
       {placement.screen === "main" ? <BottomBar /> : null}
       <FloatingWindows />
+      <ScheduleBuilderHost />
       <CommandPalette />
       <ShortcutHelp />
     </div>

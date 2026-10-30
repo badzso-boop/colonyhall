@@ -3,6 +3,7 @@ import { ConversationPage } from "@/features/conversation";
 import { DesignPage } from "@/features/design";
 import { LoginPage } from "@/features/identity";
 import { NotesPage } from "@/features/notes";
+import { SchedulesPage } from "@/features/schedules";
 import { CalendarPage, TasksPage } from "@/features/planner";
 import { Shell } from "@/layout";
 import { Home } from "./Home";
@@ -27,6 +28,7 @@ export function AppRoutes() {
         <Route path="tasks" element={<TasksPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="notes" element={<NotesPage />} />
+        <Route path="schedules" element={<SchedulesPage />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

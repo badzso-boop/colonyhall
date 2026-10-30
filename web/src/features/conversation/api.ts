@@ -50,6 +50,13 @@ export function useThread(rootId: string | null) {
   });
 }
 
+/** The composer's /schedule, /daily and /cron (the builder is the schedules feature's). */
+export function useCreateSchedule() {
+  return useMutation({
+    mutationFn: async (body: Schemas["CreateScheduleRequest"]) => unwrap(await api.POST("/schedules", { body })),
+  });
+}
+
 export function useSendMessage(channelId: string) {
   return useMutation({
     mutationFn: async (body: Schemas["SendMessageRequest"]) =>

@@ -50,7 +50,8 @@
     "readOnly": "Csak olvasási jogod van ebben a beszélgetésben.",
     "mentions": "Megemlíthető résztvevők",
     "commandsLabel": "Parancsok",
-    "noAgent": "Ebben a beszélgetésben nincs agent."
+    "noAgent": "Ebben a beszélgetésben nincs agent.",
+    "schedule": "Ütemezés…"
   },
   "commands": {
     "schedule": "Egyszeri ütemezett üzenet",

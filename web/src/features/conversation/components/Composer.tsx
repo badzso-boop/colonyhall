@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, insertMention, parseCommand, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
+import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
+import { activeMention, cn, commandList, insertMention, openScheduleBuilder, parseCommand, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
 import { useAnswerQuestion } from "@/features/questions";
-import { useCreateSchedule } from "@/features/schedules";
-import { useRetract, useSendMessage } from "../api";
+import { useCreateSchedule, useRetract, useSendMessage } from "../api";
 import type { AttachmentTray } from "../attachments";
 
 type Props = {
@@ -262,6 +261,22 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
           <MenuContent align="start">
             <MenuItem icon={<Paperclip aria-hidden className="size-4" />} onSelect={() => fileInput.current?.click()}>
               {t("composer.uploadFile")}
+            </MenuItem>
+            <MenuItem
+              icon={<CalendarClock aria-hidden className="size-4" />}
+              onSelect={() =>
+                openScheduleBuilder({
+                  body: text,
+                  channelId,
+                  threadRootId,
+                  onSaved: () => {
+                    setText("");
+                    setCaret(0);
+                  },
+                })
+              }
+            >
+              {t("composer.schedule")}
             </MenuItem>
             {width === "narrow" ? (
               <MenuItem icon={<Camera aria-hidden className="size-4" />} onSelect={() => cameraInput.current?.click()}>
