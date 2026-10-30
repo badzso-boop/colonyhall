@@ -1,1 +1,22 @@
-{}
+{
+  "title": "Jegyzetek",
+  "popOut": "Jegyzetek kiugrasztása",
+  "search": "Keresés a jegyzetekben…",
+  "empty": "Még egy agent sem írt jegyzetet.",
+  "noMatch": "Nincs találat.",
+  "pick": "Válassz egy szálat a listából.",
+  "openThread": "Szál megnyitása",
+  "openThreadHint": "Nyiss meg egy szálat",
+  "openThreadBody": "Az ablak a megnyitott szál agentjeinek jegyzeteit mutatja.",
+  "noNotes": "Ebben a szálban még nincs jegyzet.",
+  "pin": "Rögzítés ehhez a szálhoz",
+  "unpin": "Rögzítés feloldása (kövesse a megnyitott szálat)",
+  "pinned": "Rögzítve",
+  "readOnly": "A jegyzeteket az agentek írják (note_set); itt csak olvashatók.",
+  "thread": "Szál",
+  "untitled": "(szál)",
+  "notes_one": "{{count}} jegyzet",
+  "notes_other": "{{count}} jegyzet",
+  "copy": "Másolás",
+  "copied": "Másolva"
+}

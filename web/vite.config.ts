@@ -47,6 +47,9 @@ export default defineConfig({
     // The calendar's tests need a zone with a clock change (Europe/Budapest).
     env: { TZ: "Europe/Budapest" },
     globals: true,
+    // Each file builds its own jsdom; with a worker per core, workers on a
+    // busy WSL host miss the start-up timeout.
+    maxWorkers: "50%",
     include: ["src/**/*.test.{ts,tsx,mjs}"],
     setupFiles: ["src/app/test-setup.ts"],
   },

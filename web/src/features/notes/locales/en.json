@@ -1,1 +1,22 @@
-{}
+{
+  "title": "Notes",
+  "popOut": "Pop out the notes",
+  "search": "Search the notes…",
+  "empty": "No agent has written a note yet.",
+  "noMatch": "No matches.",
+  "pick": "Pick a thread from the list.",
+  "openThread": "Open the thread",
+  "openThreadHint": "Open a thread",
+  "openThreadBody": "The window shows the notes of the agents in the open thread.",
+  "noNotes": "No notes in this thread yet.",
+  "pin": "Pin to this thread",
+  "unpin": "Unpin (follow the open thread)",
+  "pinned": "Pinned",
+  "readOnly": "Agents write the notes (note_set); here they are read-only.",
+  "thread": "Thread",
+  "untitled": "(thread)",
+  "notes_one": "{{count}} note",
+  "notes_other": "{{count}} notes",
+  "copy": "Copy",
+  "copied": "Copied"
+}
