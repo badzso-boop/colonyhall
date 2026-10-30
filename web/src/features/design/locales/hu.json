@@ -53,7 +53,11 @@
     "badgeDone": "kész ✅ exit 0",
     "badgeRunning": "fut ⏳",
     "badgeError": "hiba ⚠️ exit 1",
-    "badgeInfo": "info"
+    "badgeInfo": "info",
+    "brandOnDark": "Sötét háttéren",
+    "brandOnLight": "Világos háttéren",
+    "brandOnRed": "Piros háttéren (egyszínű)",
+    "brandIcons": "PWA-ikonok: sima, maszkolható, Apple"
   },
   "typeNames": {
     "display": "Kijelző 24",

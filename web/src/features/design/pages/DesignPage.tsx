@@ -32,6 +32,15 @@ import {
   toast,
 } from "@/shared/ui";
 
+const brand = `${import.meta.env.BASE_URL}brand/`;
+// The single-colour mark painted with a token colour (an <img> cannot use currentColor).
+const monoMask = {
+  maskImage: `url(${brand}mark-mono.svg)`,
+  WebkitMaskImage: `url(${brand}mark-mono.svg)`,
+  maskSize: "contain",
+  maskRepeat: "no-repeat",
+} as const;
+
 // The colour tokens, in the order of tokens.css.
 const colourTokens = [
   "bg", "surface", "surface-raised", "surface-sunken", "border", "border-strong",
@@ -253,13 +262,33 @@ export default function DesignPage() {
         </Section>
 
         <Section title={t("sections.brand")}>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="grid size-20 place-items-center rounded-lg bg-terminal-bg">
-              <BrandMark className="size-12" />
-            </div>
-            <div className="grid size-20 place-items-center rounded-lg border border-border bg-surface">
-              <BrandMark className="size-12" />
-            </div>
+          <div className="flex flex-wrap items-end gap-6">
+            <figure className="flex flex-col items-center gap-2">
+              <div className="grid h-20 w-56 place-items-center rounded-lg bg-brand-ink">
+                <img src={`${brand}logo-on-dark.svg`} alt="Colonyhall" className="h-8" />
+              </div>
+              <figcaption className="text-meta text-fg-muted">{t("sample.brandOnDark")}</figcaption>
+            </figure>
+            <figure className="flex flex-col items-center gap-2">
+              <div className="grid h-20 w-56 place-items-center rounded-lg border border-border bg-brand-paper">
+                <img src={`${brand}logo.svg`} alt="Colonyhall" className="h-8" />
+              </div>
+              <figcaption className="text-meta text-fg-muted">{t("sample.brandOnLight")}</figcaption>
+            </figure>
+            <figure className="flex flex-col items-center gap-2">
+              <div className="grid size-20 place-items-center rounded-lg bg-accent">
+                <span aria-hidden className="size-12 bg-accent-fg" style={monoMask} />
+              </div>
+              <figcaption className="text-meta text-fg-muted">{t("sample.brandOnRed")}</figcaption>
+            </figure>
+            <figure className="flex flex-col items-center gap-2">
+              <div className="flex items-end gap-3">
+                <img src={`${brand}icon-192.png`} alt="" className="size-16" />
+                <img src={`${brand}maskable-512.png`} alt="" className="size-16 rounded-full" />
+                <img src={`${brand}apple-touch-icon.png`} alt="" className="size-16 rounded-[22%]" />
+              </div>
+              <figcaption className="text-meta text-fg-muted">{t("sample.brandIcons")}</figcaption>
+            </figure>
           </div>
         </Section>
       </div>

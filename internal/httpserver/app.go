@@ -22,6 +22,10 @@ func appHandler(dist fs.FS) http.Handler {
 			return
 		}
 		if st, err := fs.Stat(dist, name); err == nil && !st.IsDir() && name != ".keep" {
+			if path.Ext(name) == ".webmanifest" {
+				// Not in Go's MIME table; browsers want this type for the PWA manifest.
+				w.Header().Set("Content-Type", "application/manifest+json")
+			}
 			if strings.HasPrefix(name, "assets/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {

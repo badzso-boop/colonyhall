@@ -68,6 +68,11 @@ export default defineConfig([
     extends: [js.configs.recommended, tseslint.configs.recommended],
   },
   {
+    files: ["sw/**/*.js"],
+    extends: [js.configs.recommended],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
     files: ["scripts/**/*.mjs", "eslint.config.js"],
     extends: [js.configs.recommended],
     languageOptions: { globals: globals.node },

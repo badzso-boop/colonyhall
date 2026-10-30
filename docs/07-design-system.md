@@ -43,6 +43,7 @@ A komponensek **soha nem használnak nyers színt** (`#e5383b`, `bg-red-500`), c
 | `focus-ring` | piros, 50% | piros, 60% | a fókusz körvonala |
 | `overlay` | fekete, 60% | fekete, 65% | ablakok mögötti sötétítés |
 | `terminal-bg` / `terminal-fg` | `#0f0d0d` / `#e9e4e3` | ugyanaz | **a terminál mindig sötét**, mindkét témában |
+| `brand-paper` / `brand-ink` | `#faf8f7` / `#0b0a0a` | ugyanaz | témától független háttér a logó és az ikonok bemutatásához |
 
 **Miért két piros?** Sötét témában ugyanaz a piros nem lehet egyszerre jól olvasható szöveg a sötét felületen és jó háttér a fehér szövegnek. Ezért van külön `accent` (kitöltés) és `accent-text` (szöveg).
 

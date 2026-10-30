@@ -20,10 +20,11 @@ func serveApp(t *testing.T, dist fstest.MapFS, target string) *httptest.Response
 }
 
 var builtApp = fstest.MapFS{
-	"index.html":          {Data: []byte("<!doctype html><title>Colonyhall</title>")},
-	"assets/index-abc.js": {Data: []byte("console.log(1)")},
-	"brand/favicon.svg":   {Data: []byte("<svg/>")},
-	".keep":               {Data: nil},
+	"index.html":           {Data: []byte("<!doctype html><title>Colonyhall</title>")},
+	"assets/index-abc.js":  {Data: []byte("console.log(1)")},
+	"brand/favicon.svg":    {Data: []byte("<svg/>")},
+	"manifest.webmanifest": {Data: []byte(`{"name":"Colonyhall"}`)},
+	".keep":                {Data: nil},
 }
 
 func TestAppServesIndexAndFallsBackForRoutes(t *testing.T) {
@@ -52,6 +53,13 @@ func TestAppCachesHashedAssetsOnly(t *testing.T) {
 	rec = serveApp(t, builtApp, "/app/brand/favicon.svg")
 	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "no-cache" {
 		t.Fatalf("public file: %d %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+}
+
+func TestAppServesTheManifestWithItsType(t *testing.T) {
+	rec := serveApp(t, builtApp, "/app/manifest.webmanifest")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Fatalf("manifest: %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
 }
 

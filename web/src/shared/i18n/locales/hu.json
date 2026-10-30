@@ -9,5 +9,9 @@
   "language": {
     "label": "Nyelv"
   },
-  "close": "Bezárás"
+  "close": "Bezárás",
+  "update": {
+    "available": "Új verzió érhető el",
+    "reload": "Frissítés"
+  }
 }
