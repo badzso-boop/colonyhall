@@ -62,5 +62,6 @@
   "isDeleted": "This topic is deleted.",
   "notFound": "No such topic.",
   "copy": "Copy",
-  "copied": "Copied"
+  "copied": "Copied",
+  "skip": "… {{count}} unchanged lines …"
 }

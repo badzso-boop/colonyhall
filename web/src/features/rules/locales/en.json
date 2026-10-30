@@ -35,5 +35,6 @@
   "copy": "Copy",
   "copied": "Copied",
   "saved": "Saved: version {{version}}",
-  "read": "Read"
+  "read": "Read",
+  "skip": "… {{count}} unchanged lines …"
 }

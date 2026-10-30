@@ -247,7 +247,9 @@ export function FloatingWindows() {
   }
   return (
     <>
-      {open.map((k) => (
+      {/* A fixed DOM order: z-index stacks them. Reordering the nodes on focus
+          would make the browser drop the click that focused the window. */}
+      {KINDS.filter((k) => wins[k].state === "open").map((k) => (
         <FloatingWindow key={k} kind={k} />
       ))}
       {KINDS.filter((k) => wins[k].state === "min").map((k) => (

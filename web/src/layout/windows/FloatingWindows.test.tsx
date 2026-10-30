@@ -65,3 +65,18 @@ test("on a phone an open window is a sheet", () => {
   act(() => dispatchWindow({ type: "open", kind: "calendar" }));
   expect(screen.getByRole("dialog", { name: "Naptár" }).getAttribute("aria-modal")).not.toBe("false");
 });
+
+test("bringing a window to the front keeps the DOM order, so the click that did it still lands", () => {
+  setup();
+  act(() => {
+    dispatchWindow({ type: "open", kind: "tasks" });
+    dispatchWindow({ type: "open", kind: "calendar" });
+  });
+  const order = () => screen.getAllByRole("dialog").map((d) => d.getAttribute("aria-labelledby"));
+  const before = order();
+  const tasks = screen.getByRole("dialog", { name: "Feladatok" });
+  fireEvent.pointerDown(tasks);
+  expect(useWindows.getState().wins.tasks.z).toBeGreaterThan(useWindows.getState().wins.calendar.z);
+  expect(order()).toEqual(before);
+  expect(screen.getByRole("dialog", { name: "Feladatok" })).toBe(tasks);
+});

@@ -35,5 +35,6 @@
   "copy": "Másolás",
   "copied": "Másolva",
   "saved": "Mentve: {{version}}. verzió",
-  "read": "Olvasás"
+  "read": "Olvasás",
+  "skip": "… {{count}} változatlan sor …"
 }

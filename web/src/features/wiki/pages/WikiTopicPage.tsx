@@ -5,12 +5,12 @@ import { ArrowLeft, BookOpen, History, Link2, Pencil, Quote, Trash2 } from "luci
 import { useActors, useSession, type Actor } from "@/features/identity";
 import { ApiError } from "@/shared/api";
 import { localeOf } from "@/shared/i18n";
-import { cn, fullTime, relativeTime } from "@/shared/lib";
-import { Button, Dialog, EmptyState, IconButton, Input, Markdown, PageHeader, Select, Sheet, Skeleton, toast } from "@/shared/ui";
+import { fullTime, relativeTime } from "@/shared/lib";
+import { Button, Dialog, DiffView, EmptyState, IconButton, Input, Markdown, PageHeader, Select, Sheet, Skeleton, toast } from "@/shared/ui";
 import { markTopicSeen, useAppend, useDeleteTopic, useEditTopic, useWikiPage, useWikiRevisions, type WikiPage } from "../api";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { ActorAvatar } from "../components/People";
-import { lineDiff, quote, wikiPosts, type Post, type Revision } from "../posts";
+import { quote, wikiPosts, type Post, type Revision } from "../posts";
 
 function PostCard({ post, author, onQuote, canQuote }: { post: Extract<Post, { kind: "post" }>; author?: Actor; onQuote: () => void; canQuote: boolean }) {
   const { t, i18n } = useTranslation("wiki");
@@ -67,7 +67,6 @@ function HistorySheet({ revisions, open, onOpenChange, actors }: { revisions: Re
   const [to, setTo] = useState(last);
   const a = sorted.find((r) => r.rev === from)?.body ?? "";
   const b = sorted.find((r) => r.rev === to)?.body ?? "";
-  const diff = useMemo(() => lineDiff(a, b), [a, b]);
   const option = (r: Revision) => (
     <option key={r.rev} value={r.rev}>
       {r.rev}. {t(`kinds.${r.kind}`)} · @{actors.get(r.author_id)?.handle ?? "?"} · {new Date(r.created_at).toLocaleString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -90,14 +89,7 @@ function HistorySheet({ revisions, open, onOpenChange, actors }: { revisions: Re
             </Select>
           </label>
         </div>
-        <pre aria-label={t("history")} className="overflow-x-auto rounded-md border border-border bg-surface-sunken p-2 font-mono text-meta leading-relaxed">
-          {diff.map((l, i) => (
-            <div key={i} className={cn("px-1 whitespace-pre-wrap", l.op === "add" && "bg-success-soft text-success", l.op === "del" && "bg-danger-soft text-danger line-through")}>
-              {l.op === "add" ? "+ " : l.op === "del" ? "− " : "  "}
-              {l.text || " "}
-            </div>
-          ))}
-        </pre>
+        <DiffView a={a} b={b} label={t("history")} skipLabel={(n) => t("skip", { count: n })} />
       </div>
     </Sheet>
   );

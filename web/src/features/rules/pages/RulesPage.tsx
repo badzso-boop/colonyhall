@@ -4,8 +4,8 @@ import { GitCompare, History, Pencil, ScrollText } from "lucide-react";
 import { useActors, useSession } from "@/features/identity";
 import { localeOf } from "@/shared/i18n";
 import { useWidth } from "@/shared/hooks";
-import { cn, lineDiff, relativeTime } from "@/shared/lib";
-import { Button, Dialog, EmptyState, Markdown, PageHeader, Select, Sheet, Skeleton, Tab, TabList, TabPanel, Tabs, Textarea, Tooltip, toast } from "@/shared/ui";
+import { cn, relativeTime } from "@/shared/lib";
+import { Button, Dialog, DiffView, EmptyState, Markdown, PageHeader, Select, Sheet, Skeleton, Tab, TabList, TabPanel, Tabs, Textarea, Tooltip, toast } from "@/shared/ui";
 import { useRules, useRulesVersion, useSaveRules } from "../api";
 import { MaxLen, lengthState, placeholders, renderRules, segments, type Placeholder } from "../model";
 
@@ -38,20 +38,6 @@ function Reading({ text }: { text: string }) {
         ),
       )}
     </div>
-  );
-}
-
-function Diff({ a, b }: { a: string; b: string }) {
-  const lines = useMemo(() => lineDiff(a, b), [a, b]);
-  return (
-    <pre className="max-h-[60dvh] overflow-auto rounded-md border border-border bg-surface-sunken p-2 font-mono text-meta leading-relaxed">
-      {lines.map((l, i) => (
-        <div key={i} className={cn("px-1 whitespace-pre-wrap", l.op === "add" && "bg-success-soft text-success", l.op === "del" && "bg-danger-soft text-danger line-through")}>
-          {l.op === "add" ? "+ " : l.op === "del" ? "− " : "  "}
-          {l.text || " "}
-        </div>
-      ))}
-    </pre>
   );
 }
 
@@ -267,7 +253,7 @@ export default function RulesPage() {
         size="xl"
         closeLabel={t("close")}
       >
-        {other.data && current ? <Diff a={other.data.text} b={current.text} /> : <Skeleton className="h-40 w-full" />}
+        {other.data && current ? <DiffView a={other.data.text} b={current.text} skipLabel={(n) => t("skip", { count: n })} className="max-h-[60dvh]" /> : <Skeleton className="h-40 w-full" />}
       </Dialog>
       <Dialog
         open={confirm === "save"}
@@ -285,7 +271,7 @@ export default function RulesPage() {
           </>
         }
       >
-        {current ? <Diff a={current.text} b={draft} /> : null}
+        {current ? <DiffView a={current.text} b={draft} skipLabel={(n) => t("skip", { count: n })} className="max-h-[60dvh]" /> : null}
       </Dialog>
       <Dialog
         open={confirm === "leave"}

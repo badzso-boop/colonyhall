@@ -74,3 +74,22 @@ test("close hides the window", () => {
   expect(s.tasks.state).toBe("closed");
   expect(stack(s)).toEqual([]);
 });
+
+test("a window opening over another goes beside it, or cascades when there is no room", () => {
+  const vp = { w: 1440, h: 900 };
+  let s = reduce(initial(vp), { type: "open", kind: "tasks" }, vp);
+  s = reduce(s, { type: "open", kind: "calendar" }, vp);
+  const [t, c] = [s.tasks.rect, s.calendar.rect];
+  expect(c.x + c.w).toBeLessThanOrEqual(t.x);
+  expect(c.y).toBe(t.y);
+  // Reopening keeps where the user put it.
+  s = reduce(s, { type: "minimize", kind: "calendar" }, vp);
+  s = reduce(s, { type: "restore", kind: "calendar" }, vp);
+  expect(s.calendar.rect).toEqual(c);
+  // A narrow screen has no room beside: cascade instead.
+  const small = { w: 500, h: 900 };
+  let n = reduce(initial(small), { type: "open", kind: "tasks" }, small);
+  n = reduce(n, { type: "move", kind: "calendar", x: n.tasks.rect.x, y: n.tasks.rect.y }, small);
+  n = reduce(n, { type: "open", kind: "calendar" }, small);
+  expect(n.calendar.rect.y).toBeGreaterThan(n.tasks.rect.y);
+});

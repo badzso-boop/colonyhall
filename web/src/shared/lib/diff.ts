@@ -28,3 +28,28 @@ export function lineDiff(a: string, b: string): DiffLine[] {
   while (j < m) out.push({ op: "add", text: y[j++]! });
   return out;
 }
+
+export type DiffItem = DiffLine | { op: "skip"; count: number };
+
+/** Long unchanged runs folded to a count, keeping `context` lines around each change. */
+export function foldDiff(lines: DiffLine[], context = 2): DiffItem[] {
+  const keep = lines.map(() => false);
+  lines.forEach((l, i) => {
+    if (l.op === "same") return;
+    for (let j = Math.max(0, i - context); j <= Math.min(lines.length - 1, i + context); j++) keep[j] = true;
+  });
+  const out: DiffItem[] = [];
+  for (let i = 0; i < lines.length; ) {
+    if (keep[i]) {
+      out.push(lines[i++]!);
+      continue;
+    }
+    let j = i;
+    while (j < lines.length && !keep[j]) j++;
+    // Folding a single line saves nothing.
+    if (j - i === 1) out.push(lines[i]!);
+    else out.push({ op: "skip", count: j - i });
+    i = j;
+  }
+  return out;
+}

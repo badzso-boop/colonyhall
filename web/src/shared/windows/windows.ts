@@ -68,6 +68,24 @@ export function clampBubble(b: { x: number; y: number }, vp: Viewport): { x: num
   return { x, y };
 }
 
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/**
+ * Where a window opening from closed goes: its own place if no open window
+ * covers it, else to the left of the open ones, else cascaded down by a title bar.
+ */
+export function placeFree(r: Rect, others: Rect[], vp: Viewport): Rect {
+  const free = (c: Rect) => c.x >= 0 && c.x + c.w <= vp.w && c.y + c.h <= vp.h && !others.some((o) => overlaps(c, o));
+  if (free(r)) return r;
+  for (const o of [...others].sort((p, q) => q.x - p.x)) {
+    const left = { ...r, x: o.x - r.w - 12, y: o.y };
+    if (free(left)) return left;
+  }
+  let c = r;
+  for (let i = 0; i < 6 && others.some((o) => o.x === c.x && o.y === c.y); i++) c = { ...c, x: c.x - TITLE, y: c.y + TITLE };
+  return clampRect(c, vp);
+}
+
 export type WinAction =
   | { type: "open"; kind: WindowKind }
   | { type: "close"; kind: WindowKind }
@@ -97,9 +115,16 @@ export function reduce(s: Windows, a: WinAction, vp: Viewport): Windows {
   switch (a.type) {
     case "open":
     case "restore":
-    case "focus":
+    case "focus": {
       if (a.type === "focus" && w.state !== "open") return s;
-      return set({ state: "open", z: w.z === top(s) && w.state === "open" ? w.z : top(s) + 1, rect: clampRect(w.rect, vp) });
+      const rect = clampRect(w.rect, vp);
+      const others = KINDS.filter((k) => k !== a.kind && s[k].state === "open").map((k) => s[k].rect);
+      return set({
+        state: "open",
+        z: w.z === top(s) && w.state === "open" ? w.z : top(s) + 1,
+        rect: a.type === "open" && w.state === "closed" ? placeFree(rect, others, vp) : rect,
+      });
+    }
     case "close":
       return set({ state: "closed" });
     case "minimize":

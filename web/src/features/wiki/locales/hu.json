@@ -62,5 +62,6 @@
   "isDeleted": "Ez a téma törölve van.",
   "notFound": "Nincs ilyen téma.",
   "copy": "Másolás",
-  "copied": "Másolva"
+  "copied": "Másolva",
+  "skip": "… {{count}} változatlan sor …"
 }
