@@ -736,7 +736,8 @@ func (q *Queries) RemoveReaction(ctx context.Context, arg RemoveReactionParams) 
 const replyParticipants = `-- name: ReplyParticipants :many
 SELECT t.root_id::uuid AS root_id, t.author_id FROM (
   SELECT thread_root_id AS root_id, author_id,
-         row_number() OVER (PARTITION BY thread_root_id ORDER BY max(id) DESC) AS rn
+         -- uuid has no max(); the reply time orders, the id breaks ties.
+         row_number() OVER (PARTITION BY thread_root_id ORDER BY max(created_at) DESC, max(id::text) DESC) AS rn
   FROM message
   WHERE thread_root_id = ANY($1::uuid[]) AND deleted_at IS NULL
   GROUP BY thread_root_id, author_id
