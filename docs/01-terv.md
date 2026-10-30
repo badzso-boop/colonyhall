@@ -51,7 +51,7 @@ Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felha
 - **Engedélyek, agentenként választható:** alapból `--permission-mode auto` (ahogy a felhasználó ma is használja). Később a jóváhagyás a chatből: amit az auto mód nem enged magától, azt a `--permission-prompt-tool` a Colonyhall MCP-nek adja át, a telefonon egy gombbal jóváhagyható; válasz nélkül egy idő után elutasítva. Antigravitynél a saját engedélylistája érvényes.
 - **A tömör ébresztés** (eszközök nélküli döntő futás, kb. 1,7 ezer token) megmarad azoknak az agenteknek, amelyek csak csevegnek.
 
-**Titkok átadása gépek között:** a WSL-es gép a `/mnt/z`-n eléri a szerver home könyvtárát (`\\192.168.0.45\szmajli01-home`). Ott van a közös átadó mappa: `~/colonyhall-exchange/<projekt>/` (gépen: `/mnt/z/colonyhall-exchange/<projekt>/`). Szabályok: a fájl `chmod 600`; a chatbe csak a hely kerül; a fogadó agent átmásolja a helyére, majd törli az átadó mappából; az átadó mappa soha nem kerül gitbe; a régi fájlokat időnként törölni kell. Az őr induláskor ellenőrzi, hogy a `Z:` csatolva van-e.
+**Titkok átadása gépek között:** a WSL-es gép a `/mnt/z`-n eléri a szerver home könyvtárát (`\\192.168.1.101\szmajli01-home`). Ott van a közös átadó mappa: `~/colonyhall-exchange/<projekt>/` (gépen: `/mnt/z/colonyhall-exchange/<projekt>/`). Szabályok: a fájl `chmod 600`; a chatbe csak a hely kerül; a fogadó agent átmásolja a helyére, majd törli az átadó mappából; az átadó mappa soha nem kerül gitbe; a régi fájlokat időnként törölni kell. Az őr induláskor ellenőrzi, hogy a `Z:` csatolva van-e.
 
 **Ki adhat feladatot kinek (döntés, 2026-10-15, frissítve 2026-10-26, 2026-10-27):**
 
