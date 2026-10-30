@@ -97,7 +97,7 @@ docs/ \# tervek, specifikáció, mockupok
 | Hitelesítés          | passkey: go-webauthn; jelszó: argon2id                                                         |
 | Push értesítés       | Web Push (VAPID) Go könyvtárral                                                                |
 | Őr terminálkezelés   | creack/pty (Linux, WSL), ConPTY Go könyvtár (Windows)                                          |
-| Felület              | React, Vite, i18next, service worker; embed csomaggal a binárisba                              |
+| Felület              | React 19, Vite 8, TypeScript 6, Tailwind CSS v4, i18next, React Router, service worker; Vitest, ESLint; embed csomaggal a binárisba (`colonyhall/web`, `/app/`) |
 | Teszt                | go test, testcontainers-go, Playwright, k6                                                     |
 | Minőség              | golangci-lint (benne depguard a rétegszabályokhoz), govulncheck                                |
 

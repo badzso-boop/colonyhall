@@ -9,7 +9,7 @@ agy --model claude-opus-4-6-thinking -i "$(cat docs/handoff/00-ground-rules.md d
 
 ---
 
-Branch: `feature/pwa-foundation`, **in its own git worktree** at `/mnt/g/Projects/new-chat-worktrees/pwa-foundation`. This overrides the ground rules' "git switch -c" step: never work in `/mnt/g/Projects/new-chat` itself, never touch `main`. Commit only on `feature/pwa-foundation`; never merge, never push. This round needs **no migration**; if you find you need one, stop and say why in the report.
+Branch: `feature/pwa-foundation`, **in its own git worktree** at `/mnt/g/Projects/new-chat-worktrees/pwa-foundation`. This overrides the ground rules' "git switch -c" step: never work in `/mnt/g/Projects/new-chat` itself, never touch `main`. Commit only on `feature/pwa-foundation`; never merge, never push. **The PWA scaffold (`feature/pwa-scaffold`, part 1) must be merged first.** This round needs **no migration**; if you find you need one, stop and say why in the report.
 
 After each part: `gofmt`, `make test`, `make lint`, `make test-web`, `make gen-check` if the contract changed. **Commit only when they pass.** Check every screen in a real headless browser at **1440×900, 1024×768 and 390×844** in **both themes**, with no `pageerror` and no console errors; save the screenshots under `docs/handoff/31-screens/` and link them in the report.
 
@@ -35,11 +35,20 @@ State on `main` (checked 2026-10-30): all 136 REST operations the server registe
 
 ## 1. The `web/` project
 
-- `web/` at the repo root (as `docs/02` says): Vite, React 18, TypeScript (`strict`), **Tailwind CSS v4** (`@tailwindcss/vite`, CSS-first configuration with `@theme`), i18next with `web/src/locales/hu.json` and `en.json` (Hungarian is the default; no text in components, only keys), React Router.
+**The scaffold already exists (`feature/pwa-scaffold`, merged before this round).** Read it first and build on it; do not recreate it:
+
+- `web/package.json` with exact versions and a lockfile: React 19.3, Vite 8, TypeScript 6.0 (not 7: `typescript-eslint` 8.72 supports TypeScript below 6.1 only), Tailwind CSS 4.3 (`@tailwindcss/vite`), React Router 8, i18next 26 / react-i18next 17, Vitest 5 (jsdom), ESLint 10 (flat config, `typescript-eslint`, `react-hooks`). Use the latest stable releases when you add packages; when a newer major is out, check the peer ranges before upgrading.
+- `web/scripts/go-ignore-node-modules.mjs` (postinstall): writes a `go.mod` into `node_modules`, because some npm packages ship Go sources that `go test ./...` would otherwise pick up. Keep it.
+- `web/scripts/keep-dist.mjs`: recreates the tracked `web/dist/.keep` after each build.
+- `web/embed.go` (`colonyhall/web`, `//go:embed all:dist`) and `internal/httpserver/app.go`: `/app/` with the SPA fallback, 404 for missing files, 503 "run make web" without a build, a year of caching for `assets/`, `no-cache` for the rest, `nosniff`. Tests in `app_test.go`.
+- `web/src/`: `main.tsx` (`BrowserRouter basename="/app"`), `App.tsx` (a placeholder page to replace), `i18n.ts` (`colony.lang`), `theme.ts` (`colony.theme`, the same key as the pre-paint script in `index.html`), `styles/tokens.css` (the starting semantic tokens, `.dark` overrides) and `styles/index.css` (`@custom-variant dark` on the `.dark` class), and tests.
+- `make web`, `make test-web` (dev page Node tests + typecheck + lint + Vitest), the `node:22-alpine` stage in `deploy/Dockerfile`, `.dockerignore`.
+
+What this part still adds:
+
+- `web/` at the repo root (as `docs/02` says): **Tailwind CSS v4** (CSS-first configuration with `@theme`), i18next with `web/src/locales/hu.json` and `en.json` (Hungarian is the default; no text in components, only keys), React Router.
 - **Accessible primitives:** Radix UI (MIT) for dialog, dropdown menu, popover, tooltip, tabs and scroll area. Style them with Tailwind; do not add a component kit with its own look.
-- **Embedding:** a Go package `colonyhall/web` (`web/embed.go`, `//go:embed all:dist`). `web/dist/` is gitignored except a tracked `web/dist/.keep`, so `go build` works without Node. The server serves the PWA at `/app/` with an SPA fallback to `index.html`. If `dist/index.html` is missing, `/app/` answers 503 with a one-line hint ("run make web"). Hashed assets are cached for a long time, `index.html` is not cached. Use the same security headers as the dev page.
-- **Make:** `make web` (`npm ci && npm run build` in `web/`); `make test-web` runs the existing Node tests **and** `npm --prefix web test` (Vitest) and `npm --prefix web run typecheck` (`tsc --noEmit`) and `lint` (ESLint, flat config).
-- **Docker:** a `node:22-alpine` stage in `deploy/Dockerfile` builds `web/` and copies `dist/` into the Go stage before `go build`. The homelab deploy command does not change.
+- **Embedding, Make, Docker:** done by the scaffold (above). The Docker stage was not built on the dev machine (no Docker there): **build the image once** (`docker build -f deploy/Dockerfile .`) and fix it if needed.
 - **PWA basics:**
   - a web app manifest (name, `theme_color`, icons from part 3, `display: standalone`, `start_url: /app/`);
   - a minimal service worker that caches only the app shell (never API responses, never `/api/`);

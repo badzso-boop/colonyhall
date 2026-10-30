@@ -19,7 +19,7 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
 
 - **Go** (aktuális stabil): szerver (`cmd/colonyhall`), CLI és őr (`cmd/colony`), hamis agent (`cmd/fake-agent`).
 - HTTP: `net/http` (+ `chi`, ha kell) · WebSocket: `coder/websocket` · DB: PostgreSQL, `pgx`, `sqlc`, `goose` · feladatsor: River · MCP: `modelcontextprotocol/go-sdk` · naplózás: `log/slog` · telemetria: OpenTelemetry, Prometheus.
-- **Web:** React + Vite + TypeScript PWA, i18next; a build a Go binárisba ágyazódik (`embed`).
+- **Web:** React + Vite + TypeScript PWA, Tailwind CSS v4, i18next; a `web/` mappában, a build (`web/dist`) a Go binárisba ágyazódik (`embed`, `colonyhall/web`), a szerver a `/app/` címen szolgálja ki.
 - **Futtatás:** Docker Compose (`deploy/`).
 
 ## Architektúra-szabályok (kötelező)
@@ -63,6 +63,8 @@ A Go a `/usr/local/go/bin`-ben van, a `golangci-lint` a `~/go/bin`-ben (mindkett
 | `make test` | Egység-, szerződés- (memória) és végponttól végpontig tartó tesztek |
 | `make test-pg` | A tár-szerződéstesztek Postgres ellen (kell hozzá `make dev`; a `colony_test` adatbázist törli) |
 | `make lint` | golangci-lint, a depguard rétegszabályokkal |
+| `make web` | A PWA buildje a `web/dist`-be (első futáskor `npm ci`); a szerver a `/app/` címen adja. Fejlesztéshez `npm --prefix web run dev` (Vite, az API-t a :8080-ra proxyzza) |
+| `make test-web` | A fejlesztői oldal Node-tesztjei és a PWA típusellenőrzése, lintje és Vitest-tesztjei |
 
 Fejlesztői belépés (csak a `COLONY_DEV_SEED=1` helyi stacken): `@norbi` jelszava `colonyhall-dev-password`; Bearer tokenek: admin `col_dev_admin_token_do_not_use_in_production`, `@fake-agent` `col_dev_agent_token_do_not_use_in_production`.
 
