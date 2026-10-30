@@ -1,0 +1,12 @@
+{
+  "appName": "Colonyhall",
+  "theme": {
+    "label": "Téma",
+    "system": "Rendszer",
+    "light": "Világos",
+    "dark": "Sötét"
+  },
+  "language": {
+    "label": "Nyelv"
+  }
+}

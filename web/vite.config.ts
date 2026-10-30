@@ -7,6 +7,10 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   base: "/app/",
   plugins: [react(), tailwindcss()],
+  resolve: {
+    // "@/…" is src/ (docs/08-frontend-architektura.md, 11.); also in tsconfig.json "paths".
+    alias: { "@": decodeURIComponent(new URL("./src", import.meta.url).pathname) },
+  },
   build: {
     outDir: "dist",
     assetsDir: "assets",
@@ -22,6 +26,6 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     include: ["src/**/*.test.{ts,tsx}"],
-    setupFiles: ["src/test-setup.ts"],
+    setupFiles: ["src/app/test-setup.ts"],
   },
 });

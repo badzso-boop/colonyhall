@@ -13,6 +13,8 @@ Branch: `feature/pwa-pages`, **in its own git worktree** at `/mnt/g/Projects/new
 
 After each part: `gofmt`, `make test`, `make lint`, `make test-web`, and `make gen-check` when the contract changed. Commit only when they pass. Check every page in a headless browser at 1440×900, 1024×768 and 390×844, in both themes, with no console errors, and save the screenshots under `docs/handoff/32-screens/`.
 
+**Code structure:** `docs/08-frontend-architektura.md` is binding for everything under `web/` (layers, feature modules mirroring the backend, data and state, styling, i18n, tests). Put each piece where that document says; `make test-web` checks the boundaries.
+
 ## Why (Norbi, 2026-10-30)
 
 The dev page has a panel for each of these, but they are cramped and some need typing (a schedule is written as `/schedule …` or a cron expression). Norbi wants:
@@ -25,7 +27,7 @@ The dev page has a panel for each of these, but they are cramped and some need t
 
 ## 1. Floating windows (the fifth overlay kind)
 
-A generic `FloatingWindow` component and a **window manager**, built as a **pure reducer** (`web/src/layout/windows.ts`) with Vitest tests, like the pane manager. It looks and behaves like a Windows window inside the page.
+A generic `FloatingWindow` component and a **window manager**, built as a **pure reducer** (`web/src/layout/windows/windows.ts`) with Vitest tests, like the pane manager. It looks and behaves like a Windows window inside the page.
 
 - **Who has one:** Feladatok, Naptár and Jegyzetek. At most one window of each kind; several kinds may be open at once.
 - **Opening:**

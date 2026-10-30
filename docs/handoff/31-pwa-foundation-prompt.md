@@ -13,6 +13,8 @@ Branch: `feature/pwa-foundation`, **in its own git worktree** at `/mnt/g/Project
 
 After each part: `gofmt`, `make test`, `make lint`, `make test-web`, `make gen-check` if the contract changed. **Commit only when they pass.** Check every screen in a real headless browser at **1440×900, 1024×768 and 390×844** in **both themes**, with no `pageerror` and no console errors; save the screenshots under `docs/handoff/31-screens/` and link them in the report.
 
+**Code structure:** `docs/08-frontend-architektura.md` is binding for everything under `web/` (layers, feature modules mirroring the backend, data and state, styling, i18n, tests). Put each piece where that document says; `make test-web` checks the boundaries.
+
 ## Why (Norbi, 2026-10-30)
 
 The dev page (`internal/httpserver/web/index.html`, 6 200 lines) has reached its limit. The plan always said the final UI is a React + Vite + TypeScript PWA (`docs/01-terv.md`, `docs/02-muszaki-specifikacio.md`, "Felület"). This round lays its foundation and fixes the **design decisions** every later PWA round builds on:
@@ -28,7 +30,7 @@ Scope of this round: the foundation, the design system, the shell, the sidebar, 
 
 State on `main` (checked 2026-10-30): all 136 REST operations the server registers are described in `api/openapi.yaml`, and `make gen-check` is clean. **REST needs one additive field this round** (point 4 below). Missing for a TypeScript client:
 
-1. **No TypeScript types are generated.** `make gen` only runs `oapi-codegen`. Add `openapi-typescript` (pinned, as a `web/` devDependency) and generate `web/src/api/schema.d.ts` in `make gen`; extend `make gen-check` to diff it. Wrap `fetch` in a small typed client (`openapi-fetch`, MIT, or a 50-line helper of your own); never write request or response types by hand.
+1. **No TypeScript types are generated.** `make gen` only runs `oapi-codegen`. Add `openapi-typescript` (pinned, as a `web/` devDependency) and generate `web/src/shared/api/schema.d.ts` in `make gen`; extend `make gen-check` to diff it. Wrap `fetch` in a small typed client (`openapi-fetch`, MIT, or a 50-line helper of your own); never write request or response types by hand.
 2. **WebSocket frames.** `WsHello`, `WsWelcome`, `WsEvent`, `WsReplayDone` and `WsResyncRequired` are in the spec, but the gateway also sends `agent.activity` and `agent.progress` frames (`internal/gateway/gateway.go`) that are not. Describe them as schemas (`WsActivity`, `WsProgress`) exactly as the server sends them today. `fs.request` goes to guards only; leave it out and say so.
 3. **Event payloads are untyped** (`WsEvent.data: object`). For every event type the PWA consumes in this round (at least `message.created`, `message.retracted`, the reaction events, `channel.created`, `channel.member_added`, `channel.member_removed`, the agent state events, the terminal and file events the panes use; take the exact names from the code, since there is no message edit event), add a payload schema named `Event<Name>` and list the mapping event type → schema in the `WsEvent` description. Read the real payloads in the modules' `events.go`. **Do not change what the server sends.** If an e2e test can cheaply check one real payload per schema against the spec, add it.
 4. **Thread participants:** the thread summary row (part 5) needs the participants without one request per thread. Add `reply_participant_ids` (up to 3, most recent repliers first) to `Message` (additive; the store query in `memory` and `postgres`; storetest; e2e).
@@ -41,12 +43,12 @@ State on `main` (checked 2026-10-30): all 136 REST operations the server registe
 - `web/scripts/go-ignore-node-modules.mjs` (postinstall): writes a `go.mod` into `node_modules`, because some npm packages ship Go sources that `go test ./...` would otherwise pick up. Keep it.
 - `web/scripts/keep-dist.mjs`: recreates the tracked `web/dist/.keep` after each build.
 - `web/embed.go` (`colonyhall/web`, `//go:embed all:dist`) and `internal/httpserver/app.go`: `/app/` with the SPA fallback, 404 for missing files, 503 "run make web" without a build, a year of caching for `assets/`, `no-cache` for the rest, `nosniff`. Tests in `app_test.go`.
-- `web/src/`: `main.tsx` (`BrowserRouter basename="/app"`), `App.tsx` (a placeholder page to replace), `i18n.ts` (`colony.lang`), `theme.ts` (`colony.theme`, the same key as the pre-paint script in `index.html`), `styles/tokens.css` (the starting semantic tokens, `.dark` overrides) and `styles/index.css` (`@custom-variant dark` on the `.dark` class), and tests.
+- `web/src/` in the layers of `docs/08-frontend-architektura.md`: `app/` (`main.tsx` with `BrowserRouter basename="/app"`, `App.tsx` with the TanStack Query provider, `routes.tsx`, `i18n.ts` collecting the namespaces, `architecture.test.ts`), `shared/` (`i18n` with `colony.lang`, `theme` with `colony.theme` (the same key as the pre-paint script in `index.html`), `styles/tokens.css` with the starting semantic tokens and `.dark` overrides, `styles/index.css` with `@custom-variant dark`, `lib/cn.ts`, `ui/BrandMark.tsx`, `api/queryClient.ts`), and `features/scaffold/` (a placeholder page: **replace it with the shell and delete the feature**). TanStack Query and Zustand are installed; `eslint-plugin-boundaries` enforces the layers.
 - `make web`, `make test-web` (dev page Node tests + typecheck + lint + Vitest), the `node:22-alpine` stage in `deploy/Dockerfile`, `.dockerignore`.
 
 What this part still adds:
 
-- `web/` at the repo root (as `docs/02` says): **Tailwind CSS v4** (CSS-first configuration with `@theme`), i18next with `web/src/locales/hu.json` and `en.json` (Hungarian is the default; no text in components, only keys), React Router.
+- `web/` at the repo root (as `docs/02` says): **Tailwind CSS v4** (CSS-first configuration with `@theme`), i18next with namespaces (`common` in `web/src/shared/i18n/locales/`, one per feature in `web/src/features/<name>/locales/`) (Hungarian is the default; no text in components, only keys), React Router.
 - **Accessible primitives:** Radix UI (MIT) for dialog, dropdown menu, popover, tooltip, tabs and scroll area. Style them with Tailwind; do not add a component kit with its own look.
 - **Embedding, Make, Docker:** done by the scaffold (above). The Docker stage was not built on the dev machine (no Docker there): **build the image once** (`docker build -f deploy/Dockerfile .`) and fix it if needed.
 - **PWA basics:**
@@ -60,7 +62,7 @@ What this part still adds:
 
 ## 2. The design system
 
-Write it down in **`docs/07-design-system.md`** (Hungarian, the binding reference for every later round) and build it as **`web/src/styles/tokens.css`** (`@theme` tokens) plus a living style guide at **`/app/design`** that shows every token and component in both themes side by side.
+Write it down in **`docs/07-design-system.md`** (Hungarian, the binding reference for every later round) and build it as **`web/src/shared/styles/tokens.css`** (`@theme` tokens) plus a living style guide at **`/app/design`** that shows every token and component in both themes side by side.
 
 ### Colours: black and red, the colony
 
@@ -165,7 +167,7 @@ From top to bottom:
 
 ### Channel feed
 
-- Reuse the logic, not the DOM, of the dev page: port `format.js` (dates, day separators, `sessionContext`), `markdown.js` and `mention.js` to typed modules under `web/src/lib/`, **keeping their tests** (convert them to Vitest). The safe markdown rules still hold: build React elements, never `dangerouslySetInnerHTML`, no remote images.
+- Reuse the logic, not the DOM, of the dev page: port `format.js` (dates, day separators, `sessionContext`), `markdown.js` and `mention.js` to typed modules under `web/src/shared/lib/`, **keeping their tests** (convert them to Vitest). The safe markdown rules still hold: build React elements, never `dangerouslySetInnerHTML`, no remote images.
 - Message: avatar (circle or square), display name, `@handle` in mono for agents, time (with the date as in round 30), body, attachments, reactions, hover actions (react, reply in thread, copy link, more).
   - Messages that mention the viewer get an `accent-soft` background.
   - Long messages collapse with "Több" / "Kevesebb" (round 17).
@@ -200,7 +202,7 @@ Rules:
 8. **< 768 px:** a navigation stack: conversation list → conversation → thread → work pane, each full screen, with a back button and the swipe-back gesture. The composer and the "Fájlok" and "Terminál" buttons stay reachable.
 9. **The state lives in the URL**, e.g. `/app/c/:channelId?thread=:rootId&work=terminal:agentId:name,files:agentId:path&tab=1`, so reload, back and forward, and (later) push notifications open exactly this view.
 
-Implement the rules as a **pure reducer** (`web/src/layout/panes.ts`: state + actions → state, and state ↔ URL), with Vitest tests for each numbered rule above at each width class. The components only render what the reducer says.
+Implement the rules as a **pure reducer** (`web/src/layout/panes/panes.ts`: state + actions → state, and state ↔ URL), with Vitest tests for each numbered rule above at each width class. The components only render what the reducer says.
 
 ### Composer and attachments
 
@@ -236,7 +238,7 @@ Over `POST /agents/{agentId}/fs` (`list`, `search`, `git_status`) and `file-fetc
 
 ## 8. Keyboard shortcuts and their help (Norbi, 2026-10-30)
 
-- **One registry** (`web/src/lib/shortcuts.ts`) where every shortcut is declared once: keys (with the Mac variant: ⌘ for Ctrl), the scope (global, conversation, composer, pane, page), the i18n description, and the handler. Components register their shortcuts there and never add ad-hoc `keydown` listeners. Later rounds (the calendar's M/W/D, the directory's `/`, the floating windows' Alt+arrows) register into the same place.
+- **One registry** (`web/src/shared/lib/shortcuts.ts`) where every shortcut is declared once: keys (with the Mac variant: ⌘ for Ctrl), the scope (global, conversation, composer, pane, page), the i18n description, and the handler. Components register their shortcuts there and never add ad-hoc `keydown` listeners. Later rounds (the calendar's M/W/D, the directory's `/`, the floating windows' Alt+arrows) register into the same place.
 - **The help:** `?` (outside text inputs) and the user menu's "Billentyűparancsok" open a Dialog that lists the registered shortcuts grouped by scope, with `<kbd>` styled keys and a filter field. Shortcuts of the current screen come first. On a phone the entry is hidden.
 - **Shortcuts this round:**
   - Ctrl K: command palette;
@@ -254,7 +256,7 @@ Over `POST /agents/{agentId}/fs` (`list`, `search`, `git_status`) and `file-fetc
 
 ## 9. Data and live updates
 
-- One WebSocket client (`web/src/api/ws.ts`): hello with `last_seq`, replay, `resync_required` → refetch, reconnect with backoff. It dispatches typed events (part 0) into a small store (Zustand, MIT, or React context + reducer; pick one and say why). REST reads through the typed client; TanStack Query (MIT) is allowed for caching.
+- One WebSocket client (`web/src/shared/api/ws.ts`): hello with `last_seq`, replay, `resync_required` → refetch, reconnect with backoff. It dispatches typed events (part 0) through `shared/api/events.ts`; each feature's `events.ts` subscribes and updates its TanStack Query cache. UI state (panes, windows, preferences) lives in small Zustand stores wrapping the pure reducers (`docs/08-frontend-architektura.md`, 5.). REST reads go through the typed client and TanStack Query.
 - Log in at `/app/login` with the existing session cookie flow (`/auth/login`, `/auth/session`).
 
 ## Not in this round

@@ -19,11 +19,3 @@ test("applyTheme stores the choice and sets the class", () => {
   applyTheme("system");
   expect(readTheme()).toBe("system");
 });
-
-test("hu and en have the same keys", async () => {
-  const hu = (await import("./locales/hu.json")).default;
-  const en = (await import("./locales/en.json")).default;
-  const keys = (o: object, p = ""): string[] =>
-    Object.entries(o).flatMap(([k, v]) => (typeof v === "object" && v ? keys(v, `${p}${k}.`) : [`${p}${k}`]));
-  expect(keys(en).sort()).toEqual(keys(hu).sort());
-});

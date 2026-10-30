@@ -7,13 +7,14 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
 ## Mielőtt bármit csinálsz
 
 - A teljes terv: `docs/01-terv.md`; a műszaki specifikáció (rétegek, adatmodell, WebSocket, MCP, REST): `docs/02-muszaki-specifikacio.md`; a más chat szerverekből átvett minták és azok indoklása: `docs/03-tanulsagok-mas-chat-szerverekbol.md`. Tervezési kérdésben ezek a mérvadók.
+- A webes felülethez (`web/`, a PWA): **`docs/08-frontend-architektura.md` kötelező** (rétegek, funkciómodulok, adatkezelés, stílus, i18n, tesztek, gépi ellenőrzés); a kinézethez `docs/07-design-system.md` (a 31. kör írja meg).
 - Ha egy döntés változik, frissítsd a `docs/` megfelelő fájlját is (és szólj, hogy az élő claude.ai dokumentumot is frissíteni kell, lásd `docs/README.md`).
 
 ## Nyelv
 
 - Kommunikáció a felhasználóval és a `docs/` tartalma: **magyarul**.
 - Kód, azonosítók, adatbázis, API, MCP eszközleírások, kódkommentek, commit üzenetek: **angolul**.
-- A felület szövegei soha nincsenek beégetve: i18n kulcsok (`web/src/locales/hu.json`, `en.json`), alapnyelv a magyar.
+- A felület szövegei soha nincsenek beégetve: i18n kulcsok (közös: `web/src/shared/i18n/locales/{hu,en}.json`, funkciónként: `web/src/features/<név>/locales/{hu,en}.json`), alapnyelv a magyar.
 
 ## Stack
 

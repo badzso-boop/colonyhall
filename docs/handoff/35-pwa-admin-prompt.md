@@ -13,6 +13,8 @@ Branch: `feature/pwa-admin`, **in its own git worktree** at `/mnt/g/Projects/new
 
 After each part: `gofmt`, `make test`, `make lint`, `make test-web`, `make gen-check` if the contract or SQL changed. Commit only when they pass. At the end `make test-pg` uncached and `go test -race ./internal/guard/ ./internal/e2e/`. Every authorization rule needs a test that fails without it. Check every screen in a headless browser at 1440×900, 1024×768 and 390×844 in both themes; save the screenshots under `docs/handoff/35-screens/`.
 
+**Code structure:** `docs/08-frontend-architektura.md` is binding for everything under `web/` (layers, feature modules mirroring the backend, data and state, styling, i18n, tests). Put each piece where that document says; `make test-web` checks the boundaries.
+
 ## Why, and Norbi's decisions (2026-10-30)
 
 This is the last round before the dev page can be retired: everything an admin does on it moves to the PWA, plus a few things it never had.

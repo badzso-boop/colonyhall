@@ -1,14 +1,12 @@
-import i18n from "i18next";
+import i18n, { type Resource } from "i18next";
 import { initReactI18next } from "react-i18next";
-import hu from "./locales/hu.json";
-import en from "./locales/en.json";
 
 export const languages = ["hu", "en"] as const;
 export type Language = (typeof languages)[number];
 
 const storageKey = "colony.lang";
 
-function storedLanguage(): Language {
+export function storedLanguage(): Language {
   try {
     const v = localStorage.getItem(storageKey);
     if (v === "hu" || v === "en") return v;
@@ -28,12 +26,19 @@ export function setLanguage(lang: Language): void {
   document.documentElement.lang = lang;
 }
 
-void i18n.use(initReactI18next).init({
-  resources: { hu: { translation: hu }, en: { translation: en } },
-  lng: storedLanguage(),
-  fallbackLng: "hu",
-  // React escapes text itself.
-  interpolation: { escapeValue: false },
-});
+// initI18n starts i18next with every namespace: "common" from shared and one
+// per feature. app/i18n.ts collects them (shared does not know the features).
+export function initI18n(resources: Resource): typeof i18n {
+  void i18n.use(initReactI18next).init({
+    resources,
+    lng: storedLanguage(),
+    fallbackLng: "hu",
+    defaultNS: "common",
+    ns: Object.keys(resources.hu ?? {}),
+    // React escapes text itself.
+    interpolation: { escapeValue: false },
+  });
+  return i18n;
+}
 
-export default i18n;
+export { i18n };

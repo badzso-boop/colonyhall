@@ -13,6 +13,8 @@ Branch: `feature/pwa-chat`, **in its own git worktree** at `/mnt/g/Projects/new-
 
 After each part: `gofmt`, `make test`, `make lint`, `make test-web`, `make gen-check` if the contract or SQL changed. Commit only when they pass. At the end `make test-pg` uncached and `go test -race ./internal/guard/ ./internal/e2e/`. Every authorization rule needs a test that fails without it. Check every screen in a headless browser at 1440×900, 1024×768 and 390×844 in both themes; save the screenshots under `docs/handoff/34-screens/`.
 
+**Code structure:** `docs/08-frontend-architektura.md` is binding for everything under `web/` (layers, feature modules mirroring the backend, data and state, styling, i18n, tests). Put each piece where that document says; `make test-web` checks the boundaries.
+
 ## Why, and Norbi's decisions (2026-10-30)
 
 After rounds 31–33 the PWA has the shell, the pages, agents and machines. To replace the dev page for daily chat, it still needs the chat features the dev page has, plus **channel editing**, which nobody has today: a channel's description cannot be changed after creation.
