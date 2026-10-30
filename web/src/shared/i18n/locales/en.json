@@ -15,5 +15,10 @@
     "reload": "Reload"
   },
   "today": "Today",
-  "yesterday": "Yesterday"
+  "yesterday": "Yesterday",
+  "workKinds": {
+    "terminal": "Terminals",
+    "files": "Files",
+    "agent": "Overview"
+  }
 }

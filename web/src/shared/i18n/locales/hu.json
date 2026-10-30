@@ -15,5 +15,10 @@
     "reload": "Frissítés"
   },
   "today": "Ma",
-  "yesterday": "Tegnap"
+  "yesterday": "Tegnap",
+  "workKinds": {
+    "terminal": "Terminálok",
+    "files": "Fájlok",
+    "agent": "Áttekintés"
+  }
 }

@@ -1,4 +1,4 @@
-export { ApiError, api, createApi, onUnauthorized, setCsrfToken, unwrap, type Problem, type Schemas } from "./client";
+export { ApiError, api, createApi, getCsrfToken, onUnauthorized, setCsrfToken, unwrap, type Problem, type Schemas } from "./client";
 export {
   dispatch,
   onActivity,
@@ -14,3 +14,4 @@ export {
 } from "./events";
 export { createQueryClient } from "./queryClient";
 export { WsClient, useConnection, wsURL, type ConnectionState } from "./ws";
+export { uploadFile } from "./upload";

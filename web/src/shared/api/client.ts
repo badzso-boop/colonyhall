@@ -12,6 +12,10 @@ export function setCsrfToken(token: string): void {
   csrfToken = token;
 }
 
+export function getCsrfToken(): string {
+  return csrfToken;
+}
+
 /** Called on any 401 (the session expired): the app sends the user to /login. */
 export function onUnauthorized(handler: () => void): void {
   unauthorized = handler;

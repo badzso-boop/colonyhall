@@ -30,5 +30,13 @@
     "agents": "Agentek",
     "more": "Több"
   },
-  "devPage": "Fejlesztői oldal"
+  "devPage": "Fejlesztői oldal",
+  "panes": {
+    "work": "Munkapanel",
+    "closeTab": "{{name}} bezárása",
+    "closeWork": "Munkapanel bezárása",
+    "showThread": "Szál",
+    "showWork": "Munkapanel",
+    "back": "Vissza"
+  }
 }

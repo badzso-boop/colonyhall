@@ -5,6 +5,7 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { Checkbox, Input, Select, Switch, Textarea } from "./fields";
 export { HoldButton } from "./HoldButton";
 export { IconButton } from "./IconButton";
+export { Lightbox, type LightboxImage } from "./Lightbox";
 export { Markdown, type MarkdownProps } from "./Markdown";
 export { EmptyState, Kbd, Skeleton } from "./misc";
 export {

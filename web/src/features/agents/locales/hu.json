@@ -1,0 +1,26 @@
+{
+  "overview": {
+    "title": "Áttekintés",
+    "sandbox": "Sandbox",
+    "fullAccess": "Teljes hozzáférés",
+    "states": {
+      "working": "dolgozik",
+      "idle": "tétlen",
+      "offline": "offline",
+      "paused": "szünetel",
+      "stopped": "leállítva",
+      "active": "aktív"
+    },
+    "sessions": "Munkamenetek",
+    "noSessions": "Még nincs munkamenet.",
+    "nearLimit": "hamarosan új munkamenet",
+    "host": "Gép",
+    "model": "Modell",
+    "today": "Ma: {{tokens}} token",
+    "limit": "keret: {{limit}}",
+    "lastRuns": "Utolsó futások",
+    "notFound": "Ez az agent nem található.",
+    "dm": "DM",
+    "context": "kontextus"
+  }
+}

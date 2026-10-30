@@ -1,33 +1,55 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation } from "react-router";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/shared/lib";
-import { useLocalStorage } from "@/shared/hooks";
-import { useMentionTotal } from "@/features/conversation";
+import { useLocalStorage, useWidth } from "@/shared/hooks";
+import { place, usePanes } from "@/shared/panes";
+import { ThreadPane, useMentionTotal } from "@/features/conversation";
 import { BottomBar } from "./BottomBar";
 import { ConnectionBar } from "./ConnectionBar";
 import { Header } from "./header/Header";
+import { WorkPane } from "./panes/WorkPane";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useDocumentTitle } from "./useDocumentTitle";
 
 /**
- * The app frame: header, sidebar, main column (docs/handoff/31, part 4).
- * ≥ 1024 px the sidebar is a column (collapsible); below it is a drawer;
- * on a phone the conversation list is the home screen and a bottom bar
- * switches screens.
+ * The app frame (docs/handoff/31, parts 4–5): header, sidebar, main column
+ * and the two pane slots placed by shared/panes (place()).
+ *  wide (≥ 1280): left slot = sidebar or the work pane, right slot = thread or work;
+ *  medium: one right slot with a switcher; the sidebar is a column from 1024, a drawer below;
+ *  narrow (< 768): one screen at a time with a back button, a bottom bar.
  */
 export function Shell() {
   const { t } = useTranslation("layout");
+  const width = useWidth();
+  const [panes, dispatch] = usePanes();
+  const placement = place(panes, width);
   const [collapsed, setCollapsed] = useLocalStorage("colony.sidebar.hidden", false);
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
-  const home = location.pathname === "/";
+  const home = location.pathname === "/" && placement.screen === "main";
   useDocumentTitle(useMentionTotal(), t("common:appName"));
 
+  // Rule 6: while the work pane holds the left slot, the sidebar is a drawer.
+  const sidebarAsDrawer = placement.left === "work";
   const toggle = () => {
-    if (window.matchMedia("(min-width: 1024px)").matches) setCollapsed(!collapsed);
+    if (!sidebarAsDrawer && window.matchMedia("(min-width: 1024px)").matches) setCollapsed(!collapsed);
     else setDrawer(!drawer);
   };
+
+  const thread = panes.thread ? <ThreadPane key={panes.thread} rootId={panes.thread} /> : null;
+  const right = placement.right === "thread" ? thread : placement.right === "work" ? <WorkPane /> : null;
+  const switcher =
+    placement.other !== null ? (
+      <button
+        type="button"
+        onClick={() => dispatch({ type: "focus", pane: placement.other! })}
+        className="w-full border-b border-border bg-surface-sunken py-1 text-meta font-medium text-fg-muted hover:text-fg"
+      >
+        {placement.other === "thread" ? t("panes.showThread") : t("panes.showWork")}
+      </button>
+    ) : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -41,13 +63,11 @@ export function Shell() {
           aria-label={t("sidebar")}
           className={cn(
             "shrink-0 border-r border-border bg-surface",
-            // Desktop: a column, unless collapsed.
-            "lg:block lg:w-[260px]",
-            collapsed && "lg:hidden",
-            // Tablet: a drawer over the content.
-            "max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-(--z-overlay) max-lg:w-[280px] max-lg:shadow-overlay",
-            drawer ? "max-lg:block" : "max-lg:hidden",
-            // Phone: the list is the home screen.
+            sidebarAsDrawer && "absolute inset-y-0 left-0 z-(--z-overlay) w-[280px] shadow-overlay",
+            !sidebarAsDrawer && "lg:block lg:w-[260px]",
+            !sidebarAsDrawer && collapsed && "lg:hidden",
+            !sidebarAsDrawer && "max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-(--z-overlay) max-lg:w-[280px] max-lg:shadow-overlay",
+            drawer ? "block" : sidebarAsDrawer ? "hidden" : "max-lg:hidden",
             home && "max-md:static max-md:block max-md:w-full max-md:shadow-none",
           )}
           onClick={(e) => {
@@ -56,12 +76,38 @@ export function Shell() {
         >
           <Sidebar />
         </aside>
-        {drawer ? <div aria-hidden className="absolute inset-0 z-(--z-pane) bg-overlay lg:hidden" onClick={() => setDrawer(false)} /> : null}
-        <main id="main" className={cn("min-w-0 flex-1 bg-bg", home && "max-md:hidden")}>
-          <Outlet />
-        </main>
+        {drawer ? <div aria-hidden className="absolute inset-0 z-(--z-pane) bg-overlay" onClick={() => setDrawer(false)} /> : null}
+        {placement.left === "work" ? (
+          <div className="w-[560px] shrink-0 border-r border-border">
+            <WorkPane />
+          </div>
+        ) : null}
+        {placement.screen === "main" ? (
+          <main id="main" className={cn("min-w-0 flex-1 bg-bg", home && "max-md:hidden")}>
+            <Outlet />
+          </main>
+        ) : (
+          <main id="main" className="flex min-w-0 flex-1 flex-col bg-surface">
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              className="flex h-10 shrink-0 items-center gap-1.5 border-b border-border px-3 text-ui text-fg-muted"
+            >
+              <ArrowLeft aria-hidden className="size-4" />
+              {t("panes.back")}
+            </button>
+            {switcher}
+            <div className="min-h-0 flex-1">{placement.screen === "thread" ? thread : <WorkPane />}</div>
+          </main>
+        )}
+        {right ? (
+          <div className={cn("flex shrink-0 flex-col border-l border-border bg-surface", width === "wide" ? "w-[440px]" : "w-[380px]")}>
+            {width === "medium" ? switcher : null}
+            <div className="min-h-0 flex-1">{right}</div>
+          </div>
+        ) : null}
       </div>
-      <BottomBar />
+      {placement.screen === "main" ? <BottomBar /> : null}
     </div>
   );
 }

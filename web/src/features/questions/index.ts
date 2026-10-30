@@ -1,1 +1,1 @@
-export { registerQuestionEvents, useOpenQuestions } from "./api";
+export { registerQuestionEvents, useAnswerQuestion, useOpenQuestions } from "./api";

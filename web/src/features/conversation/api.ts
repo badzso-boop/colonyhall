@@ -73,3 +73,20 @@ export function useMarkRead() {
 }
 
 export type MessagePages = InfiniteData<Message[], string | undefined>;
+
+export type Member = Schemas["ChannelMember"];
+
+export function useMembers(channelId: string) {
+  return useQuery({
+    queryKey: ["conversation", "members", channelId],
+    queryFn: async () => unwrap(await api.GET("/channels/{channelId}/members", { params: { path: { channelId } } })).members,
+  });
+}
+
+export function useRetract() {
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      unwrap(await api.POST("/messages/{messageId}/retract", { params: { path: { messageId } } }));
+    },
+  });
+}

@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, onResync, onUntypedEvent, unwrap } from "@/shared/api";
 
 export const questionKeys = { open: ["questions", "open"] as const };
@@ -18,4 +18,13 @@ export function registerQuestionEvents(qc: QueryClient): () => void {
   );
   offs.push(onResync(refetch));
   return () => offs.forEach((off) => off());
+}
+
+export function useAnswerQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, answer }: { id: string; answer: string }) =>
+      unwrap(await api.POST("/questions/{questionId}/answer", { params: { path: { questionId: id } }, body: { answer } })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: questionKeys.open }),
+  });
 }

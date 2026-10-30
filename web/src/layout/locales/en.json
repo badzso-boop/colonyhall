@@ -30,5 +30,13 @@
     "agents": "Agents",
     "more": "More"
   },
-  "devPage": "Dev page"
+  "devPage": "Dev page",
+  "panes": {
+    "work": "Work pane",
+    "closeTab": "Close {{name}}",
+    "closeWork": "Close the work pane",
+    "showThread": "Thread",
+    "showWork": "Work pane",
+    "back": "Back"
+  }
 }
