@@ -1,0 +1,163 @@
+# A Colonyhall design systemje
+
+**Kötelező a PWA minden képernyőjére** (`web/`). A kód felépítését a `docs/08-frontend-architektura.md` írja le, ez a dokumentum a kinézetet és a viselkedést. Az élő változat a **`/app/design`** oldalon van: minden token és komponens ott látszik, a téma váltható. A minták sima HTML-ben: `ui/ui-mockup/`.
+
+Forrás a kódban:
+
+- tokenek: `web/src/shared/styles/tokens.css`;
+- komponensek: `web/src/shared/ui/`;
+- a kontrasztszabályok tesztje: `web/src/shared/styles/contrast.test.ts`.
+
+---
+
+## 1. Karakter
+
+Hangyaboly éjjel: mély, meleg feketék, és egyetlen erős piros (a katonahangya). A piros jelentése „Colonyhall”, az elsődleges művelet, a megemlítés és a veszély. **Takarékosan kell használni**, hogy megtartsa a súlyát. Rajta kívül semmi sem harsány.
+
+---
+
+## 2. Színek: csak szemantikus tokenek
+
+A komponensek **soha nem használnak nyers színt** (`#e5383b`, `bg-red-500`), csak a tokenek nevét (`bg-surface`, `text-fg-muted`). Ezt teszt ellenőrzi (`no-raw-colors.test.ts`). Nyers érték csak a `tokens.css`-ben szerepelhet.
+
+| Token | Világos | Sötét | Mire |
+| --- | --- | --- | --- |
+| `bg` | `#faf8f7` | `#0b0a0a` | az oldal háttere |
+| `surface` | `#ffffff` | `#141212` | panelek, oldalsáv, fejléc |
+| `surface-raised` | `#ffffff` | `#1c1919` | ablakok, menük, kártyák |
+| `surface-sunken` | `#f3efed` | `#0f0d0d` | hover, mezők háttere, kódsor |
+| `border` | `#e6e0de` | `#2a2525` | elválasztó vonal (dekoráció) |
+| `border-strong` | `#8f8582` | `#6f6464` | mezők és gombok kerete (≥ 3:1) |
+| `fg` | `#141111` | `#f2eeee` | fő szöveg |
+| `fg-muted` | `#6b6262` | `#a39a9a` | másodlagos szöveg |
+| `fg-subtle` | `#8a807e` | `#857b7b` | ikon, placeholder, nem lényeges jelzés (≥ 3:1; folyó szövegre nem) |
+| `accent` | `#c1121f` | `#d42a2e` | piros **kitöltés** (elsődleges gomb, számláló jelvény) |
+| `accent-hover` | `#a40f1a` | `#bf2226` | a kitöltés hover állapota |
+| `accent-fg` | `#ffffff` | `#ffffff` | szöveg a piros kitöltésen |
+| `accent-soft` | `#fbe9ea` | `#3a1416` | piros árnyalatú háttér (aktív sor, megemlítés) |
+| `accent-text` | `#c1121f` | `#ff6b6e` | **piros szöveg** a felületeken (link, „N válasz”) |
+| `danger` / `danger-soft` | `#c1121f` / `#fbe9ea` | `#ff6b6e` / `#3a1416` | veszélyes művelet, hiba |
+| `warning` / `warning-soft` | `#8a5d00` / `#fdf3dc` | `#e0a63a` / `#33270f` | figyelmeztetés, borostyán |
+| `success` / `success-soft` | `#2a7046` / `#e5f4ea` | `#5cc286` / `#12291c` | siker |
+| `info` / `info-soft` | `#2f5f9e` / `#e6eefb` | `#7aa7e6` / `#15233a` | tájékoztatás |
+| `focus-ring` | piros, 50% | piros, 60% | a fókusz körvonala |
+| `overlay` | fekete, 60% | fekete, 65% | ablakok mögötti sötétítés |
+| `terminal-bg` / `terminal-fg` | `#0f0d0d` / `#e9e4e3` | ugyanaz | **a terminál mindig sötét**, mindkét témában |
+
+**Miért két piros?** Sötét témában ugyanaz a piros nem lehet egyszerre jól olvasható szöveg a sötét felületen és jó háttér a fehér szövegnek. Ezért van külön `accent` (kitöltés) és `accent-text` (szöveg).
+
+**Kontraszt (WCAG AA), teszttel ellenőrizve, mindkét témában:**
+
+- szöveg (`fg`, `fg-muted`, `accent-text`, `danger`, `warning`, `success`, `info`, a terminál szövege): legalább **4,5:1** minden felületen, amelyen megjelenik;
+- `fg-subtle` és `border-strong` (ikon, placeholder, vezérlő kerete): legalább **3:1**;
+- `accent-fg` a piros kitöltésen (alap és hover): legalább 4,5:1.
+
+**A szín soha nem az egyetlen jelzés:** a veszélyt ikon is jelzi, az állapotot felirat vagy forma, a gépet a neve.
+
+Új token felvétele: érték mindkét témában a `tokens.css`-ben, ha szöveg vagy vezérlő, akkor sor a `contrast.test.ts`-be, és minta az `/app/design` oldalra.
+
+---
+
+## 3. Téma
+
+- Három mód: **Rendszer** (alapértelmezés), **Világos**, **Sötét**. A felhasználói menüben és az `/app/design` oldalon lehet váltani.
+- A `.dark` osztály a `<html>`-en kapcsolja át a tokeneket. Az `index.html` inline szkriptje **az első kirajzolás előtt** állítja be, így nincs villanás.
+- A választás a böngészőben marad (`colony.theme`). Ha a tárolás tiltott, a rendszerbeállítás érvényes.
+- A tokenek maguk váltanak, ezért `dark:` variáns ritkán kell.
+
+---
+
+## 4. Tipográfia
+
+- **Felület:** Inter. **Kód, terminál, fájlút, technikai handle:** JetBrains Mono. Mindkettő SIL OFL licencű, **saját szerverről** jön (`@fontsource-variable/*`), Google Fonts nincs. A böngésző csak a ténylegesen használt nyelvi készletet tölti le (latin, latin-ext: ő, ű).
+- **Méretskála:**
+
+  | Osztály | Méret | Sortáv | Mire |
+  | --- | --- | --- | --- |
+  | `text-meta` | 12 px | 1,4 | idő, jelvény, meta |
+  | `text-ui` | 13 px | 1,45 | oldalsáv, gombok, menük, másodlagos szöveg |
+  | `text-body` | 14 px | 1,5 | **üzenet törzse, alapértelmezett** |
+  | `text-title` | 16 px | 1,3 | panel- és ablakcím |
+  | `text-page` | 20 px | 1,3 | oldalcím |
+  | `text-display` | 24 px | 1,25 | üres állapot, nagy cím |
+
+- Vastagság: 400, 500, 600.
+- Változó számokhoz (tokenszám, időzítő, számláló) a `tabular` osztály kell, hogy a számok egyforma szélesek legyenek.
+
+---
+
+## 5. Forma, tér, mélység, mozgás
+
+- **Térköz:** 4 px-es lépések (a Tailwind alapskálája).
+- **Lekerekítés:** `rounded-sm` 4 px, `rounded-md` 8 px, `rounded-lg` 12 px, `rounded-full`.
+- **Formanyelv: az ember kör, az agent lekerekített négyzet.** Mindenhol így van: avatar, megemlítés, taglista. Ez a fő megkülönböztető jel, a szín nem helyettesíti. Az agent avatarja körül a színe (alapból a gépéé) gyűrűként jelenik meg.
+- **Mélység:** sötét témában keretek, világosban lágy árnyék (`shadow-raised`, `shadow-overlay`). Az ablakok mögött `overlay` sötétítés enyhe elmosással.
+- **Mozgás:** 150 ms, `ease-out`, csak panelekre és ablakokra. Ha a `prefers-reduced-motion` be van kapcsolva, nincs animáció. Magától csak a „dolgozik” jelzés lüktet.
+
+---
+
+## 6. Komponensek (`shared/ui`)
+
+Egy funkció nem gyárt saját gombot vagy ablakot: ezeket használja, és ha valami hiányzik, itt kell bővíteni (tesztekkel, és mintával az `/app/design` oldalon).
+
+| Komponens | Mire, szabály |
+| --- | --- |
+| `Button` | `primary` (piros, képernyőnként legfeljebb egy fő művelet), `secondary`, `ghost`, `danger`; `sm`/`md`; `loading` |
+| `IconButton` | **kötelező `label`** (ez az akadálymentes név és a tooltip); opcionális számláló jelvény |
+| `Input`, `Textarea`, `Select` | `border-strong` keret, hibánál `aria-invalid` |
+| `Checkbox`, `Switch` | Radix; mindig címkével |
+| `Badge` | számláló, állapot, git-betű (`mono`); tónus: `neutral`, `accent`, `success`, `warning`, `info`, `danger` |
+| `Avatar` | `human` kör / `agent` négyzet; emoji vagy monogram; állapot: `working` (piros, lüktet), `idle`, `offline` (üres gyűrű), `paused` |
+| `Tooltip` | rövid magyarázat; a `TooltipProvider` az `app/`-ban van |
+| `Menu…` | Radix legördülő menü; veszélyes tétel `danger` |
+| `Tabs`, `TabList`, `Tab`, `TabPanel` | vízszintes vagy függőleges fülek |
+| `Dialog` | rövid űrlap, megerősítés; `md`, `lg`, `xl` (nagy beállítóablak) |
+| `Sheet` | hosszabb, csak olvasható részlet |
+| `toast()` + `Toaster` | visszajelzés, egy opcionális művelettel (pl. „Visszavonás”) |
+| `EmptyState`, `Skeleton` | üres és töltődő állapot |
+| `Kbd` | billentyű a súgóban |
+| `HoldButton` | nyomva tartással megerősít (vészleállító, 2 mp); egérrel és Szóközzel/Enterrel is |
+| `BrandMark` | a hangya jel |
+
+Ikonok: **Lucide** (`lucide-react`), sűrű helyen 16 px, máshol 20 px. A logó saját.
+
+---
+
+## 7. Hogyan nyílnak az ablakok és panelek
+
+Ötféle réteg van. A célja szerint kell választani, nem ízlés szerint:
+
+1. **Dialog** (középen; `md` 448 px, `lg` 512 px, `xl` 896 px): rövid űrlap és megerősítés. Esc és a háttérre kattintás bezárja (ha mentetlen bevitel van, előbb rákérdez). A fókusz bent marad, bezárás után visszatér a kiváltó elemhez. **640 px alatt alulról felcsúszó lap lesz belőle**, fogantyúval.
+2. **Sheet** (asztali gépen jobbról, telefonon alulról): hosszabb, csak olvasható részlet, az aktuális képernyőhöz tartozik.
+3. **Pane** (panel): tartós oszlop a keretben, nem modális (szál, terminál, fájlböngésző, agent-áttekintő). A helyét a panelkezelő szabályai adják (31. kör, 5. rész), és az URL-ben is benne van.
+4. **Lebegő ablak** (32. kör): mozgatható, kicsinyíthető, áttetsző ablak az oldalon belül (feladatok, naptár, jegyzetek).
+5. **Toast** (asztali gépen jobbra lent, telefonon fent): válasz nélküli visszajelzés.
+
+**Rétegsorrend:** panel < lebegő ablak < Sheet és Dialog < Toast (`--z-pane`, `--z-window`, `--z-overlay`, `--z-toast`).
+
+**Szabályok:**
+
+- egyszerre **legfeljebb egy** Dialog vagy Sheet lehet nyitva;
+- kivételek: megerősítő Dialog egy Sheet vagy egy nagy (`xl`) Dialog fölött, és a mappaválasztó a nagy beállítóablak fölött (33. kör);
+- **`window.confirm` / `alert` / `prompt` tilos**;
+- veszélyes műveletnél `danger` gomb kell, megerősítő Dialogban;
+- a vészleállító `HoldButton`, ablak nélkül.
+
+---
+
+## 8. Akadálymentesség
+
+- Ikon-gombnak kötelező a felirat (`IconButton` `label`).
+- A fókusz látható (`focus-ring`), a billentyűzetes használat mindenhol működik.
+- Minden ablak, menü és fül Radix-alapú: a szerepek, a fókusz és az Esc maguktól helyesek.
+- A szín nem lehet egyetlen jelzés; a kontrasztot teszt ellenőrzi.
+- `prefers-reduced-motion` mellett nincs animáció.
+- Telefonon az iPhone-os biztonsági sávok (`safe-area-inset-*`) be vannak tartva.
+
+---
+
+## 9. Ami még jön
+
+- **A 31. kör további részei:** a logó és az ikonok véglegesítése (PWA-ikonok, maszkolható ikon), a keret (fejléc, oldalsáv), a panelkezelő, a hírfolyam, a szerkesztő, a terminál- és fájlpanel, a billentyűparancsok súgója. Mindegyik ide is bekerül.
+- **32. kör:** a lebegő ablak részletei.
+- **33. kör:** a gépek és agentek színpalettája, a nagy beállítóablak, a mappaválasztó.

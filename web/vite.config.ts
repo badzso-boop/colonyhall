@@ -23,6 +23,9 @@ export default defineConfig({
     },
   },
   test: {
+    // The persistent transform cache keeps stale import.meta.glob results
+    // (a new feature's locales/*.json would be missing from the tests).
+    fsModuleCache: false,
     environment: "jsdom",
     globals: true,
     include: ["src/**/*.test.{ts,tsx}"],

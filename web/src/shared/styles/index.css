@@ -1,14 +1,26 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
 @import "./tokens.css";
 
 /* `dark:` follows the .dark class on <html>, not only the OS setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
-  html, body, #root { height: 100%; }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
-    @apply bg-bg text-fg font-sans antialiased;
-    font-size: 14px;
-    line-height: 1.5;
+    @apply bg-bg text-body text-fg font-sans antialiased;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
