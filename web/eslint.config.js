@@ -31,7 +31,7 @@ const layerPolicies = [
 ];
 
 export default defineConfig([
-  globalIgnores(["dist", "node_modules"]),
+  globalIgnores(["dist", "node_modules", "src/shared/api/schema.d.ts"]),
   {
     files: ["src/**/*.{ts,tsx}"],
     extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat.recommended],

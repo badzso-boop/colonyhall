@@ -688,6 +688,10 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	if err != nil {
 		return nil, err
 	}
+	msgs, err = s.withReplyParticipants(ctx, msgs)
+	if err != nil {
+		return nil, err
+	}
 	msgs, err = s.withReactions(ctx, msgs)
 	if err != nil {
 		return nil, err

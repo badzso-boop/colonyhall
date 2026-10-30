@@ -82,24 +82,27 @@ type Attachment struct {
 
 // Message is one chat message. Rows are append-only.
 type Message struct {
-	ID              ids.ID
-	WorkspaceID     ids.ID
-	ChannelID       ids.ID
-	ThreadRootID    ids.ID // ids.Nil for a top-level message
-	AuthorID        ids.ID
-	ClientMsgID     string // set by the client for idempotent sends; may be empty
-	Kind            string // "text" or "system"
-	Body            string
-	CompactionID    ids.ID // set for compaction system messages
-	Mentions        []ids.ID
-	ReplyCount      int
-	LastReplyAt     *time.Time
-	CreatedAt       time.Time
-	DeletedAt       *time.Time
-	DeletedBy       *ids.ID
-	OriginChannelID ids.ID // origin channel if sent by agent with an origin
-	OriginChannel   string // channel name, filled on reads
-	OriginThreadID  ids.ID // origin thread root if sent by agent with an origin
+	ID           ids.ID
+	WorkspaceID  ids.ID
+	ChannelID    ids.ID
+	ThreadRootID ids.ID // ids.Nil for a top-level message
+	AuthorID     ids.ID
+	ClientMsgID  string // set by the client for idempotent sends; may be empty
+	Kind         string // "text" or "system"
+	Body         string
+	CompactionID ids.ID // set for compaction system messages
+	Mentions     []ids.ID
+	ReplyCount   int
+	LastReplyAt  *time.Time
+	// ReplyParticipantIDs: up to MaxReplyParticipants reply authors, most
+	// recent first. Filled on read for thread roots, never stored.
+	ReplyParticipantIDs []ids.ID
+	CreatedAt           time.Time
+	DeletedAt           *time.Time
+	DeletedBy           *ids.ID
+	OriginChannelID     ids.ID // origin channel if sent by agent with an origin
+	OriginChannel       string // channel name, filled on reads
+	OriginThreadID      ids.ID // origin thread root if sent by agent with an origin
 	// AnswersMessageID is the DM reply an agent's answer in its origin
 	// thread responds to (set by the guard, checked on send).
 	AnswersMessageID ids.ID
@@ -130,6 +133,8 @@ const (
 	MaxClientMsgID  = 64
 	DefaultPageSize = 50
 	MaxPageSize     = 200
+	// MaxReplyParticipants: reply authors shown on a thread's summary row.
+	MaxReplyParticipants = 3
 )
 
 // Errors returned by the conversation service.

@@ -109,6 +109,27 @@ func (s *Service) reactInTx(ctx context.Context, by identity.Actor, messageID id
 }
 
 // withReactions fills Message.Reactions for a page of messages.
+// withReplyParticipants fills ReplyParticipantIDs on the thread roots.
+func (s *Service) withReplyParticipants(ctx context.Context, msgs []Message) ([]Message, error) {
+	var roots []ids.ID
+	for _, m := range msgs {
+		if m.ReplyCount > 0 {
+			roots = append(roots, m.ID)
+		}
+	}
+	if len(roots) == 0 {
+		return msgs, nil
+	}
+	byRoot, err := s.Store.ReplyParticipants(ctx, roots, MaxReplyParticipants)
+	if err != nil {
+		return nil, err
+	}
+	for i := range msgs {
+		msgs[i].ReplyParticipantIDs = byRoot[msgs[i].ID]
+	}
+	return msgs, nil
+}
+
 func (s *Service) withReactions(ctx context.Context, msgs []Message) ([]Message, error) {
 	if len(msgs) == 0 {
 		return msgs, nil

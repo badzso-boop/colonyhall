@@ -7,6 +7,7 @@ package storetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -358,7 +359,55 @@ func testConversation(t *testing.T, b Backend) {
 	testThreadsAndReactions(t, b, f, msgs)
 }
 
+// testReplyParticipants: distinct reply authors per thread, the most recent
+// replier first, at most max, retracted replies left out. It uses its own
+// channel so the other conversation checks are not affected.
+func testReplyParticipants(t *testing.T, b Backend, f fixture) {
+	ctx := context.Background()
+	ch := conversation.Channel{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: conversation.KindPublic,
+		Name: "threads", CreatedBy: f.human.ID, CreatedAt: t0}
+	must(t, b.Conversation.CreateChannel(ctx, ch))
+	third := identity.Actor{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: identity.KindAgent, Handle: "third",
+		DisplayName: "Third", Role: identity.RoleMember, State: "active", CreatedAt: t0}
+	must(t, b.Identity.CreateActor(ctx, third))
+	add := func(rootID, author ids.ID) conversation.Message {
+		m := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: ch.ID, AuthorID: author,
+			ThreadRootID: rootID, Kind: "text", Body: "r", CreatedAt: t0}
+		must(t, b.Conversation.InsertMessage(ctx, m))
+		return m
+	}
+	root := add(ids.Nil, f.human.ID)
+	other := add(ids.Nil, f.human.ID)
+	// Replies in order: agent, human, agent again, third, then a retracted human reply.
+	add(root.ID, f.agent.ID)
+	add(root.ID, f.human.ID)
+	add(root.ID, f.agent.ID)
+	add(root.ID, third.ID)
+	gone := add(root.ID, f.human.ID)
+	must(t, b.Conversation.RetractMessage(ctx, gone.ID, f.human.ID, t0))
+	add(other.ID, f.agent.ID)
+
+	got, err := b.Conversation.ReplyParticipants(ctx, []ids.ID{root.ID, other.ID, gen.New()}, 3)
+	must(t, err)
+	want := []ids.ID{third.ID, f.agent.ID, f.human.ID}
+	if fmt.Sprint(got[root.ID]) != fmt.Sprint(want) {
+		t.Fatalf("ReplyParticipants(root) = %v, want %v (most recent first, retracted left out)", got[root.ID], want)
+	}
+	if fmt.Sprint(got[other.ID]) != fmt.Sprint([]ids.ID{f.agent.ID}) || len(got) != 2 {
+		t.Fatalf("ReplyParticipants: %v", got)
+	}
+	capped, err := b.Conversation.ReplyParticipants(ctx, []ids.ID{root.ID}, 2)
+	must(t, err)
+	if fmt.Sprint(capped[root.ID]) != fmt.Sprint(want[:2]) {
+		t.Fatalf("ReplyParticipants max 2 = %v", capped[root.ID])
+	}
+	if none, err := b.Conversation.ReplyParticipants(ctx, nil, 3); err != nil || len(none) != 0 {
+		t.Fatalf("no roots: %v %v", none, err)
+	}
+}
+
 func testThreadsAndReactions(t *testing.T, b Backend, f fixture, msgs []conversation.Message) {
+	testReplyParticipants(t, b, f)
 	ctx := context.Background()
 	reply := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: f.channel.ID, AuthorID: f.agent.ID,
 		ThreadRootID: msgs[0].ID, Kind: "text", Body: "reply", CreatedAt: t0}

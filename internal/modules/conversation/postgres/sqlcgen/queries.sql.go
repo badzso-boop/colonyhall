@@ -733,6 +733,49 @@ func (q *Queries) RemoveReaction(ctx context.Context, arg RemoveReactionParams) 
 	return result.RowsAffected(), nil
 }
 
+const replyParticipants = `-- name: ReplyParticipants :many
+SELECT t.root_id::uuid AS root_id, t.author_id FROM (
+  SELECT thread_root_id AS root_id, author_id,
+         row_number() OVER (PARTITION BY thread_root_id ORDER BY max(id) DESC) AS rn
+  FROM message
+  WHERE thread_root_id = ANY($1::uuid[]) AND deleted_at IS NULL
+  GROUP BY thread_root_id, author_id
+) t
+WHERE t.rn <= $2::int
+ORDER BY t.root_id, t.rn
+`
+
+type ReplyParticipantsParams struct {
+	RootIds    []uuid.UUID
+	MaxPerRoot int32
+}
+
+type ReplyParticipantsRow struct {
+	RootID   uuid.UUID
+	AuthorID uuid.UUID
+}
+
+// Up to max_per_root distinct reply authors per thread, most recent first.
+func (q *Queries) ReplyParticipants(ctx context.Context, arg ReplyParticipantsParams) ([]ReplyParticipantsRow, error) {
+	rows, err := q.db.Query(ctx, replyParticipants, arg.RootIds, arg.MaxPerRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReplyParticipantsRow
+	for rows.Next() {
+		var i ReplyParticipantsRow
+		if err := rows.Scan(&i.RootID, &i.AuthorID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retractMessage = `-- name: RetractMessage :execrows
 UPDATE message
 SET deleted_at = $1::timestamptz,

@@ -30,6 +30,9 @@ type Store interface {
 	// ListMessages returns up to limit messages older than before (or the
 	// newest when before is ids.Nil), oldest first.
 	ListMessages(ctx context.Context, channelID, before ids.ID, limit int) ([]Message, error)
+	// ReplyParticipants returns, per thread root, up to max distinct authors
+	// of its replies that are not retracted, the most recent replier first.
+	ReplyParticipants(ctx context.Context, rootIDs []ids.ID, max int) (map[ids.ID][]ids.ID, error)
 
 	// IncrementMsgCount adds one to the channel's message count and returns it.
 	IncrementMsgCount(ctx context.Context, channelID ids.ID) (int64, error)

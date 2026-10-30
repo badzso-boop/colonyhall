@@ -44,13 +44,14 @@ test-web: $(WEB_DEPS) ## Frontend tests: dev page (Node) and PWA (typecheck, lin
 test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
 
-gen:             ## Regenerate code from api/openapi.yaml and SQL queries
+gen: $(WEB_DEPS) ## Regenerate code from api/openapi.yaml (Go and TypeScript) and SQL queries
 	$(GO) tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+	npm --prefix web run gen:api
 	$(SQLC) generate
 
 gen-check:       ## Fail if generated code is out of date
 	$(MAKE) gen
-	git diff --exit-code -- internal/apispec $$(find internal -type d -name sqlcgen)
+	git diff --exit-code -- internal/apispec web/src/shared/api/schema.d.ts $$(find internal -type d -name sqlcgen)
 
 lint:            ## golangci-lint with the depguard layer rules
 	golangci-lint run ./...

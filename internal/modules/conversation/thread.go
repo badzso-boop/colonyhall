@@ -29,6 +29,10 @@ func (s *Service) Thread(ctx context.Context, by identity.Actor, messageID ids.I
 	if err != nil {
 		return Message{}, nil, err
 	}
+	all, err = s.withReplyParticipants(ctx, all)
+	if err != nil {
+		return Message{}, nil, err
+	}
 	all, err = s.withReactions(ctx, all)
 	if err != nil {
 		return Message{}, nil, err

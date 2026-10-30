@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/server"
 )
 
@@ -115,6 +117,49 @@ func TestThreadEndpoint(t *testing.T) {
 	e.do("GET", "/api/v1/messages/"+th.Replies[0].ID+"/thread", server.DevAdminToken, nil, &th2)
 	if th2.Root.ID != root.ID {
 		t.Fatalf("thread via reply: root %s", th2.Root.ID)
+	}
+}
+
+// TestThreadParticipants: a thread root carries its most recent repliers
+// (for the "N válasz" summary row) in the channel list and the thread.
+func TestThreadParticipants(t *testing.T) {
+	e := newEnv(t)
+	general := e.generalID()
+	root, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "plan?"})
+	plain, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "no replies"})
+	e.send(server.DevAgentToken, general, map[string]any{"body": "agent first", "thread_root_id": root.ID})
+	e.send(server.DevAdminToken, general, map[string]any{"body": "then the admin", "thread_root_id": root.ID})
+
+	var admin, agent struct{ ID string }
+	e.do("GET", "/api/v1/me", server.DevAdminToken, nil, &admin)
+	e.do("GET", "/api/v1/me", server.DevAgentToken, nil, &agent)
+	want := []string{admin.ID, agent.ID}
+
+	var list apispec.MessageList
+	e.do("GET", "/api/v1/channels/"+general+"/messages", server.DevAdminToken, nil, &list)
+	found := 0
+	for _, m := range list.Messages {
+		switch m.Id.String() {
+		case root.ID:
+			found++
+			if m.ReplyParticipantIds == nil || fmt.Sprint(*m.ReplyParticipantIds) != fmt.Sprint(want) {
+				t.Fatalf("root participants in the list: %v, want %v", m.ReplyParticipantIds, want)
+			}
+		case plain.ID:
+			found++
+			if m.ReplyParticipantIds != nil {
+				t.Fatalf("a message without replies has participants: %v", *m.ReplyParticipantIds)
+			}
+		}
+	}
+	if found != 2 {
+		t.Fatalf("messages not in the list: %d", found)
+	}
+
+	var th apispec.Thread
+	e.do("GET", "/api/v1/messages/"+root.ID+"/thread", server.DevAdminToken, nil, &th)
+	if th.Root.ReplyParticipantIds == nil || fmt.Sprint(*th.Root.ReplyParticipantIds) != fmt.Sprint(want) {
+		t.Fatalf("root participants in the thread: %v", th.Root.ReplyParticipantIds)
 	}
 }
 

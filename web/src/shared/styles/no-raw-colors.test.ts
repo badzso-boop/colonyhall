@@ -13,7 +13,7 @@ const palette =
 test("no raw colours or default palette classes outside tokens.css", () => {
   const offenders: string[] = [];
   for (const [path, text] of Object.entries(sources)) {
-    if (path.endsWith("/tokens.css") || path.includes(".test.")) continue;
+    if (path.endsWith("/tokens.css") || path.endsWith(".d.ts") || path.includes(".test.")) continue;
     text.split("\n").forEach((line, i) => {
       if (rawColour.test(line) || palette.test(line)) offenders.push(`${path}:${i + 1}: ${line.trim()}`);
     });

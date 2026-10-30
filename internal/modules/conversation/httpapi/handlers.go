@@ -58,6 +58,9 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	if out.Mentions == nil {
 		out.Mentions = []ids.ID{}
 	}
+	if len(m.ReplyParticipantIDs) > 0 {
+		out.ReplyParticipantIds = &m.ReplyParticipantIDs
+	}
 	if len(m.Reactions) > 0 && m.DeletedAt == nil {
 		rs := make([]apispec.ReactionSummary, 0, len(m.Reactions))
 		for _, r := range m.Reactions {

@@ -97,6 +97,18 @@ WHERE reaction.removed_at IS NOT NULL;
 UPDATE reaction SET removed_at = sqlc.arg(at)::timestamptz
 WHERE message_id = sqlc.arg(message_id) AND actor_id = sqlc.arg(actor_id) AND emoji = sqlc.arg(emoji) AND removed_at IS NULL;
 
+-- name: ReplyParticipants :many
+-- Up to max_per_root distinct reply authors per thread, most recent first.
+SELECT t.root_id::uuid AS root_id, t.author_id FROM (
+  SELECT thread_root_id AS root_id, author_id,
+         row_number() OVER (PARTITION BY thread_root_id ORDER BY max(id) DESC) AS rn
+  FROM message
+  WHERE thread_root_id = ANY(sqlc.arg(root_ids)::uuid[]) AND deleted_at IS NULL
+  GROUP BY thread_root_id, author_id
+) t
+WHERE t.rn <= sqlc.arg(max_per_root)::int
+ORDER BY t.root_id, t.rn;
+
 -- name: ReactionsFor :many
 SELECT message_id, actor_id, emoji, created_at FROM reaction
 WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) AND removed_at IS NULL

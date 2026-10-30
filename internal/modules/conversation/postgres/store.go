@@ -289,6 +289,22 @@ func (s *Store) ReactionsFor(ctx context.Context, messageIDs []ids.ID) ([]conver
 	return out, nil
 }
 
+// ReplyParticipants returns up to max recent reply authors per thread root.
+func (s *Store) ReplyParticipants(ctx context.Context, rootIDs []ids.ID, max int) (map[ids.ID][]ids.ID, error) {
+	out := map[ids.ID][]ids.ID{}
+	if len(rootIDs) == 0 || max <= 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).ReplyParticipants(ctx, sqlcgen.ReplyParticipantsParams{RootIds: rootIDs, MaxPerRoot: int32(max)})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.RootID] = append(out[r.RootID], r.AuthorID)
+	}
+	return out, nil
+}
+
 // ThreadMessages returns the root and its replies.
 func (s *Store) ThreadMessages(ctx context.Context, rootID ids.ID) ([]conversation.Message, error) {
 	return manyMessages(s.q(ctx).ThreadMessages(ctx, rootID))

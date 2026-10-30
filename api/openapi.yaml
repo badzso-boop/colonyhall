@@ -2260,6 +2260,10 @@ components:
         mentions: { type: array, items: { type: string, format: uuid } }
         reply_count: { type: integer }
         last_reply_at: { type: string, format: date-time }
+        reply_participant_ids:
+          type: array
+          description: Up to 3 authors of the replies, the most recent replier first (thread roots only).
+          items: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
         reactions: { type: array, items: { $ref: "#/components/schemas/ReactionSummary" } }
         attachments: { type: array, items: { $ref: "#/components/schemas/FileAttachment" } }
@@ -2390,6 +2394,19 @@ components:
         head: { type: integer, format: int64 }
     WsEvent:
       type: object
+      description: |
+        A durable event. `data` depends on `event_type`; the payloads the web
+        client reads are described by these schemas (the server sends them
+        unchanged; unknown types must be ignored by clients):
+        message.created → EventMessageCreated; message.retracted →
+        EventMessageRetracted; reaction.added, reaction.removed →
+        EventReaction; channel.created → EventChannelCreated;
+        channel.member_added → EventMemberAdded; channel.member_removed →
+        EventMemberRemoved; actor.created → EventActorCreated;
+        actor.state_changed → EventActorStateChanged; actor.profile_updated →
+        EventActorProfileUpdated; workspace.emergency_activated,
+        workspace.emergency_cleared → EventEmergency; delivery.item_created →
+        EventDeliveryItemCreated.
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -2411,6 +2428,127 @@ components:
       properties:
         type: { type: string, enum: [resync_required] }
         head: { type: integer, format: int64 }
+    WsActivity:
+      type: object
+      description: Ephemeral (not in the event log). An agent started or stopped working in a channel or thread.
+      required: [type, agent_id, channel_id, state]
+      properties:
+        type: { type: string, enum: [agent.activity] }
+        agent_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        state: { type: string, description: "working or idle" }
+    WsProgress:
+      type: object
+      description: Ephemeral (not in the event log). The live steps of an agent's running work.
+      required: [type, agent_id, channel_id, run_key, steps, done]
+      properties:
+        type: { type: string, enum: [agent.progress] }
+        agent_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        run_key: { type: string }
+        steps: { type: array, items: { $ref: "#/components/schemas/AgentStep" } }
+        done: { type: boolean }
+
+    # Payloads of WsEvent.data (see the mapping in the WsEvent description).
+    EventMessageCreated:
+      type: object
+      required: [message_id, channel_id, author_id, kind, body, mentions, created_at]
+      properties:
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        client_msg_id: { type: string }
+        kind: { type: string, enum: [text, system] }
+        body: { type: string }
+        mentions: { type: array, items: { type: string, format: uuid } }
+        no_thread_follow: { type: boolean }
+        silent: { type: boolean }
+        attachments: { type: array, items: { $ref: "#/components/schemas/EventAttachment" } }
+        created_at: { type: string, format: date-time }
+    EventAttachment:
+      type: object
+      required: [id, name, mime, size]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        mime: { type: string }
+        size: { type: integer, format: int64 }
+    EventMessageRetracted:
+      type: object
+      required: [message_id, channel_id, author_id, retracted_by, at]
+      properties:
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        retracted_by: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+    EventReaction:
+      type: object
+      required: [message_id, channel_id, actor_id, message_author_id, emoji]
+      properties:
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        message_author_id: { type: string, format: uuid }
+        emoji: { type: string }
+    EventChannelCreated:
+      type: object
+      required: [channel_id, kind, name]
+      properties:
+        channel_id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ChannelKind" }
+        name: { type: string }
+    EventMemberAdded:
+      type: object
+      required: [channel_id, actor_id, can_write]
+      properties:
+        channel_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        can_write: { type: boolean }
+    EventMemberRemoved:
+      type: object
+      required: [channel_id, actor_id]
+      properties:
+        channel_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+    EventActorCreated:
+      type: object
+      required: [actor_id, kind, handle, role]
+      properties:
+        actor_id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActorKind" }
+        handle: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+    EventActorStateChanged:
+      type: object
+      required: [actor_id, state]
+      properties:
+        actor_id: { type: string, format: uuid }
+        state: { type: string }
+    EventActorProfileUpdated:
+      type: object
+      required: [actor_id, description, avatar_emoji, timezone, status_text]
+      properties:
+        actor_id: { type: string, format: uuid }
+        description: { type: string }
+        avatar_emoji: { type: string }
+        timezone: { type: string }
+        status_text: { type: string }
+    EventEmergency:
+      type: object
+      required: [by]
+      properties:
+        by: { type: string, format: uuid }
+    EventDeliveryItemCreated:
+      type: object
+      required: [recipient_id, item_kind]
+      properties:
+        recipient_id: { type: string, format: uuid }
+        item_kind: { type: string }
 
     PairingCode:
       type: object

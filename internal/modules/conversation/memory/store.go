@@ -375,6 +375,41 @@ func (s *Store) ThreadMessages(_ context.Context, rootID ids.ID) ([]conversation
 	return out, nil
 }
 
+// ReplyParticipants returns up to max recent reply authors per thread root.
+func (s *Store) ReplyParticipants(_ context.Context, rootIDs []ids.ID, max int) (map[ids.ID][]ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := map[ids.ID][]ids.ID{}
+	if max <= 0 {
+		return out, nil
+	}
+	want := map[ids.ID]bool{}
+	for _, id := range rootIDs {
+		want[id] = true
+	}
+	var replies []conversation.Message
+	for _, m := range s.messages {
+		if want[m.ThreadRootID] && m.DeletedAt == nil {
+			replies = append(replies, m)
+		}
+	}
+	sortMessages(replies)
+	// Newest reply first; each author once, at their latest reply.
+	seen := map[ids.ID]map[ids.ID]bool{}
+	for i := len(replies) - 1; i >= 0; i-- {
+		m := replies[i]
+		if seen[m.ThreadRootID] == nil {
+			seen[m.ThreadRootID] = map[ids.ID]bool{}
+		}
+		if seen[m.ThreadRootID][m.AuthorID] || len(out[m.ThreadRootID]) >= max {
+			continue
+		}
+		seen[m.ThreadRootID][m.AuthorID] = true
+		out[m.ThreadRootID] = append(out[m.ThreadRootID], m.AuthorID)
+	}
+	return out, nil
+}
+
 // MainStreamMessages returns top-level messages in the channel, oldest first.
 func (s *Store) MainStreamMessages(_ context.Context, channelID ids.ID) ([]conversation.Message, error) {
 	s.mu.RLock()

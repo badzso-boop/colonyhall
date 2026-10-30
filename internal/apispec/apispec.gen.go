@@ -2219,7 +2219,10 @@ type Message struct {
 	Origin       *MessageOrigin       `json:"origin,omitempty"`
 	Reactions    *[]ReactionSummary   `json:"reactions,omitempty"`
 	ReplyCount   int                  `json:"reply_count"`
-	ThreadRootId *openapi_types.UUID  `json:"thread_root_id,omitempty"`
+
+	// ReplyParticipantIds Up to 3 authors of the replies, the most recent replier first (thread roots only).
+	ReplyParticipantIds *[]openapi_types.UUID `json:"reply_participant_ids,omitempty"`
+	ThreadRootId        *openapi_types.UUID   `json:"thread_root_id,omitempty"`
 }
 
 // MessageKind defines model for Message.Kind.
