@@ -7,6 +7,10 @@ const common = import.meta.glob<Record<string, unknown>>("../shared/i18n/locales
   import: "default",
   eager: true,
 });
+const layout = import.meta.glob<Record<string, unknown>>("../layout/locales/*.json", {
+  import: "default",
+  eager: true,
+});
 const features = import.meta.glob<Record<string, unknown>>("../features/*/locales/*.json", {
   import: "default",
   eager: true,
@@ -21,6 +25,7 @@ export function collectResources(): Resource {
     bucket[ns] = data;
   };
   for (const [path, data] of Object.entries(common)) add("common", path, data);
+  for (const [path, data] of Object.entries(layout)) add("layout", path, data);
   for (const [path, data] of Object.entries(features)) {
     const ns = path.split("/")[2];
     if (!ns) throw new Error(`unexpected locale path: ${path}`);

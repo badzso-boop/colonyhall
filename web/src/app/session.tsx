@@ -2,7 +2,11 @@ import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { ApiError, WsClient, onUnauthorized, wsURL } from "@/shared/api";
+import { registerAdminEvents } from "@/features/admin";
+import { registerAgentEvents } from "@/features/agents";
+import { registerConversationEvents } from "@/features/conversation";
 import { registerIdentityEvents, useSession } from "@/features/identity";
+import { registerQuestionEvents } from "@/features/questions";
 
 /** Sends the user to /login (and back afterwards) when the session is gone. */
 function useUnauthorizedRedirect() {
@@ -23,7 +27,13 @@ function useLiveUpdates(enabled: boolean) {
   const qc = useQueryClient();
   useEffect(() => {
     if (!enabled) return;
-    const offs = [registerIdentityEvents(qc)];
+    const offs = [
+      registerIdentityEvents(qc),
+      registerConversationEvents(qc),
+      registerQuestionEvents(qc),
+      registerAgentEvents(),
+      registerAdminEvents(qc),
+    ];
     const ws = new WsClient(wsURL());
     ws.start();
     return () => {

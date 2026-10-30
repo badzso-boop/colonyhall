@@ -1,0 +1,34 @@
+{
+  "skip": "Skip to content",
+  "sidebar": "Sidebar",
+  "toggleSidebar": "Show or hide the sidebar",
+  "workspace": "Workspace",
+  "pages": {
+    "design": "Design system"
+  },
+  "search": "Search or command…",
+  "questions": "Waiting for you",
+  "working": "{{count}} working",
+  "workingNone": "Nobody is working now",
+  "workingIn": "#{{channel}}",
+  "claude": "Claude 5 h: {{five}} % · resets {{reset}} · weekly {{week}} %",
+  "windows": "Floating windows",
+  "stop": "Stop all",
+  "stopHint": "Press and hold for 2 seconds: every agent stops",
+  "stopped": "Emergency stop active",
+  "release": "Release",
+  "halted": "You cannot write now: paused or stopped.",
+  "reconnecting": "Reconnecting…",
+  "userMenu": "User menu",
+  "profile": "My profile",
+  "theme": "Theme",
+  "language": "Language",
+  "logout": "Sign out",
+  "tabs": {
+    "conversations": "Conversations",
+    "questions": "Waiting",
+    "agents": "Agents",
+    "more": "More"
+  },
+  "devPage": "Dev page"
+}

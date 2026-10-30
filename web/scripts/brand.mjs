@@ -49,6 +49,12 @@ const files = {
   "mark.svg": svg("0 0 24 24", markShapes(RED)),
   "mark-mono.svg": svg("0 0 24 24", markShapes("currentColor")),
   "favicon.svg": svg("0 0 32 32", `<rect width="32" height="32" rx="7" fill="${DARK}"/><g transform="translate(4 4)">${markShapes(RED)}</g>`),
+  // The tab icon while there are unread mentions: a red dot in the corner.
+  "favicon-alert.svg": svg(
+    "0 0 32 32",
+    `<rect width="32" height="32" rx="7" fill="${DARK}"/><g transform="translate(4 4)">${markShapes(RED)}</g>` +
+      `<circle cx="26" cy="6" r="5.5" fill="${RED}" stroke="${DARK}" stroke-width="2"/>`,
+  ),
   // The wordmark stays text (Inter 600 with fallbacks): it renders crisply and
   // stays small; where Inter is missing, a system sans is used. logo.svg is
   // for light backgrounds, logo-on-dark.svg for dark ones (an <img> cannot

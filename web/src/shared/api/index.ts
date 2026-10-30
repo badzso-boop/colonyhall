@@ -4,6 +4,7 @@ export {
   onActivity,
   onEvent,
   onProgress,
+  onUntypedEvent,
   onResync,
   type ActivityFrame,
   type AppEvent,

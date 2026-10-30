@@ -13,5 +13,7 @@
   "update": {
     "available": "Új verzió érhető el",
     "reload": "Frissítés"
-  }
+  },
+  "today": "Ma",
+  "yesterday": "Tegnap"
 }

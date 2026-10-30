@@ -37,6 +37,10 @@ test("without a session, the app goes to /login and returns after signing in", a
     vi.fn(async (req: Request) => {
       const path = new URL(req.url).pathname;
       if (path.endsWith("/auth/session")) return signedIn ? json(session) : json({ title: "Unauthorized" }, 401);
+      if (path.endsWith("/actors")) return json({ actors: [session.actor] });
+      if (path.endsWith("/channels")) return json({ channels: [] });
+      if (path.endsWith("/sidebar/sections")) return json({ sections: [] });
+      if (path.endsWith("/questions")) return json({ questions: [] });
       if (path.endsWith("/auth/login")) {
         const body = await req.json();
         if (body.handle !== "norbi" || body.password !== "jo") return json({ title: "Unauthorized" }, 401);
@@ -57,7 +61,9 @@ test("without a session, the app goes to /login and returns after signing in", a
   fireEvent.change(screen.getByLabelText("Jelszó"), { target: { value: "jo" } });
   fireEvent.click(screen.getByRole("button", { name: "Belépés" }));
   await waitFor(() => expect(screen.queryByRole("heading", { name: "Belépés" })).toBeNull());
-  expect(await screen.findByRole("heading", { name: "A PWA alapja kész" })).toBeTruthy();
+  // The shell: the user menu in the header and the home screen.
+  expect(await screen.findByRole("button", { name: "Felhasználói menü" })).toBeTruthy();
+  expect(await screen.findByText("Válassz egy beszélgetést")).toBeTruthy();
 });
 
 test("the style guide is public", async () => {

@@ -1,0 +1,34 @@
+{
+  "skip": "Ugrás a tartalomhoz",
+  "sidebar": "Oldalsáv",
+  "toggleSidebar": "Oldalsáv megjelenítése vagy elrejtése",
+  "workspace": "Munkaterület",
+  "pages": {
+    "design": "Design system"
+  },
+  "search": "Keresés vagy parancs…",
+  "questions": "Válaszra vár",
+  "working": "{{count}} dolgozik",
+  "workingNone": "Most senki nem dolgozik",
+  "workingIn": "#{{channel}}",
+  "claude": "Claude 5 óra: {{five}} % · újraindul {{reset}} · heti {{week}} %",
+  "windows": "Lebegő ablakok",
+  "stop": "Mind áll",
+  "stopHint": "Nyomd és tartsd 2 másodpercig: minden agent leáll",
+  "stopped": "Vészleállítás aktív",
+  "release": "Feloldás",
+  "halted": "Most nem írhatsz: szüneteltetve vagy leállítva.",
+  "reconnecting": "Újracsatlakozás…",
+  "userMenu": "Felhasználói menü",
+  "profile": "Profilom",
+  "theme": "Téma",
+  "language": "Nyelv",
+  "logout": "Kijelentkezés",
+  "tabs": {
+    "conversations": "Beszélgetések",
+    "questions": "Válaszra vár",
+    "agents": "Agentek",
+    "more": "Több"
+  },
+  "devPage": "Fejlesztői oldal"
+}

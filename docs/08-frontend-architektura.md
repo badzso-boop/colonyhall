@@ -222,7 +222,8 @@ Kis funkciónál a fájlok elhagyhatók (például nincs `store.ts`), de a megl�
 - **Szöveg nem lehet beégetve** a komponensben (CLAUDE.md, Nyelv). A felhasználó minden szövege i18n kulcs.
 - **Névterek:**
   - közös szövegek (gombok, általános hibák): `shared/i18n/locales/{hu,en}.json`, névtér `common`;
-  - funkció szövegei: `features/<x>/locales/{hu,en}.json`, a névtér a funkció neve (`wiki`, `agents`…).
+  - funkció szövegei: `features/<x>/locales/{hu,en}.json`, a névtér a funkció neve (`wiki`, `agents`…);
+  - a keret (fejléc, oldalsáv, alsó sáv) szövegei: `layout/locales/{hu,en}.json`, névtér `layout`.
   - Az `app/i18n.ts` gyűjti össze őket (`import.meta.glob`), a funkciónak csak a saját JSON-ját kell létrehoznia.
 - Használat: `useTranslation("wiki")` és `t("topic.reply")`, közös szövegnél `t("common:save")`.
 - Alapnyelv a magyar. **A magyar és az angol kulcsok egyezését teszt ellenőrzi**, minden névtérben.

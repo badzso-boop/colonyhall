@@ -18,14 +18,14 @@ beforeAll(async () => {
 }, 180_000);
 
 const cases: Array<[string, string, string, string | null]> = [
-  ["feature → another feature's internals", "src/features/demo/x.ts", 'import P from "@/features/scaffold/pages/ScaffoldPage";\nexport const a = P;', "boundaries/dependencies"],
-  ["feature → another feature's index", "src/features/demo/x.ts", 'import { ScaffoldPage } from "@/features/scaffold";\nexport const a = ScaffoldPage;', null],
+  ["feature → another feature's internals", "src/features/demo/x.ts", 'import P from "@/features/design/pages/DesignPage";\nexport const a = P;', "boundaries/dependencies"],
+  ["feature → another feature's index", "src/features/demo/x.ts", 'import { DesignPage } from "@/features/design";\nexport const a = DesignPage;', null],
   ["feature → shared", "src/features/demo/x.ts", 'import { cn } from "@/shared/lib";\nexport const a = cn;', null],
   ["feature → app", "src/features/demo/x.ts", 'import { App } from "@/app/App";\nexport const a = App;', "boundaries/dependencies"],
-  ["shared → feature", "src/shared/lib/x.ts", 'import { ScaffoldPage } from "@/features/scaffold";\nexport const a = ScaffoldPage;', "boundaries/dependencies"],
-  ["layout → feature internals", "src/layout/x.ts", 'import P from "@/features/scaffold/pages/ScaffoldPage";\nexport const a = P;', "boundaries/dependencies"],
-  ["layout → feature index", "src/layout/x.ts", 'import { ScaffoldPage } from "@/features/scaffold";\nexport const a = ScaffoldPage;', null],
-  ["app → feature index", "src/app/x.ts", 'import { ScaffoldPage } from "@/features/scaffold";\nexport const a = ScaffoldPage;', null],
+  ["shared → feature", "src/shared/lib/x.ts", 'import { DesignPage } from "@/features/design";\nexport const a = DesignPage;', "boundaries/dependencies"],
+  ["layout → feature internals", "src/layout/x.ts", 'import P from "@/features/design/pages/DesignPage";\nexport const a = P;', "boundaries/dependencies"],
+  ["layout → feature index", "src/layout/x.ts", 'import { DesignPage } from "@/features/design";\nexport const a = DesignPage;', null],
+  ["app → feature index", "src/app/x.ts", 'import { DesignPage } from "@/features/design";\nexport const a = DesignPage;', null],
   ["../../ import", "src/features/demo/sub/x.ts", 'import { cn } from "../../../shared/lib";\nexport const a = cn;', "no-restricted-imports"],
   ["dangerouslySetInnerHTML", "src/features/demo/X.tsx", 'export const X = () => <div dangerouslySetInnerHTML={{ __html: "x" }} />;', "no-restricted-syntax"],
   ["innerHTML", "src/features/demo/x.ts", 'export const f = (e: HTMLElement) => { e.innerHTML = "x"; };', "no-restricted-syntax"],

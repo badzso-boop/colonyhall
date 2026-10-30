@@ -48,6 +48,16 @@ export function onEvent<T extends KnownEvent>(type: T, handler: (e: AppEvent<T>)
   return add(set, handler as Handler);
 }
 
+/**
+ * Subscribe to an event type whose payload the contract does not describe
+ * (yet): the handler only learns that it happened. Use it to refetch.
+ */
+export function onUntypedEvent(type: string, handler: () => void): () => void {
+  let set = eventHandlers.get(type);
+  if (!set) eventHandlers.set(type, (set = new Set()));
+  return add(set, handler as Handler);
+}
+
 /** An agent started or stopped working somewhere (ephemeral). */
 export function onActivity(handler: (f: ActivityFrame) => void): () => void {
   return add(activityHandlers, handler);

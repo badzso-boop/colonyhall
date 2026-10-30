@@ -1,7 +1,9 @@
 import { Route, Routes } from "react-router";
+import { ConversationPage } from "@/features/conversation";
 import { DesignPage } from "@/features/design";
 import { LoginPage } from "@/features/identity";
-import { ScaffoldPage } from "@/features/scaffold";
+import { Shell } from "@/layout";
+import { Home } from "./Home";
 import { RequireSession } from "./session";
 
 // Route → the page a feature exports from its index.ts (lazy loaded).
@@ -12,13 +14,16 @@ export function AppRoutes() {
       <Route path="login" element={<LoginPage />} />
       <Route path="design" element={<DesignPage />} />
       <Route
-        path="*"
         element={
           <RequireSession>
-            <ScaffoldPage />
+            <Shell />
           </RequireSession>
         }
-      />
+      >
+        <Route index element={<Home />} />
+        <Route path="c/:channelId" element={<ConversationPage />} />
+        <Route path="*" element={<Home />} />
+      </Route>
     </Routes>
   );
 }

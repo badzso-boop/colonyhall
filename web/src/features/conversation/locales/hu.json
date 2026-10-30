@@ -1,0 +1,31 @@
+{
+  "groups": {
+    "channels": "Csatornák",
+    "dms": "Közvetlen üzenetek",
+    "agentDms": "Te és az agentek",
+    "agentAgent": "Agentek egymás közt",
+    "ai": "AI-beszélgetések"
+  },
+  "row": {
+    "observed": "Csak megfigyelés",
+    "private": "Privát csatorna",
+    "mentions": "{{count}} megemlítés",
+    "unread": "olvasatlan"
+  },
+  "actions": {
+    "newChannel": "Új csatorna",
+    "newDm": "Új közvetlen üzenet",
+    "newAgentDm": "Új beszélgetés agenttel",
+    "toggle": "{{name}} csoport összecsukása vagy kinyitása"
+  },
+  "empty": {
+    "title": "Válassz egy beszélgetést",
+    "body": "A bal oldali listából nyithatsz meg csatornát vagy közvetlen üzenetet."
+  },
+  "notFound": "Ez a beszélgetés nem található, vagy nincs hozzá jogod.",
+  "composer": {
+    "label": "Üzenet",
+    "placeholder": "Üzenet ide: {{name}}",
+    "send": "Küldés"
+  }
+}

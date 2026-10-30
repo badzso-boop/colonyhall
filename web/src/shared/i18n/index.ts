@@ -6,6 +6,11 @@ export type Language = (typeof languages)[number];
 
 const storageKey = "colony.lang";
 
+/** The Intl locale of a UI language (dates and numbers follow the UI, not the browser). */
+export function localeOf(lang: string): string {
+  return lang === "en" ? "en-GB" : "hu-HU";
+}
+
 export function storedLanguage(): Language {
   try {
     const v = localStorage.getItem(storageKey);

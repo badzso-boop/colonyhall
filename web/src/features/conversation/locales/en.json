@@ -1,0 +1,31 @@
+{
+  "groups": {
+    "channels": "Channels",
+    "dms": "Direct messages",
+    "agentDms": "You and the agents",
+    "agentAgent": "Agents among themselves",
+    "ai": "AI conversations"
+  },
+  "row": {
+    "observed": "Observing only",
+    "private": "Private channel",
+    "mentions": "{{count}} mentions",
+    "unread": "unread"
+  },
+  "actions": {
+    "newChannel": "New channel",
+    "newDm": "New direct message",
+    "newAgentDm": "New conversation with an agent",
+    "toggle": "Collapse or expand {{name}}"
+  },
+  "empty": {
+    "title": "Pick a conversation",
+    "body": "Open a channel or a direct message from the list on the left."
+  },
+  "notFound": "This conversation does not exist, or you have no access to it.",
+  "composer": {
+    "label": "Message",
+    "placeholder": "Message {{name}}",
+    "send": "Send"
+  }
+}
