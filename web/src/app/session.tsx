@@ -9,6 +9,7 @@ import { registerIdentityEvents, useSession } from "@/features/identity";
 import { registerPlannerEvents } from "@/features/planner";
 import { registerQuestionEvents } from "@/features/questions";
 import { registerScheduleEvents } from "@/features/schedules";
+import { registerWikiEvents } from "@/features/wiki";
 
 /** Sends the user to /login (and back afterwards) when the session is gone. */
 function useUnauthorizedRedirect() {
@@ -37,6 +38,7 @@ function useLiveUpdates(enabled: boolean) {
       registerAdminEvents(qc),
       registerPlannerEvents(qc),
       registerScheduleEvents(qc),
+      registerWikiEvents(qc),
     ];
     const ws = new WsClient(wsURL());
     ws.start();

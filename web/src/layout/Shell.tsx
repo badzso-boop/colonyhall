@@ -27,7 +27,7 @@ import { FloatingWindows } from "./windows/FloatingWindows";
  *  narrow (< 768): one screen at a time with a back button, a bottom bar.
  */
 // The pages that exist so far (round 32 adds them one by one).
-const readyPages = new Set(["tasks", "calendar", "notes", "schedules", "design"]);
+const readyPages = new Set(["tasks", "calendar", "notes", "schedules", "wiki", "design"]);
 
 export function Shell() {
   const { t } = useTranslation("layout");

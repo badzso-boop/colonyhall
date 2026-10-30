@@ -4,6 +4,7 @@ import { DesignPage } from "@/features/design";
 import { LoginPage } from "@/features/identity";
 import { NotesPage } from "@/features/notes";
 import { SchedulesPage } from "@/features/schedules";
+import { WikiIndexPage, WikiTopicPage } from "@/features/wiki";
 import { CalendarPage, TasksPage } from "@/features/planner";
 import { Shell } from "@/layout";
 import { Home } from "./Home";
@@ -29,6 +30,8 @@ export function AppRoutes() {
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="notes" element={<NotesPage />} />
         <Route path="schedules" element={<SchedulesPage />} />
+        <Route path="wiki" element={<WikiIndexPage />} />
+        <Route path="wiki/:slug" element={<WikiTopicPage />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>
