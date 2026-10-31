@@ -56,6 +56,10 @@ export default defineConfig([
           selector: "MemberExpression[property.name=/^(innerHTML|outerHTML)$/]",
           message: "innerHTML/outerHTML is forbidden (docs/08, 10.).",
         },
+        {
+          selector: "CallExpression[callee.object.name='crypto'][callee.property.name='randomUUID']",
+          message: "crypto.randomUUID does not exist on plain HTTP (Tailscale): use randomId from shared/lib.",
+        },
       ],
       "no-restricted-imports": [
         "error",

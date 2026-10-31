@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, insertMention, openScheduleBuilder, parseCommand, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
+import { activeMention, cn, commandList, insertMention, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
@@ -136,7 +136,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       } else {
         const res = await send.mutateAsync({
           body: body || tray.items.map((a) => a.file.name).join(", "),
-          client_msg_id: crypto.randomUUID(),
+          client_msg_id: randomId(),
           ...(threadRootId ? { thread_root_id: threadRootId } : {}),
           ...(tray.fileIds.length ? { file_ids: tray.fileIds } : {}),
         });
