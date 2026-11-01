@@ -60,7 +60,9 @@
 
 **Tömörítés beállítása:** a jegyző agent legyen géphez rendelve (`compact` mód + sandbox, olcsó modell); „Gépek” fül → tömörítés: küszöb (alapból 350 000 token, 20 000–2 000 000), jegyző. Beragadt (`pending`) tömörítés 15 perc után lejár; a „🗜 Tömörítés most” újat indít.
 
-**Agent létrehozása:** „Gépek” → „Új agent”. Sandbox nélküli agentnek kötelező a `root dir`; `compact` választásakor a sandbox magától bepipálódik. Ha a géphez rendelés hibát dob, ugyanazzal a névvel újrapróbálható (az űrlap a meglévő agentet használja). Új gyökérmappa a gép `guard.yaml` `roots` listájába kell (pl. a szakdoga mappa 2026-10-22-én), utána őr-újraindítás.
+**Agent létrehozása (33. kör óta):** a PWA-ban, `/app/agents` → „Új agent”. A hatlépéses ablak minden beállítást egyszerre kér (gép, kliens, modell, mód, hozzáférés, mappák a mappaválasztóból, saját utasítás, keretek, csatornák), és az utolsó lépésen tudomásul kell venni, hogy ezek **utólag nem módosíthatók**. A fejlesztői oldal „Gépek” panelje ettől kezdve csak olvasható (a keretek ott is állíthatók). Új gyökérmappa továbbra is a gép `guard.yaml` `roots` listájába kell, utána őr-újraindítás; a mappaválasztó csak a jelentett gyökérmappákon belül kínál.
+
+**Agent módosítása (33. kör óta):** az agent beállítása nem szerkeszthető. Menet: az agent beállítóablaka (`⚙`) → Konfiguráció → „Másolat új agentként” → a kitöltött ablakban módosítás → Létrehozás → a régi agent törlése (Veszélyes műveletek → „Agent törlése”, a handle beírásával). A törlés archivál: a régi üzenetek megmaradnak, a handle felszabadul, így az új agent ugyanazt a nevet kaphatja (előbb a régit kell törölni, ha ugyanazt a handle-t akarod). Ami közvetlenül állítható: név alatti profil (emoji, szín, leírás, állapotszöveg, időzóna) és a keretek.
 
 **Reggeli összefoglaló (asszisztens):**
 1. „Gépek” → új agent `@asszisztens` a homelab gépen: sandbox, Antigravity flash-low, „munka” bepipálva (hogy munkafutásban elérje a naptárat és a feladatokat), mappa nem kell.

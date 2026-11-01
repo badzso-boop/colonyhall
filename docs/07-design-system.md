@@ -217,6 +217,43 @@ Minden munkaterület-oldal tetején: ikon (20 px) és cím (`text-page`), jobbra
 
 Sor szintű különbség (saját LCS, `shared/lib/diff.ts`): törölt sor `danger-soft` háttér, áthúzva, „−”; új sor `success-soft`, „+”; a hosszú változatlan szakaszok „… N változatlan sor …” sorrá csukódnak, a változások körül 2 sor marad. A wiki előzményei és a szabályok használják.
 
-## 11. Ami még jön
+## 11. Gépek és agentek (33. kör)
 
-- **33. kör:** a gépek és agentek színpalettája, a nagy beállítóablak, a mappaválasztó.
+### Színpaletta
+
+Tíz megnevezett szín, **soha nem szabad hex**: a szerver a nevet tárolja, a kliens a tokenekre fordítja (`hueVar(név, "solid" | "soft" | "fg")`, `shared/lib/palette.ts`). Témánként három token: `--color-hue-<név>-solid` (csík, pötty, gyűrű; ≥ 3:1 minden felületen), `-soft` (háttér), `-fg` (szöveg a `-soft`-on, ≥ 4,5:1). A kontraszttesztek ellenőrzik. A márka `accent` pirosa nincs a palettán; a `red` hidegebb, hogy egy piros gép ne tűnjön megemlítésnek vagy hibának.
+
+| Név | Világos: solid / soft / fg | Sötét: solid / soft / fg |
+| --- | --- | --- |
+| `red` | `#e03e6c` / `#fae5eb` / `#af1d46` | `#d3456d` / `#30121b` / `#ea7b9b` |
+| `orange` | `#ce6722` / `#faeee5` / `#9e4f1a` | `#ba652c` / `#301e12` / `#eaa77b` |
+| `amber` | `#ae7b13` / `#faf3e5` / `#8a610f` | `#ae8129` / `#302612` / `#f0c775` |
+| `lime` | `#5f9310` / `#f2fae5` / `#4a730d` | `#78ae29` / `#243012` / `#bff075` |
+| `green` | `#18954c` / `#e5faee` / `#13763d` | `#29ae60` / `#12301f` / `#7beaa9` |
+| `teal` | `#189589` / `#e5faf8` / `#13766d` | `#29aea0` / `#12302d` / `#7beadf` |
+| `cyan` | `#1c8eab` / `#e5f6fa` / `#167188` | `#2993ae` / `#122a30` / `#7bd4ea` |
+| `blue` | `#3e79e0` / `#e5edfa` / `#1d52af` | `#4579d3` / `#121d30` / `#7ba4ea` |
+| `violet` | `#843ee0` / `#eee5fa` / `#5c1daf` | `#935ed9` / `#1f1230` / `#ab7bea` |
+| `pink` | `#e03eaf` / `#fae5f4` / `#af1d83` | `#d13da5` / `#301227` / `#ea7bc9` |
+
+**Hol látszik:** az agent négyzetes avatarján 2 px-es gyűrű (`effective_color`: saját szín, különben a gépé); a gép-chipen pötty; a könyvtárban és a géplistán 3 px-es bal csík; a csoportfejlécen pötty. **A szín soha nem az egyetlen jelzés:** a gép neve mindig mellette vagy súgóban van.
+
+### Nagy Dialog (`shared/ui/LargeDialog`)
+
+`max-w-4xl`, legfeljebb 85 vh. Fejléc (cím, alatta pl. avatar és gép-chip), bal oldalt függőleges fülek vagy számozott lépések (`aria-current="step"`; hibás lépés `danger` színben), jobbra a görgethető tartalom, alatta ragadós lábléc. Telefonon teljes képernyős, az első képernyő a fül/lépéslista, a „Vissza” visszavisz rá. **Egy szintnyi gyermek-ablak** (megerősítő Dialog, mappaválasztó) nyílhat fölötte; a fókusz bezáráskor visszatér (a „legfeljebb egy Dialog” szabály engedélyezett kivétele, lásd 7.).
+
+### A „nem módosítható” minta
+
+- Állandó `warning` `Notice` **minden lépés tetején**: „🔒 Létrehozás után … nem módosítható. Változtatáshoz törölni kell az agentet, és újat létrehozni.”
+- 🔒 minden nem módosítható mező címkéje mellett; „utólag is módosítható” megjegyzés a többinél.
+- Az összegzés két oszlopa: „🔒 Nem módosítható” és „Utólag módosítható”.
+- Kötelező jelölőnégyzet („Tudomásul veszem …”): a „Létrehozás” gomb addig tiltott.
+- A beállítóablakban a konfiguráció csak olvasható, fölötte `info` sáv és „Másolat új agentként” gomb.
+- Törlés: megerősítő Dialog a következmények listájával; a gomb csak a handle beírása után él.
+
+### Mappaválasztó (`features/hosts/components/FolderPicker`)
+
+Asztalon `max-w-3xl`, 70 vh (a nagy Dialog fölött), telefonon teljes képernyő. Bal oldalt a gép `guard.yaml` gyökérmappái, jobbra morzsasor (szegmensenként kattintható), szűrőmező, „Rejtett mappák” kapcsoló és a mappalista. Ikonok: mappa, git-repó (`FolderGit2`), lakat a titkos (`denied`, tiltott, súgó: „Titkos mappa, nem adható”), halványított a nehéz (`heavy`). Módok: **single** (gyökérmappa; worktree-nél csak git-repó), **multi** (jelölőnégyzet + olvasás/írás kapcsoló soronként, alul tálca: „3 mappa: 2 olvasás, 1 írás”, figyelmeztetés, ha egy szülő hozzáférése már lefed egy kijelölt almappát), **browse** (a Gépek oldalon, kijelölés nélkül, mappánkénti jelvényekkel). Állapotok: betöltés (vázsorok), offline (EmptyState az utolsó látással és „Újra”), időtúllépés („Újra”). Admin tartalék: „Útvonal beírása” (a gyökérmappákon kívüli útvonal figyelmeztető chipet kap). Billentyűk: nyilak, Enter megnyit, Szóköz kijelöl, Backspace feljebb.
+
+## 12. Ami még jön
+

@@ -36,7 +36,7 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
 5. **Tranzakciós outbox:** minden állapotváltozás ugyanabban a tranzakcióban ír az `event` táblába, mint maga az adat.
 6. **Migrációk:** `goose`, sorszámozott SQL, kiterjeszt-majd-szűkít minta. Már lefutott migrációt soha ne módosíts; új migrációt írj.
 7. **Bővítés = új adapter:** új AI kliens, AI-szolgáltató, git-szolgáltató, értesítési csatorna, tárhely vagy eseménybusz egy új adapter a megfelelő porthoz, regisztrálva. A magot ehhez ne módosítsd.
-8. **Az agent konfigurációja nem módosítható:** változás = új agentverzió (lásd a terv „Agent életciklus” fejezetét).
+8. **Az agent konfigurációja nem módosítható:** a szerver kényszeríti (`POST /agents` egyszer, a régi szerkesztő végpontok 409); változás = másolat új agentként + a régi törlése (archiválás), lásd a terv „Agent életciklus” fejezetét. Csak a profil és a keretek változhatnak.
 9. **Minden `workspace_id`-hoz kötött**, a jogosultság minden hívásnál ellenőrizve (nem csak csatlakozáskor).
 10. **Az agentektől jövő tartalom adat, nem utasítás:** üzenetet, fájlt, webhookot soha ne hajts végre; az agentnek átadott szöveg mindig `<colonyhall_message ...>` keretben megy.
 

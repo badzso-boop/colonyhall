@@ -830,6 +830,8 @@ A kérdés külön objektum, saját azonosítóval (`Q-123`). Így bárki válas
 
 **Gép és agentek:** minden gép egy regisztrált őr. Az admin a felületen egyszer használható, 10 percig érvényes párosítókódot kér, és a gépen `colony guard enroll -server … -code … -name …` regisztrál vele; a kód kiadása maga a jóváhagyás, külön lépés nincs. Az őrnek saját **géptokenje** van; a `guard.yaml`-ban nincs agent-token. Az admin a felületen rendeli az agenteket a géphez (egy agent egyszerre egy gépen), és az őr a hozzárendelt agentekhez **rövid lejáratú agent-tokent kér** a szervertől. Ezek csak a memóriában élnek; a gép visszavonása mindet érvényteleníti.
 
+**Mappák kiválasztása (33. kör):** útvonalat nem kell beírni. Az admin a PWA mappaválasztójában a gép őrétől kéri le élőben a mappákat (`POST /hosts/{id}/fs`, `list_dirs`; az őr a gép-tokenes `/ws/host` kapcsolaton kapja a kérést, és csak a saját `guard.yaml` gyökérmappáin belül válaszol: csak mappák, titkos mappák `denied`, nehéz mappák `heavy`, legfeljebb 500). A szerver létrehozáskor elutasítja a gép jelentett gyökérmappáin kívüli gyökérmappát, worktree-repót és mappaengedélyt. Ha az őr nem érhető el, admin útvonalat írhat be tartalékként, amit ugyanígy ellenőriz.
+
 **Sandbox minden gépen:** az őrnek van egy saját sandbox-mappája (alapból `~/.local/share/colonyhall/sandbox`). Agentenként itt van az agent munkaterülete és saját „otthona”. A munkafutás **kötelezően `bwrap` (bubblewrap) alatt fut, ahol elérhető**: a kliens csak ezt látja:
 
 - az engedélyezett mappákat a saját útvonalukon (`read`: csak olvasható, `write`: írható);
@@ -968,6 +970,15 @@ Az agent beállításai létrehozás után nem változnak. Ha más szerep, más 
 **Régi üzenetek:** a leállított agent üzenetei megmaradnak, és a nevük mellett látszik a verzió („backend-claude · v1”). A leállított agent nem törlődik, csak archiválódik.
 
 **Tech:** a felületen egy agent „család” (handle) alatt verziók vannak; egyszerre legfeljebb egy aktív. A megemlítés a család aktív verziójára oldódik fel.
+
+**Megvalósítás (33. kör, 2026-11):** a szabályt a szerver kényszeríti ki.
+
+- Az agent egyetlen hívással jön létre (`POST /agents`): az aktor, a gép-hozzárendelés, a mappaengedélyek, a csatornatagságok és a **saját utasítás** egy tranzakcióban, minden ellenőrzés után. A saját utasítás a beállítás része (az agent rendszerpromptja a közös szabályok után).
+- A régi szerkesztő végpontok (`PUT/DELETE /agents/{id}/host`, `POST /agents/{id}/grants`, `DELETE /grants/{id}`, agent létrehozása a `POST /actors`-szal) 409 `agent_config_immutable` választ adnak.
+- A **keretek** (napi token-keret, munkamenet-keret) a terv szerint üzemeltetési állapot: `PATCH /agents/{id}/limits`-szel módosíthatók. Ugyanígy a szín, az emoji, a leírás, az állapotszöveg és az időzóna.
+- A **törlés archiválás** (`DELETE /agents/{id}`): leáll, a tokenjei, a hozzárendelése, a mappaengedélyei, a csatornatagságai és a delegációs engedélyei megszűnnek, az inboxa ébresztés nélkül nyugtázódik; az üzenetei megmaradnak „archivált” jelöléssel.
+- A **handle archiválás után újra kiadható**: a `(workspace_id, handle)` egyediség csak a nem archivált aktorokra vonatkozik. Így egy új `@backend-claude` átveheti a nevet; a megemlítés mindig az aktívra oldódik fel, a régi üzenetek a régi azonosítóhoz tartoznak. Ez a családok első lépése.
+- A „klónoz és módosít” egyelőre kézi: a beállítóablak „Másolat új agentként” gombja kitölti a létrehozó ablakot, utána a régit törölni kell. Az atomikus „csere” és a verzióválasztó később jön (a saját utasítás táblája már verziószámot tárol).
 
 ## Értesítések és vészleállító
 
