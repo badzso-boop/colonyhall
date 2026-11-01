@@ -9,6 +9,7 @@ import { openWindow } from "@/shared/windows";
 import { useCalendars, useEvents } from "../api";
 import { eventsByDay, rangeTitle, shift, startOfDay, viewDays, viewRange, type CalView } from "../calendar";
 import { Agenda, useHiddenCalendars } from "../components/CalendarParts";
+import { AccessButton } from "../components/AccessDialog";
 import { CalendarsPopover } from "../components/CalendarsPopover";
 import { MonthView, TimeGrid } from "../components/CalendarViews";
 
@@ -79,6 +80,7 @@ export default function CalendarPage() {
               ))}
             </div>
             {calendars.data?.length ? <CalendarsPopover calendars={calendars.data} hidden={hidden} onToggle={toggle} /> : null}
+            <AccessButton kind="calendar" />
           </>
         }
       />

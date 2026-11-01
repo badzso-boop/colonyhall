@@ -50,6 +50,19 @@ export function useCalendars() {
   return useQuery({ queryKey: plannerKeys.calendars, queryFn: async () => unwrap(await api.GET("/planner/calendars")).calendars });
 }
 
+/** Which agents may read the viewer's tasks and calendars (round 34, part 8). */
+export function usePlannerAccess(enabled: boolean) {
+  return useQuery({ queryKey: plannerKeys.access, enabled, queryFn: async () => unwrap(await api.GET("/planner/access")) });
+}
+
+export function useSavePlannerAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["PlannerAccess"]) => unwrap(await api.PUT("/planner/access", { body })),
+    onSuccess: (a) => qc.setQueryData(plannerKeys.access, a),
+  });
+}
+
 /** The occurrences in [from, to); the calendars are cached on the server, so a minute is fresh enough. */
 export function useEvents(from: Date, to: Date, enabled = true) {
   const f = from.toISOString();

@@ -79,5 +79,36 @@
     "agenda": "Teendők",
     "week_n": "{{n}}. hét",
     "now": "Most"
+  },
+  "access": {
+    "button": "Hozzáférés",
+    "title": {
+      "tasks": "Ki olvashatja a feladataidat?",
+      "calendar": "Ki olvashatja a naptáradat?"
+    },
+    "body": {
+      "tasks": "A kiválasztott agentek olvashatják a feladatlistádat.",
+      "calendar": "A kiválasztott agentek olvashatják a naptáraid eseményeit."
+    },
+    "mode": {
+      "tasks": {
+        "all": "Minden agent",
+        "selected": "Csak a kiválasztott agentek"
+      },
+      "calendar": {
+        "none": "Senki",
+        "selected": "Csak a kiválasztott agentek"
+      }
+    },
+    "search": "Agent keresése…",
+    "agents": "Agentek",
+    "none": "Nincs találat.",
+    "chosen": "{{count}} agent kiválasztva",
+    "save": "Mentés",
+    "cancel": "Mégse",
+    "close": "Bezárás",
+    "saved": "Hozzáférés mentve",
+    "failed": "Nem sikerült menteni a hozzáférést.",
+    "loadFailed": "Nem sikerült betölteni a hozzáférést."
   }
 }

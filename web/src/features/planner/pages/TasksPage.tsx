@@ -8,6 +8,7 @@ import { openWindow } from "@/shared/windows";
 import { useTasks, useUpdateTask } from "../api";
 import { QuickAdd, StatusToggle, TaskRow } from "../components/TaskParts";
 import { TaskSheet } from "../components/TaskSheet";
+import { AccessButton } from "../components/AccessDialog";
 import { firstLine, groupTasks, neighbours, statusOrder, type Status, type Task } from "../tasks";
 
 function ListView({ groups, onOpen }: { groups: Record<Status, Task[]>; onOpen: (t: Task) => void }) {
@@ -116,20 +117,23 @@ export default function TasksPage() {
         onPopOut={() => openWindow("tasks")}
         popOutLabel={t("tasks.popOut")}
         actions={
-          <div role="radiogroup" aria-label={t("tasks.view")} className="flex rounded-md border border-border p-0.5">
-            {(["list", "board"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                role="radio"
-                aria-checked={view === v}
-                onClick={() => setView(v)}
-                className={cn("rounded-sm px-2.5 py-1 text-ui", view === v ? "bg-accent-soft font-semibold text-fg" : "text-fg-muted")}
-              >
-                {t(`tasks.${v}`)}
-              </button>
-            ))}
-          </div>
+          <>
+            <AccessButton kind="tasks" />
+            <div role="radiogroup" aria-label={t("tasks.view")} className="flex rounded-md border border-border p-0.5">
+              {(["list", "board"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={view === v}
+                  onClick={() => setView(v)}
+                  className={cn("rounded-sm px-2.5 py-1 text-ui", view === v ? "bg-accent-soft font-semibold text-fg" : "text-fg-muted")}
+                >
+                  {t(`tasks.${v}`)}
+                </button>
+              ))}
+            </div>
+          </>
         }
       />
       <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">

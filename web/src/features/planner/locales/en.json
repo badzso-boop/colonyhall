@@ -79,5 +79,36 @@
     "agenda": "Agenda",
     "week_n": "Week {{n}}",
     "now": "Now"
+  },
+  "access": {
+    "button": "Access",
+    "title": {
+      "tasks": "Who may read your tasks?",
+      "calendar": "Who may read your calendar?"
+    },
+    "body": {
+      "tasks": "The chosen agents may read your task list.",
+      "calendar": "The chosen agents may read your calendars’ events."
+    },
+    "mode": {
+      "tasks": {
+        "all": "Every agent",
+        "selected": "Only the selected agents"
+      },
+      "calendar": {
+        "none": "Nobody",
+        "selected": "Only the selected agents"
+      }
+    },
+    "search": "Search agents…",
+    "agents": "Agents",
+    "none": "No matches.",
+    "chosen": "{{count}} agents selected",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "saved": "Access saved",
+    "failed": "Could not save the access.",
+    "loadFailed": "Could not load the access."
   }
 }
