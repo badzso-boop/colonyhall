@@ -8,6 +8,7 @@ const (
 	EventHostUpdated     = "host.updated"
 	EventAgentAssigned   = "host.agent_assigned"
 	EventAgentUnassigned = "host.agent_unassigned"
+	EventAgentLimits     = "host.agent_limits_changed"
 	EventGrantAdded      = "host.grant_added"
 	EventGrantRevoked    = "host.grant_revoked"
 )

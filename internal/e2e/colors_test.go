@@ -61,10 +61,7 @@ func TestHostAndAgentColors(t *testing.T) {
 
 	// An agent shows its machine's colour until it has its own.
 	agent := e.agentID()
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": first, "client": "claude-code", "model": "haiku", "root_dir": "/app"}, nil); s != http.StatusOK {
-		t.Fatalf("assign: %d", s)
-	}
+	e.configure(agent, map[string]any{"host_id": first, "client": "claude-code", "model": "haiku", "root_dir": "/app"})
 	if own, eff := e.effectiveColor("fake-agent"); own != "" || eff != "teal" {
 		t.Fatalf("machine colour: %q %q", own, eff)
 	}

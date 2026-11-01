@@ -59,19 +59,14 @@ func TestE2E_SandboxPlannerTools(t *testing.T) {
 	// 3. Assign agent to host with sandbox: true and allow_work: true
 	agentID := e.agentID()
 
-	e.do("PUT", "/api/v1/agents/"+agentID+"/host", adminToken, map[string]any{
+	e.configure(agentID, map[string]any{
 		"host_id":    hostID,
 		"client":     "claude-code",
 		"model":      "haiku",
 		"allow_work": true,
 		"mode":       "compact",
 		"sandbox":    true,
-	}, nil)
-
-	e.do("POST", "/api/v1/agents/"+agentID+"/grants", adminToken, map[string]any{
-		"path": app,
-		"mode": "write",
-	}, nil)
+	}, map[string]any{"path": app, "mode": "write"})
 
 	var mu sync.Mutex
 	var capturedReq guard.WorkRequest

@@ -75,14 +75,14 @@ func TestReplyRoutingIncidentReproduction(t *testing.T) {
 	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &hosts)
 	hostID := hosts.Hosts[0].ID
 
-	e.do("PUT", "/api/v1/agents/"+claudeID+"/host", server.DevAdminToken, map[string]any{
+	e.configure(claudeID, map[string]any{
 		"host_id":         hostID,
 		"client":          "claude-code",
 		"mode":            "direct",
 		"root_dir":        root,
 		"sandbox":         false, // full access, as @visegrad-claude in production
 		"permission_mode": "auto",
-	}, nil)
+	})
 
 	var mu sync.Mutex
 	var directReqs []guard.DirectRequest

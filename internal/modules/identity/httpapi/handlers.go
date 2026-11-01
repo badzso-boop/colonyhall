@@ -14,6 +14,8 @@ import (
 )
 
 func init() {
+	httpx.RegisterProblemType(http.StatusConflict, "agent_config_immutable", identity.ErrAgentConfigImmutable)
+	httpx.RegisterValidation(identity.ErrNotAnAgent)
 	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
 		identity.ErrWorkspaceRequired, identity.ErrInvalidState, identity.ErrInvalidTimezone,
 		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor)
@@ -70,6 +72,7 @@ func ToAPI(a identity.Actor) apispec.Actor {
 		StatusText:     status,
 		Color:          hue(a.Color),
 		EffectiveColor: hue(a.EffectiveColor),
+		ArchivedAt:     a.ArchivedAt,
 	}
 }
 
@@ -146,13 +149,17 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("GET /api/v1/actors", auth(func(w http.ResponseWriter, r *http.Request) {
-		list, err := svc.ListActors(r.Context(), httpx.Actor(r))
+		list := svc.ListActors
+		if r.URL.Query().Get("archived") == "true" {
+			list = svc.ListActorsWithArchived
+		}
+		actors, err := list(r.Context(), httpx.Actor(r))
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		out := apispec.ActorList{Actors: make([]apispec.Actor, 0, len(list))}
-		for _, a := range list {
+		out := apispec.ActorList{Actors: make([]apispec.Actor, 0, len(actors))}
+		for _, a := range actors {
 			out.Actors = append(out.Actors, ToAPI(a))
 		}
 		httpx.JSON(w, http.StatusOK, out)

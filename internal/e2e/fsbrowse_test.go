@@ -111,11 +111,10 @@ func TestFsBrowseE2E(t *testing.T) {
 	}
 
 	// 4. Agent not in channel -> 403
-	agent2Actor, agent2Token, err := e.app.Identity.CreateActor(ctx, admin, identity.NewActorInput{
-		Kind:        identity.KindAgent,
+	agent2Actor, agent2Token, err := e.app.Identity.CreateAgentActor(ctx, admin, identity.AgentActorInput{
 		Handle:      "other-bot",
 		DisplayName: "Other Bot",
-		Role:        identity.RoleMember,
+		WithToken:   true,
 	})
 	if err != nil {
 		t.Fatal(err)

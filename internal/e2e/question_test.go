@@ -26,24 +26,10 @@ func (e *env) runDueQuestions() int {
 	return n
 }
 
+// createAgent creates an API-key agent in #general (POST /agents).
 func (e *env) createAgent(handle, name string) (string, string) {
 	e.t.Helper()
-	var created struct {
-		Actor apispec.Actor `json:"actor"`
-		Token string        `json:"token"`
-	}
-	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{
-		"kind":         "agent",
-		"handle":       handle,
-		"display_name": name,
-	}, &created); s != http.StatusCreated {
-		e.t.Fatalf("create agent: %d", s)
-	}
-	general := e.generalID()
-	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{
-		"actor_id": created.Actor.Id.String(),
-	}, nil)
-	return created.Actor.Id.String(), created.Token
+	return e.newAgent(handle, name, nil, nil)
 }
 
 // TestQuestionMCPLifecycle tests the complete flow:
@@ -215,16 +201,14 @@ func TestQuestionRedirectFullAccess(t *testing.T) {
 	hostID, _ := e.enroll("server-box")
 	fullAgentID, _ := e.createAgent("full-agent", "Full Access Agent")
 
-	if s := e.do("PUT", "/api/v1/agents/"+fullAgentID+"/host", server.DevAdminToken, map[string]any{
+	e.configure(fullAgentID, map[string]any{
 		"host_id":         hostID,
 		"client":          "claude-code",
 		"mode":            "direct",
 		"root_dir":        "/tmp",
 		"sandbox":         false,
 		"permission_mode": "auto",
-	}, nil); s != http.StatusOK {
-		t.Fatalf("assign host: %d", s)
-	}
+	})
 
 	// 2. fake-agent asks @full-agent
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", server.DevAgentToken, nil)

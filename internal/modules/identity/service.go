@@ -40,6 +40,14 @@ type NewActorInput struct {
 	// Secret, if set, is used as the token instead of a random one.
 	// Only the development seed uses this.
 	Secret string
+	// NoToken: no API token (an agent run by a guard gets short-lived
+	// host-issued tokens instead).
+	NoToken bool
+
+	// Profile set at creation (round 33).
+	Description string
+	AvatarEmoji string
+	Color       string
 }
 
 // Bootstrap creates a workspace and its owner. It returns the owner's token.
@@ -72,6 +80,10 @@ func (s *Service) Bootstrap(ctx context.Context, workspaceName, ownerHandle, own
 func (s *Service) CreateActor(ctx context.Context, by Actor, in NewActorInput) (Actor, string, error) {
 	if by.Kind != KindHuman || !by.IsAdmin() || by.Halted || by.Role.Rank() <= in.Role.Rank() {
 		return Actor{}, "", ErrForbidden
+	}
+	if in.Kind == KindAgent {
+		// Agents are configured once, as a whole (POST /agents).
+		return Actor{}, "", ErrAgentConfigImmutable
 	}
 	in.WorkspaceID = by.WorkspaceID
 	var a Actor
@@ -109,6 +121,7 @@ func (s *Service) createActor(ctx context.Context, byID ids.ID, in NewActorInput
 	a := Actor{
 		ID: s.IDs.New(), WorkspaceID: in.WorkspaceID, Kind: in.Kind, Handle: in.Handle,
 		DisplayName: in.DisplayName, Role: in.Role, State: "active", CreatedAt: s.Clock.Now(),
+		Description: in.Description, AvatarEmoji: in.AvatarEmoji, Color: in.Color,
 	}
 	if err := s.Store.CreateActor(ctx, a); err != nil {
 		if errors.Is(err, db.ErrConflict) {
@@ -117,15 +130,17 @@ func (s *Service) createActor(ctx context.Context, byID ids.ID, in NewActorInput
 		return Actor{}, "", 0, err
 	}
 	secret := in.Secret
-	if secret == "" {
-		var err error
-		if secret, err = NewSecret(); err != nil {
+	if !in.NoToken {
+		if secret == "" {
+			var err error
+			if secret, err = NewSecret(); err != nil {
+				return Actor{}, "", 0, err
+			}
+		}
+		tok := Token{ID: s.IDs.New(), ActorID: a.ID, Hash: HashSecret(secret), Label: "default", CreatedAt: s.Clock.Now()}
+		if err := s.Store.CreateToken(ctx, tok); err != nil {
 			return Actor{}, "", 0, err
 		}
-	}
-	tok := Token{ID: s.IDs.New(), ActorID: a.ID, Hash: HashSecret(secret), Label: "default", CreatedAt: s.Clock.Now()}
-	if err := s.Store.CreateToken(ctx, tok); err != nil {
-		return Actor{}, "", 0, err
 	}
 	actorID := byID
 	if actorID == ids.Nil {

@@ -14,6 +14,7 @@ import (
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/agentrules"
+	"colonyhall/internal/modules/agents"
 	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/compaction"
@@ -57,6 +58,7 @@ type Backend struct {
 	Preview      preview.Store
 	AgentRules   agentrules.Store
 	Notes        notes.Store
+	Agents       agents.Store
 	Planner      planner.Store
 	Decisions    decision.Store
 	Leases       lease.Store
@@ -89,6 +91,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("sidebar", func(t *testing.T) { testSidebar(t, newBackend(t)) })
 	t.Run("compaction", func(t *testing.T) { testCompaction(t, newBackend(t)) })
 	t.Run("delegation", func(t *testing.T) { testDelegation(t, newBackend(t)) })
+	t.Run("agents", func(t *testing.T) { testAgentLifecycle(t, newBackend(t)) })
 }
 
 var (

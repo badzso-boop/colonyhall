@@ -103,6 +103,9 @@ linters:
             - pkg: colonyhall/internal/modules/agentrules/postgres
             - pkg: colonyhall/internal/modules/agentrules/memory
             - pkg: colonyhall/internal/modules/agentrules/httpapi
+            - pkg: colonyhall/internal/modules/agents/postgres
+            - pkg: colonyhall/internal/modules/agents/memory
+            - pkg: colonyhall/internal/modules/agents/httpapi
             - pkg: colonyhall/internal/modules/notes/postgres
             - pkg: colonyhall/internal/modules/notes/memory
             - pkg: colonyhall/internal/modules/notes/httpapi

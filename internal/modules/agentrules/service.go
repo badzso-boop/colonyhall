@@ -28,6 +28,9 @@ type Service struct {
 	Tx        db.TxRunner
 	IDs       ids.Generator
 	Clock     clock.Clock
+	// OwnInstructions returns an agent's own instructions (round 33; the
+	// agents module), appended after the shared rules. nil: none.
+	OwnInstructions func(ctx context.Context, agentID ids.ID) (string, error)
 }
 
 // GetLatest returns the current agent rules for a workspace.
@@ -130,10 +133,46 @@ func (s *Service) Update(ctx context.Context, by identity.Actor, text string) (R
 
 // RenderInstructions renders the current rules for the calling actor.
 func (s *Service) RenderInstructions(ctx context.Context, actor identity.Actor) (int, string, error) {
-	rules, err := s.GetLatest(ctx, actor.WorkspaceID)
+	version, shared, err := s.RenderShared(ctx, actor.WorkspaceID, actor.Handle)
 	if err != nil {
 		return 0, "", err
 	}
+	if s.OwnInstructions == nil || actor.Kind != identity.KindAgent {
+		return version, shared, nil
+	}
+	own, err := s.OwnInstructions(ctx, actor.ID)
+	if err != nil {
+		return 0, "", err
+	}
+	return version, WithOwn(shared, s.renderFor(ctx, actor.WorkspaceID, own, actor.Handle), actor.Handle), nil
+}
+
+// WithOwn puts an agent's own instructions after the shared rules, under a
+// clear heading (round 33).
+func WithOwn(shared, own, handle string) string {
+	if own == "" {
+		return shared
+	}
+	return shared + "\n\n## Instructions for @" + handle + "\n\n" + own
+}
+
+// RenderShared renders the workspace's shared rules for a handle (also for
+// an agent about to be created: the creation dialog's effective preview).
+func (s *Service) RenderShared(ctx context.Context, workspaceID ids.ID, handle string) (int, string, error) {
+	rules, err := s.GetLatest(ctx, workspaceID)
+	if err != nil {
+		return 0, "", err
+	}
+	return rules.Version, s.renderFor(ctx, workspaceID, rules.Text, handle), nil
+}
+
+// RenderText fills the placeholders of any text for a handle.
+func (s *Service) RenderText(ctx context.Context, workspaceID ids.ID, text, handle string) string {
+	return s.renderFor(ctx, workspaceID, text, handle)
+}
+
+func (s *Service) renderFor(ctx context.Context, workspaceID ids.ID, text, handle string) string {
+	actor := identity.Actor{WorkspaceID: workspaceID, Handle: handle}
 
 	var adminHandles []string
 	if s.Directory != nil {
@@ -155,8 +194,7 @@ func (s *Service) RenderInstructions(ctx context.Context, actor identity.Actor) 
 		}
 	}
 
-	rendered := Render(rules.Text, actor.Handle, adminHandles, wsName)
-	return rules.Version, rendered, nil
+	return Render(text, actor.Handle, adminHandles, wsName)
 }
 
 // InstructionsForActor returns rendered instructions for agents, or empty string for humans.

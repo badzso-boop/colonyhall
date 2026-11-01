@@ -4,7 +4,14 @@ package identity
 const (
 	EventActorCreated        = "actor.created"
 	EventActorProfileUpdated = "actor.profile_updated"
+	EventActorArchived       = "actor.archived"
 )
+
+// ActorArchived is the payload of EventActorArchived.
+type ActorArchived struct {
+	ActorID string `json:"actor_id"`
+	Handle  string `json:"handle"`
+}
 
 // ActorCreated is the payload of EventActorCreated.
 type ActorCreated struct {

@@ -467,6 +467,30 @@ func (s *Service) Ack(ctx context.Context, by identity.Actor, idList []ids.ID) (
 	return s.Store.Ack(ctx, by.ID, idList, s.Clock.Now())
 }
 
+// AckAllFor acks every pending item of a recipient without waking it
+// (an archived agent, round 33). It returns how many items it acked.
+func (s *Service) AckAllFor(ctx context.Context, recipientID ids.ID) (int, error) {
+	total := 0
+	for {
+		pending, _, err := s.Store.Pending(ctx, recipientID, 500)
+		if err != nil || len(pending) == 0 {
+			return total, err
+		}
+		idList := make([]ids.ID, len(pending))
+		for i, d := range pending {
+			idList[i] = d.ID
+		}
+		n, err := s.Store.Ack(ctx, recipientID, idList, s.Clock.Now())
+		if err != nil {
+			return total, err
+		}
+		total += n
+		if n == 0 {
+			return total, nil
+		}
+	}
+}
+
 // CreateTerminalEvent stores a terminal completion event and queues a wake delivery item for the agent.
 func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, name string, channelID, threadRootID ids.ID, exitCode *int, durationMs int64, tail string) error {
 	if by.Kind != identity.KindAgent {

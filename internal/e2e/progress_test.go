@@ -281,7 +281,7 @@ func TestProgressNotSentToAgentsAndTerminalEventChannelChecked(t *testing.T) {
 		Actor struct{ ID string }
 		Token string
 	}
-	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "worker", "role": "member"}, &other); s != http.StatusCreated {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "worker", "api_key": true}, &other); s != http.StatusCreated {
 		t.Fatalf("create worker: %d", s)
 	}
 	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": other.Actor.ID, "can_write": true}, nil); s != http.StatusNoContent {
@@ -347,7 +347,7 @@ func TestProgressRunKeyScopedToAgent(t *testing.T) {
 		Actor struct{ ID string }
 		Token string
 	}
-	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "intruder", "role": "member"}, &other); s != http.StatusCreated {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "intruder", "api_key": true}, &other); s != http.StatusCreated {
 		t.Fatalf("create intruder: %d", s)
 	}
 	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": other.Actor.ID, "can_write": true}, nil); s != http.StatusNoContent {

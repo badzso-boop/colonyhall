@@ -1204,7 +1204,9 @@ type ActiveRunProgress struct {
 
 // Actor defines model for Actor.
 type Actor struct {
-	AvatarEmoji *string `json:"avatar_emoji,omitempty"`
+	// ArchivedAt Set on a deleted (archived) agent; its handle may belong to a newer agent
+	ArchivedAt  *time.Time `json:"archived_at,omitempty"`
+	AvatarEmoji *string    `json:"avatar_emoji,omitempty"`
 
 	// Color A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
 	Color       *Hue      `json:"color,omitempty"`
@@ -1358,6 +1360,21 @@ type AgentInstructions struct {
 	Version int    `json:"version"`
 }
 
+// AgentLimits defines model for AgentLimits.
+type AgentLimits struct {
+	DailyTokenLimit  int64 `json:"daily_token_limit"`
+	MaxSessionTokens int   `json:"max_session_tokens"`
+}
+
+// AgentLimitsRequest defines model for AgentLimitsRequest.
+type AgentLimitsRequest struct {
+	// DailyTokenLimit 0 = none
+	DailyTokenLimit *int64 `json:"daily_token_limit,omitempty"`
+
+	// MaxSessionTokens 0 = none
+	MaxSessionTokens *int `json:"max_session_tokens,omitempty"`
+}
+
 // AgentNote defines model for AgentNote.
 type AgentNote struct {
 	AgentId      openapi_types.UUID `json:"agent_id"`
@@ -1384,6 +1401,19 @@ type AgentOverview struct {
 	State          string                   `json:"state"`
 	Threads        *[]OverviewThread        `json:"threads,omitempty"`
 	Usage          *OverviewUsage           `json:"usage,omitempty"`
+}
+
+// AgentOwnInstructions defines model for AgentOwnInstructions.
+type AgentOwnInstructions struct {
+	CreatedAt *time.Time          `json:"created_at,omitempty"`
+	CreatedBy *openapi_types.UUID `json:"created_by,omitempty"`
+
+	// Effective What the agent receives: the shared rules, then its own instructions, placeholders filled
+	Effective string `json:"effective"`
+
+	// Text Empty when the agent has none
+	Text    string `json:"text"`
+	Version *int   `json:"version,omitempty"`
 }
 
 // AgentPendingFileFetch defines model for AgentPendingFileFetch.
@@ -1698,6 +1728,27 @@ type CreateAgentFileFetchRequest struct {
 	Refresh   *bool              `json:"refresh,omitempty"`
 }
 
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	// ApiKey An API-key agent with no machine: only the actor and a token (shown once); host fields must be absent
+	ApiKey      *bool                 `json:"api_key,omitempty"`
+	AvatarEmoji *string               `json:"avatar_emoji,omitempty"`
+	ChannelIds  *[]openapi_types.UUID `json:"channel_ids,omitempty"`
+
+	// Color A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+	Color       *Hue            `json:"color,omitempty"`
+	Description *string         `json:"description,omitempty"`
+	DisplayName *string         `json:"display_name,omitempty"`
+	Grants      *[]GrantRequest `json:"grants,omitempty"`
+
+	// Handle 2-32 characters: lowercase letters, digits and '-'; free among agents that are not archived
+	Handle string         `json:"handle"`
+	Host   *AssignRequest `json:"host,omitempty"`
+
+	// Instructions The agent's own instructions, appended to the shared rules; never secrets
+	Instructions *string `json:"instructions,omitempty"`
+}
+
 // CreateChannelRequest defines model for CreateChannelRequest.
 type CreateChannelRequest struct {
 	Description *string      `json:"description,omitempty"`
@@ -1758,6 +1809,15 @@ type CreateWikiPageRequest struct {
 	Body  string    `json:"body"`
 	Tags  *[]string `json:"tags,omitempty"`
 	Title string    `json:"title"`
+}
+
+// CreatedAgent defines model for CreatedAgent.
+type CreatedAgent struct {
+	Actor Actor      `json:"actor"`
+	Host  *HostAgent `json:"host,omitempty"`
+
+	// Token API-key agents only; shown once
+	Token *string `json:"token,omitempty"`
 }
 
 // DayUsage defines model for DayUsage.
@@ -3029,6 +3089,11 @@ type WikiRevisionList struct {
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
 
+// ListActorsParams defines parameters for ListActors.
+type ListActorsParams struct {
+	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+}
+
 // ListAuditParams defines parameters for ListAudit.
 type ListAuditParams struct {
 	// Before Return entries older than this seq
@@ -3207,6 +3272,9 @@ type CreateTerminalEventJSONRequestBody = CreateTerminalEventRequest
 // ReportTerminalStartJSONRequestBody defines body for ReportTerminalStart for application/json ContentType.
 type ReportTerminalStartJSONRequestBody = TerminalStartRequest
 
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
 // RequestAgentFileFetchJSONRequestBody defines body for RequestAgentFileFetch for application/json ContentType.
 type RequestAgentFileFetchJSONRequestBody = CreateAgentFileFetchRequest
 
@@ -3214,10 +3282,17 @@ type RequestAgentFileFetchJSONRequestBody = CreateAgentFileFetchRequest
 type AgentFsRequestJSONRequestBody = AgentFsRequest
 
 // AddGrantJSONRequestBody defines body for AddGrant for application/json ContentType.
+//
+// Deprecated: this type has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 type AddGrantJSONRequestBody = GrantRequest
 
 // AssignAgentJSONRequestBody defines body for AssignAgent for application/json ContentType.
+//
+// Deprecated: this type has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 type AssignAgentJSONRequestBody = AssignRequest
+
+// SetAgentLimitsJSONRequestBody defines body for SetAgentLimits for application/json ContentType.
+type SetAgentLimitsJSONRequestBody = AgentLimitsRequest
 
 // DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
 type DecideApprovalJSONRequestBody = DecideApprovalRequest

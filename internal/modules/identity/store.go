@@ -9,14 +9,22 @@ import (
 
 // Store persists identity data. Implementations: postgres, memory.
 // Lookups return db.ErrNotFound when nothing matches; CreateActor returns
-// db.ErrConflict when the handle is taken.
+// db.ErrConflict when an actor that is not archived has the handle. Lookups
+// by handle see only actors that are not archived; by id, every actor.
 type Store interface {
 	CreateWorkspace(ctx context.Context, w Workspace) error
 	CreateActor(ctx context.Context, a Actor) error
 	ActorByID(ctx context.Context, id ids.ID) (Actor, error)
 	ActorByHandle(ctx context.Context, workspaceID ids.ID, handle string) (Actor, error)
 	ActorsByIDs(ctx context.Context, idList []ids.ID) ([]Actor, error)
+	// ListActors lists the workspace's actors that are not archived.
 	ListActors(ctx context.Context, workspaceID ids.ID) ([]Actor, error)
+	// ListAllActors lists archived actors too.
+	ListAllActors(ctx context.Context, workspaceID ids.ID) ([]Actor, error)
+	// ArchiveActor stops the actor and marks it archived (once).
+	ArchiveActor(ctx context.Context, id, by ids.ID, at time.Time) error
+	// RevokeActorTokens revokes every API token of the actor.
+	RevokeActorTokens(ctx context.Context, actorID ids.ID, at time.Time) error
 	CreateToken(ctx context.Context, t Token) error
 	ListTokens(ctx context.Context, actorID ids.ID) ([]Token, error)
 	TokenByID(ctx context.Context, id ids.ID) (Token, error)

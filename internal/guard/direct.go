@@ -432,7 +432,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	}
 
 	gen := state.Generations[threadRoot]
-	maxSessionTokens := a.Cfg.MaxSessionTokens
+	maxSessionTokens := a.maxSessionTokens()
 	lastTokens := state.LastRunTokens[threadRoot]
 	if !reportsContext(a.Cfg.Client, lastTokens) {
 		// Antigravity reports context only when per-call usage was streamed

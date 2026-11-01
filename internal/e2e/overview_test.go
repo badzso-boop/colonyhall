@@ -88,28 +88,6 @@ func TestOverviewE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sandbox := false
-	maxSession := 150000
-	dailyLimit := int64(500000)
-	_, err = e.app.Hosts.Assign(context.Background(), adminActor, agentID, hosts.AssignInput{
-		HostID:           host.ID,
-		Client:           "claude-code",
-		Model:            "claude-3-5-sonnet",
-		WorkModel:        "claude-3-7-sonnet",
-		AllowWork:        true,
-		PermissionMode:   "default",
-		Mode:             "direct",
-		RootDir:          "/workspace",
-		WorktreeRepo:     "/workspace/repo",
-		Sandbox:          &sandbox,
-		Approvals:        "none",
-		MaxSessionTokens: &maxSession,
-		DailyTokenLimit:  &dailyLimit,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Host saves report with worktree
 	err = e.app.Hosts.SaveReport(context.Background(), host, hosts.Report{
 		Roots:   []string{"/workspace"},
@@ -126,9 +104,29 @@ func TestOverviewE2E(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add a folder grant
-	_, err = e.app.Hosts.AddGrant(context.Background(), adminActor, agentID, "/workspace/data", "read")
+	// The configuration as POST /agents writes it, with a folder grant.
+	sandbox := false
+	maxSession := 150000
+	dailyLimit := int64(500000)
+	a, grants, err := e.app.Hosts.ValidateNewAgent(context.Background(), adminActor, hosts.AssignInput{
+		HostID:           host.ID,
+		Client:           "claude-code",
+		Model:            "claude-3-5-sonnet",
+		WorkModel:        "claude-3-7-sonnet",
+		AllowWork:        true,
+		PermissionMode:   "default",
+		Mode:             "direct",
+		RootDir:          "/workspace",
+		WorktreeRepo:     "/workspace/repo",
+		Sandbox:          &sandbox,
+		Approvals:        "none",
+		MaxSessionTokens: &maxSession,
+		DailyTokenLimit:  &dailyLimit,
+	}, []hosts.GrantInput{{Path: "/workspace/data", Mode: "read"}})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.app.Hosts.CreateAgentConfig(context.Background(), adminActor, agentActor, a, grants); err != nil {
 		t.Fatal(err)
 	}
 

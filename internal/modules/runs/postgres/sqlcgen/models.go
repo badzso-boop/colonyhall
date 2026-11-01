@@ -24,6 +24,8 @@ type Actor struct {
 	Timezone    string
 	StatusText  string
 	Color       *string
+	ArchivedAt  *time.Time
+	ArchivedBy  *uuid.UUID
 }
 
 type AgentHost struct {
@@ -46,6 +48,15 @@ type AgentHost struct {
 	WorktreeRepo     string
 	AllowPreview     bool
 	AllowWebRead     bool
+}
+
+type AgentInstruction struct {
+	AgentID     uuid.UUID
+	WorkspaceID uuid.UUID
+	Version     int32
+	Text        string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
 }
 
 type AgentNote struct {

@@ -13,43 +13,18 @@ import (
 
 func createFullAccessAgent(e *env, hostID, handle, name string) (string, string) {
 	e.t.Helper()
-	agentID, token := e.createAgent(handle, name)
-
-	var assigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agentID+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":    hostID,
-			"client":     "claude-code",
-			"model":      "haiku",
-			"allow_work": true,
-			"mode":       "direct",
-			"root_dir":   "/app",
-			"sandbox":    false,
-		}, &assigned); s != http.StatusOK {
-		e.t.Fatalf("assign agent %s: %d", handle, s)
-	}
-
-	return agentID, token
+	return e.newAgent(handle, name, map[string]any{
+		"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true,
+		"mode": "direct", "root_dir": "/app", "sandbox": false,
+	}, nil)
 }
 
 func createSandboxedAgent(e *env, hostID, handle, name string) (string, string) {
 	e.t.Helper()
-	agentID, token := e.createAgent(handle, name)
-
-	var assigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agentID+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":    hostID,
-			"client":     "claude-code",
-			"model":      "haiku",
-			"allow_work": true,
-			"mode":       "compact",
-			"sandbox":    true,
-		}, &assigned); s != http.StatusOK {
-		e.t.Fatalf("assign sandboxed agent %s: %d", handle, s)
-	}
-
-	return agentID, token
+	return e.newAgent(handle, name, map[string]any{
+		"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true,
+		"mode": "compact", "sandbox": true,
+	}, nil)
 }
 
 func TestDelegationFlowApprove(t *testing.T) {

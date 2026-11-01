@@ -245,7 +245,7 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 			rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
 			s.Log.Warn("guard: unsandboxed agent refused", "agent", "@"+ha.Handle, "reason", reason)
 			if m != nil {
-				s.stop(ha.AgentID)
+				s.stop(ha.AgentID, "halt")
 			}
 			continue
 		}
@@ -256,7 +256,7 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.WorktreeRepo, Reason: reason})
 				s.Log.Warn("guard: worktree_repo refused", "agent", "@"+ha.Handle, "path", ha.WorktreeRepo, "reason", reason)
 				if m != nil {
-					s.stop(ha.AgentID)
+					s.stop(ha.AgentID, "halt")
 				}
 				continue
 			}
@@ -266,7 +266,7 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.WorktreeRepo, Reason: err.Error()})
 				s.Log.Warn("guard: worktree setup failed", "agent", "@"+ha.Handle, "path", ha.WorktreeRepo, "err", err)
 				if m != nil {
-					s.stop(ha.AgentID)
+					s.stop(ha.AgentID, "halt")
 				}
 				continue
 			}
@@ -278,17 +278,22 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 				rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
 				s.Log.Warn("guard: root_dir refused", "agent", "@"+ha.Handle, "path", ha.RootDir, "reason", reason)
 				if m != nil {
-					s.stop(ha.AgentID)
+					s.stop(ha.AgentID, "halt")
 				}
 				continue
 			}
 			ha.RootDir = realRoot
 		}
-		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, ha.WorktreeRepo, fmt.Sprint(ha.Sandbox), ha.Approvals, fmt.Sprint(ha.MaxSessionTokens), fmt.Sprint(ha.DailyTokenLimit)}, "|")
+		// The limits are not in the key: an admin may change them (round
+		// 33), and the agent takes them over without a restart.
+		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, ha.WorktreeRepo, fmt.Sprint(ha.Sandbox), ha.Approvals}, "|")
 		switch {
 		case m != nil && m.key == key:
 			s.mu.Lock()
 			changedGrants := !slices.Equal(m.grants, grants)
+			if m.conf.MaxSessionTokens != ha.MaxSessionTokens && m.agent != nil {
+				m.agent.SetSessionLimit(ha.MaxSessionTokens)
+			}
 			m.grants, m.conf = grants, ha
 			m.worktree = wt
 			s.mu.Unlock()
@@ -298,7 +303,8 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 			}
 		default:
 			if m != nil {
-				s.stop(ha.AgentID)
+				// Restarting with a new configuration: its terminals keep running.
+				s.stop(ha.AgentID, "")
 			}
 			s.startAgent(ctx, ha, key, grants, wt)
 		}
@@ -322,8 +328,9 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 	s.rejected = rejected
 	s.worktrees = curWT
 	s.mu.Unlock()
+	// Gone from the config: the agent was deleted (archived, round 33).
 	for _, id := range gone {
-		s.stop(id)
+		s.stop(id, KilledArchived)
 	}
 	if changed || len(gone) > 0 {
 		s.report(ctx)
@@ -640,7 +647,12 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 	return p
 }
 
-func (s *Supervisor) stop(agentID string) {
+// KilledArchived marks terminals ended because their agent was deleted.
+const KilledArchived = "archived"
+
+// stop ends an agent's runs. killedBy, if set, also kills its terminals
+// with that reason ("halt", "archived"); empty keeps them (a restart).
+func (s *Supervisor) stop(agentID, killedBy string) {
 	s.mu.Lock()
 	m := s.agents[agentID]
 	delete(s.agents, agentID)
@@ -656,10 +668,10 @@ func (s *Supervisor) stop(agentID string) {
 	m.proxyMu.Unlock()
 	m.cancel()
 	<-m.done
-	if s.terminals != nil {
-		s.terminals.KillAllForHandle(m.conf.Handle, "halt")
+	if s.terminals != nil && killedBy != "" {
+		s.terminals.KillAllForHandle(m.conf.Handle, killedBy)
 	}
-	s.Log.Info("guard: agent stopped", "agent", "@"+m.conf.Handle)
+	s.Log.Info("guard: agent stopped", "agent", "@"+m.conf.Handle, "reason", killedBy)
 }
 
 func (s *Supervisor) stopAll() {
@@ -671,7 +683,7 @@ func (s *Supervisor) stopAll() {
 	s.version = ""
 	s.mu.Unlock()
 	for _, id := range ids {
-		s.stop(id)
+		s.stop(id, "halt")
 	}
 	if s.previews != nil {
 		s.previews.StopAll(context.Background())

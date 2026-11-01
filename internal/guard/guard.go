@@ -39,6 +39,10 @@ type Agent struct {
 	// too: Antigravity cannot switch its tools off.
 	DecideWrap Wrapper
 
+	// sessionLimit overrides Cfg.MaxSessionTokens once an admin changed
+	// it (stored +1; 0 = not set).
+	sessionLimit atomic.Int64
+
 	// Mode is "direct" or "compact" (empty defaults to compact).
 	Mode           string
 	RootDir        string
@@ -1350,4 +1354,15 @@ func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error
 	wg.Wait()
 	close(errs)
 	return <-errs
+}
+
+// SetSessionLimit changes the session limit of a running agent (an admin
+// changed the agent's limits; round 33).
+func (a *Agent) SetSessionLimit(n int) { a.sessionLimit.Store(int64(n) + 1) }
+
+func (a *Agent) maxSessionTokens() int {
+	if v := a.sessionLimit.Load(); v > 0 {
+		return int(v - 1)
+	}
+	return a.Cfg.MaxSessionTokens
 }

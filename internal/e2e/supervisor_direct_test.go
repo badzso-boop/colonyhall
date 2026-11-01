@@ -43,15 +43,14 @@ func TestSupervisorDirectMode(t *testing.T) {
 
 	agent := e.agentID()
 	// Assign in direct mode
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":         hostID,
-			"client":          "claude-code",
-			"mode":            "direct",
-			"root_dir":        root,
-			"sandbox":         false,
-			"permission_mode": "auto",
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":         hostID,
+		"client":          "claude-code",
+		"mode":            "direct",
+		"root_dir":        root,
+		"sandbox":         false,
+		"permission_mode": "auto",
+	})
 
 	var mu sync.Mutex
 	var directReqs []guard.DirectRequest
@@ -244,15 +243,14 @@ func TestSupervisorAllowUnsandboxedE2E(t *testing.T) {
 
 	agent := e.agentID()
 	// Assign in direct mode with sandbox: false
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":         hostID,
-			"client":          "claude-code",
-			"mode":            "direct",
-			"root_dir":        root,
-			"sandbox":         false,
-			"permission_mode": "auto",
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":         hostID,
+		"client":          "claude-code",
+		"mode":            "direct",
+		"root_dir":        root,
+		"sandbox":         false,
+		"permission_mode": "auto",
+	})
 
 	called := false
 	ad := &scriptedAdapter{

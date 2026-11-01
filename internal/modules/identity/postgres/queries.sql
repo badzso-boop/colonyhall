@@ -18,13 +18,23 @@ WHERE id = $1;
 SELECT * FROM actor WHERE id = $1;
 
 -- name: ActorByHandle :one
-SELECT * FROM actor WHERE workspace_id = $1 AND handle = $2;
+SELECT * FROM actor WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL;
 
 -- name: ActorsByIDs :many
 SELECT * FROM actor WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY handle;
 
 -- name: ListActors :many
-SELECT * FROM actor WHERE workspace_id = $1 ORDER BY handle;
+SELECT * FROM actor WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY handle;
+
+-- name: ListAllActors :many
+SELECT * FROM actor WHERE workspace_id = $1 ORDER BY handle, created_at;
+
+-- name: ArchiveActor :exec
+UPDATE actor SET archived_at = sqlc.arg(at), archived_by = sqlc.arg(by), state = 'stopped'
+WHERE id = sqlc.arg(id) AND archived_at IS NULL;
+
+-- name: RevokeActorTokens :exec
+UPDATE api_token SET revoked_at = sqlc.arg(at) WHERE actor_id = sqlc.arg(actor_id) AND revoked_at IS NULL;
 
 -- name: CreateToken :exec
 INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at)
@@ -41,7 +51,7 @@ WHERE host_id = sqlc.arg(host_id) AND revoked_at IS NULL
   AND (sqlc.narg(agent_id)::uuid IS NULL OR actor_id = sqlc.narg(agent_id)::uuid);
 
 -- name: ActorsByHandle :many
-SELECT * FROM actor WHERE handle = $1 ORDER BY workspace_id;
+SELECT * FROM actor WHERE handle = $1 AND archived_at IS NULL ORDER BY workspace_id;
 
 -- name: WorkspaceByName :one
 SELECT * FROM workspace WHERE name = $1;

@@ -359,7 +359,7 @@ func TestCompactionScribeNeedsNoMembership(t *testing.T) {
 		Actor struct{ ID string }
 		Token string
 	}
-	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "jegyzo", "role": "member"}, &scribe); s != http.StatusCreated {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "jegyzo", "api_key": true}, &scribe); s != http.StatusCreated {
 		t.Fatalf("create scribe: %d", s)
 	}
 	scribeID, _ := uuid.Parse(scribe.Actor.ID)
@@ -416,7 +416,7 @@ func TestCompactionReplacedOrPausedScribeRefused(t *testing.T) {
 			Actor struct{ ID string }
 			Token string
 		}
-		if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": handle, "role": "member"}, &a); s != http.StatusCreated {
+		if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": handle, "api_key": true}, &a); s != http.StatusCreated {
 			t.Fatalf("create %s: %d", handle, s)
 		}
 		return a.Actor.ID, a.Token

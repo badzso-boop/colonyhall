@@ -897,6 +897,32 @@ func (s *Service) MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, er
 	return s.Store.MemberIDs(ctx, channelID)
 }
 
+// ChannelInWorkspace reports whether a channel exists in the workspace.
+func (s *Service) ChannelInWorkspace(ctx context.Context, workspaceID, channelID ids.ID) (bool, error) {
+	c, err := s.Store.ChannelByID(ctx, channelID)
+	if errors.Is(err, db.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return c.WorkspaceID == workspaceID, nil
+}
+
+// ChannelIDsOf lists the channels (and DMs) an actor belongs to, in the
+// caller's workspace (archiving an agent removes its memberships).
+func (s *Service) ChannelIDsOf(ctx context.Context, by identity.Actor, actorID ids.ID) ([]ids.ID, error) {
+	views, err := s.Store.ChannelsForActor(ctx, by.WorkspaceID, actorID, false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ids.ID, len(views))
+	for i, v := range views {
+		out[i] = v.ID
+	}
+	return out, nil
+}
+
 // ChannelByID implements Reader.
 func (s *Service) ChannelByID(ctx context.Context, id ids.ID) (Channel, error) {
 	return s.Store.ChannelByID(ctx, id)

@@ -273,31 +273,45 @@ type AssignInput struct {
 	AllowWebRead     bool
 }
 
-// Assign puts an agent on a host (moving it if it was elsewhere; grants on
-// the old host are revoked, as are its tokens there).
-func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID, in AssignInput) (AgentConfig, error) {
+// GrantInput is a folder an agent gets at creation.
+type GrantInput struct {
+	Path string
+	Mode string
+}
+
+// ValidateNewAgent checks an agent's machine configuration before anything
+// is written (POST /agents, round 33): the host is approved and has
+// reported the client; the root folder, the worktree repo and every grant
+// lie inside the roots the host reported. It returns the assignment to
+// write (without the agent id) and the normalised grants.
+func (s *Service) ValidateNewAgent(ctx context.Context, by identity.Actor, in AssignInput, grants []GrantInput) (Assignment, []GrantInput, error) {
 	if err := admin(by); err != nil {
-		return AgentConfig{}, err
-	}
-	agent, err := s.agent(ctx, by, agentID)
-	if err != nil {
-		return AgentConfig{}, err
+		return Assignment{}, nil, err
 	}
 	if !Clients[in.Client] {
-		return AgentConfig{}, ErrBadClient
+		return Assignment{}, nil, ErrBadClient
 	}
 	h, err := s.hostIn(ctx, by.WorkspaceID, in.HostID)
 	if err != nil {
-		return AgentConfig{}, err
+		return Assignment{}, nil, err
 	}
 	if h.State != StateApproved {
-		return AgentConfig{}, ErrHostRevoked
+		return Assignment{}, nil, ErrHostRevoked
+	}
+	reported := false
+	for _, c := range h.Report.Clients {
+		if c.Name == in.Client {
+			reported = true
+		}
+	}
+	if !reported {
+		return Assignment{}, nil, ErrClientNotReported
 	}
 	if in.Mode == "" {
 		in.Mode = AgentModeDirect
 	}
 	if in.Mode != AgentModeDirect && in.Mode != AgentModeCompact {
-		return AgentConfig{}, ErrBadAgentMode
+		return Assignment{}, nil, ErrBadAgentMode
 	}
 	sandbox := false
 	if in.Sandbox != nil {
@@ -305,32 +319,43 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 	} else if in.Mode == AgentModeCompact {
 		sandbox = true
 	}
+	inRoots := func(p string) error {
+		if err := ValidatePath(p); err != nil {
+			return err
+		}
+		for _, r := range h.Report.Roots {
+			if Within(p, r) {
+				return nil
+			}
+		}
+		return ErrOutsideRoots
+	}
 	if in.WorktreeRepo != "" {
 		if (in.Mode == AgentModeDirect && sandbox) || (in.Mode == AgentModeCompact && !sandbox) {
-			return AgentConfig{}, ErrWorktreeDirectOnly
+			return Assignment{}, nil, ErrWorktreeDirectOnly
 		}
-		if err := ValidatePath(in.WorktreeRepo); err != nil {
-			return AgentConfig{}, err
+		if err := inRoots(in.WorktreeRepo); err != nil {
+			return Assignment{}, nil, err
 		}
 		if in.RootDir == "" {
 			in.RootDir = in.WorktreeRepo
 		}
 	}
 	if in.RootDir != "" {
-		if err := ValidatePath(in.RootDir); err != nil {
-			return AgentConfig{}, err
+		if err := inRoots(in.RootDir); err != nil {
+			return Assignment{}, nil, err
 		}
 	}
 	if (in.Mode == AgentModeDirect || !sandbox) && in.RootDir == "" {
-		return AgentConfig{}, ErrBadRootDir
+		return Assignment{}, nil, ErrBadRootDir
 	}
 	// A preview runs docker compose (image builds run any command): a
 	// sandboxed agent, which may not run commands, must not get it.
 	if in.AllowPreview && (in.Mode != AgentModeDirect || sandbox) {
-		return AgentConfig{}, ErrPreviewFullAccess
+		return Assignment{}, nil, ErrPreviewFullAccess
 	}
 	if in.AllowWebRead && !sandbox {
-		return AgentConfig{}, ErrWebReadSandboxedOnly
+		return Assignment{}, nil, ErrWebReadSandboxedOnly
 	}
 	if in.PermissionMode == "" {
 		in.PermissionMode = "auto" // claude: --permission-mode auto; antigravity: --mode accept-edits
@@ -343,55 +368,82 @@ func (s *Service) Assign(ctx context.Context, by identity.Actor, agentID ids.ID,
 		approvals = ApprovalsNone
 	}
 	if approvals != ApprovalsNone && approvals != ApprovalsChat {
-		return AgentConfig{}, ErrBadApprovals
+		return Assignment{}, nil, ErrBadApprovals
 	}
 	if approvals == ApprovalsChat && in.Client != "claude-code" {
-		return AgentConfig{}, ErrApprovalsChatClient
+		return Assignment{}, nil, ErrApprovalsChatClient
 	}
 	maxSessionTokens := 150000
 	if in.MaxSessionTokens != nil {
 		maxSessionTokens = *in.MaxSessionTokens
 	}
 	if maxSessionTokens < 0 {
-		return AgentConfig{}, ErrBadMaxSessionTokens
+		return Assignment{}, nil, ErrBadMaxSessionTokens
 	}
 	var dailyTokenLimit int64
 	if in.DailyTokenLimit != nil {
 		dailyTokenLimit = *in.DailyTokenLimit
 	}
 	if dailyTokenLimit < 0 {
-		return AgentConfig{}, ErrBadDailyTokenLimit
+		return Assignment{}, nil, ErrBadDailyTokenLimit
+	}
+	out := make([]GrantInput, 0, len(grants))
+	seen := map[string]bool{}
+	for _, g := range grants {
+		if g.Mode != ModeRead && g.Mode != ModeWrite {
+			return Assignment{}, nil, ErrBadMode
+		}
+		if err := inRoots(g.Path); err != nil {
+			return Assignment{}, nil, err
+		}
+		if seen[g.Path] {
+			continue
+		}
+		seen[g.Path] = true
+		out = append(out, g)
 	}
 	a := Assignment{
-		AgentID: agent.ID, HostID: h.ID, WorkspaceID: by.WorkspaceID, Client: in.Client, Model: clip(in.Model, 100),
+		HostID: h.ID, WorkspaceID: by.WorkspaceID, Client: in.Client, Model: clip(in.Model, 100),
 		WorkModel: clip(in.WorkModel, 100), AllowWork: in.AllowWork, PermissionMode: clip(in.PermissionMode, 40),
 		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), WorktreeRepo: clip(in.WorktreeRepo, 1024), Sandbox: sandbox, Approvals: approvals, AllowPreview: in.AllowPreview,
 		AllowWebRead:     in.AllowWebRead,
 		MaxSessionTokens: maxSessionTokens, DailyTokenLimit: dailyTokenLimit,
 		CreatedBy: by.ID, CreatedAt: s.Clock.Now(),
 	}
-	err = s.record(ctx, by.WorkspaceID, by.ID, EventAgentAssigned, h.ID,
+	return a, out, nil
+}
+
+// CreateAgentConfig writes a validated assignment and its grants for a new
+// agent (inside the caller's transaction; audited).
+func (s *Service) CreateAgentConfig(ctx context.Context, by identity.Actor, agent identity.Actor, a Assignment, grants []GrantInput) (AgentConfig, error) {
+	if err := admin(by); err != nil {
+		return AgentConfig{}, err
+	}
+	a.AgentID = agent.ID
+	cfg := AgentConfig{Assignment: a, Handle: agent.Handle, Grants: []Grant{}}
+	err := s.record(ctx, by.WorkspaceID, by.ID, EventAgentAssigned, a.HostID,
 		AssignmentEvent{
-			AgentID: agent.ID.String(), HostID: h.ID.String(), Client: a.Client, Model: a.Model,
+			AgentID: agent.ID.String(), HostID: a.HostID.String(), Client: a.Client, Model: a.Model,
 			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: a.Approvals,
 			MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
 			AllowPreview: a.AllowPreview, AllowWebRead: a.AllowWebRead,
 		},
-		func(ctx context.Context) error {
-			old, err := s.Store.AssignmentByAgent(ctx, agent.ID)
-			if err == nil && old.HostID != h.ID {
-				if err := s.Store.RevokeGrantsForAgent(ctx, agent.ID, s.Clock.Now()); err != nil {
-					return err
-				}
-				if err := s.Tokens.RevokeHostTokens(ctx, old.HostID, agent.ID); err != nil {
-					return err
-				}
-			} else if err != nil && !errors.Is(err, db.ErrNotFound) {
-				return err
-			}
-			return s.Store.SetAssignment(ctx, a)
-		})
-	return AgentConfig{Assignment: a, Handle: agent.Handle, Grants: []Grant{}}, err
+		func(ctx context.Context) error { return s.Store.SetAssignment(ctx, a) })
+	if err != nil {
+		return AgentConfig{}, err
+	}
+	for _, gi := range grants {
+		g := Grant{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, AgentID: agent.ID, HostID: a.HostID, Path: gi.Path, Mode: gi.Mode,
+			CreatedBy: by.ID, CreatedAt: s.Clock.Now()}
+		err := s.record(ctx, by.WorkspaceID, by.ID, EventGrantAdded, a.HostID,
+			GrantEvent{GrantID: g.ID.String(), AgentID: agent.ID.String(), HostID: a.HostID.String(), Path: g.Path, Mode: g.Mode},
+			func(ctx context.Context) error { return s.Store.AddGrant(ctx, g) })
+		if err != nil {
+			return AgentConfig{}, err
+		}
+		cfg.Grants = append(cfg.Grants, g)
+	}
+	return cfg, nil
 }
 
 // AssignmentByAgent returns an agent's current host assignment, or db.ErrNotFound if not assigned.
@@ -399,29 +451,71 @@ func (s *Service) AssignmentByAgent(ctx context.Context, agentID ids.ID) (Assign
 	return s.Store.AssignmentByAgent(ctx, agentID)
 }
 
-// Unassign takes an agent off its host: its grants and host tokens end.
-func (s *Service) Unassign(ctx context.Context, by identity.Actor, agentID ids.ID) error {
+// EndAssignment takes an archived agent off its host: its grants and host
+// tokens end, and the guard drops it on its next config fetch. No
+// assignment (an API-key agent) is not an error.
+func (s *Service) EndAssignment(ctx context.Context, by identity.Actor, agentID ids.ID) error {
 	if err := admin(by); err != nil {
 		return err
 	}
+	a, err := s.Store.AssignmentByAgent(ctx, agentID)
+	if errors.Is(err, db.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if a.WorkspaceID != by.WorkspaceID {
+		return db.ErrNotFound
+	}
+	return s.record(ctx, by.WorkspaceID, by.ID, EventAgentUnassigned, a.HostID, AssignmentEvent{AgentID: agentID.String(), HostID: a.HostID.String()},
+		func(ctx context.Context) error {
+			if err := s.Store.RevokeGrantsForAgent(ctx, agentID, s.Clock.Now()); err != nil {
+				return err
+			}
+			if err := s.Tokens.RevokeHostTokens(ctx, a.HostID, agentID); err != nil {
+				return err
+			}
+			return s.Store.DeleteAssignment(ctx, agentID)
+		})
+}
+
+// SetLimits changes an agent's limits, the plan's changeable "keretek"
+// (round 33): the daily token limit and the session limit. nil leaves one.
+func (s *Service) SetLimits(ctx context.Context, by identity.Actor, agentID ids.ID, daily *int64, maxSession *int) (Assignment, error) {
+	if err := admin(by); err != nil {
+		return Assignment{}, err
+	}
 	agent, err := s.agent(ctx, by, agentID)
 	if err != nil {
-		return err
+		return Assignment{}, err
+	}
+	if agent.ArchivedAt != nil {
+		return Assignment{}, identity.ErrAgentConfigImmutable
 	}
 	a, err := s.Store.AssignmentByAgent(ctx, agent.ID)
-	if err != nil {
-		return err
+	if errors.Is(err, db.ErrNotFound) {
+		return Assignment{}, ErrNotAssigned
 	}
-	return s.record(ctx, by.WorkspaceID, by.ID, EventAgentUnassigned, a.HostID, AssignmentEvent{AgentID: agent.ID.String(), HostID: a.HostID.String()},
-		func(ctx context.Context) error {
-			if err := s.Store.RevokeGrantsForAgent(ctx, agent.ID, s.Clock.Now()); err != nil {
-				return err
-			}
-			if err := s.Tokens.RevokeHostTokens(ctx, a.HostID, agent.ID); err != nil {
-				return err
-			}
-			return s.Store.DeleteAssignment(ctx, agent.ID)
-		})
+	if err != nil {
+		return Assignment{}, err
+	}
+	if daily != nil {
+		if *daily < 0 {
+			return Assignment{}, ErrBadDailyTokenLimit
+		}
+		a.DailyTokenLimit = *daily
+	}
+	if maxSession != nil {
+		if *maxSession < 0 {
+			return Assignment{}, ErrBadMaxSessionTokens
+		}
+		a.MaxSessionTokens = *maxSession
+	}
+	err = s.record(ctx, by.WorkspaceID, by.ID, EventAgentLimits, a.HostID,
+		AssignmentEvent{AgentID: agent.ID.String(), HostID: a.HostID.String(), MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit},
+		func(ctx context.Context) error { return s.Store.SetAssignment(ctx, a) })
+	return a, err
 }
 
 func (s *Service) agent(ctx context.Context, by identity.Actor, agentID ids.ID) (identity.Actor, error) {
@@ -439,76 +533,6 @@ func (s *Service) agent(ctx context.Context, by identity.Actor, agentID ids.ID) 
 		return identity.Actor{}, ErrForbidden
 	}
 	return a, nil
-}
-
-// GrantResult is a new grant plus whether its path lies outside the roots
-// the host reported (the guard will refuse it until the roots change).
-type GrantResult struct {
-	Grant
-	OutsideRoots bool
-}
-
-// AddGrant lets an agent use a folder on the host it is assigned to.
-func (s *Service) AddGrant(ctx context.Context, by identity.Actor, agentID ids.ID, path, mode string) (GrantResult, error) {
-	if err := admin(by); err != nil {
-		return GrantResult{}, err
-	}
-	if err := ValidatePath(path); err != nil {
-		return GrantResult{}, err
-	}
-	if mode != ModeRead && mode != ModeWrite {
-		return GrantResult{}, ErrBadMode
-	}
-	agent, err := s.agent(ctx, by, agentID)
-	if err != nil {
-		return GrantResult{}, err
-	}
-	a, err := s.Store.AssignmentByAgent(ctx, agent.ID)
-	if errors.Is(err, db.ErrNotFound) {
-		return GrantResult{}, ErrNotAssigned
-	}
-	if err != nil {
-		return GrantResult{}, err
-	}
-	h, err := s.Store.HostByID(ctx, a.HostID)
-	if err != nil {
-		return GrantResult{}, err
-	}
-	g := Grant{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, AgentID: agent.ID, HostID: a.HostID, Path: path, Mode: mode,
-		CreatedBy: by.ID, CreatedAt: s.Clock.Now()}
-	err = s.record(ctx, by.WorkspaceID, by.ID, EventGrantAdded, a.HostID,
-		GrantEvent{GrantID: g.ID.String(), AgentID: agent.ID.String(), HostID: a.HostID.String(), Path: path, Mode: mode},
-		func(ctx context.Context) error { return s.Store.AddGrant(ctx, g) })
-	if err != nil {
-		return GrantResult{}, err
-	}
-	outside := true
-	for _, r := range h.Report.Roots {
-		if Within(path, r) {
-			outside = false
-		}
-	}
-	return GrantResult{Grant: g, OutsideRoots: outside}, nil
-}
-
-// RevokeGrant ends a grant (kept, marked revoked).
-func (s *Service) RevokeGrant(ctx context.Context, by identity.Actor, grantID ids.ID) error {
-	if err := admin(by); err != nil {
-		return err
-	}
-	g, err := s.Store.GrantByID(ctx, grantID)
-	if err != nil {
-		return err
-	}
-	if g.WorkspaceID != by.WorkspaceID {
-		return db.ErrNotFound
-	}
-	if _, err := s.agent(ctx, by, g.AgentID); err != nil {
-		return err
-	}
-	return s.record(ctx, by.WorkspaceID, by.ID, EventGrantRevoked, g.HostID,
-		GrantEvent{GrantID: g.ID.String(), AgentID: g.AgentID.String(), HostID: g.HostID.String(), Path: g.Path, Mode: g.Mode},
-		func(ctx context.Context) error { return s.Store.RevokeGrant(ctx, g.ID, s.Clock.Now()) })
 }
 
 // SaveReport stores what the guard says about its machine.

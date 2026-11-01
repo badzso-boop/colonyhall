@@ -256,9 +256,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Actors that are not archived; with archived=true, archived agents too (archived_at set). */
         get: operations["listActors"];
         put?: never;
-        /** @description Admins only. The token is shown once. */
+        /** @description Admins only, humans only (round 33): kind agent is refused with 409 agent_config_immutable; create agents with POST /agents. The token is shown once. */
         post: operations["createActor"];
         delete?: never;
         options?: never;
@@ -824,9 +825,16 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Run the agent on a host. Moving it to another host revokes its grants and tokens on the old one. */
+        /**
+         * @deprecated
+         * @description Closed (round 33): an agent's configuration cannot change after creation. Always 409 with type agent_config_immutable; use POST /agents and DELETE /agents/{agentId}.
+         */
         put: operations["assignAgent"];
         post?: never;
+        /**
+         * @deprecated
+         * @description Closed (round 33): always 409 agent_config_immutable; delete the agent with DELETE /agents/{agentId}.
+         */
         delete: operations["unassignAgent"];
         options?: never;
         head?: never;
@@ -844,8 +852,85 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Let the agent use a folder on its host. The guard only honours paths inside its own root folders. */
+        /**
+         * @deprecated
+         * @description Closed (round 33): folder grants are set at creation (POST /agents). Always 409 agent_config_immutable.
+         */
         post: operations["addGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Human admins. Creates a configured agent in one transaction: the actor, the machine assignment and folder grants (unless api_key), the channel memberships and the own instructions. Everything is validated before anything is written. The configuration never changes afterwards; only the profile, the limits and memberships do. */
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Human admins. Archives the agent in one transaction: it stops, its tokens, machine assignment, folder grants, channel memberships and active delegation grants end, its pending inbox items are acked without waking. Its messages stay; its handle becomes free. */
+        delete: operations["deleteAgent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Human admins. The limits are operational state and may change (audited, event host.agent_limits_changed). */
+        patch: operations["setAgentLimits"];
+        trace?: never;
+    };
+    "/agents/{agentId}/instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Humans only. The agent's own instructions (set at creation), and the effective text it receives (the shared rules followed by them). */
+        get: operations["getAgentOwnInstructions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -993,6 +1078,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * @deprecated
+         * @description Closed (round 33): always 409 agent_config_immutable.
+         */
         delete: operations["revokeGrant"];
         options?: never;
         head?: never;
@@ -2165,6 +2254,11 @@ export interface components {
             timezone?: string;
             status_text?: string;
             color?: components["schemas"]["Hue"];
+            /**
+             * Format: date-time
+             * @description Set on a deleted (archived) agent; its handle may belong to a newer agent
+             */
+            archived_at?: string;
             /** @description The colour to show: the agent's own, else its machine's; absent when neither */
             effective_color?: components["schemas"]["Hue"];
         };
@@ -2787,6 +2881,52 @@ export interface components {
             daily_token_limit: number;
             allow_preview?: boolean;
             allow_web_read?: boolean;
+        };
+        CreateAgentRequest: {
+            /** @description 2-32 characters: lowercase letters, digits and '-'; free among agents that are not archived */
+            handle: string;
+            display_name?: string;
+            avatar_emoji?: string;
+            color?: components["schemas"]["Hue"];
+            description?: string;
+            /** @description An API-key agent with no machine: only the actor and a token (shown once); host fields must be absent */
+            api_key?: boolean;
+            host?: components["schemas"]["AssignRequest"];
+            grants?: components["schemas"]["GrantRequest"][];
+            channel_ids?: string[];
+            /** @description The agent's own instructions, appended to the shared rules; never secrets */
+            instructions?: string;
+        };
+        CreatedAgent: {
+            actor: components["schemas"]["Actor"];
+            host?: components["schemas"]["HostAgent"];
+            /** @description API-key agents only; shown once */
+            token?: string;
+        };
+        AgentLimitsRequest: {
+            /**
+             * Format: int64
+             * @description 0 = none
+             */
+            daily_token_limit?: number;
+            /** @description 0 = none */
+            max_session_tokens?: number;
+        };
+        AgentLimits: {
+            /** Format: int64 */
+            daily_token_limit: number;
+            max_session_tokens: number;
+        };
+        AgentOwnInstructions: {
+            /** @description Empty when the agent has none */
+            text: string;
+            version?: number;
+            /** Format: uuid */
+            created_by?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** @description What the agent receives: the shared rules, then its own instructions, placeholders filled */
+            effective: string;
         };
         GrantRequest: {
             path: string;
@@ -4325,7 +4465,9 @@ export interface operations {
     };
     listActors: {
         parameters: {
-            query?: never;
+            query?: {
+                archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5375,15 +5517,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Assigned */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HostAgent"];
-                };
-            };
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -5398,13 +5532,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Unassigned; grants and host tokens end */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -5423,15 +5551,109 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Granted */
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FolderGrant"];
+                    "application/json": components["schemas"]["CreatedAgent"];
                 };
             };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAgentLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentLimitsRequest"];
+            };
+        };
+        responses: {
+            /** @description The limits now */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLimits"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAgentOwnInstructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instructions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentOwnInstructions"];
+                };
+            };
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -5645,13 +5867,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Revoked */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

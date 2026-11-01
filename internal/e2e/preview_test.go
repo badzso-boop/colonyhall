@@ -32,56 +32,32 @@ type previewListOut struct {
 
 func TestPreviewAssignmentFlag(t *testing.T) {
 	e := newEnv(t)
-	agent := e.agentID()
 	hostID, _ := e.enroll("dev-box")
-
-	// 1. Assign with allow_preview = false
-	var assigned struct {
-		AgentID      string `json:"agent_id"`
-		AllowPreview bool   `json:"allow_preview"`
+	create := func(handle string, host map[string]any) (int, bool) {
+		var created struct {
+			Host struct {
+				AllowPreview bool `json:"allow_preview"`
+			} `json:"host"`
+		}
+		s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": handle, "host": host}, &created)
+		return s, created.Host.AllowPreview
 	}
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": false,
-		}, &assigned); s != http.StatusOK {
-		t.Fatalf("assign allow_preview=false: %d", s)
+	base := func(preview bool, extra map[string]any) map[string]any {
+		h := map[string]any{"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true, "root_dir": "/app", "allow_preview": preview}
+		for k, v := range extra {
+			h[k] = v
+		}
+		return h
 	}
-	if assigned.AllowPreview {
-		t.Errorf("expected allow_preview to be false")
+	if s, preview := create("no-preview", base(false, nil)); s != http.StatusCreated || preview {
+		t.Fatalf("allow_preview false: %d %v", s, preview)
 	}
-
-	// 2. Assign with allow_preview = true
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": true,
-		}, &assigned); s != http.StatusOK {
-		t.Fatalf("assign allow_preview=true: %d", s)
+	if s, preview := create("with-preview", base(true, nil)); s != http.StatusCreated || !preview {
+		t.Fatalf("allow_preview true: %d %v", s, preview)
 	}
-	if !assigned.AllowPreview {
-		t.Errorf("expected allow_preview to be true")
-	}
-
-	// 3. A preview runs docker compose: a sandboxed agent cannot get it.
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"mode":          "direct",
-			"sandbox":       true,
-			"root_dir":      "/app",
-			"allow_preview": true,
-		}, nil); s != http.StatusBadRequest {
-		t.Fatalf("assign allow_preview to a sandboxed agent: %d, want 400", s)
+	// A preview runs docker compose: a sandboxed agent cannot get it.
+	if s, _ := create("sandboxed-preview", base(true, map[string]any{"mode": "direct", "sandbox": true})); s != http.StatusBadRequest {
+		t.Fatalf("sandboxed agent with preview: %d", s)
 	}
 }
 
@@ -95,15 +71,14 @@ func TestPreviewMCPLifecycle(t *testing.T) {
 	defer cancel()
 
 	// 1. Unassigned / allow_preview = false -> preview_start fails
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": false,
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": false,
+	})
 
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", server.DevAgentToken, nil)
 	if err != nil {
@@ -124,15 +99,14 @@ func TestPreviewMCPLifecycle(t *testing.T) {
 	}
 
 	// 2. Enable allow_preview = true
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": true,
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": true,
+	})
 
 	// Call preview_start -> succeeds
 	startRes, err := session.CallTool(ctx, &mcp.CallToolParams{
@@ -233,15 +207,14 @@ func TestPreviewHumanControls(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": true,
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": true,
+	})
 
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", server.DevAgentToken, nil)
 	if err != nil {
@@ -290,15 +263,14 @@ func TestPreviewHaltAndEmergency(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": true,
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": true,
+	})
 
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", server.DevAgentToken, nil)
 	if err != nil {
@@ -356,15 +328,14 @@ func TestPreviewRefusals(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{
-			"host_id":       hostID,
-			"client":        "claude-code",
-			"model":         "haiku",
-			"allow_work":    true,
-			"root_dir":      "/app",
-			"allow_preview": true,
-		}, nil)
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": true,
+	})
 
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", server.DevAgentToken, nil)
 	if err != nil {
@@ -421,8 +392,7 @@ func TestPreviewFailureDetailStaysOutOfChat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": hostID, "client": "claude-code", "root_dir": "/app", "allow_preview": true}, nil)
+	e.configure(agent, map[string]any{"host_id": hostID, "client": "claude-code", "root_dir": "/app", "allow_preview": true})
 	session, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", server.DevAgentToken, nil)
 	if err != nil {
 		t.Fatal(err)

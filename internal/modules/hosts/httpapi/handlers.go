@@ -17,7 +17,7 @@ import (
 
 func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
-	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName, hosts.ErrBadColor,
+	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName, hosts.ErrBadColor, hosts.ErrOutsideRoots, hosts.ErrClientNotReported, hosts.ErrBadDailyTokenLimit, hosts.ErrBadMaxSessionTokens,
 		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
 		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)
@@ -68,12 +68,13 @@ func toHostOut(h hosts.HostView) hostOut {
 		ho.Report.Roots = []string{}
 	}
 	for _, a := range h.Agents {
-		ho.Agents = append(ho.Agents, agentOut(a))
+		ho.Agents = append(ho.Agents, AgentOut(a))
 	}
 	return ho
 }
 
-func agentOut(a hosts.AgentConfig) apispec.HostAgent {
+// AgentOut is the API view of an agent's machine configuration.
+func AgentOut(a hosts.AgentConfig) apispec.HostAgent {
 	approvals := a.Approvals
 	if approvals == "" {
 		approvals = hosts.ApprovalsNone
@@ -189,83 +190,36 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	mux.Handle("PUT /api/v1/agents/{agentId}/host", wrap(func(w http.ResponseWriter, r *http.Request) {
+	// The agent configuration endpoints are closed (round 33): an agent is
+	// configured once with POST /agents; a change means deleting it and
+	// creating a new one. They stay in the contract so old clients get a
+	// clear 409 instead of a 404. Only signed-in callers reach the answer.
+	immutable := wrap(func(w http.ResponseWriter, r *http.Request) {
+		httpx.Error(w, r, identity.ErrAgentConfigImmutable)
+	})
+	mux.Handle("PUT /api/v1/agents/{agentId}/host", immutable)
+	mux.Handle("DELETE /api/v1/agents/{agentId}/host", immutable)
+	mux.Handle("POST /api/v1/agents/{agentId}/grants", immutable)
+	mux.Handle("DELETE /api/v1/grants/{grantId}", immutable)
+
+	mux.Handle("PATCH /api/v1/agents/{agentId}/limits", wrap(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r, "agentId")
 		if !ok {
 			return
 		}
-		var in apispec.AssignRequest
+		var in apispec.AgentLimitsRequest
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		var mode string
-		if in.Mode != nil {
-			mode = string(*in.Mode)
-		}
-		var approvals string
-		if in.Approvals != nil {
-			approvals = string(*in.Approvals)
-		}
-		a, err := svc.Assign(r.Context(), httpx.Actor(r), id, hosts.AssignInput{
-			HostID: in.HostId, Client: string(in.Client),
-			Model: httpx.Deref(in.Model, ""), WorkModel: httpx.Deref(in.WorkModel, ""), AllowWork: httpx.Deref(in.AllowWork, false),
-			PermissionMode: httpx.Deref(in.PermissionMode, ""),
-			Mode:           mode, RootDir: httpx.Deref(in.RootDir, ""), WorktreeRepo: httpx.Deref(in.WorktreeRepo, ""), Sandbox: in.Sandbox, Approvals: approvals,
-			MaxSessionTokens: in.MaxSessionTokens, DailyTokenLimit: in.DailyTokenLimit,
-			AllowPreview: httpx.Deref(in.AllowPreview, false),
-			AllowWebRead: httpx.Deref(in.AllowWebRead, false),
-		})
+		a, err := svc.SetLimits(r.Context(), httpx.Actor(r), id, in.DailyTokenLimit, in.MaxSessionTokens)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, agentOut(a))
+		httpx.JSON(w, http.StatusOK, apispec.AgentLimits{DailyTokenLimit: a.DailyTokenLimit, MaxSessionTokens: a.MaxSessionTokens})
 	}))
 
-	mux.Handle("DELETE /api/v1/agents/{agentId}/host", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "agentId")
-		if !ok {
-			return
-		}
-		if err := svc.Unassign(r.Context(), httpx.Actor(r), id); err != nil {
-			httpx.Error(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-
-	mux.Handle("POST /api/v1/agents/{agentId}/grants", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "agentId")
-		if !ok {
-			return
-		}
-		var in apispec.GrantRequest
-		if err := httpx.Decode(r, &in); err != nil {
-			httpx.Error(w, r, err)
-			return
-		}
-		g, err := svc.AddGrant(r.Context(), httpx.Actor(r), id, in.Path, string(in.Mode))
-		if err != nil {
-			httpx.Error(w, r, err)
-			return
-		}
-		httpx.JSON(w, http.StatusCreated, grantOut(g.Grant, &g.OutsideRoots))
-	}))
-
-	mux.Handle("DELETE /api/v1/grants/{grantId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "grantId")
-		if !ok {
-			return
-		}
-		if err := svc.RevokeGrant(r.Context(), httpx.Actor(r), id); err != nil {
-			httpx.Error(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-
-	// Guard routes.
 	mux.Handle("POST /api/v1/host/report", requireHost(svc, func(w http.ResponseWriter, r *http.Request) {
 		var in hosts.Report
 		if err := httpx.Decode(r, &in); err != nil {
@@ -293,7 +247,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 		}
 		out := apispec.HostConfig{Version: cfg.Version, Agents: make([]apispec.HostAgent, 0, len(cfg.Agents))}
 		for _, a := range cfg.Agents {
-			out.Agents = append(out.Agents, agentOut(a))
+			out.Agents = append(out.Agents, AgentOut(a))
 		}
 		previews := make([]apispec.HostPreview, 0, len(cfg.Previews))
 		for _, p := range cfg.Previews {

@@ -117,19 +117,28 @@ func (e *BadRequest) Error() string { return e.Detail }
 type statusErr struct {
 	err    error
 	status int
+	typ    string // the problem type; "" is about:blank
 }
 
 // statusErrors maps module errors to HTTP statuses; modules register theirs
 // from their httpapi package.
 var statusErrors = []statusErr{
-	{identity.ErrForbidden, http.StatusForbidden},
-	{ErrCSRF, http.StatusForbidden},
+	{identity.ErrForbidden, http.StatusForbidden, ""},
+	{ErrCSRF, http.StatusForbidden, ""},
 }
 
 // RegisterStatus reports the given errors with an HTTP status.
 func RegisterStatus(status int, errs ...error) {
 	for _, e := range errs {
-		statusErrors = append(statusErrors, statusErr{e, status})
+		statusErrors = append(statusErrors, statusErr{e, status, ""})
+	}
+}
+
+// RegisterProblemType reports the errors with a status and a problem type
+// that clients can branch on (e.g. "agent_config_immutable").
+func RegisterProblemType(status int, typ string, errs ...error) {
+	for _, e := range errs {
+		statusErrors = append(statusErrors, statusErr{e, status, typ})
 	}
 }
 
@@ -148,34 +157,40 @@ type problem struct {
 
 // Error writes err as an application/problem+json response.
 func Error(w http.ResponseWriter, r *http.Request, err error) {
-	status, title, detail := classify(err)
+	status, title, detail, typ := classify(err)
+	if typ == "" {
+		typ = "about:blank"
+	}
 	if status >= 500 {
 		slog.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		detail = ""
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(problem{Type: "about:blank", Title: title, Status: status, Detail: detail})
+	_ = json.NewEncoder(w).Encode(problem{Type: typ, Title: title, Status: status, Detail: detail})
 }
 
-func classify(err error) (int, string, string) {
+func classify(err error) (int, string, string, string) {
 	var bad *BadRequest
 	switch {
 	case errors.As(err, &bad):
-		return http.StatusBadRequest, "Bad Request", bad.Detail
+		return http.StatusBadRequest, "Bad Request", bad.Detail, ""
 	case errors.Is(err, identity.ErrUnauthorized):
-		return http.StatusUnauthorized, "Unauthorized", err.Error()
+		return http.StatusUnauthorized, "Unauthorized", err.Error(), ""
 	case errors.Is(err, db.ErrNotFound):
-		return http.StatusNotFound, "Not Found", err.Error()
-	case errors.Is(err, db.ErrConflict):
-		return http.StatusConflict, "Conflict", err.Error()
+		return http.StatusNotFound, "Not Found", err.Error(), ""
 	}
+	// Registered errors first: a specific conflict (e.g. an immutable
+	// agent) wraps db.ErrConflict-like meaning with its own type.
 	for _, se := range statusErrors {
 		if errors.Is(err, se.err) {
-			return se.status, http.StatusText(se.status), err.Error()
+			return se.status, http.StatusText(se.status), err.Error(), se.typ
 		}
 	}
-	return http.StatusInternalServerError, "Internal Server Error", err.Error()
+	if errors.Is(err, db.ErrConflict) {
+		return http.StatusConflict, "Conflict", err.Error(), ""
+	}
+	return http.StatusInternalServerError, "Internal Server Error", err.Error(), ""
 }
 
 // Deref returns *p, or def when p is nil. Used with generated request types,

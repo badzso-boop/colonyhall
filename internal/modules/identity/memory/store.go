@@ -51,7 +51,7 @@ func (s *Store) CreateActor(_ context.Context, a identity.Actor) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, other := range s.actors {
-		if other.WorkspaceID == a.WorkspaceID && other.Handle == a.Handle {
+		if other.WorkspaceID == a.WorkspaceID && other.Handle == a.Handle && other.ArchivedAt == nil {
 			return db.ErrConflict
 		}
 	}
@@ -78,7 +78,7 @@ func (s *Store) ActorByHandle(_ context.Context, workspaceID ids.ID, handle stri
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, a := range s.actors {
-		if a.WorkspaceID == workspaceID && a.Handle == handle {
+		if a.WorkspaceID == workspaceID && a.Handle == handle && a.ArchivedAt == nil {
 			return a, nil
 		}
 	}
@@ -123,18 +123,60 @@ func (s *Store) ActorByTokenHash(_ context.Context, hash []byte, now time.Time) 
 	return a, nil
 }
 
-// ListActors lists every actor in the workspace, sorted by handle.
+// ListActors lists the workspace's actors that are not archived, sorted by handle.
 func (s *Store) ListActors(_ context.Context, workspaceID ids.ID) ([]identity.Actor, error) {
+	return s.list(workspaceID, false), nil
+}
+
+// ListAllActors lists archived actors too.
+func (s *Store) ListAllActors(_ context.Context, workspaceID ids.ID) ([]identity.Actor, error) {
+	return s.list(workspaceID, true), nil
+}
+
+func (s *Store) list(workspaceID ids.ID, archived bool) []identity.Actor {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []identity.Actor
 	for _, a := range s.actors {
-		if a.WorkspaceID == workspaceID {
+		if a.WorkspaceID == workspaceID && (archived || a.ArchivedAt == nil) {
 			out = append(out, a)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Handle < out[j].Handle })
-	return out, nil
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Handle != out[j].Handle {
+			return out[i].Handle < out[j].Handle
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return out
+}
+
+// ArchiveActor stops and archives the actor.
+func (s *Store) ArchiveActor(_ context.Context, id, by ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.actors[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	if a.ArchivedAt == nil {
+		a.ArchivedAt, a.ArchivedBy, a.State = &at, by, "stopped"
+		s.actors[id] = a
+	}
+	return nil
+}
+
+// RevokeActorTokens revokes every API token of the actor.
+func (s *Store) RevokeActorTokens(_ context.Context, actorID ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, t := range s.tokens {
+		if t.ActorID == actorID && t.RevokedAt == nil {
+			t.RevokedAt = &at
+			s.tokens[k] = t
+		}
+	}
+	return nil
 }
 
 // ActorsByHandle finds the handle in every workspace.
@@ -143,7 +185,7 @@ func (s *Store) ActorsByHandle(_ context.Context, handle string) ([]identity.Act
 	defer s.mu.RUnlock()
 	var out []identity.Actor
 	for _, a := range s.actors {
-		if a.Handle == handle {
+		if a.Handle == handle && a.ArchivedAt == nil {
 			out = append(out, a)
 		}
 	}

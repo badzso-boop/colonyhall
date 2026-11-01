@@ -105,7 +105,39 @@ func toActor(r sqlcgen.Actor) identity.Actor {
 		Timezone:    r.Timezone,
 		StatusText:  r.StatusText,
 		Color:       deref(r.Color),
+		ArchivedAt:  r.ArchivedAt,
+		ArchivedBy:  derefID(r.ArchivedBy),
 	}
+}
+
+func derefID(id *ids.ID) ids.ID {
+	if id == nil {
+		return ids.Nil
+	}
+	return *id
+}
+
+// ListAllActors lists archived actors too.
+func (s *Store) ListAllActors(ctx context.Context, workspaceID ids.ID) ([]identity.Actor, error) {
+	rows, err := s.q(ctx).ListAllActors(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]identity.Actor, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toActor(r))
+	}
+	return out, nil
+}
+
+// ArchiveActor stops and archives the actor.
+func (s *Store) ArchiveActor(ctx context.Context, id, by ids.ID, at time.Time) error {
+	return s.q(ctx).ArchiveActor(ctx, sqlcgen.ArchiveActorParams{ID: id, By: &by, At: &at})
+}
+
+// RevokeActorTokens revokes every API token of the actor.
+func (s *Store) RevokeActorTokens(ctx context.Context, actorID ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeActorTokens(ctx, sqlcgen.RevokeActorTokensParams{ActorID: actorID, At: &at})
 }
 
 func deref(s *string) string {

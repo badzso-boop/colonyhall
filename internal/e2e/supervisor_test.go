@@ -63,11 +63,12 @@ func TestSupervisorHostMode(t *testing.T) {
 	hostID := hosts.Hosts[0].ID
 
 	agent := e.agentID()
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true, "mode": "compact"}, nil)
-	for _, g := range []map[string]any{{"path": app, "mode": "write"}, {"path": docs, "mode": "read"}, {"path": outside, "mode": "write"}} {
-		e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, g, nil)
-	}
+	e.configure(agent, map[string]any{"host_id": hostID, "client": "claude-code", "model": "haiku", "allow_work": true, "mode": "compact"},
+		map[string]any{"path": app, "mode": "write"}, map[string]any{"path": docs, "mode": "read"})
+	// The server refuses a grant outside the roots at creation; one made
+	// before the machine's guard.yaml narrowed its roots still reaches the
+	// guard, which refuses it on its own.
+	e.grantDirectly(agent, hostID, outside, "write")
 
 	var mu sync.Mutex
 	var works []guard.WorkRequest
@@ -125,8 +126,10 @@ func TestSupervisorHostMode(t *testing.T) {
 		t.Fatalf("work dirs: dir %s, add %v", w.Dir, w.AddDirs)
 	}
 
-	// Unassigning stops the agent: a new mention is not answered.
-	e.do("DELETE", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, nil, nil)
+	// Deleting (archiving) the agent stops it: a new mention is not answered.
+	if s := e.do("DELETE", "/api/v1/agents/"+agent, server.DevAdminToken, nil, nil); s != http.StatusNoContent {
+		t.Fatalf("archive: %d", s)
+	}
 	time.Sleep(200 * time.Millisecond) // a few config polls
 	n := len(e.messages(general))
 	e.send(server.DevAdminToken, general, map[string]any{"body": "@fake-agent are you there?"})

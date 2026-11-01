@@ -26,6 +26,9 @@ import (
 	ruleshttp "colonyhall/internal/modules/agentrules/httpapi"
 	rulesmem "colonyhall/internal/modules/agentrules/memory"
 	rulespg "colonyhall/internal/modules/agentrules/postgres"
+	"colonyhall/internal/modules/agents"
+	agentsmem "colonyhall/internal/modules/agents/memory"
+	agentspg "colonyhall/internal/modules/agents/postgres"
 	"colonyhall/internal/modules/approval"
 	apphttp "colonyhall/internal/modules/approval/httpapi"
 	appmcp "colonyhall/internal/modules/approval/mcptools"
@@ -231,6 +234,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore        preview.Store
 		rlStore        agentrules.Store
 		ntStore        notes.Store
+		agStore        agents.Store
 		plStore        planner.Store
 		dcStore        decision.Store
 		lsStore        lease.Store
@@ -254,6 +258,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = previewmem.New()
 		rlStore = rulesmem.New()
 		ntStore = notesmem.New()
+		agStore = agentsmem.New()
 		plStore = plannermem.New()
 		dcStore = decmem.New()
 		lsStore = leasesmem.New()
@@ -292,6 +297,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = &previewpg.Store{DB: pg}
 		rlStore = &rulespg.Store{DB: pg}
 		ntStore = &notespg.Store{DB: pg}
+		agStore = &agentspg.Store{DB: pg}
 		plStore = &plannerpg.Store{DB: pg}
 		dcStore = &decpg.Store{DB: pg}
 		lsStore = &leasespg.Store{DB: pg}
@@ -409,6 +415,31 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	}
 	dlSvc.Approval = dgSvc
 	qSvc.Delegation = dgSvc
+	// Agent lifecycle (round 33): one configuration at creation, deleting
+	// archives. The delegation and inbox clean-ups run in its transaction.
+	agSvc := &agents.Service{
+		Store: agStore, Identity: idSvc, Hosts: hoSvc, Channels: cvSvc, Rules: rlSvc,
+		RevokeDelegations: func(ctx context.Context, by identity.Actor, agentID ids.ID) error {
+			grants, err := dgSvc.ListGrants(ctx, by, true)
+			if err != nil {
+				return err
+			}
+			for _, g := range grants {
+				if g.AgentAID == agentID || g.AgentBID == agentID {
+					if _, err := dgSvc.RevokeGrant(ctx, by, g.ID); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		AckInbox: func(ctx context.Context, agentID ids.ID) error {
+			_, err := dlSvc.AckAllFor(ctx, agentID)
+			return err
+		},
+		Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock,
+	}
+	rlSvc.OwnInstructions = agSvc.OwnInstructions
 
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
@@ -523,6 +554,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		httpx.JSON(w, http.StatusOK, apispec.ChannelProgressResponse{Runs: runs})
 	})))
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, gw, opt.Clock)
+	registerAgents(mux, idSvc, agSvc)
 
 	return &App{
 		Handler:      httpserver.New(mux, ready, opt.Logger),
@@ -654,8 +686,8 @@ func (a *App) SeedDev(ctx context.Context) error {
 	if err := a.Identity.ResetPassword(ctx, owner.ID, DevAdminPassword); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
-	agent, _, err := a.Identity.CreateActor(ctx, owner, identity.NewActorInput{
-		Kind: identity.KindAgent, Handle: "fake-agent", DisplayName: "Fake agent", Role: identity.RoleMember, Secret: DevAgentToken,
+	agent, _, err := a.Identity.CreateAgentActor(ctx, owner, identity.AgentActorInput{
+		Handle: "fake-agent", DisplayName: "Fake agent", WithToken: true, Secret: DevAgentToken,
 	})
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)

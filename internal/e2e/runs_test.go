@@ -358,8 +358,7 @@ func TestAgentBudgetEndpoint(t *testing.T) {
 	// 3. Enroll host and assign agent with daily limit 100,000
 	host, _ := e.enroll("box")
 	agentID := e.agentID()
-	var assigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agentID+"/host", server.DevAdminToken, map[string]any{
+	assigned := e.configure(agentID, map[string]any{
 		"host_id":            host,
 		"client":             "claude-code",
 		"model":              "haiku",
@@ -367,9 +366,7 @@ func TestAgentBudgetEndpoint(t *testing.T) {
 		"root_dir":           "/app",
 		"max_session_tokens": 120000,
 		"daily_token_limit":  100000,
-	}, &assigned); s != http.StatusOK {
-		t.Fatalf("assign host: %d", s)
-	}
+	})
 	if assigned.DailyTokenLimit != 100000 || assigned.MaxSessionTokens != 120000 {
 		t.Fatalf("assigned limits: %+v", assigned)
 	}

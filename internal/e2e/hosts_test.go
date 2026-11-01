@@ -45,6 +45,7 @@ func (e *env) enroll(name string) (string, string) {
 	if s := e.do("POST", "/api/v1/hosts/enroll", "", map[string]any{"code": pc.Code, "name": name}, &out); s != http.StatusCreated {
 		e.t.Fatalf("enroll: %d", s)
 	}
+	e.reportReady(out.Token)
 	return out.HostID, out.Token
 }
 
@@ -79,31 +80,35 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 		t.Fatalf("a host token is not an actor token: %d", s)
 	}
 
-	// Not assigned yet: no token for the agent.
+	e.reportReady(hostToken)
+
+	// Not assigned: no token for the agent.
 	if s := e.do("POST", "/api/v1/host/agents/"+agent+"/token", hostToken, nil, nil); s != http.StatusForbidden {
 		t.Fatalf("token for unassigned agent: %d", s)
 	}
-	var assigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "allow_work": true, "root_dir": "/app"}, &assigned); s != http.StatusOK {
-		t.Fatalf("assign: %d", s)
+	var created struct {
+		Actor struct{ ID string }
+		Host  hostAgent
 	}
-	if assigned.Handle != "fake-agent" || assigned.Model != "haiku" || assigned.Mode != "direct" || assigned.RootDir != "/app" || assigned.Sandbox != false || assigned.PermissionMode != "auto" || assigned.MaxSessionTokens != 150000 || assigned.DailyTokenLimit != 0 {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "laptop-claude",
+		"host": map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "allow_work": true, "root_dir": "/app"}}, &created); s != http.StatusCreated {
+		t.Fatalf("create: %d", s)
+	}
+	assigned := created.Host
+	if assigned.Handle != "laptop-claude" || assigned.Model != "haiku" || assigned.Mode != "direct" || assigned.RootDir != "/app" || assigned.Sandbox != false || assigned.PermissionMode != "auto" || assigned.MaxSessionTokens != 150000 || assigned.DailyTokenLimit != 0 {
 		t.Fatalf("assigned: %+v", assigned)
 	}
+	agent = created.Actor.ID
 
-	// Validation tests: invalid mode and missing root_dir in direct mode.
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "invalid", "root_dir": "/app"}, nil); s != http.StatusBadRequest {
-		t.Fatalf("invalid mode allowed: %d", s)
-	}
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct"}, nil); s != http.StatusBadRequest {
-		t.Fatalf("direct mode without root_dir allowed: %d", s)
-	}
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": false}, nil); s != http.StatusBadRequest {
-		t.Fatalf("compact mode with sandbox=false without root_dir allowed: %d", s)
+	// Validation: invalid mode, missing root_dir in direct mode or without a sandbox.
+	for name, h := range map[string]map[string]any{
+		"invalid mode":                {"host_id": host, "client": "claude-code", "mode": "invalid", "root_dir": "/app"},
+		"direct without root_dir":     {"host_id": host, "client": "claude-code", "mode": "direct"},
+		"compact unsandboxed no root": {"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": false},
+	} {
+		if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "bad-config", "host": h}, nil); s != http.StatusBadRequest {
+			t.Fatalf("%s allowed: %d", name, s)
+		}
 	}
 
 	var tok struct{ Token string }
@@ -111,21 +116,24 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 		t.Fatalf("agent token: %d", s)
 	}
 	var me struct{ Handle string }
-	if s := e.do("GET", "/api/v1/me", tok.Token, nil, &me); s != http.StatusOK || me.Handle != "fake-agent" {
+	if s := e.do("GET", "/api/v1/me", tok.Token, nil, &me); s != http.StatusOK || me.Handle != "laptop-claude" {
 		t.Fatalf("agent token works: %d %+v", s, me)
 	}
 
-	// Unassigning ends the host's tokens for that agent.
-	if s := e.do("DELETE", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, nil, nil); s != http.StatusNoContent {
-		t.Fatalf("unassign: %d", s)
+	// Deleting (archiving) the agent ends the host's tokens for it.
+	if s := e.do("DELETE", "/api/v1/agents/"+agent, server.DevAdminToken, nil, nil); s != http.StatusNoContent {
+		t.Fatalf("archive: %d", s)
 	}
 	if s := e.do("GET", "/api/v1/me", tok.Token, nil, nil); s != http.StatusUnauthorized {
-		t.Fatalf("token after unassign: %d", s)
+		t.Fatalf("token after archive: %d", s)
 	}
 
 	// Revoking the host ends its own token and every agent token it got.
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "antigravity", "mode": "compact"}, nil)
-	e.do("POST", "/api/v1/host/agents/"+agent+"/token", hostToken, nil, &tok)
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "laptop-ag",
+		"host": map[string]any{"host_id": host, "client": "antigravity", "mode": "compact"}}, &created); s != http.StatusCreated {
+		t.Fatalf("create: %d", s)
+	}
+	e.do("POST", "/api/v1/host/agents/"+created.Actor.ID+"/token", hostToken, nil, &tok)
 	if s := e.do("PUT", "/api/v1/hosts/"+host+"/state", server.DevAdminToken, map[string]any{"state": "revoked"}, nil); s != http.StatusNoContent {
 		t.Fatalf("revoke host: %d", s)
 	}
@@ -135,37 +143,15 @@ func TestHostPairingAndAgentTokens(t *testing.T) {
 	if s := e.do("GET", "/api/v1/me", tok.Token, nil, nil); s != http.StatusUnauthorized {
 		t.Fatalf("agent token of revoked host: %d", s)
 	}
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "claude-code", "mode": "compact"}, nil); s != http.StatusBadRequest {
-		t.Fatalf("assign to revoked host: %d", s)
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "too-late",
+		"host": map[string]any{"host_id": host, "client": "claude-code", "mode": "compact"}}, nil); s != http.StatusBadRequest {
+		t.Fatalf("create on a revoked host: %d", s)
 	}
 }
 
 func TestHostConfigAndGrants(t *testing.T) {
 	e := newEnv(t)
-	agent := e.agentID()
 	host, hostToken := e.enroll("homelab")
-
-	if s := e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": "/work", "mode": "write"}, nil); s != http.StatusBadRequest {
-		t.Fatalf("grant before assignment: %d", s)
-	}
-	e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken, map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "mode": "compact"}, nil)
-	for _, bad := range []string{"work", "/work/../etc", "/work/", "/a//b"} {
-		if s := e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": bad, "mode": "read"}, nil); s != http.StatusBadRequest {
-			t.Fatalf("bad path %q: %d", bad, s)
-		}
-	}
-	if s := e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": "/work", "mode": "admin"}, nil); s != http.StatusBadRequest {
-		t.Fatalf("bad mode: %d", s)
-	}
-
-	var g struct {
-		ID           string `json:"id"`
-		OutsideRoots bool   `json:"outside_roots"`
-	}
-	e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": "/work/app", "mode": "write"}, &g)
-	if !g.OutsideRoots {
-		t.Fatal("no roots reported yet: the grant must be flagged")
-	}
 	if s := e.do("POST", "/api/v1/host/report", hostToken, map[string]any{"roots": []string{"/work"}, "clients": []any{map[string]any{"name": "claude-code"}},
 		"sandbox": "bwrap 0.9.0", "exchange_dir": "/mnt/z/exchange", "exchange_ok": true, "rejected": []any{}}, nil); s != http.StatusNoContent {
 		t.Fatalf("report: %d", s)
@@ -184,10 +170,29 @@ func TestHostConfigAndGrants(t *testing.T) {
 	if len(hl.Hosts) != 1 || hl.Hosts[0].Report.ExchangeDir != "/mnt/z/exchange" || !hl.Hosts[0].Report.ExchangeOK {
 		t.Fatalf("unexpected host report in list: %+v", hl)
 	}
-	e.do("POST", "/api/v1/agents/"+agent+"/grants", server.DevAdminToken, map[string]any{"path": "/work/docs", "mode": "read"}, &g)
-	if g.OutsideRoots {
-		t.Fatal("inside the reported roots")
+
+	compact := map[string]any{"host_id": host, "client": "claude-code", "model": "haiku", "mode": "compact"}
+	withGrants := func(grants ...map[string]any) map[string]any {
+		return map[string]any{"handle": "homelab-bot", "host": compact, "grants": grants}
 	}
+	for _, bad := range []string{"work", "/work/../etc", "/work/", "/a//b"} {
+		if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, withGrants(map[string]any{"path": bad, "mode": "read"}), nil); s != http.StatusBadRequest {
+			t.Fatalf("bad path %q: %d", bad, s)
+		}
+	}
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, withGrants(map[string]any{"path": "/work", "mode": "admin"}), nil); s != http.StatusBadRequest {
+		t.Fatalf("bad mode: %d", s)
+	}
+	// Outside the roots the machine reported: refused at creation.
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, withGrants(map[string]any{"path": "/etc", "mode": "read"}), nil); s != http.StatusBadRequest {
+		t.Fatalf("grant outside the roots: %d", s)
+	}
+	var created struct{ Actor struct{ ID string } }
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken,
+		withGrants(map[string]any{"path": "/work/app", "mode": "write"}, map[string]any{"path": "/work/docs", "mode": "read"}), &created); s != http.StatusCreated {
+		t.Fatalf("create with grants: %d", s)
+	}
+	agent := created.Actor.ID
 
 	// The guard sees its agents and grants; an unchanged config is a 304.
 	var cfg struct {
@@ -212,19 +217,6 @@ func TestHostConfigAndGrants(t *testing.T) {
 		t.Fatalf("unchanged config: %d", res.StatusCode)
 	}
 
-	// Revoking a grant changes the config.
-	if s := e.do("DELETE", "/api/v1/grants/"+g.ID, server.DevAdminToken, nil, nil); s != http.StatusNoContent {
-		t.Fatalf("revoke grant: %d", s)
-	}
-	var cfg2 struct {
-		Version string
-		Agents  []hostAgent
-	}
-	e.do("GET", "/api/v1/host/config", hostToken, nil, &cfg2)
-	if cfg2.Version == cfg.Version || len(cfg2.Agents[0].Grants) != 1 {
-		t.Fatalf("after revoke: %+v", cfg2)
-	}
-
 	// Admins see the machine with its report and agents.
 	var list struct {
 		Hosts []struct {
@@ -236,6 +228,19 @@ func TestHostConfigAndGrants(t *testing.T) {
 	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &list)
 	if len(list.Hosts) != 1 || list.Hosts[0].Report.Sandbox != "bwrap 0.9.0" || len(list.Hosts[0].Agents) != 1 {
 		t.Fatalf("hosts: %+v", list)
+	}
+
+	// Deleting the agent takes it out of the guard's config.
+	if s := e.do("DELETE", "/api/v1/agents/"+agent, server.DevAdminToken, nil, nil); s != http.StatusNoContent {
+		t.Fatalf("archive: %d", s)
+	}
+	var cfg2 struct {
+		Version string
+		Agents  []hostAgent
+	}
+	e.do("GET", "/api/v1/host/config", hostToken, nil, &cfg2)
+	if cfg2.Version == cfg.Version || len(cfg2.Agents) != 0 {
+		t.Fatalf("after archive: %+v", cfg2)
 	}
 	if s := e.do("GET", "/api/v1/hosts", server.DevAgentToken, nil, nil); s != http.StatusForbidden {
 		t.Fatalf("agent lists hosts: %d", s)
@@ -251,7 +256,7 @@ func TestHostConfigAndGrants(t *testing.T) {
 	for _, en := range audit.Entries {
 		seen[en.Action] = true
 	}
-	for _, want := range []string{"host.pairing_created", "host.enrolled", "host.agent_assigned", "host.grant_added", "host.grant_revoked"} {
+	for _, want := range []string{"host.pairing_created", "host.enrolled", "host.agent_assigned", "host.grant_added", "host.agent_unassigned", "agent.created", "agent.archived", "actor.archived"} {
 		if !seen[want] {
 			t.Errorf("audit misses %s", want)
 		}
@@ -260,47 +265,39 @@ func TestHostConfigAndGrants(t *testing.T) {
 
 func TestWorktreeAssignmentAndReport(t *testing.T) {
 	e := newEnv(t)
-	agent := e.agentID()
 	host, hostToken := e.enroll("worktree-box")
+	try := func(handle string, h map[string]any) (int, hostAgent) {
+		var created struct{ Host hostAgent }
+		h["host_id"], h["client"] = host, "claude-code"
+		s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": handle, "host": h}, &created)
+		return s, created.Host
+	}
 
-	// 1. Invalid assignment: worktree_repo with mismatched sandbox modes is refused
+	// 1. worktree_repo with mismatched sandbox modes is refused
 	// (direct with sandbox: true, or compact with sandbox: false)
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "sandbox": true, "worktree_repo": "/repo"}, nil); s != http.StatusBadRequest {
+	if s, _ := try("wt-a", map[string]any{"mode": "direct", "sandbox": true, "worktree_repo": "/repo"}); s != http.StatusBadRequest {
 		t.Fatalf("worktree_repo in direct mode with sandbox: true should be refused: %d", s)
 	}
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": false, "worktree_repo": "/repo"}, nil); s != http.StatusBadRequest {
+	if s, _ := try("wt-a", map[string]any{"mode": "compact", "sandbox": false, "worktree_repo": "/repo"}); s != http.StatusBadRequest {
 		t.Fatalf("worktree_repo in compact mode with sandbox: false should be refused: %d", s)
 	}
-
-	// 1b. Valid assignment: worktree_repo in compact mode with sandbox: true
-	var compactAssigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": true, "worktree_repo": "/repo"}, &compactAssigned); s != http.StatusOK {
-		t.Fatalf("worktree_repo in compact mode with sandbox: true should be allowed: %d", s)
-	}
-	if compactAssigned.WorktreeRepo != "/repo" || compactAssigned.Mode != "compact" || !compactAssigned.Sandbox {
-		t.Fatalf("unexpected compact assignment: %+v", compactAssigned)
-	}
-
-	// 2. Invalid assignment: bad path for worktree_repo
+	// 2. bad worktree_repo paths
 	for _, bad := range []string{"repo", "/repo/../etc", "/repo/", "/a//b"} {
-		if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-			map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "worktree_repo": bad}, nil); s != http.StatusBadRequest {
+		if s, _ := try("wt-a", map[string]any{"mode": "direct", "worktree_repo": bad}); s != http.StatusBadRequest {
 			t.Fatalf("bad worktree_repo path %q allowed: %d", bad, s)
 		}
 	}
-
-	// 3. Valid assignment in direct mode: root_dir defaults to worktree_repo if not provided
-	var assigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "worktree_repo": "/repo"}, &assigned); s != http.StatusOK {
-		t.Fatalf("assign with worktree_repo: %d", s)
+	// 1b. worktree_repo in compact mode with sandbox: true
+	s, compactAssigned := try("wt-compact", map[string]any{"mode": "compact", "sandbox": true, "worktree_repo": "/repo"})
+	if s != http.StatusCreated || compactAssigned.WorktreeRepo != "/repo" || compactAssigned.Mode != "compact" || !compactAssigned.Sandbox {
+		t.Fatalf("worktree_repo in compact mode with sandbox: true: %d %+v", s, compactAssigned)
 	}
-	if assigned.WorktreeRepo != "/repo" || assigned.RootDir != "/repo" || assigned.Mode != "direct" {
-		t.Fatalf("unexpected assignment: %+v", assigned)
+	// 3. direct mode: root_dir defaults to worktree_repo if not provided
+	s, assigned := try("wt-direct", map[string]any{"mode": "direct", "worktree_repo": "/repo"})
+	if s != http.StatusCreated || assigned.WorktreeRepo != "/repo" || assigned.RootDir != "/repo" || assigned.Mode != "direct" {
+		t.Fatalf("assign with worktree_repo: %d %+v", s, assigned)
 	}
+	agent := assigned.AgentID
 
 	// 4. Host config returns worktree_repo
 	var cfg struct {
@@ -310,7 +307,7 @@ func TestWorktreeAssignmentAndReport(t *testing.T) {
 	if s := e.do("GET", "/api/v1/host/config", hostToken, nil, &cfg); s != http.StatusOK {
 		t.Fatalf("config: %d", s)
 	}
-	if len(cfg.Agents) != 1 || cfg.Agents[0].WorktreeRepo != "/repo" {
+	if len(cfg.Agents) != 2 || cfg.Agents[0].WorktreeRepo != "/repo" || cfg.Agents[1].WorktreeRepo != "/repo" {
 		t.Fatalf("config worktree_repo mismatch: %+v", cfg)
 	}
 
@@ -361,24 +358,27 @@ func TestWorktreeAssignmentAndReport(t *testing.T) {
 
 func TestHostAssignAllowWebRead(t *testing.T) {
 	e := newEnv(t)
-	agent := e.agentID()
 	host, hostToken := e.enroll("laptop-webread")
 
 	// 1. Full-access agent (mode: direct, sandbox: false) with allow_web_read -> 400 Bad Request
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "root_dir": "/app", "allow_web_read": true}, nil); s != http.StatusBadRequest {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "reader",
+		"host": map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "root_dir": "/app", "allow_web_read": true}}, nil); s != http.StatusBadRequest {
 		t.Fatalf("allow_web_read on full-access agent must fail with 400, got: %d", s)
 	}
 
-	// 2. Sandboxed agent (mode: compact, sandbox: true) with allow_web_read -> 200 OK
-	var assigned hostAgent
-	if s := e.do("PUT", "/api/v1/agents/"+agent+"/host", server.DevAdminToken,
-		map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": true, "allow_web_read": true}, &assigned); s != http.StatusOK {
-		t.Fatalf("assign sandboxed agent with allow_web_read: %d", s)
+	// 2. Sandboxed agent (mode: compact, sandbox: true) with allow_web_read
+	var created struct {
+		Actor struct{ ID string }
+		Host  hostAgent
 	}
-	if !assigned.AllowWebRead {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "reader",
+		"host": map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": true, "allow_web_read": true}}, &created); s != http.StatusCreated {
+		t.Fatalf("sandboxed agent with allow_web_read: %d", s)
+	}
+	if !created.Host.AllowWebRead {
 		t.Fatalf("expected allow_web_read to be true, got false")
 	}
+	agent := created.Actor.ID
 
 	// 3. Appears in host config
 	var cfg struct {

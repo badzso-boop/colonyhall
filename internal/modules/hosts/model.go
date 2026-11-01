@@ -183,6 +183,8 @@ var (
 	ErrBadDailyTokenLimit   = errors.New("daily_token_limit must be non-negative")
 	ErrBadName              = errors.New("host name must be 1-64 characters")
 	ErrBadColor             = errors.New("color must be one of the palette hues")
+	ErrOutsideRoots         = errors.New("the path is outside the folders the machine reported (its guard.yaml roots)")
+	ErrClientNotReported    = errors.New("the machine has not reported this client (is its guard running?)")
 	ErrNotAssigned          = errors.New("the agent is not assigned to this host")
 	ErrNotAgent             = errors.New("only agents can be assigned to a host")
 	ErrHostRevoked          = errors.New("the host is revoked")

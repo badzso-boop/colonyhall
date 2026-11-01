@@ -13,7 +13,7 @@ import (
 )
 
 const actorByHandle = `-- name: ActorByHandle :one
-SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color FROM actor WHERE workspace_id = $1 AND handle = $2
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by FROM actor WHERE workspace_id = $1 AND handle = $2 AND archived_at IS NULL
 `
 
 type ActorByHandleParams struct {
@@ -38,12 +38,14 @@ func (q *Queries) ActorByHandle(ctx context.Context, arg ActorByHandleParams) (A
 		&i.Timezone,
 		&i.StatusText,
 		&i.Color,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
 	)
 	return i, err
 }
 
 const actorByID = `-- name: ActorByID :one
-SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color FROM actor WHERE id = $1
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by FROM actor WHERE id = $1
 `
 
 func (q *Queries) ActorByID(ctx context.Context, id uuid.UUID) (Actor, error) {
@@ -63,12 +65,14 @@ func (q *Queries) ActorByID(ctx context.Context, id uuid.UUID) (Actor, error) {
 		&i.Timezone,
 		&i.StatusText,
 		&i.Color,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
 	)
 	return i, err
 }
 
 const actorByTokenHash = `-- name: ActorByTokenHash :one
-SELECT a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color FROM api_token t JOIN actor a ON a.id = t.actor_id
+SELECT a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by FROM api_token t JOIN actor a ON a.id = t.actor_id
 WHERE t.token_hash = $1 AND t.revoked_at IS NULL
   AND (t.expires_at IS NULL OR t.expires_at > $2::timestamptz)
 `
@@ -95,12 +99,14 @@ func (q *Queries) ActorByTokenHash(ctx context.Context, arg ActorByTokenHashPara
 		&i.Timezone,
 		&i.StatusText,
 		&i.Color,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
 	)
 	return i, err
 }
 
 const actorsByHandle = `-- name: ActorsByHandle :many
-SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color FROM actor WHERE handle = $1 ORDER BY workspace_id
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by FROM actor WHERE handle = $1 AND archived_at IS NULL ORDER BY workspace_id
 `
 
 func (q *Queries) ActorsByHandle(ctx context.Context, handle string) ([]Actor, error) {
@@ -126,6 +132,8 @@ func (q *Queries) ActorsByHandle(ctx context.Context, handle string) ([]Actor, e
 			&i.Timezone,
 			&i.StatusText,
 			&i.Color,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -138,7 +146,7 @@ func (q *Queries) ActorsByHandle(ctx context.Context, handle string) ([]Actor, e
 }
 
 const actorsByIDs = `-- name: ActorsByIDs :many
-SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color FROM actor WHERE id = ANY($1::uuid[]) ORDER BY handle
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by FROM actor WHERE id = ANY($1::uuid[]) ORDER BY handle
 `
 
 func (q *Queries) ActorsByIDs(ctx context.Context, ids []uuid.UUID) ([]Actor, error) {
@@ -164,6 +172,8 @@ func (q *Queries) ActorsByIDs(ctx context.Context, ids []uuid.UUID) ([]Actor, er
 			&i.Timezone,
 			&i.StatusText,
 			&i.Color,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -173,6 +183,22 @@ func (q *Queries) ActorsByIDs(ctx context.Context, ids []uuid.UUID) ([]Actor, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const archiveActor = `-- name: ArchiveActor :exec
+UPDATE actor SET archived_at = $1, archived_by = $2, state = 'stopped'
+WHERE id = $3 AND archived_at IS NULL
+`
+
+type ArchiveActorParams struct {
+	At *time.Time
+	By *uuid.UUID
+	ID uuid.UUID
+}
+
+func (q *Queries) ArchiveActor(ctx context.Context, arg ArchiveActorParams) error {
+	_, err := q.db.Exec(ctx, archiveActor, arg.At, arg.By, arg.ID)
+	return err
 }
 
 const createActor = `-- name: CreateActor :exec
@@ -298,7 +324,7 @@ func (q *Queries) Credential(ctx context.Context, actorID uuid.UUID) (string, er
 }
 
 const listActors = `-- name: ListActors :many
-SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color FROM actor WHERE workspace_id = $1 ORDER BY handle
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by FROM actor WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY handle
 `
 
 func (q *Queries) ListActors(ctx context.Context, workspaceID uuid.UUID) ([]Actor, error) {
@@ -324,6 +350,48 @@ func (q *Queries) ListActors(ctx context.Context, workspaceID uuid.UUID) ([]Acto
 			&i.Timezone,
 			&i.StatusText,
 			&i.Color,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllActors = `-- name: ListAllActors :many
+SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by FROM actor WHERE workspace_id = $1 ORDER BY handle, created_at
+`
+
+func (q *Queries) ListAllActors(ctx context.Context, workspaceID uuid.UUID) ([]Actor, error) {
+	rows, err := q.db.Query(ctx, listAllActors, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Actor
+	for rows.Next() {
+		var i Actor
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Kind,
+			&i.Handle,
+			&i.DisplayName,
+			&i.Role,
+			&i.State,
+			&i.CreatedAt,
+			&i.Description,
+			&i.AvatarEmoji,
+			&i.Timezone,
+			&i.StatusText,
+			&i.Color,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -366,6 +434,20 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeActorTokens = `-- name: RevokeActorTokens :exec
+UPDATE api_token SET revoked_at = $1 WHERE actor_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeActorTokensParams struct {
+	At      *time.Time
+	ActorID uuid.UUID
+}
+
+func (q *Queries) RevokeActorTokens(ctx context.Context, arg RevokeActorTokensParams) error {
+	_, err := q.db.Exec(ctx, revokeActorTokens, arg.At, arg.ActorID)
+	return err
 }
 
 const revokeHostTokens = `-- name: RevokeHostTokens :exec
@@ -430,7 +512,7 @@ func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error 
 }
 
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color
+SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL
 `
@@ -465,6 +547,8 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 		&i.Actor.Timezone,
 		&i.Actor.StatusText,
 		&i.Actor.Color,
+		&i.Actor.ArchivedAt,
+		&i.Actor.ArchivedBy,
 	)
 	return i, err
 }

@@ -72,6 +72,10 @@ type Actor struct {
 	// EffectiveColor is computed, never stored: Color, else the agent's
 	// machine colour (Service.HostColors), else "".
 	EffectiveColor string
+	// ArchivedAt is set when the agent was deleted (round 33): it stays as
+	// the author of its messages, and its handle is free again.
+	ArchivedAt *time.Time
+	ArchivedBy ids.ID
 
 	// Halted is computed when the actor is loaded for a request, never
 	// stored: the actor is paused, or it is an agent while the workspace's
@@ -133,6 +137,11 @@ var (
 	ErrInvalidStatusText  = errors.New("status text must be at most 80 characters")
 	ErrInvalidAvatarEmoji = errors.New("avatar emoji must be a valid emoji")
 	ErrInvalidColor       = errors.New("color must be a palette hue, and only agents have one")
+	ErrNotAnAgent         = errors.New("the actor is not an agent")
+	// ErrAgentConfigImmutable: an agent's configuration is set once, at
+	// creation (POST /agents); a change means deleting it (DELETE
+	// /agents/{agentId}) and creating a new one.
+	ErrAgentConfigImmutable = errors.New("an agent's configuration cannot change after creation: create a new agent with POST /api/v1/agents and delete this one with DELETE /api/v1/agents/{agentId}")
 )
 
 const (

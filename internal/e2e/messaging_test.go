@@ -18,6 +18,18 @@ import (
 )
 
 func (e *env) createActor(kind, handle, role string) (id, token string) {
+	if kind == "agent" {
+		// Agents are created with POST /agents (round 33), not in #general here.
+		var created struct {
+			Actor struct{ ID string }
+			Token string
+		}
+		if s := e.do("POST", "/api/v1/agents", server.DevAdminToken,
+			map[string]any{"handle": handle, "api_key": true}, &created); s != http.StatusCreated {
+			e.t.Fatalf("create agent %s: status %d", handle, s)
+		}
+		return created.Actor.ID, created.Token
+	}
 	var created struct {
 		Actor struct{ ID string }
 		Token string
@@ -295,12 +307,11 @@ func TestThreadReplyReachesAgentsInTheThread(t *testing.T) {
 	}
 
 	// A second agent in #general.
-	agentRole := "member"
 	var other struct {
 		Actor struct{ ID string }
 		Token string
 	}
-	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken, map[string]any{"kind": "agent", "handle": "helper", "role": agentRole}, &other); s != http.StatusCreated {
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, map[string]any{"handle": "helper", "api_key": true}, &other); s != http.StatusCreated {
 		t.Fatalf("create helper: %d", s)
 	}
 	if s := e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": other.Actor.ID, "can_write": true}, nil); s != http.StatusNoContent {

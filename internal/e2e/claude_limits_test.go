@@ -58,14 +58,14 @@ func TestRateLimitHostReportAndOverview(t *testing.T) {
 	hostID := hl.Hosts[0].ID
 
 	// Assign claude agent to this host
-	e.do("PUT", "/api/v1/agents/"+claudeID+"/host", server.DevAdminToken, map[string]any{
+	e.configure(claudeID, map[string]any{
 		"host_id":         hostID,
 		"client":          "claude-code",
 		"mode":            "direct",
 		"root_dir":        root,
 		"sandbox":         true,
 		"permission_mode": "auto",
-	}, nil)
+	})
 
 	// 3. Guard sends report carrying ClaudeLimits
 	hostClient := &guard.Client{
@@ -277,14 +277,14 @@ func TestGuard_ClaudeLimiterPause_E2E(t *testing.T) {
 	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &hosts)
 	hostID := hosts.Hosts[0].ID
 
-	e.do("PUT", "/api/v1/agents/"+claudeID+"/host", server.DevAdminToken, map[string]any{
+	e.configure(claudeID, map[string]any{
 		"host_id":         hostID,
 		"client":          "claude-code",
 		"mode":            "direct",
 		"root_dir":        root,
 		"sandbox":         true,
 		"permission_mode": "auto",
-	}, nil)
+	})
 
 	loc, _ := time.LoadLocation("Europe/Budapest")
 	simTime := time.Date(2026, 10, 28, 12, 0, 0, 0, loc)
