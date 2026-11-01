@@ -776,6 +776,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hosts/{hostId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Human admins. Renames or recolours a machine (operational state, audited, event host.updated). */
+        patch: operations["updateHost"];
+        trace?: never;
+    };
     "/hosts/{hostId}/state": {
         parameters: {
             query?: never;
@@ -2145,12 +2164,17 @@ export interface components {
             avatar_emoji?: string;
             timezone?: string;
             status_text?: string;
+            color?: components["schemas"]["Hue"];
+            /** @description The colour to show: the agent's own, else its machine's; absent when neither */
+            effective_color?: components["schemas"]["Hue"];
         };
         UpdateActorProfileRequest: {
             description?: string;
             avatar_emoji?: string;
             timezone?: string;
             status_text?: string;
+            /** @description Admins, agents only: a palette hue (see Hue), or empty to show the machine's colour again */
+            color?: string;
         };
         ActorList: {
             actors: components["schemas"]["Actor"][];
@@ -2769,10 +2793,20 @@ export interface components {
             /** @enum {string} */
             mode: "read" | "write";
         };
+        /**
+         * @description A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+         * @enum {string}
+         */
+        Hue: "red" | "orange" | "amber" | "lime" | "green" | "teal" | "cyan" | "blue" | "violet" | "pink";
+        UpdateHostRequest: {
+            name?: string;
+            color?: components["schemas"]["Hue"];
+        };
         Host: {
             /** Format: uuid */
             id: string;
             name: string;
+            color: components["schemas"]["Hue"];
             /** @enum {string} */
             state: "approved" | "revoked";
             /** Format: date-time */
@@ -5269,6 +5303,35 @@ export interface operations {
                     "application/json": components["schemas"]["HostList"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHostRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Host"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

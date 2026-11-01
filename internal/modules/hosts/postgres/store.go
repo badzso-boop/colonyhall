@@ -51,11 +51,29 @@ func (s *Store) CreateHost(ctx context.Context, h hosts.Host) error {
 		return err
 	}
 	return s.q(ctx).CreateHost(ctx, sqlcgen.CreateHostParams{ID: h.ID, WorkspaceID: h.WorkspaceID, Name: h.Name,
-		TokenHash: h.TokenHash, State: h.State, CreatedBy: h.CreatedBy, CreatedAt: h.CreatedAt, Report: report})
+		TokenHash: h.TokenHash, State: h.State, CreatedBy: h.CreatedBy, CreatedAt: h.CreatedAt, Report: report, Color: h.Color})
+}
+
+// UpdateHost sets the host's name and colour.
+func (s *Store) UpdateHost(ctx context.Context, id ids.ID, name, color string) error {
+	return s.q(ctx).UpdateHost(ctx, sqlcgen.UpdateHostParams{ID: id, Name: name, Color: color})
+}
+
+// AgentHostColors maps assigned agents to their host's colour.
+func (s *Store) AgentHostColors(ctx context.Context, workspaceID ids.ID) (map[ids.ID]string, error) {
+	rows, err := s.q(ctx).AgentHostColors(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[ids.ID]string, len(rows))
+	for _, r := range rows {
+		out[r.AgentID] = r.Color
+	}
+	return out, nil
 }
 
 func toHost(r sqlcgen.Host) (hosts.Host, error) {
-	h := hosts.Host{ID: r.ID, WorkspaceID: r.WorkspaceID, Name: r.Name, TokenHash: r.TokenHash, State: r.State,
+	h := hosts.Host{ID: r.ID, WorkspaceID: r.WorkspaceID, Name: r.Name, Color: r.Color, TokenHash: r.TokenHash, State: r.State,
 		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, LastSeenAt: r.LastSeenAt}
 	if len(r.Report) > 0 {
 		if err := json.Unmarshal(r.Report, &h.Report); err != nil {

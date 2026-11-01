@@ -116,6 +116,24 @@ func (s *Store) SetHostState(_ context.Context, id ids.ID, state string) error {
 	return s.update(id, func(h *hosts.Host) { h.State = state })
 }
 
+// UpdateHost sets the host's name and colour.
+func (s *Store) UpdateHost(_ context.Context, id ids.ID, name, color string) error {
+	return s.update(id, func(h *hosts.Host) { h.Name, h.Color = name, color })
+}
+
+// AgentHostColors maps assigned agents to their host's colour.
+func (s *Store) AgentHostColors(_ context.Context, workspaceID ids.ID) (map[ids.ID]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := map[ids.ID]string{}
+	for _, a := range s.assigns {
+		if h, ok := s.hosts[a.HostID]; ok && h.WorkspaceID == workspaceID {
+			out[a.AgentID] = h.Color
+		}
+	}
+	return out, nil
+}
+
 // SaveReport stores the guard's report.
 func (s *Store) SaveReport(_ context.Context, id ids.ID, r hosts.Report, at time.Time) error {
 	return s.update(id, func(h *hosts.Host) { h.Report, h.LastSeenAt = r, &at })

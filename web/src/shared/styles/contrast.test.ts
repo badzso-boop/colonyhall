@@ -38,6 +38,7 @@ export function contrast(a: string, b: string): number {
 }
 
 const surfaces = ["bg", "surface", "surface-raised", "surface-sunken"];
+const hues = ["red", "orange", "amber", "lime", "green", "teal", "cyan", "blue", "violet", "pink"];
 // [foreground, backgrounds, minimum]
 const pairs: Array<[string, string[], number]> = [
   ["fg", [...surfaces, "accent-soft"], 4.5],
@@ -51,6 +52,11 @@ const pairs: Array<[string, string[], number]> = [
   ["success", ["surface", "success-soft"], 4.5],
   ["info", ["surface", "info-soft"], 4.5],
   ["terminal-fg", ["terminal-bg"], 4.5],
+  // The machine and agent palette (round 33): text on its tint, marks on surfaces.
+  ...hues.flatMap((h): Array<[string, string[], number]> => [
+    [`hue-${h}-fg`, [`hue-${h}-soft`], 4.5],
+    [`hue-${h}-solid`, surfaces, 3],
+  ]),
 ];
 
 for (const [theme, t] of [["light", light], ["dark", dark]] as const) {

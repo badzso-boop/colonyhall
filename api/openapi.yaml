@@ -745,6 +745,22 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostList" } } } }
 
+  /hosts/{hostId}:
+    parameters:
+      - { name: hostId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateHost
+      tags: [hosts]
+      description: Human admins. Renames or recolours a machine (operational state, audited, event host.updated).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateHostRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Host" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /hosts/{hostId}/state:
     parameters:
       - { name: hostId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -2037,6 +2053,10 @@ components:
         avatar_emoji: { type: string, maxLength: 32 }
         timezone: { type: string, maxLength: 64 }
         status_text: { type: string, maxLength: 80 }
+        color: { $ref: "#/components/schemas/Hue" }
+        effective_color:
+          allOf: [{ $ref: "#/components/schemas/Hue" }]
+          description: "The colour to show: the agent's own, else its machine's; absent when neither"
     UpdateActorProfileRequest:
       type: object
       properties:
@@ -2044,6 +2064,9 @@ components:
         avatar_emoji: { type: string, maxLength: 32 }
         timezone: { type: string, maxLength: 64 }
         status_text: { type: string, maxLength: 80 }
+        color:
+          type: string
+          description: "Admins, agents only: a palette hue (see Hue), or empty to show the machine's colour again"
     ActorList:
       type: object
       required: [actors]
@@ -2685,12 +2708,22 @@ components:
       properties:
         path: { type: string, maxLength: 1024 }
         mode: { type: string, enum: [read, write] }
+    Hue:
+      type: string
+      description: A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+      enum: [red, orange, amber, lime, green, teal, cyan, blue, violet, pink]
+    UpdateHostRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+        color: { $ref: "#/components/schemas/Hue" }
     Host:
       type: object
-      required: [id, name, state, created_at, report, agents]
+      required: [id, name, color, state, created_at, report, agents]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        color: { $ref: "#/components/schemas/Hue" }
         state: { type: string, enum: [approved, revoked] }
         created_at: { type: string, format: date-time }
         last_seen_at: { type: string, format: date-time }

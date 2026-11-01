@@ -44,6 +44,7 @@ func (s *Store) CreateActor(ctx context.Context, a identity.Actor) error {
 		AvatarEmoji: a.AvatarEmoji,
 		Timezone:    tz,
 		StatusText:  a.StatusText,
+		Color:       nullString(a.Color),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -103,7 +104,15 @@ func toActor(r sqlcgen.Actor) identity.Actor {
 		AvatarEmoji: r.AvatarEmoji,
 		Timezone:    r.Timezone,
 		StatusText:  r.StatusText,
+		Color:       deref(r.Color),
 	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func one(r sqlcgen.Actor, err error) (identity.Actor, error) {
@@ -244,14 +253,22 @@ func (s *Store) SetActorState(ctx context.Context, actorID ids.ID, state string)
 }
 
 // UpdateActorProfile updates an actor's profile fields.
-func (s *Store) UpdateActorProfile(ctx context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText string) error {
+func (s *Store) UpdateActorProfile(ctx context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText, color string) error {
 	return s.q(ctx).UpdateActorProfile(ctx, sqlcgen.UpdateActorProfileParams{
 		ID:          actorID,
 		Description: desc,
 		AvatarEmoji: avatarEmoji,
 		Timezone:    tz,
 		StatusText:  statusText,
+		Color:       nullString(color),
 	})
+}
+
+func nullString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // WorkspaceByID loads a workspace.

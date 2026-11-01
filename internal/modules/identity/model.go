@@ -67,6 +67,11 @@ type Actor struct {
 	AvatarEmoji string
 	Timezone    string
 	StatusText  string
+	// Color is an agent's own palette hue (round 33); "" shows its machine's.
+	Color string
+	// EffectiveColor is computed, never stored: Color, else the agent's
+	// machine colour (Service.HostColors), else "".
+	EffectiveColor string
 
 	// Halted is computed when the actor is loaded for a request, never
 	// stored: the actor is paused, or it is an agent while the workspace's
@@ -127,6 +132,7 @@ var (
 	ErrInvalidDescription = errors.New("description must be at most 300 characters")
 	ErrInvalidStatusText  = errors.New("status text must be at most 80 characters")
 	ErrInvalidAvatarEmoji = errors.New("avatar emoji must be a valid emoji")
+	ErrInvalidColor       = errors.New("color must be a palette hue, and only agents have one")
 )
 
 const (

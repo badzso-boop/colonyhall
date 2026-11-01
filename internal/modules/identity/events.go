@@ -21,4 +21,5 @@ type ActorProfileUpdated struct {
 	AvatarEmoji string `json:"avatar_emoji"`
 	Timezone    string `json:"timezone"`
 	StatusText  string `json:"status_text"`
+	Color       string `json:"color,omitempty"`
 }

@@ -253,11 +253,21 @@ func testIdentity(t *testing.T, b Backend) {
 		t.Fatalf("ListActors must be sorted by handle: %+v", list)
 	}
 
-	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Lead Developer", "🚀", "Europe/Budapest", "Busy coding"))
+	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Lead Developer", "🚀", "Europe/Budapest", "Busy coding", ""))
 	updatedHuman, err := b.Identity.ActorByID(ctx, f.human.ID)
 	must(t, err)
 	if updatedHuman.Description != "Lead Developer" || updatedHuman.AvatarEmoji != "🚀" || updatedHuman.Timezone != "Europe/Budapest" || updatedHuman.StatusText != "Busy coding" {
 		t.Fatalf("UpdateActorProfile not saved: %+v", updatedHuman)
+	}
+
+	// An agent's own colour (round 33): set, read back, cleared to NULL.
+	must(t, b.Identity.UpdateActorProfile(ctx, f.agent.ID, "", "", "Europe/Budapest", "", "teal"))
+	if a, err := b.Identity.ActorByID(ctx, f.agent.ID); err != nil || a.Color != "teal" {
+		t.Fatalf("agent colour: %+v %v", a, err)
+	}
+	must(t, b.Identity.UpdateActorProfile(ctx, f.agent.ID, "", "", "Europe/Budapest", "", ""))
+	if a, err := b.Identity.ActorByID(ctx, f.agent.ID); err != nil || a.Color != "" {
+		t.Fatalf("agent colour cleared: %+v %v", a, err)
 	}
 }
 
@@ -630,13 +640,18 @@ func testHosts(t *testing.T, b Backend) {
 		t.Fatalf("a code works once: %v", err)
 	}
 
-	h := hosts.Host{ID: gen.New(), WorkspaceID: f.ws.ID, Name: "laptop", TokenHash: hosts.Hash("colh_x"), State: hosts.StateApproved,
+	h := hosts.Host{ID: gen.New(), WorkspaceID: f.ws.ID, Name: "laptop", Color: "blue", TokenHash: hosts.Hash("colh_x"), State: hosts.StateApproved,
 		CreatedBy: f.human.ID, CreatedAt: t0, Report: hosts.Report{Roots: []string{}, Clients: []hosts.Client{}, Rejected: []hosts.Rejected{}}}
 	must(t, hs.CreateHost(ctx, h))
 	got, err := hs.HostByTokenHash(ctx, hosts.Hash("colh_x"))
-	if err != nil || got.ID != h.ID || got.Name != "laptop" {
+	if err != nil || got.ID != h.ID || got.Name != "laptop" || got.Color != "blue" {
 		t.Fatalf("HostByTokenHash: %+v %v", got, err)
 	}
+	must(t, hs.UpdateHost(ctx, h.ID, "pc", "violet"))
+	if got, err := hs.HostByID(ctx, h.ID); err != nil || got.Name != "pc" || got.Color != "violet" {
+		t.Fatalf("UpdateHost: %+v %v", got, err)
+	}
+	must(t, hs.UpdateHost(ctx, h.ID, "laptop", "blue"))
 	rep := hosts.Report{GuardVersion: "1", Roots: []string{"/work"}, Clients: []hosts.Client{{Name: "claude-code", Version: "2"}},
 		Sandbox: "bwrap 0.9.0", AllowUnsandboxed: true, ExchangeDir: "/mnt/z/exchange", ExchangeOK: true, Rejected: []hosts.Rejected{{AgentID: "a", Path: "/etc", Reason: "outside roots"}},
 		Worktrees: []hosts.Worktree{{AgentID: f.agent.ID.String(), Path: "/work/repo-worktrees/agent", Branch: "colony/agent/work"}}}
@@ -658,6 +673,12 @@ func testHosts(t *testing.T, b Backend) {
 		Approvals: hosts.ApprovalsChat, MaxSessionTokens: 120000, DailyTokenLimit: 500000, AllowPreview: true, AllowWebRead: false, CreatedBy: f.human.ID, CreatedAt: t0,
 	}
 	must(t, hs.SetAssignment(ctx, a))
+	if m, err := hs.AgentHostColors(ctx, f.ws.ID); err != nil || len(m) != 1 || m[f.agent.ID] != "blue" {
+		t.Fatalf("AgentHostColors: %v %v", m, err)
+	}
+	if m, err := hs.AgentHostColors(ctx, gen.New()); err != nil || len(m) != 0 {
+		t.Fatalf("AgentHostColors of another workspace: %v %v", m, err)
+	}
 	ga, err := hs.AssignmentByAgent(ctx, f.agent.ID)
 	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 || ga.WorktreeRepo != "/work/repo" || !ga.AllowPreview || ga.AllowWebRead {
 		t.Fatalf("approvals / limits / worktree / web_read: %+v %v", ga, err)
@@ -1962,6 +1983,7 @@ func testPreview(t *testing.T, b Backend) {
 		ID:          hostID,
 		WorkspaceID: f.ws.ID,
 		Name:        "preview-host",
+		Color:       "green",
 		TokenHash:   hosts.Hash("tok1"),
 		State:       hosts.StateApproved,
 		CreatedBy:   f.human.ID,

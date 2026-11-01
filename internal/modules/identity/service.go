@@ -22,6 +22,10 @@ type Service struct {
 	IDs    ids.Generator
 	Clock  clock.Clock
 
+	// HostColors maps assigned agents to their machine's colour, for
+	// Actor.EffectiveColor (wired to the hosts module; nil: none).
+	HostColors func(ctx context.Context, workspaceID ids.ID) (map[ids.ID]string, error)
+
 	limiterOnce  sync.Once
 	loginLimiter *loginLimiter
 }
@@ -220,7 +224,34 @@ func (s *Service) ActorsByIDs(ctx context.Context, idList []ids.ID) ([]Actor, er
 
 // ListActors lists the workspace's actors.
 func (s *Service) ListActors(ctx context.Context, by Actor) ([]Actor, error) {
-	return s.Store.ListActors(ctx, by.WorkspaceID)
+	list, err := s.Store.ListActors(ctx, by.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	ptrs := make([]*Actor, len(list))
+	for i := range list {
+		ptrs[i] = &list[i]
+	}
+	return list, s.colour(ctx, by.WorkspaceID, ptrs)
+}
+
+// colour fills EffectiveColor: the actor's own colour, else its machine's.
+func (s *Service) colour(ctx context.Context, workspaceID ids.ID, list []*Actor) error {
+	var hostColors map[ids.ID]string
+	if s.HostColors != nil {
+		m, err := s.HostColors(ctx, workspaceID)
+		if err != nil {
+			return err
+		}
+		hostColors = m
+	}
+	for _, a := range list {
+		a.EffectiveColor = a.Color
+		if a.EffectiveColor == "" && a.Kind == KindAgent {
+			a.EffectiveColor = hostColors[a.ID]
+		}
+	}
+	return nil
 }
 
 // Admins implements Directory.

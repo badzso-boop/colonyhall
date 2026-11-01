@@ -42,6 +42,39 @@
   /* The same in both themes: backgrounds for showing the brand (logo, icons). */
   --color-brand-paper: #faf8f7;
   --color-brand-ink: #0b0a0a;
+  /* Machine and agent colours (round 33): a fixed palette, never free hex.
+     -solid: stripes, dots, rings (≥ 3:1 on surfaces); -soft: backgrounds;
+     -fg: text on -soft (≥ 4.5:1). `red` is cooler than the brand accent. */
+  --color-hue-red-solid: #e03e6c;
+  --color-hue-red-soft: #fae5eb;
+  --color-hue-red-fg: #af1d46;
+  --color-hue-orange-solid: #ce6722;
+  --color-hue-orange-soft: #faeee5;
+  --color-hue-orange-fg: #9e4f1a;
+  --color-hue-amber-solid: #ae7b13;
+  --color-hue-amber-soft: #faf3e5;
+  --color-hue-amber-fg: #8a610f;
+  --color-hue-lime-solid: #5f9310;
+  --color-hue-lime-soft: #f2fae5;
+  --color-hue-lime-fg: #4a730d;
+  --color-hue-green-solid: #18954c;
+  --color-hue-green-soft: #e5faee;
+  --color-hue-green-fg: #13763d;
+  --color-hue-teal-solid: #189589;
+  --color-hue-teal-soft: #e5faf8;
+  --color-hue-teal-fg: #13766d;
+  --color-hue-cyan-solid: #1c8eab;
+  --color-hue-cyan-soft: #e5f6fa;
+  --color-hue-cyan-fg: #167188;
+  --color-hue-blue-solid: #3e79e0;
+  --color-hue-blue-soft: #e5edfa;
+  --color-hue-blue-fg: #1d52af;
+  --color-hue-violet-solid: #843ee0;
+  --color-hue-violet-soft: #eee5fa;
+  --color-hue-violet-fg: #5c1daf;
+  --color-hue-pink-solid: #e03eaf;
+  --color-hue-pink-soft: #fae5f4;
+  --color-hue-pink-fg: #af1d83;
   /* The colours offered for a new calendar subscription (stored as hex on the server). */
   --color-cal-1: #c1121f;
   --color-cal-2: #2f5f9e;
@@ -111,6 +144,37 @@
     --color-info-soft: #15233a;
     --color-focus-ring: #ff6b6e99;
     --color-overlay: #000000a6;
+    /* Machine and agent colours (round 33). */
+    --color-hue-red-solid: #d3456d;
+    --color-hue-red-soft: #30121b;
+    --color-hue-red-fg: #ea7b9b;
+    --color-hue-orange-solid: #ba652c;
+    --color-hue-orange-soft: #301e12;
+    --color-hue-orange-fg: #eaa77b;
+    --color-hue-amber-solid: #ae8129;
+    --color-hue-amber-soft: #302612;
+    --color-hue-amber-fg: #f0c775;
+    --color-hue-lime-solid: #78ae29;
+    --color-hue-lime-soft: #243012;
+    --color-hue-lime-fg: #bff075;
+    --color-hue-green-solid: #29ae60;
+    --color-hue-green-soft: #12301f;
+    --color-hue-green-fg: #7beaa9;
+    --color-hue-teal-solid: #29aea0;
+    --color-hue-teal-soft: #12302d;
+    --color-hue-teal-fg: #7beadf;
+    --color-hue-cyan-solid: #2993ae;
+    --color-hue-cyan-soft: #122a30;
+    --color-hue-cyan-fg: #7bd4ea;
+    --color-hue-blue-solid: #4579d3;
+    --color-hue-blue-soft: #121d30;
+    --color-hue-blue-fg: #7ba4ea;
+    --color-hue-violet-solid: #935ed9;
+    --color-hue-violet-soft: #1f1230;
+    --color-hue-violet-fg: #ab7bea;
+    --color-hue-pink-solid: #d13da5;
+    --color-hue-pink-soft: #301227;
+    --color-hue-pink-fg: #ea7bc9;
     --shadow-raised: none;
     --shadow-overlay: 0 0 0 1px #3b3434, 0 18px 48px #00000080;
     color-scheme: dark;

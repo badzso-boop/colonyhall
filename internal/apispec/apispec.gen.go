@@ -690,6 +690,48 @@ func (e HostPreviewReportState) Valid() bool {
 	}
 }
 
+// Defines values for Hue.
+const (
+	Amber  Hue = "amber"
+	Blue   Hue = "blue"
+	Cyan   Hue = "cyan"
+	Green  Hue = "green"
+	Lime   Hue = "lime"
+	Orange Hue = "orange"
+	Pink   Hue = "pink"
+	Red    Hue = "red"
+	Teal   Hue = "teal"
+	Violet Hue = "violet"
+)
+
+// Valid indicates whether the value is a known member of the Hue enum.
+func (e Hue) Valid() bool {
+	switch e {
+	case Amber:
+		return true
+	case Blue:
+		return true
+	case Cyan:
+		return true
+	case Green:
+		return true
+	case Lime:
+		return true
+	case Orange:
+		return true
+	case Pink:
+		return true
+	case Red:
+		return true
+	case Teal:
+		return true
+	case Violet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InboxItemAuthorKind.
 const (
 	InboxItemAuthorKindAgent  InboxItemAuthorKind = "agent"
@@ -1162,10 +1204,16 @@ type ActiveRunProgress struct {
 
 // Actor defines model for Actor.
 type Actor struct {
-	AvatarEmoji *string   `json:"avatar_emoji,omitempty"`
+	AvatarEmoji *string `json:"avatar_emoji,omitempty"`
+
+	// Color A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+	Color       *Hue      `json:"color,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	Description *string   `json:"description,omitempty"`
 	DisplayName string    `json:"display_name"`
+
+	// EffectiveColor The colour to show: the agent's own, else its machine's; absent when neither
+	EffectiveColor *Hue `json:"effective_color,omitempty"`
 
 	// Halted Only on /me: true while the actor may not write (paused, stopped or emergency stop)
 	Halted     *bool              `json:"halted,omitempty"`
@@ -2013,7 +2061,10 @@ type GrantRequestMode string
 
 // Host defines model for Host.
 type Host struct {
-	Agents     []HostAgent        `json:"agents"`
+	Agents []HostAgent `json:"agents"`
+
+	// Color A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+	Color      Hue                `json:"color"`
 	CreatedAt  time.Time          `json:"created_at"`
 	Id         openapi_types.UUID `json:"id"`
 	LastSeenAt *time.Time         `json:"last_seen_at,omitempty"`
@@ -2129,6 +2180,9 @@ type HostReport struct {
 		Path    string `json:"path"`
 	} `json:"worktrees,omitempty"`
 }
+
+// Hue A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+type Hue string
 
 // Inbox defines model for Inbox.
 type Inbox struct {
@@ -2837,6 +2891,9 @@ type TokenList struct {
 // UpdateActorProfileRequest defines model for UpdateActorProfileRequest.
 type UpdateActorProfileRequest struct {
 	AvatarEmoji *string `json:"avatar_emoji,omitempty"`
+
+	// Color Admins, agents only: a palette hue (see Hue), or empty to show the machine's colour again
+	Color       *string `json:"color,omitempty"`
 	Description *string `json:"description,omitempty"`
 	StatusText  *string `json:"status_text,omitempty"`
 	Timezone    *string `json:"timezone,omitempty"`
@@ -2876,6 +2933,13 @@ type UpdateDelegationSettingsRequest struct {
 type UpdateFileFetchSettingsRequest struct {
 	MaxFileMb  int `json:"max_file_mb"`
 	MaxImageMb int `json:"max_image_mb"`
+}
+
+// UpdateHostRequest defines model for UpdateHostRequest.
+type UpdateHostRequest struct {
+	// Color A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
+	Color *Hue    `json:"color,omitempty"`
+	Name  *string `json:"name,omitempty"`
 }
 
 // UpdatePlannerTaskRequest defines model for UpdatePlannerTaskRequest.
@@ -3199,6 +3263,9 @@ type HostReportJSONRequestBody = HostReport
 
 // EnrollHostJSONRequestBody defines body for EnrollHost for application/json ContentType.
 type EnrollHostJSONRequestBody = EnrollRequest
+
+// UpdateHostJSONRequestBody defines body for UpdateHost for application/json ContentType.
+type UpdateHostJSONRequestBody = UpdateHostRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest

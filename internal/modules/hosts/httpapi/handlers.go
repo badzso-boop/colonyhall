@@ -11,12 +11,13 @@ import (
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
 func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
-	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName,
+	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName, hosts.ErrBadColor,
 		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
 		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)
@@ -52,11 +53,24 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) 
 type hostOut struct {
 	ID         ids.ID              `json:"id"`
 	Name       string              `json:"name"`
+	Color      string              `json:"color"`
 	State      string              `json:"state"`
 	CreatedAt  time.Time           `json:"created_at"`
 	LastSeenAt *time.Time          `json:"last_seen_at,omitempty"`
 	Report     hosts.Report        `json:"report"`
 	Agents     []apispec.HostAgent `json:"agents"`
+}
+
+func toHostOut(h hosts.HostView) hostOut {
+	ho := hostOut{ID: h.ID, Name: h.Name, Color: h.Color, State: h.State, CreatedAt: h.CreatedAt, LastSeenAt: h.LastSeenAt,
+		Report: h.Report, Agents: make([]apispec.HostAgent, 0, len(h.Agents))}
+	if ho.Report.Roots == nil {
+		ho.Report.Roots = []string{}
+	}
+	for _, a := range h.Agents {
+		ho.Agents = append(ho.Agents, agentOut(a))
+	}
+	return ho
 }
 
 func agentOut(a hosts.AgentConfig) apispec.HostAgent {
@@ -118,17 +132,44 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			Hosts []hostOut `json:"hosts"`
 		}{Hosts: make([]hostOut, 0, len(list))}
 		for _, h := range list {
-			ho := hostOut{ID: h.ID, Name: h.Name, State: h.State, CreatedAt: h.CreatedAt, LastSeenAt: h.LastSeenAt,
-				Report: h.Report, Agents: make([]apispec.HostAgent, 0, len(h.Agents))}
-			if ho.Report.Roots == nil {
-				ho.Report.Roots = []string{}
-			}
-			for _, a := range h.Agents {
-				ho.Agents = append(ho.Agents, agentOut(a))
-			}
-			out.Hosts = append(out.Hosts, ho)
+			out.Hosts = append(out.Hosts, toHostOut(h))
 		}
 		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	mux.Handle("PATCH /api/v1/hosts/{hostId}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "hostId")
+		if !ok {
+			return
+		}
+		var in apispec.UpdateHostRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		var color *string
+		if in.Color != nil {
+			c := string(*in.Color)
+			color = &c
+		}
+		by := httpx.Actor(r)
+		h, err := svc.UpdateHost(r.Context(), by, id, hosts.UpdateHostInput{Name: in.Name, Color: color})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		views, err := svc.ListHosts(r.Context(), by)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		for _, v := range views {
+			if v.ID == h.ID {
+				httpx.JSON(w, http.StatusOK, toHostOut(v))
+				return
+			}
+		}
+		httpx.Error(w, r, db.ErrNotFound)
 	}))
 
 	mux.Handle("PUT /api/v1/hosts/{hostId}/state", wrap(func(w http.ResponseWriter, r *http.Request) {

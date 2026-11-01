@@ -16,7 +16,7 @@ import (
 func init() {
 	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
 		identity.ErrWorkspaceRequired, identity.ErrInvalidState, identity.ErrInvalidTimezone,
-		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidAvatarEmoji)
+		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor)
 	httpx.RegisterStatus(http.StatusUnauthorized, identity.ErrBadCredentials)
 	httpx.RegisterStatus(http.StatusTooManyRequests, identity.ErrTooManyAttempts)
 	httpx.RegisterForbidden(identity.ErrHalted)
@@ -57,18 +57,28 @@ func ToAPI(a identity.Actor) apispec.Actor {
 		status = &a.StatusText
 	}
 	return apispec.Actor{
-		Id:          a.ID,
-		Kind:        apispec.ActorKind(a.Kind),
-		Handle:      a.Handle,
-		DisplayName: a.DisplayName,
-		Role:        apispec.Role(a.Role),
-		State:       a.State,
-		CreatedAt:   a.CreatedAt,
-		Description: desc,
-		AvatarEmoji: emoji,
-		Timezone:    tz,
-		StatusText:  status,
+		Id:             a.ID,
+		Kind:           apispec.ActorKind(a.Kind),
+		Handle:         a.Handle,
+		DisplayName:    a.DisplayName,
+		Role:           apispec.Role(a.Role),
+		State:          a.State,
+		CreatedAt:      a.CreatedAt,
+		Description:    desc,
+		AvatarEmoji:    emoji,
+		Timezone:       tz,
+		StatusText:     status,
+		Color:          hue(a.Color),
+		EffectiveColor: hue(a.EffectiveColor),
 	}
+}
+
+func hue(c string) *apispec.Hue {
+	if c == "" {
+		return nil
+	}
+	h := apispec.Hue(c)
+	return &h
 }
 
 // meToAPI is ToAPI plus the computed halted flag, which is only known for
@@ -248,6 +258,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			AvatarEmoji: in.AvatarEmoji,
 			Timezone:    in.Timezone,
 			StatusText:  in.StatusText,
+			Color:       in.Color,
 		})
 		if err != nil {
 			httpx.Error(w, r, err)

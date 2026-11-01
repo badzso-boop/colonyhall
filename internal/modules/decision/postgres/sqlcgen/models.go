@@ -23,6 +23,7 @@ type Actor struct {
 	AvatarEmoji string
 	Timezone    string
 	StatusText  string
+	Color       *string
 }
 
 type AgentHost struct {
@@ -349,6 +350,7 @@ type Host struct {
 	CreatedAt   time.Time
 	LastSeenAt  *time.Time
 	Report      []byte
+	Color       string
 }
 
 type HostPairingCode struct {

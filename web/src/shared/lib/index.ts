@@ -1,4 +1,6 @@
 export { cn } from "./cn";
+export { hueVar, hues, isHue, type Hue } from "./palette";
+export { matchRanges } from "./highlight";
 export { randomId } from "./uuid";
 export { foldDiff, lineDiff, type DiffItem, type DiffLine } from "./diff";
 export { dayKey, dayLabel, feedItems, fullTime, messageTime, relativeTime, sessionContext, shortTime, type FeedItem } from "./format";

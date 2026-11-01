@@ -17,6 +17,7 @@ import (
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/palette"
 )
 
 // PreviewProvider supplies previews for a host config.
@@ -108,7 +109,11 @@ func (s *Service) Enroll(ctx context.Context, code, name string) (Host, string, 
 		if err != nil {
 			return err
 		}
-		h = Host{ID: s.IDs.New(), WorkspaceID: pc.WorkspaceID, Name: name, TokenHash: Hash(secret), State: StateApproved,
+		existing, err := s.Store.ListHosts(ctx, pc.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		h = Host{ID: s.IDs.New(), WorkspaceID: pc.WorkspaceID, Name: name, Color: palette.Default(len(existing)), TokenHash: Hash(secret), State: StateApproved,
 			CreatedBy: pc.CreatedBy, CreatedAt: s.Clock.Now(), Report: Report{Roots: []string{}, Clients: []Client{}, Rejected: []Rejected{}}}
 		if err := s.Store.CreateHost(ctx, h); err != nil {
 			return err
@@ -171,6 +176,46 @@ func (s *Service) ListHosts(ctx context.Context, by identity.Actor) ([]HostView,
 		out = append(out, HostView{Host: h, Agents: agents})
 	}
 	return out, nil
+}
+
+// UpdateHostInput changes a host's name or colour; nil leaves it.
+type UpdateHostInput struct {
+	Name  *string
+	Color *string
+}
+
+// UpdateHost renames or recolours a host (operational state, audited;
+// round 33). Admins only.
+func (s *Service) UpdateHost(ctx context.Context, by identity.Actor, hostID ids.ID, in UpdateHostInput) (Host, error) {
+	if err := admin(by); err != nil {
+		return Host{}, err
+	}
+	h, err := s.hostIn(ctx, by.WorkspaceID, hostID)
+	if err != nil {
+		return Host{}, err
+	}
+	if in.Name != nil {
+		name := strings.TrimSpace(*in.Name)
+		if name == "" || utf8.RuneCountInString(name) > 64 {
+			return Host{}, ErrBadName
+		}
+		h.Name = name
+	}
+	if in.Color != nil {
+		if !palette.Valid(*in.Color) {
+			return Host{}, ErrBadColor
+		}
+		h.Color = *in.Color
+	}
+	err = s.record(ctx, by.WorkspaceID, by.ID, EventHostUpdated, h.ID, HostEvent{HostID: h.ID.String(), Name: h.Name, Color: h.Color},
+		func(ctx context.Context) error { return s.Store.UpdateHost(ctx, h.ID, h.Name, h.Color) })
+	return h, err
+}
+
+// AgentHostColors maps the workspace's assigned agents to their host's
+// colour (an agent without its own colour shows its machine's).
+func (s *Service) AgentHostColors(ctx context.Context, workspaceID ids.ID) (map[ids.ID]string, error) {
+	return s.Store.AgentHostColors(ctx, workspaceID)
 }
 
 // SetHostState approves or revokes a host. Revoking also revokes every

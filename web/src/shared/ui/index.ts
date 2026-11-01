@@ -3,11 +3,13 @@ export { Badge, type BadgeTone } from "./Badge";
 export { BrandMark } from "./BrandMark";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { Checkbox, Input, Select, Switch, Textarea } from "./fields";
+export { Highlight } from "./Highlight";
 export { HoldButton } from "./HoldButton";
 export { IconButton } from "./IconButton";
 export { Lightbox, type LightboxImage } from "./Lightbox";
 export { Markdown, type MarkdownProps } from "./Markdown";
-export { EmptyState, Kbd, Skeleton } from "./misc";
+export { EmptyState, Kbd, Notice, Skeleton } from "./misc";
+export { LargeDialog, type LargeDialogTab } from "./LargeDialog";
 export { DiffView } from "./DiffView";
 export { PageHeader } from "./PageHeader";
 export {

@@ -7,6 +7,7 @@ import (
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/palette"
 )
 
 // Event types for account control. The workspace.* events are shown to
@@ -147,6 +148,8 @@ type UpdateProfileInput struct {
 	AvatarEmoji *string
 	Timezone    *string
 	StatusText  *string
+	// Color: admins only, agents only; "" clears it.
+	Color *string
 }
 
 // UpdateProfile updates an actor's profile.
@@ -205,16 +208,29 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 		newEmoji = em
 	}
 
+	newColor := target.Color
+	if in.Color != nil {
+		c := *in.Color
+		if !by.IsAdmin() {
+			return Actor{}, ErrForbidden
+		}
+		if c != "" && (target.Kind != KindAgent || !palette.Valid(c)) {
+			return Actor{}, ErrInvalidColor
+		}
+		newColor = c
+	}
+
 	payload := ActorProfileUpdated{
 		ActorID:     target.ID.String(),
 		Description: newDesc,
 		AvatarEmoji: newEmoji,
 		Timezone:    newTz,
 		StatusText:  newStatus,
+		Color:       newColor,
 	}
 
 	err = s.record(ctx, by, EventActorProfileUpdated, "actor", target.ID, payload, func(ctx context.Context) error {
-		return s.Store.UpdateActorProfile(ctx, target.ID, newDesc, newEmoji, newTz, newStatus)
+		return s.Store.UpdateActorProfile(ctx, target.ID, newDesc, newEmoji, newTz, newStatus, newColor)
 	})
 	if err != nil {
 		return Actor{}, err
@@ -224,6 +240,10 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 	target.AvatarEmoji = newEmoji
 	target.Timezone = newTz
 	target.StatusText = newStatus
+	target.Color = newColor
+	if err := s.colour(ctx, target.WorkspaceID, []*Actor{&target}); err != nil {
+		return Actor{}, err
+	}
 	return s.load(ctx, target)
 }
 

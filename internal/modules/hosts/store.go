@@ -19,6 +19,8 @@ type Store interface {
 	HostByTokenHash(ctx context.Context, hash []byte) (Host, error)
 	ListHosts(ctx context.Context, workspaceID ids.ID) ([]Host, error)
 	SetHostState(ctx context.Context, id ids.ID, state string) error
+	// UpdateHost sets the name and colour (operational state, round 33).
+	UpdateHost(ctx context.Context, id ids.ID, name, color string) error
 	SaveReport(ctx context.Context, id ids.ID, r Report, at time.Time) error
 	Touch(ctx context.Context, id ids.ID, at time.Time) error
 
@@ -27,6 +29,8 @@ type Store interface {
 	DeleteAssignment(ctx context.Context, agentID ids.ID) error
 	AssignmentByAgent(ctx context.Context, agentID ids.ID) (Assignment, error)
 	AssignmentsForHost(ctx context.Context, hostID ids.ID) ([]Assignment, error)
+	// AgentHostColors maps each assigned agent of the workspace to its host's colour.
+	AgentHostColors(ctx context.Context, workspaceID ids.ID) (map[ids.ID]string, error)
 
 	AddGrant(ctx context.Context, g Grant) error
 	GrantByID(ctx context.Context, id ids.ID) (Grant, error)

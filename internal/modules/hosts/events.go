@@ -5,6 +5,7 @@ const (
 	EventPairingCreated  = "host.pairing_created"
 	EventHostEnrolled    = "host.enrolled"
 	EventHostState       = "host.state_changed"
+	EventHostUpdated     = "host.updated"
 	EventAgentAssigned   = "host.agent_assigned"
 	EventAgentUnassigned = "host.agent_unassigned"
 	EventGrantAdded      = "host.grant_added"
@@ -16,6 +17,7 @@ type HostEvent struct {
 	HostID string `json:"host_id,omitempty"`
 	Name   string `json:"name,omitempty"`
 	State  string `json:"state,omitempty"`
+	Color  string `json:"color,omitempty"`
 }
 
 // AssignmentEvent is the payload of agent assignment events.

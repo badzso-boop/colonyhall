@@ -52,6 +52,7 @@ type Host struct {
 	ID          ids.ID
 	WorkspaceID ids.ID
 	Name        string
+	Color       string // a palette hue (platform/palette)
 	TokenHash   []byte
 	State       string
 	CreatedBy   ids.ID
@@ -181,6 +182,7 @@ var (
 	ErrBadMaxSessionTokens  = errors.New("max_session_tokens must be non-negative")
 	ErrBadDailyTokenLimit   = errors.New("daily_token_limit must be non-negative")
 	ErrBadName              = errors.New("host name must be 1-64 characters")
+	ErrBadColor             = errors.New("color must be one of the palette hues")
 	ErrNotAssigned          = errors.New("the agent is not assigned to this host")
 	ErrNotAgent             = errors.New("only agents can be assigned to a host")
 	ErrHostRevoked          = errors.New("the host is revoked")

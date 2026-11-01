@@ -81,6 +81,35 @@ func (q *Queries) AddGrant(ctx context.Context, arg AddGrantParams) error {
 	return err
 }
 
+const agentHostColors = `-- name: AgentHostColors :many
+SELECT ah.agent_id, h.color FROM agent_host ah JOIN host h ON h.id = ah.host_id WHERE h.workspace_id = $1
+`
+
+type AgentHostColorsRow struct {
+	AgentID uuid.UUID
+	Color   string
+}
+
+func (q *Queries) AgentHostColors(ctx context.Context, workspaceID uuid.UUID) ([]AgentHostColorsRow, error) {
+	rows, err := q.db.Query(ctx, agentHostColors, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentHostColorsRow
+	for rows.Next() {
+		var i AgentHostColorsRow
+		if err := rows.Scan(&i.AgentID, &i.Color); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const assignmentByAgent = `-- name: AssignmentByAgent :one
 SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, worktree_repo, allow_preview, allow_web_read FROM agent_host WHERE agent_id = $1
 `
@@ -157,8 +186,8 @@ func (q *Queries) AssignmentsForHost(ctx context.Context, hostID uuid.UUID) ([]A
 }
 
 const createHost = `-- name: CreateHost :exec
-INSERT INTO host (id, workspace_id, name, token_hash, state, created_by, created_at, report)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO host (id, workspace_id, name, token_hash, state, created_by, created_at, report, color)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type CreateHostParams struct {
@@ -170,6 +199,7 @@ type CreateHostParams struct {
 	CreatedBy   uuid.UUID
 	CreatedAt   time.Time
 	Report      []byte
+	Color       string
 }
 
 func (q *Queries) CreateHost(ctx context.Context, arg CreateHostParams) error {
@@ -182,6 +212,7 @@ func (q *Queries) CreateHost(ctx context.Context, arg CreateHostParams) error {
 		arg.CreatedBy,
 		arg.CreatedAt,
 		arg.Report,
+		arg.Color,
 	)
 	return err
 }
@@ -243,7 +274,7 @@ func (q *Queries) GrantByID(ctx context.Context, id uuid.UUID) (FolderGrant, err
 }
 
 const hostByID = `-- name: HostByID :one
-SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report FROM host WHERE id = $1
+SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color FROM host WHERE id = $1
 `
 
 func (q *Queries) HostByID(ctx context.Context, id uuid.UUID) (Host, error) {
@@ -259,12 +290,13 @@ func (q *Queries) HostByID(ctx context.Context, id uuid.UUID) (Host, error) {
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.Report,
+		&i.Color,
 	)
 	return i, err
 }
 
 const hostByTokenHash = `-- name: HostByTokenHash :one
-SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report FROM host WHERE token_hash = $1
+SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color FROM host WHERE token_hash = $1
 `
 
 func (q *Queries) HostByTokenHash(ctx context.Context, tokenHash []byte) (Host, error) {
@@ -280,12 +312,13 @@ func (q *Queries) HostByTokenHash(ctx context.Context, tokenHash []byte) (Host, 
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.Report,
+		&i.Color,
 	)
 	return i, err
 }
 
 const listHosts = `-- name: ListHosts :many
-SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report FROM host WHERE workspace_id = $1 ORDER BY name, id
+SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color FROM host WHERE workspace_id = $1 ORDER BY name, id
 `
 
 func (q *Queries) ListHosts(ctx context.Context, workspaceID uuid.UUID) ([]Host, error) {
@@ -307,6 +340,7 @@ func (q *Queries) ListHosts(ctx context.Context, workspaceID uuid.UUID) ([]Host,
 			&i.CreatedAt,
 			&i.LastSeenAt,
 			&i.Report,
+			&i.Color,
 		); err != nil {
 			return nil, err
 		}
@@ -444,6 +478,21 @@ type TouchParams struct {
 
 func (q *Queries) Touch(ctx context.Context, arg TouchParams) error {
 	_, err := q.db.Exec(ctx, touch, arg.ID, arg.LastSeenAt)
+	return err
+}
+
+const updateHost = `-- name: UpdateHost :exec
+UPDATE host SET name = $2, color = $3 WHERE id = $1
+`
+
+type UpdateHostParams struct {
+	ID    uuid.UUID
+	Name  string
+	Color string
+}
+
+func (q *Queries) UpdateHost(ctx context.Context, arg UpdateHostParams) error {
+	_, err := q.db.Exec(ctx, updateHost, arg.ID, arg.Name, arg.Color)
 	return err
 }
 

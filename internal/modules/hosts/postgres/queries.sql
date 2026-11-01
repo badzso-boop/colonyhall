@@ -8,8 +8,14 @@ WHERE code_hash = sqlc.arg(code_hash) AND used_at IS NULL AND expires_at > sqlc.
 RETURNING *;
 
 -- name: CreateHost :exec
-INSERT INTO host (id, workspace_id, name, token_hash, state, created_by, created_at, report)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+INSERT INTO host (id, workspace_id, name, token_hash, state, created_by, created_at, report, color)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: UpdateHost :exec
+UPDATE host SET name = $2, color = $3 WHERE id = $1;
+
+-- name: AgentHostColors :many
+SELECT ah.agent_id, h.color FROM agent_host ah JOIN host h ON h.id = ah.host_id WHERE h.workspace_id = $1;
 
 -- name: HostByID :one
 SELECT * FROM host WHERE id = $1;
