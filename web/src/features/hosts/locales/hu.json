@@ -1,0 +1,44 @@
+{
+  "picker": {
+    "title": {
+      "single": "Mappa kiválasztása",
+      "singleGit": "Git-repó kiválasztása",
+      "multi": "Mappák kiválasztása",
+      "browse": "Mappák"
+    },
+    "roots": "Gyökérmappák (guard.yaml)",
+    "path": "Útvonal",
+    "filter": "Szűrés…",
+    "hidden": "Rejtett mappák",
+    "folders": "Mappák",
+    "open": "{{name}} megnyitása",
+    "read": "olvasás",
+    "write": "írás",
+    "access": "{{name}} hozzáférése",
+    "denied": "Titkos mappa, nem adható",
+    "empty": "Nincs almappa.",
+    "truncated": "Több mint 500 mappa: az első 500 látszik. Szűrj!",
+    "offline": "A gép most nem elérhető",
+    "timeout": "A gép nem válaszolt időben",
+    "error": "Nem sikerült betölteni",
+    "lastSeen": "Utoljára látva: {{when}}",
+    "retry": "Újra",
+    "errors": {
+      "denied": "Ez a mappa nem nyitható meg.",
+      "not_found": "Ez a mappa nem létezik.",
+      "not_a_directory": "Ez nem mappa."
+    },
+    "typePath": "Útvonal beírása",
+    "add": "Hozzáadás",
+    "outsideRoots": "A gép gyökérmappáin kívül esik: a szerver elutasítja.",
+    "summary_one": "{{count}} mappa: {{read}} olvasás, {{write}} írás",
+    "summary_other": "{{count}} mappa: {{read}} olvasás, {{write}} írás",
+    "selected": "Kiválasztva",
+    "remove": "{{path}} eltávolítása",
+    "nested": "{{path}}: a(z) {{by}} hozzáférése már lefedi.",
+    "noneSelected": "Nincs kiválasztva mappa.",
+    "cancel": "Mégse",
+    "choose": "Kiválasztás",
+    "close": "Bezárás"
+  }
+}

@@ -47,7 +47,7 @@ export function selectable(e: DirEntry, mode: PickMode, gitOnly = false): boolea
 }
 
 /** Folders first as the guard sends them; hidden ones only on request; a filter over the names. */
-export function visibleEntries(entries: DirEntry[], showHidden: boolean, filter: string): DirEntry[] {
+export function visibleEntries<E extends DirEntry>(entries: E[], showHidden: boolean, filter: string): E[] {
   const q = filter.trim().toLowerCase();
   return entries.filter((e) => (showHidden || !e.hidden) && (!q || e.name.toLowerCase().includes(q)));
 }

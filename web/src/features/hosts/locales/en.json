@@ -1,0 +1,44 @@
+{
+  "picker": {
+    "title": {
+      "single": "Choose a folder",
+      "singleGit": "Choose a git repository",
+      "multi": "Choose folders",
+      "browse": "Folders"
+    },
+    "roots": "Roots (guard.yaml)",
+    "path": "Path",
+    "filter": "Filter…",
+    "hidden": "Hidden folders",
+    "folders": "Folders",
+    "open": "Open {{name}}",
+    "read": "read",
+    "write": "write",
+    "access": "Access of {{name}}",
+    "denied": "A secret folder, it cannot be granted",
+    "empty": "No subfolders.",
+    "truncated": "More than 500 folders: the first 500 are shown. Filter!",
+    "offline": "The machine is not reachable now",
+    "timeout": "The machine did not answer in time",
+    "error": "Could not load",
+    "lastSeen": "Last seen {{when}}",
+    "retry": "Retry",
+    "errors": {
+      "denied": "This folder cannot be opened.",
+      "not_found": "This folder does not exist.",
+      "not_a_directory": "This is not a folder."
+    },
+    "typePath": "Type a path",
+    "add": "Add",
+    "outsideRoots": "Outside the machine's roots: the server will refuse it.",
+    "summary_one": "{{count}} folder: {{read}} read, {{write}} write",
+    "summary_other": "{{count}} folders: {{read}} read, {{write}} write",
+    "selected": "Selected",
+    "remove": "Remove {{path}}",
+    "nested": "{{path}}: already covered by {{by}}.",
+    "noneSelected": "No folder chosen.",
+    "cancel": "Cancel",
+    "choose": "Choose",
+    "close": "Close"
+  }
+}
