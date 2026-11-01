@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Check, Copy, FileText } from "lucide-react";
-import { cn, parseMarkdown, sanitizeUrl, type Block, type FileLink, type Inline } from "@/shared/lib";
+import { cn, parseMarkdown, sanitizeUrl, splitChips, type Block, type Chip, type FileLink, type Inline } from "@/shared/lib";
 
 export type MarkdownProps = {
   text: string;
@@ -10,6 +10,12 @@ export type MarkdownProps = {
   /** Turns file references into buttons; return false to keep a reference as text. */
   onFileClick?: (link: FileLink) => void;
   canOpenFile?: (link: FileLink) => boolean;
+  /**
+   * Turns Q-12, D-12, [error:<id>] and [approval:<id>] in plain text into
+   * whatever the caller renders (null hides the reference). Code spans are
+   * never touched. Without it the references stay text.
+   */
+  renderChip?: (chip: Chip) => ReactNode;
   /** Chat messages: headings are small. */
   inChat?: boolean;
   copyLabel: string;
@@ -43,11 +49,17 @@ function CodeBlock({ lang, text, ctx }: { lang: string; text: string; ctx: Ctx }
   );
 }
 
+function withChips(text: string, render: (chip: Chip) => ReactNode): ReactNode {
+  const parts = splitChips(text);
+  if (parts.length === 1 && parts[0]!.type === "text") return text;
+  return parts.map((p, i) => <Fragment key={i}>{p.type === "text" ? p.text : render(p)}</Fragment>);
+}
+
 function inline(nodes: Inline[] | undefined, ctx: Ctx): ReactNode {
   return (nodes ?? []).map((n, i) => {
     switch (n.type) {
       case "text":
-        return <Fragment key={i}>{n.text}</Fragment>;
+        return <Fragment key={i}>{ctx.renderChip ? withChips(n.text, ctx.renderChip) : n.text}</Fragment>;
       case "code":
         return (
           <code key={i} className="rounded-sm border border-border bg-surface-sunken px-1 font-mono text-[0.9em]">

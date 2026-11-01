@@ -54,12 +54,15 @@ export function onEvent<T extends KnownEvent>(type: T, handler: (e: AppEvent<T>)
 
 /**
  * Subscribe to an event type whose payload the contract does not describe
- * (yet): the handler only learns that it happened. Use it to refetch.
+ * (yet): use it to refetch. The handler gets the raw payload, which is
+ * unknown: read it only through a checking function (e.g. a feature's
+ * parse function with a test), never by casting.
  */
-export function onUntypedEvent(type: string, handler: () => void): () => void {
+export function onUntypedEvent(type: string, handler: (data: unknown) => void): () => void {
   let set = eventHandlers.get(type);
   if (!set) eventHandlers.set(type, (set = new Set()));
-  return add(set, handler as Handler);
+  const h = (frame: { data?: unknown }) => handler(frame.data);
+  return add(set, h as Handler);
 }
 
 /** An agent started or stopped working somewhere (ephemeral). */

@@ -1,4 +1,5 @@
 export { cn } from "./cn";
+export { chipRefs, splitChips, type Chip, type ChipKind, type ChipPart } from "./chips";
 export { hueVar, hues, isHue, type Hue } from "./palette";
 export { matchRanges } from "./highlight";
 export { randomId } from "./uuid";

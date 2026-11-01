@@ -46,6 +46,22 @@ test("file references become buttons only with a handler, and can be refused", (
   expect(screen.queryByRole("button")).toBeNull();
 });
 
+test("references become chips only with renderChip, never inside code", () => {
+  const id = "0b5c2a8e-1f2d-4c3b-9a8e-7d6c5b4a3f21";
+  const text = `**Q-12** asks; see D-3 and \`Q-99\` [error:${id}] [approval:${id}]`;
+  const { container, rerender } = render(<Markdown text={text} {...labels} />);
+  expect(container.textContent).toContain("Q-12");
+  expect(container.querySelector("[data-chip]")).toBeNull();
+  rerender(
+    <Markdown text={text} renderChip={(c) => (c.kind === "approval" ? null : <span data-chip={c.kind}>{c.ref}</span>)} {...labels} />,
+  );
+  const chips = [...container.querySelectorAll("[data-chip]")].map((e) => `${e.getAttribute("data-chip")}:${e.textContent}`);
+  expect(chips).toEqual(["question:Q-12", "decision:D-3", `error:${id}`]);
+  expect(container.querySelector("strong [data-chip]")).toBeTruthy();
+  expect(container.querySelector("code")?.textContent).toBe("Q-99");
+  expect(container.textContent).not.toContain("approval:");
+});
+
 test("code blocks keep their text and have a copy button", () => {
   const { container } = render(<Markdown text={"```go\nfmt.Println(\"<b>\")\n```"} {...labels} />);
   expect(container.querySelector("pre code")?.textContent).toBe('fmt.Println("<b>")');
