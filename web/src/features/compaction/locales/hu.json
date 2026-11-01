@@ -1,0 +1,30 @@
+{
+  "card": {
+    "label": "Tömörítés összefoglalója",
+    "title": "📦 Összefoglaló a korábbi üzenetekről",
+    "open": "Összefoglaló megnyitása",
+    "edit": "Szerkesztés",
+    "regenerate": "Újragenerálás",
+    "loadFailed": "Az összefoglaló nem tölthető be."
+  },
+  "edit": {
+    "title": "Összefoglaló szerkesztése",
+    "hint": "A mentett szöveg lesz az agentek következő munkamenetének kiindulópontja.",
+    "label": "Összefoglaló (markdown)",
+    "save": "Mentés",
+    "saved": "Összefoglaló mentve"
+  },
+  "regenerate": {
+    "title": "Újragenerálod az összefoglalót?",
+    "body": "A jegyző agent újra elkészíti az összefoglalót ugyanezekből az üzenetekből; a mostani változat megmarad az előzményekben.",
+    "confirm": "Újragenerálás"
+  },
+  "live": {
+    "pending": "Tömörítés folyamatban…",
+    "failed": "A tömörítés nem sikerült.",
+    "dismiss": "Elrejtés"
+  },
+  "cancel": "Mégse",
+  "copy": "Másolás",
+  "copied": "Másolva"
+}

@@ -1,0 +1,40 @@
+{
+  "approval": {
+    "label": "Permission request: {{tool}}",
+    "title": "Permission request",
+    "details": "Details",
+    "detailsTitle": "{{tool}}: the requested action",
+    "masked": "The server has already masked the input; secrets are not shown here either.",
+    "allow": "Allow",
+    "deny": "Deny",
+    "autoDeny": "auto-deny in {{left}}",
+    "allowedBy": "{{who}} allowed it {{when}}",
+    "deniedBy": "{{who}} denied it {{when}}",
+    "someone": "someone",
+    "state": {
+      "pending": "awaiting decision",
+      "allowed": "allowed",
+      "denied": "denied",
+      "expired": "expired"
+    }
+  },
+  "delegation": {
+    "label": "Hand the task to {{target}}",
+    "ask": "Hand the task to {{target}}",
+    "approve": "Approve",
+    "deny": "Deny",
+    "pending": "awaiting approval",
+    "approved": "✅ approved · {{who}} {{when}}",
+    "approvedByGrant": "✅ approved by the grant",
+    "denied": "⛔ denied · {{who}} {{when}}",
+    "expired": "⌛ expired",
+    "cancelled": "cancelled"
+  },
+  "grant": {
+    "text": "🤝 @{{a}} ↔ @{{b}}: grant, expires {{until}}",
+    "revoke": "Revoke",
+    "confirm": "Revoke the grant?",
+    "yes": "Yes, revoke",
+    "cancel": "Cancel"
+  }
+}

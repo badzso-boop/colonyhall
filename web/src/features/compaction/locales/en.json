@@ -1,0 +1,30 @@
+{
+  "card": {
+    "label": "Compaction summary",
+    "title": "📦 Summary of the earlier messages",
+    "open": "Open the summary",
+    "edit": "Edit",
+    "regenerate": "Regenerate",
+    "loadFailed": "The summary could not be loaded."
+  },
+  "edit": {
+    "title": "Edit the summary",
+    "hint": "The saved text is where the agents' next session starts from.",
+    "label": "Summary (markdown)",
+    "save": "Save",
+    "saved": "Summary saved"
+  },
+  "regenerate": {
+    "title": "Regenerate the summary?",
+    "body": "The scribe agent writes the summary again from the same messages; the current version stays in the history.",
+    "confirm": "Regenerate"
+  },
+  "live": {
+    "pending": "Compacting…",
+    "failed": "The compaction failed.",
+    "dismiss": "Hide"
+  },
+  "cancel": "Cancel",
+  "copy": "Copy",
+  "copied": "Copied"
+}

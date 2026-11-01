@@ -4,6 +4,8 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { ApiError, WsClient, onUnauthorized, wsURL } from "@/shared/api";
 import { registerAdminEvents } from "@/features/admin";
 import { registerAgentEvents } from "@/features/agents";
+import { registerApprovalEvents } from "@/features/approvals";
+import { registerCompactionEvents } from "@/features/compaction";
 import { registerConversationEvents } from "@/features/conversation";
 import { registerHostEvents } from "@/features/hosts";
 import { registerIdentityEvents, useSession } from "@/features/identity";
@@ -37,6 +39,8 @@ function useLiveUpdates(enabled: boolean) {
       registerIdentityEvents(qc),
       registerConversationEvents(qc),
       registerQuestionEvents(qc),
+      registerApprovalEvents(qc),
+      registerCompactionEvents(qc),
       registerAgentEvents(qc),
       registerAdminEvents(qc),
       registerPlannerEvents(qc),

@@ -1,0 +1,40 @@
+{
+  "approval": {
+    "label": "Engedélykérés: {{tool}}",
+    "title": "Engedélykérés",
+    "details": "Részletek",
+    "detailsTitle": "{{tool}}: a kért művelet",
+    "masked": "A bemenetet a szerver már maszkolta; a titkok itt sem látszanak.",
+    "allow": "Engedélyezem",
+    "deny": "Elutasítom",
+    "autoDeny": "automatikus elutasítás: {{left}}",
+    "allowedBy": "{{who}} engedélyezte {{when}}",
+    "deniedBy": "{{who}} elutasította {{when}}",
+    "someone": "valaki",
+    "state": {
+      "pending": "döntésre vár",
+      "allowed": "engedélyezve",
+      "denied": "elutasítva",
+      "expired": "lejárt"
+    }
+  },
+  "delegation": {
+    "label": "Feladat átadása neki: {{target}}",
+    "ask": "Feladat átadása neki: {{target}}",
+    "approve": "Jóváhagyom",
+    "deny": "Elutasítom",
+    "pending": "jóváhagyásra vár",
+    "approved": "✅ jóváhagyva · {{who}} {{when}}",
+    "approvedByGrant": "✅ jóváhagyva az engedély alapján",
+    "denied": "⛔ elutasítva · {{who}} {{when}}",
+    "expired": "⌛ lejárt",
+    "cancelled": "visszavonva"
+  },
+  "grant": {
+    "text": "🤝 @{{a}} ↔ @{{b}}: engedély, lejár {{until}}",
+    "revoke": "Visszavonás",
+    "confirm": "Biztosan visszavonod az engedélyt?",
+    "yes": "Igen, visszavonom",
+    "cancel": "Mégse"
+  }
+}
