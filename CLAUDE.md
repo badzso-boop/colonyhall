@@ -81,7 +81,7 @@ Minden változtatás után: `make lint test`, és ha az adattár változott, `ma
 
 ## Eltérések a tervtől (tudatos, átmeneti)
 
-- **Webes felület:** a fejlesztői HTML-oldal (`internal/httpserver/web/index.html`, a `/` címen) a fő felület, amíg a PWA (`web/`, a `/app/` címen) mindent nem tud. A 31. kör óta a PWA-ban megvan a keret, a csatornák, DM-ek, szálak, a szerkesztő csatolással, a terminál- és fájlpanel; a 32. kör óta a lebegő ablakok, a Feladatok, Naptár, Jegyzetek, Ütemezések, Wiki, Foglalások, Szabályok és Döntések oldal; a többi funkció a 33–35. körben jön.
+- **Webes felület:** a fejlesztői HTML-oldal (`internal/httpserver/web/index.html`, a `/` címen) a fő felület, amíg a PWA (`web/`, a `/app/` címen) mindent nem tud. A 31. kör óta a PWA-ban megvan a keret, a csatornák, DM-ek, szálak, a szerkesztő csatolással, a terminál- és fájlpanel; a 32. kör óta a lebegő ablakok, a Feladatok, Naptár, Jegyzetek, Ütemezések, Wiki, Foglalások, Szabályok és Döntések oldal; a 33. kör óta az Agentek (létrehozás, beállítás, törlés) és a Gépek oldal — agentet már csak itt lehet létrehozni; a többi funkció a 34–35. körben jön.
 - **Szerepkörök:** egyelőre csak a `COLONY_ROLE=all` működik, a busz memórián belüli.
 - **Őr:** WebSocket-ébresztéssel figyel a `/ws/ui` végponton (esemény érkezésekor azonnal ellenőrzi az inboxot, a lekérdezés csak tartalék: `fallback_poll` alapértelmezetten 60 mp, a normál 5 mp-es `poll` csak kikapcsolt WebSocket esetén érvényes); a gyűjtési idő 3 mp (a terv 20–60 mp-et). A futásnapló a szerveren is megvan (lépéslistával), a részletek az őr naplójában.
 - **Az őr csak a nyilvános REST és WebSocket API-n beszél a szerverrel** (`internal/guard`, depguard-szabály tiltja a szerver belső csomagjait).
