@@ -257,3 +257,5 @@ Asztalon `max-w-3xl`, 70 vh (a nagy Dialog fölött), telefonon teljes képerny�
 
 ## 12. Ami még jön
 
+- **34. kör:** a chat hiányzó részei (`D-12`/`Q-12` chipek, csatorna-beállítások, némítás, „Szálaim”).
+- **35. kör:** az admin oldalak (futások, keretek, audit, felhasználók).
