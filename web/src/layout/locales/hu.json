@@ -13,7 +13,8 @@
     "leases": "Foglalások",
     "rules": "Szabályok",
     "design": "Design system",
-    "agents": "Agentek"
+    "agents": "Agentek",
+    "hosts": "Gépek"
   },
   "search": "Keresés vagy parancs…",
   "questions": "Válaszra vár",

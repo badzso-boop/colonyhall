@@ -1,4 +1,4 @@
-import { Bot, CalendarDays, Clock, Gavel, KeyRound, ListChecks, NotebookPen, Palette, ScrollText, BookOpen } from "lucide-react";
+import { Bot, CalendarDays, Clock, Gavel, KeyRound, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Server } from "lucide-react";
 import type { WindowKind } from "@/shared/windows";
 
 /** The workspace pages of the sidebar and the command palette (docs/handoff/32, part 2). */
@@ -14,5 +14,6 @@ export const pages: PageEntry[] = [
   { id: "decisions", route: "/decisions", icon: Gavel },
   { id: "leases", route: "/leases", icon: KeyRound },
   { id: "rules", route: "/rules", icon: ScrollText, adminOnly: true },
+  { id: "hosts", route: "/hosts", icon: Server, adminOnly: true },
   { id: "design", route: "/design", icon: Palette },
 ];

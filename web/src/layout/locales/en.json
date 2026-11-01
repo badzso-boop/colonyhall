@@ -13,7 +13,8 @@
     "leases": "Leases",
     "rules": "Rules",
     "design": "Design system",
-    "agents": "Agents"
+    "agents": "Agents",
+    "hosts": "Machines"
   },
   "search": "Search or command…",
   "questions": "Waiting for you",
