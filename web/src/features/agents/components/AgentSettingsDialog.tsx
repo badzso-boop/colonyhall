@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, Lock, ShieldAlert, Trash2 } from "lucide-react";
 import { useHosts } from "@/features/hosts";
+import { useSession } from "@/features/identity";
 import { cn, hueVar } from "@/shared/lib";
 import { Avatar, Badge, Button, Dialog, Input, LargeDialog, Markdown, Notice, Textarea, toast } from "@/shared/ui";
 import { useAgentActors, useAgentInstructions, useAgentOverview, useArchiveAgent, useChangeAgentState, useSetLimits, useUpdateAgentProfile } from "../api";
@@ -41,6 +42,10 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
   const instructions = useAgentInstructions(actor?.id ?? "", Boolean(actor));
   const overview = useAgentOverview(actor?.id ?? "", Boolean(actor) && tab === "keretek");
   const archived = Boolean(actor?.archived_at);
+  const role = useSession().data?.actor.role;
+  const admin = role === "owner" || role === "admin";
+  // Members see the settings but change nothing (the server refuses it too).
+  const readOnly = archived || !admin;
 
   const fromActor = (): Profile => ({
     description: actor?.description ?? "", avatarEmoji: actor?.avatar_emoji ?? "", color: actor?.color ?? "",
@@ -111,7 +116,7 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
 
   const body: Record<SettingsTab, ReactNode> = {
     profil: (
-      <fieldset disabled={archived} className="grid gap-3 sm:grid-cols-2">
+      <fieldset disabled={readOnly} className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className="text-meta font-semibold text-fg-muted">{t("create.displayName")}</span>
           <Input value={actor.display_name} readOnly aria-readonly />
@@ -145,7 +150,7 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
       </fieldset>
     ),
     keretek: (
-      <fieldset disabled={archived || !config} className="flex flex-col gap-4">
+      <fieldset disabled={readOnly || !config} className="flex flex-col gap-4">
         {!config ? <Notice>{t("settings.noLimits")}</Notice> : null}
         <div className="flex flex-col gap-1">
           <span className="text-meta font-semibold text-fg-muted">{t("create.sessionLimit")}</span>
@@ -175,9 +180,11 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
       <div className="flex flex-col gap-4">
         <Notice
           action={
-            <Button size="sm" icon={<Copy className="size-3.5" />} onClick={onCopy}>
-              {t("settings.copy")}
-            </Button>
+            admin ? (
+              <Button size="sm" icon={<Copy className="size-3.5" />} onClick={onCopy}>
+                {t("settings.copy")}
+              </Button>
+            ) : undefined
           }
         >
           {t("settings.fixedInfo")}
@@ -277,11 +284,11 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
   };
 
   const footer =
-    tab === "profil" && !archived ? (
+    tab === "profil" && !readOnly ? (
       <Button variant="primary" disabled={!dirty} loading={updateProfile.isPending} onClick={saveProfile}>
         {t("settings.save")}
       </Button>
-    ) : tab === "keretek" && !archived && config ? (
+    ) : tab === "keretek" && !readOnly && config ? (
       <Button
         variant="primary"
         disabled={!limits}
@@ -304,13 +311,14 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
         onOpenChange={(o) => !o && guard({ close: true })}
         title={t("settings.title")}
         header={header}
-        tabs={settingsTabs.map((id) => ({ id, label: t(`settings.tabs.${id}`), marker: id === "konfiguracio" || id === "utasitas" ? <Lock aria-hidden className="size-3" /> : undefined }))}
+        tabs={settingsTabs.filter((id) => admin || id !== "veszelyes").map((id) => ({ id, label: t(`settings.tabs.${id}`), marker: id === "konfiguracio" || id === "utasitas" ? <Lock aria-hidden className="size-3" /> : undefined }))}
         active={tab}
         onSelect={(id) => guard({ next: id as SettingsTab })}
         navLabel={t("settings.tabsLabel")}
         banner={
           <div className="flex flex-col gap-2">
             {archived ? <Notice>{t("settings.archivedNotice")}</Notice> : null}
+            {!admin && !archived ? <Notice>{t("settings.adminOnly")}</Notice> : null}
             {changedElsewhere && !archived ? (
               <Notice
                 tone="warning"

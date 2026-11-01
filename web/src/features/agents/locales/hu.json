@@ -329,7 +329,8 @@
     "archivedNotice": "Ez az agent archivált: minden csak olvasható, de másolatot készíthetsz róla.",
     "changedElsewhere": "Közben módosult.",
     "refresh": "Frissítés",
-    "unsaved": "Elveted a nem mentett változtatásokat?"
+    "unsaved": "Elveted a nem mentett változtatásokat?",
+    "adminOnly": "Csak admin módosíthatja az agent beállításait; te megnézheted őket."
   },
   "directory": {
     "title": "Agentek",

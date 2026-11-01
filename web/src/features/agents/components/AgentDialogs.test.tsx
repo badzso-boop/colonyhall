@@ -35,7 +35,7 @@ function setup(url: string, ui: React.ReactNode = null, onPost?: (path: string, 
       if (u.pathname.endsWith("/agent-rules")) return json({ version: 1, text: "You are @{handle}.", history: [] });
       if (u.pathname.endsWith("/instructions")) return json({ text: "Légy tömör.", effective: "You are @backend.\n\n## Instructions for @backend\n\nLégy tömör.", version: 1 });
       if (u.pathname.endsWith("/overview")) return json({ actor: agent("a1", "backend"), state: "active", usage: { today_tokens: 1234, last_runs: [] } });
-      if (u.pathname.endsWith("/auth/session")) return json({ actor: me, csrf_token: "x" });
+      if (u.pathname.endsWith("/auth/session")) return json({ actor: { ...me, role: sessionRole }, csrf_token: "x" });
       return json({});
     }),
   );
@@ -55,7 +55,10 @@ function setup(url: string, ui: React.ReactNode = null, onPost?: (path: string, 
   return calls;
 }
 
+let sessionRole = "owner";
+
 afterEach(() => {
+  sessionRole = "owner";
   vi.unstubAllGlobals();
   localStorage.clear();
 });
@@ -132,4 +135,16 @@ test("the directory: fuzzy search with highlights, filters in the URL, archived 
   await waitFor(() => expect(screen.getByRole("status", { name: "location" }).textContent).toContain("archived=1"));
   fireEvent.click(screen.getByRole("button", { name: /pc-wsl/ }));
   expect(screen.getByRole("status", { name: "location" }).textContent).toContain("host=pc");
+});
+
+test("a member sees an agent's settings read-only: no save, no copy, no danger zone", async () => {
+  sessionRole = "member";
+  setup("/agents?agent=backend&settings=profil");
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByText(/Csak admin módosíthatja/)).toBeTruthy();
+  expect(within(dialog).queryByRole("button", { name: "Mentés" })).toBeNull();
+  expect(within(dialog).queryByRole("button", { name: /Veszélyes/ })).toBeNull();
+  expect((within(dialog).getByRole("textbox", { name: /Leírás/ }) as HTMLTextAreaElement).closest("fieldset")!.disabled).toBe(true);
+  fireEvent.click(within(dialog).getByRole("button", { name: /Konfiguráció/ }));
+  expect(within(dialog).queryByRole("button", { name: "Másolat új agentként" })).toBeNull();
 });

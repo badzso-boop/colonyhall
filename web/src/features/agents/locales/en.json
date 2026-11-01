@@ -329,7 +329,8 @@
     "archivedNotice": "This agent is archived: everything is read-only, but you can make a copy of it.",
     "changedElsewhere": "It changed meanwhile.",
     "refresh": "Refresh",
-    "unsaved": "Discard the unsaved changes?"
+    "unsaved": "Discard the unsaved changes?",
+    "adminOnly": "Only admins change an agent's settings; you can view them."
   },
   "directory": {
     "title": "Agents",

@@ -40,7 +40,7 @@ export function Feed({ channel, actors, meId, handlers }: { channel: Channel; ac
   const markIfVisible = useCallback(() => {
     // An admin observing a conversation they are not in has no read position (the server answers 404).
     if (atBottom.current && document.visibilityState === "visible" && channel.is_member && channel.unread > 0 && !markRead.isPending) markRead.mutate(channel.id);
-  }, [channel.id, channel.unread, markRead]);
+  }, [channel.id, channel.is_member, channel.unread, markRead]);
 
   // Older pages: keep the visible message where it was.
   useLayoutEffect(() => {
