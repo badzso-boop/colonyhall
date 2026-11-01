@@ -79,5 +79,19 @@
     "openInChannel": "Open in the channel",
     "closeThread": "Close the thread",
     "replyInThread": "Reply in thread"
+  },
+  "new": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "create": "Create",
+    "name": "Name",
+    "visibility": "Visibility",
+    "public": "Public",
+    "publicHint": "Anyone in the workspace can see and join it.",
+    "private": "Private",
+    "privateHint": "Only invited members see it.",
+    "search": "Search by name or @handle…",
+    "people": "Recipients",
+    "none": "No matches."
   }
 }

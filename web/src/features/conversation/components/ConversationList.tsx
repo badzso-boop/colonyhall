@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 import { ChevronDown, ChevronRight, Eye, Hash, Lock, Plus } from "lucide-react";
@@ -8,6 +8,7 @@ import { Avatar, Badge, Tooltip } from "@/shared/ui";
 import { useActivity } from "@/features/agents";
 import { useActors, useSession } from "@/features/identity";
 import { useChannels, useSections } from "../api";
+import { NewConversationDialog } from "./NewConversationDialog";
 import { buildSidebar, dmPeers, unreadTotals, type Actor, type SidebarGroup, type SidebarRow } from "../model";
 
 function RowIcon({ row, actors, meId }: { row: SidebarRow; actors: Map<string, Actor>; meId: string }) {
@@ -80,6 +81,7 @@ function Group({ group, actors, meId }: { group: SidebarGroup; actors: Map<strin
   const { t } = useTranslation("conversation");
   const title = group.title ?? t(`groups.${group.id}`);
   const [collapsed, setCollapsed] = useLocalStorage(`colony.sidebar.collapsed.${group.id}`, group.collapsed);
+  const [adding, setAdding] = useState(false);
   if (!group.custom && group.rows.length === 0 && group.id === "agentAgent") return null;
   const totals = unreadTotals(group.rows);
   const addLabel = group.id === "channels" ? t("actions.newChannel") : group.id === "dms" ? t("actions.newDm") : group.id === "agentDms" ? t("actions.newAgentDm") : null;
@@ -99,11 +101,17 @@ function Group({ group, actors, meId }: { group: SidebarGroup; actors: Map<strin
         {collapsed && totals.mentions > 0 ? <Badge tone="accent">{totals.mentions}</Badge> : null}
         {collapsed && totals.mentions === 0 && totals.unread > 0 ? <Badge>{totals.unread}</Badge> : null}
         {addLabel ? (
-          // The dialogs come in round 34; until then the dev page does it.
-          <a href="/" aria-label={addLabel} title={addLabel} className="grid size-6 place-items-center rounded-sm text-fg-subtle hover:bg-surface-sunken hover:text-fg">
+          <button
+            type="button"
+            aria-label={addLabel}
+            title={addLabel}
+            onClick={() => setAdding(true)}
+            className="grid size-6 place-items-center rounded-sm text-fg-subtle hover:bg-surface-sunken hover:text-fg"
+          >
             <Plus aria-hidden className="size-3.5" />
-          </a>
+          </button>
         ) : null}
+        {adding ? <NewConversationDialog kind={group.id === "channels" ? "channel" : group.id === "dms" ? "dm" : "agentDm"} meId={meId} onClose={() => setAdding(false)} /> : null}
       </div>
       {collapsed ? null : (
         <div className="flex flex-col gap-px pl-2">

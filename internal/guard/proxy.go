@@ -34,6 +34,7 @@ var (
 		"www.googleapis.com:443",
 		"antigravity-unleash.goog:443",
 		"generativelanguage.googleapis.com:443",
+		"aicode.googleapis.com:443", // Antigravity calls it on every run (since 2026-10-26)
 		"oauth2.googleapis.com:443",
 		"accounts.google.com:443",
 		"play.googleapis.com:443",

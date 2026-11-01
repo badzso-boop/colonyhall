@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
+	"sort"
 	"time"
 
 	"colonyhall/internal/apispec"
@@ -106,7 +108,36 @@ func registerOverview(
 			return
 		}
 
-		// For agents:
+		// For agents: the conversations both the caller and the agent are in,
+		// DMs first. The file and terminal relays run through one of them, so
+		// the PWA picks the first (a DM with the agent counts).
+		chans, err := cvSvc.ListChannels(ctx, caller)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		agentCommon := []apispec.OverviewCommonChannel{}
+		rank := map[ids.ID]int{} // 0: the caller's DM with the agent, 1: other channels the caller is in, 2: the rest (admins)
+		for _, ch := range chans {
+			members, err := cvSvc.MemberIDs(ctx, ch.ID)
+			if err != nil || !slices.Contains(members, targetActor.ID) {
+				continue
+			}
+			if ok, _ := cvSvc.CanRead(ctx, caller, ch.ID); !ok {
+				continue
+			}
+			switch {
+			case !slices.Contains(members, caller.ID):
+				rank[ch.ID] = 2
+			case ch.Kind == conversation.KindDM:
+				rank[ch.ID] = 0
+			default:
+				rank[ch.ID] = 1
+			}
+			agentCommon = append(agentCommon, apispec.OverviewCommonChannel{Id: ch.ID, Name: ch.Name, Kind: string(ch.Kind)})
+		}
+		sort.SliceStable(agentCommon, func(i, j int) bool { return rank[agentCommon[i].Id] < rank[agentCommon[j].Id] })
+
 		// 1. Activity (gateway)
 		working := false
 		if gw != nil {
@@ -352,13 +383,14 @@ func registerOverview(
 		}
 
 		res := apispec.AgentOverview{
-			Actor:         actorSpec,
-			State:         targetActor.State,
-			Activity:      activity,
-			Assignment:    overviewAssignment,
-			Threads:       &overviewThreads,
-			Usage:         overviewUsage,
-			Collaboration: overviewCollaboration,
+			Actor:          actorSpec,
+			State:          targetActor.State,
+			Activity:       activity,
+			Assignment:     overviewAssignment,
+			Threads:        &overviewThreads,
+			Usage:          overviewUsage,
+			Collaboration:  overviewCollaboration,
+			CommonChannels: &agentCommon,
 		}
 		// The unacked inbox (round 33): admins only, like the assignment.
 		if caller.IsAdmin() && dlSvc != nil {

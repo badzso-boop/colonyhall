@@ -79,5 +79,19 @@
     "openInChannel": "Megnyitás a csatornában",
     "closeThread": "Szál bezárása",
     "replyInThread": "Válasz szálban"
+  },
+  "new": {
+    "close": "Bezárás",
+    "cancel": "Mégse",
+    "create": "Létrehozás",
+    "name": "Név",
+    "visibility": "Láthatóság",
+    "public": "Nyilvános",
+    "publicHint": "Bárki a munkaterületen láthatja és csatlakozhat.",
+    "private": "Privát",
+    "privateHint": "Csak a meghívott tagok látják.",
+    "search": "Keresés név vagy @handle szerint…",
+    "people": "Lehetséges címzettek",
+    "none": "Nincs találat."
   }
 }
