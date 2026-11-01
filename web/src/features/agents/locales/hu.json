@@ -386,5 +386,11 @@
     "open": "A hiba részletei",
     "title": "A hiba részletei",
     "unavailable": "A hiba részletei nem érhetők el."
+  },
+  "profile": {
+    "state": "Állapot",
+    "machine": "Gép",
+    "client": "Kliens",
+    "overview": "Áttekintés"
   }
 }

@@ -6,4 +6,5 @@ export { AgentOverviewPane } from "./components/AgentOverviewPane";
 export { AgentDialogs } from "./components/AgentDialogs";
 export { ErrorChip } from "./components/ErrorChip";
 export { StepDrawer, StepList } from "./components/StepDrawer";
+export { AgentProfileDetails } from "./components/AgentProfileDetails";
 export const AgentsPage = lazy(() => import("./pages/AgentsPage"));

@@ -46,6 +46,7 @@
   "halted": "You cannot write now: paused or stopped.",
   "reconnecting": "Reconnecting…",
   "userMenu": "User menu",
+  "myProfile": "My profile",
   "profile": "My profile",
   "theme": "Theme",
   "language": "Language",

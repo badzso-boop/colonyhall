@@ -47,6 +47,23 @@ export function useLogout() {
   });
 }
 
+/**
+ * Edits a profile (one's own; admins anyone's). The display name is not
+ * part of the API. The result replaces the actor in the cached list and,
+ * for one's own profile, in the session.
+ */
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ actorId, body }: { actorId: string; body: Schemas["UpdateActorProfileRequest"] }) =>
+      unwrap(await api.PATCH("/actors/{actorId}/profile", { params: { path: { actorId } }, body })),
+    onSuccess: (a) => {
+      qc.setQueryData<Map<string, Actor>>(identityKeys.actors, (m) => (m ? new Map(m).set(a.id, a) : m));
+      qc.setQueryData<Session>(identityKeys.session, (s) => (s && s.actor.id === a.id ? { ...s, actor: { ...s.actor, ...a } } : s));
+    },
+  });
+}
+
 /** Every actor of the workspace, by id. */
 export function useActors() {
   return useQuery({

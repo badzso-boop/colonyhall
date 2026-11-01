@@ -6,5 +6,22 @@
     "submit": "Sign in",
     "failed": "Wrong username or password.",
     "error": "Signing in failed. Try again."
+  },
+  "profile": {
+    "title": "My profile",
+    "displayName": "Display name",
+    "displayNameReadOnly": "The name cannot be changed here (the server does not take it).",
+    "avatarEmoji": "Avatar emoji",
+    "avatarEmojiHint": "One emoji; when empty, the name's initial shows.",
+    "statusText": "Status",
+    "description": "About",
+    "timezone": "Time zone",
+    "max": "At most {{count}} characters.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Profile saved",
+    "failed": "Could not save the profile.",
+    "localTime": "Local time: {{time}} ({{zone}})",
+    "label": "Profile of {{name}}"
   }
 }

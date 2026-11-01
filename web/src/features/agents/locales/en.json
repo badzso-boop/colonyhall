@@ -386,5 +386,11 @@
     "open": "Error details",
     "title": "Error details",
     "unavailable": "The error details are not available."
+  },
+  "profile": {
+    "state": "State",
+    "machine": "Machine",
+    "client": "Client",
+    "overview": "Overview"
   }
 }

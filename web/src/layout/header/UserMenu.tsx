@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { Check, Keyboard, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Keyboard, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import { languages, setLanguage } from "@/shared/i18n";
 import { applyTheme, readTheme, type Theme } from "@/shared/theme";
 import { Avatar, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/shared/ui";
-import { useLogout, useSession } from "@/features/identity";
+import { ProfileDialog, useLogout, useSession } from "@/features/identity";
 import { openOverlay } from "../overlays";
 
 const themeIcons = { system: Monitor, light: Sun, dark: Moon } as const;
@@ -16,6 +16,7 @@ export function UserMenu() {
   const logout = useLogout();
   const navigate = useNavigate();
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const [profile, setProfile] = useState(false);
   const me = session.data?.actor;
   if (!me) return null;
   const choose = (th: Theme) => {
@@ -33,7 +34,13 @@ export function UserMenu() {
         <div className="px-2 py-1.5">
           <p className="font-semibold">{me.display_name}</p>
           <p className="text-meta text-fg-muted">@{me.handle}</p>
+          {me.status_text ? <p className="mt-0.5 text-meta text-fg-muted">{me.status_text}</p> : null}
         </div>
+        {me.kind === "human" ? (
+          <MenuItem onSelect={() => setProfile(true)} icon={<UserRound aria-hidden className="size-4" />}>
+            {t("myProfile")}
+          </MenuItem>
+        ) : null}
         <MenuSeparator />
         <p className="px-2 pt-1 text-meta text-fg-subtle">{t("theme")}</p>
         {(["system", "light", "dark"] as const).map((th) => {
@@ -63,6 +70,7 @@ export function UserMenu() {
           {t("logout")}
         </MenuItem>
       </MenuContent>
+      {profile ? <ProfileDialog onClose={() => setProfile(false)} /> : null}
     </Menu>
   );
 }

@@ -148,6 +148,7 @@ export function MenuSeparator() {
 
 export const Popover = RPopover.Root;
 export const PopoverTrigger = RPopover.Trigger;
+export const PopoverAnchor = RPopover.Anchor;
 
 /** A small anchored panel (event detail, a calendar list); Esc and an outside click close it. */
 export function PopoverContent({ children, label, align = "start", className }: { children: ReactNode; label: string; align?: "start" | "center" | "end"; className?: string }) {

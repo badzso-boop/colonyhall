@@ -20,6 +20,7 @@ export {
   MenuSeparator,
   MenuTrigger,
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
   Sheet,
