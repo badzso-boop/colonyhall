@@ -199,7 +199,7 @@
       "limits": "Keretek és csatornák",
       "summary": "Összegzés"
     },
-    "banner": "🔒 Létrehozás után a gép, a kliens, a modell, a hozzáférés, a mappák és az utasítás nem módosítható. Változtatáshoz törölni kell az agentet, és újat létrehozni.",
+    "banner": "Létrehozás után a gép, a kliens, a modell, a hozzáférés, a mappák és az utasítás nem módosítható. Változtatáshoz törölni kell az agentet, és újat létrehozni.",
     "fixed": "Létrehozás után nem módosítható",
     "mutable": "utólag is módosítható",
     "handle": "Handle",

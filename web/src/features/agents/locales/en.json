@@ -199,7 +199,7 @@
       "limits": "Limits and channels",
       "summary": "Summary"
     },
-    "banner": "🔒 After creation the machine, client, model, access, folders and instructions cannot change. To change them, delete the agent and create a new one.",
+    "banner": "After creation the machine, client, model, access, folders and instructions cannot change. To change them, delete the agent and create a new one.",
     "fixed": "Cannot change after creation",
     "mutable": "can change later",
     "handle": "Handle",

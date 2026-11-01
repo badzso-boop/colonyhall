@@ -39,7 +39,7 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
   const host = hosts.data?.find((h) => h.agents.some((a) => a.agent_id === actor?.id));
   const config = host?.agents.find((a) => a.agent_id === actor?.id);
   const instructions = useAgentInstructions(actor?.id ?? "", Boolean(actor));
-  const overview = useAgentOverview(actor?.id ?? "");
+  const overview = useAgentOverview(actor?.id ?? "", Boolean(actor) && tab === "keretek");
   const archived = Boolean(actor?.archived_at);
 
   const fromActor = (): Profile => ({
@@ -56,11 +56,14 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
   const changes = (Object.keys(profile) as (keyof Profile)[]).filter((k) => profile[k] !== saved[k]);
   const dirty = changes.length > 0;
   // "Közben módosult": the agent changed elsewhere while the dialog is open.
-  const seen = useRef(JSON.stringify(saved));
+  // The first loaded version is the baseline; later differences mean a change elsewhere.
+  const seen = useRef<string | null>(null);
   const [changedElsewhere, setChangedElsewhere] = useState(false);
-  const savedKey = JSON.stringify(saved);
+  const savedKey = actor ? JSON.stringify(saved) : null;
   useEffect(() => {
-    if (seen.current !== savedKey) setChangedElsewhere(true);
+    if (savedKey === null) return;
+    if (seen.current === null) seen.current = savedKey;
+    else if (seen.current !== savedKey) setChangedElsewhere(true);
   }, [savedKey]);
 
   const [limits, setLimits] = useState<{ session: number; daily: number } | null>(null);

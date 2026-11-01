@@ -98,6 +98,8 @@ test("settings: the configuration is read-only with a copy; deleting needs the h
   const dialog = await screen.findByRole("dialog");
   expect(await within(dialog).findByText("/home/n/projects/colonyhall")).toBeTruthy();
   expect(within(dialog).queryByRole("textbox")).toBeNull();
+  // Loading the agent is not "a change elsewhere".
+  expect(within(dialog).queryByText("Közben módosult.")).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: /Utasítás/ }));
   expect((await within(dialog).findAllByText("Légy tömör.")).length).toBeGreaterThan(0);
   fireEvent.click(within(dialog).getByRole("button", { name: /Veszélyes/ }));

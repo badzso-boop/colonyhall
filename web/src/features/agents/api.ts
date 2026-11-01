@@ -16,9 +16,10 @@ export const agentKeys = {
 };
 
 /** The overview; live events patch it, otherwise it is refetched at most every 15 s. */
-export function useAgentOverview(agentId: string) {
+export function useAgentOverview(agentId: string, enabled = true) {
   return useQuery({
     queryKey: agentKeys.overview(agentId),
+    enabled: enabled && Boolean(agentId),
     refetchInterval: 15_000,
     staleTime: 15_000,
     queryFn: async () => unwrap(await api.GET("/agents/{id}/overview", { params: { path: { id: agentId } } })),
