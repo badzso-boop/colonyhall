@@ -84,9 +84,9 @@ export default function AgentsPage() {
       <button
         type="button"
         onClick={() => openOverview(r)}
-        className={cn("flex w-full flex-col gap-2 rounded-lg border border-border bg-surface p-3 pl-4 text-left hover:border-border-strong", r.state === "archived" && "opacity-70")}
-        style={{ boxShadow: r.host ? `inset 3px 0 0 ${hueVar(r.host.color)}` : undefined }}
+        className={cn("relative flex w-full flex-col gap-2 overflow-hidden rounded-lg border border-border bg-surface p-3 pl-4 text-left hover:border-border-strong", r.state === "archived" && "opacity-70")}
       >
+        {r.host ? <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: hueVar(r.host.color) }} /> : null}
         <span className="flex items-center gap-2">
           <Avatar kind="agent" name={r.actor.display_name || r.actor.handle} emoji={r.actor.avatar_emoji} ringColor={hueVar(r.actor.effective_color)} />
           <span className="min-w-0 flex-1">
