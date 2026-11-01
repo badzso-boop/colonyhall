@@ -778,6 +778,32 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Changed }
 
+  /hosts/{hostId}/fs:
+    parameters:
+      - { name: hostId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: hostFsRequest
+      tags: [hosts]
+      description: |
+        Human admins only. Relays a folder listing to the machine's guard over
+        its host WebSocket (/ws/host) and waits up to 15 s. op list_dirs with
+        an empty path lists the guard.yaml roots; otherwise the folders inside
+        `path` (absolute, within the roots). Audited (event host.fs_requested,
+        without the path). 409 with detail `host_offline` when the guard holds
+        no host WebSocket; 504 when it does not answer in time.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HostFsRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: The guard's answer, content: { application/json: { schema: { $ref: "#/components/schemas/HostDirListing" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "504": { $ref: "#/components/responses/Problem" }
+
   /agents/{agentId}/host:
     parameters:
       - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1026,6 +1052,40 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostConfig" } } } }
         "304": { description: Unchanged }
+
+  /host/fs/{requestId}:
+    parameters:
+      - { name: requestId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getHostFsRequest
+      tags: [hosts]
+      description: Guard (host token). The op and arguments of a pending host fs request; another host's request is 404.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Pending request, content: { application/json: { schema: { $ref: "#/components/schemas/HostFsPendingRequest" } } } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /host/fs/{requestId}/result:
+    parameters:
+      - { name: requestId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: postHostFsResult
+      tags: [hosts]
+      description: |
+        Guard (host token). Delivers the answer (max 1 MiB, at most 500
+        entries) to the waiting admin. Another host's request is 404; an
+        answer after the timeout is 410.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HostDirListing" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Delivered }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
 
   /host/agents/{agentId}/token:
     parameters:
@@ -2533,6 +2593,29 @@ components:
       properties:
         type: { type: string, enum: [resync_required] }
         head: { type: integer, format: int64 }
+    # WebSocket frames on /ws/host: the guard's own connection, authenticated
+    # with its host token. It carries only relay requests for that host; no
+    # events, no agent frames.
+    WsHostHello:
+      type: object
+      required: [type, token]
+      properties:
+        type: { type: string, enum: [hello] }
+        token: { type: string, description: "The host token (colh_…)." }
+    WsHostWelcome:
+      type: object
+      required: [type, protocol, host_id]
+      properties:
+        type: { type: string, enum: [welcome] }
+        protocol: { type: integer }
+        host_id: { type: string, format: uuid }
+    WsHostFsRequest:
+      type: object
+      description: Ephemeral. An admin waits for a host fs answer; the guard fetches GET /host/fs/{request_id} and posts the result.
+      required: [type, request_id]
+      properties:
+        type: { type: string, enum: [host.fs.request] }
+        request_id: { type: string }
     WsActivity:
       type: object
       description: Ephemeral (not in the event log). An agent started or stopped working in a channel or thread.
@@ -3371,6 +3454,51 @@ components:
         exit_code: { type: integer, nullable: true }
         killed_by: { type: string, nullable: true }
         duration_ms: { type: integer, format: int64 }
+
+    HostFsRequest:
+      type: object
+      required: [op]
+      properties:
+        op: { type: string, enum: [list_dirs] }
+        path: { type: string, description: "Absolute folder on the machine; empty or omitted lists the roots." }
+
+    HostFsPendingRequest:
+      type: object
+      required: [request_id, op]
+      properties:
+        request_id: { type: string }
+        op: { type: string, enum: [list_dirs] }
+        path: { type: string }
+
+    HostDirListing:
+      type: object
+      description: |
+        Folders only. With an empty `path` the entries are the guard.yaml roots
+        (`name` is then the full absolute path). `error_code` is `denied`
+        (outside the roots or a secret folder), `not_found` or
+        `not_a_directory`; entries are then empty.
+      required: [op, entries]
+      properties:
+        op: { type: string, enum: [list_dirs] }
+        path: { type: string, description: The listed folder; empty for the roots. }
+        entries:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/HostDirEntry" }
+        truncated: { type: boolean, description: More than 500 folders; the first 500 by name are listed. }
+        error_code: { type: string, enum: [denied, not_found, not_a_directory] }
+
+    HostDirEntry:
+      type: object
+      required: [name, path]
+      properties:
+        name: { type: string }
+        path: { type: string, description: Absolute path on the machine. }
+        is_git_repo: { type: boolean, description: The folder has a .git entry. }
+        has_children: { type: boolean, description: The folder has at least one subfolder (not checked for denied ones). }
+        hidden: { type: boolean, description: The name starts with a dot. }
+        denied: { type: boolean, description: "A secret-looking folder (.ssh, .gnupg, .aws, .config/colonyhall, the guard's deny list): never grantable, not listable." }
+        heavy: { type: boolean, description: "node_modules, .git, vendor, dist, …: shown collapsed." }
 
     AgentFsRequest:
       type: object

@@ -645,6 +645,72 @@ func (e HostAgentMode) Valid() bool {
 	}
 }
 
+// Defines values for HostDirListingErrorCode.
+const (
+	HostDirListingErrorCodeDenied        HostDirListingErrorCode = "denied"
+	HostDirListingErrorCodeNotADirectory HostDirListingErrorCode = "not_a_directory"
+	HostDirListingErrorCodeNotFound      HostDirListingErrorCode = "not_found"
+)
+
+// Valid indicates whether the value is a known member of the HostDirListingErrorCode enum.
+func (e HostDirListingErrorCode) Valid() bool {
+	switch e {
+	case HostDirListingErrorCodeDenied:
+		return true
+	case HostDirListingErrorCodeNotADirectory:
+		return true
+	case HostDirListingErrorCodeNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostDirListingOp.
+const (
+	HostDirListingOpListDirs HostDirListingOp = "list_dirs"
+)
+
+// Valid indicates whether the value is a known member of the HostDirListingOp enum.
+func (e HostDirListingOp) Valid() bool {
+	switch e {
+	case HostDirListingOpListDirs:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostFsPendingRequestOp.
+const (
+	HostFsPendingRequestOpListDirs HostFsPendingRequestOp = "list_dirs"
+)
+
+// Valid indicates whether the value is a known member of the HostFsPendingRequestOp enum.
+func (e HostFsPendingRequestOp) Valid() bool {
+	switch e {
+	case HostFsPendingRequestOpListDirs:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostFsRequestOp.
+const (
+	HostFsRequestOpListDirs HostFsRequestOp = "list_dirs"
+)
+
+// Valid indicates whether the value is a known member of the HostFsRequestOp enum.
+func (e HostFsRequestOp) Valid() bool {
+	switch e {
+	case HostFsRequestOpListDirs:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HostPreviewState.
 const (
 	HostPreviewStateFailed    HostPreviewState = "failed"
@@ -2178,6 +2244,71 @@ type HostConfig struct {
 	Version  string         `json:"version"`
 }
 
+// HostDirEntry defines model for HostDirEntry.
+type HostDirEntry struct {
+	// Denied A secret-looking folder (.ssh, .gnupg, .aws, .config/colonyhall, the guard's deny list): never grantable, not listable.
+	Denied *bool `json:"denied,omitempty"`
+
+	// HasChildren The folder has at least one subfolder (not checked for denied ones).
+	HasChildren *bool `json:"has_children,omitempty"`
+
+	// Heavy node_modules, .git, vendor, dist, …: shown collapsed.
+	Heavy *bool `json:"heavy,omitempty"`
+
+	// Hidden The name starts with a dot.
+	Hidden *bool `json:"hidden,omitempty"`
+
+	// IsGitRepo The folder has a .git entry.
+	IsGitRepo *bool  `json:"is_git_repo,omitempty"`
+	Name      string `json:"name"`
+
+	// Path Absolute path on the machine.
+	Path string `json:"path"`
+}
+
+// HostDirListing Folders only. With an empty `path` the entries are the guard.yaml roots
+// (`name` is then the full absolute path). `error_code` is `denied`
+// (outside the roots or a secret folder), `not_found` or
+// `not_a_directory`; entries are then empty.
+type HostDirListing struct {
+	Entries   []HostDirEntry           `json:"entries"`
+	ErrorCode *HostDirListingErrorCode `json:"error_code,omitempty"`
+	Op        HostDirListingOp         `json:"op"`
+
+	// Path The listed folder; empty for the roots.
+	Path *string `json:"path,omitempty"`
+
+	// Truncated More than 500 folders; the first 500 by name are listed.
+	Truncated *bool `json:"truncated,omitempty"`
+}
+
+// HostDirListingErrorCode defines model for HostDirListing.ErrorCode.
+type HostDirListingErrorCode string
+
+// HostDirListingOp defines model for HostDirListing.Op.
+type HostDirListingOp string
+
+// HostFsPendingRequest defines model for HostFsPendingRequest.
+type HostFsPendingRequest struct {
+	Op        HostFsPendingRequestOp `json:"op"`
+	Path      *string                `json:"path,omitempty"`
+	RequestId string                 `json:"request_id"`
+}
+
+// HostFsPendingRequestOp defines model for HostFsPendingRequest.Op.
+type HostFsPendingRequestOp string
+
+// HostFsRequest defines model for HostFsRequest.
+type HostFsRequest struct {
+	Op HostFsRequestOp `json:"op"`
+
+	// Path Absolute folder on the machine; empty or omitted lists the roots.
+	Path *string `json:"path,omitempty"`
+}
+
+// HostFsRequestOp defines model for HostFsRequest.Op.
+type HostFsRequestOp string
+
 // HostList defines model for HostList.
 type HostList struct {
 	Hosts []Host `json:"hosts"`
@@ -3330,6 +3461,9 @@ type OpenDMJSONRequestBody = OpenDMRequest
 // SetGitMappingJSONRequestBody defines body for SetGitMapping for application/json ContentType.
 type SetGitMappingJSONRequestBody = SetGitRepoMappingRequest
 
+// PostHostFsResultJSONRequestBody defines body for PostHostFsResult for application/json ContentType.
+type PostHostFsResultJSONRequestBody = HostDirListing
+
 // HostReportPreviewJSONRequestBody defines body for HostReportPreview for application/json ContentType.
 type HostReportPreviewJSONRequestBody = HostPreviewReport
 
@@ -3341,6 +3475,9 @@ type EnrollHostJSONRequestBody = EnrollRequest
 
 // UpdateHostJSONRequestBody defines body for UpdateHost for application/json ContentType.
 type UpdateHostJSONRequestBody = UpdateHostRequest
+
+// HostFsRequestJSONRequestBody defines body for HostFsRequest for application/json ContentType.
+type HostFsRequestJSONRequestBody = HostFsRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest

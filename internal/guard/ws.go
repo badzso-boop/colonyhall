@@ -31,7 +31,10 @@ func wsBackoff(attempt int) time.Duration {
 }
 
 // wsURL converts a base server URL (http:// or https://) into a WebSocket URL for /ws/ui.
-func wsURL(baseURL string) (string, error) {
+func wsURL(baseURL string) (string, error) { return wsURLPath(baseURL, "/ws/ui") }
+
+// wsURLPath converts a base server URL into a WebSocket URL for path.
+func wsURLPath(baseURL, path string) (string, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("guard: invalid server URL: %w", err)
@@ -46,7 +49,7 @@ func wsURL(baseURL string) (string, error) {
 	default:
 		return "", fmt.Errorf("guard: unsupported URL scheme %q for websocket", u.Scheme)
 	}
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/ws/ui"
+	u.Path = strings.TrimSuffix(u.Path, "/") + path
 	return u.String(), nil
 }
 

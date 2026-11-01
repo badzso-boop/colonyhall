@@ -192,6 +192,8 @@ type App struct {
 	Delegation   *delegation.Service
 	Runs         *runs.Service
 	Gateway      *gateway.Gateway
+	HostGateway  *gateway.HostGateway
+	HostFs       *hosts.FsRelay
 	logger       *slog.Logger
 	calRefresh   time.Duration
 	Consumers    []*eventlog.Consumer
@@ -458,6 +460,12 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	delhttp.Register(mux, dlSvc, idSvc)
 	audhttp.Register(mux, auSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
+	// Host-level folder listing: the guard's own WebSocket (host token)
+	// carries host.fs.request frames; see docs/handoff/33-host-fs-relay-notes.md.
+	hostGw := &gateway.HostGateway{Auth: hoSvc, Logger: opt.Logger}
+	hostFs := &hosts.FsRelay{Hosts: hoSvc, Pusher: hostGw}
+	hosthttp.RegisterFs(mux, hoSvc, hostFs, idSvc)
+	mux.Handle("GET /ws/host", hostGw)
 	wikihttp.Register(mux, wiSvc, idSvc)
 	previewhttp.Register(mux, prSvc, idSvc, hoSvc)
 	schedhttp.Register(mux, scSvc, idSvc)
@@ -581,6 +589,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Delegation:   dgSvc,
 		Runs:         ruSvc,
 		Gateway:      gw,
+		HostGateway:  hostGw,
+		HostFs:       hostFs,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

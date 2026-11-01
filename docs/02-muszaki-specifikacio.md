@@ -874,6 +874,12 @@ Az agentek a válaszaikban gyakran hivatkoznak a gépükön lévő helyi fájlok
   - Chat megjelenítés: `📄 server.go:42-58` chipként, kattintásra a fájlböngésző panel megnyitása és a sorok kijelölése/középre görgetése (`revealLinesInCenter`). A Go és JS `FileLinks` felismeri a sorvégződéseket.
   - Szerkesztő: vendored Monaco Editor 0.52.2 (`min/vs`, 14 MB), igény szerinti betöltés AMD loaderrel az első panelnyitáskor, csak olvasható mód, beépített nyelvi tokenizálók (Monarch), témaszinkronizáció, sortörés, Markdown Formázott/Nyers kapcsoló, képmegjelenítés, Range fej/láb nézet >2 MB fájlokra.
 
+### Gépszintű mappalistázás (33. kör, `feature/host-fs-relay`)
+
+- `POST /api/v1/hosts/{hostId}/fs` `{op: "list_dirs", path?}`: csak emberi admin; üres `path` = a `guard.yaml` gyökerei. Audit: `host.fs_requested` `{host_id, op}`, útvonal nélkül. 15 mp → 504; nincs élő gépkapcsolat vagy visszavont gép → 409 `detail: "host_offline"`.
+- Szállítás: az őr saját, géptokennel hitelesített WebSocketje (`/ws/host`: `hello {token}` → `welcome {host_id}`; a szerver csak `host.fs.request {request_id}` keretet küld rajta). Az őr `GET /api/v1/host/fs/{id}`, majd `POST /api/v1/host/fs/{id}/result` (géptoken; más gép kérése 404, késői válasz 410).
+- Őr (`internal/guard/hostfs.go`): csak a gyökereken belül, csak mappák, kifelé mutató symlink nem követve, max. 500 elem (`truncated`), elemenként `is_git_repo`, `has_children`, `hidden`, `heavy`, a titkos mappák `denied: true` jelöléssel. Részletek és indoklás: `docs/handoff/33-host-fs-relay-notes.md`.
+
 ### Ágens terminálok (23. kör, `feature/agent-terminals`)
 
 A funkció célja, hogy a teljes hozzáférésű agentek elnevezett, hosszú futásidejű parancsokat indíthassanak (pl. WSL cross-distribution build, 45 perces fordítások), amelyek túlélik az agent közvetlen futási idejét (`work_timeout`, 15 perc) és a folyamatcsoport terminálását (`Setpgid` + `kill(-pgid)`). A parancs végeztével az őr automatikusan felébreszti az agentet, miközben az ember a webes felületen élőben olvashatja a kimenetet, leállíthatja a folyamatot, vagy SSH-n keresztül rácsatlakozhat.
