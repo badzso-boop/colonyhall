@@ -168,6 +168,7 @@ func (s *Supervisor) RunHost(ctx context.Context) error {
 	}
 	s.Log.Info("guard: host mode", "server", s.Cfg.Server, "roots", strings.Join(s.roots, ","), "sandbox", sandbox, "sandbox_network", s.Cfg.SandboxNetwork)
 	s.report(ctx)
+	go s.hostWS().Run(ctx)
 	t := time.NewTicker(s.Cfg.ConfigPoll)
 	defer t.Stop()
 	for {
@@ -179,6 +180,13 @@ func (s *Supervisor) RunHost(ctx context.Context) error {
 		case <-t.C:
 		}
 	}
+}
+
+// hostWS is the guard's own WebSocket (host token) for host-level folder
+// listings; the deny rules are the same as for the agents of this machine.
+func (s *Supervisor) hostWS() *HostWS {
+	return &HostWS{Client: s.host, Log: s.Log, Scope: HostFsScope{Roots: s.roots, Home: s.home,
+		DenyFiles: []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile}, ExchangeDir: s.Cfg.ExchangeDir}}
 }
 
 func (s *Supervisor) sync(ctx context.Context) {

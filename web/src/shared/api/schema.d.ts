@@ -814,6 +814,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hosts/{hostId}/fs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Human admins only. Relays a folder listing to the machine's guard over
+         *     its host WebSocket (/ws/host) and waits up to 15 s. op list_dirs with
+         *     an empty path lists the guard.yaml roots; otherwise the folders inside
+         *     `path` (absolute, within the roots). Audited (event host.fs_requested,
+         *     without the path). 409 with detail `host_offline` when the guard holds
+         *     no host WebSocket; 504 when it does not answer in time.
+         */
+        post: operations["hostFsRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/host": {
         parameters: {
             query?: never;
@@ -1027,6 +1053,48 @@ export interface paths {
         get: operations["hostConfig"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/fs/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Guard (host token). The op and arguments of a pending host fs request; another host's request is 404. */
+        get: operations["getHostFsRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/fs/{requestId}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Guard (host token). Delivers the answer (max 1 MiB, at most 500
+         *     entries) to the waiting admin. Another host's request is 404; an
+         *     answer after the timeout is 410.
+         */
+        post: operations["postHostFsResult"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2541,6 +2609,25 @@ export interface components {
             /** Format: int64 */
             head: number;
         };
+        WsHostHello: {
+            /** @enum {string} */
+            type: "hello";
+            /** @description The host token (colh_…). */
+            token: string;
+        };
+        WsHostWelcome: {
+            /** @enum {string} */
+            type: "welcome";
+            protocol: number;
+            /** Format: uuid */
+            host_id: string;
+        };
+        /** @description Ephemeral. An admin waits for a host fs answer; the guard fetches GET /host/fs/{request_id} and posts the result. */
+        WsHostFsRequest: {
+            /** @enum {string} */
+            type: "host.fs.request";
+            request_id: string;
+        };
         /** @description Ephemeral (not in the event log). An agent started or stopped working in a channel or thread. */
         WsActivity: {
             /** @enum {string} */
@@ -3407,6 +3494,50 @@ export interface components {
             killed_by?: string | null;
             /** Format: int64 */
             duration_ms: number;
+        };
+        HostFsRequest: {
+            /** @enum {string} */
+            op: "list_dirs";
+            /** @description Absolute folder on the machine; empty or omitted lists the roots. */
+            path?: string;
+        };
+        HostFsPendingRequest: {
+            request_id: string;
+            /** @enum {string} */
+            op: "list_dirs";
+            path?: string;
+        };
+        /**
+         * @description Folders only. With an empty `path` the entries are the guard.yaml roots
+         *     (`name` is then the full absolute path). `error_code` is `denied`
+         *     (outside the roots or a secret folder), `not_found` or
+         *     `not_a_directory`; entries are then empty.
+         */
+        HostDirListing: {
+            /** @enum {string} */
+            op: "list_dirs";
+            /** @description The listed folder; empty for the roots. */
+            path?: string;
+            entries: components["schemas"]["HostDirEntry"][];
+            /** @description More than 500 folders; the first 500 by name are listed. */
+            truncated?: boolean;
+            /** @enum {string} */
+            error_code?: "denied" | "not_found" | "not_a_directory";
+        };
+        HostDirEntry: {
+            name: string;
+            /** @description Absolute path on the machine. */
+            path: string;
+            /** @description The folder has a .git entry. */
+            is_git_repo?: boolean;
+            /** @description The folder has at least one subfolder (not checked for denied ones). */
+            has_children?: boolean;
+            /** @description The name starts with a dot. */
+            hidden?: boolean;
+            /** @description A secret-looking folder (.ssh, .gnupg, .aws, .config/colonyhall, the guard's deny list): never grantable, not listable. */
+            denied?: boolean;
+            /** @description node_modules, .git, vendor, dist, …: shown collapsed. */
+            heavy?: boolean;
         };
         AgentFsRequest: {
             /** Format: uuid */
@@ -5360,6 +5491,39 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    hostFsRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostFsRequest"];
+            };
+        };
+        responses: {
+            /** @description The guard's answer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostDirListing"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     assignAgent: {
         parameters: {
             query?: never;
@@ -5703,6 +5867,60 @@ export interface operations {
                 };
                 content?: never;
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getHostFsRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostFsPendingRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    postHostFsResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostDirListing"];
+            };
+        };
+        responses: {
+            /** @description Delivered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
