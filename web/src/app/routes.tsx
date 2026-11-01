@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router";
 import { ConversationPage } from "@/features/conversation";
 import { DecisionsPage } from "@/features/decisions";
 import { DesignPage } from "@/features/design";
+import { HostsPage } from "@/features/hosts";
 import { LoginPage } from "@/features/identity";
 import { LeasesPage } from "@/features/leases";
 import { NotesPage } from "@/features/notes";
@@ -38,6 +39,8 @@ export function AppRoutes() {
         <Route path="leases" element={<LeasesPage />} />
         <Route path="rules" element={<RulesPage />} />
         <Route path="decisions" element={<DecisionsPage />} />
+        <Route path="hosts" element={<HostsPage />} />
+        <Route path="hosts/:hostId" element={<HostsPage />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

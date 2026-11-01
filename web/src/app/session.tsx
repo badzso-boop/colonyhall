@@ -5,6 +5,7 @@ import { ApiError, WsClient, onUnauthorized, wsURL } from "@/shared/api";
 import { registerAdminEvents } from "@/features/admin";
 import { registerAgentEvents } from "@/features/agents";
 import { registerConversationEvents } from "@/features/conversation";
+import { registerHostEvents } from "@/features/hosts";
 import { registerIdentityEvents, useSession } from "@/features/identity";
 import { registerLeaseEvents } from "@/features/leases";
 import { registerPlannerEvents } from "@/features/planner";
@@ -43,6 +44,7 @@ function useLiveUpdates(enabled: boolean) {
       registerWikiEvents(qc),
       registerLeaseEvents(qc),
       registerRulesEvents(qc),
+      registerHostEvents(qc),
     ];
     const ws = new WsClient(wsURL());
     ws.start();
