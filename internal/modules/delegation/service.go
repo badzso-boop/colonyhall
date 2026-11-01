@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -218,11 +219,65 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 			continue
 		}
 
+		// A reply is not a task: the full-access agent asked the author here
+		// first (Norbi's decision, 2026-11-01), so the answer goes through.
+		if replied, err := s.answersRequest(ctx, ch, msgID, author.ID, rec.Actor.ID, st, now); err != nil {
+			return err
+		} else if replied {
+			err = s.deliver(ctx, delivery.Delivery{
+				ID:          s.IDs.New(),
+				WorkspaceID: e.WorkspaceID,
+				RecipientID: rec.Actor.ID,
+				ItemKind:    delivery.ItemMessage,
+				ItemID:      msgID,
+				ChannelID:   ch.ID,
+				FromActorID: author.ID,
+				Flags:       rec.Flags,
+				EventSeq:    e.Seq,
+				CreatedAt:   now,
+			})
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
 		if err := s.createDelegationAndQuestion(ctx, e, p, author, rec.Actor, ch, msgID, conv); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// answersRequest reports whether the message answers the recipient: in the
+// same unit (the thread, else the DM's or channel's main stream), within
+// the grant's idle window, the recipient wrote to the author before it (a
+// DM between them, or a message mentioning the author).
+func (s *Service) answersRequest(ctx context.Context, ch conversation.Channel, msgID, authorID, recipientID ids.ID, st Settings, now time.Time) (bool, error) {
+	msg, err := s.Conversation.MessageByID(ctx, msgID)
+	if err != nil {
+		return false, err
+	}
+	units := []ids.ID{msg.ThreadRootID}
+	if msg.ThreadRootID != ids.Nil && ch.Kind == conversation.KindDM {
+		units = append(units, ids.Nil) // a DM is one conversation, threads included
+	}
+	window := time.Duration(st.GrantIdleMinutes) * time.Minute
+	for _, unit := range units {
+		list, err := s.Conversation.MessagesInUnit(ctx, ch.ID, unit)
+		if err != nil {
+			return false, err
+		}
+		for _, m := range list {
+			if m.AuthorID != recipientID || m.DeletedAt != nil || m.ID == msgID || !m.CreatedAt.Before(msg.CreatedAt) || now.Sub(m.CreatedAt) > window {
+				continue
+			}
+			if ch.Kind == conversation.KindDM || slices.Contains(m.Mentions, authorID) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (s *Service) createDelegationAndQuestion(ctx context.Context, e eventlog.Event, p conversation.MessageCreated, fromAgent, toAgent identity.Actor, ch conversation.Channel, msgID ids.ID, conv ConversationKey) error {
