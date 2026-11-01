@@ -3,7 +3,7 @@ import { NavLink } from "react-router";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { openWindow } from "@/shared/windows";
-import { ConversationList } from "@/features/conversation";
+import { ConversationList, ThreadsEntry } from "@/features/conversation";
 import { useSession } from "@/features/identity";
 import { pages } from "./pages";
 
@@ -15,7 +15,8 @@ export function Sidebar() {
   const admin = role === "owner" || role === "admin";
   return (
     <div className="flex h-full flex-col overflow-y-auto px-2 pt-2 pb-6">
-      <p className="px-1 text-meta font-semibold tracking-wide text-fg-subtle uppercase">{t("workspace")}</p>
+      <ThreadsEntry />
+      <p className="mt-3 px-1 text-meta font-semibold tracking-wide text-fg-subtle uppercase">{t("workspace")}</p>
       <ul className="mt-1 flex flex-col gap-px">
         {pages
           .filter((p) => !p.adminOnly || admin)

@@ -30,3 +30,21 @@ test("a live message is appended once; a reply bumps its root and the open threa
   expect(thread.root.reply_count).toBe(1);
   off();
 });
+
+test("channel edits refetch the sidebar and the members; a reply refetches Szálaim", () => {
+  const qc = new QueryClient();
+  const off = registerConversationEvents(qc);
+  const spy = vi.spyOn(qc, "invalidateQueries");
+  const ev = (event_type: string, data: Record<string, unknown>) => dispatch({ type: "event", seq: 2, event_type, actor_id: "x", at: "", data });
+
+  ev("channel.updated", { channel_id: "c1", fields: ["description"] });
+  ev("channel.archived", { channel_id: "c1", name: "ops" });
+  const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+  expect(keys).toContain(JSON.stringify(conversationKeys.channels));
+  expect(keys).toContain(JSON.stringify(conversationKeys.members("c1")));
+
+  spy.mockClear();
+  dispatch(created("r2", { thread_root_id: "root" }));
+  expect(spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))).toContain(JSON.stringify(["conversation", "myThreads"]));
+  off();
+});

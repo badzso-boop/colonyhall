@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { localeOf } from "@/shared/i18n";
 import { usePanes } from "@/shared/panes";
 import { EmptyState, IconButton, Skeleton } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
-import { useChannels, useThread } from "../api";
+import { useChannels, useMarkThreadRead, useThread } from "../api";
 import { useAttachments } from "../attachments";
 import { openAgent, openFiles } from "../workPanes";
 import { ActivityLine } from "./ActivityLine";
@@ -28,6 +28,18 @@ export function ThreadPane({ rootId }: { rootId: string }) {
   const channel = channels.data?.find((c) => c.id === channelId);
   const handles = useMemo(() => new Set([...(actors.data?.values() ?? [])].map((a) => a.handle)), [actors.data]);
   const memberIds = useMemo(() => new Set(channel?.member_ids ?? []), [channel]);
+  // "Szálaim": seeing the thread to its end marks it read (debounced, like the channel read).
+  const markRead = useMarkThreadRead();
+  const human = session.data?.actor.kind === "human";
+  const lastReply = thread.data?.replies.at(-1)?.id;
+  const rootLoaded = thread.data?.root.id;
+  useEffect(() => {
+    if (!human || !rootLoaded || !lastReply) return;
+    const id = window.setTimeout(() => markRead.mutate(rootLoaded), 1000);
+    return () => window.clearTimeout(id);
+    // markRead is a fresh object each render; the ids are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [human, rootLoaded, lastReply]);
 
   const header = (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
@@ -62,7 +74,7 @@ export function ThreadPane({ rootId }: { rootId: string }) {
         ))}
       </div>
       <ActivityLine channelId={channelId} threadRootId={rootId} actors={actors.data} />
-      <Composer channelId={channelId} threadRootId={rootId} placeholder={t("composer.threadPlaceholder")} memberIds={memberIds} tray={tray} />
+      <Composer channelId={channelId} threadRootId={rootId} placeholder={t("composer.threadPlaceholder")} memberIds={memberIds} tray={tray} readOnly={Boolean(channel?.archived_at)} />
     </DropZone>
   );
 }

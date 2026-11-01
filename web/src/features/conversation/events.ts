@@ -25,6 +25,13 @@ function fromEvent(e: AppEvent<"message.created">): Message {
 export function registerConversationEvents(qc: QueryClient): () => void {
   const channels = () => void qc.invalidateQueries({ queryKey: conversationKeys.channels });
   const reloadChannel = (channelId: string) => void qc.invalidateQueries({ queryKey: conversationKeys.messages(channelId) });
+  const threads = () => void qc.invalidateQueries({ queryKey: ["conversation", "myThreads"] });
+  // A rename, description, archive or membership change: the sidebar, the header and open dialogs refetch.
+  const channelChanged = (channelId: string) => {
+    channels();
+    void qc.invalidateQueries({ queryKey: conversationKeys.members(channelId) });
+    void qc.invalidateQueries({ queryKey: conversationKeys.archived });
+  };
 
   const offs = [
     onEvent("message.created", (e) => {
@@ -42,6 +49,7 @@ export function registerConversationEvents(qc: QueryClient): () => void {
         );
       }
       channels();
+      if (m.thread_root_id) threads();
     }),
     onEvent("message.retracted", (e) => {
       reloadChannel(e.data.channel_id);
@@ -50,8 +58,19 @@ export function registerConversationEvents(qc: QueryClient): () => void {
     onEvent("reaction.added", (e) => reloadChannel(e.data.channel_id)),
     onEvent("reaction.removed", (e) => reloadChannel(e.data.channel_id)),
     onEvent("channel.created", channels),
-    onEvent("channel.member_added", channels),
-    onEvent("channel.member_removed", channels),
+    onEvent("channel.member_added", (e) => channelChanged(e.data.channel_id)),
+    onEvent("channel.member_removed", (e) => {
+      channelChanged(e.data.channel_id);
+      threads();
+    }),
+    onEvent("channel.updated", (e) => channelChanged(e.data.channel_id)),
+    onEvent("channel.archived", (e) => channelChanged(e.data.channel_id)),
+    onEvent("channel.unarchived", (e) => channelChanged(e.data.channel_id)),
+    // Only the viewer's own mutes arrive (their other tabs).
+    onEvent("channel.mute_changed", () => {
+      channels();
+      threads();
+    }),
     onResync(() => void qc.invalidateQueries({ queryKey: ["conversation"] })),
   ];
   return () => offs.forEach((off) => off());

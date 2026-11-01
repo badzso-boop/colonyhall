@@ -5,4 +5,6 @@ export { ConversationList, useConversationOrder, useMentionTotal } from "./compo
 export { ThreadPane } from "./components/ThreadPane";
 export { registerConversationEvents } from "./events";
 export { buildSidebar, classifyConversation, conversationTitle, type Channel, type ConversationKind } from "./model";
+export { ThreadsEntry } from "./components/ThreadsEntry";
 export const ConversationPage = lazy(() => import("./pages/ConversationPage"));
+export const ThreadsPage = lazy(() => import("./pages/ThreadsPage"));

@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Hash, Lock, Search } from "lucide-react";
-import { useActors, type Actor } from "@/features/identity";
+import { useActors, useSession, type Actor } from "@/features/identity";
 import { api, unwrap } from "@/shared/api";
 import { cn, fuzzyScore, hueVar } from "@/shared/lib";
-import { Avatar, Button, Dialog, Input, toast } from "@/shared/ui";
+import { Avatar, Button, Dialog, Input, Textarea, toast } from "@/shared/ui";
 import { conversationKeys } from "../api";
+import { MAX_DESCRIPTION, validChannelName } from "../channel";
+import { MemberChecklist } from "./MemberPicker";
 
 export type NewConversationKind = "channel" | "dm" | "agentDm";
 
@@ -31,6 +33,11 @@ export function NewConversationDialog({ kind, meId, onClose }: { kind: NewConver
   const [query, setQuery] = useState("");
   const [name, setName] = useState("");
   const [isPrivate, setPrivate] = useState(false);
+  const [description, setDescription] = useState("");
+  const [members, setMembers] = useState<string[]>([]);
+  const role = useSession().data?.actor.role;
+  // Adding members is for admins (the server refuses it too).
+  const admin = role === "owner" || role === "admin";
   const done = (id: string) => {
     void qc.invalidateQueries({ queryKey: conversationKeys.channels });
     onClose();
@@ -42,7 +49,17 @@ export function NewConversationDialog({ kind, meId, onClose }: { kind: NewConver
     onError: (e) => toast(e.message, { tone: "danger" }),
   });
   const createChannel = useMutation({
-    mutationFn: async () => unwrap(await api.POST("/channels", { body: { name: name.trim(), kind: isPrivate ? "private" : "public" } })),
+    mutationFn: async () =>
+      unwrap(
+        await api.POST("/channels", {
+          body: {
+            name: name.trim(),
+            kind: isPrivate ? "private" : "public",
+            ...(description.trim() ? { description: description.trim() } : {}),
+            ...(members.length ? { member_ids: members } : {}),
+          },
+        }),
+      ),
     onSuccess: (ch) => done(ch.id),
     onError: (e) => toast(e.message, { tone: "danger" }),
   });
@@ -61,7 +78,7 @@ export function NewConversationDialog({ kind, meId, onClose }: { kind: NewConver
             <Button variant="ghost" onClick={onClose}>
               {t("new.cancel")}
             </Button>
-            <Button variant="primary" disabled={!name.trim()} loading={createChannel.isPending} onClick={() => createChannel.mutate()}>
+            <Button variant="primary" disabled={!validChannelName(name.trim()) || description.length > MAX_DESCRIPTION} loading={createChannel.isPending} onClick={() => createChannel.mutate()}>
               {t("new.create")}
             </Button>
           </>
@@ -70,7 +87,8 @@ export function NewConversationDialog({ kind, meId, onClose }: { kind: NewConver
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-meta font-semibold text-fg-muted">{t("new.name")}</span>
-            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="pl. trader" />
+            <Input autoFocus value={name} onChange={(e) => setName(e.target.value.toLowerCase())} maxLength={32} placeholder="pl. trader" aria-invalid={name !== "" && !validChannelName(name.trim())} />
+            {name !== "" && !validChannelName(name.trim()) ? <span className="text-meta text-danger">{t("channel.nameRule")}</span> : null}
           </label>
           <div role="radiogroup" aria-label={t("new.visibility")} className="flex gap-2">
             {[false, true].map((p) => (
@@ -90,6 +108,26 @@ export function NewConversationDialog({ kind, meId, onClose }: { kind: NewConver
               </button>
             ))}
           </div>
+          <label className="flex flex-col gap-1">
+            <span className="flex text-meta font-semibold text-fg-muted">
+              <span className="flex-1">{t("channel.description")}</span>
+              <span className={description.length > MAX_DESCRIPTION ? "text-danger" : "tabular-nums"}>
+                {description.length}/{MAX_DESCRIPTION}
+              </span>
+            </span>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          </label>
+          {admin ? (
+            <section aria-label={t("channel.members.initial")} className="flex flex-col gap-1">
+              <span className="text-meta font-semibold text-fg-muted">{t("channel.members.initial")}</span>
+              <MemberChecklist
+                actors={[...(actors.data?.values() ?? [])]}
+                selected={members}
+                exclude={[meId]}
+                onToggle={(id) => setMembers((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]))}
+              />
+            </section>
+          ) : null}
         </div>
       </Dialog>
     );

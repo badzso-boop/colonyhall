@@ -11,6 +11,10 @@ export type EventPayloads = {
   "channel.created": S["EventChannelCreated"];
   "channel.member_added": S["EventMemberAdded"];
   "channel.member_removed": S["EventMemberRemoved"];
+  "channel.updated": S["EventChannelUpdated"];
+  "channel.archived": S["EventChannelArchived"];
+  "channel.unarchived": S["EventChannelArchived"];
+  "channel.mute_changed": S["EventMuteChanged"];
   "actor.created": S["EventActorCreated"];
   "actor.state_changed": S["EventActorStateChanged"];
   "actor.profile_updated": S["EventActorProfileUpdated"];

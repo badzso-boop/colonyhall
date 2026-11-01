@@ -1,14 +1,16 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "react-router";
-import { Hash, Lock } from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useShortcut } from "@/shared/lib";
 import { usePanes } from "@/shared/panes";
-import { EmptyState, Skeleton } from "@/shared/ui";
+import { EmptyState, Skeleton, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
 import { useChannels, useMembers } from "../api";
 import { useAttachments } from "../attachments";
+import { isChannelTab, type ChannelTab } from "../channel";
 import { ActivityLine } from "../components/ActivityLine";
+import { ArchivedBar, ChannelHeader } from "../components/ChannelHeader";
+import { ChannelSettingsDialog } from "../components/ChannelSettingsDialog";
 import { Composer } from "../components/Composer";
 import { DropZone } from "../components/DropZone";
 import { Feed } from "../components/Feed";
@@ -31,6 +33,20 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
   const mine = members.data?.find((m) => m.actor_id === meId);
   // Read only: an observer, or a member without write access (admins observing a DM can write).
   const readOnly = session.data?.actor.role === "observer" || (mine !== undefined && !mine.can_write);
+  const role = session.data?.actor.role;
+  const admin = role === "owner" || role === "admin";
+  const [params, setParams] = useSearchParams();
+  const settingsTab = params.get("channel-settings");
+  const setSettings = (tab: ChannelTab | null) =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        if (tab) next.set("channel-settings", tab);
+        else next.delete("channel-settings");
+        return next;
+      },
+      { replace: tab !== null && settingsTab !== null },
+    );
 
   useShortcut("mod+shift+f", "conversation", "files", () => agent && dispatch(openFiles(agent.id)), Boolean(agent));
   // Ctrl+Shift+T is the browser's "reopen tab" and cannot be taken: X for terminals.
@@ -50,14 +66,12 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
 
   return (
     <DropZone onFiles={tray.add} className="flex h-full min-h-0 flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
-        {channel.kind === "private" ? <Lock aria-hidden className="size-4 text-fg-subtle" /> : null}
-        {channel.kind === "public" ? <Hash aria-hidden className="size-4 text-fg-subtle" /> : null}
-        <h1 className="text-title font-semibold whitespace-nowrap">{title}</h1>
-        {channel.description ? <p className="min-w-0 flex-1 truncate text-ui text-fg-muted">{channel.description}</p> : null}
-      </header>
+      <ChannelHeader channel={channel} title={title} actors={actors} admin={admin} onSettings={setSettings} />
       <Feed key={channel.id} channel={channel} actors={actors} meId={meId} handlers={handlers} />
       <ActivityLine channelId={channel.id} actors={actors} />
+      {channel.archived_at ? (
+        <ArchivedBar channel={channel} admin={admin} />
+      ) : (
       <Composer
         channelId={channel.id}
         placeholder={t("composer.placeholder", { name: channel.kind === "dm" ? title : `#${title}` })}
@@ -67,6 +81,10 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
         onOpenFiles={agent ? () => dispatch(openFiles(agent.id)) : undefined}
         onOpenTerminals={agent ? () => dispatch(openTerminals(agent.id)) : undefined}
       />
+      )}
+      {isChannelTab(settingsTab) && channel.kind !== "dm" ? (
+        <ChannelSettingsDialog key={channel.id} channel={channel} actors={actors} admin={admin} tab={settingsTab} onTab={setSettings} onClose={() => setSettings(null)} />
+      ) : null}
     </DropZone>
   );
 }
@@ -78,7 +96,27 @@ export default function ConversationPage() {
   const actors = useActors();
   const session = useSession();
   const channel = channels.data?.find((c) => c.id === channelId);
+  useLeftChannelToast(channelId, channel);
   if (channels.data && !channel) return <EmptyState title={t("notFound")} />;
   if (!channel || !actors.data || !session.data) return <Skeleton className="m-4 h-6 w-1/3" />;
   return <Conversation key={channel.id} channel={channel} actors={actors.data} meId={session.data.actor.id} />;
+}
+
+/**
+ * The viewer was removed from the open channel (it disappears from their
+ * list, or an admin stops being a member): a toast, and out to the start page.
+ */
+function useLeftChannelToast(channelId: string, channel: Channel | undefined) {
+  const { t } = useTranslation("conversation");
+  const navigate = useNavigate();
+  const wasMember = useRef<{ id: string; member: boolean } | null>(null);
+  useEffect(() => {
+    const prev = wasMember.current?.id === channelId ? wasMember.current : null;
+    wasMember.current = channel ? { id: channelId, member: channel.is_member } : prev;
+    if (!prev?.member || channel?.is_member) return;
+    if (channel?.kind === "dm") return;
+    wasMember.current = null;
+    toast(t("channel.removedYou"));
+    navigate("/");
+  }, [channelId, channel, navigate, t]);
 }

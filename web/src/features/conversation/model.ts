@@ -1,4 +1,5 @@
 import type { Schemas } from "@/shared/api";
+import { isMuted } from "./channel";
 
 export type Channel = Schemas["Channel"];
 export type Actor = Schemas["Actor"];
@@ -84,12 +85,16 @@ export function buildSidebar(channels: Channel[], sections: Section[], actors: M
   return out;
 }
 
-/** Unread rows count once each; mentions add up. Used for collapsed groups and the tab title. */
-export function unreadTotals(rows: SidebarRow[]): { unread: number; mentions: number } {
+/**
+ * Unread rows count once each; mentions add up. Used for collapsed groups and
+ * the tab title. A muted conversation's unread messages do not count; its
+ * mentions of the viewer still do (round 34).
+ */
+export function unreadTotals(rows: SidebarRow[], now = new Date()): { unread: number; mentions: number } {
   let unread = 0;
   let mentions = 0;
   for (const r of rows) {
-    if (r.channel.unread > 0) unread++;
+    if (r.channel.unread > 0 && !isMuted(r.channel, now)) unread++;
     mentions += r.channel.mentions;
   }
   return { unread, mentions };

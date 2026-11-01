@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
-import { ChevronDown, ChevronRight, Eye, Hash, Lock, Plus } from "lucide-react";
+import { BellOff, ChevronDown, ChevronRight, Eye, Hash, Lock, Plus } from "lucide-react";
 import { cn } from "@/shared/lib";
-import { useLocalStorage } from "@/shared/hooks";
+import { useLocalStorage, useNow } from "@/shared/hooks";
 import { Avatar, Badge, Tooltip } from "@/shared/ui";
 import { useActivity } from "@/features/agents";
 import { useActors, useSession } from "@/features/identity";
 import { useChannels, useSections } from "../api";
+import { isMuted } from "../channel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { buildSidebar, dmPeers, unreadTotals, type Actor, type SidebarGroup, type SidebarRow } from "../model";
 
@@ -46,7 +47,9 @@ function RowIcon({ row, actors, meId }: { row: SidebarRow; actors: Map<string, A
 
 function Row({ row, actors, meId }: { row: SidebarRow; actors: Map<string, Actor>; meId: string }) {
   const { t } = useTranslation("conversation");
-  const unread = row.channel.unread > 0;
+  const muted = isMuted(row.channel, useNow(60_000));
+  // A muted row is never bold for unread messages; a mention still shows its badge.
+  const unread = row.channel.unread > 0 && !muted;
   return (
     <NavLink
       to={`/c/${row.channel.id}`}
@@ -54,6 +57,7 @@ function Row({ row, actors, meId }: { row: SidebarRow; actors: Map<string, Actor
         cn(
           "relative flex h-8 items-center gap-2 rounded-md px-2 text-ui text-fg-muted hover:bg-surface-sunken hover:text-fg",
           unread && "font-semibold text-fg",
+          muted && "text-fg-subtle",
           isActive && "bg-accent-soft font-semibold text-fg before:absolute before:inset-y-1.5 before:-left-2 before:w-0.5 before:rounded-full before:bg-accent",
         )
       }
@@ -62,6 +66,7 @@ function Row({ row, actors, meId }: { row: SidebarRow; actors: Map<string, Actor
       <span className={cn("min-w-0 flex-1 truncate", row.kind !== "channel" && row.kind !== "human-dm" && "font-mono text-meta", row.kind === "agent-agent" && "text-fg-muted")}>
         {row.title}
       </span>
+      {muted ? <BellOff aria-label={t("mute.muted")} className="size-3.5 shrink-0 text-fg-subtle" /> : null}
       {row.observed ? (
         <Tooltip content={t("row.observed")}>
           <Eye aria-label={t("row.observed")} className="size-3.5 shrink-0 text-fg-subtle" />
