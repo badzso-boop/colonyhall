@@ -1,5 +1,7 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import { onActivity, onProgress, type ActivityFrame, type ProgressFrame } from "@/shared/api";
+import { registerOverviewEvents } from "./events";
 
 /** Where an agent is working: a channel, or a thread within it. */
 export type WorkPlace = { channelId: string; threadRootId?: string };
@@ -38,8 +40,10 @@ export function applyActivity(working: Record<string, WorkPlace[]>, f: ActivityF
 /** Live "who works where", from the ephemeral agent.activity frames. */
 export const useActivity = create<State>(() => ({ working: {}, steps: {} }));
 
-export function registerAgentEvents(): () => void {
+/** The agent events: live activity and progress, and (given the query client) the overview cache. */
+export function registerAgentEvents(qc?: QueryClient): () => void {
   const offs = [
+    ...(qc ? [registerOverviewEvents(qc)] : []),
     onActivity((f) =>
       useActivity.setState((s) => {
         const working = applyActivity(s.working, f);
