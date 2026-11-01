@@ -215,5 +215,37 @@
       "closed": "closed",
       "merged": "merged"
     }
+  },
+  "sections": {
+    "new": "New section",
+    "renameTitle": "Rename section",
+    "rename": "Rename",
+    "save": "Save",
+    "nameHint": "At most 40 characters (accented letters count twice).",
+    "delete": "Delete section",
+    "deleteTitle": "Delete section?",
+    "deleteBody": "The section “{{name}}” will be deleted. Its conversations go back to their default groups.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "menu": "Actions for section {{name}}",
+    "empty": "Drag a conversation here.",
+    "failed": "The server refused the change; the previous order is back.",
+    "saveFailed": "Could not save the section."
+  },
+  "rowMenu": {
+    "profile": "Profile",
+    "label": "Actions for {{name}}",
+    "move": "Move…",
+    "moveTitle": "Move to a section",
+    "moveBody": "Where should {{name}} go?",
+    "moveConfirm": "Move",
+    "defaultGroup": "Its default group",
+    "newSection": "New section…"
+  },
+  "profile": {
+    "label": "Profile of {{name}}",
+    "unknown": "Unknown participant.",
+    "dm": "Message",
+    "dmFailed": "Could not open the direct message."
   }
 }

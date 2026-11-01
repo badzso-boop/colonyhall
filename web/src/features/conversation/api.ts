@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "@/shared/api";
+import { itemOrder, moveConversation, moveSection, sectionOrder, upsertSection } from "./sections";
 
 export type Message = Schemas["Message"];
 export const PAGE_SIZE = 50;
@@ -25,6 +26,103 @@ export function useSections() {
   return useQuery({
     queryKey: conversationKeys.sections,
     queryFn: async () => unwrap(await api.GET("/sidebar/sections")).sections,
+  });
+}
+
+type Section = Schemas["SidebarSection"];
+
+/**
+ * A change to the viewer's sections, applied to the cache at once and rolled
+ * back when the server refuses it (docs/handoff/34, part 2). `send` gets the
+ * sections as they are after the change. The caller shows the toast; the
+ * list is refetched afterwards either way.
+ */
+function useSectionChange<V>(apply: (sections: Section[], v: V) => Section[], send: (v: V, after: Section[]) => Promise<void>) {
+  const qc = useQueryClient();
+  return useMutation({
+    onMutate: async (v: V) => {
+      await qc.cancelQueries({ queryKey: conversationKeys.sections });
+      const before = qc.getQueryData<Section[]>(conversationKeys.sections);
+      if (before) qc.setQueryData<Section[]>(conversationKeys.sections, apply(before, v));
+      return { before };
+    },
+    // onMutate has run by now, so the cache holds the changed state.
+    mutationFn: async (v: V) => send(v, qc.getQueryData<Section[]>(conversationKeys.sections) ?? []),
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(conversationKeys.sections, ctx.before);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: conversationKeys.sections }),
+  });
+}
+
+/** Reorders the sections: the server gets the full new order. */
+export function useReorderSections() {
+  return useSectionChange<{ sectionId: string; toIndex: number }>(
+    (s, v) => moveSection(s, v.sectionId, v.toIndex),
+    async (_v, after) => {
+      unwrap(await api.PUT("/sidebar/sections/reorder", { body: { section_ids: sectionOrder(after) } }));
+    },
+  );
+}
+
+/**
+ * Moves a conversation into a section at an index (the end when omitted), or
+ * back to its default group (target null). `from` is where it is now. The
+ * server takes it out of any other section itself.
+ */
+export function useMoveConversation() {
+  return useSectionChange<{ channelId: string; from: string | null; target: string | null; index?: number }>(
+    (s, v) => moveConversation(s, v.channelId, v.target, v.index),
+    async ({ channelId, from, target }, after) => {
+      if (target === null) {
+        if (from) unwrap(await api.DELETE("/sidebar/sections/{sectionId}/channels/{channelId}", { params: { path: { sectionId: from, channelId } } }));
+        return;
+      }
+      const order = itemOrder(after, target);
+      if (from !== target) {
+        const position = order.indexOf(channelId);
+        unwrap(await api.PUT("/sidebar/sections/{sectionId}/channels/{channelId}", { params: { path: { sectionId: target, channelId } }, body: { position } }));
+      }
+      unwrap(await api.PUT("/sidebar/sections/{sectionId}/reorder", { params: { path: { sectionId: target } }, body: { channel_ids: order } }));
+    },
+  );
+}
+
+/** Opens (or creates) the DM with one actor; the caller navigates to it. */
+export function useOpenDm() {
+  return useMutation({
+    mutationFn: async (actorId: string) => unwrap(await api.POST("/dms", { body: { actor_ids: [actorId] } })),
+  });
+}
+
+export function useCreateSection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => unwrap(await api.POST("/sidebar/sections", { body: { name: name.trim() } })),
+    onSuccess: (s) => qc.setQueryData<Section[]>(conversationKeys.sections, (list) => upsertSection(list ?? [], s)),
+    onSettled: () => void qc.invalidateQueries({ queryKey: conversationKeys.sections }),
+  });
+}
+
+export function useRenameSection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) =>
+      unwrap(await api.PATCH("/sidebar/sections/{sectionId}", { params: { path: { sectionId: id } }, body: { name: name.trim() } })),
+    onSuccess: (s) => qc.setQueryData<Section[]>(conversationKeys.sections, (list) => upsertSection(list ?? [], s)),
+    onSettled: () => void qc.invalidateQueries({ queryKey: conversationKeys.sections }),
+  });
+}
+
+/** Deletes a section; its conversations go back to their default groups. */
+export function useDeleteSection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      unwrap(await api.DELETE("/sidebar/sections/{sectionId}", { params: { path: { sectionId: id } } }));
+    },
+    onSuccess: (_d, id) => qc.setQueryData<Section[]>(conversationKeys.sections, (list) => list?.filter((s) => s.id !== id)),
+    onSettled: () => void qc.invalidateQueries({ queryKey: conversationKeys.sections }),
   });
 }
 

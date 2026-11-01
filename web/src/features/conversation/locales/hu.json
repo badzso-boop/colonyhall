@@ -215,5 +215,37 @@
       "closed": "lezárt",
       "merged": "beolvasztva"
     }
+  },
+  "sections": {
+    "new": "Új szakasz",
+    "renameTitle": "Szakasz átnevezése",
+    "rename": "Átnevezés",
+    "save": "Mentés",
+    "nameHint": "Legfeljebb 40 karakter (az ékezetes betű kettőnek számít).",
+    "delete": "Szakasz törlése",
+    "deleteTitle": "Törlöd a szakaszt?",
+    "deleteBody": "A(z) „{{name}}” szakasz törlődik. A benne lévő beszélgetések visszakerülnek az alapértelmezett csoportjukba.",
+    "moveUp": "Feljebb",
+    "moveDown": "Lejjebb",
+    "menu": "{{name}} szakasz műveletei",
+    "empty": "Húzz ide egy beszélgetést.",
+    "failed": "A szerver nem fogadta el a módosítást, visszaállt az előző sorrend.",
+    "saveFailed": "Nem sikerült menteni a szakaszt."
+  },
+  "rowMenu": {
+    "profile": "Profil",
+    "label": "{{name}} műveletei",
+    "move": "Áthelyezés…",
+    "moveTitle": "Áthelyezés szakaszba",
+    "moveBody": "Hova kerüljön: {{name}}?",
+    "moveConfirm": "Áthelyezés",
+    "defaultGroup": "Az alapértelmezett csoportja",
+    "newSection": "Új szakasz…"
+  },
+  "profile": {
+    "label": "{{name}} profilja",
+    "unknown": "Ismeretlen résztvevő.",
+    "dm": "Üzenet",
+    "dmFailed": "Nem sikerült megnyitni a közvetlen üzenetet."
   }
 }

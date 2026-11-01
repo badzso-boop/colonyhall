@@ -2,7 +2,7 @@ import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { CornerDownRight, CornerUpLeft, Download, FileText, MessageSquare, MoreHorizontal, SquareTerminal, Undo2 } from "lucide-react";
-import { chipRefs, cn, fullTime, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
+import { chipRefs, cn, fullTime, hueVar, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
 import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
 import { ErrorChip, StepDrawer } from "@/features/agents";
 import { ApprovalCard, DelegationActions } from "@/features/approvals";
@@ -14,6 +14,7 @@ import type { Actor } from "../model";
 import { useRetract, useToggleReaction, type Message } from "../api";
 import { isRateLimitNote, REACTIONS, terminalNotice } from "../messageParts";
 import { LinkCards } from "./LinkCards";
+import { ProfileTrigger } from "./ProfilePopover";
 
 const LONG_CHARS = 1500;
 const LONG_LINES = 20;
@@ -140,10 +141,22 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
         mentionsMe && "bg-accent-soft shadow-[inset_2px_0_0_var(--color-accent)] hover:bg-accent-soft",
       )}
     >
-      <Avatar kind={author?.kind ?? "human"} name={author?.handle ?? "?"} emoji={author?.avatar_emoji} size="lg" status={paused ? "paused" : undefined} />
+      {author ? (
+        <ProfileTrigger actorId={author.id} className="self-start">
+          <Avatar kind={author.kind} name={author.handle} emoji={author.avatar_emoji} size="lg" status={paused ? "paused" : undefined} ringColor={author.kind === "agent" ? hueVar(author.effective_color) : undefined} />
+        </ProfileTrigger>
+      ) : (
+        <Avatar kind="human" name="?" size="lg" />
+      )}
       <div className="min-w-0">
         <header className="flex flex-wrap items-baseline gap-x-2">
-          <span className="font-semibold">{name}</span>
+          {author ? (
+            <ProfileTrigger actorId={author.id} className="font-semibold hover:underline">
+              {name}
+            </ProfileTrigger>
+          ) : (
+            <span className="font-semibold">{name}</span>
+          )}
           {fromAgent ? <span className="font-mono text-meta text-fg-muted">@{author.handle}</span> : null}
           {paused ? <Badge tone="warning">{t("message.paused")}</Badge> : null}
           <time className="text-meta text-fg-subtle" dateTime={m.created_at} title={fullTime(m.created_at, locale)}>
