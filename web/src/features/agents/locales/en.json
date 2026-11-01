@@ -9,18 +9,132 @@
       "offline": "offline",
       "paused": "paused",
       "stopped": "stopped",
+      "archived": "archived",
       "active": "active"
     },
-    "sessions": "Sessions",
-    "noSessions": "No sessions yet.",
-    "nearLimit": "a new session soon",
-    "host": "Machine",
-    "model": "Model",
-    "today": "Today: {{tokens}} tokens",
-    "limit": "limit: {{limit}}",
-    "lastRuns": "Recent runs",
-    "notFound": "This agent does not exist.",
-    "dm": "DM",
-    "context": "context"
+    "hostLabel": "Machine: {{host}}",
+    "notFound": "This agent was not found.",
+    "actions": {
+      "label": "Actions",
+      "dm": "DM",
+      "files": "Files",
+      "terminals": "Terminals",
+      "settings": "Settings",
+      "more": "More actions",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop",
+      "emergency": "Emergency stop, this one only",
+      "cancel": "Cancel",
+      "stopTitle": "Stop @{{handle}}?",
+      "stopBody": "A stopped agent gets no tokens and cannot run until someone starts it again. Its running work is interrupted.",
+      "emergencyTitle": "Emergency stop: @{{handle}}",
+      "emergencyBody": "Stops only this agent, right away; the other agents keep running.",
+      "done": "The state changed.",
+      "failed": "The action failed.",
+      "dmFailed": "The DM could not be opened."
+    },
+    "now": {
+      "title": "Now",
+      "idle": "Not working right now.",
+      "step": "{{step}} · {{elapsed}}",
+      "inbox": "Unprocessed in the inbox: {{count}}",
+      "inboxOldest": "the oldest {{age}}",
+      "inboxEmpty": "The inbox is empty.",
+      "thread": "thread",
+      "channel": "channel"
+    },
+    "sessions": {
+      "title": "Sessions",
+      "empty": "No session yet.",
+      "context": "context",
+      "near": "new session soon",
+      "lastRun": "last run: {{tokens}} tokens",
+      "all": "All ({{count}})",
+      "less": "Fewer"
+    },
+    "usage": {
+      "title": "Usage",
+      "today": "Today",
+      "week": "Last 7 days",
+      "tokens": "{{tokens}} tokens",
+      "runs": "{{count}} runs",
+      "limit": "Daily limit: {{used}} / {{limit}}",
+      "noLimit": "No daily limit.",
+      "chart": "Tokens per day, last 7 days",
+      "day": "{{day}}: {{tokens}} tokens, {{runs}} runs",
+      "noWeek": "The weekly breakdown is not available."
+    },
+    "runs": {
+      "title": "Latest runs",
+      "empty": "No runs yet.",
+      "all": "All runs",
+      "ok": "succeeded",
+      "error": "error",
+      "halted": "halted",
+      "tokens": "{{tokens}} tokens",
+      "webReads": "{{count}} web pages",
+      "errorDetails": "Error details",
+      "errorTitle": "The run's error",
+      "close": "Close"
+    },
+    "terminals": {
+      "title": "Terminals",
+      "open": "Open in a pane"
+    },
+    "config": {
+      "title": "Configuration",
+      "locked": "Fixed at creation",
+      "details": "Details",
+      "root": "Root folder",
+      "worktree": "Worktree repo",
+      "branch": "Branch",
+      "grants": "Folder grants",
+      "noGrants": "none",
+      "read": "read",
+      "write": "write",
+      "webRead": "Web reading",
+      "on": "on",
+      "off": "off",
+      "mode": "Mode",
+      "approvals": "Approvals",
+      "permissionMode": "Permission mode",
+      "model": "Model",
+      "workModel": "Work model",
+      "client": "Client",
+      "hidden": "Only admins see the configuration."
+    },
+    "collab": {
+      "title": "Collaboration",
+      "grants": "Delegation grants",
+      "grantWith": "@{{other}} · expires {{when}}",
+      "revoke": "Revoke",
+      "revoked": "The grant was revoked.",
+      "leases": "Active leases",
+      "leaseExpires": "expires {{when}}",
+      "release": "Release",
+      "released": "The lease was released.",
+      "questions": "Open questions",
+      "questionTo": "→ {{to}}",
+      "toHumans": "humans",
+      "deadline": "deadline {{when}}",
+      "channels": "Common channels",
+      "none": "none"
+    },
+    "notes": {
+      "title": "Notes",
+      "empty": "No notes.",
+      "open": "Open in the Notes window"
+    },
+    "instructions": {
+      "title": "Instructions",
+      "empty": "It has no own instructions.",
+      "view": "View"
+    },
+    "human": {
+      "profile": "Profile",
+      "role": "Role: {{role}}",
+      "timezone": "Time zone: {{tz}}"
+    }
   }
 }

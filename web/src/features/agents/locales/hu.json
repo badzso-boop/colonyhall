@@ -9,18 +9,132 @@
       "offline": "offline",
       "paused": "szünetel",
       "stopped": "leállítva",
+      "archived": "archivált",
       "active": "aktív"
     },
-    "sessions": "Munkamenetek",
-    "noSessions": "Még nincs munkamenet.",
-    "nearLimit": "hamarosan új munkamenet",
-    "host": "Gép",
-    "model": "Modell",
-    "today": "Ma: {{tokens}} token",
-    "limit": "keret: {{limit}}",
-    "lastRuns": "Utolsó futások",
+    "hostLabel": "Gép: {{host}}",
     "notFound": "Ez az agent nem található.",
-    "dm": "DM",
-    "context": "kontextus"
+    "actions": {
+      "label": "Műveletek",
+      "dm": "DM",
+      "files": "Fájlok",
+      "terminals": "Terminálok",
+      "settings": "Beállítások",
+      "more": "További műveletek",
+      "pause": "Szüneteltetés",
+      "resume": "Folytatás",
+      "stop": "Leállítás",
+      "emergency": "Vészleállítás csak ennek",
+      "cancel": "Mégse",
+      "stopTitle": "Leállítod @{{handle}} agentet?",
+      "stopBody": "A leállított agent nem kap tokent és nem futhat, amíg valaki újra nem indítja. A folyamatban lévő munkája megszakad.",
+      "emergencyTitle": "Vészleállítás: @{{handle}}",
+      "emergencyBody": "Csak ezt az agentet állítja le azonnal; a többi agent tovább fut.",
+      "done": "Az állapot megváltozott.",
+      "failed": "Nem sikerült a művelet.",
+      "dmFailed": "A DM nem nyitható meg."
+    },
+    "now": {
+      "title": "Most",
+      "idle": "Most nem dolgozik.",
+      "step": "{{step}} · {{elapsed}}",
+      "inbox": "Feldolgozatlan a postaládában: {{count}}",
+      "inboxOldest": "a legrégebbi {{age}}",
+      "inboxEmpty": "A postaláda üres.",
+      "thread": "szál",
+      "channel": "csatorna"
+    },
+    "sessions": {
+      "title": "Munkamenetek",
+      "empty": "Még nincs munkamenet.",
+      "context": "kontextus",
+      "near": "hamarosan új munkamenet",
+      "lastRun": "utolsó futás: {{tokens}} token",
+      "all": "Összes ({{count}})",
+      "less": "Kevesebb"
+    },
+    "usage": {
+      "title": "Felhasználás",
+      "today": "Ma",
+      "week": "Utolsó 7 nap",
+      "tokens": "{{tokens}} token",
+      "runs": "{{count}} futás",
+      "limit": "Napi keret: {{used}} / {{limit}}",
+      "noLimit": "Nincs napi keret.",
+      "chart": "Tokenek naponta, utolsó 7 nap",
+      "day": "{{day}}: {{tokens}} token, {{runs}} futás",
+      "noWeek": "A heti bontás nem érhető el."
+    },
+    "runs": {
+      "title": "Utolsó futások",
+      "empty": "Még nem futott.",
+      "all": "Összes futás",
+      "ok": "sikeres",
+      "error": "hiba",
+      "halted": "megállítva",
+      "tokens": "{{tokens}} token",
+      "webReads": "{{count}} weboldal",
+      "errorDetails": "Hiba részletei",
+      "errorTitle": "A futás hibája",
+      "close": "Bezárás"
+    },
+    "terminals": {
+      "title": "Terminálok",
+      "open": "Megnyitás panelen"
+    },
+    "config": {
+      "title": "Konfiguráció",
+      "locked": "Létrehozáskor rögzítve",
+      "details": "Részletek",
+      "root": "Gyökérmappa",
+      "worktree": "Worktree repó",
+      "branch": "Ág",
+      "grants": "Mappaengedélyek",
+      "noGrants": "nincs",
+      "read": "olvasás",
+      "write": "írás",
+      "webRead": "Webolvasás",
+      "on": "be",
+      "off": "ki",
+      "mode": "Mód",
+      "approvals": "Jóváhagyás",
+      "permissionMode": "Engedélymód",
+      "model": "Modell",
+      "workModel": "Munkamodell",
+      "client": "Kliens",
+      "hidden": "A konfigurációt csak adminisztrátor látja."
+    },
+    "collab": {
+      "title": "Együttműködés",
+      "grants": "Delegációs engedélyek",
+      "grantWith": "@{{other}} · lejár {{when}}",
+      "revoke": "Visszavonás",
+      "revoked": "Az engedély visszavonva.",
+      "leases": "Aktív foglalások",
+      "leaseExpires": "lejár {{when}}",
+      "release": "Felszabadítás",
+      "released": "A foglalás felszabadítva.",
+      "questions": "Nyitott kérdések",
+      "questionTo": "→ {{to}}",
+      "toHumans": "embereknek",
+      "deadline": "határidő {{when}}",
+      "channels": "Közös csatornák",
+      "none": "nincs"
+    },
+    "notes": {
+      "title": "Jegyzetek",
+      "empty": "Nincs jegyzet.",
+      "open": "Megnyitás a Jegyzetek ablakban"
+    },
+    "instructions": {
+      "title": "Utasítás",
+      "empty": "Nincs saját utasítása.",
+      "view": "Megtekintés"
+    },
+    "human": {
+      "profile": "Profil",
+      "role": "Szerepkör: {{role}}",
+      "timezone": "Időzóna: {{tz}}"
+    }
   }
 }

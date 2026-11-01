@@ -13,7 +13,7 @@ const icons = { terminal: SquareTerminal, files: FolderOpen, agent: Bot } as con
 function TabContent({ tab }: { tab: WorkTab }) {
   switch (tab.kind) {
     case "agent":
-      return <AgentOverviewPane agentId={tab.agentId} />;
+      return <AgentOverviewPane agentId={tab.agentId} terminals={<TerminalPane agentId={tab.agentId} name="" />} />;
     case "terminal":
       return <TerminalPane agentId={tab.agentId} name={tab.ref} />;
     case "files":
