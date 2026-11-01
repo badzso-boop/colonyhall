@@ -1,4 +1,5 @@
 import { Route, Routes } from "react-router";
+import { AgentsPage } from "@/features/agents";
 import { ConversationPage } from "@/features/conversation";
 import { DecisionsPage } from "@/features/decisions";
 import { DesignPage } from "@/features/design";
@@ -29,6 +30,7 @@ export function AppRoutes() {
       >
         <Route index element={<Home />} />
         <Route path="c/:channelId" element={<ConversationPage />} />
+        <Route path="agents" element={<AgentsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="notes" element={<NotesPage />} />

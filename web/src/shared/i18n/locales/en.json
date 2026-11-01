@@ -51,6 +51,7 @@
     "calDay": "Calendar: day view",
     "calPrev": "Calendar: previous range",
     "calNext": "Calendar: next range",
-    "calToday": "Calendar: today"
+    "calToday": "Calendar: today",
+    "agentSearch": "Search the agents"
   }
 }

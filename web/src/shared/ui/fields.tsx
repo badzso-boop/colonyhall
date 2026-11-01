@@ -1,4 +1,4 @@
-import type { ComponentProps, InputHTMLAttributes, SelectHTMLAttributes } from "react";
+import type { ComponentProps, SelectHTMLAttributes } from "react";
 import { Checkbox as RCheckbox, Switch as RSwitch } from "radix-ui";
 import { Check } from "lucide-react";
 import { cn } from "@/shared/lib";
@@ -7,7 +7,7 @@ const control =
   "w-full rounded-md border border-border-strong bg-surface text-fg placeholder:text-fg-subtle " +
   "focus-visible:border-fg-muted disabled:opacity-50 aria-invalid:border-danger";
 
-export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...rest }: ComponentProps<"input">) {
   return <input {...rest} className={cn(control, "h-8 px-2.5", className)} />;
 }
 

@@ -49,7 +49,7 @@ export default defineConfig({
     globals: true,
     // Each file builds its own jsdom; with a worker per core, workers on a
     // busy WSL host miss the start-up timeout.
-    maxWorkers: "50%",
+    maxWorkers: "25%",
     include: ["src/**/*.test.{ts,tsx,mjs}"],
     setupFiles: ["src/app/test-setup.ts"],
   },

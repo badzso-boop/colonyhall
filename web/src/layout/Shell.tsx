@@ -7,6 +7,7 @@ import { cn, useShortcut } from "@/shared/lib";
 import { useLocalStorage, useWidth } from "@/shared/hooks";
 import { place, usePanes } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
+import { AgentDialogs } from "@/features/agents";
 import { ScheduleBuilderHost } from "@/features/schedules";
 import { BottomBar } from "./BottomBar";
 import { CommandPalette } from "./CommandPalette";
@@ -137,6 +138,7 @@ export function Shell() {
       {placement.screen === "main" ? <BottomBar /> : null}
       <FloatingWindows />
       <ScheduleBuilderHost />
+      <AgentDialogs />
       <CommandPalette />
       <ShortcutHelp />
     </div>

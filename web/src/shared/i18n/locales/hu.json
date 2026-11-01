@@ -51,6 +51,7 @@
     "calDay": "Naptár: napi nézet",
     "calPrev": "Naptár: előző időszak",
     "calNext": "Naptár: következő időszak",
-    "calToday": "Naptár: ma"
+    "calToday": "Naptár: ma",
+    "agentSearch": "Keresés az agentek között"
   }
 }
