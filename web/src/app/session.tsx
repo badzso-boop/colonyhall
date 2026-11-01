@@ -36,7 +36,7 @@ function useLiveUpdates(enabled: boolean) {
       registerIdentityEvents(qc),
       registerConversationEvents(qc),
       registerQuestionEvents(qc),
-      registerAgentEvents(),
+      registerAgentEvents(qc),
       registerAdminEvents(qc),
       registerPlannerEvents(qc),
       registerScheduleEvents(qc),

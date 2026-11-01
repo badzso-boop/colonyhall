@@ -13,7 +13,7 @@ function CopyDialog({ handle, onClose }: { handle: string; onClose: () => void }
   const hosts = useHosts();
   const actor = (actors.data ?? []).filter((a) => a.handle === handle && a.kind === "agent").sort((a, b) => Number(Boolean(a.archived_at)) - Number(Boolean(b.archived_at)))[0];
   const config = hosts.data?.flatMap((h) => h.agents).find((a) => a.agent_id === actor?.id);
-  const instructions = useAgentInstructions(actor?.id ?? null);
+  const instructions = useAgentInstructions(actor?.id ?? "", Boolean(actor));
   if (!actor || hosts.isPending || instructions.isPending) return null;
   return <CreateAgentDialog initial={fromAgent(actor, config, instructions.data?.text ?? "")} onClose={onClose} />;
 }

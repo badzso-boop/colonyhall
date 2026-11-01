@@ -4,7 +4,7 @@ import { Copy, Lock, ShieldAlert, Trash2 } from "lucide-react";
 import { useHosts } from "@/features/hosts";
 import { cn, hueVar } from "@/shared/lib";
 import { Avatar, Badge, Button, Dialog, Input, LargeDialog, Markdown, Notice, Textarea, toast } from "@/shared/ui";
-import { useAgentActors, useAgentInstructions, useAgentOverview, useArchiveAgent, useSetAgentState, useSetLimits, useUpdateAgentProfile } from "../api";
+import { useAgentActors, useAgentInstructions, useAgentOverview, useArchiveAgent, useChangeAgentState, useSetLimits, useUpdateAgentProfile } from "../api";
 import { sessionPresets } from "../creation";
 import { ColorSwatches } from "./CreateAgentDialog";
 
@@ -38,7 +38,7 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
   const actor = (actors.data ?? []).filter((a) => a.handle === handle && a.kind === "agent").sort((a, b) => Number(Boolean(a.archived_at)) - Number(Boolean(b.archived_at)))[0];
   const host = hosts.data?.find((h) => h.agents.some((a) => a.agent_id === actor?.id));
   const config = host?.agents.find((a) => a.agent_id === actor?.id);
-  const instructions = useAgentInstructions(actor?.id ?? null);
+  const instructions = useAgentInstructions(actor?.id ?? "", Boolean(actor));
   const overview = useAgentOverview(actor?.id ?? "");
   const archived = Boolean(actor?.archived_at);
 
@@ -70,7 +70,7 @@ export function AgentSettingsDialog({ handle, tab, onTab, onClose, onCopy }: { h
   const [typed, setTyped] = useState("");
   const updateProfile = useUpdateAgentProfile();
   const setLimitsM = useSetLimits();
-  const setState = useSetAgentState();
+  const setState = useChangeAgentState();
   const archive = useArchiveAgent();
 
   if (!actor) return null;
