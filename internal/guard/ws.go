@@ -260,6 +260,7 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 					a.OnMessageRetracted(p.MessageID)
 				}
 			}
+			a.onChannelEvent(frame.EventType, frame.Data)
 			if frame.EventType == "file.fetch_requested" {
 				var p struct {
 					AgentID string `json:"agent_id"`
@@ -296,5 +297,25 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 		default:
 			// Ignored
 		}
+	}
+}
+
+// onChannelEvent stops work in a channel the agent was removed from, or
+// that was archived (round 34).
+func (a *Agent) onChannelEvent(eventType string, data json.RawMessage) {
+	if eventType != "channel.member_removed" && eventType != "channel.archived" {
+		return
+	}
+	var p struct {
+		ChannelID string `json:"channel_id"`
+		ActorID   string `json:"actor_id"`
+	}
+	if json.Unmarshal(data, &p) != nil {
+		return
+	}
+	if eventType == "channel.archived" {
+		a.OnChannelLeft(p.ChannelID, "archived")
+	} else if me := a.getMe(); me.ID != "" && p.ActorID == me.ID {
+		a.OnChannelLeft(p.ChannelID, "removed")
 	}
 }

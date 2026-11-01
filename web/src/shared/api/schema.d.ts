@@ -274,11 +274,107 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Channels the caller belongs to; admins see every channel. */
+        /**
+         * @description Channels the caller belongs to; admins see every channel. Archived
+         *     channels are left out unless an admin asks with archived=true. muted
+         *     and muted_until are the caller's own mute.
+         */
         get: operations["listChannels"];
         put?: never;
         post: operations["createChannel"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/{channelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        /** @description A channel the caller can read, with the caller's unread counts and mute. */
+        get: operations["getChannel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Admins only. Renames a channel and/or changes its description (empty
+         *     clears it). DMs cannot be renamed (409). Emits channel.updated with the
+         *     changed field names, never the description text, and writes a silent
+         *     system note into the channel.
+         */
+        patch: operations["updateChannel"];
+        trace?: never;
+    };
+    "/channels/{channelId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Admins only. Makes the channel read-only for everyone: sending,
+         *     reactions, uploads and thread replies get 409 channel_archived. Its
+         *     pending wake items are acked and running agent work in it stops.
+         *     DMs cannot be archived (409).
+         */
+        post: operations["archiveChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/{channelId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admins only. Makes an archived channel writable again. */
+        post: operations["unarchiveChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/{channelId}/mute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Humans, for themselves. Mutes the channel until `until` (forever when
+         *     omitted). It changes only what the caller is bothered by, never what
+         *     agents receive. Emits channel.mute_changed to the caller only.
+         */
+        put: operations["muteChannel"];
+        post?: never;
+        /** @description Humans, for themselves. Removes the caller's mute. */
+        delete: operations["unmuteChannel"];
         options?: never;
         head?: never;
         patch?: never;
@@ -296,7 +392,11 @@ export interface paths {
         /** @description Anyone who can read the channel. List channel members. */
         get: operations["listChannelMembers"];
         put?: never;
-        /** @description Admins only. Adding an existing member is a no-op. */
+        /**
+         * @description Admins only. Give actor_id, actor_ids or both; existing members are
+         *     skipped. Writes one silent system note naming the new members. A DM's
+         *     members cannot change (409).
+         */
         post: operations["addChannelMember"];
         delete?: never;
         options?: never;
@@ -317,7 +417,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Admins only. Soft-remove a member from the channel. */
+        /**
+         * @description Admins only. Soft-remove a member from the channel. The member's
+         *     pending items for the channel are acked without waking it, and a
+         *     silent system note is written. A DM's members cannot change (409).
+         */
         delete: operations["removeChannelMember"];
         options?: never;
         head?: never;
@@ -397,6 +501,64 @@ export interface paths {
         get: operations["getThread"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{messageId}/thread/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Humans. The caller has seen the thread (root messageId) to its end. */
+        post: operations["markThreadRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The threads the caller wrote, replied in or was mentioned in,
+         *     in channels the caller is still a member of, newest reply first.
+         *     unread_threads counts threads with unread replies (threads in muted
+         *     channels only when the caller is mentioned).
+         */
+        get: operations["listMyThreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/threads/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Humans. Marks every thread of the caller with unread replies as read. */
+        post: operations["markAllThreadsRead"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2480,6 +2642,57 @@ export interface components {
             mentions: number;
             /** @description DM channels only */
             member_ids?: string[];
+            /**
+             * Format: date-time
+             * @description Set while the channel is archived (read-only)
+             */
+            archived_at?: string | null;
+            /** @description The caller has muted the channel */
+            muted?: boolean;
+            /**
+             * Format: date-time
+             * @description End of the caller's mute; null while muted means forever
+             */
+            muted_until?: string | null;
+        };
+        UpdateChannelRequest: {
+            name?: string;
+            /** @description Empty clears it */
+            description?: string;
+        };
+        MuteRequest: {
+            /**
+             * Format: date-time
+             * @description Omit to mute until unmuted
+             */
+            until?: string;
+        };
+        MyThread: {
+            root: components["schemas"]["Message"];
+            /** Format: uuid */
+            channel_id: string;
+            channel_name: string;
+            channel_kind?: components["schemas"]["ChannelKind"];
+            /** Format: date-time */
+            last_read_at?: string | null;
+            /**
+             * Format: int64
+             * @description Others' replies after the caller last read or replied
+             */
+            unread_replies: number;
+            /** @description The caller is mentioned in the root or a reply */
+            mentioned: boolean;
+            /** @description The latest 2 replies, oldest first */
+            latest_replies: components["schemas"]["Message"][];
+        };
+        MyThreadPage: {
+            threads: components["schemas"]["MyThread"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
+            unread_threads: number;
+        };
+        MarkedCount: {
+            marked: number;
         };
         ChannelList: {
             channels: components["schemas"]["Channel"][];
@@ -2488,6 +2701,7 @@ export interface components {
             /** Format: uuid */
             actor_id: string;
             handle: string;
+            display_name?: string;
             kind: components["schemas"]["ActorKind"];
             can_write: boolean;
         };
@@ -2498,10 +2712,13 @@ export interface components {
             name: string;
             kind?: components["schemas"]["ChannelKind"];
             description?: string;
+            /** @description Admins: initial members besides the creator */
+            member_ids?: string[];
         };
         AddMemberRequest: {
             /** Format: uuid */
-            actor_id: string;
+            actor_id?: string;
+            actor_ids?: string[];
             /** @default true */
             can_write: boolean;
         };
@@ -2669,7 +2886,10 @@ export interface components {
          *     EventMessageRetracted; reaction.added, reaction.removed →
          *     EventReaction; channel.created → EventChannelCreated;
          *     channel.member_added → EventMemberAdded; channel.member_removed →
-         *     EventMemberRemoved; actor.created → EventActorCreated;
+         *     EventMemberRemoved; channel.updated → EventChannelUpdated;
+         *     channel.archived, channel.unarchived → EventChannelArchived;
+         *     channel.mute_changed (the muting viewer only) → EventMuteChanged;
+         *     actor.created → EventActorCreated;
          *     actor.state_changed → EventActorStateChanged; actor.profile_updated →
          *     EventActorProfileUpdated; workspace.emergency_activated,
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
@@ -2820,6 +3040,28 @@ export interface components {
             channel_id: string;
             /** Format: uuid */
             actor_id: string;
+        };
+        /** @description The changed fields; never the description text (clients refetch the channel). */
+        EventChannelUpdated: {
+            /** Format: uuid */
+            channel_id: string;
+            fields: ("name" | "description")[];
+            old_name?: string;
+            new_name?: string;
+        };
+        EventChannelArchived: {
+            /** Format: uuid */
+            channel_id: string;
+            name: string;
+        };
+        EventMuteChanged: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            actor_id: string;
+            muted: boolean;
+            /** Format: date-time */
+            muted_until?: string;
         };
         EventActorCreated: {
             /** Format: uuid */
@@ -4654,7 +4896,10 @@ export interface operations {
     };
     listChannels: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Admins: include archived channels */
+                archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4698,6 +4943,164 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    archiveChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    unarchiveChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    muteChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Muted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    unmuteChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unmuted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -4748,8 +5151,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -4841,6 +5246,7 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
@@ -4878,6 +5284,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -4926,6 +5333,81 @@ export interface operations {
                     "application/json": components["schemas"]["Thread"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    markThreadRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked as read */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMyThreads: {
+        parameters: {
+            query?: {
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+                limit?: number;
+                /** @description Only threads with unread replies */
+                unread?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyThreadPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    markAllThreadsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkedCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

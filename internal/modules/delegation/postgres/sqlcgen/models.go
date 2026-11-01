@@ -152,6 +152,8 @@ type Channel struct {
 	CreatedAt              time.Time
 	Description            string
 	CompactThresholdTokens *int32
+	ArchivedAt             *time.Time
+	ArchivedBy             *uuid.UUID
 }
 
 type ChannelMember struct {
@@ -162,6 +164,13 @@ type ChannelMember struct {
 	MentionCount int64
 	JoinedAt     time.Time
 	LeftAt       *time.Time
+}
+
+type ChannelMute struct {
+	ActorID    uuid.UUID
+	ChannelID  uuid.UUID
+	MutedUntil *time.Time
+	CreatedAt  time.Time
 }
 
 type Compaction struct {
@@ -579,6 +588,12 @@ type TerminalEvent struct {
 	DurationMs   int64
 	Tail         string
 	CreatedAt    time.Time
+}
+
+type ThreadRead struct {
+	ActorID      uuid.UUID
+	ThreadRootID uuid.UUID
+	LastReadAt   time.Time
 }
 
 type WikiPage struct {

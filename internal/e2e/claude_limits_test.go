@@ -17,6 +17,7 @@ import (
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/guard"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/server"
 )
 
@@ -159,8 +160,7 @@ func TestRateLimitNoteEndpoint(t *testing.T) {
 
 	agentID, agentToken := e.createActor("agent", "claude-bot", "member")
 	canWrite := true
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", ch.Id), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId:  uuid.MustParse(agentID),
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", ch.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(agentID)),
 		CanWrite: &canWrite,
 	}, nil)
 
@@ -254,8 +254,7 @@ func TestGuard_ClaudeLimiterPause_E2E(t *testing.T) {
 
 	claudeID, _ := e.createActor("agent", "claude-bot", "member")
 	canWrite := true
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", ch.Id), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId:  uuid.MustParse(claudeID),
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", ch.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(claudeID)),
 		CanWrite: &canWrite,
 	}, nil)
 

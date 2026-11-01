@@ -39,6 +39,7 @@ type ConversationReader interface {
 	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
 	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
+	ChannelByID(ctx context.Context, id ids.ID) (conversation.Channel, error)
 }
 
 // ChannelReader checks access to channels.
@@ -103,6 +104,11 @@ func (s *Service) Upload(ctx context.Context, by identity.Actor, channelID ids.I
 	}
 	if !canWrite {
 		return File{}, ErrForbidden
+	}
+	if c, err := s.Conversation.ChannelByID(ctx, channelID); err != nil {
+		return File{}, err
+	} else if c.Archived() {
+		return File{}, conversation.ErrChannelArchived
 	}
 	return s.upload(ctx, by, channelID, filename, r)
 }

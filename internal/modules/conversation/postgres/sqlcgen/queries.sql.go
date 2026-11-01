@@ -84,7 +84,7 @@ func (q *Queries) BumpThread(ctx context.Context, arg BumpThreadParams) error {
 }
 
 const channelByID = `-- name: ChannelByID :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens FROM channel WHERE id = $1
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens, archived_at, archived_by FROM channel WHERE id = $1
 `
 
 func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error) {
@@ -100,12 +100,14 @@ func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error
 		&i.CreatedAt,
 		&i.Description,
 		&i.CompactThresholdTokens,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
 	)
 	return i, err
 }
 
 const channelByName = `-- name: ChannelByName :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens FROM channel WHERE workspace_id = $1 AND name = $2
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens, archived_at, archived_by FROM channel WHERE workspace_id = $1 AND name = $2
 `
 
 type ChannelByNameParams struct {
@@ -126,12 +128,15 @@ func (q *Queries) ChannelByName(ctx context.Context, arg ChannelByNameParams) (C
 		&i.CreatedAt,
 		&i.Description,
 		&i.CompactThresholdTokens,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
 	)
 	return i, err
 }
 
 const channelsForActor = `-- name: ChannelsForActor :many
 SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.compact_threshold_tokens, c.msg_count, c.created_by, c.created_at,
+       c.archived_at, c.archived_by,
        (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
@@ -157,6 +162,8 @@ type ChannelsForActorRow struct {
 	MsgCount               int64
 	CreatedBy              uuid.UUID
 	CreatedAt              time.Time
+	ArchivedAt             *time.Time
+	ArchivedBy             *uuid.UUID
 	IsMember               bool
 	Unread                 int64
 	Mentions               int64
@@ -181,6 +188,8 @@ func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorPara
 			&i.MsgCount,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
 			&i.IsMember,
 			&i.Unread,
 			&i.Mentions,
@@ -222,6 +231,20 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) er
 		arg.CreatedBy,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const deleteMute = `-- name: DeleteMute :exec
+DELETE FROM channel_mute WHERE actor_id = $1 AND channel_id = $2
+`
+
+type DeleteMuteParams struct {
+	ActorID   uuid.UUID
+	ChannelID uuid.UUID
+}
+
+func (q *Queries) DeleteMute(ctx context.Context, arg DeleteMuteParams) error {
+	_, err := q.db.Exec(ctx, deleteMute, arg.ActorID, arg.ChannelID)
 	return err
 }
 
@@ -653,6 +676,35 @@ func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message
 	return items, nil
 }
 
+const mutes = `-- name: Mutes :many
+SELECT actor_id, channel_id, muted_until, created_at FROM channel_mute WHERE actor_id = $1 ORDER BY channel_id
+`
+
+func (q *Queries) Mutes(ctx context.Context, actorID uuid.UUID) ([]ChannelMute, error) {
+	rows, err := q.db.Query(ctx, mutes, actorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChannelMute
+	for rows.Next() {
+		var i ChannelMute
+		if err := rows.Scan(
+			&i.ActorID,
+			&i.ChannelID,
+			&i.MutedUntil,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reactionsFor = `-- name: ReactionsFor :many
 SELECT message_id, actor_id, emoji, created_at FROM reaction
 WHERE message_id = ANY($1::uuid[]) AND removed_at IS NULL
@@ -798,6 +850,44 @@ func (q *Queries) RetractMessage(ctx context.Context, arg RetractMessageParams) 
 	return result.RowsAffected(), nil
 }
 
+const setChannelArchived = `-- name: SetChannelArchived :exec
+UPDATE channel SET archived_at = $1, archived_by = $2 WHERE id = $3
+`
+
+type SetChannelArchivedParams struct {
+	ArchivedAt *time.Time
+	ArchivedBy *uuid.UUID
+	ID         uuid.UUID
+}
+
+func (q *Queries) SetChannelArchived(ctx context.Context, arg SetChannelArchivedParams) error {
+	_, err := q.db.Exec(ctx, setChannelArchived, arg.ArchivedAt, arg.ArchivedBy, arg.ID)
+	return err
+}
+
+const setMute = `-- name: SetMute :exec
+INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (actor_id, channel_id) DO UPDATE SET muted_until = EXCLUDED.muted_until, created_at = EXCLUDED.created_at
+`
+
+type SetMuteParams struct {
+	ActorID    uuid.UUID
+	ChannelID  uuid.UUID
+	MutedUntil *time.Time
+	CreatedAt  time.Time
+}
+
+func (q *Queries) SetMute(ctx context.Context, arg SetMuteParams) error {
+	_, err := q.db.Exec(ctx, setMute,
+		arg.ActorID,
+		arg.ChannelID,
+		arg.MutedUntil,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const setSeen = `-- name: SetSeen :exec
 UPDATE channel_member SET msg_count = GREATEST(msg_count, $1::bigint), mention_count = 0
 WHERE channel_id = $2 AND actor_id = $3 AND left_at IS NULL
@@ -811,6 +901,23 @@ type SetSeenParams struct {
 
 func (q *Queries) SetSeen(ctx context.Context, arg SetSeenParams) error {
 	_, err := q.db.Exec(ctx, setSeen, arg.Seen, arg.ChannelID, arg.ActorID)
+	return err
+}
+
+const setThreadRead = `-- name: SetThreadRead :exec
+INSERT INTO thread_read (actor_id, thread_root_id, last_read_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (actor_id, thread_root_id) DO UPDATE SET last_read_at = GREATEST(thread_read.last_read_at, EXCLUDED.last_read_at)
+`
+
+type SetThreadReadParams struct {
+	ActorID      uuid.UUID
+	ThreadRootID uuid.UUID
+	LastReadAt   time.Time
+}
+
+func (q *Queries) SetThreadRead(ctx context.Context, arg SetThreadReadParams) error {
+	_, err := q.db.Exec(ctx, setThreadRead, arg.ActorID, arg.ThreadRootID, arg.LastReadAt)
 	return err
 }
 
@@ -855,4 +962,114 @@ func (q *Queries) ThreadMessages(ctx context.Context, rootID uuid.UUID) ([]Messa
 		return nil, err
 	}
 	return items, nil
+}
+
+const threadsForActor = `-- name: ThreadsForActor :many
+SELECT r.id, r.workspace_id, r.channel_id, r.thread_root_id, r.author_id, r.client_msg_id, r.kind, r.body, r.mentions, r.reply_count, r.last_reply_at, r.created_at, r.deleted_at, r.deleted_by, r.origin_channel_id, r.origin_thread_id, r.answers_message_id, t.last_read_at, t.unread_replies, t.mentioned
+FROM (
+    SELECT root.id,
+           tr.last_read_at,
+           (SELECT count(*) FROM message rep
+            WHERE rep.thread_root_id = root.id AND rep.deleted_at IS NULL AND rep.author_id <> $1
+              AND rep.created_at > GREATEST(
+                  COALESCE(tr.last_read_at, '-infinity'::timestamptz),
+                  COALESCE((SELECT max(own.created_at) FROM message own
+                            WHERE own.thread_root_id = root.id AND own.author_id = $1), '-infinity'::timestamptz)))::bigint AS unread_replies,
+           ($1::uuid = ANY(root.mentions) OR EXISTS (
+               SELECT 1 FROM message rep WHERE rep.thread_root_id = root.id AND rep.deleted_at IS NULL
+                 AND $1::uuid = ANY(rep.mentions)))::boolean AS mentioned
+    FROM message root
+    JOIN channel_member cm ON cm.channel_id = root.channel_id AND cm.actor_id = $1 AND cm.left_at IS NULL
+    LEFT JOIN thread_read tr ON tr.thread_root_id = root.id AND tr.actor_id = $1
+    WHERE root.workspace_id = $2
+      AND root.thread_root_id IS NULL AND root.deleted_at IS NULL AND root.reply_count > 0
+      AND (root.author_id = $1 OR $1::uuid = ANY(root.mentions) OR EXISTS (
+          SELECT 1 FROM message rep WHERE rep.thread_root_id = root.id
+            AND (rep.author_id = $1 OR $1::uuid = ANY(rep.mentions))))
+      AND ($3::timestamptz IS NULL
+           OR (root.last_reply_at, root.id) < ($3::timestamptz, $4::uuid))
+) t
+JOIN message r ON r.id = t.id
+WHERE NOT $5::boolean OR t.unread_replies > 0
+ORDER BY r.last_reply_at DESC, r.id DESC
+LIMIT $6
+`
+
+type ThreadsForActorParams struct {
+	ActorID     uuid.UUID
+	WorkspaceID uuid.UUID
+	AfterAt     *time.Time
+	AfterID     *uuid.UUID
+	UnreadOnly  bool
+	PageSize    int32
+}
+
+type ThreadsForActorRow struct {
+	Message       Message
+	LastReadAt    *time.Time
+	UnreadReplies int64
+	Mentioned     bool
+}
+
+func (q *Queries) ThreadsForActor(ctx context.Context, arg ThreadsForActorParams) ([]ThreadsForActorRow, error) {
+	rows, err := q.db.Query(ctx, threadsForActor,
+		arg.ActorID,
+		arg.WorkspaceID,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.UnreadOnly,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ThreadsForActorRow
+	for rows.Next() {
+		var i ThreadsForActorRow
+		if err := rows.Scan(
+			&i.Message.ID,
+			&i.Message.WorkspaceID,
+			&i.Message.ChannelID,
+			&i.Message.ThreadRootID,
+			&i.Message.AuthorID,
+			&i.Message.ClientMsgID,
+			&i.Message.Kind,
+			&i.Message.Body,
+			&i.Message.Mentions,
+			&i.Message.ReplyCount,
+			&i.Message.LastReplyAt,
+			&i.Message.CreatedAt,
+			&i.Message.DeletedAt,
+			&i.Message.DeletedBy,
+			&i.Message.OriginChannelID,
+			&i.Message.OriginThreadID,
+			&i.Message.AnswersMessageID,
+			&i.LastReadAt,
+			&i.UnreadReplies,
+			&i.Mentioned,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateChannel = `-- name: UpdateChannel :exec
+UPDATE channel SET name = $2, description = $3 WHERE id = $1
+`
+
+type UpdateChannelParams struct {
+	ID          uuid.UUID
+	Name        string
+	Description string
+}
+
+func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) error {
+	_, err := q.db.Exec(ctx, updateChannel, arg.ID, arg.Name, arg.Description)
+	return err
 }

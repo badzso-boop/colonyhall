@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"colonyhall/internal/apispec"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/server"
 )
 
@@ -76,8 +77,7 @@ func TestChannelsAndMembersE2E(t *testing.T) {
 
 	// 5. Agent cannot add members (403)
 	canWrite := true
-	addStatus := e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), server.DevAgentToken, apispec.AddMemberRequest{
-		ActorId:  alice.Actor.Id,
+	addStatus := e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), server.DevAgentToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(alice.Actor.Id),
 		CanWrite: &canWrite,
 	}, nil)
 	if addStatus != http.StatusForbidden {
@@ -85,8 +85,7 @@ func TestChannelsAndMembersE2E(t *testing.T) {
 	}
 
 	// 6. Non-admin human (alice) cannot add members (403)
-	addStatus = e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), alice.Token, apispec.AddMemberRequest{
-		ActorId:  bobAdmin.Actor.Id,
+	addStatus = e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), alice.Token, apispec.AddMemberRequest{ActorId: httpx.Ptr(bobAdmin.Actor.Id),
 		CanWrite: &canWrite,
 	}, nil)
 	if addStatus != http.StatusForbidden {
@@ -94,16 +93,14 @@ func TestChannelsAndMembersE2E(t *testing.T) {
 	}
 
 	// 7. Admin adds alice and bobAdmin to the channel
-	status = e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId:  alice.Actor.Id,
+	status = e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(alice.Actor.Id),
 		CanWrite: &canWrite,
 	}, nil)
 	if status != http.StatusNoContent {
 		t.Fatalf("expected 204 for adding alice, got %d", status)
 	}
 
-	status = e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId:  bobAdmin.Actor.Id,
+	status = e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", createdChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(bobAdmin.Actor.Id),
 		CanWrite: &canWrite,
 	}, nil)
 	if status != http.StatusNoContent {

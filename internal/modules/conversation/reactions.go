@@ -84,6 +84,9 @@ func (s *Service) reactInTx(ctx context.Context, by identity.Actor, messageID id
 	if err != nil {
 		return 0, err
 	}
+	if c.Archived() {
+		return 0, ErrChannelArchived
+	}
 	mem, err := s.membership(ctx, c.ID, by.ID)
 	if err != nil {
 		return 0, err

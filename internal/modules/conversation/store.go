@@ -16,6 +16,26 @@ type Store interface {
 	// ChannelsForActor lists channels the actor belongs to; all=true lists
 	// every channel in the workspace (for admins), marking membership.
 	ChannelsForActor(ctx context.Context, workspaceID, actorID ids.ID, all bool) ([]ChannelView, error)
+	// UpdateChannel stores a new name and description.
+	UpdateChannel(ctx context.Context, id ids.ID, name, description string) error
+	// SetArchived archives (at, by set) or unarchives (both nil) a channel.
+	SetArchived(ctx context.Context, id ids.ID, at *time.Time, by *ids.ID) error
+
+	// SetMute stores (or replaces) a viewer's mute; DeleteMute removes it.
+	SetMute(ctx context.Context, m Mute) error
+	DeleteMute(ctx context.Context, actorID, channelID ids.ID) error
+	// Mutes returns the actor's mutes, including expired ones.
+	Mutes(ctx context.Context, actorID ids.ID) ([]Mute, error)
+
+	// SetThreadRead records that the actor has seen the thread up to at.
+	SetThreadRead(ctx context.Context, actorID, rootID ids.ID, at time.Time) error
+	// ThreadsForActor lists the threads (roots with replies, not retracted)
+	// the actor wrote, replied in or was mentioned in, in channels the actor
+	// is a member of, newest reply first, after the cursor (nil = start).
+	// UnreadReplies counts others' replies after the later of the actor's
+	// last read and the actor's own latest reply. unreadOnly keeps those
+	// with unread replies.
+	ThreadsForActor(ctx context.Context, workspaceID, actorID ids.ID, after *ThreadCursor, limit int, unreadOnly bool) ([]ThreadSummary, error)
 
 	AddMember(ctx context.Context, m Member) error
 	RemoveMember(ctx context.Context, channelID, actorID ids.ID, at time.Time) error

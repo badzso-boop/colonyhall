@@ -75,6 +75,12 @@ type Agent struct {
 	currentRunThreadID    string
 	currentRunRetracted   bool
 	currentRetractedMsgID string
+	// currentRunLeft: the run was stopped because the agent was removed
+	// from its channel or the channel was archived (round 34).
+	currentRunLeft bool
+	// leftChannels collects such channels while a decide batch runs, so
+	// its items there are not acted on.
+	leftChannels map[string]bool
 
 	// HostConfigVersion, when set (host mode), returns the host config version.
 	HostConfigVersion func() string
@@ -426,6 +432,14 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 	for _, it := range items {
 		pitems = append(pitems, PromptItem{Item: it, Context: a.threadContext(runCtx, it)})
 	}
+	a.workMu.Lock()
+	a.leftChannels = map[string]bool{}
+	a.workMu.Unlock()
+	defer func() {
+		a.workMu.Lock()
+		a.leftChannels = nil
+		a.workMu.Unlock()
+	}()
 	dctx, cancel := context.WithTimeout(runCtx, a.Cfg.DecideTimeout)
 	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.getMe().Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir, Wrap: a.DecideWrap})
 	cancel()
@@ -471,6 +485,13 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		}
 		act, ok := byRef[ref]
 		if !ok {
+			act = Action{Kind: ActNone}
+		}
+		a.workMu.Lock()
+		left := a.leftChannels[it.ChannelID]
+		a.workMu.Unlock()
+		if left {
+			a.Log.Info("guard: skipping item, the channel is no longer the agent's", "agent", a.logName(), "channel_id", it.ChannelID)
 			act = Action{Kind: ActNone}
 		}
 		if err := a.apply(runCtx, it, act); err != nil {
@@ -612,6 +633,36 @@ func (a *Agent) OnMessageRetracted(messageID string) {
 	if a.workCancel != nil {
 		a.workCancel()
 	}
+}
+
+// OnChannelLeft stops the running work or direct run whose items or target
+// belong to the channel: the agent was removed from it or it was archived.
+// No note is posted (the agent may no longer write there; the server wrote
+// the silent system message). Runs for other channels continue.
+func (a *Agent) OnChannelLeft(channelID, reason string) {
+	if channelID == "" {
+		return
+	}
+	a.workMu.Lock()
+	defer a.workMu.Unlock()
+	if a.leftChannels != nil {
+		a.leftChannels[channelID] = true
+	}
+	if a.workCancel == nil {
+		return
+	}
+	match := a.currentRunChannelID == channelID
+	for _, it := range a.currentRunItems {
+		if it.ChannelID == channelID {
+			match = true
+		}
+	}
+	if !match {
+		return
+	}
+	a.currentRunLeft = true
+	a.Log.Info("guard: stopping run, the channel is no longer the agent's", "agent", a.logName(), "channel_id", channelID, "reason", reason)
+	a.workCancel()
 }
 
 // fetchRules fetches the agent's instructions (rendered rules) from the server,
@@ -779,6 +830,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		a.currentRunThreadID = it.ThreadRootID
 		a.currentRunRetracted = false
 		a.currentRetractedMsgID = ""
+		a.currentRunLeft = false
 		a.workMu.Unlock()
 		promptBranch := ""
 		if a.Sandbox && a.WorktreeBranch != "" {
@@ -811,6 +863,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				a.Log.Error("guard: start planner mcp server", "err", err)
 			} else {
 				plannerSrv = ps
+				plannerSrv.DefaultChannel = it.ChannelID
 				defer func() { _ = plannerSrv.Close() }()
 			}
 		}
@@ -854,15 +907,22 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		a.workMu.Lock()
 		wasRetracted := a.currentRunRetracted
 		retractedMsgID := a.currentRetractedMsgID
+		wasLeft := a.currentRunLeft
 		a.workCancel = nil
 		a.currentRunItems = nil
 		a.currentRunRetracted = false
+		a.currentRunLeft = false
 		a.workMu.Unlock()
 		var visitedURLs []string
 		if tracker != nil {
 			visitedURLs = tracker.VisitedURLs()
 		}
 		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
+		if wasLeft {
+			a.Log.Info("guard: work run stopped, the channel is no longer the agent's", "agent", a.logName(), "channel_id", it.ChannelID)
+			a.reportRun(context.Background(), "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "stopped", "", steps, "", visitedURLs)
+			return nil
+		}
 		if wasRetracted {
 			a.Log.Info("guard: work run stopped because message was retracted", "agent", a.logName(), "message_id", retractedMsgID)
 			_ = a.Client.CreateRetractNote(context.Background(), it.ChannelID, it.ThreadRootID)

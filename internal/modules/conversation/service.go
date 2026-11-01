@@ -109,10 +109,11 @@ func (s *Service) CreateChannel(ctx context.Context, by identity.Actor, name, de
 
 // ChannelMemberView is a channel member with actor details for clients.
 type ChannelMemberView struct {
-	ActorID  ids.ID
-	Handle   string
-	Kind     identity.Kind
-	CanWrite bool
+	ActorID     ids.ID
+	Handle      string
+	DisplayName string
+	Kind        identity.Kind
+	CanWrite    bool
 }
 
 // ListMembers lists members of channelID. Any actor who can read the channel may list its members.
@@ -138,18 +139,31 @@ func (s *Service) ListMembers(ctx context.Context, by identity.Actor, channelID 
 			continue
 		}
 		out = append(out, ChannelMemberView{
-			ActorID:  m.ActorID,
-			Handle:   act.Handle,
-			Kind:     act.Kind,
-			CanWrite: m.CanWrite,
+			ActorID:     m.ActorID,
+			Handle:      act.Handle,
+			DisplayName: act.DisplayName,
+			Kind:        act.Kind,
+			CanWrite:    m.CanWrite,
 		})
 	}
 	return out, nil
 }
 
-// RemoveMember removes an actor from a channel. Only admins may do this.
-// Soft-removes the member. Removing the last human admin of a private channel is refused.
+// RemoveMember removes an actor from a channel or DM for another module
+// (archiving an agent), without a note. Only admins may do this.
+// Soft-removes the member. Removing the last human admin of a private
+// channel is refused.
 func (s *Service) RemoveMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID) error {
+	return s.removeMember(ctx, by, channelID, actorID, false)
+}
+
+// RemoveChannelMember is RemoveMember for the channel editor: a DM's members
+// are fixed, and the removal leaves a silent note in the channel.
+func (s *Service) RemoveChannelMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID) error {
+	return s.removeMember(ctx, by, channelID, actorID, true)
+}
+
+func (s *Service) removeMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID, editor bool) error {
 	if !policy.CanManageMembers(subject(by)) {
 		return ErrForbidden
 	}
@@ -158,6 +172,9 @@ func (s *Service) RemoveMember(ctx context.Context, by identity.Actor, channelID
 		c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
 		if err != nil {
 			return err
+		}
+		if c.Kind == KindDM && editor {
+			return ErrDMUnchangeable
 		}
 		target, err := s.Directory.ActorByID(ctx, actorID)
 		if err != nil {
@@ -202,6 +219,10 @@ func (s *Service) RemoveMember(ctx context.Context, by identity.Actor, channelID
 		}
 		seq, err = s.appendEvent(ctx, by, c.ID, EventMemberRemoved, "channel", c.ID,
 			MemberRemoved{ChannelID: c.ID.String(), ActorID: actorID.String()})
+		if err != nil || !editor {
+			return err
+		}
+		seq, err = s.postChangeNote(ctx, by, c, fmt.Sprintf("👋 @%s eltávolította: @%s", by.Handle, target.Handle))
 		return err
 	})
 	if err != nil {
@@ -213,11 +234,29 @@ func (s *Service) RemoveMember(ctx context.Context, by identity.Actor, channelID
 	return nil
 }
 
-// AddMember adds an actor to a channel. Only admins may do this.
-// Adding an existing member is a no-op.
+// AddMember adds an actor to a channel for another module (a new agent's
+// channels, the dev seed), without a note. Only admins may do this. Adding
+// an existing member is a no-op.
 func (s *Service) AddMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID, canWrite bool) error {
+	return s.addMembers(ctx, by, channelID, []ids.ID{actorID}, canWrite, false)
+}
+
+// MaxBatchMembers bounds one batch add.
+const MaxBatchMembers = 100
+
+// AddMembers adds actors to a channel in one transaction for the channel
+// editor (admins only) and writes one silent note naming the new members.
+// Existing members are skipped; a DM's members are fixed.
+func (s *Service) AddMembers(ctx context.Context, by identity.Actor, channelID ids.ID, actorIDs []ids.ID, canWrite bool) error {
+	return s.addMembers(ctx, by, channelID, actorIDs, canWrite, true)
+}
+
+func (s *Service) addMembers(ctx context.Context, by identity.Actor, channelID ids.ID, actorIDs []ids.ID, canWrite, editor bool) error {
 	if !policy.CanManageMembers(subject(by)) {
 		return ErrForbidden
+	}
+	if len(actorIDs) == 0 || len(actorIDs) > MaxBatchMembers {
+		return ErrMemberNotFound
 	}
 	var seq int64
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -225,14 +264,42 @@ func (s *Service) AddMember(ctx context.Context, by identity.Actor, channelID, a
 		if err != nil {
 			return err
 		}
-		target, err := s.Directory.ActorByID(ctx, actorID)
-		if err != nil {
-			return fmt.Errorf("actor: %w", err)
+		if c.Kind == KindDM && editor {
+			return ErrDMUnchangeable
 		}
-		if target.WorkspaceID != by.WorkspaceID {
-			return fmt.Errorf("actor: %w", db.ErrNotFound)
+		// Validate every target before the first write: the memory store
+		// cannot roll back.
+		targets := make([]identity.Actor, 0, len(actorIDs))
+		seen := map[ids.ID]bool{}
+		for _, id := range actorIDs {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			target, err := s.Directory.ActorByID(ctx, id)
+			if err != nil {
+				return fmt.Errorf("actor: %w", err)
+			}
+			if target.WorkspaceID != by.WorkspaceID {
+				return fmt.Errorf("actor: %w", db.ErrNotFound)
+			}
+			targets = append(targets, target)
 		}
-		seq, err = s.addMember(ctx, by, c, actorID, canWrite)
+		var added []string
+		for _, target := range targets {
+			n, err := s.addMember(ctx, by, c, target.ID, canWrite)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				seq = n
+				added = append(added, "@"+target.Handle)
+			}
+		}
+		if len(added) == 0 || !editor {
+			return nil
+		}
+		seq, err = s.postChangeNote(ctx, by, c, fmt.Sprintf("➕ @%s hozzáadta: %s", by.Handle, strings.Join(added, ", ")))
 		return err
 	})
 	if err != nil {
@@ -351,6 +418,9 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	c, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID)
 	if err != nil {
 		return SendResult{}, err
+	}
+	if c.Archived() {
+		return SendResult{}, ErrChannelArchived
 	}
 	mem, err := s.membership(ctx, c.ID, by.ID)
 	if err != nil {
@@ -564,8 +634,12 @@ func (s *Service) ackAsReaction(ctx context.Context, by identity.Actor, in SendI
 	var target ids.ID
 	var seq int64
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
-		if _, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID); err != nil {
+		c, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID)
+		if err != nil {
 			return err
+		}
+		if c.Archived() {
+			return ErrChannelArchived
 		}
 		target = in.ThreadRootID
 		if target == ids.Nil {
@@ -578,7 +652,6 @@ func (s *Service) ackAsReaction(ctx context.Context, by identity.Actor, in SendI
 			}
 			target = last.ID
 		}
-		var err error
 		seq, err = s.reactInTx(ctx, by, target, ThumbsUp, true)
 		return err
 	})
@@ -634,10 +707,22 @@ func MessageCreatedPayload(m Message) MessageCreated {
 	return p
 }
 
-// ListChannels lists the channels the actor may see, with unread counts.
-func (s *Service) ListChannels(ctx context.Context, by identity.Actor) ([]ChannelView, error) {
-	views, err := s.Store.ChannelsForActor(ctx, by.WorkspaceID, by.ID, by.IsAdmin())
+// ListChannels lists the channels the actor may see, with unread counts and
+// the actor's own mutes. Archived channels are left out unless an admin asks
+// for them.
+func (s *Service) ListChannels(ctx context.Context, by identity.Actor, archived bool) ([]ChannelView, error) {
+	all, err := s.Store.ChannelsForActor(ctx, by.WorkspaceID, by.ID, by.IsAdmin())
 	if err != nil {
+		return nil, err
+	}
+	archived = archived && by.IsAdmin()
+	views := all[:0]
+	for _, v := range all {
+		if !v.Archived() || archived {
+			views = append(views, v)
+		}
+	}
+	if err := s.withMutes(ctx, by.ID, views); err != nil {
 		return nil, err
 	}
 	for i := range views {

@@ -81,7 +81,7 @@ func registerOverview(
 
 		// For humans: profile, role, their channels in common.
 		if targetActor.Kind == identity.KindHuman {
-			chans, err := cvSvc.ListChannels(ctx, caller)
+			chans, err := cvSvc.ListChannels(ctx, caller, false)
 			if err != nil {
 				httpx.Error(w, r, err)
 				return
@@ -111,7 +111,7 @@ func registerOverview(
 		// For agents: the conversations both the caller and the agent are in,
 		// DMs first. The file and terminal relays run through one of them, so
 		// the PWA picks the first (a DM with the agent counts).
-		chans, err := cvSvc.ListChannels(ctx, caller)
+		chans, err := cvSvc.ListChannels(ctx, caller, false)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return

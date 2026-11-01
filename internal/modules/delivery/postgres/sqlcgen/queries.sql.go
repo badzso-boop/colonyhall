@@ -31,6 +31,26 @@ func (q *Queries) Ack(ctx context.Context, arg AckParams) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const ackByChannel = `-- name: AckByChannel :execrows
+UPDATE delivery SET acked_at = $1::timestamptz
+WHERE channel_id = $2 AND acked_at IS NULL
+  AND ($3::uuid IS NULL OR recipient_id = $3::uuid)
+`
+
+type AckByChannelParams struct {
+	At          time.Time
+	ChannelID   *uuid.UUID
+	RecipientID *uuid.UUID
+}
+
+func (q *Queries) AckByChannel(ctx context.Context, arg AckByChannelParams) (int64, error) {
+	result, err := q.db.Exec(ctx, ackByChannel, arg.At, arg.ChannelID, arg.RecipientID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const ackByItemID = `-- name: AckByItemID :execrows
 UPDATE delivery SET acked_at = $1::timestamptz
 WHERE item_id = $2 AND acked_at IS NULL

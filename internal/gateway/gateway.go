@@ -612,6 +612,10 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 	if e.WorkspaceID != c.actor.WorkspaceID {
 		return false, nil
 	}
+	if e.Type == conversation.EventMuteChanged {
+		// A mute is the viewer's own preference, even for admins.
+		return e.ActorID == c.actor.ID, nil
+	}
 	if c.actor.IsAdmin() {
 		return true, nil
 	}
@@ -622,6 +626,17 @@ func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error
 			return false, nil
 		}
 		return p.RecipientID == c.actor.ID.String(), nil
+	}
+	if e.Type == conversation.EventMemberRemoved {
+		// The removed member hears of it even though it can no longer read
+		// the channel: its guard stops the work it runs there.
+		var p conversation.MemberRemoved
+		if json.Unmarshal(e.Payload, &p) == nil && p.ActorID == c.actor.ID.String() {
+			c.mu.Lock()
+			delete(c.canRead, e.ChannelID)
+			c.mu.Unlock()
+			return true, nil
+		}
 	}
 	if e.ChannelID == ids.Nil {
 		// Workspace-wide announcements (e.g. the emergency stop) reach

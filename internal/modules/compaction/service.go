@@ -333,6 +333,12 @@ func (s *Service) TriggerCompaction(ctx context.Context, by identity.Actor, chan
 	if err != nil || !canWrite {
 		return Compaction{}, ErrForbidden
 	}
+	// An archived channel is read-only: no compaction runs in it.
+	if ch, err := s.Conversation.ChannelByID(ctx, channelID); err != nil {
+		return Compaction{}, err
+	} else if ch.Archived() {
+		return Compaction{}, conversation.ErrChannelArchived
+	}
 
 	st, err := s.Store.GetSettings(ctx, by.WorkspaceID)
 	if err != nil || st.CompactorAgentID == ids.Nil {

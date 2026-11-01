@@ -406,3 +406,56 @@ func TestPlannerMCP_NotOfferedWithoutPolicy(t *testing.T) {
 		t.Fatalf("planner tools offered without the policy: allow=%v prompt=%q", got.AllowPlanner, got.Prompt)
 	}
 }
+
+// TestPlannerMCP_ChannelInfo: the bridge offers channel_info besides the two
+// planner tools, forwards it with the current task's channel when the agent
+// names none, and still offers nothing else.
+func TestPlannerMCP_ChannelInfo(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	sockPath := filepath.Join(t.TempDir(), "planner.sock")
+	ps, err := StartPlannerMCPServer(sockPath, nil, "http://127.0.0.1:9999", "@bot", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ps.Close() }()
+	ps.DefaultChannel = "c-current"
+	var forwarded []map[string]any
+	ps.forwardFunc = func(_ context.Context, tool string, args map[string]any) (*mcp.CallToolResult, error) {
+		forwarded = append(forwarded, map[string]any{"tool": tool, "channel": args["channel"]})
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "#ops"}}}, nil
+	}
+	httpClient := &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return net.Dial("unix", sockPath) },
+	}}
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "sandboxed", Version: "1.0"}, nil).
+		Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://localhost/mcp", HTTPClient: httpClient}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = session.Close() }()
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, tl := range tools.Tools {
+		names = append(names, tl.Name)
+	}
+	if strings.Join(names, ",") != "calendar_read,channel_info,planner_read" {
+		t.Fatalf("bridge tools: %v", names)
+	}
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "channel_info", Arguments: map[string]any{}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "channel_info", Arguments: map[string]any{"channel": "#ops"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(forwarded) != 2 || forwarded[0]["channel"] != "c-current" || forwarded[1]["channel"] != "#ops" {
+		t.Fatalf("forwarded: %v", forwarded)
+	}
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "send", Arguments: map[string]any{"text": "x"}}); err == nil {
+		t.Fatal("send must stay refused")
+	}
+}

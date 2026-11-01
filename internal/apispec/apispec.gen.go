@@ -1304,8 +1304,9 @@ type ActorList struct {
 
 // AddMemberRequest defines model for AddMemberRequest.
 type AddMemberRequest struct {
-	ActorId  openapi_types.UUID `json:"actor_id"`
-	CanWrite *bool              `json:"can_write,omitempty"`
+	ActorId  *openapi_types.UUID   `json:"actor_id,omitempty"`
+	ActorIds *[]openapi_types.UUID `json:"actor_ids,omitempty"`
+	CanWrite *bool                 `json:"can_write,omitempty"`
 }
 
 // AddPlannerCalendarRequest defines model for AddPlannerCalendarRequest.
@@ -1640,6 +1641,8 @@ type AuditVerify struct {
 
 // Channel defines model for Channel.
 type Channel struct {
+	// ArchivedAt Set while the channel is archived (read-only)
+	ArchivedAt             *time.Time         `json:"archived_at,omitempty"`
 	CompactThresholdTokens *int               `json:"compact_threshold_tokens,omitempty"`
 	Description            *string            `json:"description,omitempty"`
 	Id                     openapi_types.UUID `json:"id"`
@@ -1649,8 +1652,14 @@ type Channel struct {
 	// MemberIds DM channels only
 	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
 	Mentions  int64                 `json:"mentions"`
-	Name      string                `json:"name"`
-	Unread    int64                 `json:"unread"`
+
+	// Muted The caller has muted the channel
+	Muted *bool `json:"muted,omitempty"`
+
+	// MutedUntil End of the caller's mute; null while muted means forever
+	MutedUntil *time.Time `json:"muted_until,omitempty"`
+	Name       string     `json:"name"`
+	Unread     int64      `json:"unread"`
 }
 
 // ChannelKind defines model for ChannelKind.
@@ -1663,10 +1672,11 @@ type ChannelList struct {
 
 // ChannelMember defines model for ChannelMember.
 type ChannelMember struct {
-	ActorId  openapi_types.UUID `json:"actor_id"`
-	CanWrite bool               `json:"can_write"`
-	Handle   string             `json:"handle"`
-	Kind     ActorKind          `json:"kind"`
+	ActorId     openapi_types.UUID `json:"actor_id"`
+	CanWrite    bool               `json:"can_write"`
+	DisplayName *string            `json:"display_name,omitempty"`
+	Handle      string             `json:"handle"`
+	Kind        ActorKind          `json:"kind"`
 }
 
 // ChannelMemberList defines model for ChannelMemberList.
@@ -1825,7 +1835,10 @@ type CreateAgentRequest struct {
 type CreateChannelRequest struct {
 	Description *string      `json:"description,omitempty"`
 	Kind        *ChannelKind `json:"kind,omitempty"`
-	Name        string       `json:"name"`
+
+	// MemberIds Admins: initial members besides the creator
+	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
+	Name      string                `json:"name"`
 }
 
 // CreateFileFetchRequest defines model for CreateFileFetchRequest.
@@ -2467,6 +2480,11 @@ type LoginRequest struct {
 	Workspace *string `json:"workspace,omitempty"`
 }
 
+// MarkedCount defines model for MarkedCount.
+type MarkedCount struct {
+	Marked int `json:"marked"`
+}
+
 // Message defines model for Message.
 type Message struct {
 	// Answers Set on an agent's answer posted in its origin thread: the DM reply it answers
@@ -2514,6 +2532,38 @@ type MessageOrigin struct {
 	Channel   string             `json:"channel"`
 	ChannelId openapi_types.UUID `json:"channel_id"`
 	ThreadId  openapi_types.UUID `json:"thread_id"`
+}
+
+// MuteRequest defines model for MuteRequest.
+type MuteRequest struct {
+	// Until Omit to mute until unmuted
+	Until *time.Time `json:"until,omitempty"`
+}
+
+// MyThread defines model for MyThread.
+type MyThread struct {
+	ChannelId   openapi_types.UUID `json:"channel_id"`
+	ChannelKind *ChannelKind       `json:"channel_kind,omitempty"`
+	ChannelName string             `json:"channel_name"`
+	LastReadAt  *time.Time         `json:"last_read_at,omitempty"`
+
+	// LatestReplies The latest 2 replies, oldest first
+	LatestReplies []Message `json:"latest_replies"`
+
+	// Mentioned The caller is mentioned in the root or a reply
+	Mentioned bool    `json:"mentioned"`
+	Root      Message `json:"root"`
+
+	// UnreadReplies Others' replies after the caller last read or replied
+	UnreadReplies int64 `json:"unread_replies"`
+}
+
+// MyThreadPage defines model for MyThreadPage.
+type MyThreadPage struct {
+	// NextCursor Absent on the last page
+	NextCursor    *string    `json:"next_cursor,omitempty"`
+	Threads       []MyThread `json:"threads"`
+	UnreadThreads int        `json:"unread_threads"`
 }
 
 // OpenDMRequest defines model for OpenDMRequest.
@@ -3106,6 +3156,13 @@ type UpdateChannelCompactionRequest struct {
 	CompactThresholdTokens *int `json:"compact_threshold_tokens,omitempty"`
 }
 
+// UpdateChannelRequest defines model for UpdateChannelRequest.
+type UpdateChannelRequest struct {
+	// Description Empty clears it
+	Description *string `json:"description,omitempty"`
+	Name        *string `json:"name,omitempty"`
+}
+
 // UpdateCompactionSettingsRequest defines model for UpdateCompactionSettingsRequest.
 type UpdateCompactionSettingsRequest struct {
 	CompactThresholdTokens int                 `json:"compact_threshold_tokens"`
@@ -3259,6 +3316,12 @@ type ListAgentNotesParams struct {
 	Thread *openapi_types.UUID `form:"thread,omitempty" json:"thread,omitempty"`
 }
 
+// ListChannelsParams defines parameters for ListChannels.
+type ListChannelsParams struct {
+	// Archived Admins: include archived channels
+	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+}
+
 // GetChannelCompactionParams defines parameters for GetChannelCompaction.
 type GetChannelCompactionParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
@@ -3314,6 +3377,16 @@ type ListActiveLeasesParams struct {
 
 // ListActiveLeasesParamsState defines parameters for ListActiveLeases.
 type ListActiveLeasesParamsState string
+
+// ListMyThreadsParams defines parameters for ListMyThreads.
+type ListMyThreadsParams struct {
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Unread Only threads with unread replies
+	Unread *bool `form:"unread,omitempty" json:"unread,omitempty"`
+}
 
 // ListPlannerEventsParams defines parameters for ListPlannerEvents.
 type ListPlannerEventsParams struct {
@@ -3440,6 +3513,9 @@ type LoginJSONRequestBody = LoginRequest
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
 
+// UpdateChannelJSONRequestBody defines body for UpdateChannel for application/json ContentType.
+type UpdateChannelJSONRequestBody = UpdateChannelRequest
+
 // UpdateChannelCompactionJSONRequestBody defines body for UpdateChannelCompaction for application/json ContentType.
 type UpdateChannelCompactionJSONRequestBody = UpdateChannelCompactionRequest
 
@@ -3454,6 +3530,9 @@ type AddChannelMemberJSONRequestBody = AddMemberRequest
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessageRequest
+
+// MuteChannelJSONRequestBody defines body for MuteChannel for application/json ContentType.
+type MuteChannelJSONRequestBody = MuteRequest
 
 // UpdateCompactionSummaryJSONRequestBody defines body for UpdateCompactionSummary for application/json ContentType.
 type UpdateCompactionSummaryJSONRequestBody = UpdateCompactionSummaryRequest

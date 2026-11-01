@@ -60,6 +60,24 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 		}
 		_, err = s.Store.AckByItemID(ctx, msgID, e.At)
 		return err
+	case conversation.EventMemberRemoved:
+		// A removed member is not woken for the channel any more (rule 9
+		// refuses its reads and sends there from now on).
+		var p conversation.MemberRemoved
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return fmt.Errorf("delivery: bad %s payload: %w", e.Type, err)
+		}
+		channelID, err1 := ids.Parse(p.ChannelID)
+		actorID, err2 := ids.Parse(p.ActorID)
+		if err1 != nil || err2 != nil {
+			return nil
+		}
+		_, err := s.Store.AckByChannel(ctx, channelID, actorID, e.At)
+		return err
+	case conversation.EventChannelArchived:
+		// An archived channel wakes nobody.
+		_, err := s.Store.AckByChannel(ctx, e.ChannelID, ids.Nil, e.At)
+		return err
 	case conversation.EventReactionAdded:
 		var p conversation.ReactionEvent
 		if err := json.Unmarshal(e.Payload, &p); err != nil {

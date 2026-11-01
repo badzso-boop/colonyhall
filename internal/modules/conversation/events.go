@@ -7,6 +7,11 @@ const (
 	EventChannelCreated   = "channel.created"
 	EventMemberAdded      = "channel.member_added"
 	EventMemberRemoved    = "channel.member_removed"
+	EventChannelUpdated   = "channel.updated"
+	EventChannelArchived  = "channel.archived"
+	EventChannelUnarchive = "channel.unarchived"
+	// EventMuteChanged reaches only the viewer who muted (their other tabs).
+	EventMuteChanged      = "channel.mute_changed"
 	EventMessageCreated   = "message.created"
 	EventMessageRetracted = "message.retracted"
 	EventReactionAdded    = "reaction.added"
@@ -34,6 +39,29 @@ type MemberAdded struct {
 	ChannelID string `json:"channel_id"`
 	ActorID   string `json:"actor_id"`
 	CanWrite  bool   `json:"can_write"`
+}
+
+// ChannelUpdated is the payload of EventChannelUpdated. It never carries the
+// description text: clients refetch the channel.
+type ChannelUpdated struct {
+	ChannelID string   `json:"channel_id"`
+	Fields    []string `json:"fields"`
+	OldName   string   `json:"old_name,omitempty"`
+	NewName   string   `json:"new_name,omitempty"`
+}
+
+// ChannelArchived is the payload of EventChannelArchived and EventChannelUnarchive.
+type ChannelArchived struct {
+	ChannelID string `json:"channel_id"`
+	Name      string `json:"name"`
+}
+
+// MuteChanged is the payload of EventMuteChanged.
+type MuteChanged struct {
+	ChannelID  string     `json:"channel_id"`
+	ActorID    string     `json:"actor_id"`
+	Muted      bool       `json:"muted"`
+	MutedUntil *time.Time `json:"muted_until,omitempty"`
 }
 
 // MemberRemoved is the payload of EventMemberRemoved.

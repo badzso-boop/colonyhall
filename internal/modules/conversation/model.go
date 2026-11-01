@@ -32,7 +32,13 @@ type Channel struct {
 	MsgCount               int64 // total messages, for unread badges
 	CreatedBy              ids.ID
 	CreatedAt              time.Time
+	// ArchivedAt marks a read-only channel; ArchivedBy is the admin who did it.
+	ArchivedAt *time.Time
+	ArchivedBy *ids.ID
 }
+
+// Archived reports whether the channel is read-only.
+func (c Channel) Archived() bool { return c.ArchivedAt != nil }
 
 // Member is an actor's membership in a channel. MsgCount is how many of the
 // channel's messages the member has seen; unread = Channel.MsgCount - MsgCount
@@ -55,6 +61,38 @@ type ChannelView struct {
 	IsMember bool
 	// MemberIDs is filled for DM channels, so clients can show who is in it.
 	MemberIDs []ids.ID
+	// Muted is the viewer's own mute; MutedUntil nil while muted means forever.
+	Muted      bool
+	MutedUntil *time.Time
+}
+
+// Mute is one viewer's mute of a channel. Until nil means forever; an
+// expired mute counts as unmuted.
+type Mute struct {
+	ActorID   ids.ID
+	ChannelID ids.ID
+	Until     *time.Time
+	CreatedAt time.Time
+}
+
+// Active reports whether the mute is in force at now.
+func (m Mute) Active(now time.Time) bool { return m.Until == nil || m.Until.After(now) }
+
+// ThreadSummary is one thread the viewer takes part in, for "Szálaim".
+type ThreadSummary struct {
+	Root          Message
+	Channel       Channel // filled by the service
+	LastReadAt    *time.Time
+	UnreadReplies int64
+	// Mentioned: the viewer is mentioned in the root or a reply.
+	Mentioned     bool
+	LatestReplies []Message
+}
+
+// ThreadCursor pages "Szálaim" by (last reply time, root id), newest first.
+type ThreadCursor struct {
+	LastReplyAt time.Time
+	RootID      ids.ID
 }
 
 // Reaction is one actor's emoji on a message. Removal is a soft mark.
@@ -150,6 +188,10 @@ var (
 	ErrBadThread          = errors.New("thread root must be a top-level message in the same channel")
 	ErrBadEmoji           = errors.New("emoji must be a short emoji sequence (1-32 characters, no text)")
 	ErrBadDM              = errors.New("a DM needs 1-8 other people from this workspace")
+	ErrChannelArchived    = errors.New("the channel is archived and read-only")
+	ErrDMUnchangeable     = errors.New("a DM cannot be renamed, archived or have its members changed")
+	ErrNothingToUpdate    = errors.New("give a name or a description to change")
+	ErrBadMuteUntil       = errors.New("until must be in the future")
 )
 
 // MaxDescriptionLen is the maximum allowed length of a channel description.

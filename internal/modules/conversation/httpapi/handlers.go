@@ -24,7 +24,9 @@ func init() {
 		conversation.ErrNothingToAck)
 	httpx.RegisterForbidden(conversation.ErrForbidden)
 	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrConversationPaused)
-	httpx.RegisterStatus(http.StatusConflict, conversation.ErrLastAdmin)
+	httpx.RegisterStatus(http.StatusConflict, conversation.ErrLastAdmin, conversation.ErrDMUnchangeable)
+	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
+	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
 }
 
@@ -114,6 +116,11 @@ func channelToAPI(c conversation.ChannelView) apispec.Channel {
 	if c.MemberIDs != nil {
 		out.MemberIds = &c.MemberIDs
 	}
+	out.ArchivedAt = c.ArchivedAt
+	if c.Muted {
+		out.Muted = httpx.Ptr(true)
+		out.MutedUntil = c.MutedUntil
+	}
 	return out
 }
 
@@ -129,6 +136,7 @@ func ChannelToAPI(c conversation.Channel) apispec.Channel {
 		Name:                   c.Name,
 		Description:            desc,
 		CompactThresholdTokens: c.CompactThresholdTokens,
+		ArchivedAt:             c.ArchivedAt,
 	}
 }
 
@@ -150,7 +158,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
 
 	mux.Handle("GET /api/v1/channels", wrap(func(w http.ResponseWriter, r *http.Request) {
-		list, err := svc.ListChannels(r.Context(), httpx.Actor(r))
+		list, err := svc.ListChannels(r.Context(), httpx.Actor(r), r.URL.Query().Get("archived") == "true")
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
@@ -173,12 +181,166 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		if in.Description != nil {
 			desc = *in.Description
 		}
-		c, err := svc.CreateChannel(r.Context(), httpx.Actor(r), in.Name, desc, kind)
+		by := httpx.Actor(r)
+		members := httpx.Deref(in.MemberIds, nil)
+		// Adding members is for admins; refuse before creating anything.
+		if len(members) > 0 && !by.IsAdmin() {
+			httpx.Error(w, r, conversation.ErrForbidden)
+			return
+		}
+		c, err := svc.CreateChannel(r.Context(), by, in.Name, desc, kind)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
+		if len(members) > 0 {
+			if err := svc.AddMembers(r.Context(), by, c.ID, members, true); err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+		}
 		httpx.JSON(w, http.StatusCreated, channelToAPI(conversation.ChannelView{Channel: c, IsMember: true}))
+	}))
+
+	mux.Handle("GET /api/v1/channels/{id}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		v, err := svc.GetChannel(r.Context(), httpx.Actor(r), channelID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, channelToAPI(v))
+	}))
+
+	mux.Handle("PATCH /api/v1/channels/{id}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var in apispec.UpdateChannelRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		by := httpx.Actor(r)
+		if _, err := svc.UpdateChannel(r.Context(), by, channelID, conversation.ChannelUpdate{Name: in.Name, Description: in.Description}); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		writeChannel(w, r, svc, channelID)
+	}))
+
+	archive := func(on bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			channelID, ok := pathID(w, r, "id")
+			if !ok {
+				return
+			}
+			var err error
+			if on {
+				_, err = svc.ArchiveChannel(r.Context(), httpx.Actor(r), channelID)
+			} else {
+				_, err = svc.UnarchiveChannel(r.Context(), httpx.Actor(r), channelID)
+			}
+			if err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+			writeChannel(w, r, svc, channelID)
+		}
+	}
+	mux.Handle("POST /api/v1/channels/{id}/archive", wrap(archive(true)))
+	mux.Handle("POST /api/v1/channels/{id}/unarchive", wrap(archive(false)))
+
+	mux.Handle("PUT /api/v1/channels/{id}/mute", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var in apispec.MuteRequest
+		if r.ContentLength != 0 {
+			if err := httpx.Decode(r, &in); err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+		}
+		if err := svc.Mute(r.Context(), httpx.Actor(r), channelID, in.Until); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("DELETE /api/v1/channels/{id}/mute", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		if err := svc.Unmute(r.Context(), httpx.Actor(r), channelID); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("GET /api/v1/me/threads", wrap(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		var after *conversation.ThreadCursor
+		if c := q.Get("cursor"); c != "" {
+			cur, err := parseThreadCursor(c)
+			if err != nil {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "cursor is not a next_cursor value"})
+				return
+			}
+			after = &cur
+		}
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		page, err := svc.MyThreads(r.Context(), httpx.Actor(r), after, limit, q.Get("unread") == "true")
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.MyThreadPage{Threads: make([]apispec.MyThread, 0, len(page.Threads)), UnreadThreads: page.UnreadThreads}
+		for _, t := range page.Threads {
+			item := apispec.MyThread{
+				Root: MessageToAPI(t.Root), ChannelId: t.Channel.ID, ChannelName: t.Channel.Name,
+				ChannelKind: httpx.Ptr(apispec.ChannelKind(t.Channel.Kind)), LastReadAt: t.LastReadAt,
+				UnreadReplies: t.UnreadReplies, Mentioned: t.Mentioned,
+				LatestReplies: make([]apispec.Message, 0, len(t.LatestReplies)),
+			}
+			for _, m := range t.LatestReplies {
+				item.LatestReplies = append(item.LatestReplies, MessageToAPI(m))
+			}
+			out.Threads = append(out.Threads, item)
+		}
+		if page.Next != nil {
+			out.NextCursor = httpx.Ptr(formatThreadCursor(*page.Next))
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	mux.Handle("POST /api/v1/me/threads/read", wrap(func(w http.ResponseWriter, r *http.Request) {
+		n, err := svc.MarkAllThreadsRead(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.MarkedCount{Marked: n})
+	}))
+
+	mux.Handle("POST /api/v1/messages/{id}/thread/read", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		if err := svc.MarkThreadRead(r.Context(), httpx.Actor(r), id); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	mux.Handle("GET /api/v1/channels/{id}/members", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -196,10 +358,11 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		}
 		for i, m := range members {
 			out.Members[i] = apispec.ChannelMember{
-				ActorId:  m.ActorID,
-				Handle:   m.Handle,
-				Kind:     apispec.ActorKind(m.Kind),
-				CanWrite: m.CanWrite,
+				ActorId:     m.ActorID,
+				Handle:      m.Handle,
+				DisplayName: httpx.Ptr(m.DisplayName),
+				Kind:        apispec.ActorKind(m.Kind),
+				CanWrite:    m.CanWrite,
 			}
 		}
 		httpx.JSON(w, http.StatusOK, out)
@@ -215,7 +378,18 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			httpx.Error(w, r, err)
 			return
 		}
-		if err := svc.AddMember(r.Context(), httpx.Actor(r), channelID, in.ActorId, httpx.Deref(in.CanWrite, true)); err != nil {
+		var actorIDs []ids.ID
+		if in.ActorId != nil {
+			actorIDs = append(actorIDs, *in.ActorId)
+		}
+		if in.ActorIds != nil {
+			actorIDs = append(actorIDs, *in.ActorIds...)
+		}
+		if len(actorIDs) == 0 {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "give actor_id or actor_ids"})
+			return
+		}
+		if err := svc.AddMembers(r.Context(), httpx.Actor(r), channelID, actorIDs, httpx.Deref(in.CanWrite, true)); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
@@ -231,7 +405,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		if !ok {
 			return
 		}
-		if err := svc.RemoveMember(r.Context(), httpx.Actor(r), channelID, actorID); err != nil {
+		if err := svc.RemoveChannelMember(r.Context(), httpx.Actor(r), channelID, actorID); err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
@@ -497,6 +671,37 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
+}
+
+// writeChannel answers with the channel as the caller now sees it.
+func writeChannel(w http.ResponseWriter, r *http.Request, svc *conversation.Service, channelID ids.ID) {
+	v, err := svc.GetChannel(r.Context(), httpx.Actor(r), channelID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, channelToAPI(v))
+}
+
+// A thread cursor is "<last reply, unix nanoseconds>_<root id>".
+func formatThreadCursor(c conversation.ThreadCursor) string {
+	return strconv.FormatInt(c.LastReplyAt.UnixNano(), 10) + "_" + c.RootID.String()
+}
+
+func parseThreadCursor(s string) (conversation.ThreadCursor, error) {
+	at, id, ok := strings.Cut(s, "_")
+	if !ok {
+		return conversation.ThreadCursor{}, fmt.Errorf("bad cursor")
+	}
+	n, err := strconv.ParseInt(at, 10, 64)
+	if err != nil {
+		return conversation.ThreadCursor{}, err
+	}
+	root, err := ids.Parse(id)
+	if err != nil {
+		return conversation.ThreadCursor{}, err
+	}
+	return conversation.ThreadCursor{LastReplyAt: time.Unix(0, n).UTC(), RootID: root}, nil
 }
 
 func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {

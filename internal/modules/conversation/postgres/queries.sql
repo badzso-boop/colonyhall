@@ -10,6 +10,7 @@ SELECT * FROM channel WHERE workspace_id = $1 AND name = $2;
 
 -- name: ChannelsForActor :many
 SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.compact_threshold_tokens, c.msg_count, c.created_by, c.created_at,
+       c.archived_at, c.archived_by,
        (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
@@ -132,3 +133,55 @@ SET deleted_at = sqlc.arg(deleted_at)::timestamptz,
     deleted_by = sqlc.arg(deleted_by)::uuid
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL;
 
+
+-- name: UpdateChannel :exec
+UPDATE channel SET name = $2, description = $3 WHERE id = $1;
+
+-- name: SetChannelArchived :exec
+UPDATE channel SET archived_at = sqlc.narg(archived_at), archived_by = sqlc.narg(archived_by) WHERE id = sqlc.arg(id);
+
+-- name: SetMute :exec
+INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (actor_id, channel_id) DO UPDATE SET muted_until = EXCLUDED.muted_until, created_at = EXCLUDED.created_at;
+
+-- name: DeleteMute :exec
+DELETE FROM channel_mute WHERE actor_id = $1 AND channel_id = $2;
+
+-- name: Mutes :many
+SELECT * FROM channel_mute WHERE actor_id = $1 ORDER BY channel_id;
+
+-- name: SetThreadRead :exec
+INSERT INTO thread_read (actor_id, thread_root_id, last_read_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (actor_id, thread_root_id) DO UPDATE SET last_read_at = GREATEST(thread_read.last_read_at, EXCLUDED.last_read_at);
+
+-- name: ThreadsForActor :many
+SELECT sqlc.embed(r), t.last_read_at, t.unread_replies, t.mentioned
+FROM (
+    SELECT root.id,
+           tr.last_read_at,
+           (SELECT count(*) FROM message rep
+            WHERE rep.thread_root_id = root.id AND rep.deleted_at IS NULL AND rep.author_id <> sqlc.arg(actor_id)
+              AND rep.created_at > GREATEST(
+                  COALESCE(tr.last_read_at, '-infinity'::timestamptz),
+                  COALESCE((SELECT max(own.created_at) FROM message own
+                            WHERE own.thread_root_id = root.id AND own.author_id = sqlc.arg(actor_id)), '-infinity'::timestamptz)))::bigint AS unread_replies,
+           (sqlc.arg(actor_id)::uuid = ANY(root.mentions) OR EXISTS (
+               SELECT 1 FROM message rep WHERE rep.thread_root_id = root.id AND rep.deleted_at IS NULL
+                 AND sqlc.arg(actor_id)::uuid = ANY(rep.mentions)))::boolean AS mentioned
+    FROM message root
+    JOIN channel_member cm ON cm.channel_id = root.channel_id AND cm.actor_id = sqlc.arg(actor_id) AND cm.left_at IS NULL
+    LEFT JOIN thread_read tr ON tr.thread_root_id = root.id AND tr.actor_id = sqlc.arg(actor_id)
+    WHERE root.workspace_id = sqlc.arg(workspace_id)
+      AND root.thread_root_id IS NULL AND root.deleted_at IS NULL AND root.reply_count > 0
+      AND (root.author_id = sqlc.arg(actor_id) OR sqlc.arg(actor_id)::uuid = ANY(root.mentions) OR EXISTS (
+          SELECT 1 FROM message rep WHERE rep.thread_root_id = root.id
+            AND (rep.author_id = sqlc.arg(actor_id) OR sqlc.arg(actor_id)::uuid = ANY(rep.mentions))))
+      AND (sqlc.narg(after_at)::timestamptz IS NULL
+           OR (root.last_reply_at, root.id) < (sqlc.narg(after_at)::timestamptz, sqlc.narg(after_id)::uuid))
+) t
+JOIN message r ON r.id = t.id
+WHERE NOT sqlc.arg(unread_only)::boolean OR t.unread_replies > 0
+ORDER BY r.last_reply_at DESC, r.id DESC
+LIMIT sqlc.arg(page_size);

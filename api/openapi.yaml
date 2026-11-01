@@ -215,7 +215,12 @@ paths:
     get:
       operationId: listChannels
       tags: [conversation]
-      description: Channels the caller belongs to; admins see every channel.
+      description: |
+        Channels the caller belongs to; admins see every channel. Archived
+        channels are left out unless an admin asks with archived=true. muted
+        and muted_until are the caller's own mute.
+      parameters:
+        - { name: archived, in: query, schema: { type: boolean, default: false }, description: "Admins: include archived channels" }
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ChannelList" } } } }
@@ -231,6 +236,97 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    get:
+      operationId: getChannel
+      tags: [conversation]
+      description: A channel the caller can read, with the caller's unread counts and mute.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateChannel
+      tags: [conversation]
+      description: |
+        Admins only. Renames a channel and/or changes its description (empty
+        clears it). DMs cannot be renamed (409). Emits channel.updated with the
+        changed field names, never the description text, and writes a silent
+        system note into the channel.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateChannelRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/archive:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: archiveChannel
+      tags: [conversation]
+      description: |
+        Admins only. Makes the channel read-only for everyone: sending,
+        reactions, uploads and thread replies get 409 channel_archived. Its
+        pending wake items are acked and running agent work in it stops.
+        DMs cannot be archived (409).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Archived, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/unarchive:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: unarchiveChannel
+      tags: [conversation]
+      description: Admins only. Makes an archived channel writable again.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Restored, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/mute:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    put:
+      operationId: muteChannel
+      tags: [conversation]
+      description: |
+        Humans, for themselves. Mutes the channel until `until` (forever when
+        omitted). It changes only what the caller is bothered by, never what
+        agents receive. Emits channel.mute_changed to the caller only.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/MuteRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Muted }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unmuteChannel
+      tags: [conversation]
+      description: Humans, for themselves. Removes the caller's mute.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Unmuted }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
   /channels/{channelId}/members:
     parameters:
@@ -249,15 +345,20 @@ paths:
     post:
       operationId: addChannelMember
       tags: [conversation]
-      description: Admins only. Adding an existing member is a no-op.
+      description: |
+        Admins only. Give actor_id, actor_ids or both; existing members are
+        skipped. Writes one silent system note naming the new members. A DM's
+        members cannot change (409).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AddMemberRequest" } } }
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Added }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /channels/{channelId}/members/{actorId}:
     parameters:
@@ -269,7 +370,10 @@ paths:
     delete:
       operationId: removeChannelMember
       tags: [conversation]
-      description: Admins only. Soft-remove a member from the channel.
+      description: |
+        Admins only. Soft-remove a member from the channel. The member's
+        pending items for the channel are acked without waking it, and a
+        silent system note is written. A DM's members cannot change (409).
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Removed }
@@ -307,6 +411,7 @@ paths:
         "200": { description: Converted to a reaction, content: { application/json: { schema: { $ref: "#/components/schemas/SendResult" } } } }
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
 
   /channels/{channelId}/files:
@@ -336,6 +441,7 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /dms:
     post:
@@ -359,6 +465,49 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
+
+  /messages/{messageId}/thread/read:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: markThreadRead
+      tags: [conversation]
+      description: Humans. The caller has seen the thread (root messageId) to its end.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Marked as read }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /me/threads:
+    get:
+      operationId: listMyThreads
+      tags: [conversation]
+      description: |
+        Humans. The threads the caller wrote, replied in or was mentioned in,
+        in channels the caller is still a member of, newest reply first.
+        unread_threads counts threads with unread replies (threads in muted
+        channels only when the caller is mentioned).
+      parameters:
+        - { name: cursor, in: query, schema: { type: string }, description: next_cursor of the previous page }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { name: unread, in: query, schema: { type: boolean, default: false }, description: Only threads with unread replies }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MyThreadPage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /me/threads/read:
+    post:
+      operationId: markAllThreadsRead
+      tags: [conversation]
+      description: Humans. Marks every thread of the caller with unread replies as read.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarkedCount" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /messages/{messageId}/reactions/{emoji}:
     parameters:
@@ -2376,6 +2525,42 @@ components:
         unread: { type: integer, format: int64 }
         mentions: { type: integer, format: int64 }
         member_ids: { type: array, items: { type: string, format: uuid }, description: DM channels only }
+        archived_at: { type: string, format: date-time, nullable: true, description: Set while the channel is archived (read-only) }
+        muted: { type: boolean, description: The caller has muted the channel }
+        muted_until: { type: string, format: date-time, nullable: true, description: "End of the caller's mute; null while muted means forever" }
+    UpdateChannelRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string, maxLength: 250, description: Empty clears it }
+    MuteRequest:
+      type: object
+      properties:
+        until: { type: string, format: date-time, description: Omit to mute until unmuted }
+    MyThread:
+      type: object
+      required: [root, channel_id, channel_name, unread_replies, mentioned, latest_replies]
+      properties:
+        root: { $ref: "#/components/schemas/Message" }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        channel_kind: { $ref: "#/components/schemas/ChannelKind" }
+        last_read_at: { type: string, format: date-time, nullable: true }
+        unread_replies: { type: integer, format: int64, description: "Others' replies after the caller last read or replied" }
+        mentioned: { type: boolean, description: The caller is mentioned in the root or a reply }
+        latest_replies: { type: array, items: { $ref: "#/components/schemas/Message" }, description: "The latest 2 replies, oldest first" }
+    MyThreadPage:
+      type: object
+      required: [threads, unread_threads]
+      properties:
+        threads: { type: array, items: { $ref: "#/components/schemas/MyThread" } }
+        next_cursor: { type: string, description: Absent on the last page }
+        unread_threads: { type: integer }
+    MarkedCount:
+      type: object
+      required: [marked]
+      properties:
+        marked: { type: integer }
     ChannelList:
       type: object
       required: [channels]
@@ -2387,6 +2572,7 @@ components:
       properties:
         actor_id: { type: string, format: uuid }
         handle: { type: string }
+        display_name: { type: string }
         kind: { $ref: "#/components/schemas/ActorKind" }
         can_write: { type: boolean }
     ChannelMemberList:
@@ -2403,11 +2589,12 @@ components:
         name: { type: string }
         kind: { $ref: "#/components/schemas/ChannelKind" }
         description: { type: string, maxLength: 250 }
+        member_ids: { type: array, maxItems: 100, items: { type: string, format: uuid }, description: "Admins: initial members besides the creator" }
     AddMemberRequest:
       type: object
-      required: [actor_id]
       properties:
         actor_id: { type: string, format: uuid }
+        actor_ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
         can_write: { type: boolean, default: true }
 
     Message:
@@ -2567,7 +2754,10 @@ components:
         EventMessageRetracted; reaction.added, reaction.removed →
         EventReaction; channel.created → EventChannelCreated;
         channel.member_added → EventMemberAdded; channel.member_removed →
-        EventMemberRemoved; actor.created → EventActorCreated;
+        EventMemberRemoved; channel.updated → EventChannelUpdated;
+        channel.archived, channel.unarchived → EventChannelArchived;
+        channel.mute_changed (the muting viewer only) → EventMuteChanged;
+        actor.created → EventActorCreated;
         actor.state_changed → EventActorStateChanged; actor.profile_updated →
         EventActorProfileUpdated; workspace.emergency_activated,
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
@@ -2703,6 +2893,29 @@ components:
       properties:
         channel_id: { type: string, format: uuid }
         actor_id: { type: string, format: uuid }
+    EventChannelUpdated:
+      type: object
+      description: The changed fields; never the description text (clients refetch the channel).
+      required: [channel_id, fields]
+      properties:
+        channel_id: { type: string, format: uuid }
+        fields: { type: array, items: { type: string, enum: [name, description] } }
+        old_name: { type: string }
+        new_name: { type: string }
+    EventChannelArchived:
+      type: object
+      required: [channel_id, name]
+      properties:
+        channel_id: { type: string, format: uuid }
+        name: { type: string }
+    EventMuteChanged:
+      type: object
+      required: [channel_id, actor_id, muted]
+      properties:
+        channel_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        muted: { type: boolean }
+        muted_until: { type: string, format: date-time }
     EventActorCreated:
       type: object
       required: [actor_id, kind, handle, role]

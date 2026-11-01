@@ -4,6 +4,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -22,6 +23,8 @@ type Store struct {
 	members  map[memberKey]conversation.Member
 	messages map[ids.ID]conversation.Message
 	reacts   map[reactKey]reactRow
+	mutes    map[memberKey]conversation.Mute
+	reads    map[memberKey]time.Time // (thread root, actor) -> last read
 }
 
 type reactKey struct {
@@ -41,6 +44,8 @@ func New() *Store {
 		members:  map[memberKey]conversation.Member{},
 		messages: map[ids.ID]conversation.Message{},
 		reacts:   map[reactKey]reactRow{},
+		mutes:    map[memberKey]conversation.Mute{},
+		reads:    map[memberKey]time.Time{},
 	}
 }
 
@@ -481,4 +486,156 @@ func (s *Store) RetractMessage(_ context.Context, id ids.ID, deletedBy ids.ID, a
 	m.DeletedBy = &delBy
 	s.messages[id] = m
 	return nil
+}
+
+// UpdateChannel stores a new name and description, rejecting duplicate names.
+func (s *Store) UpdateChannel(_ context.Context, id ids.ID, name, description string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.channels[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	for _, o := range s.channels {
+		if o.ID != id && o.WorkspaceID == c.WorkspaceID && o.Name == name {
+			return db.ErrConflict
+		}
+	}
+	c.Name, c.Description = name, description
+	s.channels[id] = c
+	return nil
+}
+
+// SetArchived archives or unarchives a channel.
+func (s *Store) SetArchived(_ context.Context, id ids.ID, at *time.Time, by *ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.channels[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	c.ArchivedAt, c.ArchivedBy = at, by
+	s.channels[id] = c
+	return nil
+}
+
+// SetMute stores a viewer's mute.
+func (s *Store) SetMute(_ context.Context, m conversation.Mute) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mutes[memberKey{m.ChannelID, m.ActorID}] = m
+	return nil
+}
+
+// DeleteMute removes a viewer's mute.
+func (s *Store) DeleteMute(_ context.Context, actorID, channelID ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.mutes, memberKey{channelID, actorID})
+	return nil
+}
+
+// Mutes returns the actor's mutes.
+func (s *Store) Mutes(_ context.Context, actorID ids.ID) ([]conversation.Mute, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []conversation.Mute
+	for _, m := range s.mutes {
+		if m.ActorID == actorID {
+			out = append(out, m)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return bytes.Compare(out[i].ChannelID[:], out[j].ChannelID[:]) < 0 })
+	return out, nil
+}
+
+// SetThreadRead records the actor's read position in a thread; it never moves back.
+func (s *Store) SetThreadRead(_ context.Context, actorID, rootID ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := memberKey{rootID, actorID}
+	if prev, ok := s.reads[k]; !ok || at.After(prev) {
+		s.reads[k] = at
+	}
+	return nil
+}
+
+// ThreadsForActor lists the actor's threads, newest reply first.
+func (s *Store) ThreadsForActor(_ context.Context, workspaceID, actorID ids.ID, after *conversation.ThreadCursor, limit int, unreadOnly bool) ([]conversation.ThreadSummary, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	replies := map[ids.ID][]conversation.Message{}
+	for _, m := range s.messages {
+		if m.ThreadRootID != ids.Nil {
+			replies[m.ThreadRootID] = append(replies[m.ThreadRootID], m)
+		}
+	}
+	var out []conversation.ThreadSummary
+	for _, root := range s.messages {
+		if root.WorkspaceID != workspaceID || root.ThreadRootID != ids.Nil || root.DeletedAt != nil ||
+			root.ReplyCount == 0 || root.LastReplyAt == nil {
+			continue
+		}
+		if m, ok := s.members[memberKey{root.ChannelID, actorID}]; !ok || m.LeftAt != nil {
+			continue
+		}
+		if after != nil && !cursorBefore(*root.LastReplyAt, root.ID, *after) {
+			continue
+		}
+		mentioned := slices.Contains(root.Mentions, actorID)
+		takesPart := root.AuthorID == actorID || mentioned
+		var ownLast time.Time
+		for _, r := range replies[root.ID] {
+			if r.AuthorID == actorID {
+				takesPart = true
+				if r.CreatedAt.After(ownLast) {
+					ownLast = r.CreatedAt
+				}
+			}
+			if slices.Contains(r.Mentions, actorID) {
+				takesPart = true
+				if r.DeletedAt == nil {
+					mentioned = true
+				}
+			}
+		}
+		if !takesPart {
+			continue
+		}
+		t := conversation.ThreadSummary{Root: root, Mentioned: mentioned}
+		seen := ownLast
+		if read, ok := s.reads[memberKey{root.ID, actorID}]; ok {
+			r := read
+			t.LastReadAt = &r
+			if read.After(seen) {
+				seen = read
+			}
+		}
+		for _, r := range replies[root.ID] {
+			if r.DeletedAt == nil && r.AuthorID != actorID && r.CreatedAt.After(seen) {
+				t.UnreadReplies++
+			}
+		}
+		if unreadOnly && t.UnreadReplies == 0 {
+			continue
+		}
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i].Root, out[j].Root
+		return cursorBefore(*b.LastReplyAt, b.ID, conversation.ThreadCursor{LastReplyAt: *a.LastReplyAt, RootID: a.ID})
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// cursorBefore reports whether (at, id) sorts after the cursor in the
+// newest-first order, i.e. (at, id) < (c.LastReplyAt, c.RootID).
+func cursorBefore(at time.Time, id ids.ID, c conversation.ThreadCursor) bool {
+	if !at.Equal(c.LastReplyAt) {
+		return at.Before(c.LastReplyAt)
+	}
+	return bytes.Compare(id[:], c.RootID[:]) < 0
 }

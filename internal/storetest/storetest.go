@@ -92,6 +92,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("compaction", func(t *testing.T) { testCompaction(t, newBackend(t)) })
 	t.Run("delegation", func(t *testing.T) { testDelegation(t, newBackend(t)) })
 	t.Run("agents", func(t *testing.T) { testAgentLifecycle(t, newBackend(t)) })
+	t.Run("channeledit", func(t *testing.T) { testChannelEdit(t, newBackend(t)) })
 }
 
 var (

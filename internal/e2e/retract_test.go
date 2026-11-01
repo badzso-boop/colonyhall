@@ -12,6 +12,7 @@ import (
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/guard"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/server"
 )
@@ -27,17 +28,13 @@ func TestMessageRetractAuthorAndPermissions(t *testing.T) {
 	_, user2Tok := e.createUser("other-human", "Other Human")
 
 	// Add user1 to general
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: user1UUID,
-	}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(user1UUID)}, nil)
 
 	// Create an agent in general channel
 	hID, _ := e.enroll("machine-retract")
 	agentIDStr, agentTok := createFullAccessAgent(e, hID, "retract-agent", "Retract Agent")
 	agentUUID, _ := ids.Parse(agentIDStr)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: agentUUID,
-	}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(agentUUID)}, nil)
 
 	// User1 sends a message mentioning @retract-agent
 	var sendRes apispec.SendResult
@@ -129,17 +126,11 @@ func TestMessageRetractCancelsPendingDelegation(t *testing.T) {
 	humanID, humanTok := e.createUser("delegating-human", "Delegating Human")
 	humanUUID, _ := ids.Parse(humanID)
 	general := e.generalID()
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: humanUUID,
-	}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(humanUUID)}, nil)
 	sourceUUID, _ := ids.Parse(sourceID)
 	targetUUID, _ := ids.Parse(targetID)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: sourceUUID,
-	}, nil)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: targetUUID,
-	}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(sourceUUID)}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(targetUUID)}, nil)
 
 	var sendRes apispec.SendResult
 	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", general), humanTok, apispec.SendMessageRequest{
@@ -192,9 +183,7 @@ func TestMessageRetractExcludedFromThreadContext(t *testing.T) {
 
 	humanID, humanTok := e.createUser("context-author", "Context Author")
 	humanUUID, _ := ids.Parse(humanID)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: humanUUID,
-	}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(humanUUID)}, nil)
 
 	// Post root message
 	var rootRes apispec.SendResult

@@ -18,6 +18,11 @@ UPDATE delivery SET acked_at = sqlc.arg(at)::timestamptz
 WHERE item_id = sqlc.arg(item_id) AND acked_at IS NULL;
 
 
+-- name: AckByChannel :execrows
+UPDATE delivery SET acked_at = sqlc.arg(at)::timestamptz
+WHERE channel_id = sqlc.arg(channel_id) AND acked_at IS NULL
+  AND (sqlc.narg(recipient_id)::uuid IS NULL OR recipient_id = sqlc.narg(recipient_id)::uuid);
+
 -- name: InsertTerminalEvent :exec
 INSERT INTO terminal_event (id, workspace_id, agent_id, channel_id, thread_root_id, name, exit_code, duration_ms, tail, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);

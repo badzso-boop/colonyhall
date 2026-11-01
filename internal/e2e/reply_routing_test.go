@@ -20,6 +20,7 @@ import (
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/fakeagent"
 	"colonyhall/internal/guard"
+	"colonyhall/internal/httpx"
 	"colonyhall/internal/server"
 )
 
@@ -52,12 +53,10 @@ func TestReplyRoutingIncidentReproduction(t *testing.T) {
 
 	// 3. Add both agents to #visegradevent
 	canWrite := true
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId:  uuid.MustParse(claudeID),
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(claudeID)),
 		CanWrite: &canWrite,
 	}, nil)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId:  uuid.MustParse(agyID),
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(agyID)),
 		CanWrite: &canWrite,
 	}, nil)
 
@@ -330,8 +329,8 @@ func TestReplyRoutingTopLevelDMReply(t *testing.T) {
 	agyID, agyToken := e.createActor("agent", "agy-top", "member")
 
 	canWrite := true
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(claudeID), CanWrite: &canWrite}, nil)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(agyID), CanWrite: &canWrite}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(claudeID)), CanWrite: &canWrite}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", visegradChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(agyID)), CanWrite: &canWrite}, nil)
 
 	qT, _ := e.send(server.DevAdminToken, visegradChan.Id.String(), map[string]any{"body": "Start work in thread"})
 	threadT := qT.ID
@@ -415,8 +414,8 @@ func TestReplyRoutingNegativeCases(t *testing.T) {
 	agyID, agyToken := e.createActor("agent", "agy-neg", "member")
 
 	canWrite := true
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(claudeID), CanWrite: &canWrite}, nil)
-	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(agyID), CanWrite: &canWrite}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(claudeID)), CanWrite: &canWrite}, nil)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(agyID)), CanWrite: &canWrite}, nil)
 
 	qT, _ := e.send(server.DevAdminToken, testChan.Id.String(), map[string]any{"body": "Thread T"})
 	threadT := qT.ID
@@ -550,7 +549,7 @@ func TestReplyRoutingNegativeCases(t *testing.T) {
 		}
 
 		// Re-add Claude to channel for subsequent tests
-		e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(claudeID), CanWrite: &canWrite}, nil)
+		e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", testChan.Id), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(claudeID)), CanWrite: &canWrite}, nil)
 	}
 
 	// Negative Case D: Agent posted newer top-level DM message without origin -> no reply_origin
@@ -669,9 +668,7 @@ func TestReplyRoutingTopLevelDMReplyWindow(t *testing.T) {
 	askerID, askerTok := e.createActor("agent", "asker", "member")
 	_, helperTok := e.createActor("agent", "helper", "member")
 	canWrite := true
-	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, apispec.AddMemberRequest{
-		ActorId: uuid.MustParse(askerID), CanWrite: &canWrite,
-	}, nil)
+	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(askerID)), CanWrite: &canWrite}, nil)
 	root, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "@asker please coordinate"})
 	if err := e.app.Drain(ctx); err != nil {
 		t.Fatal(err)
@@ -748,7 +745,7 @@ func TestReplyRoutingLinksRespectAccess(t *testing.T) {
 	viewerID, viewerTok := e.createUser("viewer", "Viewer")
 	canWrite := true
 	for _, id := range []string{askerID, viewerID} {
-		e.do("POST", "/api/v1/channels/"+secret.Id.String()+"/members", server.DevAdminToken, apispec.AddMemberRequest{ActorId: uuid.MustParse(id), CanWrite: &canWrite}, nil)
+		e.do("POST", "/api/v1/channels/"+secret.Id.String()+"/members", server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(uuid.MustParse(id)), CanWrite: &canWrite}, nil)
 	}
 	root, _ := e.send(server.DevAdminToken, secret.Id.String(), map[string]any{"body": "@asker coordinate the tests"})
 	root2, _ := e.send(server.DevAdminToken, secret.Id.String(), map[string]any{"body": "another topic"})

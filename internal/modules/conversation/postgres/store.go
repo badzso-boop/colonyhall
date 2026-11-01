@@ -60,7 +60,8 @@ func (s *Store) ChannelsForActor(ctx context.Context, workspaceID, actorID ids.I
 		}
 		out = append(out, conversation.ChannelView{
 			Channel: conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
-				Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt},
+				Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
+				ArchivedAt: r.ArchivedAt, ArchivedBy: r.ArchivedBy},
 			IsMember: r.IsMember, Unread: r.Unread, Mentions: r.Mentions,
 		})
 	}
@@ -204,7 +205,8 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 		compactThreshold = &v
 	}
 	return conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
-		Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt}, nil
+		Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
+		ArchivedAt: r.ArchivedAt, ArchivedBy: r.ArchivedBy}, nil
 }
 
 func toMessage(r sqlcgen.Message) conversation.Message {
@@ -333,4 +335,65 @@ func (s *Store) RetractMessage(ctx context.Context, id ids.ID, deletedBy ids.ID,
 		DeletedAt: at,
 	})
 	return err
+}
+
+// UpdateChannel stores a new name and description.
+func (s *Store) UpdateChannel(ctx context.Context, id ids.ID, name, description string) error {
+	err := s.q(ctx).UpdateChannel(ctx, sqlcgen.UpdateChannelParams{ID: id, Name: name, Description: description})
+	if db.IsUniqueViolation(err) {
+		return db.ErrConflict
+	}
+	return err
+}
+
+// SetArchived archives or unarchives a channel.
+func (s *Store) SetArchived(ctx context.Context, id ids.ID, at *time.Time, by *ids.ID) error {
+	return s.q(ctx).SetChannelArchived(ctx, sqlcgen.SetChannelArchivedParams{ID: id, ArchivedAt: at, ArchivedBy: by})
+}
+
+// SetMute stores a viewer's mute.
+func (s *Store) SetMute(ctx context.Context, m conversation.Mute) error {
+	return s.q(ctx).SetMute(ctx, sqlcgen.SetMuteParams{ActorID: m.ActorID, ChannelID: m.ChannelID, MutedUntil: m.Until, CreatedAt: m.CreatedAt})
+}
+
+// DeleteMute removes a viewer's mute.
+func (s *Store) DeleteMute(ctx context.Context, actorID, channelID ids.ID) error {
+	return s.q(ctx).DeleteMute(ctx, sqlcgen.DeleteMuteParams{ActorID: actorID, ChannelID: channelID})
+}
+
+// Mutes returns the actor's mutes.
+func (s *Store) Mutes(ctx context.Context, actorID ids.ID) ([]conversation.Mute, error) {
+	rows, err := s.q(ctx).Mutes(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]conversation.Mute, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, conversation.Mute{ActorID: r.ActorID, ChannelID: r.ChannelID, Until: r.MutedUntil, CreatedAt: r.CreatedAt})
+	}
+	return out, nil
+}
+
+// SetThreadRead records the actor's read position in a thread; it never moves back.
+func (s *Store) SetThreadRead(ctx context.Context, actorID, rootID ids.ID, at time.Time) error {
+	return s.q(ctx).SetThreadRead(ctx, sqlcgen.SetThreadReadParams{ActorID: actorID, ThreadRootID: rootID, LastReadAt: at})
+}
+
+// ThreadsForActor lists the actor's threads, newest reply first.
+func (s *Store) ThreadsForActor(ctx context.Context, workspaceID, actorID ids.ID, after *conversation.ThreadCursor, limit int, unreadOnly bool) ([]conversation.ThreadSummary, error) {
+	p := sqlcgen.ThreadsForActorParams{ActorID: actorID, WorkspaceID: workspaceID, UnreadOnly: unreadOnly, PageSize: int32(limit)}
+	if after != nil {
+		p.AfterAt, p.AfterID = &after.LastReplyAt, &after.RootID
+	}
+	rows, err := s.q(ctx).ThreadsForActor(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]conversation.ThreadSummary, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, conversation.ThreadSummary{
+			Root: toMessage(r.Message), LastReadAt: r.LastReadAt, UnreadReplies: r.UnreadReplies, Mentioned: r.Mentioned,
+		})
+	}
+	return out, nil
 }
