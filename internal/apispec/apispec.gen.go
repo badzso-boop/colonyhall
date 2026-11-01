@@ -1464,9 +1464,15 @@ type AgentOverview struct {
 	Assignment     *OverviewAssignment      `json:"assignment,omitempty"`
 	Collaboration  *OverviewCollaboration   `json:"collaboration,omitempty"`
 	CommonChannels *[]OverviewCommonChannel `json:"common_channels,omitempty"`
-	State          string                   `json:"state"`
-	Threads        *[]OverviewThread        `json:"threads,omitempty"`
-	Usage          *OverviewUsage           `json:"usage,omitempty"`
+
+	// Inbox Admins, agents only (round 33): unacked inbox items and the oldest one's time
+	Inbox *struct {
+		Count    int        `json:"count"`
+		OldestAt *time.Time `json:"oldest_at,omitempty"`
+	} `json:"inbox,omitempty"`
+	State   string            `json:"state"`
+	Threads *[]OverviewThread `json:"threads,omitempty"`
+	Usage   *OverviewUsage    `json:"usage,omitempty"`
 }
 
 // AgentOwnInstructions defines model for AgentOwnInstructions.

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/lease"
@@ -37,6 +39,7 @@ func registerOverview(
 	ntSvc *notes.Service,
 	lsSvc *lease.Service,
 	qSvc *question.Service,
+	dlSvc *delivery.Service,
 	gw *gateway.Gateway,
 	clk clock.Clock,
 ) {
@@ -356,6 +359,18 @@ func registerOverview(
 			Threads:       &overviewThreads,
 			Usage:         overviewUsage,
 			Collaboration: overviewCollaboration,
+		}
+		// The unacked inbox (round 33): admins only, like the assignment.
+		if caller.IsAdmin() && dlSvc != nil {
+			if pending, total, err := dlSvc.Store.Pending(ctx, targetActor.ID, 1); err == nil {
+				res.Inbox = &struct {
+					Count    int        `json:"count"`
+					OldestAt *time.Time `json:"oldest_at,omitempty"`
+				}{Count: total}
+				if len(pending) > 0 {
+					res.Inbox.OldestAt = &pending[0].CreatedAt
+				}
+			}
 		}
 		httpx.JSON(w, http.StatusOK, res)
 	})))

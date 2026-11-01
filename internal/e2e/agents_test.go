@@ -203,6 +203,23 @@ func TestArchiveAgentAndReuseHandle(t *testing.T) {
 		t.Fatalf("delete a human with the agent endpoint: %d", s)
 	}
 	e.send(server.DevAdminToken, general, map[string]any{"body": "@backend before"})
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var ov struct {
+		Inbox *struct {
+			Count    int     `json:"count"`
+			OldestAt *string `json:"oldest_at"`
+		} `json:"inbox"`
+	}
+	if s := e.do("GET", "/api/v1/agents/"+old+"/overview", server.DevAdminToken, nil, &ov); s != http.StatusOK || ov.Inbox == nil || ov.Inbox.Count != 1 || ov.Inbox.OldestAt == nil {
+		t.Fatalf("overview inbox: %d %+v", s, ov.Inbox)
+	}
+	var memberOv struct{ Inbox *struct{ Count int } }
+	e.do("GET", "/api/v1/agents/"+old+"/overview", memberToken, nil, &memberOv)
+	if memberOv.Inbox != nil {
+		t.Fatal("a member sees the inbox")
+	}
 	if s := e.do("DELETE", "/api/v1/agents/"+old, server.DevAdminToken, nil, nil); s != http.StatusNoContent {
 		t.Fatalf("archive: %d", s)
 	}
@@ -262,6 +279,9 @@ func TestArchiveAgentAndReuseHandle(t *testing.T) {
 		t.Fatal("same id")
 	}
 	e.send(server.DevAdminToken, general, map[string]any{"body": "@backend after"})
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
 	items := e.inbox(freshToken)
 	if len(items) == 0 || !strings.Contains(items[len(items)-1].Body, "after") {
 		t.Fatalf("the mention did not reach the new agent: %+v", items)

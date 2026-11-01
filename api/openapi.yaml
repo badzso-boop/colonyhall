@@ -3949,6 +3949,13 @@ components:
           $ref: "#/components/schemas/OverviewUsage"
         collaboration:
           $ref: "#/components/schemas/OverviewCollaboration"
+        inbox:
+          type: object
+          description: "Admins, agents only (round 33): unacked inbox items and the oldest one's time"
+          required: [count]
+          properties:
+            count: { type: integer }
+            oldest_at: { type: string, format: date-time }
         common_channels:
           type: array
           items: { $ref: "#/components/schemas/OverviewCommonChannel" }

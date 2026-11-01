@@ -4018,6 +4018,12 @@ export interface components {
             threads?: components["schemas"]["OverviewThread"][];
             usage?: components["schemas"]["OverviewUsage"];
             collaboration?: components["schemas"]["OverviewCollaboration"];
+            /** @description Admins, agents only (round 33): unacked inbox items and the oldest one's time */
+            inbox?: {
+                count: number;
+                /** Format: date-time */
+                oldest_at?: string;
+            };
             common_channels?: components["schemas"]["OverviewCommonChannel"][];
         };
         CompactionSettings: {

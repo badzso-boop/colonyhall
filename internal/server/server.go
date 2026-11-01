@@ -561,7 +561,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		}
 		httpx.JSON(w, http.StatusOK, apispec.ChannelProgressResponse{Runs: runs})
 	})))
-	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, gw, opt.Clock)
+	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, dlSvc, gw, opt.Clock)
 	registerAgents(mux, idSvc, agSvc)
 
 	return &App{
