@@ -93,6 +93,16 @@ export function useMembers(channelId: string) {
   });
 }
 
+/** Adds or removes the viewer's reaction; reaction.* events refresh the message. */
+export function useToggleReaction() {
+  return useMutation({
+    mutationFn: async ({ messageId, emoji, mine }: { messageId: string; emoji: string; mine: boolean }) => {
+      const params = { params: { path: { messageId, emoji } } };
+      unwrap(mine ? await api.DELETE("/messages/{messageId}/reactions/{emoji}", params) : await api.PUT("/messages/{messageId}/reactions/{emoji}", params));
+    },
+  });
+}
+
 export function useRetract() {
   return useMutation({
     mutationFn: async (messageId: string) => {

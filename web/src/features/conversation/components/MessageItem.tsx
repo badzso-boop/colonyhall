@@ -1,10 +1,19 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, FileText, MessageSquare } from "lucide-react";
-import { cn, fullTime, messageTime, relativeTime, type FileLink } from "@/shared/lib";
-import { Avatar, Lightbox, Markdown } from "@/shared/ui";
+import { Link } from "react-router";
+import { CornerDownRight, CornerUpLeft, Download, FileText, MessageSquare, MoreHorizontal, SquareTerminal, Undo2 } from "lucide-react";
+import { chipRefs, cn, fullTime, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
+import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
+import { ErrorChip, StepDrawer } from "@/features/agents";
+import { ApprovalCard, DelegationActions } from "@/features/approvals";
+import { CompactionCard } from "@/features/compaction";
+import { DecisionChip } from "@/features/decisions";
+import { MessageFileSheet } from "@/features/files";
+import { QuestionChip } from "@/features/questions";
 import type { Actor } from "../model";
-import type { Message } from "../api";
+import { useRetract, useToggleReaction, type Message } from "../api";
+import { isRateLimitNote, REACTIONS, terminalNotice } from "../messageParts";
+import { LinkCards } from "./LinkCards";
 
 const LONG_CHARS = 1500;
 const LONG_LINES = 20;
@@ -12,27 +21,64 @@ const LONG_LINES = 20;
 export type MessageHandlers = {
   onOpenThread?: (rootId: string) => void;
   onMention?: (handle: string) => void;
+  /** A relative file reference (path:12-20): opens the agent's file browser. */
   onFileClick?: (author: Actor | undefined, link: FileLink) => void;
+  /** "Terminál megtekintése" under a terminal notice: opens that terminal in the work pane. */
+  onOpenTerminal?: (agentId: string, name: string) => void;
 };
+
+/** Who is looking: humans see details (errors, approvals, steps, files); agents never do. */
+export type Viewer = { id: string; human: boolean; admin: boolean; canWrite: boolean; pausedAgents: Set<string> };
 
 type Props = MessageHandlers & {
   message: Message;
   actors: Map<string, Actor>;
   handles: Set<string>;
-  meId: string;
+  viewer: Viewer;
   locale: string;
   /** Show the "N válasz" row (the channel's main stream). */
   summary: boolean;
 };
 
-/** One message (docs/handoff/31, part 5). */
-export const MessageItem = memo(function MessageItem({ message: m, actors, handles, meId, locale, summary, onOpenThread, onMention, onFileClick }: Props) {
+/** "Visszavonás" from the message menu, confirmed in place (round 26). */
+function RetractConfirm({ messageId, onDone }: { messageId: string; onDone: () => void }) {
+  const { t } = useTranslation("conversation");
+  const retract = useRetract();
+  return (
+    <div role="group" aria-label={t("message.retractConfirm")} className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-danger/40 bg-danger-soft px-2.5 py-1.5 text-ui">
+      <span className="flex-1">{t("message.retractConfirm")}</span>
+      <Button
+        size="sm"
+        variant="danger"
+        loading={retract.isPending}
+        onClick={() =>
+          retract.mutate(messageId, {
+            onSuccess: onDone,
+            onError: (e) => toast(e instanceof Error ? e.message : String(e), { tone: "danger" }),
+          })
+        }
+      >
+        {t("message.retract")}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onDone}>
+        {t("message.cancel")}
+      </Button>
+    </div>
+  );
+}
+
+/** One message (docs/handoff/31, part 5; the elements of round 34, part 6). */
+export const MessageItem = memo(function MessageItem({ message: m, actors, handles, viewer, locale, summary, onOpenThread, onMention, onFileClick, onOpenTerminal }: Props) {
   const { t } = useTranslation("conversation");
   const [expanded, setExpanded] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const [confirmRetract, setConfirmRetract] = useState(false);
+  const [file, setFile] = useState<FileLink | null>(null);
+  const react = useToggleReaction();
   const author = actors.get(m.author_id);
+  const fromAgent = author?.kind === "agent";
   const now = new Date();
-  const mentionsMe = m.mentions.includes(meId);
+  const mentionsMe = m.mentions.includes(viewer.id);
   const long = m.body.length > LONG_CHARS || m.body.split("\n").length > LONG_LINES;
   const images = useMemo(
     () => (m.attachments ?? []).filter((a) => a.mime.startsWith("image/")).map((a) => ({ src: `/api/v1/files/${a.id}/content`, name: a.name })),
@@ -40,7 +86,43 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   );
   const others = (m.attachments ?? []).filter((a) => !a.mime.startsWith("image/"));
   const retracted = Boolean(m.deleted_at);
-  const name = author ? (author.kind === "agent" ? author.display_name || author.handle : author.display_name || author.handle) : "?";
+  const name = author ? author.display_name || author.handle : "?";
+  const paused = fromAgent && (author.state === "paused" || viewer.pausedAgents.has(author.id));
+  const approvals = viewer.human && !retracted ? chipRefs(m.body, "approval") : [];
+  const terminal = viewer.human && fromAgent && !retracted ? terminalNotice(m.body) : null;
+  const canRetract = viewer.human && m.author_id === viewer.id && !retracted;
+
+  // The rate-limit note (round 27): a muted system line, not a message.
+  if (!retracted && isRateLimitNote(m.body, author?.kind)) {
+    return (
+      <p data-message-id={m.id} role="note" className="flex items-baseline gap-2 px-4 py-0.5 pl-[3.6rem] text-meta text-fg-muted">
+        <span className="font-mono">@{author?.handle}</span>
+        <span className="min-w-0 flex-1">{m.body}</span>
+        <time className="text-fg-subtle" dateTime={m.created_at} title={fullTime(m.created_at, locale)}>
+          {messageTime(m.created_at, now, locale)}
+        </time>
+      </p>
+    );
+  }
+
+  const renderChip = (c: Chip): ReactNode => {
+    switch (c.kind) {
+      case "question":
+        return <QuestionChip number={c.ref} />;
+      case "decision":
+        return viewer.human ? <DecisionChip number={c.ref} /> : c.raw;
+      case "error":
+        return <ErrorChip errorId={c.ref} human={viewer.human} />;
+      case "approval":
+        // Shown as a card under the message (humans); never as text.
+        return null;
+    }
+  };
+
+  const openFile = (link: FileLink) => {
+    if (link.isRef) onFileClick?.(author, link);
+    else setFile(link);
+  };
 
   return (
     <article
@@ -54,15 +136,16 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
         }
       }}
       className={cn(
-        "group grid grid-cols-[36px_1fr] gap-x-2.5 px-4 py-1.5 outline-none hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:shadow-[inset_2px_0_0_var(--color-focus-ring)]",
+        "group relative grid grid-cols-[36px_1fr] gap-x-2.5 px-4 py-1.5 outline-none hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:shadow-[inset_2px_0_0_var(--color-focus-ring)]",
         mentionsMe && "bg-accent-soft shadow-[inset_2px_0_0_var(--color-accent)] hover:bg-accent-soft",
       )}
     >
-      <Avatar kind={author?.kind ?? "human"} name={author?.handle ?? "?"} emoji={author?.avatar_emoji} size="lg" />
+      <Avatar kind={author?.kind ?? "human"} name={author?.handle ?? "?"} emoji={author?.avatar_emoji} size="lg" status={paused ? "paused" : undefined} />
       <div className="min-w-0">
         <header className="flex flex-wrap items-baseline gap-x-2">
           <span className="font-semibold">{name}</span>
-          {author?.kind === "agent" ? <span className="font-mono text-meta text-fg-muted">@{author.handle}</span> : null}
+          {fromAgent ? <span className="font-mono text-meta text-fg-muted">@{author.handle}</span> : null}
+          {paused ? <Badge tone="warning">{t("message.paused")}</Badge> : null}
           <time className="text-meta text-fg-subtle" dateTime={m.created_at} title={fullTime(m.created_at, locale)}>
             {messageTime(m.created_at, now, locale)}
           </time>
@@ -76,8 +159,10 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
               inChat
               knownHandles={handles}
               onMention={onMention}
-              onFileClick={onFileClick ? (link) => onFileClick(author, link) : undefined}
-              canOpenFile={() => author?.kind === "agent"}
+              onFileClick={openFile}
+              // Local files of an agent open for humans only (round 16).
+              canOpenFile={(link) => fromAgent && viewer.human && (!link.isRef || onFileClick !== undefined)}
+              renderChip={renderChip}
               copyLabel={t("message.copy")}
               copiedLabel={t("message.copied")}
             />
@@ -89,7 +174,16 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
             {expanded ? t("message.less") : t("message.more")}
           </button>
         ) : null}
-        {images.length ? (
+        {approvals.map((id) => (
+          <ApprovalCard key={id} id={id} />
+        ))}
+        {terminal ? (
+          <Button size="sm" variant="secondary" className="mt-1" icon={<SquareTerminal className="size-3.5" />} onClick={() => onOpenTerminal?.(m.author_id, terminal)}>
+            {t("message.viewTerminal")}
+          </Button>
+        ) : null}
+        {m.compaction_id && !retracted ? <CompactionCard compactionId={m.compaction_id} attachments={m.attachments} canWrite={viewer.human && viewer.canWrite} /> : null}
+        {images.length && !retracted && !m.compaction_id ? (
           <div className="mt-1.5 flex flex-wrap gap-2">
             {images.map((img, i) => (
               <button key={img.src} type="button" onClick={() => setLightbox(i)} className="overflow-hidden rounded-md border border-border">
@@ -98,7 +192,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
             ))}
           </div>
         ) : null}
-        {others.length ? (
+        {others.length && !retracted && !m.compaction_id ? (
           <div className="mt-1.5 flex flex-wrap gap-2">
             {others.map((a) => (
               <a
@@ -115,13 +209,38 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
             ))}
           </div>
         ) : null}
-        {m.reactions?.length ? (
+        {m.link_cards?.length && !retracted ? <LinkCards cards={m.link_cards} /> : null}
+        {viewer.human && fromAgent && !retracted ? <DelegationActions message={m} admin={viewer.admin} /> : null}
+        {m.origin ? (
+          <Link to={`/c/${m.origin.channel_id}?thread=${m.origin.thread_id}`} className="mt-1 inline-flex items-center gap-1 text-meta text-accent-text hover:underline">
+            <CornerUpLeft aria-hidden className="size-3.5" />
+            {t("message.fromThread", { channel: m.origin.channel })}
+          </Link>
+        ) : null}
+        {m.answers ? (
+          <Link to={`/c/${m.answers.channel_id}`} className="mt-1 inline-flex items-center gap-1 text-meta text-accent-text hover:underline">
+            <CornerDownRight aria-hidden className="size-3.5" />
+            {t("message.answersDm", { handle: actors.get(m.answers.author_id)?.handle ?? "?" })}
+          </Link>
+        ) : null}
+        {viewer.human && fromAgent && !retracted ? <StepDrawer messageId={m.id} /> : null}
+        {m.reactions?.length && !retracted ? (
           <div className="mt-1 flex flex-wrap gap-1">
-            {m.reactions.map((r) => (
-              <span key={r.emoji} className={cn("tabular inline-flex h-6 items-center gap-1 rounded-full border px-2 text-meta", r.actor_ids.includes(meId) ? "border-accent bg-accent-soft" : "border-border bg-surface")}>
-                {r.emoji} {r.count}
-              </span>
-            ))}
+            {m.reactions.map((r) => {
+              const mine = r.actor_ids.includes(viewer.id);
+              return (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  aria-pressed={mine}
+                  title={r.actor_ids.map((id) => `@${actors.get(id)?.handle ?? "?"}`).join(", ")}
+                  onClick={() => react.mutate({ messageId: m.id, emoji: r.emoji, mine })}
+                  className={cn("tabular inline-flex h-6 items-center gap-1 rounded-full border px-2 text-meta", mine ? "border-accent bg-accent-soft" : "border-border bg-surface hover:border-border-strong")}
+                >
+                  {r.emoji} {r.count}
+                </button>
+              );
+            })}
           </div>
         ) : null}
         {summary && m.reply_count > 0 && onOpenThread ? (
@@ -150,7 +269,44 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
             {t("message.replyInThread")}
           </button>
         )}
+        {confirmRetract ? <RetractConfirm messageId={m.id} onDone={() => setConfirmRetract(false)} /> : null}
       </div>
+      {!retracted ? (
+        <div
+          role="toolbar"
+          aria-label={t("message.actions")}
+          className="absolute -top-3 right-4 hidden items-center gap-0.5 rounded-md border border-border bg-surface-raised p-0.5 shadow-raised group-focus-within:flex group-hover:flex has-[[data-state=open]]:flex"
+        >
+          {REACTIONS.map((e) => {
+            const mine = m.reactions?.some((r) => r.emoji === e && r.actor_ids.includes(viewer.id)) ?? false;
+            return (
+              <Tooltip key={e} content={t(`message.reaction.${e === "👍" ? "agree" : "disagree"}`)}>
+                <button
+                  type="button"
+                  aria-label={t(`message.reaction.${e === "👍" ? "agree" : "disagree"}`)}
+                  aria-pressed={mine}
+                  onClick={() => react.mutate({ messageId: m.id, emoji: e, mine })}
+                  className={cn("grid size-7 place-items-center rounded-sm text-ui hover:bg-surface-sunken", mine && "bg-accent-soft")}
+                >
+                  {e}
+                </button>
+              </Tooltip>
+            );
+          })}
+          {canRetract ? (
+            <Menu>
+              <MenuTrigger asChild>
+                <IconButton size="sm" label={t("message.menu")} icon={<MoreHorizontal className="size-4" />} />
+              </MenuTrigger>
+              <MenuContent>
+                <MenuItem danger icon={<Undo2 aria-hidden className="size-4" />} onSelect={() => setConfirmRetract(true)}>
+                  {t("message.retract")}
+                </MenuItem>
+              </MenuContent>
+            </Menu>
+          ) : null}
+        </div>
+      ) : null}
       {lightbox !== null ? (
         <Lightbox
           images={images}
@@ -158,6 +314,9 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
           onClose={() => setLightbox(null)}
           labels={{ close: t("common:close"), prev: t("message.prev"), next: t("message.next"), download: t("message.download") }}
         />
+      ) : null}
+      {file ? (
+        <MessageFileSheet messageId={m.id} path={file.path} handle={author?.handle ?? ""} lines={{ start: file.startLine, end: file.endLine }} onClose={() => setFile(null)} />
       ) : null}
     </article>
   );

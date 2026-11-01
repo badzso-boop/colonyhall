@@ -10,5 +10,8 @@
   "more": "Load more",
   "hint": "Agents and people record decisions in the chat (decision_record); here they are read-only.",
   "copy": "Copy",
-  "copied": "Copied"
+  "copied": "Copied",
+  "chip": {
+    "notFound": "{{n}} was not found."
+  }
 }

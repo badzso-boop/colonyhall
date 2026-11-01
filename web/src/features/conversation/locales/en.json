@@ -51,7 +51,8 @@
     "mentions": "People and agents to mention",
     "commandsLabel": "Commands",
     "noAgent": "There is no agent in this conversation.",
-    "schedule": "Schedule…"
+    "schedule": "Schedule…",
+    "questions": "Open questions"
   },
   "commands": {
     "schedule": "A one-off scheduled message",
@@ -78,7 +79,20 @@
     "thread": "Thread",
     "openInChannel": "Open in the channel",
     "closeThread": "Close the thread",
-    "replyInThread": "Reply in thread"
+    "replyInThread": "Reply in thread",
+    "paused": "⏸ paused",
+    "retract": "Retract",
+    "retractConfirm": "Retract the message? If an agent is still working on it, it stops.",
+    "cancel": "Cancel",
+    "viewTerminal": "View terminal",
+    "fromThread": "↩ in the original thread: #{{channel}}",
+    "answersDm": "↪ answers @{{handle}}'s DM",
+    "actions": "Message actions",
+    "menu": "More actions",
+    "reaction": {
+      "agree": "👍 agree (how the agent reads it)",
+      "disagree": "👎 disagree (how the agent reads it)"
+    }
   },
   "new": {
     "close": "Close",
@@ -190,5 +204,16 @@
     "noneUnread": "No unread threads",
     "noneBody": "Threads you started, replied in or were mentioned in show up here.",
     "loadMore": "Load more"
+  },
+  "card": {
+    "repo": "Repository",
+    "pull": "Pull request",
+    "issue": "Issue",
+    "commit": "Commit",
+    "state": {
+      "open": "open",
+      "closed": "closed",
+      "merged": "merged"
+    }
   }
 }

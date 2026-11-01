@@ -6,6 +6,7 @@ export const agentKeys = {
   overview: (id: string) => ["agents", "overview", id] as const,
   overviews: ["agents", "overview"] as const,
   runs: (id: string) => ["agents", "runs", id] as const,
+  recentRuns: ["agents", "recent-runs"] as const,
   usage: ["agents", "usage"] as const,
   hosts: ["agents", "hosts"] as const,
   grants: ["agents", "grants"] as const,
@@ -43,6 +44,25 @@ export function useAgentRuns(agentId: string, enabled: boolean) {
     retry: false,
     staleTime: 15_000,
     queryFn: async () => unwrap(await api.GET("/runs", { params: { query: { agent_id: agentId, limit: 5 } } })).runs,
+  });
+}
+
+/** How many recent runs the step drawers look through (the dev page's number). */
+const RECENT_RUNS = 100;
+
+/**
+ * The run that produced an agent's answer, for the step drawer under it
+ * (humans only): the latest runs, matched by reply_message_id. The API has
+ * no lookup by message, so older answers have no drawer.
+ */
+export function useReplyRun(messageId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: agentKeys.recentRuns,
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+    queryFn: async () => unwrap(await api.GET("/runs", { params: { query: { limit: RECENT_RUNS } } })).runs,
+    select: (runs) => runs.find((r) => r.reply_message_id === messageId) ?? null,
   });
 }
 

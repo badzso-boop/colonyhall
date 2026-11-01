@@ -51,7 +51,8 @@
     "mentions": "Megemlíthető résztvevők",
     "commandsLabel": "Parancsok",
     "noAgent": "Ebben a beszélgetésben nincs agent.",
-    "schedule": "Ütemezés…"
+    "schedule": "Ütemezés…",
+    "questions": "Nyitott kérdések"
   },
   "commands": {
     "schedule": "Egyszeri ütemezett üzenet",
@@ -78,7 +79,20 @@
     "thread": "Szál",
     "openInChannel": "Megnyitás a csatornában",
     "closeThread": "Szál bezárása",
-    "replyInThread": "Válasz szálban"
+    "replyInThread": "Válasz szálban",
+    "paused": "⏸ szünetel",
+    "retract": "Visszavonás",
+    "retractConfirm": "Biztosan visszavonod az üzenetet? Ha egy agent még dolgozik rajta, leáll.",
+    "cancel": "Mégse",
+    "viewTerminal": "Terminál megtekintése",
+    "fromThread": "↩ az eredeti szálban: #{{channel}}",
+    "answersDm": "↪ válasz @{{handle}} DM-jére",
+    "actions": "Üzenetműveletek",
+    "menu": "További műveletek",
+    "reaction": {
+      "agree": "👍 egyetértés (az agent így olvassa)",
+      "disagree": "👎 nem ért egyet (az agent így olvassa)"
+    }
   },
   "new": {
     "close": "Bezárás",
@@ -190,5 +204,16 @@
     "noneUnread": "Nincs olvasatlan szál",
     "noneBody": "Ide kerülnek a szálak, amelyeket te indítottál, amelyekben válaszoltál, vagy ahol megemlítettek.",
     "loadMore": "Továbbiak betöltése"
+  },
+  "card": {
+    "repo": "Repó",
+    "pull": "Pull request",
+    "issue": "Issue",
+    "commit": "Commit",
+    "state": {
+      "open": "nyitott",
+      "closed": "lezárt",
+      "merged": "beolvasztva"
+    }
   }
 }

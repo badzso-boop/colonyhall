@@ -5,7 +5,8 @@ import { localeOf } from "@/shared/i18n";
 import { Skeleton } from "@/shared/ui";
 import { useMarkRead, useMessages } from "../api";
 import { mainStream, type Actor, type Channel } from "../model";
-import { MessageItem, type MessageHandlers } from "./MessageItem";
+import { CompactionLive } from "@/features/compaction";
+import { MessageItem, type MessageHandlers, type Viewer } from "./MessageItem";
 
 const NEAR_BOTTOM = 80;
 
@@ -15,7 +16,7 @@ const NEAR_BOTTOM = 80;
  * scrolling up (keeping the position), a "↓ N új üzenet" pill while
  * scrolled up, and read marking while the end is in view.
  */
-export function Feed({ channel, actors, meId, handlers }: { channel: Channel; actors: Map<string, Actor>; meId: string; handlers: MessageHandlers }) {
+export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; actors: Map<string, Actor>; viewer: Viewer; handlers: MessageHandlers }) {
   const { t, i18n } = useTranslation("conversation");
   const locale = localeOf(i18n.language);
   const messages = useMessages(channel.id);
@@ -128,7 +129,7 @@ export function Feed({ channel, actors, meId, handlers }: { channel: Channel; ac
                 message={it.message}
                 actors={actors}
                 handles={handles}
-                meId={meId}
+                viewer={viewer}
                 locale={locale}
                 summary={channel.kind !== "dm"}
                 {...handlers}
@@ -136,6 +137,7 @@ export function Feed({ channel, actors, meId, handlers }: { channel: Channel; ac
             </div>
           ),
         )}
+        <CompactionLive channelId={channel.id} human={viewer.human} />
       </div>
       {unseen > 0 ? (
         <button

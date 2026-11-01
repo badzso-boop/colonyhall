@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Quote } from "lucide-react";
 import { insertIntoComposer } from "@/shared/lib";
 import { Button, EmptyState, Markdown, Skeleton, Switch, toast } from "@/shared/ui";
-import { useFetchedFile, useFileText } from "../api";
+import { useFetchedFile, useFileText, type FetchRequest } from "../api";
 import { LARGE_FILE, languageOf, lineReference, rangeFor } from "../model";
 import { defineThemes, loadMonaco, type MonacoEditor } from "../monaco";
 
@@ -56,25 +56,37 @@ function MonacoView({ text, path, wrap, start, end, onSelect }: { text: string; 
   return <div ref={host} className="h-full" />;
 }
 
-/** The selected file: Monaco (read-only), markdown rendered or raw, images, head/tail of large files. */
-export function FileViewer({ agentId, channelId, handle, path, start, end, nonce }: { agentId: string; channelId: string; handle: string; path: string; start?: number; end?: number; nonce: number }) {
-  const { t } = useTranslation("files");
-  const fetched = useFetchedFile(agentId, channelId, path, nonce);
-  const file = fetched.data?.state === "done" ? fetched.data.file : undefined;
-  const [part, setPart] = useState<"start" | "end">("start");
-  const large = file ? file.size > LARGE_FILE : false;
-  const isImage = file?.mime.startsWith("image/") ?? false;
-  const text = useFileText(file && !isImage ? file.id : null, file && large ? rangeFor(file.size, part) : null);
-  const [rendered, setRendered] = useState(true);
-  const [wrap, setWrap] = useState(false);
-  const [sel, setSel] = useState<[number, number] | null>(start ? [start, end ?? start] : null);
+type StoredFile = NonNullable<FetchRequest["file"]>;
 
-  if (fetched.isPending) return <p className="p-4 text-ui text-fg-muted">{t("loading")}</p>;
+/** The state of a fetch: loading, an i18n EmptyState for a failure, or the stored file. */
+export function FetchState({ fetched, children }: { fetched: { isPending: boolean; isError: boolean; data?: FetchRequest | undefined }; children: (file: StoredFile) => ReactNode }) {
+  const { t } = useTranslation("files");
+  if (fetched.isPending) return <p role="status" className="p-4 text-ui text-fg-muted">{t("loading")}</p>;
   if (fetched.data?.state === "failed" || fetched.isError) {
     const code = fetched.data?.error_code ?? "generic";
     return <EmptyState title={t(`errors.${code}`, { defaultValue: t("errors.generic") })} />;
   }
-  if (!file) return <p className="p-4 text-ui text-fg-muted">{t("loading")}</p>;
+  const file = fetched.data?.state === "done" ? fetched.data.file : undefined;
+  if (!file) return <p role="status" className="p-4 text-ui text-fg-muted">{t("loading")}</p>;
+  return <>{children(file)}</>;
+}
+
+/** The selected file: Monaco (read-only), markdown rendered or raw, images, head/tail of large files. */
+export function FileViewer({ agentId, channelId, handle, path, start, end, nonce }: { agentId: string; channelId: string; handle: string; path: string; start?: number; end?: number; nonce: number }) {
+  const fetched = useFetchedFile(agentId, channelId, path, nonce);
+  return <FetchState fetched={fetched}>{(file) => <FileContent file={file} handle={handle} path={path} start={start} end={end} />}</FetchState>;
+}
+
+/** A stored file's view (shared by the file browser and the message file Sheet). */
+export function FileContent({ file, handle, path, start, end }: { file: StoredFile; handle: string; path: string; start?: number | undefined; end?: number | undefined }) {
+  const { t } = useTranslation("files");
+  const [part, setPart] = useState<"start" | "end">("start");
+  const large = file.size > LARGE_FILE;
+  const isImage = file.mime.startsWith("image/");
+  const text = useFileText(!isImage ? file.id : null, large ? rangeFor(file.size, part) : null);
+  const [rendered, setRendered] = useState(true);
+  const [wrap, setWrap] = useState(false);
+  const [sel, setSel] = useState<[number, number] | null>(start ? [start, end ?? start] : null);
 
   const ref = sel ? lineReference(handle, path, sel[0], sel[1]) : null;
   const isMarkdown = /\.md$/i.test(path);

@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useShortcut } from "@/shared/lib";
 import { usePanes } from "@/shared/panes";
 import { EmptyState, Skeleton, toast } from "@/shared/ui";
+import { GrantBar } from "@/features/approvals";
 import { useActors, useSession } from "@/features/identity";
 import { useChannels, useMembers } from "../api";
 import { useAttachments } from "../attachments";
@@ -15,6 +16,7 @@ import { Composer } from "../components/Composer";
 import { DropZone } from "../components/DropZone";
 import { Feed } from "../components/Feed";
 import { conversationTitle, type Actor, type Channel } from "../model";
+import { useViewer } from "../viewer";
 import { conversationAgent, openAgent, openFiles, openTerminals } from "../workPanes";
 
 function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map<string, Actor>; meId: string }) {
@@ -47,6 +49,7 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
       },
       { replace: tab !== null && settingsTab !== null },
     );
+  const viewer = useViewer(!readOnly);
 
   useShortcut("mod+shift+f", "conversation", "files", () => agent && dispatch(openFiles(agent.id)), Boolean(agent));
   // Ctrl+Shift+T is the browser's "reopen tab" and cannot be taken: X for terminals.
@@ -62,12 +65,14 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
     onFileClick: (author: Actor | undefined, link: Parameters<typeof openFiles>[1]) => {
       if (author?.kind === "agent") dispatch(openFiles(author.id, link));
     },
+    onOpenTerminal: (agentId: string, name: string) => dispatch(openTerminals(agentId, name)),
   };
 
   return (
     <DropZone onFiles={tray.add} className="flex h-full min-h-0 flex-col">
       <ChannelHeader channel={channel} title={title} actors={actors} admin={admin} onSettings={setSettings} />
-      <Feed key={channel.id} channel={channel} actors={actors} meId={meId} handlers={handlers} />
+      {viewer.human ? <GrantBar channelId={channel.id} isDm={channel.kind === "dm"} admin={viewer.admin} /> : null}
+      <Feed key={channel.id} channel={channel} actors={actors} viewer={viewer} handlers={handlers} />
       <ActivityLine channelId={channel.id} actors={actors} />
       {channel.archived_at ? (
         <ArchivedBar channel={channel} admin={admin} />

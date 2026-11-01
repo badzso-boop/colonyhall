@@ -27,6 +27,8 @@ export function registerOverviewEvents(qc: QueryClient): () => void {
     onEvent("actor.state_changed", (e) => patch(e.data.actor_id, (o) => ({ ...o, state: e.data.state, actor: { ...o.actor, state: e.data.state } }))),
     onEvent("actor.profile_updated", (e) => void qc.invalidateQueries({ queryKey: agentKeys.overview(e.data.actor_id) })),
     onEvent("delivery.item_created", (e) => patch(e.data.recipient_id, (o) => bumpInbox(o, e.at))),
+    // A reported run may carry the steps of an answer already shown (the step drawer).
+    onUntypedEvent("run.reported", () => void qc.invalidateQueries({ queryKey: agentKeys.recentRuns })),
     // A run that ends leaves the place: its sessions, runs and usage changed.
     onActivity((f) => f.state !== "working" && runFinished(f.agent_id)),
     ...["delegation.grant_created", "delegation.grant_revoked"].map((t) => onUntypedEvent(t, () => void qc.invalidateQueries({ queryKey: agentKeys.grants }))),

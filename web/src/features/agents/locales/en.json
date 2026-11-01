@@ -363,5 +363,28 @@
       "access": "Access",
       "actions": "Actions"
     }
+  },
+  "steps": {
+    "summary_one": "{{count}} step · {{time}}",
+    "summary_other": "{{count}} steps · {{time}}",
+    "kind": {
+      "read": "read",
+      "write": "write",
+      "edit": "edit",
+      "search": "search",
+      "command": "command",
+      "web": "web",
+      "mcp": "MCP tool",
+      "think": "thinking",
+      "answer": "answer",
+      "denied": "denied",
+      "other": "other"
+    }
+  },
+  "error": {
+    "chip": "error",
+    "open": "Error details",
+    "title": "Error details",
+    "unavailable": "The error details are not available."
   }
 }

@@ -363,5 +363,28 @@
       "access": "Hozzáférés",
       "actions": "Műveletek"
     }
+  },
+  "steps": {
+    "summary_one": "{{count}} lépés · {{time}}",
+    "summary_other": "{{count}} lépés · {{time}}",
+    "kind": {
+      "read": "olvasás",
+      "write": "írás",
+      "edit": "szerkesztés",
+      "search": "keresés",
+      "command": "parancs",
+      "web": "web",
+      "mcp": "MCP-eszköz",
+      "think": "gondolkodás",
+      "answer": "válasz",
+      "denied": "megtagadva",
+      "other": "egyéb"
+    }
+  },
+  "error": {
+    "chip": "hiba",
+    "open": "A hiba részletei",
+    "title": "A hiba részletei",
+    "unavailable": "A hiba részletei nem érhetők el."
   }
 }

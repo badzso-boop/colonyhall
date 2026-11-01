@@ -8,7 +8,7 @@ export const openFiles = (agentId: string, link?: FileLink): PaneAction => ({
   type: "openWork",
   tab: { kind: "files", agentId, ref: link ? link.path + (link.lines ? `:${link.lines}` : "") : "" },
 });
-export const openTerminals = (agentId: string): PaneAction => ({ type: "openWork", tab: { kind: "terminal", agentId, ref: "" } });
+export const openTerminals = (agentId: string, name = ""): PaneAction => ({ type: "openWork", tab: { kind: "terminal", agentId, ref: name } });
 
 /** The agent a conversation's Files/Terminal buttons act on: the DM's agent, or the channel's only agent. */
 export function conversationAgent(agents: Actor[]): Actor | undefined {

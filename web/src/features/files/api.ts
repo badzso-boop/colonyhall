@@ -56,6 +56,31 @@ export async function fetchFile(agentId: string, channelId: string, path: string
   return req;
 }
 
+/**
+ * A local file linked in an agent's message (round 16, humans only): the
+ * server asks the guard of the message's author, and the result is polled
+ * until it is stored or fails, at most 2 minutes.
+ */
+export async function fetchMessageFile(messageId: string, path: string, refresh = false): Promise<FetchRequest> {
+  let req = unwrap(await api.POST("/messages/{messageId}/file-fetch", { params: { path: { messageId } }, body: { path, refresh } }));
+  const until = Date.now() + 120_000;
+  while (req.state === "pending" && Date.now() < until) {
+    await sleep(800);
+    req = unwrap(await api.GET("/file-fetch/{id}", { params: { path: { id: req.id } } }));
+  }
+  return req.state === "pending" ? { ...req, state: "failed", error_code: "timeout" } : req;
+}
+
+export function useMessageFile(messageId: string, path: string | null, nonce: number) {
+  return useQuery({
+    queryKey: ["files", "message", messageId, path, nonce],
+    enabled: path !== null,
+    staleTime: Infinity,
+    retry: false,
+    queryFn: () => fetchMessageFile(messageId, path!, nonce > 0),
+  });
+}
+
 export function useFetchedFile(agentId: string, channelId: string, path: string | null, nonce: number) {
   return useQuery({
     queryKey: ["files", agentId, "fetch", path, nonce],

@@ -4,10 +4,13 @@ import { X } from "lucide-react";
 import { localeOf } from "@/shared/i18n";
 import { usePanes } from "@/shared/panes";
 import { EmptyState, IconButton, Skeleton } from "@/shared/ui";
+import { GrantBar } from "@/features/approvals";
+import { CompactionLive } from "@/features/compaction";
 import { useActors, useSession } from "@/features/identity";
 import { useChannels, useMarkThreadRead, useThread } from "../api";
 import { useAttachments } from "../attachments";
-import { openAgent, openFiles } from "../workPanes";
+import { useViewer } from "../viewer";
+import { openAgent, openFiles, openTerminals } from "../workPanes";
 import { ActivityLine } from "./ActivityLine";
 import { Composer } from "./Composer";
 import { DropZone } from "./DropZone";
@@ -22,7 +25,7 @@ export function ThreadPane({ rootId }: { rootId: string }) {
   const actors = useActors();
   const channels = useChannels();
   const session = useSession();
-  const meId = session.data?.actor.id ?? "";
+  const viewer = useViewer(session.data?.actor.role !== "observer");
   const channelId = thread.data?.root.channel_id ?? "";
   const tray = useAttachments(channelId);
   const channel = channels.data?.find((c) => c.id === channelId);
@@ -59,19 +62,22 @@ export function ThreadPane({ rootId }: { rootId: string }) {
     onFileClick: (author: { id: string; kind: string } | undefined, link: Parameters<typeof openFiles>[1]) => {
       if (author?.kind === "agent") dispatch(openFiles(author.id, link));
     },
+    onOpenTerminal: (agentId: string, name: string) => dispatch(openTerminals(agentId, name)),
   };
 
   return (
     <DropZone onFiles={tray.add} className="flex h-full min-h-0 flex-col">
       {header}
+      {viewer.human ? <GrantBar channelId={channelId} threadRootId={rootId} isDm={channel?.kind === "dm"} admin={viewer.admin} /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto py-2">
-        <MessageItem message={thread.data.root} actors={actors.data} handles={handles} meId={meId} locale={locale} summary={false} {...handlers} />
+        <MessageItem message={thread.data.root} actors={actors.data} handles={handles} viewer={viewer} locale={locale} summary={false} {...handlers} />
         <div className="my-2 flex items-center gap-3 px-4 text-meta text-fg-subtle after:h-px after:flex-1 after:bg-border">
           {t("message.replies", { count: thread.data.replies.length })}
         </div>
         {thread.data.replies.map((m) => (
-          <MessageItem key={m.id} message={m} actors={actors.data} handles={handles} meId={meId} locale={locale} summary={false} {...handlers} />
+          <MessageItem key={m.id} message={m} actors={actors.data} handles={handles} viewer={viewer} locale={locale} summary={false} {...handlers} />
         ))}
+        <CompactionLive channelId={channelId} threadRootId={rootId} human={viewer.human} />
       </div>
       <ActivityLine channelId={channelId} threadRootId={rootId} actors={actors.data} />
       <Composer channelId={channelId} threadRootId={rootId} placeholder={t("composer.threadPlaceholder")} memberIds={memberIds} tray={tray} readOnly={Boolean(channel?.archived_at)} />

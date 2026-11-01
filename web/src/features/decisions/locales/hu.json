@@ -10,5 +10,8 @@
   "more": "Továbbiak betöltése",
   "hint": "Döntést az agentek és az emberek a chatben rögzítenek (decision_record); itt csak olvashatók.",
   "copy": "Másolás",
-  "copied": "Másolva"
+  "copied": "Másolva",
+  "chip": {
+    "notFound": "{{n}} nem található."
+  }
 }
