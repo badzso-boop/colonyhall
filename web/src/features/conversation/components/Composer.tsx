@@ -5,7 +5,7 @@ import { activeMention, cn, commandList, insertMention, openScheduleBuilder, par
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
-import { useAnswerQuestion } from "@/features/questions";
+import { answerSuggestions, useAnswerQuestion, useOpenQuestions } from "@/features/questions";
 import { useCreateSchedule, useRetract, useSendMessage } from "../api";
 import type { AttachmentTray } from "../attachments";
 
@@ -62,6 +62,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   const retract = useRetract();
   const schedule = useCreateSchedule();
   const answer = useAnswerQuestion();
+  const openQuestions = useOpenQuestions();
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [pick, setPick] = useState(0);
@@ -91,8 +92,9 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     [mention, actors.data, memberIds],
   );
   const slash = /^\/\w*$/.test(text) ? commandList.filter((c) => `/${c.name}`.startsWith(text)) : [];
-  const popup: "mention" | "slash" | null = mentionList.length ? "mention" : slash.length ? "slash" : null;
-  const options = popup === "mention" ? mentionList.length : slash.length;
+  const questionList = answerSuggestions(text, openQuestions.data ?? []);
+  const popup: "mention" | "slash" | "question" | null = mentionList.length ? "mention" : slash.length ? "slash" : questionList.length ? "question" : null;
+  const options = popup === "mention" ? mentionList.length : popup === "question" ? questionList.length : slash.length;
 
   if (readOnly) {
     return <p className="m-4 mt-0 rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-ui text-fg-muted">{t("composer.readOnly")}</p>;
@@ -109,6 +111,9 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     } else if (popup === "slash") {
       const c = slash[i];
       if (c) setText(`/${c.name} `);
+    } else if (popup === "question") {
+      const q = questionList[i];
+      if (q) setText(`/answer ${q.formatted_number} `);
     }
     setPick(0);
     area.current?.focus();
@@ -199,7 +204,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       {popup ? (
         <ul
           role="listbox"
-          aria-label={popup === "mention" ? t("composer.mentions") : t("composer.commandsLabel")}
+          aria-label={t(popup === "mention" ? "composer.mentions" : popup === "question" ? "composer.questions" : "composer.commandsLabel")}
           className="absolute inset-x-0 bottom-full z-(--z-overlay) mb-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-overlay"
         >
           {popup === "mention"
@@ -219,7 +224,24 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
                   <span className="truncate text-meta text-fg-muted">{a.display_name}</span>
                 </li>
               ))
-            : slash.map((c, i) => (
+            : popup === "question"
+              ? questionList.map((q, i) => (
+                  <li
+                    key={q.id}
+                    role="option"
+                    aria-selected={i === pick}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      choose(i);
+                    }}
+                    className={cn("flex cursor-pointer items-baseline gap-2 rounded-sm px-2 py-1.5", i === pick && "bg-surface-sunken")}
+                  >
+                    <span className="font-mono text-ui font-semibold">{q.formatted_number}</span>
+                    <span className="font-mono text-meta text-fg-muted">@{q.asked_by_handle}</span>
+                    <span className="min-w-0 flex-1 truncate text-meta text-fg-muted">{q.text}</span>
+                  </li>
+                ))
+              : slash.map((c, i) => (
                 <li
                   key={c.name}
                   role="option"

@@ -11,6 +11,12 @@ const actor = (id: string, kind: "human" | "agent", handle: string) => ({
 const me = actor("me", "human", "norbi");
 const agent = actor("ag", "agent", "fake-agent");
 
+const question = (id: string, number: number, text: string) => ({
+  id, number, formatted_number: `Q-${number}`, workspace_id: "w", asked_by: "ag", asked_by_handle: "fake-agent", to_human: true,
+  channel_id: "c1", channel_name: "general", thread_root_id: "t", text, options: [], state: "open", created_at: "2026-10-30T00:00:00Z",
+});
+const questions = [question("q12", 12, "Melyik adatbázis?"), question("q3", 3, "Mehet a deploy?")];
+
 const tray: AttachmentTray = { items: [], add: vi.fn(), remove: vi.fn(), retry: vi.fn(), clear: vi.fn(), busy: false, fileIds: [], failed: false };
 
 function setup() {
@@ -22,6 +28,10 @@ function setup() {
     "fetch",
     vi.fn(async (req: Request) => {
       if (req.method === "POST") sent.push({ path: new URL(req.url).pathname, body: await req.clone().json().catch(() => null) });
+      if (req.method === "GET" && new URL(req.url).pathname.endsWith("/questions")) {
+        const state = new URL(req.url).searchParams.get("state");
+        return new Response(JSON.stringify({ questions: state === "open" ? questions : [] }), { headers: { "Content-Type": "application/json" } });
+      }
       if (req.method === "GET") return new Response(JSON.stringify({ actors: [me, agent] }), { headers: { "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ message: { id: "m1" } }), { status: 201, headers: { "Content-Type": "application/json" } });
     }),
@@ -79,4 +89,16 @@ test("a malformed command is explained, not sent", async () => {
   });
   expect(sent).toHaveLength(0);
   expect(screen.getByRole("status").textContent).toContain("/schedule");
+});
+
+test("/answer suggests the open question numbers", async () => {
+  const { box } = setup();
+  fireEvent.change(box, { target: { value: "/answer Q-1", selectionStart: 11 } });
+  const list = await screen.findByRole("listbox", { name: "Nyitott kérdések" });
+  expect(list.textContent).toContain("Q-12");
+  expect(list.textContent).toContain("Melyik adatbázis?");
+  expect(list.textContent).not.toContain("Q-3");
+  fireEvent.keyDown(box, { key: "Enter" });
+  expect(box.value).toBe("/answer Q-12 ");
+  expect(screen.queryByRole("listbox")).toBeNull();
 });

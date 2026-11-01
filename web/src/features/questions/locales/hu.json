@@ -1,0 +1,28 @@
+{
+  "title": "Válaszra vár",
+  "tabs": {
+    "open": "Nyitott ({{count}})",
+    "answered": "Megválaszolt"
+  },
+  "state": {
+    "escalated": "eszkalálva",
+    "answered": "megválaszolva",
+    "expired": "lejárt",
+    "withdrawn": "visszavonva"
+  },
+  "deadline": "határidő: {{left}}",
+  "overdue": "lejárt a határidő",
+  "thread": "a szál: #{{channel}}",
+  "default": "Alapértelmezés: {{option}}",
+  "options": "Válaszlehetőségek",
+  "freeText": "Szöveges válasz…",
+  "freeTextLabel": "Válasz erre: {{q}}",
+  "send": "Válasz",
+  "answeredBy": "{{who}} válaszolt {{when}}:",
+  "empty": "Nincs válaszra váró kérdés.",
+  "emptyAnswered": "Az elmúlt 7 napban nem volt megválaszolt kérdés.",
+  "focused": "A kért kérdés",
+  "notFound": "{{q}} nem található.",
+  "showAll": "Összes kérdés",
+  "chipTitle": "{{q}} megnyitása"
+}

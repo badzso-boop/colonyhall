@@ -8,7 +8,7 @@ import { useActivity } from "@/features/agents";
 import { conversationTitle, useChannels } from "@/features/conversation";
 import { useClaudeLimits } from "@/features/hosts";
 import { useActors, useSession } from "@/features/identity";
-import { useOpenQuestions } from "@/features/questions";
+import { QuestionsSheet, openQuestions, useOpenQuestions } from "@/features/questions";
 import { openOverlay } from "../overlays";
 import { WindowDock } from "../windows/WindowDock";
 import { UserMenu } from "./UserMenu";
@@ -105,7 +105,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             label={t("questions")}
             icon={<CircleHelp className="size-5" />}
             badge={questions.data?.length ?? 0}
-            onClick={() => window.location.assign("/")}
+            onClick={() => openQuestions()}
           />
           <Tooltip content={workingCount ? t("working", { count: workingCount }) : t("workingNone")}>
             <span className="hidden h-7 items-center gap-1.5 rounded-full border border-border px-2.5 text-meta text-fg-muted sm:inline-flex">
@@ -128,6 +128,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           <UserMenu />
         </div>
       </header>
+      <QuestionsSheet />
       {me?.halted && !stopped ? (
         <div role="status" className="bg-warning-soft px-4 py-1 text-center text-meta text-warning">
           {t("halted")}

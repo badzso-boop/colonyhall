@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 import { Bot, CircleHelp, MessagesSquare, MoreHorizontal } from "lucide-react";
 import { cn } from "@/shared/lib";
+import { openQuestions } from "@/features/questions";
 
 /** The phone's bottom bar (< 768 px). Questions and agents get their pages in later rounds. */
 export function BottomBar() {
@@ -13,10 +14,10 @@ export function BottomBar() {
         <MessagesSquare aria-hidden className="size-5" />
         {t("tabs.conversations")}
       </NavLink>
-      <a href="/" className={item}>
+      <button type="button" onClick={() => openQuestions()} className={item}>
         <CircleHelp aria-hidden className="size-5" />
         {t("tabs.questions")}
-      </a>
+      </button>
       <a href="/" className={item}>
         <Bot aria-hidden className="size-5" />
         {t("tabs.agents")}

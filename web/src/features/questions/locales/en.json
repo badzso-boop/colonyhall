@@ -1,0 +1,28 @@
+{
+  "title": "Waiting for you",
+  "tabs": {
+    "open": "Open ({{count}})",
+    "answered": "Answered"
+  },
+  "state": {
+    "escalated": "escalated",
+    "answered": "answered",
+    "expired": "expired",
+    "withdrawn": "withdrawn"
+  },
+  "deadline": "deadline: {{left}}",
+  "overdue": "past the deadline",
+  "thread": "thread: #{{channel}}",
+  "default": "Default: {{option}}",
+  "options": "Options",
+  "freeText": "Type an answer…",
+  "freeTextLabel": "Answer to {{q}}",
+  "send": "Answer",
+  "answeredBy": "{{who}} answered {{when}}:",
+  "empty": "No questions are waiting for an answer.",
+  "emptyAnswered": "No questions were answered in the last 7 days.",
+  "focused": "The question asked for",
+  "notFound": "{{q}} was not found.",
+  "showAll": "All questions",
+  "chipTitle": "Open {{q}}"
+}
