@@ -1641,6 +1641,9 @@ type AuditVerify struct {
 
 // Channel defines model for Channel.
 type Channel struct {
+	// AgentLockedAt Set while agents cannot write or wake here
+	AgentLockedAt *time.Time `json:"agent_locked_at,omitempty"`
+
 	// ArchivedAt Set while the channel is archived (read-only)
 	ArchivedAt             *time.Time         `json:"archived_at,omitempty"`
 	CompactThresholdTokens *int               `json:"compact_threshold_tokens,omitempty"`

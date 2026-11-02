@@ -303,7 +303,7 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 // onChannelEvent stops work in a channel the agent was removed from, or
 // that was archived (round 34).
 func (a *Agent) onChannelEvent(eventType string, data json.RawMessage) {
-	if eventType != "channel.member_removed" && eventType != "channel.archived" {
+	if eventType != "channel.member_removed" && eventType != "channel.archived" && eventType != "channel.locked" {
 		return
 	}
 	var p struct {
@@ -315,6 +315,8 @@ func (a *Agent) onChannelEvent(eventType string, data json.RawMessage) {
 	}
 	if eventType == "channel.archived" {
 		a.OnChannelLeft(p.ChannelID, "archived")
+	} else if eventType == "channel.locked" {
+		a.OnChannelLeft(p.ChannelID, "locked")
 	} else if me := a.getMe(); me.ID != "" && p.ActorID == me.ID {
 		a.OnChannelLeft(p.ChannelID, "removed")
 	}

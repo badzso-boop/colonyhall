@@ -109,6 +109,8 @@ func (s *Service) Upload(ctx context.Context, by identity.Actor, channelID ids.I
 		return File{}, err
 	} else if c.Archived() {
 		return File{}, conversation.ErrChannelArchived
+	} else if by.Kind == identity.KindAgent && c.AgentLocked() {
+		return File{}, conversation.ErrChannelLocked
 	}
 	return s.upload(ctx, by, channelID, filename, r)
 }

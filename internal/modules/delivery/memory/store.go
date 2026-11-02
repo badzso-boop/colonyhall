@@ -4,6 +4,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -49,12 +50,17 @@ func (s *Store) Insert(_ context.Context, d delivery.Delivery) (bool, error) {
 }
 
 // Pending returns unacknowledged deliveries, oldest first.
-func (s *Store) Pending(_ context.Context, recipientID ids.ID, limit int) ([]delivery.Delivery, int, error) {
+func (s *Store) Pending(ctx context.Context, recipientID ids.ID, limit int) ([]delivery.Delivery, int, error) {
+	return s.PendingExcept(ctx, recipientID, nil, limit)
+}
+
+// PendingExcept is Pending without the items of the given channels.
+func (s *Store) PendingExcept(_ context.Context, recipientID ids.ID, except []ids.ID, limit int) ([]delivery.Delivery, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var all []delivery.Delivery
 	for _, d := range s.rows {
-		if d.RecipientID == recipientID && d.AckedAt == nil {
+		if d.RecipientID == recipientID && d.AckedAt == nil && !slices.Contains(except, d.ChannelID) {
 			all = append(all, d)
 		}
 	}

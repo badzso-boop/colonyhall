@@ -69,12 +69,18 @@ func (q *Queries) AckByItemID(ctx context.Context, arg AckByItemIDParams) (int64
 	return result.RowsAffected(), nil
 }
 
-const countPending = `-- name: CountPending :one
-SELECT count(*) FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL
+const countPendingExcept = `-- name: CountPendingExcept :one
+SELECT count(*) FROM delivery
+WHERE recipient_id = $1 AND acked_at IS NULL AND NOT (channel_id = ANY($2::uuid[]))
 `
 
-func (q *Queries) CountPending(ctx context.Context, recipientID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countPending, recipientID)
+type CountPendingExceptParams struct {
+	RecipientID uuid.UUID
+	Excluded    []uuid.UUID
+}
+
+func (q *Queries) CountPendingExcept(ctx context.Context, arg CountPendingExceptParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingExcept, arg.RecipientID, arg.Excluded)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -156,17 +162,20 @@ func (q *Queries) InsertTerminalEvent(ctx context.Context, arg InsertTerminalEve
 	return err
 }
 
-const pending = `-- name: Pending :many
-SELECT id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, acked_at, from_actor_id, delegated_by, via_grant FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL ORDER BY id LIMIT $2
+const pendingExcept = `-- name: PendingExcept :many
+SELECT id, workspace_id, recipient_id, item_kind, item_id, channel_id, flags, event_seq, created_at, acked_at, from_actor_id, delegated_by, via_grant FROM delivery
+WHERE recipient_id = $1 AND acked_at IS NULL AND NOT (channel_id = ANY($3::uuid[]))
+ORDER BY id LIMIT $2
 `
 
-type PendingParams struct {
+type PendingExceptParams struct {
 	RecipientID uuid.UUID
 	Limit       int32
+	Excluded    []uuid.UUID
 }
 
-func (q *Queries) Pending(ctx context.Context, arg PendingParams) ([]Delivery, error) {
-	rows, err := q.db.Query(ctx, pending, arg.RecipientID, arg.Limit)
+func (q *Queries) PendingExcept(ctx context.Context, arg PendingExceptParams) ([]Delivery, error) {
+	rows, err := q.db.Query(ctx, pendingExcept, arg.RecipientID, arg.Limit, arg.Excluded)
 	if err != nil {
 		return nil, err
 	}

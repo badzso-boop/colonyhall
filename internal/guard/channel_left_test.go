@@ -168,3 +168,19 @@ func TestDecideSkipsItemsOfALeftChannel(t *testing.T) {
 		t.Fatalf("only the c2 answer may be posted, got %v", sent)
 	}
 }
+
+// channel.locked stops the agent's run in that channel, like an archive does.
+func TestLockEventStopsTheRunInTheChannel(t *testing.T) {
+	stopped := false
+	a := &Agent{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	a.workCancel = func() { stopped = true }
+	a.currentRunChannelID = "c1"
+	a.onChannelEvent("channel.locked", json.RawMessage(`{"channel_id":"c2","name":"x"}`))
+	if stopped {
+		t.Fatal("a lock elsewhere stopped the run")
+	}
+	a.onChannelEvent("channel.locked", json.RawMessage(`{"channel_id":"c1","name":"x"}`))
+	if !stopped || !a.currentRunLeft {
+		t.Fatal("the lock did not stop the run")
+	}
+}

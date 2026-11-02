@@ -356,6 +356,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/channels/{channelId}/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Admins only. Agents cannot write in the channel (409 channel_locked)
+         *     and are not woken by it, and their running work there stops. Humans
+         *     keep talking. Pending wake items wait for the unlock. DMs and archived
+         *     channels cannot be locked (409).
+         */
+        post: operations["lockChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/{channelId}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admins only. Lets agents write and wake in the channel again. */
+        post: operations["unlockChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/channels/{channelId}/mute": {
         parameters: {
             query?: never;
@@ -2648,6 +2691,11 @@ export interface components {
              * @description Set while the channel is archived (read-only)
              */
             archived_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Set while agents cannot write or wake here
+             */
+            agent_locked_at?: string | null;
             /** @description The caller has muted the channel */
             muted?: boolean;
             /**
@@ -2889,6 +2937,7 @@ export interface components {
          *     channel.member_added → EventMemberAdded; channel.member_removed →
          *     EventMemberRemoved; channel.updated → EventChannelUpdated;
          *     channel.archived, channel.unarchived → EventChannelArchived;
+         *     channel.locked, channel.unlocked → EventChannelLocked;
          *     channel.mute_changed (the muting viewer only) → EventMuteChanged;
          *     actor.created → EventActorCreated;
          *     actor.state_changed → EventActorStateChanged; actor.profile_updated →
@@ -3051,6 +3100,11 @@ export interface components {
             new_name?: string;
         };
         EventChannelArchived: {
+            /** Format: uuid */
+            channel_id: string;
+            name: string;
+        };
+        EventChannelLocked: {
             /** Format: uuid */
             channel_id: string;
             name: string;
@@ -5040,6 +5094,58 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    lockChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Locked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    unlockChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlocked */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -21,6 +21,10 @@ type mockConvReader struct {
 	canReadMap map[string]bool
 }
 
+func (m *mockConvReader) AgentLockedChannels(context.Context, ids.ID) ([]ids.ID, error) {
+	return nil, nil
+}
+
 func (m *mockConvReader) MessageByID(_ context.Context, _ ids.ID) (conversation.Message, error) {
 	return conversation.Message{}, nil
 }

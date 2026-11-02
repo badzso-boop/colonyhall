@@ -506,6 +506,32 @@ func (s *Store) UpdateChannel(_ context.Context, id ids.ID, name, description st
 	return nil
 }
 
+// SetAgentLocked locks or unlocks a channel against agents.
+func (s *Store) SetAgentLocked(_ context.Context, id ids.ID, at *time.Time, by *ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.channels[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	c.AgentLockedAt, c.AgentLockedBy = at, by
+	s.channels[id] = c
+	return nil
+}
+
+// AgentLockedChannels lists the workspace's channels locked against agents.
+func (s *Store) AgentLockedChannels(_ context.Context, workspaceID ids.ID) ([]ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []ids.ID
+	for id, c := range s.channels {
+		if c.WorkspaceID == workspaceID && c.AgentLockedAt != nil {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
 // SetArchived archives or unarchives a channel.
 func (s *Store) SetArchived(_ context.Context, id ids.ID, at *time.Time, by *ids.ID) error {
 	s.mu.Lock()

@@ -25,6 +25,7 @@ func init() {
 	httpx.RegisterForbidden(conversation.ErrForbidden)
 	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrConversationPaused)
 	httpx.RegisterStatus(http.StatusConflict, conversation.ErrLastAdmin, conversation.ErrDMUnchangeable)
+	httpx.RegisterProblemType(http.StatusConflict, "channel_locked", conversation.ErrChannelLocked)
 	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
 	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
@@ -117,6 +118,7 @@ func channelToAPI(c conversation.ChannelView) apispec.Channel {
 		out.MemberIds = &c.MemberIDs
 	}
 	out.ArchivedAt = c.ArchivedAt
+	out.AgentLockedAt = c.AgentLockedAt
 	if c.Muted {
 		out.Muted = httpx.Ptr(true)
 		out.MutedUntil = c.MutedUntil
@@ -137,6 +139,7 @@ func ChannelToAPI(c conversation.Channel) apispec.Channel {
 		Description:            desc,
 		CompactThresholdTokens: c.CompactThresholdTokens,
 		ArchivedAt:             c.ArchivedAt,
+		AgentLockedAt:          c.AgentLockedAt,
 	}
 }
 
@@ -254,6 +257,25 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}
 	mux.Handle("POST /api/v1/channels/{id}/archive", wrap(archive(true)))
 	mux.Handle("POST /api/v1/channels/{id}/unarchive", wrap(archive(false)))
+	lock := func(on bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			channelID, ok := pathID(w, r, "id")
+			if !ok {
+				return
+			}
+			do := svc.UnlockChannel
+			if on {
+				do = svc.LockChannel
+			}
+			if _, err := do(r.Context(), httpx.Actor(r), channelID); err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+			writeChannel(w, r, svc, channelID)
+		}
+	}
+	mux.Handle("POST /api/v1/channels/{id}/lock", wrap(lock(true)))
+	mux.Handle("POST /api/v1/channels/{id}/unlock", wrap(lock(false)))
 
 	mux.Handle("PUT /api/v1/channels/{id}/mute", wrap(func(w http.ResponseWriter, r *http.Request) {
 		channelID, ok := pathID(w, r, "id")

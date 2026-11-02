@@ -3,11 +3,14 @@ INSERT INTO delivery (id, workspace_id, recipient_id, item_kind, item_id, channe
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (recipient_id, item_kind, item_id) DO NOTHING;
 
--- name: CountPending :one
-SELECT count(*) FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL;
+-- name: CountPendingExcept :one
+SELECT count(*) FROM delivery
+WHERE recipient_id = $1 AND acked_at IS NULL AND NOT (channel_id = ANY(sqlc.arg(excluded)::uuid[]));
 
--- name: Pending :many
-SELECT * FROM delivery WHERE recipient_id = $1 AND acked_at IS NULL ORDER BY id LIMIT $2;
+-- name: PendingExcept :many
+SELECT * FROM delivery
+WHERE recipient_id = $1 AND acked_at IS NULL AND NOT (channel_id = ANY(sqlc.arg(excluded)::uuid[]))
+ORDER BY id LIMIT $2;
 
 -- name: Ack :execrows
 UPDATE delivery SET acked_at = sqlc.arg(at)::timestamptz

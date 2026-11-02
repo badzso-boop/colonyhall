@@ -35,10 +35,17 @@ type Channel struct {
 	// ArchivedAt marks a read-only channel; ArchivedBy is the admin who did it.
 	ArchivedAt *time.Time
 	ArchivedBy *ids.ID
+	// AgentLockedAt marks a channel where agents cannot write and are not
+	// woken; humans keep talking. AgentLockedBy is the admin who did it.
+	AgentLockedAt *time.Time
+	AgentLockedBy *ids.ID
 }
 
 // Archived reports whether the channel is read-only.
 func (c Channel) Archived() bool { return c.ArchivedAt != nil }
+
+// AgentLocked reports whether the channel is locked against agents.
+func (c Channel) AgentLocked() bool { return c.AgentLockedAt != nil }
 
 // Member is an actor's membership in a channel. MsgCount is how many of the
 // channel's messages the member has seen; unread = Channel.MsgCount - MsgCount
@@ -189,6 +196,7 @@ var (
 	ErrBadEmoji           = errors.New("emoji must be a short emoji sequence (1-32 characters, no text)")
 	ErrBadDM              = errors.New("a DM needs 1-8 other people from this workspace")
 	ErrChannelArchived    = errors.New("the channel is archived and read-only")
+	ErrChannelLocked      = errors.New("the channel is locked against agents")
 	ErrDMUnchangeable     = errors.New("a DM cannot be renamed, archived or have its members changed")
 	ErrNothingToUpdate    = errors.New("give a name or a description to change")
 	ErrBadMuteUntil       = errors.New("until must be in the future")

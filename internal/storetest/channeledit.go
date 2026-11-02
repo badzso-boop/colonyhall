@@ -34,6 +34,36 @@ func testChannelEdit(t *testing.T, b Backend) {
 		t.Fatalf("rename to a taken name: want ErrConflict, got %v", err)
 	}
 
+	// Lock against agents and unlock.
+	lockedAt := t0.Add(time.Minute)
+	must(t, b.Conversation.SetAgentLocked(ctx, f.channel.ID, &lockedAt, &f.human.ID))
+	lc, err := b.Conversation.ChannelByID(ctx, f.channel.ID)
+	must(t, err)
+	if !lc.AgentLocked() || lc.AgentLockedBy == nil || *lc.AgentLockedBy != f.human.ID {
+		t.Fatalf("lock not stored: %+v", lc)
+	}
+	locked, err := b.Conversation.AgentLockedChannels(ctx, f.ws.ID)
+	must(t, err)
+	if len(locked) != 1 || locked[0] != f.channel.ID {
+		t.Fatalf("locked channels: %+v", locked)
+	}
+	lockedViews, err := b.Conversation.ChannelsForActor(ctx, f.ws.ID, f.human.ID, false)
+	must(t, err)
+	if len(lockedViews) != 1 || !lockedViews[0].AgentLocked() {
+		t.Fatalf("channel list must carry agent_locked_at: %+v", lockedViews)
+	}
+	_, err = b.Delivery.Insert(ctx, delivery.Delivery{ID: gen.New(), WorkspaceID: f.ws.ID, RecipientID: f.agent.ID, ItemKind: delivery.ItemMessage, ItemID: gen.New(), ChannelID: f.channel.ID, Flags: delivery.FlagWake, CreatedAt: t0})
+	must(t, err)
+	if _, total, err := b.Delivery.PendingExcept(ctx, f.agent.ID, []ids.ID{f.channel.ID}, 10); err != nil || total != 0 {
+		t.Fatalf("items of an excepted channel: %d %v", total, err)
+	}
+	if _, total, err := b.Delivery.PendingExcept(ctx, f.agent.ID, nil, 10); err != nil || total != 1 {
+		t.Fatalf("items without exception: %d %v", total, err)
+	}
+	_, err = b.Delivery.AckByChannel(ctx, f.channel.ID, f.agent.ID, t0)
+	must(t, err)
+	must(t, b.Conversation.SetAgentLocked(ctx, f.channel.ID, nil, nil))
+
 	// Archive and unarchive.
 	at := t0.Add(time.Hour)
 	must(t, b.Conversation.SetArchived(ctx, f.channel.ID, &at, &f.human.ID))

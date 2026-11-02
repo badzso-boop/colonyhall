@@ -299,6 +299,38 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /channels/{channelId}/lock:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: lockChannel
+      tags: [conversation]
+      description: |
+        Admins only. Agents cannot write in the channel (409 channel_locked)
+        and are not woken by it, and their running work there stops. Humans
+        keep talking. Pending wake items wait for the unlock. DMs and archived
+        channels cannot be locked (409).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Locked, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/unlock:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    post:
+      operationId: unlockChannel
+      tags: [conversation]
+      description: Admins only. Lets agents write and wake in the channel again.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Unlocked, content: { application/json: { schema: { $ref: "#/components/schemas/Channel" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /channels/{channelId}/mute:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
@@ -2527,6 +2559,7 @@ components:
         mentions: { type: integer, format: int64 }
         member_ids: { type: array, items: { type: string, format: uuid }, description: DM channels only }
         archived_at: { type: string, format: date-time, nullable: true, description: Set while the channel is archived (read-only) }
+        agent_locked_at: { type: string, format: date-time, nullable: true, description: Set while agents cannot write or wake here }
         muted: { type: boolean, description: The caller has muted the channel }
         muted_until: { type: string, format: date-time, nullable: true, description: "End of the caller's mute; null while muted means forever" }
     UpdateChannelRequest:
@@ -2757,6 +2790,7 @@ components:
         channel.member_added → EventMemberAdded; channel.member_removed →
         EventMemberRemoved; channel.updated → EventChannelUpdated;
         channel.archived, channel.unarchived → EventChannelArchived;
+        channel.locked, channel.unlocked → EventChannelLocked;
         channel.mute_changed (the muting viewer only) → EventMuteChanged;
         actor.created → EventActorCreated;
         actor.state_changed → EventActorStateChanged; actor.profile_updated →
@@ -2904,6 +2938,12 @@ components:
         old_name: { type: string }
         new_name: { type: string }
     EventChannelArchived:
+      type: object
+      required: [channel_id, name]
+      properties:
+        channel_id: { type: string, format: uuid }
+        name: { type: string }
+    EventChannelLocked:
       type: object
       required: [channel_id, name]
       properties:

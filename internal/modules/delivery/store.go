@@ -29,6 +29,8 @@ type Store interface {
 	// Pending returns unacknowledged deliveries for the recipient, oldest
 	// first, and the total number pending.
 	Pending(ctx context.Context, recipientID ids.ID, limit int) ([]Delivery, int, error)
+	// PendingExcept is Pending without the items of the given channels.
+	PendingExcept(ctx context.Context, recipientID ids.ID, except []ids.ID, limit int) ([]Delivery, int, error)
 	// Ack marks the recipient's deliveries as handled and returns how many changed.
 	Ack(ctx context.Context, recipientID ids.ID, idList []ids.ID, at time.Time) (int, error)
 	// AckByItemID marks all deliveries for itemID as handled.

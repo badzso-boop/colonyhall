@@ -200,6 +200,9 @@ func FormatChannelInfo(info conversation.ChannelInfo) string {
 	if c.Archived() {
 		fmt.Fprintf(&b, "\nArchived on %s: read-only, nothing can be posted.", c.ArchivedAt.Format("2006-01-02"))
 	}
+	if c.AgentLocked() {
+		b.WriteString("\nLocked against agents: you can read it, but cannot post here.")
+	}
 	if c.Description == "" {
 		b.WriteString("\nNo description.")
 	} else {

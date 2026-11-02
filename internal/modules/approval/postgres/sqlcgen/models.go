@@ -154,6 +154,8 @@ type Channel struct {
 	CompactThresholdTokens *int32
 	ArchivedAt             *time.Time
 	ArchivedBy             *uuid.UUID
+	AgentLockedAt          *time.Time
+	AgentLockedBy          *uuid.UUID
 }
 
 type ChannelMember struct {

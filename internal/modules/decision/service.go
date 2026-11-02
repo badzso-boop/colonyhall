@@ -26,6 +26,7 @@ type ConversationReader interface {
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
 	ResolveChannel(ctx context.Context, by identity.Actor, nameOrID string) (conversation.Channel, error)
+	ChannelByID(ctx context.Context, id ids.ID) (conversation.Channel, error)
 }
 
 // Service manages decision logging and wiki synchronisation.
@@ -132,6 +133,15 @@ func (s *Service) AddDecision(ctx context.Context, actor identity.Actor, in AddD
 	}
 	if !canRead {
 		return Decision{}, ErrForbidden
+	}
+	if actor.Kind == identity.KindAgent {
+		ch, err := s.conv.ChannelByID(ctx, channelID)
+		if err != nil {
+			return Decision{}, err
+		}
+		if ch.AgentLocked() {
+			return Decision{}, conversation.ErrChannelLocked
+		}
 	}
 
 	var d Decision

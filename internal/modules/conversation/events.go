@@ -10,6 +10,8 @@ const (
 	EventChannelUpdated   = "channel.updated"
 	EventChannelArchived  = "channel.archived"
 	EventChannelUnarchive = "channel.unarchived"
+	EventChannelLocked    = "channel.locked"
+	EventChannelUnlocked  = "channel.unlocked"
 	// EventMuteChanged reaches only the viewer who muted (their other tabs).
 	EventMuteChanged      = "channel.mute_changed"
 	EventMessageCreated   = "message.created"
@@ -52,6 +54,12 @@ type ChannelUpdated struct {
 
 // ChannelArchived is the payload of EventChannelArchived and EventChannelUnarchive.
 type ChannelArchived struct {
+	ChannelID string `json:"channel_id"`
+	Name      string `json:"name"`
+}
+
+// ChannelLocked is the payload of EventChannelLocked and EventChannelUnlocked.
+type ChannelLocked struct {
 	ChannelID string `json:"channel_id"`
 	Name      string `json:"name"`
 }

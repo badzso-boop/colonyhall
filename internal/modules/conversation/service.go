@@ -432,6 +432,9 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	if c.Archived() {
 		return SendResult{}, ErrChannelArchived
 	}
+	if by.Kind == identity.KindAgent && c.AgentLocked() {
+		return SendResult{}, ErrChannelLocked
+	}
 	if in.ThreadRootID != ids.Nil {
 		root, err := s.Store.MessageByID(ctx, in.ThreadRootID)
 		if err != nil || root.ChannelID != c.ID || root.ThreadRootID != ids.Nil {

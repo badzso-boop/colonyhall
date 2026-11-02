@@ -159,6 +159,72 @@ func (s *Service) setArchived(ctx context.Context, by identity.Actor, channelID 
 	return out, nil
 }
 
+// LockChannel locks a channel against agents (admins only): they cannot write
+// and are not woken; humans keep talking. The guard stops their running work
+// on the event. Pending wake items are kept and wake after the unlock; messages
+// written while it is locked never wake an agent.
+func (s *Service) LockChannel(ctx context.Context, by identity.Actor, channelID ids.ID) (Channel, error) {
+	return s.setAgentLocked(ctx, by, channelID, true)
+}
+
+// UnlockChannel lets agents write and wake in the channel again (admins only).
+func (s *Service) UnlockChannel(ctx context.Context, by identity.Actor, channelID ids.ID) (Channel, error) {
+	return s.setAgentLocked(ctx, by, channelID, false)
+}
+
+func (s *Service) setAgentLocked(ctx context.Context, by identity.Actor, channelID ids.ID, lock bool) (Channel, error) {
+	if by.Kind != identity.KindHuman || !policy.CanManageMembers(subject(by)) {
+		return Channel{}, ErrForbidden
+	}
+	var out Channel
+	var seq int64
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+		c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
+		if err != nil {
+			return err
+		}
+		if c.Kind == KindDM {
+			return ErrDMUnchangeable
+		}
+		if c.Archived() {
+			return ErrChannelArchived
+		}
+		out = c
+		if c.AgentLocked() == lock {
+			return nil
+		}
+		typ, note := EventChannelUnlocked, fmt.Sprintf("🔓 @%s feloldotta a csatorna zárolását", by.Handle)
+		var at *time.Time
+		var who *ids.ID
+		if lock {
+			now, id := s.Clock.Now(), by.ID
+			at, who = &now, &id
+			typ, note = EventChannelLocked, fmt.Sprintf("🔒 @%s zárolta a csatornát az agentek elől", by.Handle)
+		}
+		if err := s.Store.SetAgentLocked(ctx, c.ID, at, who); err != nil {
+			return err
+		}
+		out.AgentLockedAt, out.AgentLockedBy = at, who
+		if _, err = s.appendEvent(ctx, by, c.ID, typ, "channel", c.ID, ChannelLocked{ChannelID: c.ID.String(), Name: c.Name}); err != nil {
+			return err
+		}
+		seq, err = s.postChangeNote(ctx, by, out, note)
+		return err
+	})
+	if err != nil {
+		return Channel{}, err
+	}
+	if seq > 0 {
+		s.Bus.Notify(seq)
+	}
+	return out, nil
+}
+
+// AgentLockedChannels lists the workspace's channels locked against agents.
+func (s *Service) AgentLockedChannels(ctx context.Context, workspaceID ids.ID) ([]ids.ID, error) {
+	return s.Store.AgentLockedChannels(ctx, workspaceID)
+}
+
 // postChangeNote writes a silent system note about a channel change inside
 // the caller's transaction: it wakes nobody (no delivery) and counts as seen
 // for its author.

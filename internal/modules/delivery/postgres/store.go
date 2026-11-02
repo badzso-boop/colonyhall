@@ -33,12 +33,20 @@ func (s *Store) Insert(ctx context.Context, d delivery.Delivery) (bool, error) {
 
 // Pending returns unacknowledged deliveries, oldest first.
 func (s *Store) Pending(ctx context.Context, recipientID ids.ID, limit int) ([]delivery.Delivery, int, error) {
+	return s.PendingExcept(ctx, recipientID, nil, limit)
+}
+
+// PendingExcept is Pending without the items of the given channels.
+func (s *Store) PendingExcept(ctx context.Context, recipientID ids.ID, except []ids.ID, limit int) ([]delivery.Delivery, int, error) {
 	q := s.q(ctx)
-	total, err := q.CountPending(ctx, recipientID)
+	if except == nil {
+		except = []ids.ID{} // NULL would match nothing
+	}
+	total, err := q.CountPendingExcept(ctx, sqlcgen.CountPendingExceptParams{RecipientID: recipientID, Excluded: except})
 	if err != nil {
 		return nil, 0, err
 	}
-	rows, err := q.Pending(ctx, sqlcgen.PendingParams{RecipientID: recipientID, Limit: int32(limit)})
+	rows, err := q.PendingExcept(ctx, sqlcgen.PendingExceptParams{RecipientID: recipientID, Limit: int32(limit), Excluded: except})
 	if err != nil {
 		return nil, 0, err
 	}

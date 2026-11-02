@@ -61,7 +61,7 @@ func (s *Store) ChannelsForActor(ctx context.Context, workspaceID, actorID ids.I
 		out = append(out, conversation.ChannelView{
 			Channel: conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
 				Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
-				ArchivedAt: r.ArchivedAt, ArchivedBy: r.ArchivedBy},
+				ArchivedAt: r.ArchivedAt, ArchivedBy: r.ArchivedBy, AgentLockedAt: r.AgentLockedAt, AgentLockedBy: r.AgentLockedBy},
 			IsMember: r.IsMember, Unread: r.Unread, Mentions: r.Mentions,
 		})
 	}
@@ -206,7 +206,7 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 	}
 	return conversation.Channel{ID: r.ID, WorkspaceID: r.WorkspaceID, Kind: conversation.ChannelKind(r.Kind),
 		Name: r.Name, Description: r.Description, CompactThresholdTokens: compactThreshold, MsgCount: r.MsgCount, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
-		ArchivedAt: r.ArchivedAt, ArchivedBy: r.ArchivedBy}, nil
+		ArchivedAt: r.ArchivedAt, ArchivedBy: r.ArchivedBy, AgentLockedAt: r.AgentLockedAt, AgentLockedBy: r.AgentLockedBy}, nil
 }
 
 func toMessage(r sqlcgen.Message) conversation.Message {
@@ -349,6 +349,16 @@ func (s *Store) UpdateChannel(ctx context.Context, id ids.ID, name, description 
 // SetArchived archives or unarchives a channel.
 func (s *Store) SetArchived(ctx context.Context, id ids.ID, at *time.Time, by *ids.ID) error {
 	return s.q(ctx).SetChannelArchived(ctx, sqlcgen.SetChannelArchivedParams{ID: id, ArchivedAt: at, ArchivedBy: by})
+}
+
+// SetAgentLocked locks or unlocks a channel against agents.
+func (s *Store) SetAgentLocked(ctx context.Context, id ids.ID, at *time.Time, by *ids.ID) error {
+	return s.q(ctx).SetChannelAgentLocked(ctx, sqlcgen.SetChannelAgentLockedParams{ID: id, AgentLockedAt: at, AgentLockedBy: by})
+}
+
+// AgentLockedChannels lists the workspace's channels locked against agents.
+func (s *Store) AgentLockedChannels(ctx context.Context, workspaceID ids.ID) ([]ids.ID, error) {
+	return s.q(ctx).AgentLockedChannels(ctx, workspaceID)
 }
 
 // SetMute stores a viewer's mute.

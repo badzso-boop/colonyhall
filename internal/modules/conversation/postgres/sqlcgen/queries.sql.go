@@ -69,6 +69,30 @@ func (q *Queries) AddReaction(ctx context.Context, arg AddReactionParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const agentLockedChannels = `-- name: AgentLockedChannels :many
+SELECT id FROM channel WHERE workspace_id = $1 AND agent_locked_at IS NOT NULL ORDER BY id
+`
+
+func (q *Queries) AgentLockedChannels(ctx context.Context, workspaceID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, agentLockedChannels, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const bumpThread = `-- name: BumpThread :exec
 UPDATE message SET reply_count = reply_count + 1, last_reply_at = $1::timestamptz WHERE id = $2
 `
@@ -84,7 +108,7 @@ func (q *Queries) BumpThread(ctx context.Context, arg BumpThreadParams) error {
 }
 
 const channelByID = `-- name: ChannelByID :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens, archived_at, archived_by FROM channel WHERE id = $1
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens, archived_at, archived_by, agent_locked_at, agent_locked_by FROM channel WHERE id = $1
 `
 
 func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error) {
@@ -102,12 +126,14 @@ func (q *Queries) ChannelByID(ctx context.Context, id uuid.UUID) (Channel, error
 		&i.CompactThresholdTokens,
 		&i.ArchivedAt,
 		&i.ArchivedBy,
+		&i.AgentLockedAt,
+		&i.AgentLockedBy,
 	)
 	return i, err
 }
 
 const channelByName = `-- name: ChannelByName :one
-SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens, archived_at, archived_by FROM channel WHERE workspace_id = $1 AND name = $2
+SELECT id, workspace_id, kind, name, msg_count, created_by, created_at, description, compact_threshold_tokens, archived_at, archived_by, agent_locked_at, agent_locked_by FROM channel WHERE workspace_id = $1 AND name = $2
 `
 
 type ChannelByNameParams struct {
@@ -130,13 +156,15 @@ func (q *Queries) ChannelByName(ctx context.Context, arg ChannelByNameParams) (C
 		&i.CompactThresholdTokens,
 		&i.ArchivedAt,
 		&i.ArchivedBy,
+		&i.AgentLockedAt,
+		&i.AgentLockedBy,
 	)
 	return i, err
 }
 
 const channelsForActor = `-- name: ChannelsForActor :many
 SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.compact_threshold_tokens, c.msg_count, c.created_by, c.created_at,
-       c.archived_at, c.archived_by,
+       c.archived_at, c.archived_by, c.agent_locked_at, c.agent_locked_by,
        (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
@@ -164,6 +192,8 @@ type ChannelsForActorRow struct {
 	CreatedAt              time.Time
 	ArchivedAt             *time.Time
 	ArchivedBy             *uuid.UUID
+	AgentLockedAt          *time.Time
+	AgentLockedBy          *uuid.UUID
 	IsMember               bool
 	Unread                 int64
 	Mentions               int64
@@ -190,6 +220,8 @@ func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorPara
 			&i.CreatedAt,
 			&i.ArchivedAt,
 			&i.ArchivedBy,
+			&i.AgentLockedAt,
+			&i.AgentLockedBy,
 			&i.IsMember,
 			&i.Unread,
 			&i.Mentions,
@@ -848,6 +880,21 @@ func (q *Queries) RetractMessage(ctx context.Context, arg RetractMessageParams) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setChannelAgentLocked = `-- name: SetChannelAgentLocked :exec
+UPDATE channel SET agent_locked_at = $1, agent_locked_by = $2 WHERE id = $3
+`
+
+type SetChannelAgentLockedParams struct {
+	AgentLockedAt *time.Time
+	AgentLockedBy *uuid.UUID
+	ID            uuid.UUID
+}
+
+func (q *Queries) SetChannelAgentLocked(ctx context.Context, arg SetChannelAgentLockedParams) error {
+	_, err := q.db.Exec(ctx, setChannelAgentLocked, arg.AgentLockedAt, arg.AgentLockedBy, arg.ID)
+	return err
 }
 
 const setChannelArchived = `-- name: SetChannelArchived :exec

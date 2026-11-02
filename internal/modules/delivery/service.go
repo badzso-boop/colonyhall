@@ -240,6 +240,10 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 	}
 	for _, rec := range recipients {
 		a := rec.Actor
+		// A locked channel wakes no agent, not even after the unlock.
+		if ch.AgentLocked() && a.Kind == identity.KindAgent {
+			continue
+		}
 		if author.Kind == identity.KindAgent && a.Kind == identity.KindAgent && s.Approval != nil {
 			needsApproval, err := s.Approval.NeedsApproval(ctx, author.ID, a.ID)
 			if err != nil {
@@ -358,7 +362,15 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 	if limit > MaxInboxLimit {
 		limit = MaxInboxLimit
 	}
-	ds, total, err := s.Store.Pending(ctx, by.ID, limit)
+	// An agent's items from a locked channel wait for the unlock.
+	var locked []ids.ID
+	if by.Kind == identity.KindAgent {
+		var err error
+		if locked, err = s.Conversation.AgentLockedChannels(ctx, by.WorkspaceID); err != nil {
+			return nil, 0, err
+		}
+	}
+	ds, total, err := s.Store.PendingExcept(ctx, by.ID, locked, limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -615,7 +627,7 @@ func (s *Service) replyOrigin(ctx context.Context, by identity.Actor, d Delivery
 	}
 	origChan, err := getChannel(req.OriginChannelID)
 	// An archived origin cannot take the answer: it stays a plain DM item.
-	if err != nil || origChan.Archived() {
+	if err != nil || origChan.Archived() || origChan.AgentLocked() {
 		return nil
 	}
 	return &ReplyOrigin{

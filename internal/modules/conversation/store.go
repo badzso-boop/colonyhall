@@ -20,6 +20,10 @@ type Store interface {
 	UpdateChannel(ctx context.Context, id ids.ID, name, description string) error
 	// SetArchived archives (at, by set) or unarchives (both nil) a channel.
 	SetArchived(ctx context.Context, id ids.ID, at *time.Time, by *ids.ID) error
+	// SetAgentLocked locks (at, by set) or unlocks (both nil) a channel.
+	SetAgentLocked(ctx context.Context, id ids.ID, at *time.Time, by *ids.ID) error
+	// AgentLockedChannels lists the workspace's channels locked against agents.
+	AgentLockedChannels(ctx context.Context, workspaceID ids.ID) ([]ids.ID, error)
 
 	// SetMute stores (or replaces) a viewer's mute; DeleteMute removes it.
 	SetMute(ctx context.Context, m Mute) error

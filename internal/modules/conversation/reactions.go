@@ -94,6 +94,9 @@ func (s *Service) reactInTx(ctx context.Context, by identity.Actor, messageID id
 	if c.Archived() {
 		return 0, ErrChannelArchived
 	}
+	if by.Kind == identity.KindAgent && c.AgentLocked() {
+		return 0, ErrChannelLocked
+	}
 	var changed bool
 	typ := EventReactionAdded
 	if add {

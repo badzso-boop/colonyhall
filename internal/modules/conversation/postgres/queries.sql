@@ -10,7 +10,7 @@ SELECT * FROM channel WHERE workspace_id = $1 AND name = $2;
 
 -- name: ChannelsForActor :many
 SELECT c.id, c.workspace_id, c.kind, c.name, c.description, c.compact_threshold_tokens, c.msg_count, c.created_by, c.created_at,
-       c.archived_at, c.archived_by,
+       c.archived_at, c.archived_by, c.agent_locked_at, c.agent_locked_by,
        (m.actor_id IS NOT NULL AND m.left_at IS NULL)::boolean AS is_member,
        COALESCE(c.msg_count - m.msg_count, 0)::bigint AS unread,
        COALESCE(m.mention_count, 0)::bigint AS mentions
@@ -139,6 +139,12 @@ UPDATE channel SET name = $2, description = $3 WHERE id = $1;
 
 -- name: SetChannelArchived :exec
 UPDATE channel SET archived_at = sqlc.narg(archived_at), archived_by = sqlc.narg(archived_by) WHERE id = sqlc.arg(id);
+
+-- name: SetChannelAgentLocked :exec
+UPDATE channel SET agent_locked_at = sqlc.narg(agent_locked_at), agent_locked_by = sqlc.narg(agent_locked_by) WHERE id = sqlc.arg(id);
+
+-- name: AgentLockedChannels :many
+SELECT id FROM channel WHERE workspace_id = $1 AND agent_locked_at IS NOT NULL ORDER BY id;
 
 -- name: SetMute :exec
 INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at)
