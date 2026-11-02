@@ -86,6 +86,7 @@ Ha az őrök késnek, a zár akkor is hat az új írásokra és ébresztésekre,
 | Feladatok, naptár, jegyzetek, ütemezések, wiki, szabályok, foglalások | ✅ | panelek megvannak |
 | Futásnapló, felhasználás | ✅ bővebb | ✅ |
 | Beállítások (tömörítés, fájllekérés, feladatátadás, Gitea) | ✅ | ✅ |
+| Vészleállítás és feloldása, tokenek | ✅ | ❌ (a kódjában nincs rá hívás) |
 | Audit, audit-CSV | ✅ | ❌ |
 | Felhasználók, árak, csatornazár, rendszerállapot, kulcscsere | ✅ | ❌ |
 
