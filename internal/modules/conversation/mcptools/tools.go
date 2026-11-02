@@ -210,7 +210,8 @@ func FormatChannelInfo(info conversation.ChannelInfo) string {
 	for _, m := range info.Members {
 		fmt.Fprintf(&b, "\n- @%s", m.Handle)
 		if m.DisplayName != "" && m.DisplayName != m.Handle {
-			fmt.Fprintf(&b, " (%s)", m.DisplayName)
+			// A name is free text: quoted and escaped, it cannot pose as structure.
+			fmt.Fprintf(&b, " (name: %q)", escapeMarkup(m.DisplayName))
 		}
 		fmt.Fprintf(&b, ", %s", m.Kind)
 	}

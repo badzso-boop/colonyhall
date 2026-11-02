@@ -255,7 +255,16 @@ Tíz megnevezett szín, **soha nem szabad hex**: a szerver a nevet tárolja, a k
 
 Asztalon `max-w-3xl`, 70 vh (a nagy Dialog fölött), telefonon teljes képernyő. Bal oldalt a gép `guard.yaml` gyökérmappái, jobbra morzsasor (szegmensenként kattintható), szűrőmező, „Rejtett mappák” kapcsoló és a mappalista. Ikonok: mappa, git-repó (`FolderGit2`), lakat a titkos (`denied`, tiltott, súgó: „Titkos mappa, nem adható”), halványított a nehéz (`heavy`). Módok: **single** (gyökérmappa; worktree-nél csak git-repó), **multi** (jelölőnégyzet + olvasás/írás kapcsoló soronként, alul tálca: „3 mappa: 2 olvasás, 1 írás”, figyelmeztetés, ha egy szülő hozzáférése már lefed egy kijelölt almappát), **browse** (a Gépek oldalon, kijelölés nélkül, mappánkénti jelvényekkel). Állapotok: betöltés (vázsorok), offline (EmptyState az utolsó látással és „Újra”), időtúllépés („Újra”). Admin tartalék: „Útvonal beírása” (a gyökérmappákon kívüli útvonal figyelmeztető chipet kap). Billentyűk: nyilak, Enter megnyit, Szóköz kijelöl, Backspace feljebb.
 
-## 12. Ami még jön
+## 12. Csevegés-elemek (34. kör)
+
+- **Csatorna fejléce:** név, egysoros leírás („Több” kibontja, a linkek kattinthatók), tagok avatarjai a számukkal, némítás-menü, adminnak ⚙. Némítva alatta egy `fg-muted` sor mutatja, meddig; archivált csatornánál a szerkesztő helyén „Archivált csatorna” sáv áll.
+- **Csatorna beállításai:** a 33. körös nagy Dialog (`LargeDialog`), `?channel-settings=<fül>`; telefonon az első képernyő a fülek listája. Nem admin csak olvasható „Csatorna adatai” nézetet kap.
+- **Oldalsáv sora:** húzható; a „…” menüben Profil (DM-nél), Áthelyezés…, Feljebb/Lejjebb és a némítás. A némított sor `fg-subtle` 🔕 ikonnal, és csak a megemlítés számít bele a jelvénybe.
+- **Kártyák:** az engedélykérés, a kérdés, a tömörítés és a Gitea-link ugyanazt a keretes kártyát használja. A függő engedélykérés kerete `warning` színű, a döntés után semleges, a döntő nevével.
+- **Hivatkozás-chipek:** `Q-12`, `D-12`, `[error:<id>]` kis, keretes chip ikonnal; kódblokkban és linkben nem alakulnak át.
+- **Szálak oldal:** középre igazított kártyalista, csatornanév, gyökérüzenet, a legutóbbi 2 válasz, „N új válasz” piros jelvény, „Mind / Olvasatlan” szűrő.
+
+## 13. Ami még jön
 
 - **34. kör:** a chat hiányzó részei (`D-12`/`Q-12` chipek, csatorna-beállítások, némítás, „Szálaim”).
 - **35. kör:** az admin oldalak (futások, keretek, audit, felhasználók).

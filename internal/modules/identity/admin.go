@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/platform/db"
@@ -154,10 +156,29 @@ type UpdateProfileInput struct {
 	Color *string
 }
 
+// validDisplayName refuses what could pose as something else where the name
+// is shown: invalid UTF-8, control, format (bidi, zero-width) and line or
+// paragraph separator characters. At least one visible character is needed.
+func validDisplayName(n string) bool {
+	if n == "" || !utf8.ValidString(n) || utf8.RuneCountInString(n) > MaxDisplayNameLen {
+		return false
+	}
+	visible := false
+	for _, r := range n {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+			return false
+		}
+		if !unicode.IsSpace(r) {
+			visible = true
+		}
+	}
+	return visible
+}
+
 // UpdateProfile updates an actor's profile.
 // A human edits their own profile; admins edit anyone's (including agents); agents cannot edit profiles.
 func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, in UpdateProfileInput) (Actor, error) {
-	if by.Kind != KindHuman {
+	if by.Kind != KindHuman || by.Halted {
 		return Actor{}, ErrForbidden
 	}
 	target, err := s.Store.ActorByID(ctx, actorID)
@@ -173,8 +194,13 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 
 	newName := target.DisplayName
 	if in.DisplayName != nil {
+		// Someone else's name needs the rank check too: an admin must not
+		// rename the owner.
+		if target.ID != by.ID && !by.CanManage(target) {
+			return Actor{}, ErrForbidden
+		}
 		n := strings.TrimSpace(*in.DisplayName)
-		if n == "" || len([]rune(n)) > MaxDisplayNameLen || strings.ContainsAny(n, "\r\n") {
+		if !validDisplayName(n) {
 			return Actor{}, ErrInvalidDisplayName
 		}
 		newName = n
