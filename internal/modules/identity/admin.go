@@ -102,10 +102,12 @@ func (s *Service) ListTokens(ctx context.Context, by Actor, actorID ids.ID) ([]T
 	return s.Store.ListTokens(ctx, actorID)
 }
 
-// IssueToken creates a new token for an actor you manage; the secret is
+// IssueToken creates a new token for an actor you manage, or for yourself if
+// you are a person who is allowed to write; the secret is
 // returned once.
 func (s *Service) IssueToken(ctx context.Context, by Actor, actorID ids.ID, label string) (Token, string, error) {
-	target, err := s.managed(ctx, by, actorID, false)
+	self := by.ID == actorID && by.Kind == KindHuman && !by.Halted
+	target, err := s.managed(ctx, by, actorID, self)
 	if err != nil {
 		return Token{}, "", err
 	}
@@ -387,6 +389,11 @@ func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string)
 	if by.Kind != KindHuman || !by.IsAdmin() || by.Halted {
 		return ErrForbidden
 	}
+	// Limited apart from the login: a lockout there must not block the release.
+	key, now := "emergency-clear:"+by.Handle, s.Clock.Now()
+	if !s.limiter().allow(key, now) {
+		return ErrTooManyAttempts
+	}
 	hash, err := s.Store.Credential(ctx, by.ID)
 	if errors.Is(err, db.ErrNotFound) {
 		return ErrBadCredentials
@@ -399,8 +406,10 @@ func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string)
 		return err
 	}
 	if !ok {
+		s.limiter().fail(key, now)
 		return ErrBadCredentials
 	}
+	s.limiter().reset(key)
 	return s.record(ctx, by, EventEmergencyCleared, "workspace", by.WorkspaceID, EmergencyEvent{By: by.ID.String()},
 		func(ctx context.Context) error { return s.Store.SetEmergencyStop(ctx, by.WorkspaceID, nil, ids.Nil) })
 }

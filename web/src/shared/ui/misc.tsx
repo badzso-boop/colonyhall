@@ -31,6 +31,7 @@ const noticeTone = {
   info: "border-info/40 bg-info-soft text-info",
   warning: "border-warning/40 bg-warning-soft text-warning",
   danger: "border-danger/40 bg-danger-soft text-danger",
+  success: "border-success/40 bg-success-soft text-success",
 } as const;
 
 /** A persistent banner inside a page or dialog (e.g. the immutable-configuration warning). */

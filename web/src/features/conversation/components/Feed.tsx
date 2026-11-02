@@ -17,6 +17,7 @@ const NEAR_BOTTOM = 80;
  * scrolled up, and read marking while the end is in view.
  */
 export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; actors: Map<string, Actor>; viewer: Viewer; handlers: MessageHandlers }) {
+  const lockedViewer = useMemo(() => ({ ...viewer, agentsLocked: Boolean(channel.agent_locked_at) }), [viewer, channel.agent_locked_at]);
   const { t, i18n } = useTranslation("conversation");
   const locale = localeOf(i18n.language);
   const messages = useMessages(channel.id);
@@ -129,7 +130,7 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
                 message={it.message}
                 actors={actors}
                 handles={handles}
-                viewer={viewer}
+                viewer={lockedViewer}
                 locale={locale}
                 summary={channel.kind !== "dm"}
                 {...handlers}

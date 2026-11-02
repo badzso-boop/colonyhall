@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
-import { ArrowDown, ArrowUp, BellOff, ChevronDown, ChevronRight, Eye, Hash, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BellOff, ChevronDown, ChevronRight, Eye, Hash, Lock, LockKeyhole, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { useLocalStorage, useNow } from "@/shared/hooks";
 import { Avatar, Badge, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Tooltip, toast } from "@/shared/ui";
@@ -170,6 +170,7 @@ function Row({ row, actors, meId, sections, sectionId, human }: RowProps) {
             {row.title}
           </span>
           {muted ? <BellOff aria-label={t("mute.muted")} className="size-3.5 shrink-0 text-fg-subtle" /> : null}
+          {row.channel.agent_locked_at ? <LockKeyhole aria-label={t("channel.lock.locked")} className="size-3.5 shrink-0 text-warning" /> : null}
           {row.observed ? (
             <Tooltip content={t("row.observed")}>
               <Eye aria-label={t("row.observed")} className="size-3.5 shrink-0 text-fg-subtle" />

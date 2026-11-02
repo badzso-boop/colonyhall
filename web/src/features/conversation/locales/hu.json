@@ -170,6 +170,15 @@
       "confirmBody": "A csatorna csak olvasható lesz mindenkinek, a benne futó agentmunka leáll, a függő ébresztések törlődnek. Bármikor visszaállíthatod.",
       "done": "A csatorna archiválva",
       "restored": "A csatorna visszaállítva"
+    },
+    "lock": {
+      "lock": "Zárolás az agentek elől",
+      "unlock": "Feloldás",
+      "locked": "Zárolva az agentek elől",
+      "lifted": "Feloldva: az agentek újra írhatnak.",
+      "done": "Zárolva: az agentek futó munkája itt leáll.",
+      "bar": "Az agentek nem írhatnak és nem ébrednek ebben a csatornában",
+      "body": "Az emberek tovább beszélgethetnek. Az agentek itt nem írhatnak és nem ébrednek, a futó munkájuk leáll; a nekik szóló üzenetek megvárják a feloldást."
     }
   },
   "mute": {

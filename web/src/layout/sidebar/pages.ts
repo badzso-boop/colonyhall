@@ -1,8 +1,8 @@
-import { Bot, CalendarDays, Clock, Gavel, KeyRound, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Server } from "lucide-react";
+import { Activity, Bot, CalendarDays, Clock, FileClock, Gauge, Gavel, KeyRound, KeySquare, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Server, Settings, Users } from "lucide-react";
 import type { WindowKind } from "@/shared/windows";
 
 /** The workspace pages of the sidebar and the command palette (docs/handoff/32, part 2). */
-export type PageEntry = { id: string; route: string; icon: typeof ListChecks; window?: WindowKind; adminOnly?: boolean };
+export type PageEntry = { id: string; route: string; icon: typeof ListChecks; window?: WindowKind; adminOnly?: boolean; ownerOnly?: boolean };
 
 export const pages: PageEntry[] = [
   { id: "agents", route: "/agents", icon: Bot },
@@ -16,4 +16,14 @@ export const pages: PageEntry[] = [
   { id: "rules", route: "/rules", icon: ScrollText, adminOnly: true },
   { id: "hosts", route: "/hosts", icon: Server, adminOnly: true },
   { id: "design", route: "/design", icon: Palette },
+];
+
+/** The "Adminisztráció" group (docs/handoff/35, part 1). */
+export const adminPages: PageEntry[] = [
+  { id: "adminRuns", route: "/admin/runs", icon: Activity, adminOnly: true },
+  { id: "adminSettings", route: "/admin/settings", icon: Settings, adminOnly: true },
+  { id: "adminUsers", route: "/admin/users", icon: Users, adminOnly: true, ownerOnly: true },
+  { id: "adminTokens", route: "/admin/tokens", icon: KeySquare, adminOnly: true },
+  { id: "adminAudit", route: "/admin/audit", icon: FileClock, adminOnly: true },
+  { id: "adminStatus", route: "/admin/status", icon: Gauge, adminOnly: true },
 ];

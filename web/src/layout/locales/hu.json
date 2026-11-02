@@ -14,7 +14,13 @@
     "rules": "Szabályok",
     "design": "Design system",
     "agents": "Agentek",
-    "hosts": "Gépek"
+    "hosts": "Gépek",
+    "adminRuns": "Futások",
+    "adminSettings": "Beállítások",
+    "adminUsers": "Felhasználók",
+    "adminTokens": "Tokenek",
+    "adminAudit": "Audit",
+    "adminStatus": "Rendszerállapot"
   },
   "search": "Keresés vagy parancs…",
   "questions": "Válaszra vár",
@@ -74,5 +80,6 @@
     "pages": "Oldalak",
     "none": "Nincs találat."
   },
-  "shortcutsMenu": "Billentyűparancsok"
+  "shortcutsMenu": "Billentyűparancsok",
+  "administration": "Adminisztráció"
 }

@@ -6,9 +6,9 @@ import { cn, fuzzyScore } from "@/shared/lib";
 import { usePanes } from "@/shared/panes";
 import { Dialog, Input } from "@/shared/ui";
 import { useConversationOrder } from "@/features/conversation";
-import { useActors } from "@/features/identity";
+import { useActors, useSession } from "@/features/identity";
 import { openOverlay, useAppOverlay } from "./overlays";
-import { pages } from "./sidebar/pages";
+import { adminPages, pages } from "./sidebar/pages";
 
 type Item = { id: string; group: "conversations" | "agents" | "pages"; label: string; icon: typeof Hash; run: () => void };
 
@@ -23,6 +23,7 @@ export function CommandPalette() {
   const [q, setQ] = useState("");
   const [pick, setPick] = useState(0);
 
+  const role = useSession().data?.actor.role;
   const items = useMemo(() => {
     const all: Item[] = [
       ...conversations.map((r) => ({
@@ -34,6 +35,9 @@ export function CommandPalette() {
         run: () => dispatch({ type: "openWork", tab: { kind: "agent", agentId: a.id, ref: "" } }),
       })),
       ...pages.map((p) => ({ id: `p-${p.id}`, group: "pages" as const, label: t(`pages.${p.id}`), icon: p.icon, run: () => navigate(p.route) })),
+      ...adminPages
+        .filter((p) => (p.ownerOnly ? role === "owner" : role === "owner" || role === "admin"))
+        .map((p) => ({ id: `p-${p.id}`, group: "pages" as const, label: t(`pages.${p.id}`), icon: p.icon, run: () => navigate(p.route) })),
     ];
     const query = q.trim();
     if (!query) return all.slice(0, 30);
@@ -43,7 +47,7 @@ export function CommandPalette() {
       .sort((a, b) => b.s - a.s)
       .slice(0, 30)
       .map((x) => x.i);
-  }, [conversations, actors.data, q, navigate, dispatch, t]);
+  }, [conversations, actors.data, q, navigate, dispatch, t, role]);
 
   const close = () => {
     openOverlay(null);

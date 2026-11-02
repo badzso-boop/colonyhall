@@ -2565,7 +2565,7 @@ components:
       properties:
         emergency_stop: { $ref: "#/components/schemas/EmergencyStop" }
         system:
-          description: Admins only. Never holds a secret or an environment value.
+          description: Human admins only. Never holds a secret or an environment value.
           allOf: [{ $ref: "#/components/schemas/SystemStatus" }]
     StatusConsumer:
       type: object
@@ -2586,7 +2586,7 @@ components:
         online: { type: boolean, description: Seen in the last 90 seconds. }
     SystemStatus:
       type: object
-      required: [version, uptime_seconds, database, event_head, consumers, connections, guards, scheduler, compaction, gitea_configured]
+      required: [version, uptime_seconds, database, event_head, consumers, connections, guards, scheduler, compaction, gitea_configured, gitea_webhook_configured, max_upload_mb]
       properties:
         version: { type: string }
         uptime_seconds: { type: integer, format: int64 }
@@ -2623,6 +2623,8 @@ components:
             running: { type: integer, format: int64 }
             failed_24h: { type: integer, format: int64 }
         gitea_configured: { type: boolean }
+        gitea_webhook_configured: { type: boolean }
+        max_upload_mb: { type: integer }
     EmergencyClearRequest:
       type: object
       required: [password]
@@ -2971,7 +2973,7 @@ components:
         EventReaction; channel.created → EventChannelCreated;
         channel.member_added → EventMemberAdded; channel.member_removed →
         EventMemberRemoved; channel.updated → EventChannelUpdated;
-        channel.archived, channel.unarchived → EventChannelArchived;
+        channel.archived, channel.unarchived, channel.locked, channel.unlocked → EventChannelArchived;
         channel.locked, channel.unlocked → EventChannelLocked;
         channel.mute_changed (the muting viewer only) → EventMuteChanged;
         actor.created → EventActorCreated;

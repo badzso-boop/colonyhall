@@ -1,4 +1,5 @@
 import { Route, Routes } from "react-router";
+import { AuditPage, RunsPage, SettingsPage, StatusPage, TokensPage, UsersPage } from "@/features/admin";
 import { AgentsPage } from "@/features/agents";
 import { ConversationPage, ThreadsPage } from "@/features/conversation";
 import { DecisionsPage } from "@/features/decisions";
@@ -44,6 +45,12 @@ export function AppRoutes() {
         <Route path="decisions" element={<DecisionsPage />} />
         <Route path="hosts" element={<HostsPage />} />
         <Route path="hosts/:hostId" element={<HostsPage />} />
+        <Route path="admin/runs" element={<RunsPage />} />
+        <Route path="admin/settings" element={<SettingsPage />} />
+        <Route path="admin/users" element={<UsersPage />} />
+        <Route path="admin/tokens" element={<TokensPage />} />
+        <Route path="admin/audit" element={<AuditPage />} />
+        <Route path="admin/status" element={<StatusPage />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

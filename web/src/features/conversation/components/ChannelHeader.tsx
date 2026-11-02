@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, Bell, BellOff, Hash, Lock, Settings } from "lucide-react";
+import { Archive, Bell, BellOff, Hash, Lock, LockKeyhole, LockKeyholeOpen, Settings } from "lucide-react";
 import { useNow } from "@/shared/hooks";
 import { cn, fullTime, hueVar } from "@/shared/lib";
 import { Avatar, Button, IconButton, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, toast } from "@/shared/ui";
-import { useMembers, useMute, useSetArchived } from "../api";
+import { useMembers, useMute, useSetArchived, useSetLocked } from "../api";
 import { isMuted, muteChoices, muteUntil, type ChannelTab } from "../channel";
 import type { Actor, Channel } from "../model";
 
@@ -71,6 +71,13 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
   const members = useMembers(channel.id);
   const mute = useMute(channel.id);
   const muted = isMuted(channel, now);
+  const setLocked = useSetLocked(channel.id);
+  const locked = Boolean(channel.agent_locked_at);
+  const lock = (on: boolean) =>
+    setLocked.mutate(on, {
+      onSuccess: () => toast(t(on ? "channel.lock.done" : "channel.lock.lifted")),
+      onError: (e) => toast(e.message, { tone: "danger" }),
+    });
   const isChannel = channel.kind !== "dm";
   const people = (members.data ?? []).map((m) => actors.get(m.actor_id)).filter((a): a is Actor => a !== undefined);
   const shown = [...people.filter((a) => a.kind === "human"), ...people.filter((a) => a.kind === "agent")].slice(0, 4);
@@ -82,6 +89,7 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
         <h1 className="text-title font-semibold whitespace-nowrap">{title}</h1>
         {channel.archived_at ? <Archive aria-label={t("channel.archivedBar")} className="size-4 shrink-0 text-fg-subtle" /> : null}
         {muted ? <BellOff aria-label={t("mute.muted")} className="size-4 shrink-0 text-fg-subtle" /> : null}
+        {locked ? <LockKeyhole aria-label={t("channel.lock.locked")} className="size-4 shrink-0 text-warning" /> : null}
         {channel.description && !open ? (
           <p className="min-w-0 flex-1 truncate text-ui text-fg-muted">
             <LinkedText text={channel.description} />
@@ -110,7 +118,7 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
                 emoji={a.avatar_emoji}
                 size="sm"
                 ringColor={hueVar(a.effective_color)}
-                className={cn(i > 0 && "-ml-1.5", "ring-2 ring-surface")}
+                className={cn(i > 0 && "-ml-1.5", "ring-2 ring-surface", locked && a.kind === "agent" && "opacity-50")}
               />
             ))}
             <span className="ml-1 text-meta text-fg-muted tabular-nums">{members.data.length}</span>
@@ -128,6 +136,11 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
                 <MenuItem icon={<Settings className="size-4" />} onSelect={() => onSettings("altalanos")}>
                   {t(admin ? "channel.settings" : "channel.info")}
                 </MenuItem>
+                {admin && !channel.archived_at ? (
+                  <MenuItem icon={locked ? <LockKeyholeOpen className="size-4" /> : <LockKeyhole className="size-4" />} onSelect={() => lock(!locked)}>
+                    {t(locked ? "channel.lock.unlock" : "channel.lock.lock")}
+                  </MenuItem>
+                ) : null}
               </>
             ) : null}
           </MenuContent>
@@ -138,6 +151,17 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
         <p className="px-4 pb-2 text-ui whitespace-pre-wrap text-fg-muted">
           <LinkedText text={channel.description} />
         </p>
+      ) : null}
+      {locked ? (
+        <div role="status" className="flex items-center gap-2 border-t border-border bg-warning-soft px-4 py-1 text-meta text-warning">
+          <LockKeyhole aria-hidden className="size-3.5 shrink-0" />
+          <span className="flex-1">{t("channel.lock.bar")}</span>
+          {admin ? (
+            <Button size="sm" variant="ghost" loading={setLocked.isPending} onClick={() => lock(false)}>
+              {t("channel.lock.unlock")}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
       {muted ? (
         <div className="flex items-center gap-2 border-t border-border px-4 py-1 text-meta text-fg-muted">

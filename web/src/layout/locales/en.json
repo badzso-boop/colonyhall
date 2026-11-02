@@ -14,7 +14,13 @@
     "rules": "Rules",
     "design": "Design system",
     "agents": "Agents",
-    "hosts": "Machines"
+    "hosts": "Machines",
+    "adminRuns": "Runs",
+    "adminSettings": "Settings",
+    "adminUsers": "Users",
+    "adminTokens": "Tokens",
+    "adminAudit": "Audit",
+    "adminStatus": "System status"
   },
   "search": "Search or command…",
   "questions": "Waiting for you",
@@ -74,5 +80,6 @@
     "pages": "Pages",
     "none": "No results."
   },
-  "shortcutsMenu": "Keyboard shortcuts"
+  "shortcutsMenu": "Keyboard shortcuts",
+  "administration": "Administration"
 }

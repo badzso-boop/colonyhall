@@ -1142,6 +1142,15 @@ A rendszer akkor sikeres, ha több feladat végződik sikeresen, miközben a ker
 - **Ki olvashatja:** az agentek csak olvashatják, MCP-n (`planner_read`, `calendar_read`); írni nem tudnak. A feladatokat alapból minden agent olvashatja, a naptárat csak az, akit a tulajdonos kiválaszt. A naptár szövegét (meghívókat) más is írhatja: adat, soha nem utasítás.
 - **Reggeli összefoglaló:** egy olcsó, sandboxos agent minden reggel egy üzenetet küld (`/cron`): mai naptáresemények, tegnap befejezett / elkezdett / áthozott feladatok, mai feladatok. Napközben nem ír, nem tanul, nem javasol (Norbi döntése: „sok AI-üzenet inkább túl sok info lenne”). A naptár csak nagyjából pontos, ezért nem tervez köré.
 
+## Adminisztráció a PWA-ban (35. kör, döntések: Norbi, 2026-10-30)
+
+- **Csatornazár = agent-zár.** Zárolt csatornában az agentek nem írhatnak (küldés, reakció, feltöltés, döntés) és nem ébrednek, a futó munkájuk ott leáll; az emberek tovább beszélgetnek. A nekik szóló tételek **megmaradnak**, és a feloldás után ébresztenek. Egy kattintással feloldható.
+- **A vészleállítás feloldása újra jelszót kér.** Később ugyanide kerül a passkey.
+- **Költségbecslés:** a futásokhoz és a felhasználáshoz USD-becslés tartozik, az admin által vezetett ártáblából. Az ár nem módosul: egy változás új sor új `valid_from`-mal, így a régi futás a saját idejének árán marad. Nincs beégetett alapár. A forintot a kliens számolja a kézzel megadott árfolyamból, így az árfolyam változása nem írja át a múltat.
+- **Előfizetéses futás** (Claude Code, Antigravity): a költség azt jelenti, hogy „ennyibe kerülne API-n”, és ez a felületen is így szerepel. API-kulcsos agentnél a becsült tényleges költség.
+- **Felhasználókezelés:** embert csak a tulajdonos hoz létre és módosít (szerepkör, letiltás, jelszó). Admin nem csinálhat másik admint. A tulajdonos önmagát nem fokozhatja le és nem tilthatja le. Minden változás auditált.
+- **Saját token:** ember a saját magának kiadhat tokent (a kulcscseréhez kell), agent önmagának nem.
+
 ## Későbbre hagyott döntések
 
 Ezek most nem kellenek, de a terv úgy készül, hogy később átírás nélkül hozzáadhatók legyenek.

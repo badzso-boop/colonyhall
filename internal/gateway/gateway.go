@@ -478,6 +478,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "expected hello")
 		return
 	}
+	// Read before authenticating: a change in between closes once too often, never too rarely.
+	authSeq, err := g.Events.Head(ctx)
+	if err != nil {
+		_ = c.Close(websocket.StatusInternalError, "unavailable")
+		return
+	}
 	var actor identity.Actor
 	if h.Token != "" {
 		actor, err = g.Auth.Authenticate(ctx, h.Token)
@@ -511,7 +517,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn := &connection{g: g, ws: c, actor: actor, cursor: cursor, canRead: map[ids.ID]bool{}}
+	conn := &connection{g: g, ws: c, actor: actor, cursor: cursor, authSeq: authSeq, canRead: map[ids.ID]bool{}}
 	g.register(conn)
 	defer g.unregister(conn)
 
@@ -557,6 +563,8 @@ type connection struct {
 	ws     *websocket.Conn
 	actor  identity.Actor
 	cursor int64
+	// authSeq is the log head when the actor was authenticated.
+	authSeq int64
 
 	writeMu sync.Mutex
 	mu      sync.Mutex
@@ -582,6 +590,9 @@ func (c *connection) catchUp(ctx context.Context) error {
 			return nil
 		}
 		for _, e := range events {
+			if c.accessChanged(e) {
+				return errAccessChanged
+			}
 			visible, err := c.visible(ctx, e)
 			if err != nil {
 				return err
@@ -598,6 +609,26 @@ func (c *connection) catchUp(ctx context.Context) error {
 			c.cursor = e.Seq
 		}
 	}
+}
+
+// errAccessChanged ends a connection whose actor was authorised differently:
+// the client reconnects, and authenticates with the current role or not at all.
+var errAccessChanged = errors.New("gateway: the actor's access changed")
+
+// accessChanged tells whether the event, newer than the authentication, makes
+// the connection's actor (with its role and read cache) out of date.
+func (c *connection) accessChanged(e eventlog.Event) bool {
+	if e.Seq <= c.authSeq || e.AggregateID != c.actor.ID {
+		return false
+	}
+	switch e.Type {
+	case identity.EventActorRoleChanged, identity.EventPasswordReset:
+		return true
+	case identity.EventActorStateChanged:
+		var p identity.StateChanged
+		return json.Unmarshal(e.Payload, &p) != nil || p.State == identity.StateStopped
+	}
+	return false
 }
 
 // visibleChannel decides whether the connection actor may read the channel.

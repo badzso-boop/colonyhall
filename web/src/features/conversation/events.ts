@@ -66,6 +66,8 @@ export function registerConversationEvents(qc: QueryClient): () => void {
     onEvent("channel.updated", (e) => channelChanged(e.data.channel_id)),
     onEvent("channel.archived", (e) => channelChanged(e.data.channel_id)),
     onEvent("channel.unarchived", (e) => channelChanged(e.data.channel_id)),
+    onEvent("channel.locked", (e) => channelChanged(e.data.channel_id)),
+    onEvent("channel.unlocked", (e) => channelChanged(e.data.channel_id)),
     // Only the viewer's own mutes arrive (their other tabs).
     onEvent("channel.mute_changed", () => {
       channels();

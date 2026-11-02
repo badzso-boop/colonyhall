@@ -1398,7 +1398,7 @@ type AddPriceRequest struct {
 type AdminStatus struct {
 	EmergencyStop EmergencyStop `json:"emergency_stop"`
 
-	// System Admins only. Never holds a secret or an environment value.
+	// System Human admins only. Never holds a secret or an environment value.
 	System *SystemStatus `json:"system,omitempty"`
 }
 
@@ -3260,10 +3260,12 @@ type SystemStatus struct {
 		LatencyMs float64 `json:"latency_ms"`
 		Ok        bool    `json:"ok"`
 	} `json:"database"`
-	EventHead       int64         `json:"event_head"`
-	GiteaConfigured bool          `json:"gitea_configured"`
-	Guards          []StatusGuard `json:"guards"`
-	Scheduler       struct {
+	EventHead              int64         `json:"event_head"`
+	GiteaConfigured        bool          `json:"gitea_configured"`
+	GiteaWebhookConfigured bool          `json:"gitea_webhook_configured"`
+	Guards                 []StatusGuard `json:"guards"`
+	MaxUploadMb            int           `json:"max_upload_mb"`
+	Scheduler              struct {
 		Failed24h int        `json:"failed_24h"`
 		NextRunAt *time.Time `json:"next_run_at,omitempty"`
 	} `json:"scheduler"`

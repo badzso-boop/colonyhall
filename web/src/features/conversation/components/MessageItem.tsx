@@ -29,7 +29,7 @@ export type MessageHandlers = {
 };
 
 /** Who is looking: humans see details (errors, approvals, steps, files); agents never do. */
-export type Viewer = { id: string; human: boolean; admin: boolean; canWrite: boolean; pausedAgents: Set<string> };
+export type Viewer = { agentsLocked?: boolean; id: string; human: boolean; admin: boolean; canWrite: boolean; pausedAgents: Set<string> };
 
 type Props = MessageHandlers & {
   message: Message;
@@ -143,7 +143,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
     >
       {author ? (
         <ProfileTrigger actorId={author.id} className="self-start">
-          <Avatar kind={author.kind} name={author.handle} emoji={author.avatar_emoji} size="lg" status={paused ? "paused" : undefined} ringColor={author.kind === "agent" ? hueVar(author.effective_color) : undefined} />
+          <Avatar kind={author.kind} name={author.handle} emoji={author.avatar_emoji} size="lg" status={paused ? "paused" : undefined} className={viewer.agentsLocked && author.kind === "agent" ? "opacity-50" : undefined} ringColor={author.kind === "agent" ? hueVar(author.effective_color) : undefined} />
         </ProfileTrigger>
       ) : (
         <Avatar kind="human" name="?" size="lg" />

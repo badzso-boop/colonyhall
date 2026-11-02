@@ -170,6 +170,15 @@
       "confirmBody": "The channel becomes read-only for everyone, agent work in it stops and pending wake-ups are dropped. You can restore it any time.",
       "done": "Channel archived",
       "restored": "Channel restored"
+    },
+    "lock": {
+      "lock": "Lock against agents",
+      "unlock": "Unlock",
+      "locked": "Locked against agents",
+      "lifted": "Unlocked: agents can write again.",
+      "done": "Locked: the agents' running work here stops.",
+      "bar": "Agents cannot write or wake in this channel",
+      "body": "People keep talking. Agents cannot write or wake here and their running work stops; messages for them wait until it is unlocked."
     }
   },
   "mute": {

@@ -25,6 +25,12 @@ func TestSystemStatus(t *testing.T) {
 		t.Fatal("a member must only see the emergency stop")
 	}
 
+	_, agentAdmin := e.createActor("agent", "boss-bot", "admin")
+	var bot apispec.AdminStatus
+	if st := e.do(http.MethodGet, "/api/v1/admin/status", agentAdmin, nil, &bot); st != http.StatusOK || bot.System != nil {
+		t.Fatalf("an agent admin gets the banner only: %d %+v", st, bot.System)
+	}
+
 	var pc struct{ Code string }
 	e.do(http.MethodPost, "/api/v1/hosts/pairing-codes", server.DevAdminToken, nil, &pc)
 	tokenFile := filepath.Join(t.TempDir(), "host.token")

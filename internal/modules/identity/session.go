@@ -213,10 +213,15 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 			return err
 		}
 		if err := s.record(ctx, by, EventPasswordReset, "actor", target.ID, PasswordReset{ActorID: target.ID.String()},
-			func(ctx context.Context) error { return s.ResetPassword(ctx, target.ID, next) }); err != nil {
+			func(ctx context.Context) error {
+				if err := s.ResetPassword(ctx, target.ID, next); err != nil {
+					return err
+				}
+				return s.Store.RevokeSessionsForActor(ctx, target.ID, ids.Nil, s.Clock.Now())
+			}); err != nil {
 			return err
 		}
-		return s.Store.RevokeSessionsForActor(ctx, target.ID, ids.Nil, s.Clock.Now())
+		return nil
 	default:
 		return ErrForbidden
 	}

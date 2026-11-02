@@ -264,7 +264,15 @@ Asztalon `max-w-3xl`, 70 vh (a nagy Dialog fölött), telefonon teljes képerny�
 - **Hivatkozás-chipek:** `Q-12`, `D-12`, `[error:<id>]` kis, keretes chip ikonnal; kódblokkban és linkben nem alakulnak át.
 - **Szálak oldal:** középre igazított kártyalista, csatornanév, gyökérüzenet, a legutóbbi 2 válasz, „N új válasz” piros jelvény, „Mind / Olvasatlan” szűrő.
 
-## 13. Ami még jön
+## 13. Admin oldalak és grafikonok (35. kör)
 
-- **34. kör:** a chat hiányzó részei (`D-12`/`Q-12` chipek, csatorna-beállítások, némítás, „Szálaim”).
-- **35. kör:** az admin oldalak (futások, keretek, audit, felhasználók).
+- **Keret:** `AdminPage`: fejléc + tartalom; aki nem jogosult, 404-stílusú üres állapotot lát.
+- **Grafikon:** egy tengely, vékony rés (2 px) a szegmensek között, oszloponként tooltip, ≥ 2 sorozatnál jelmagyarázat, képernyőolvasónak szöveges lista; a táblázat a grafikon alatt a táblázatos nézet. Legfeljebb 6 sorozat, a többi „Egyéb” (semleges szín).
+- **Szín:** az agent és a gép a saját színét viszi (33. kör), így egy szűrő nem színezi át. Saját szín nélkül névből számolt, állandó hue. A 10 hue palettája nem teljesíti a színtévesztő-ellenőrzést (narancs/borostyán, zöld/lime): ezért kötelező a jelmagyarázat és a tooltip, a szín sosem egyedüli jelzés.
+- **Állapot:** a hiba piros (`danger`), a figyelmeztetés borostyán (`warning`), mindig ikonnal és szöveggel; az állapotkártyák ezen felül színes kerettel. Grafikon-sorozat ezeket csak a „Hibás” jelentésre használja.
+- **Kártyák:** `rounded-lg border bg-surface`, a számok `tabular`. Egyszer látható titok: `SecretOnce` (figyelmeztetés, másolás).
+- **`Notice`:** új `success` tónus.
+
+## 14. Ami még jön
+
+- A fejlesztői oldal kivezetése külön, kis körben, miután Norbi egy ideig a PWA-t használta.

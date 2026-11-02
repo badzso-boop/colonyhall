@@ -34,6 +34,8 @@ type statusDeps struct {
 	Clock       clock.Clock
 	StartedAt   time.Time
 	GiteaOn     bool
+	WebhookOn   bool
+	MaxUploadMB int
 }
 
 func registerStatus(mux *http.ServeMux, d statusDeps) {
@@ -45,7 +47,8 @@ func registerStatus(mux *http.ServeMux, d statusDeps) {
 			return
 		}
 		out := idhttp.WorkspaceStatus(ws)
-		if by.IsAdmin() {
+		// Agents with an admin role read the banner only.
+		if by.Kind == identity.KindHuman && by.IsAdmin() {
 			sys, err := d.system(r.Context(), by)
 			if err != nil {
 				httpx.Error(w, r, err)
@@ -60,6 +63,7 @@ func registerStatus(mux *http.ServeMux, d statusDeps) {
 func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.SystemStatus, error) {
 	now := d.Clock.Now()
 	out := apispec.SystemStatus{Version: Version, UptimeSeconds: int64(now.Sub(d.StartedAt).Seconds()), GiteaConfigured: d.GiteaOn,
+		GiteaWebhookConfigured: d.WebhookOn, MaxUploadMb: d.MaxUploadMB,
 		Consumers: []apispec.StatusConsumer{}, Guards: []apispec.StatusGuard{}}
 
 	begin := time.Now()

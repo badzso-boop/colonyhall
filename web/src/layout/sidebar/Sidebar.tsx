@@ -5,22 +5,15 @@ import { cn } from "@/shared/lib";
 import { openWindow } from "@/shared/windows";
 import { ConversationList, ThreadsEntry } from "@/features/conversation";
 import { useSession } from "@/features/identity";
-import { pages } from "./pages";
+import { adminPages, pages, type PageEntry } from "./pages";
 
-/** The sidebar: the workspace pages (with pop-out where a page floats), then the conversation groups. */
-export function Sidebar() {
+function PageGroup({ title, entries }: { title: string; entries: PageEntry[] }) {
   const { t } = useTranslation("layout");
-  const session = useSession();
-  const role = session.data?.actor.role;
-  const admin = role === "owner" || role === "admin";
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-2 pt-2 pb-6">
-      <ThreadsEntry />
-      <p className="mt-3 px-1 text-meta font-semibold tracking-wide text-fg-subtle uppercase">{t("workspace")}</p>
+    <>
+      <p className="mt-3 px-1 text-meta font-semibold tracking-wide text-fg-subtle uppercase">{title}</p>
       <ul className="mt-1 flex flex-col gap-px">
-        {pages
-          .filter((p) => !p.adminOnly || admin)
-          .map((p) => {
+        {entries.map((p) => {
             const Icon = p.icon;
             const name = t(`pages.${p.id}`);
             return (
@@ -50,8 +43,23 @@ export function Sidebar() {
                 ) : null}
               </li>
             );
-          })}
+        })}
       </ul>
+    </>
+  );
+}
+
+/** The sidebar: the workspace pages (with pop-out where a page floats), then the conversation groups. */
+export function Sidebar() {
+  const { t } = useTranslation("layout");
+  const session = useSession();
+  const role = session.data?.actor.role;
+  const admin = role === "owner" || role === "admin";
+  return (
+    <div className="flex h-full flex-col overflow-y-auto px-2 pt-2 pb-6">
+      <ThreadsEntry />
+      <PageGroup title={t("workspace")} entries={pages.filter((p) => !p.adminOnly || admin)} />
+      {admin ? <PageGroup title={t("administration")} entries={adminPages.filter((p) => !p.ownerOnly || role === "owner")} /> : null}
       <ConversationList />
     </div>
   );

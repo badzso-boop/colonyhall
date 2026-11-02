@@ -2728,7 +2728,7 @@ export interface components {
         };
         AdminStatus: {
             emergency_stop: components["schemas"]["EmergencyStop"];
-            /** @description Admins only. Never holds a secret or an environment value. */
+            /** @description Human admins only. Never holds a secret or an environment value. */
             system?: components["schemas"]["SystemStatus"];
         };
         StatusConsumer: {
@@ -2783,6 +2783,8 @@ export interface components {
                 failed_24h: number;
             };
             gitea_configured: boolean;
+            gitea_webhook_configured: boolean;
+            max_upload_mb: number;
         };
         EmergencyClearRequest: {
             password: string;
@@ -3118,7 +3120,7 @@ export interface components {
          *     EventReaction; channel.created → EventChannelCreated;
          *     channel.member_added → EventMemberAdded; channel.member_removed →
          *     EventMemberRemoved; channel.updated → EventChannelUpdated;
-         *     channel.archived, channel.unarchived → EventChannelArchived;
+         *     channel.archived, channel.unarchived, channel.locked, channel.unlocked → EventChannelArchived;
          *     channel.locked, channel.unlocked → EventChannelLocked;
          *     channel.mute_changed (the muting viewer only) → EventMuteChanged;
          *     actor.created → EventActorCreated;

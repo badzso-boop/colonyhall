@@ -7,6 +7,9 @@ import type { components, paths } from "./schema";
 let csrfToken = "";
 let unauthorized: () => void = () => {};
 
+/** On these a 401 is a wrong password, which the form shows; the session is fine. */
+const passwordChecked = (path: string) => path.endsWith("/auth/login") || path.endsWith("/admin/emergency-clear") || path.endsWith("/password");
+
 /** The CSRF token of the cookie session (from /auth/session or /auth/login). */
 export function setCsrfToken(token: string): void {
   csrfToken = token;
@@ -33,7 +36,7 @@ export function createApi(baseUrl = `${globalThis.location?.origin ?? ""}/api/v1
       return request;
     },
     onResponse({ response, request }) {
-      if (response.status === 401 && !new URL(request.url).pathname.endsWith("/auth/login")) unauthorized();
+      if (response.status === 401 && !passwordChecked(new URL(request.url).pathname)) unauthorized();
       return response;
     },
   });

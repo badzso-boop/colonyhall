@@ -4,6 +4,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -564,7 +565,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, dlSvc, gw, opt.Clock)
 	registerAgents(mux, idSvc, agSvc)
 	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, Events: events,
-		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil})
+		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
+		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB)})
 
 	return &App{
 		Handler:      httpserver.New(mux, ready, opt.Logger),

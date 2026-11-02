@@ -66,5 +66,8 @@ test("a 401 calls the unauthorized handler, except for the login itself", async 
   expect(handler).toHaveBeenCalledOnce();
   await api.POST("/auth/login", { body: { handle: "x", password: "y" }, fetch: fetch401 });
   expect(handler).toHaveBeenCalledOnce();
+  await api.POST("/admin/emergency-clear", { body: { password: "wrong" }, fetch: fetch401 });
+  await api.PUT("/actors/{actorId}/password", { params: { path: { actorId: "a" } }, body: { new_password: "x" }, fetch: fetch401 });
+  expect(handler).toHaveBeenCalledOnce();
   onUnauthorized(() => {});
 });

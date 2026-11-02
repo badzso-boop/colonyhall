@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useMatch } from "react-router";
 import { CircleHelp, Menu as MenuIcon, Search, ShieldAlert, Zap } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { BrandMark, HoldButton, IconButton, Kbd, Tooltip } from "@/shared/ui";
-import { useEmergency, useEmergencyStop } from "@/features/admin";
+import { EmergencyReleaseDialog, useEmergency, useEmergencyStop } from "@/features/admin";
 import { useActivity } from "@/features/agents";
 import { conversationTitle, useChannels } from "@/features/conversation";
 import { useClaudeLimits } from "@/features/hosts";
@@ -64,6 +65,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const emergency = useEmergency(admin);
   const stop = useEmergencyStop();
   const stopped = emergency.data?.active === true;
+  const [release, setRelease] = useState(false);
 
   return (
     <>
@@ -83,10 +85,11 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           <p className="mx-auto flex items-center gap-2 font-semibold">
             <ShieldAlert aria-hidden className="size-4" />
             {t("stopped")}
-            {/* The release Dialog (password again) comes in round 35; until then the dev page does it. */}
-            <a href="/" className="rounded-md border border-accent-fg px-2 py-0.5 text-ui hover:bg-accent-hover">
-              {t("release")}
-            </a>
+            {admin ? (
+              <button type="button" onClick={() => setRelease(true)} className="rounded-md border border-accent-fg px-2 py-0.5 text-ui hover:bg-accent-hover">
+                {t("release")}
+              </button>
+            ) : null}
           </p>
         ) : (
           <button
@@ -129,6 +132,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         </div>
       </header>
       <QuestionsSheet />
+      <EmergencyReleaseDialog open={release} onOpenChange={setRelease} />
       {me?.halted && !stopped ? (
         <div role="status" className="bg-warning-soft px-4 py-1 text-center text-meta text-warning">
           {t("halted")}

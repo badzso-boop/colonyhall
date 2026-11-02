@@ -14,6 +14,8 @@ export type EventPayloads = {
   "channel.updated": S["EventChannelUpdated"];
   "channel.archived": S["EventChannelArchived"];
   "channel.unarchived": S["EventChannelArchived"];
+  "channel.locked": S["EventChannelArchived"];
+  "channel.unlocked": S["EventChannelArchived"];
   "channel.mute_changed": S["EventMuteChanged"];
   "actor.created": S["EventActorCreated"];
   "actor.state_changed": S["EventActorStateChanged"];

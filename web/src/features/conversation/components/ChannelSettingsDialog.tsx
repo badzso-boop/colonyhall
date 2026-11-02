@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Archive, Search } from "lucide-react";
+import { Archive, LockKeyhole, Search } from "lucide-react";
 import { useActivity } from "@/features/agents";
 import { api, unwrap } from "@/shared/api";
 import { hueVar } from "@/shared/lib";
 import { Avatar, Badge, Button, Dialog, Input, LargeDialog, Markdown, Notice, Textarea, toast } from "@/shared/ui";
-import { useAddMembers, useMembers, useRemoveMember, useSetArchived, useUpdateChannel } from "../api";
+import { useAddMembers, useMembers, useRemoveMember, useSetArchived, useSetLocked, useUpdateChannel } from "../api";
 import { channelTabs, MAX_DESCRIPTION, orderMembers, validChannelName, type ChannelTab } from "../channel";
 import type { Actor, Channel } from "../model";
 import { MemberPicker } from "./MemberPicker";
@@ -43,7 +43,7 @@ export function ChannelSettingsDialog({ channel, actors, admin, tab, onTab, onCl
       navLabel={t("channel.tabsLabel")}
       closeLabel={t("new.close")}
       backLabel={t("channel.back")}
-      banner={channel.archived_at ? <Notice icon={<Archive className="size-4" />}>{t("channel.archivedNotice")}</Notice> : null}
+      banner={channel.archived_at ? <Notice icon={<Archive className="size-4" />}>{t("channel.archivedNotice")}</Notice> : channel.agent_locked_at ? <Notice tone="warning" icon={<LockKeyhole className="size-4" />}>{t("channel.lock.bar")}</Notice> : null}
       beforeClose={() => !dirty || window.confirm(t("channel.discard"))}
       footer={
         admin && active === "altalanos" ? (
@@ -58,7 +58,12 @@ export function ChannelSettingsDialog({ channel, actors, admin, tab, onTab, onCl
       ) : null}
       {active === "tagok" ? <Members channel={channel} actors={actors} admin={admin} /> : null}
       {active === "tomorites" ? <Compaction channel={channel} /> : null}
-      {active === "archivalas" ? <ArchiveTab channel={channel} /> : null}
+      {active === "archivalas" ? (
+        <div className="flex flex-col gap-6">
+          {channel.archived_at ? null : <LockSection channel={channel} />}
+          <ArchiveTab channel={channel} />
+        </div>
+      ) : null}
     </LargeDialog>
   );
 }
@@ -260,6 +265,31 @@ function Compaction({ channel }: { channel: Channel }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The agent lock: humans keep talking, agents neither write nor wake here. */
+function LockSection({ channel }: { channel: Channel }) {
+  const { t } = useTranslation("conversation");
+  const setLocked = useSetLocked(channel.id);
+  const locked = Boolean(channel.agent_locked_at);
+  return (
+    <section className="flex flex-col items-start gap-2 border-b border-border pb-6">
+      <h3 className="font-semibold">{t("channel.lock.lock")}</h3>
+      <p>{t("channel.lock.body")}</p>
+      <Button
+        icon={<LockKeyhole className="size-4" />}
+        loading={setLocked.isPending}
+        onClick={() =>
+          setLocked.mutate(!locked, {
+            onSuccess: () => toast(t(locked ? "channel.lock.lifted" : "channel.lock.done")),
+            onError: (e) => toast(e.message, { tone: "danger" }),
+          })
+        }
+      >
+        {t(locked ? "channel.lock.unlock" : "channel.lock.lock")}
+      </Button>
+    </section>
   );
 }
 

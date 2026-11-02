@@ -249,6 +249,20 @@ export function useSetArchived(channelId: string) {
   });
 }
 
+/** The agent lock (admins): agents cannot write or wake in the channel. */
+export function useSetLocked(channelId: string) {
+  const refresh = useChannelRefresh();
+  return useMutation({
+    mutationFn: async (lock: boolean) =>
+      unwrap(
+        lock
+          ? await api.POST("/channels/{channelId}/lock", { params: { path: { channelId } } })
+          : await api.POST("/channels/{channelId}/unlock", { params: { path: { channelId } } }),
+      ),
+    onSuccess: () => refresh(channelId),
+  });
+}
+
 export function useAddMembers(channelId: string) {
   const refresh = useChannelRefresh();
   return useMutation({

@@ -44,6 +44,9 @@
 
 ## Üzemeltetés
 
+**Hibakeresésnél először a Rendszerállapot oldalt nézd** (`/app/admin/status`, adminoknak): adatbázis, fogyasztók lemaradása (100 esemény vagy 60 mp fölött figyelmeztet), guardok (90 mp után offline), hibás ütemezések, tömörítés, vészleállítás. A „Másolás” gomb hibajegyhez való, titok nélküli szöveget ad. A mentéseket nem ellenőrzi, azokat a homelab kezeli.
+
+
 **Élesítés** (Norbi futtatja, vagy jóváhagyja; az automatikus engedélyellenőrző az éles telepítést és az éles adatbázis olvasását tiltja):
 
 1. `make test`, `make lint` zöld; push a GitHubra.
@@ -109,5 +112,5 @@
 - A fájltár kötete (`colonyhall_files`) nincs mentve (az adatbázis igen).
 - Push-értesítés és a PWA még nincs; a felület a fejlesztői oldal.
 - A futásnapló és a jegyzetek minden ember számára láthatók (egy felhasználónál nem gond).
-- A tulajdonosi API-kulcs cseréje Norbinál van.
+- A tulajdonosi API-kulcs cseréje Norbinál van: **Tokenek** oldal, „Tulajdonosi kulcs cseréje” (35. kör).
 - Az élő Claude Doc (Terv lap, „Homelab és felületi körök”) 2026-10-26-án frissítve; a részletek ebben a dokumentumban, a körök jelentései a `docs/handoff/`-ban (az utolsó öt kör átnézése: `21-24-review.md`).
