@@ -17,4 +17,17 @@ type Store interface {
 	ListRuns(ctx context.Context, workspaceID ids.ID, agentID ids.ID, limit int) ([]Run, error)
 	Usage(ctx context.Context, workspaceID ids.ID, since time.Time) ([]DayUsage, error)
 	TokensSince(ctx context.Context, workspaceID, agentID ids.ID, since time.Time) (int64, error)
+
+	// SearchRuns lists runs by filter, newest first.
+	SearchRuns(ctx context.Context, workspaceID ids.ID, f RunFilter) ([]Run, error)
+	// UsageRuns lists what usage needs of every run since a time.
+	UsageRuns(ctx context.Context, workspaceID ids.ID, since time.Time) ([]UsageRun, error)
+
+	// InsertPrice adds a row to the append-only price table.
+	InsertPrice(ctx context.Context, p Price) error
+	// Prices lists the workspace's price rows, by model and valid_from.
+	Prices(ctx context.Context, workspaceID ids.ID) ([]Price, error)
+	// Currency returns the workspace's exchange rate (db.ErrNotFound if unset).
+	Currency(ctx context.Context, workspaceID ids.ID) (Currency, error)
+	PutCurrency(ctx context.Context, c Currency) error
 }

@@ -48,3 +48,39 @@ WHERE workspace_id = $1
   AND agent_id = $2
   AND created_at >= $3;
 
+
+-- name: SearchRuns :many
+SELECT * FROM agent_run
+WHERE workspace_id = $1
+  AND (sqlc.narg(agent_id)::uuid IS NULL OR agent_id = sqlc.narg(agent_id)::uuid)
+  AND (sqlc.narg(host_id)::uuid IS NULL OR host_id = sqlc.narg(host_id)::uuid)
+  AND (sqlc.narg(channel_id)::uuid IS NULL OR channel_id = sqlc.narg(channel_id)::uuid)
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
+  AND (sqlc.narg(from_at)::timestamptz IS NULL OR created_at >= sqlc.narg(from_at)::timestamptz)
+  AND (sqlc.narg(to_at)::timestamptz IS NULL OR created_at < sqlc.narg(to_at)::timestamptz)
+  AND (sqlc.narg(before_at)::timestamptz IS NULL OR (created_at, id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $2;
+
+-- name: UsageRuns :many
+SELECT agent_id, host_id, model, client, status, duration_ms, input_tokens, output_tokens,
+       cache_read_tokens, cache_write_tokens, created_at
+FROM agent_run
+WHERE workspace_id = $1 AND created_at >= $2;
+
+-- name: InsertPrice :exec
+INSERT INTO model_price (id, workspace_id, model, input_per_mtok, output_per_mtok, cache_read_per_mtok,
+                         cache_write_per_mtok, valid_from, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+
+-- name: Prices :many
+SELECT * FROM model_price WHERE workspace_id = $1 ORDER BY model, valid_from, id;
+
+-- name: Currency :one
+SELECT * FROM workspace_currency WHERE workspace_id = $1;
+
+-- name: PutCurrency :exec
+INSERT INTO workspace_currency (workspace_id, usd_huf, updated_by, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id) DO UPDATE
+SET usd_huf = EXCLUDED.usd_huf, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at;

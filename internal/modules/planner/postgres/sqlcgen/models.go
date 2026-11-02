@@ -423,6 +423,19 @@ type MessageFile struct {
 	Position  int32
 }
 
+type ModelPrice struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	Model             string
+	InputPerMtok      float64
+	OutputPerMtok     float64
+	CacheReadPerMtok  float64
+	CacheWritePerMtok float64
+	ValidFrom         time.Time
+	CreatedBy         uuid.UUID
+	CreatedAt         time.Time
+}
+
 type PlannerAccess struct {
 	OwnerID      uuid.UUID
 	WorkspaceID  uuid.UUID
@@ -631,6 +644,13 @@ type WorkspaceCompactionSetting struct {
 	CompactThresholdTokens int32
 	CompactorAgentID       *uuid.UUID
 	UpdatedAt              time.Time
+}
+
+type WorkspaceCurrency struct {
+	WorkspaceID uuid.UUID
+	UsdHuf      float64
+	UpdatedBy   uuid.UUID
+	UpdatedAt   time.Time
 }
 
 type WorkspaceFileFetchSetting struct {

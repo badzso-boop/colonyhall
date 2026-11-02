@@ -4,6 +4,8 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
@@ -13,6 +15,7 @@ import (
 )
 
 func init() {
+	httpx.RegisterValidation(runs.ErrInvalidPrice, runs.ErrInvalidRate, runs.ErrInvalidGroup)
 	httpx.RegisterForbidden(runs.ErrForbidden)
 	httpx.RegisterValidation(runs.ErrEmpty)
 	httpx.RegisterValidation(runs.ErrInvalidRun)
@@ -130,25 +133,11 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 	}))
 
 	mux.Handle("GET /api/v1/runs", wrap(func(w http.ResponseWriter, r *http.Request) {
-		var agentID ids.ID
-		if raw := r.URL.Query().Get("agent_id"); raw != "" {
-			var err error
-			agentID, err = ids.Parse(raw)
-			if err != nil {
-				httpx.Error(w, r, &httpx.BadRequest{Detail: "agent_id must be a UUID"})
-				return
-			}
+		f, ok := runFilter(w, r)
+		if !ok {
+			return
 		}
-		limit := 50
-		if raw := r.URL.Query().Get("limit"); raw != "" {
-			l, err := strconv.Atoi(raw)
-			if err != nil || l < 1 {
-				httpx.Error(w, r, &httpx.BadRequest{Detail: "limit must be a positive integer"})
-				return
-			}
-			limit = l
-		}
-		list, err := svc.ListRuns(r.Context(), httpx.Actor(r), agentID, limit)
+		list, next, err := svc.SearchRuns(r.Context(), httpx.Actor(r), f)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
@@ -171,6 +160,8 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 				DurationMs:       item.DurationMS,
 				Status:           apispec.RunStatus(item.Status),
 				CreatedAt:        item.CreatedAt,
+				EstimatedUsd:     item.EstimatedUSD,
+				Billing:          httpx.Ptr(apispec.RunBilling(item.Billing)),
 			}
 			if item.HostID != ids.Nil {
 				ar.HostId = &item.HostID
@@ -218,7 +209,12 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			}
 			items = append(items, ar)
 		}
-		httpx.JSON(w, http.StatusOK, apispec.RunList{Runs: items})
+		out := apispec.RunList{Runs: items}
+		if next != nil {
+			c := next.CreatedAt.Format(time.RFC3339Nano) + "_" + next.ID.String()
+			out.NextCursor = &c
+		}
+		httpx.JSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("GET /api/v1/usage", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -231,13 +227,13 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			}
 			days = d
 		}
-		usage, err := svc.Usage(r.Context(), httpx.Actor(r), days)
+		usage, err := svc.UsageSummary(r.Context(), httpx.Actor(r), days, r.URL.Query().Get("group_by"))
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		items := make([]apispec.DayUsage, 0, len(usage))
-		for _, u := range usage {
+		items := make([]apispec.DayUsage, 0, len(usage.Days))
+		for _, u := range usage.Days {
 			items = append(items, apispec.DayUsage{
 				AgentId:          u.AgentID,
 				Day:              u.Day,
@@ -248,8 +244,123 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 				TotalTokens:      u.TotalTokens,
 				RunCount:         u.RunCount,
 				ErrorCount:       u.ErrorCount,
+				EstimatedUsd:     u.EstimatedUSD,
 			})
 		}
-		httpx.JSON(w, http.StatusOK, apispec.UsageResponse{Usage: items})
+		groups := make([]apispec.UsageGroup, 0, len(usage.Groups))
+		for _, g := range usage.Groups {
+			groups = append(groups, apispec.UsageGroup{Key: g.Key, Day: g.Day, InputTokens: g.InputTokens, OutputTokens: g.OutputTokens,
+				CacheReadTokens: g.CacheReadTokens, CacheWriteTokens: g.CacheWriteTokens, TotalTokens: g.TotalTokens,
+				RunCount: g.RunCount, ErrorCount: g.ErrorCount, EstimatedUsd: g.EstimatedUSD})
+		}
+		t := usage.Totals
+		httpx.JSON(w, http.StatusOK, apispec.UsageResponse{Usage: items, Groups: &groups, Totals: &apispec.UsageTotals{
+			InputTokens: t.InputTokens, OutputTokens: t.OutputTokens, CacheReadTokens: t.CacheReadTokens, CacheWriteTokens: t.CacheWriteTokens,
+			TotalTokens: t.TotalTokens, RunCount: t.RunCount, ErrorCount: t.ErrorCount, AvgDurationMs: t.AvgDurationMS,
+			SubscriptionUsd: t.SubscriptionUSD, ApiUsd: t.APIUSD, UnpricedRuns: t.UnpricedRuns,
+		}})
 	}))
+
+	mux.Handle("GET /api/v1/settings/prices", wrap(func(w http.ResponseWriter, r *http.Request) {
+		list, err := svc.Prices(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.PriceList{Prices: make([]apispec.ModelPrice, 0, len(list))}
+		for _, p := range list {
+			out.Prices = append(out.Prices, priceToAPI(p))
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+	mux.Handle("POST /api/v1/settings/prices", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.AddPriceRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		p, err := svc.AddPrice(r.Context(), httpx.Actor(r), runs.Price{Model: in.Model, InputPerMTok: in.InputPerMtok, OutputPerMTok: in.OutputPerMtok,
+			CacheReadPerMTok: in.CacheReadPerMtok, CacheWritePerMTok: in.CacheWritePerMtok, ValidFrom: httpx.Deref(in.ValidFrom, time.Time{})})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, priceToAPI(p))
+	}))
+	mux.Handle("GET /api/v1/settings/currency", wrap(func(w http.ResponseWriter, r *http.Request) {
+		c, ok, err := svc.Currency(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.CurrencySettings{}
+		if ok {
+			out.UsdHuf, out.UpdatedAt = &c.USDHUF, &c.UpdatedAt
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+	mux.Handle("PUT /api/v1/settings/currency", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.SetCurrencyRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		c, err := svc.SetCurrency(r.Context(), httpx.Actor(r), in.UsdHuf)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.CurrencySettings{UsdHuf: &c.USDHUF, UpdatedAt: &c.UpdatedAt})
+	}))
+}
+
+func priceToAPI(p runs.Price) apispec.ModelPrice {
+	return apispec.ModelPrice{Id: p.ID, Model: p.Model, InputPerMtok: p.InputPerMTok, OutputPerMtok: p.OutputPerMTok,
+		CacheReadPerMtok: p.CacheReadPerMTok, CacheWritePerMtok: p.CacheWritePerMTok, ValidFrom: p.ValidFrom, CreatedBy: p.CreatedBy, CreatedAt: p.CreatedAt}
+}
+
+// runFilter reads the query parameters of GET /runs.
+func runFilter(w http.ResponseWriter, r *http.Request) (runs.RunFilter, bool) {
+	q := r.URL.Query()
+	var f runs.RunFilter
+	bad := func(detail string) (runs.RunFilter, bool) {
+		httpx.Error(w, r, &httpx.BadRequest{Detail: detail})
+		return f, false
+	}
+	for name, dst := range map[string]*ids.ID{"agent_id": &f.AgentID, "host_id": &f.HostID, "channel_id": &f.ChannelID} {
+		if raw := q.Get(name); raw != "" {
+			id, err := ids.Parse(raw)
+			if err != nil {
+				return bad(name + " must be a UUID")
+			}
+			*dst = id
+		}
+	}
+	f.Status = q.Get("status")
+	for name, dst := range map[string]**time.Time{"from": &f.From, "to": &f.To} {
+		if raw := q.Get(name); raw != "" {
+			t, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return bad(name + " must be an RFC 3339 time")
+			}
+			*dst = &t
+		}
+	}
+	if raw := q.Get("cursor"); raw != "" {
+		at, id, ok := strings.Cut(raw, "_")
+		t, err1 := time.Parse(time.RFC3339Nano, at)
+		parsed, err2 := ids.Parse(id)
+		if !ok || err1 != nil || err2 != nil {
+			return bad("invalid cursor")
+		}
+		f.Before = &runs.RunCursor{CreatedAt: t, ID: parsed}
+	}
+	if raw := q.Get("limit"); raw != "" {
+		l, err := strconv.Atoi(raw)
+		if err != nil || l < 1 {
+			return bad("limit must be a positive integer")
+		}
+		f.Limit = l
+	}
+	return f, true
 }

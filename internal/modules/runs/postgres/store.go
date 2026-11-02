@@ -119,49 +119,7 @@ func (s *Store) ListRuns(ctx context.Context, workspaceID ids.ID, agentID ids.ID
 	}
 	out := make([]runs.Run, 0, len(rows))
 	for _, r := range rows {
-		item := runs.Run{
-			ID:               r.ID,
-			WorkspaceID:      r.WorkspaceID,
-			AgentID:          r.AgentID,
-			Phase:            r.Phase,
-			Client:           r.Client,
-			Model:            r.Model,
-			SessionID:        r.SessionID,
-			Items:            int(r.Items),
-			InputTokens:      r.InputTokens,
-			OutputTokens:     r.OutputTokens,
-			CacheReadTokens:  r.CacheReadTokens,
-			CacheWriteTokens: r.CacheWriteTokens,
-			ContextTokens:    r.ContextTokens,
-			DurationMS:       int(r.DurationMs),
-			Status:           r.Status,
-			CreatedAt:        r.CreatedAt,
-			WebReads:         r.WebReads,
-		}
-		if r.HostID != nil {
-			item.HostID = *r.HostID
-		}
-		if r.ChannelID != nil {
-			item.ChannelID = *r.ChannelID
-		}
-		if r.ThreadRootID != nil {
-			item.ThreadRootID = *r.ThreadRootID
-		}
-		if r.ErrorID != nil {
-			item.ErrorID = *r.ErrorID
-		}
-		if r.ReplyMessageID != nil {
-			item.ReplyMessageID = *r.ReplyMessageID
-		}
-		var steps []runs.Step
-		if len(r.Steps) > 0 {
-			_ = json.Unmarshal(r.Steps, &steps)
-		}
-		if steps == nil {
-			steps = []runs.Step{}
-		}
-		item.Steps = steps
-		out = append(out, item)
+		out = append(out, runFromRow(r))
 	}
 	return out, nil
 }
@@ -200,4 +158,137 @@ func (s *Store) TokensSince(ctx context.Context, workspaceID, agentID ids.ID, si
 		AgentID:     agentID,
 		CreatedAt:   since,
 	})
+}
+
+func runFromRow(r sqlcgen.AgentRun) runs.Run {
+	item := runs.Run{
+		ID:               r.ID,
+		WorkspaceID:      r.WorkspaceID,
+		AgentID:          r.AgentID,
+		Phase:            r.Phase,
+		Client:           r.Client,
+		Model:            r.Model,
+		SessionID:        r.SessionID,
+		Items:            int(r.Items),
+		InputTokens:      r.InputTokens,
+		OutputTokens:     r.OutputTokens,
+		CacheReadTokens:  r.CacheReadTokens,
+		CacheWriteTokens: r.CacheWriteTokens,
+		ContextTokens:    r.ContextTokens,
+		DurationMS:       int(r.DurationMs),
+		Status:           r.Status,
+		CreatedAt:        r.CreatedAt,
+		WebReads:         r.WebReads,
+	}
+	if r.HostID != nil {
+		item.HostID = *r.HostID
+	}
+	if r.ChannelID != nil {
+		item.ChannelID = *r.ChannelID
+	}
+	if r.ThreadRootID != nil {
+		item.ThreadRootID = *r.ThreadRootID
+	}
+	if r.ErrorID != nil {
+		item.ErrorID = *r.ErrorID
+	}
+	if r.ReplyMessageID != nil {
+		item.ReplyMessageID = *r.ReplyMessageID
+	}
+	var steps []runs.Step
+	if len(r.Steps) > 0 {
+		_ = json.Unmarshal(r.Steps, &steps)
+	}
+	if steps == nil {
+		steps = []runs.Step{}
+	}
+	item.Steps = steps
+	return item
+}
+
+// SearchRuns lists runs by filter, newest first.
+func (s *Store) SearchRuns(ctx context.Context, workspaceID ids.ID, f runs.RunFilter) ([]runs.Run, error) {
+	p := sqlcgen.SearchRunsParams{WorkspaceID: workspaceID, Limit: int32(f.Limit), FromAt: f.From, ToAt: f.To}
+	if f.AgentID != ids.Nil {
+		p.AgentID = &f.AgentID
+	}
+	if f.HostID != ids.Nil {
+		p.HostID = &f.HostID
+	}
+	if f.ChannelID != ids.Nil {
+		p.ChannelID = &f.ChannelID
+	}
+	if f.Status != "" {
+		p.Status = &f.Status
+	}
+	if f.Before != nil {
+		p.BeforeAt, p.BeforeID = &f.Before.CreatedAt, &f.Before.ID
+	}
+	rows, err := s.q(ctx).SearchRuns(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]runs.Run, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, runFromRow(r))
+	}
+	return out, nil
+}
+
+// UsageRuns lists what usage needs of every run since a time.
+func (s *Store) UsageRuns(ctx context.Context, workspaceID ids.ID, since time.Time) ([]runs.UsageRun, error) {
+	rows, err := s.q(ctx).UsageRuns(ctx, sqlcgen.UsageRunsParams{WorkspaceID: workspaceID, CreatedAt: since})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]runs.UsageRun, 0, len(rows))
+	for _, r := range rows {
+		u := runs.UsageRun{AgentID: r.AgentID, Model: r.Model, Client: r.Client, Status: r.Status, DurationMS: int(r.DurationMs),
+			InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, CacheReadTokens: r.CacheReadTokens,
+			CacheWriteTokens: r.CacheWriteTokens, CreatedAt: r.CreatedAt}
+		if r.HostID != nil {
+			u.HostID = *r.HostID
+		}
+		out = append(out, u)
+	}
+	return out, nil
+}
+
+// InsertPrice adds a row to the append-only price table.
+func (s *Store) InsertPrice(ctx context.Context, p runs.Price) error {
+	return s.q(ctx).InsertPrice(ctx, sqlcgen.InsertPriceParams{ID: p.ID, WorkspaceID: p.WorkspaceID, Model: p.Model,
+		InputPerMtok: p.InputPerMTok, OutputPerMtok: p.OutputPerMTok, CacheReadPerMtok: p.CacheReadPerMTok,
+		CacheWritePerMtok: p.CacheWritePerMTok, ValidFrom: p.ValidFrom, CreatedBy: p.CreatedBy, CreatedAt: p.CreatedAt})
+}
+
+// Prices lists the workspace's price rows.
+func (s *Store) Prices(ctx context.Context, workspaceID ids.ID) ([]runs.Price, error) {
+	rows, err := s.q(ctx).Prices(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]runs.Price, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, runs.Price{ID: r.ID, WorkspaceID: r.WorkspaceID, Model: r.Model, InputPerMTok: r.InputPerMtok,
+			OutputPerMTok: r.OutputPerMtok, CacheReadPerMTok: r.CacheReadPerMtok, CacheWritePerMTok: r.CacheWritePerMtok,
+			ValidFrom: r.ValidFrom, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt})
+	}
+	return out, nil
+}
+
+// Currency returns the workspace's exchange rate.
+func (s *Store) Currency(ctx context.Context, workspaceID ids.ID) (runs.Currency, error) {
+	r, err := s.q(ctx).Currency(ctx, workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return runs.Currency{}, db.ErrNotFound
+	}
+	if err != nil {
+		return runs.Currency{}, err
+	}
+	return runs.Currency{WorkspaceID: r.WorkspaceID, USDHUF: r.UsdHuf, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt}, nil
+}
+
+// PutCurrency stores the workspace's exchange rate.
+func (s *Store) PutCurrency(ctx context.Context, c runs.Currency) error {
+	return s.q(ctx).PutCurrency(ctx, sqlcgen.PutCurrencyParams{WorkspaceID: c.WorkspaceID, UsdHuf: c.USDHUF, UpdatedBy: c.UpdatedBy, UpdatedAt: c.UpdatedAt})
 }

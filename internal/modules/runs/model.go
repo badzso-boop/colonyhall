@@ -87,6 +87,87 @@ type Run struct {
 	WebReads       []string
 	Steps          []Step
 	ReplyMessageID ids.ID
+	// EstimatedUSD and Billing are computed on reads: nil when no price fits.
+	EstimatedUSD *float64
+	Billing      string
+}
+
+// RunCursor is where a page of runs ended.
+type RunCursor struct {
+	CreatedAt time.Time
+	ID        ids.ID
+}
+
+// RunFilter selects runs; zero values do not filter.
+type RunFilter struct {
+	AgentID   ids.ID
+	HostID    ids.ID
+	ChannelID ids.ID
+	Status    string
+	From      *time.Time
+	To        *time.Time
+	Before    *RunCursor
+	Limit     int
+}
+
+// UsageRun is what usage needs of one run.
+type UsageRun struct {
+	AgentID          ids.ID
+	HostID           ids.ID
+	Model            string
+	Client           string
+	Status           string
+	DurationMS       int
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	CreatedAt        time.Time
+}
+
+// Usage groupings.
+const (
+	GroupByAgent = "agent"
+	GroupByHost  = "host"
+	GroupByModel = "model"
+)
+
+// UsageGroup is one day of one agent, machine or model.
+type UsageGroup struct {
+	Key              string
+	Day              string
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	TotalTokens      int64
+	RunCount         int
+	ErrorCount       int
+	EstimatedUSD     *float64
+}
+
+// UsageTotals sums a period. EstimatedUSD splits by billing: the subscription
+// part is what it would cost on the API, the API part is the actual estimate.
+type UsageTotals struct {
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	TotalTokens      int64
+	RunCount         int
+	ErrorCount       int
+	AvgDurationMS    int
+	SubscriptionUSD  float64
+	APIUSD           float64
+	// UnpricedRuns ran on a model with no price in the table.
+	UnpricedRuns int
+}
+
+// UsageSummary is the usage of a period.
+type UsageSummary struct {
+	Days   []DayUsage
+	Groups []UsageGroup
+	Totals UsageTotals
 }
 
 // DayUsage is the daily aggregated token usage and run count for one agent in Europe/Budapest.
@@ -100,6 +181,7 @@ type DayUsage struct {
 	TotalTokens      int64
 	RunCount         int
 	ErrorCount       int
+	EstimatedUSD     *float64
 }
 
 // AgentBudget is the daily token budget status for one agent in Europe/Budapest.
@@ -112,10 +194,11 @@ type AgentBudget struct {
 
 // Errors.
 var (
-	ErrForbidden   = errors.New("not allowed")
-	ErrEmpty       = errors.New("summary is required")
-	ErrInvalidRun  = errors.New("invalid run data")
-	ErrInvalidDays = errors.New("days must be between 1 and 90")
+	ErrForbidden    = errors.New("not allowed")
+	ErrEmpty        = errors.New("summary is required")
+	ErrInvalidRun   = errors.New("invalid run data")
+	ErrInvalidDays  = errors.New("days must be between 1 and 90")
+	ErrInvalidGroup = errors.New("group_by must be agent, host or model")
 )
 
 // Budapest timezone used for daily aggregations.

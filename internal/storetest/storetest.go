@@ -873,6 +873,41 @@ func testRuns(t *testing.T, b Backend) {
 
 	// Test Usage with Budapest midnight boundary
 	// Query since start of 2026-10-15: should contain both days
+	// Prices, the exchange rate, filtered search and usage rows.
+	p1 := runs.Price{ID: gen.New(), WorkspaceID: f.ws.ID, Model: "m-*", InputPerMTok: 1.5, OutputPerMTok: 2, CacheReadPerMTok: 0.1, CacheWritePerMTok: 0.2, ValidFrom: t0, CreatedBy: f.human.ID, CreatedAt: t0}
+	must(t, b.Runs.InsertPrice(ctx, p1))
+	gotPrices, err := b.Runs.Prices(ctx, f.ws.ID)
+	must(t, err)
+	if len(gotPrices) != 1 || gotPrices[0].Model != "m-*" || gotPrices[0].InputPerMTok != 1.5 || gotPrices[0].CacheWritePerMTok != 0.2 {
+		t.Fatalf("prices: %+v", gotPrices)
+	}
+	if _, err := b.Runs.Currency(ctx, f.ws.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("unset rate: %v", err)
+	}
+	must(t, b.Runs.PutCurrency(ctx, runs.Currency{WorkspaceID: f.ws.ID, USDHUF: 360, UpdatedBy: f.human.ID, UpdatedAt: t0}))
+	must(t, b.Runs.PutCurrency(ctx, runs.Currency{WorkspaceID: f.ws.ID, USDHUF: 365, UpdatedBy: f.human.ID, UpdatedAt: t0}))
+	if c, err := b.Runs.Currency(ctx, f.ws.ID); err != nil || c.USDHUF != 365 {
+		t.Fatalf("rate: %+v %v", c, err)
+	}
+	found, err := b.Runs.SearchRuns(ctx, f.ws.ID, runs.RunFilter{AgentID: f.agent.ID, Limit: 100})
+	must(t, err)
+	if len(found) == 0 {
+		t.Fatal("search by agent found nothing")
+	}
+	beforeLast, err := b.Runs.SearchRuns(ctx, f.ws.ID, runs.RunFilter{Before: &runs.RunCursor{CreatedAt: found[0].CreatedAt, ID: found[0].ID}, AgentID: f.agent.ID, Limit: 100})
+	must(t, err)
+	if len(beforeLast) != len(found)-1 {
+		t.Fatalf("cursor: %d after %d", len(beforeLast), len(found))
+	}
+	if none, err := b.Runs.SearchRuns(ctx, f.ws.ID, runs.RunFilter{Status: "nonsense", Limit: 10}); err != nil || len(none) != 0 {
+		t.Fatalf("status filter: %+v %v", none, err)
+	}
+	urows, err := b.Runs.UsageRuns(ctx, f.ws.ID, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
+	must(t, err)
+	if len(urows) == 0 || urows[0].Model == "" {
+		t.Fatalf("usage rows: %+v", urows)
+	}
+
 	usageAll, err := b.Runs.Usage(ctx, f.ws.ID, time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("Usage: %v", err)

@@ -14,13 +14,17 @@ import (
 
 // Store implements runs.Store in memory.
 type Store struct {
-	mu     sync.RWMutex
-	errors map[ids.ID]runs.Error
-	runs   []runs.Run
+	prices   []runs.Price
+	currency map[ids.ID]runs.Currency
+	mu       sync.RWMutex
+	errors   map[ids.ID]runs.Error
+	runs     []runs.Run
 }
 
 // New returns an empty store.
-func New() *Store { return &Store{errors: map[ids.ID]runs.Error{}} }
+func New() *Store {
+	return &Store{errors: map[ids.ID]runs.Error{}, currency: map[ids.ID]runs.Currency{}}
+}
 
 // InsertError stores an error.
 func (s *Store) InsertError(_ context.Context, e runs.Error) error {
@@ -161,4 +165,98 @@ func (s *Store) TokensSince(_ context.Context, workspaceID, agentID ids.ID, sinc
 		}
 	}
 	return total, nil
+}
+
+// SearchRuns lists runs by filter, newest first.
+func (s *Store) SearchRuns(_ context.Context, workspaceID ids.ID, f runs.RunFilter) ([]runs.Run, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []runs.Run
+	for _, r := range s.runs {
+		switch {
+		case r.WorkspaceID != workspaceID,
+			f.AgentID != ids.Nil && r.AgentID != f.AgentID,
+			f.HostID != ids.Nil && r.HostID != f.HostID,
+			f.ChannelID != ids.Nil && r.ChannelID != f.ChannelID,
+			f.Status != "" && r.Status != f.Status,
+			f.From != nil && r.CreatedAt.Before(*f.From),
+			f.To != nil && !r.CreatedAt.Before(*f.To):
+			continue
+		}
+		if b := f.Before; b != nil && (r.CreatedAt.After(b.CreatedAt) || (r.CreatedAt.Equal(b.CreatedAt) && r.ID.String() >= b.ID.String())) {
+			continue
+		}
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].ID.String() > out[j].ID.String()
+		}
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
+	}
+	return out, nil
+}
+
+// UsageRuns lists what usage needs of every run since a time.
+func (s *Store) UsageRuns(_ context.Context, workspaceID ids.ID, since time.Time) ([]runs.UsageRun, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []runs.UsageRun
+	for _, r := range s.runs {
+		if r.WorkspaceID == workspaceID && !r.CreatedAt.Before(since) {
+			out = append(out, runs.UsageRun{AgentID: r.AgentID, HostID: r.HostID, Model: r.Model, Client: r.Client, Status: r.Status,
+				DurationMS: r.DurationMS, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, CacheReadTokens: r.CacheReadTokens,
+				CacheWriteTokens: r.CacheWriteTokens, CreatedAt: r.CreatedAt})
+		}
+	}
+	return out, nil
+}
+
+// InsertPrice adds a row to the price table.
+func (s *Store) InsertPrice(_ context.Context, p runs.Price) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prices = append(s.prices, p)
+	return nil
+}
+
+// Prices lists the workspace's price rows, by model and valid_from.
+func (s *Store) Prices(_ context.Context, workspaceID ids.ID) ([]runs.Price, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []runs.Price
+	for _, p := range s.prices {
+		if p.WorkspaceID == workspaceID {
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Model != out[j].Model {
+			return out[i].Model < out[j].Model
+		}
+		return out[i].ValidFrom.Before(out[j].ValidFrom)
+	})
+	return out, nil
+}
+
+// Currency returns the workspace's exchange rate.
+func (s *Store) Currency(_ context.Context, workspaceID ids.ID) (runs.Currency, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.currency[workspaceID]
+	if !ok {
+		return runs.Currency{}, db.ErrNotFound
+	}
+	return c, nil
+}
+
+// PutCurrency stores the workspace's exchange rate.
+func (s *Store) PutCurrency(_ context.Context, c runs.Currency) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.currency[c.WorkspaceID] = c
+	return nil
 }

@@ -33,6 +33,22 @@ func (q *Queries) AgentTokensSince(ctx context.Context, arg AgentTokensSincePara
 	return total_tokens, err
 }
 
+const currency = `-- name: Currency :one
+SELECT workspace_id, usd_huf, updated_by, updated_at FROM workspace_currency WHERE workspace_id = $1
+`
+
+func (q *Queries) Currency(ctx context.Context, workspaceID uuid.UUID) (WorkspaceCurrency, error) {
+	row := q.db.QueryRow(ctx, currency, workspaceID)
+	var i WorkspaceCurrency
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.UsdHuf,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const errorByID = `-- name: ErrorByID :one
 SELECT id, workspace_id, agent_id, channel_id, thread_root_id, summary, detail, created_at FROM run_error WHERE id = $1
 `
@@ -79,6 +95,41 @@ func (q *Queries) InsertError(ctx context.Context, arg InsertErrorParams) error 
 		arg.Detail,
 		arg.CreatedAt,
 		arg.ThreadRootID,
+	)
+	return err
+}
+
+const insertPrice = `-- name: InsertPrice :exec
+INSERT INTO model_price (id, workspace_id, model, input_per_mtok, output_per_mtok, cache_read_per_mtok,
+                         cache_write_per_mtok, valid_from, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertPriceParams struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	Model             string
+	InputPerMtok      float64
+	OutputPerMtok     float64
+	CacheReadPerMtok  float64
+	CacheWritePerMtok float64
+	ValidFrom         time.Time
+	CreatedBy         uuid.UUID
+	CreatedAt         time.Time
+}
+
+func (q *Queries) InsertPrice(ctx context.Context, arg InsertPriceParams) error {
+	_, err := q.db.Exec(ctx, insertPrice,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Model,
+		arg.InputPerMtok,
+		arg.OutputPerMtok,
+		arg.CacheReadPerMtok,
+		arg.CacheWritePerMtok,
+		arg.ValidFrom,
+		arg.CreatedBy,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -210,6 +261,147 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]AgentRun,
 	return items, nil
 }
 
+const prices = `-- name: Prices :many
+SELECT id, workspace_id, model, input_per_mtok, output_per_mtok, cache_read_per_mtok, cache_write_per_mtok, valid_from, created_by, created_at FROM model_price WHERE workspace_id = $1 ORDER BY model, valid_from, id
+`
+
+func (q *Queries) Prices(ctx context.Context, workspaceID uuid.UUID) ([]ModelPrice, error) {
+	rows, err := q.db.Query(ctx, prices, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ModelPrice
+	for rows.Next() {
+		var i ModelPrice
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Model,
+			&i.InputPerMtok,
+			&i.OutputPerMtok,
+			&i.CacheReadPerMtok,
+			&i.CacheWritePerMtok,
+			&i.ValidFrom,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const putCurrency = `-- name: PutCurrency :exec
+INSERT INTO workspace_currency (workspace_id, usd_huf, updated_by, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (workspace_id) DO UPDATE
+SET usd_huf = EXCLUDED.usd_huf, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
+`
+
+type PutCurrencyParams struct {
+	WorkspaceID uuid.UUID
+	UsdHuf      float64
+	UpdatedBy   uuid.UUID
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) PutCurrency(ctx context.Context, arg PutCurrencyParams) error {
+	_, err := q.db.Exec(ctx, putCurrency,
+		arg.WorkspaceID,
+		arg.UsdHuf,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const searchRuns = `-- name: SearchRuns :many
+SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id, context_tokens FROM agent_run
+WHERE workspace_id = $1
+  AND ($3::uuid IS NULL OR agent_id = $3::uuid)
+  AND ($4::uuid IS NULL OR host_id = $4::uuid)
+  AND ($5::uuid IS NULL OR channel_id = $5::uuid)
+  AND ($6::text IS NULL OR status = $6::text)
+  AND ($7::timestamptz IS NULL OR created_at >= $7::timestamptz)
+  AND ($8::timestamptz IS NULL OR created_at < $8::timestamptz)
+  AND ($9::timestamptz IS NULL OR (created_at, id) < ($9::timestamptz, $10::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $2
+`
+
+type SearchRunsParams struct {
+	WorkspaceID uuid.UUID
+	Limit       int32
+	AgentID     *uuid.UUID
+	HostID      *uuid.UUID
+	ChannelID   *uuid.UUID
+	Status      *string
+	FromAt      *time.Time
+	ToAt        *time.Time
+	BeforeAt    *time.Time
+	BeforeID    *uuid.UUID
+}
+
+func (q *Queries) SearchRuns(ctx context.Context, arg SearchRunsParams) ([]AgentRun, error) {
+	rows, err := q.db.Query(ctx, searchRuns,
+		arg.WorkspaceID,
+		arg.Limit,
+		arg.AgentID,
+		arg.HostID,
+		arg.ChannelID,
+		arg.Status,
+		arg.FromAt,
+		arg.ToAt,
+		arg.BeforeAt,
+		arg.BeforeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentRun
+	for rows.Next() {
+		var i AgentRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.AgentID,
+			&i.HostID,
+			&i.Phase,
+			&i.Client,
+			&i.Model,
+			&i.SessionID,
+			&i.ChannelID,
+			&i.ThreadRootID,
+			&i.Items,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.DurationMs,
+			&i.Status,
+			&i.ErrorID,
+			&i.CreatedAt,
+			&i.WebReads,
+			&i.Steps,
+			&i.ReplyMessageID,
+			&i.ContextTokens,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const usage = `-- name: Usage :many
 SELECT
     agent_id,
@@ -261,6 +453,64 @@ func (q *Queries) Usage(ctx context.Context, arg UsageParams) ([]UsageRow, error
 			&i.CacheWriteTokens,
 			&i.RunCount,
 			&i.ErrorCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const usageRuns = `-- name: UsageRuns :many
+SELECT agent_id, host_id, model, client, status, duration_ms, input_tokens, output_tokens,
+       cache_read_tokens, cache_write_tokens, created_at
+FROM agent_run
+WHERE workspace_id = $1 AND created_at >= $2
+`
+
+type UsageRunsParams struct {
+	WorkspaceID uuid.UUID
+	CreatedAt   time.Time
+}
+
+type UsageRunsRow struct {
+	AgentID          uuid.UUID
+	HostID           *uuid.UUID
+	Model            string
+	Client           string
+	Status           string
+	DurationMs       int32
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	CreatedAt        time.Time
+}
+
+func (q *Queries) UsageRuns(ctx context.Context, arg UsageRunsParams) ([]UsageRunsRow, error) {
+	rows, err := q.db.Query(ctx, usageRuns, arg.WorkspaceID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UsageRunsRow
+	for rows.Next() {
+		var i UsageRunsRow
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.HostID,
+			&i.Model,
+			&i.Client,
+			&i.Status,
+			&i.DurationMs,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

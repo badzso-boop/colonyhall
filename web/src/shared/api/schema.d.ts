@@ -1595,7 +1595,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Humans only. List recent agent runs, newest first. */
+        /** @description Humans only. List agent runs by filter, newest first. next_cursor pages on. */
         get: operations["listRuns"];
         put?: never;
         post?: never;
@@ -2372,6 +2372,42 @@ export interface paths {
         /** @description Agent token. Get primed context (latest compaction summary and capped messages after it). */
         get: operations["getAgentContext"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Admins only. The append-only price table, history included. */
+        get: operations["listPrices"];
+        put?: never;
+        /** @description Admins only, audited. Adds a row; old rows stay, so old runs keep the price of their time. */
+        post: operations["addPrice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/currency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Admins only. The manual USD to HUF rate; empty until it is set. */
+        get: operations["getCurrency"];
+        /** @description Admins only, audited. HUF is computed in the client, so this rewrites no history. */
+        put: operations["setCurrency"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3450,7 +3486,7 @@ export interface components {
             context_tokens?: number;
             duration_ms: number;
             /** @enum {string} */
-            status: "ok" | "error" | "halted";
+            status: "ok" | "error" | "halted" | "stopped";
             /** Format: uuid */
             error_id?: string;
             /** @description Public web URLs read during this run. */
@@ -3510,8 +3546,16 @@ export interface components {
             steps?: components["schemas"]["AgentStep"][];
             /** Format: uuid */
             reply_message_id?: string;
+            /**
+             * Format: double
+             * @description At the price valid at created_at; null when no price matches. Under a subscription: what it would cost on the API
+             */
+            estimated_usd?: number | null;
+            /** @enum {string} */
+            billing?: "subscription" | "api";
         };
         RunList: {
+            next_cursor?: string;
             runs: components["schemas"]["Run"][];
         };
         DayUsage: {
@@ -3531,9 +3575,108 @@ export interface components {
             total_tokens: number;
             run_count: number;
             error_count: number;
+            /** Format: double */
+            estimated_usd?: number | null;
         };
         UsageResponse: {
             usage: components["schemas"]["DayUsage"][];
+            groups?: components["schemas"]["UsageGroup"][];
+            totals?: components["schemas"]["UsageTotals"];
+        };
+        /** @description One day of one agent, machine or model (group_by). key is empty for runs with no machine. */
+        UsageGroup: {
+            key: string;
+            day: string;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** Format: int64 */
+            cache_read_tokens: number;
+            /** Format: int64 */
+            cache_write_tokens: number;
+            /** Format: int64 */
+            total_tokens: number;
+            run_count: number;
+            error_count: number;
+            /** Format: double */
+            estimated_usd?: number | null;
+        };
+        UsageTotals: {
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** Format: int64 */
+            cache_read_tokens: number;
+            /** Format: int64 */
+            cache_write_tokens: number;
+            /** Format: int64 */
+            total_tokens: number;
+            run_count: number;
+            error_count: number;
+            avg_duration_ms: number;
+            /**
+             * Format: double
+             * @description What the subscription runs would cost on the API (an estimate)
+             */
+            subscription_usd: number;
+            /**
+             * Format: double
+             * @description The estimated actual cost of API-key agents
+             */
+            api_usd: number;
+            /** @description Runs on a model with no price in the table */
+            unpriced_runs: number;
+        };
+        ModelPrice: {
+            /** Format: uuid */
+            id: string;
+            /** @description An exact model name, or a prefix ending in * */
+            model: string;
+            /** Format: double */
+            input_per_mtok: number;
+            /** Format: double */
+            output_per_mtok: number;
+            /** Format: double */
+            cache_read_per_mtok: number;
+            /** Format: double */
+            cache_write_per_mtok: number;
+            /** Format: date-time */
+            valid_from: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PriceList: {
+            prices: components["schemas"]["ModelPrice"][];
+        };
+        AddPriceRequest: {
+            model: string;
+            /** Format: double */
+            input_per_mtok: number;
+            /** Format: double */
+            output_per_mtok: number;
+            /** Format: double */
+            cache_read_per_mtok: number;
+            /** Format: double */
+            cache_write_per_mtok: number;
+            /** Format: date-time */
+            valid_from?: string;
+        };
+        CurrencySettings: {
+            /** Format: double */
+            usd_huf?: number;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        SetCurrencyRequest: {
+            /**
+             * Format: double
+             * @description Positive
+             */
+            usd_huf: number;
         };
         AgentBudget: {
             /**
@@ -6998,6 +7141,12 @@ export interface operations {
         parameters: {
             query?: {
                 agent_id?: string;
+                host_id?: string;
+                channel_id?: string;
+                status?: "ok" | "error" | "halted" | "stopped";
+                from?: string;
+                to?: string;
+                cursor?: string;
                 limit?: number;
             };
             header?: never;
@@ -7021,6 +7170,7 @@ export interface operations {
     getUsage: {
         parameters: {
             query?: {
+                group_by?: "agent" | "host" | "model";
                 days?: number;
             };
             header?: never;
@@ -8341,6 +8491,98 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    addPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPriceRequest"];
+            };
+        };
+        responses: {
+            /** @description Added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPrice"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCurrency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrencySettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setCurrency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCurrencyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrencySettings"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };

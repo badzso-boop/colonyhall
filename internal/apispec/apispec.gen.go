@@ -974,9 +974,10 @@ func (e ReportRunRequestPhase) Valid() bool {
 
 // Defines values for ReportRunRequestStatus.
 const (
-	ReportRunRequestStatusError  ReportRunRequestStatus = "error"
-	ReportRunRequestStatusHalted ReportRunRequestStatus = "halted"
-	ReportRunRequestStatusOk     ReportRunRequestStatus = "ok"
+	ReportRunRequestStatusError   ReportRunRequestStatus = "error"
+	ReportRunRequestStatusHalted  ReportRunRequestStatus = "halted"
+	ReportRunRequestStatusOk      ReportRunRequestStatus = "ok"
+	ReportRunRequestStatusStopped ReportRunRequestStatus = "stopped"
 )
 
 // Valid indicates whether the value is a known member of the ReportRunRequestStatus enum.
@@ -987,6 +988,8 @@ func (e ReportRunRequestStatus) Valid() bool {
 	case ReportRunRequestStatusHalted:
 		return true
 	case ReportRunRequestStatusOk:
+		return true
+	case ReportRunRequestStatusStopped:
 		return true
 	default:
 		return false
@@ -1011,6 +1014,24 @@ func (e Role) Valid() bool {
 	case Observer:
 		return true
 	case Owner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunBilling.
+const (
+	Api          RunBilling = "api"
+	Subscription RunBilling = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the RunBilling enum.
+func (e RunBilling) Valid() bool {
+	switch e {
+	case Api:
+		return true
+	case Subscription:
 		return true
 	default:
 		return false
@@ -1230,6 +1251,51 @@ func (e ListActiveLeasesParamsState) Valid() bool {
 	}
 }
 
+// Defines values for ListRunsParamsStatus.
+const (
+	ListRunsParamsStatusError   ListRunsParamsStatus = "error"
+	ListRunsParamsStatusHalted  ListRunsParamsStatus = "halted"
+	ListRunsParamsStatusOk      ListRunsParamsStatus = "ok"
+	ListRunsParamsStatusStopped ListRunsParamsStatus = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the ListRunsParamsStatus enum.
+func (e ListRunsParamsStatus) Valid() bool {
+	switch e {
+	case ListRunsParamsStatusError:
+		return true
+	case ListRunsParamsStatusHalted:
+		return true
+	case ListRunsParamsStatusOk:
+		return true
+	case ListRunsParamsStatusStopped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetUsageParamsGroupBy.
+const (
+	GetUsageParamsGroupByAgent GetUsageParamsGroupBy = "agent"
+	GetUsageParamsGroupByHost  GetUsageParamsGroupBy = "host"
+	GetUsageParamsGroupByModel GetUsageParamsGroupBy = "model"
+)
+
+// Valid indicates whether the value is a known member of the GetUsageParamsGroupBy enum.
+func (e GetUsageParamsGroupBy) Valid() bool {
+	switch e {
+	case GetUsageParamsGroupByAgent:
+		return true
+	case GetUsageParamsGroupByHost:
+		return true
+	case GetUsageParamsGroupByModel:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWikiPagesParamsDeleted.
 const (
 	N0 ListWikiPagesParamsDeleted = 0
@@ -1316,6 +1382,16 @@ type AddPlannerCalendarRequest struct {
 
 	// Url https:// or webcal:// ICS link (a secret: never returned)
 	Url string `json:"url"`
+}
+
+// AddPriceRequest defines model for AddPriceRequest.
+type AddPriceRequest struct {
+	CacheReadPerMtok  float64    `json:"cache_read_per_mtok"`
+	CacheWritePerMtok float64    `json:"cache_write_per_mtok"`
+	InputPerMtok      float64    `json:"input_per_mtok"`
+	Model             string     `json:"model"`
+	OutputPerMtok     float64    `json:"output_per_mtok"`
+	ValidFrom         *time.Time `json:"valid_from,omitempty"`
 }
 
 // AdminStatus defines model for AdminStatus.
@@ -1908,6 +1984,12 @@ type CreatedAgent struct {
 	Token *string `json:"token,omitempty"`
 }
 
+// CurrencySettings defines model for CurrencySettings.
+type CurrencySettings struct {
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	UsdHuf    *float64   `json:"usd_huf,omitempty"`
+}
+
 // DayUsage defines model for DayUsage.
 type DayUsage struct {
 	AgentId          openapi_types.UUID `json:"agent_id"`
@@ -1915,12 +1997,13 @@ type DayUsage struct {
 	CacheWriteTokens int64              `json:"cache_write_tokens"`
 
 	// Day Example: 2026-10-16
-	Day          string `json:"day"`
-	ErrorCount   int    `json:"error_count"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	RunCount     int    `json:"run_count"`
-	TotalTokens  int64  `json:"total_tokens"`
+	Day          string   `json:"day"`
+	ErrorCount   int      `json:"error_count"`
+	EstimatedUsd *float64 `json:"estimated_usd,omitempty"`
+	InputTokens  int64    `json:"input_tokens"`
+	OutputTokens int64    `json:"output_tokens"`
+	RunCount     int      `json:"run_count"`
+	TotalTokens  int64    `json:"total_tokens"`
 }
 
 // DecideApprovalRequest defines model for DecideApprovalRequest.
@@ -2537,6 +2620,21 @@ type MessageOrigin struct {
 	ThreadId  openapi_types.UUID `json:"thread_id"`
 }
 
+// ModelPrice defines model for ModelPrice.
+type ModelPrice struct {
+	CacheReadPerMtok  float64            `json:"cache_read_per_mtok"`
+	CacheWritePerMtok float64            `json:"cache_write_per_mtok"`
+	CreatedAt         time.Time          `json:"created_at"`
+	CreatedBy         openapi_types.UUID `json:"created_by"`
+	Id                openapi_types.UUID `json:"id"`
+	InputPerMtok      float64            `json:"input_per_mtok"`
+
+	// Model An exact model name, or a prefix ending in *
+	Model         string    `json:"model"`
+	OutputPerMtok float64   `json:"output_per_mtok"`
+	ValidFrom     time.Time `json:"valid_from"`
+}
+
 // MuteRequest defines model for MuteRequest.
 type MuteRequest struct {
 	// Until Omit to mute until unmuted
@@ -2736,6 +2834,11 @@ type PreviewList struct {
 	Previews []Preview `json:"previews"`
 }
 
+// PriceList defines model for PriceList.
+type PriceList struct {
+	Prices []ModelPrice `json:"prices"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
@@ -2876,16 +2979,20 @@ type Role string
 // Run defines model for Run.
 type Run struct {
 	AgentId          openapi_types.UUID  `json:"agent_id"`
+	Billing          *RunBilling         `json:"billing,omitempty"`
 	CacheReadTokens  int64               `json:"cache_read_tokens"`
 	CacheWriteTokens int64               `json:"cache_write_tokens"`
 	ChannelId        *openapi_types.UUID `json:"channel_id,omitempty"`
 	Client           string              `json:"client"`
 
 	// ContextTokens Context size after the run; 0 when unknown.
-	ContextTokens  *int64              `json:"context_tokens,omitempty"`
-	CreatedAt      time.Time           `json:"created_at"`
-	DurationMs     int                 `json:"duration_ms"`
-	ErrorId        *openapi_types.UUID `json:"error_id,omitempty"`
+	ContextTokens *int64              `json:"context_tokens,omitempty"`
+	CreatedAt     time.Time           `json:"created_at"`
+	DurationMs    int                 `json:"duration_ms"`
+	ErrorId       *openapi_types.UUID `json:"error_id,omitempty"`
+
+	// EstimatedUsd At the price valid at created_at; null when no price matches. Under a subscription: what it would cost on the API
+	EstimatedUsd   *float64            `json:"estimated_usd,omitempty"`
 	HostId         *openapi_types.UUID `json:"host_id,omitempty"`
 	Id             openapi_types.UUID  `json:"id"`
 	InputTokens    int64               `json:"input_tokens"`
@@ -2901,6 +3008,9 @@ type Run struct {
 	WebReads       *[]string           `json:"web_reads,omitempty"`
 	WorkspaceId    openapi_types.UUID  `json:"workspace_id"`
 }
+
+// RunBilling defines model for Run.Billing.
+type RunBilling string
 
 // RunPhase defines model for Run.Phase.
 type RunPhase string
@@ -2934,7 +3044,8 @@ type RunErrorRequest struct {
 
 // RunList defines model for RunList.
 type RunList struct {
-	Runs []Run `json:"runs"`
+	NextCursor *string `json:"next_cursor,omitempty"`
+	Runs       []Run   `json:"runs"`
 }
 
 // RunRef defines model for RunRef.
@@ -3033,6 +3144,12 @@ type SessionInfo struct {
 
 	// CsrfToken Empty for bearer-token callers
 	CsrfToken string `json:"csrf_token"`
+}
+
+// SetCurrencyRequest defines model for SetCurrencyRequest.
+type SetCurrencyRequest struct {
+	// UsdHuf Positive
+	UsdHuf float64 `json:"usd_huf"`
 }
 
 // SetGitRepoMappingRequest defines model for SetGitRepoMappingRequest.
@@ -3219,9 +3336,45 @@ type UpdateSidebarSectionRequest struct {
 	Position  *int    `json:"position,omitempty"`
 }
 
+// UsageGroup One day of one agent, machine or model (group_by). key is empty for runs with no machine.
+type UsageGroup struct {
+	CacheReadTokens  int64    `json:"cache_read_tokens"`
+	CacheWriteTokens int64    `json:"cache_write_tokens"`
+	Day              string   `json:"day"`
+	ErrorCount       int      `json:"error_count"`
+	EstimatedUsd     *float64 `json:"estimated_usd,omitempty"`
+	InputTokens      int64    `json:"input_tokens"`
+	Key              string   `json:"key"`
+	OutputTokens     int64    `json:"output_tokens"`
+	RunCount         int      `json:"run_count"`
+	TotalTokens      int64    `json:"total_tokens"`
+}
+
 // UsageResponse defines model for UsageResponse.
 type UsageResponse struct {
-	Usage []DayUsage `json:"usage"`
+	Groups *[]UsageGroup `json:"groups,omitempty"`
+	Totals *UsageTotals  `json:"totals,omitempty"`
+	Usage  []DayUsage    `json:"usage"`
+}
+
+// UsageTotals defines model for UsageTotals.
+type UsageTotals struct {
+	// ApiUsd The estimated actual cost of API-key agents
+	ApiUsd           float64 `json:"api_usd"`
+	AvgDurationMs    int     `json:"avg_duration_ms"`
+	CacheReadTokens  int64   `json:"cache_read_tokens"`
+	CacheWriteTokens int64   `json:"cache_write_tokens"`
+	ErrorCount       int     `json:"error_count"`
+	InputTokens      int64   `json:"input_tokens"`
+	OutputTokens     int64   `json:"output_tokens"`
+	RunCount         int     `json:"run_count"`
+
+	// SubscriptionUsd What the subscription runs would cost on the API (an estimate)
+	SubscriptionUsd float64 `json:"subscription_usd"`
+	TotalTokens     int64   `json:"total_tokens"`
+
+	// UnpricedRuns Runs on a model with no price in the table
+	UnpricedRuns int `json:"unpriced_runs"`
 }
 
 // WikiPage defines model for WikiPage.
@@ -3411,14 +3564,27 @@ type ListQuestionsParams struct {
 
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
-	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
-	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	AgentId   *openapi_types.UUID   `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	HostId    *openapi_types.UUID   `form:"host_id,omitempty" json:"host_id,omitempty"`
+	ChannelId *openapi_types.UUID   `form:"channel_id,omitempty" json:"channel_id,omitempty"`
+	Status    *ListRunsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	From      *time.Time            `form:"from,omitempty" json:"from,omitempty"`
+	To        *time.Time            `form:"to,omitempty" json:"to,omitempty"`
+	Cursor    *string               `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit     *int                  `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListRunsParamsStatus defines parameters for ListRuns.
+type ListRunsParamsStatus string
 
 // GetUsageParams defines parameters for GetUsage.
 type GetUsageParams struct {
-	Days *int `form:"days,omitempty" json:"days,omitempty"`
+	GroupBy *GetUsageParamsGroupBy `form:"group_by,omitempty" json:"group_by,omitempty"`
+	Days    *int                   `form:"days,omitempty" json:"days,omitempty"`
 }
+
+// GetUsageParamsGroupBy defines parameters for GetUsage.
+type GetUsageParamsGroupBy string
 
 // ListWikiPagesParams defines parameters for ListWikiPages.
 type ListWikiPagesParams struct {
@@ -3598,8 +3764,14 @@ type PreviewScheduleJSONRequestBody = SchedulePreviewRequest
 // UpdateCompactionSettingsJSONRequestBody defines body for UpdateCompactionSettings for application/json ContentType.
 type UpdateCompactionSettingsJSONRequestBody = UpdateCompactionSettingsRequest
 
+// SetCurrencyJSONRequestBody defines body for SetCurrency for application/json ContentType.
+type SetCurrencyJSONRequestBody = SetCurrencyRequest
+
 // UpdateFileFetchSettingsJSONRequestBody defines body for UpdateFileFetchSettings for application/json ContentType.
 type UpdateFileFetchSettingsJSONRequestBody = UpdateFileFetchSettingsRequest
+
+// AddPriceJSONRequestBody defines body for AddPrice for application/json ContentType.
+type AddPriceJSONRequestBody = AddPriceRequest
 
 // CreateSidebarSectionJSONRequestBody defines body for CreateSidebarSection for application/json ContentType.
 type CreateSidebarSectionJSONRequestBody = CreateSidebarSectionRequest
