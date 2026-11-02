@@ -18,7 +18,7 @@ func init() {
 	httpx.RegisterValidation(identity.ErrNotAnAgent)
 	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
 		identity.ErrWorkspaceRequired, identity.ErrInvalidState, identity.ErrInvalidTimezone,
-		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor)
+		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidDisplayName, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor)
 	httpx.RegisterStatus(http.StatusUnauthorized, identity.ErrBadCredentials)
 	httpx.RegisterStatus(http.StatusTooManyRequests, identity.ErrTooManyAttempts)
 	httpx.RegisterForbidden(identity.ErrHalted)
@@ -261,6 +261,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			return
 		}
 		updated, err := svc.UpdateProfile(r.Context(), httpx.Actor(r), id, identity.UpdateProfileInput{
+			DisplayName: in.DisplayName,
 			Description: in.Description,
 			AvatarEmoji: in.AvatarEmoji,
 			Timezone:    in.Timezone,

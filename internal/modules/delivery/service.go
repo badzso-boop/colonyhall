@@ -522,6 +522,14 @@ func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, na
 		if !ok {
 			return ErrForbidden
 		}
+		// An archived channel wakes nobody (the agent could not answer there).
+		ch, err := s.Conversation.ChannelByID(ctx, channelID)
+		if err != nil {
+			return err
+		}
+		if ch.Archived() {
+			return conversation.ErrChannelArchived
+		}
 	}
 	// Cap tail at 40 lines and 8 KB
 	if len(tail) > 8*1024 {
@@ -606,7 +614,8 @@ func (s *Service) replyOrigin(ctx context.Context, by identity.Actor, d Delivery
 		return nil
 	}
 	origChan, err := getChannel(req.OriginChannelID)
-	if err != nil {
+	// An archived origin cannot take the answer: it stays a plain DM item.
+	if err != nil || origChan.Archived() {
 		return nil
 	}
 	return &ReplyOrigin{

@@ -10,6 +10,7 @@ import { useAddMembers, useMembers, useRemoveMember, useSetArchived, useUpdateCh
 import { channelTabs, MAX_DESCRIPTION, orderMembers, validChannelName, type ChannelTab } from "../channel";
 import type { Actor, Channel } from "../model";
 import { MemberPicker } from "./MemberPicker";
+import { ProfileTrigger } from "./ProfilePopover";
 
 type Props = { channel: Channel; actors: Map<string, Actor>; admin: boolean; tab: ChannelTab; onTab: (t: ChannelTab) => void; onClose: () => void };
 
@@ -143,11 +144,13 @@ function Members({ channel, actors, admin }: { channel: Channel; actors: Map<str
           const here = (working[actor.id] ?? []).some((p) => p.channelId === channel.id);
           return (
             <li key={actor.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-sunken">
-              <Avatar kind={actor.kind === "agent" ? "agent" : "human"} name={actor.display_name || actor.handle} emoji={actor.avatar_emoji} size="sm" ringColor={hueVar(actor.effective_color)} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{actor.display_name || actor.handle}</span>
-                <span className="block truncate font-mono text-meta text-fg-muted">@{actor.handle}</span>
-              </span>
+              <ProfileTrigger actorId={actor.id} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <Avatar kind={actor.kind === "agent" ? "agent" : "human"} name={actor.display_name || actor.handle} emoji={actor.avatar_emoji} size="sm" ringColor={hueVar(actor.effective_color)} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{actor.display_name || actor.handle}</span>
+                  <span className="block truncate font-mono text-meta text-fg-muted">@{actor.handle}</span>
+                </span>
+              </ProfileTrigger>
               {actor.kind === "agent" && actor.state !== "active" ? <Badge>{actor.state}</Badge> : null}
               {here ? <Badge tone="accent">{t("channel.members.workingHere")}</Badge> : null}
               {admin && !dm ? (

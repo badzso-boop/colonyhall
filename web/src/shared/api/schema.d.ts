@@ -2493,6 +2493,7 @@ export interface components {
             effective_color?: components["schemas"]["Hue"];
         };
         UpdateActorProfileRequest: {
+            display_name?: string;
             description?: string;
             avatar_emoji?: string;
             timezone?: string;

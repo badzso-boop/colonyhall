@@ -3142,6 +3142,7 @@ type UpdateActorProfileRequest struct {
 	// Color Admins, agents only: a palette hue (see Hue), or empty to show the machine's colour again
 	Color       *string `json:"color,omitempty"`
 	Description *string `json:"description,omitempty"`
+	DisplayName *string `json:"display_name,omitempty"`
 	StatusText  *string `json:"status_text,omitempty"`
 	Timezone    *string `json:"timezone,omitempty"`
 }

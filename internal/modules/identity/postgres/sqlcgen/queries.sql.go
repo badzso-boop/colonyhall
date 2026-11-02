@@ -624,7 +624,8 @@ SET description = $2,
     avatar_emoji = $3,
     timezone = $4,
     status_text = $5,
-    color = $6
+    display_name = $6,
+    color = $7
 WHERE id = $1
 `
 
@@ -634,6 +635,7 @@ type UpdateActorProfileParams struct {
 	AvatarEmoji string
 	Timezone    string
 	StatusText  string
+	DisplayName string
 	Color       *string
 }
 
@@ -644,6 +646,7 @@ func (q *Queries) UpdateActorProfile(ctx context.Context, arg UpdateActorProfile
 		arg.AvatarEmoji,
 		arg.Timezone,
 		arg.StatusText,
+		arg.DisplayName,
 		arg.Color,
 	)
 	return err

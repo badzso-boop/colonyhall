@@ -340,13 +340,14 @@ func (s *Store) SetActorState(_ context.Context, actorID ids.ID, state string) e
 }
 
 // UpdateActorProfile updates an actor's profile fields.
-func (s *Store) UpdateActorProfile(_ context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText, color string) error {
+func (s *Store) UpdateActorProfile(_ context.Context, actorID ids.ID, displayName, desc, avatarEmoji, tz, statusText, color string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.actors[actorID]
 	if !ok {
 		return db.ErrNotFound
 	}
+	a.DisplayName = displayName
 	a.Description = desc
 	a.AvatarEmoji = avatarEmoji
 	a.Timezone = tz

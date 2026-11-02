@@ -5,7 +5,7 @@ import { ProfileDialog } from "./ProfileDialog";
 
 const me = { id: "me", kind: "human", handle: "norbi", display_name: "Norbi", role: "admin", state: "active", created_at: "", timezone: "Europe/Budapest" } as Actor;
 
-test("Profilom: the name is read-only; only changed fields are sent; the session follows", async () => {
+test("Profilom: only changed fields are sent, the name too; the session follows", async () => {
   const calls: { method: string; path: string; body: unknown }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -26,16 +26,28 @@ test("Profilom: the name is read-only; only changed fields are sent; the session
     </QueryClientProvider>,
   );
   const name = screen.getByRole("textbox", { name: /Megjelenített név/ }) as HTMLInputElement;
-  expect(name.readOnly).toBe(true);
   expect(name.value).toBe("Norbi");
+  fireEvent.change(name, { target: { value: " Norbert " } });
   fireEvent.change(screen.getByRole("textbox", { name: /Állapotüzenet/ }), { target: { value: " Úton " } });
   fireEvent.change(screen.getByRole("textbox", { name: /Avatar emoji/ }), { target: { value: "🦊" } });
   fireEvent.click(screen.getByRole("button", { name: "Mentés" }));
   await waitFor(() => expect(onClose).toHaveBeenCalled());
-  expect(calls).toEqual([{ method: "PATCH", path: "/api/v1/actors/me/profile", body: { avatar_emoji: "🦊", status_text: "Úton" } }]);
+  expect(calls).toEqual([{ method: "PATCH", path: "/api/v1/actors/me/profile", body: { display_name: "Norbert", avatar_emoji: "🦊", status_text: "Úton" } }]);
   expect(qc.getQueryData<Session>(identityKeys.session)?.actor.status_text).toBe("Úton");
   expect(qc.getQueryData<Map<string, Actor>>(identityKeys.actors)?.get("me")?.avatar_emoji).toBe("🦊");
   vi.unstubAllGlobals();
+});
+
+test("an empty name keeps Mentés disabled", () => {
+  const qc = new QueryClient();
+  qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "x" } as Session);
+  render(
+    <QueryClientProvider client={qc}>
+      <ProfileDialog onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: /Megjelenített név/ }), { target: { value: "  " } });
+  expect((screen.getByRole("button", { name: "Mentés" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 test("too long a status keeps Mentés disabled", () => {

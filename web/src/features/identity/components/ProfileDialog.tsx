@@ -15,8 +15,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 /**
- * "Profilom" (docs/handoff/34, part 7). The display name is shown read-only:
- * PATCH /actors/{id}/profile does not take it.
+ * "Profilom" (docs/handoff/34, part 7).
  */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("identity");
@@ -61,8 +60,8 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <form onSubmit={save} className="flex flex-col gap-3">
-        <Field label={t("profile.displayName")} hint={t("profile.displayNameReadOnly")}>
-          <Input value={me.display_name} readOnly aria-readonly className="bg-surface-sunken text-fg-muted" />
+        <Field label={t("profile.displayName")} hint={t("profile.max", { count: PROFILE_LIMITS.displayName })}>
+          <Input value={draft.display_name} onChange={set("display_name")} aria-invalid={errors.includes("display_name")} />
         </Field>
         <Field label={t("profile.avatarEmoji")} hint={t("profile.avatarEmojiHint")}>
           <Input value={draft.avatar_emoji} onChange={set("avatar_emoji")} className="w-24" aria-invalid={errors.includes("avatar_emoji")} />

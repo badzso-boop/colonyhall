@@ -10,7 +10,6 @@
   "profile": {
     "title": "Profilom",
     "displayName": "Megjelenített név",
-    "displayNameReadOnly": "A nevet itt nem lehet módosítani (a szerver nem fogadja).",
     "avatarEmoji": "Avatar emoji",
     "avatarEmojiHint": "Egy emoji; üresen a név kezdőbetűje látszik.",
     "statusText": "Állapotüzenet",

@@ -285,13 +285,14 @@ func (s *Store) SetActorState(ctx context.Context, actorID ids.ID, state string)
 }
 
 // UpdateActorProfile updates an actor's profile fields.
-func (s *Store) UpdateActorProfile(ctx context.Context, actorID ids.ID, desc, avatarEmoji, tz, statusText, color string) error {
+func (s *Store) UpdateActorProfile(ctx context.Context, actorID ids.ID, displayName, desc, avatarEmoji, tz, statusText, color string) error {
 	return s.q(ctx).UpdateActorProfile(ctx, sqlcgen.UpdateActorProfileParams{
 		ID:          actorID,
 		Description: desc,
 		AvatarEmoji: avatarEmoji,
 		Timezone:    tz,
 		StatusText:  statusText,
+		DisplayName: displayName,
 		Color:       nullString(color),
 	})
 }

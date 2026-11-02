@@ -11,6 +11,7 @@ SET description = $2,
     avatar_emoji = $3,
     timezone = $4,
     status_text = $5,
+    display_name = $6,
     color = sqlc.narg(color)
 WHERE id = $1;
 

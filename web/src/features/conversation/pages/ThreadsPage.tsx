@@ -10,8 +10,9 @@ import { Avatar, Badge, Button, EmptyState, PageHeader, Skeleton, toast } from "
 import { useMarkAllThreadsRead, useMyThreads, type MyThread } from "../api";
 import { useAttachments } from "../attachments";
 import { Composer } from "../components/Composer";
-import { MessageItem } from "../components/MessageItem";
+import { MessageItem, type Viewer } from "../components/MessageItem";
 import type { Actor } from "../model";
+import { useViewer } from "../viewer";
 
 function ReplyBox({ thread }: { thread: MyThread }) {
   const { t } = useTranslation("conversation");
@@ -20,7 +21,7 @@ function ReplyBox({ thread }: { thread: MyThread }) {
   return <Composer channelId={thread.channel_id} threadRootId={thread.root.id} placeholder={t("composer.threadPlaceholder")} memberIds={memberIds} tray={tray} />;
 }
 
-function ThreadCard({ thread, actors, meId, onOpen }: { thread: MyThread; actors: Map<string, Actor>; meId: string; onOpen: () => void }) {
+function ThreadCard({ thread, actors, viewer, onOpen }: { thread: MyThread; actors: Map<string, Actor>; viewer: Viewer; onOpen: () => void }) {
   const { t, i18n } = useTranslation("conversation");
   const locale = localeOf(i18n.language);
   const [replying, setReplying] = useState(false);
@@ -42,14 +43,14 @@ function ThreadCard({ thread, actors, meId, onOpen }: { thread: MyThread; actors
         </span>
       </header>
       <div className="py-1">
-        <MessageItem message={thread.root} actors={actors} handles={handles} meId={meId} locale={locale} summary={false} />
+        <MessageItem message={thread.root} actors={actors} handles={handles} viewer={viewer} locale={locale} summary={false} />
         {thread.root.reply_count > thread.latest_replies.length ? (
           <button type="button" onClick={onOpen} className="px-4 text-meta text-accent-text hover:underline">
             {t("threads.more", { count: thread.root.reply_count - thread.latest_replies.length })}
           </button>
         ) : null}
         {thread.latest_replies.map((m) => (
-          <MessageItem key={m.id} message={m} actors={actors} handles={handles} meId={meId} locale={locale} summary={false} />
+          <MessageItem key={m.id} message={m} actors={actors} handles={handles} viewer={viewer} locale={locale} summary={false} />
         ))}
       </div>
       {replying ? <ReplyBox thread={thread} /> : null}
@@ -75,6 +76,8 @@ export default function ThreadsPage() {
   const markAll = useMarkAllThreadsRead();
   const actors = useActors();
   const session = useSession();
+  // The inline composer writes here, so the viewer can write in these threads.
+  const viewer = useViewer(true);
   const [, dispatch] = usePanes();
   const list = threads.data?.pages.flatMap((p) => p.threads) ?? [];
   const unread = threads.data?.pages[0]?.unread_threads ?? 0;
@@ -111,7 +114,7 @@ export default function ThreadsPage() {
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-3">
             {list.map((th) => (
-              <ThreadCard key={th.root.id} thread={th} actors={actors.data} meId={session.data.actor.id} onOpen={() => dispatch({ type: "openThread", rootId: th.root.id })} />
+              <ThreadCard key={th.root.id} thread={th} actors={actors.data} viewer={viewer} onOpen={() => dispatch({ type: "openThread", rootId: th.root.id })} />
             ))}
             {threads.hasNextPage ? (
               <Button variant="ghost" loading={threads.isFetchingNextPage} onClick={() => void threads.fetchNextPage()}>

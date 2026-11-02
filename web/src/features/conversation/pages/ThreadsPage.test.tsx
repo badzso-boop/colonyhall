@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { identityKeys } from "@/features/identity";
+import { TooltipProvider } from "@/shared/ui";
 import type { Actor } from "../model";
 import ThreadsPage from "./ThreadsPage";
 
@@ -35,9 +36,11 @@ test("Szálaim lists the threads with their unread replies; the filter and mark-
   qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "x" });
   render(
     <QueryClientProvider client={qc}>
+      <TooltipProvider>
       <MemoryRouter>
         <ThreadsPage />
       </MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>,
   );
   expect(await screen.findByText("2 új válasz")).toBeTruthy();

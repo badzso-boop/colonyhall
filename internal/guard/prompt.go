@@ -171,11 +171,11 @@ func WorkPromptWithWebRead(handle, branch string, allowWebRead bool, it PromptIt
 	return WorkPromptWithTools(handle, branch, allowWebRead, false, it, task, grants...)
 }
 
-// WorkPromptWithTools is the prompt of a work run, optionally naming the worktree branch, web_read tool, and planner tools.
 // ChannelInfoLine is the one prompt line about channel_info (round 34): the
 // channel description is read on demand, never injected.
 const ChannelInfoLine = "`channel_info`: the channel's description and members; read it when asked or when you need the channel's purpose."
 
+// WorkPromptWithTools is the prompt of a work run, optionally naming the worktree branch, web_read tool, and planner tools.
 func WorkPromptWithTools(handle, branch string, allowWebRead, allowPlanner bool, it PromptItem, task string, grants ...Grant) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are @%s in Colonyhall. Do this task in the current directory:\n%s\n\n", handle, task)

@@ -257,7 +257,10 @@ func testIdentity(t *testing.T, b Backend) {
 		t.Fatalf("ListActors must be sorted by handle: %+v", list)
 	}
 
-	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Lead Developer", "🚀", "Europe/Budapest", "Busy coding", ""))
+	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Renamed Human", "Lead Developer", "🚀", "Europe/Budapest", "Busy coding", ""))
+	if renamed, err := b.Identity.ActorByID(ctx, f.human.ID); err != nil || renamed.DisplayName != "Renamed Human" {
+		t.Fatalf("display name not stored: %q %v", renamed.DisplayName, err)
+	}
 	updatedHuman, err := b.Identity.ActorByID(ctx, f.human.ID)
 	must(t, err)
 	if updatedHuman.Description != "Lead Developer" || updatedHuman.AvatarEmoji != "🚀" || updatedHuman.Timezone != "Europe/Budapest" || updatedHuman.StatusText != "Busy coding" {
@@ -265,11 +268,11 @@ func testIdentity(t *testing.T, b Backend) {
 	}
 
 	// An agent's own colour (round 33): set, read back, cleared to NULL.
-	must(t, b.Identity.UpdateActorProfile(ctx, f.agent.ID, "", "", "Europe/Budapest", "", "teal"))
+	must(t, b.Identity.UpdateActorProfile(ctx, f.agent.ID, f.agent.DisplayName, "", "", "Europe/Budapest", "", "teal"))
 	if a, err := b.Identity.ActorByID(ctx, f.agent.ID); err != nil || a.Color != "teal" {
 		t.Fatalf("agent colour: %+v %v", a, err)
 	}
-	must(t, b.Identity.UpdateActorProfile(ctx, f.agent.ID, "", "", "Europe/Budapest", "", ""))
+	must(t, b.Identity.UpdateActorProfile(ctx, f.agent.ID, f.agent.DisplayName, "", "", "Europe/Budapest", "", ""))
 	if a, err := b.Identity.ActorByID(ctx, f.agent.ID); err != nil || a.Color != "" {
 		t.Fatalf("agent colour cleared: %+v %v", a, err)
 	}

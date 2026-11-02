@@ -24,6 +24,7 @@ type ActorCreated struct {
 // ActorProfileUpdated is the payload of EventActorProfileUpdated.
 type ActorProfileUpdated struct {
 	ActorID     string `json:"actor_id"`
+	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
 	AvatarEmoji string `json:"avatar_emoji"`
 	Timezone    string `json:"timezone"`

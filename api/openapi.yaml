@@ -2333,6 +2333,7 @@ components:
     UpdateActorProfileRequest:
       type: object
       properties:
+        display_name: { type: string, minLength: 1, maxLength: 80 }
         description: { type: string, maxLength: 300 }
         avatar_emoji: { type: string, maxLength: 32 }
         timezone: { type: string, maxLength: 64 }

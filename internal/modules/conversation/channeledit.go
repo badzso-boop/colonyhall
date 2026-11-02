@@ -24,7 +24,7 @@ type ChannelUpdate struct {
 // only). It writes a silent note per changed field; the event carries the
 // field names and the names, never the description text.
 func (s *Service) UpdateChannel(ctx context.Context, by identity.Actor, channelID ids.ID, in ChannelUpdate) (Channel, error) {
-	if !policy.CanManageMembers(subject(by)) {
+	if by.Kind != identity.KindHuman || !policy.CanManageMembers(subject(by)) {
 		return Channel{}, ErrForbidden
 	}
 	if in.Name == nil && in.Description == nil {
@@ -107,7 +107,7 @@ func (s *Service) UnarchiveChannel(ctx context.Context, by identity.Actor, chann
 }
 
 func (s *Service) setArchived(ctx context.Context, by identity.Actor, channelID ids.ID, archive bool) (Channel, error) {
-	if !policy.CanManageMembers(subject(by)) {
+	if by.Kind != identity.KindHuman || !policy.CanManageMembers(subject(by)) {
 		return Channel{}, ErrForbidden
 	}
 	var out Channel

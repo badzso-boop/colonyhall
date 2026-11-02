@@ -135,6 +135,7 @@ var (
 	ErrInvalidTimezone    = errors.New("timezone must be a valid IANA timezone name")
 	ErrInvalidDescription = errors.New("description must be at most 300 characters")
 	ErrInvalidStatusText  = errors.New("status text must be at most 80 characters")
+	ErrInvalidDisplayName = errors.New("display name must be 1 to 80 characters on one line")
 	ErrInvalidAvatarEmoji = errors.New("avatar emoji must be a valid emoji")
 	ErrInvalidColor       = errors.New("color must be a palette hue, and only agents have one")
 	ErrNotAnAgent         = errors.New("the actor is not an agent")
@@ -146,6 +147,7 @@ var (
 
 const (
 	DefaultTimezone   = "Europe/Budapest"
+	MaxDisplayNameLen = 80
 	MaxDescriptionLen = 300
 	MaxStatusTextLen  = 80
 	MaxAvatarEmojiLen = 32

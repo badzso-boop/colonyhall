@@ -164,7 +164,8 @@ func (s *Service) RemoveChannelMember(ctx context.Context, by identity.Actor, ch
 }
 
 func (s *Service) removeMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID, editor bool) error {
-	if !policy.CanManageMembers(subject(by)) {
+	// The channel editor is for humans: agents never change a channel.
+	if !policy.CanManageMembers(subject(by)) || (editor && by.Kind != identity.KindHuman) {
 		return ErrForbidden
 	}
 	var seq int64
@@ -252,7 +253,7 @@ func (s *Service) AddMembers(ctx context.Context, by identity.Actor, channelID i
 }
 
 func (s *Service) addMembers(ctx context.Context, by identity.Actor, channelID ids.ID, actorIDs []ids.ID, canWrite, editor bool) error {
-	if !policy.CanManageMembers(subject(by)) {
+	if !policy.CanManageMembers(subject(by)) || (editor && by.Kind != identity.KindHuman) {
 		return ErrForbidden
 	}
 	if len(actorIDs) == 0 || len(actorIDs) > MaxBatchMembers {
@@ -419,15 +420,17 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	if err != nil {
 		return SendResult{}, err
 	}
-	if c.Archived() {
-		return SendResult{}, ErrChannelArchived
-	}
 	mem, err := s.membership(ctx, c.ID, by.ID)
 	if err != nil {
 		return SendResult{}, err
 	}
 	if !policy.CanWriteChannel(subject(by), mem) {
 		return SendResult{}, ErrForbidden
+	}
+	// After the permission check: an outsider must not learn the state of a
+	// private channel.
+	if c.Archived() {
+		return SendResult{}, ErrChannelArchived
 	}
 	if in.ThreadRootID != ids.Nil {
 		root, err := s.Store.MessageByID(ctx, in.ThreadRootID)
@@ -634,12 +637,8 @@ func (s *Service) ackAsReaction(ctx context.Context, by identity.Actor, in SendI
 	var target ids.ID
 	var seq int64
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
-		c, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID)
-		if err != nil {
+		if _, err := s.channelFor(ctx, by.WorkspaceID, in.ChannelID); err != nil {
 			return err
-		}
-		if c.Archived() {
-			return ErrChannelArchived
 		}
 		target = in.ThreadRootID
 		if target == ids.Nil {
@@ -652,6 +651,7 @@ func (s *Service) ackAsReaction(ctx context.Context, by identity.Actor, in SendI
 			}
 			target = last.ID
 		}
+		var err error
 		seq, err = s.reactInTx(ctx, by, target, ThumbsUp, true)
 		return err
 	})

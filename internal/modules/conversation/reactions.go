@@ -84,15 +84,15 @@ func (s *Service) reactInTx(ctx context.Context, by identity.Actor, messageID id
 	if err != nil {
 		return 0, err
 	}
-	if c.Archived() {
-		return 0, ErrChannelArchived
-	}
 	mem, err := s.membership(ctx, c.ID, by.ID)
 	if err != nil {
 		return 0, err
 	}
 	if !policy.CanWriteChannel(subject(by), mem) {
 		return 0, ErrForbidden
+	}
+	if c.Archived() {
+		return 0, ErrChannelArchived
 	}
 	var changed bool
 	typ := EventReactionAdded

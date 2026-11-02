@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/platform/db"
@@ -144,6 +145,7 @@ func (s *Service) SetActorState(ctx context.Context, by Actor, actorID ids.ID, s
 
 // UpdateProfileInput specifies fields to update in an actor's profile.
 type UpdateProfileInput struct {
+	DisplayName *string
 	Description *string
 	AvatarEmoji *string
 	Timezone    *string
@@ -167,6 +169,15 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 	}
 	if target.ID != by.ID && !by.IsAdmin() {
 		return Actor{}, ErrForbidden
+	}
+
+	newName := target.DisplayName
+	if in.DisplayName != nil {
+		n := strings.TrimSpace(*in.DisplayName)
+		if n == "" || len([]rune(n)) > MaxDisplayNameLen || strings.ContainsAny(n, "\r\n") {
+			return Actor{}, ErrInvalidDisplayName
+		}
+		newName = n
 	}
 
 	newDesc := target.Description
@@ -222,6 +233,7 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 
 	payload := ActorProfileUpdated{
 		ActorID:     target.ID.String(),
+		DisplayName: newName,
 		Description: newDesc,
 		AvatarEmoji: newEmoji,
 		Timezone:    newTz,
@@ -230,12 +242,13 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 	}
 
 	err = s.record(ctx, by, EventActorProfileUpdated, "actor", target.ID, payload, func(ctx context.Context) error {
-		return s.Store.UpdateActorProfile(ctx, target.ID, newDesc, newEmoji, newTz, newStatus, newColor)
+		return s.Store.UpdateActorProfile(ctx, target.ID, newName, newDesc, newEmoji, newTz, newStatus, newColor)
 	})
 	if err != nil {
 		return Actor{}, err
 	}
 
+	target.DisplayName = newName
 	target.Description = newDesc
 	target.AvatarEmoji = newEmoji
 	target.Timezone = newTz

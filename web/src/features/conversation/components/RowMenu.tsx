@@ -2,18 +2,19 @@ import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp, FolderInput, MoreHorizontal, UserRound } from "lucide-react";
 import { cn } from "@/shared/lib";
-import { Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, toast } from "@/shared/ui";
 import { useMoveConversation } from "../api";
 import type { Section, SidebarRow } from "../model";
 import { itemOrder } from "../sections";
+import { MuteMenuItems } from "./ChannelHeader";
 import { MoveDialog } from "./SectionDialogs";
 
 type Item = { key: string; label: string; icon: ReactNode; onSelect: () => void; danger?: boolean };
 
 /**
  * The "…" menu of a sidebar conversation row (docs/handoff/34, part 2). Every
- * item is listed in `items` below: add new ones (e.g. muting) there. Dialogs
- * an item opens are kept in `dialog`.
+ * item is listed in `items` below; muting comes from the channel header's
+ * items. Dialogs an item opens are kept in `dialog`.
  */
 export function RowMenu({ row, sections, sectionId, onShowProfile }: { row: SidebarRow; sections: Section[]; sectionId: string | null; onShowProfile?: () => void }) {
   const { t } = useTranslation("conversation");
@@ -56,6 +57,8 @@ export function RowMenu({ row, sections, sectionId, onShowProfile }: { row: Side
               {i.label}
             </MenuItem>
           ))}
+          <MenuSeparator />
+          <MuteMenuItems channel={row.channel} />
         </MenuContent>
       </Menu>
       {dialog === "move" ? <MoveDialog channelId={channelId} title={row.title} sections={sections} from={sectionId} onClose={() => setDialog(null)} /> : null}

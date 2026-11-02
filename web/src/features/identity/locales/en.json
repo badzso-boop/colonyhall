@@ -10,7 +10,6 @@
   "profile": {
     "title": "My profile",
     "displayName": "Display name",
-    "displayNameReadOnly": "The name cannot be changed here (the server does not take it).",
     "avatarEmoji": "Avatar emoji",
     "avatarEmojiHint": "One emoji; when empty, the name's initial shows.",
     "statusText": "Status",
