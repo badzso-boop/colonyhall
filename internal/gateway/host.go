@@ -42,6 +42,13 @@ type HostGateway struct {
 	conns map[*hostConn]struct{}
 }
 
+// Connections counts the open guard connections.
+func (g *HostGateway) Connections() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return len(g.conns)
+}
+
 type hostConn struct {
 	ws      *websocket.Conn
 	hostID  ids.ID

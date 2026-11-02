@@ -100,3 +100,9 @@ WHERE id = $1 AND state = 'pending';
 SELECT system_message_id, id
 FROM compaction
 WHERE system_message_id = ANY($1::uuid[]);
+
+-- name: CompactionCounts :one
+SELECT count(*) FILTER (WHERE state = 'pending') AS running,
+       count(*) FILTER (WHERE state = 'failed' AND completed_at >= sqlc.arg(since)) AS failed
+FROM compaction
+WHERE workspace_id = sqlc.arg(workspace_id);

@@ -322,7 +322,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	cvSvc := &conversation.Service{Store: cvStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
-	auSvc := &audit.Service{Store: auStore}
+	auSvc := &audit.Service{Store: auStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	hoSvc := &hosts.Service{Store: hoStore, Directory: idSvc, Tokens: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	// An agent without its own colour shows its machine's (round 33).
 	idSvc.HostColors = hoSvc.AgentHostColors
@@ -458,7 +458,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	idhttp.Register(mux, idSvc, idhttp.Options{SecureCookies: opt.SecureCookies})
 	convhttp.Register(mux, cvSvc, idSvc)
 	delhttp.Register(mux, dlSvc, idSvc)
-	audhttp.Register(mux, auSvc, idSvc)
+	audhttp.Register(mux, auSvc, idSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
 	// Host-level folder listing: the guard's own WebSocket (host token)
 	// carries host.fs.request frames; see docs/handoff/33-host-fs-relay-notes.md.
@@ -563,6 +563,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	})))
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, dlSvc, gw, opt.Clock)
 	registerAgents(mux, idSvc, agSvc)
+	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, Events: events,
+		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil})
 
 	return &App{
 		Handler:      httpserver.New(mux, ready, opt.Logger),

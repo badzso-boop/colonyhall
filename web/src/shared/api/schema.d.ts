@@ -197,6 +197,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/audit/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Admins only. The actions that occur in the log, for the filter. */
+        get: operations["listAuditActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audit/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Admins only, audited. CSV (UTF-8 with BOM) with the filters of GET
+         *     /admin/audit, newest first, at most 100 000 rows; a comment line says
+         *     so when it is cut.
+         */
+        get: operations["exportAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/audit/verify": {
         parameters: {
             query?: never;
@@ -206,6 +244,42 @@ export interface paths {
         };
         /** @description Recomputes the hash chain; ok=false names the first altered entry. */
         get: operations["verifyAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/actors/{actorId}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actorId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The owner only, audited. A person's role (admin, member, observer); not their own, and nobody becomes owner. */
+        put: operations["setActorRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The owner only. The people of the workspace with their active sessions and last login. */
+        get: operations["listUsers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2589,6 +2663,20 @@ export interface components {
             handle: string;
             display_name?: string;
             role?: components["schemas"]["Role"];
+            /** @description The owner creating a person: their initial password */
+            password?: string;
+        };
+        SetRoleRequest: {
+            role: components["schemas"]["Role"];
+        };
+        UserRow: {
+            actor: components["schemas"]["Actor"];
+            active_sessions: number;
+            /** Format: date-time */
+            last_login_at?: string | null;
+        };
+        UserList: {
+            users: components["schemas"]["UserRow"][];
         };
         LoginRequest: {
             handle: string;
@@ -2640,6 +2728,61 @@ export interface components {
         };
         AdminStatus: {
             emergency_stop: components["schemas"]["EmergencyStop"];
+            /** @description Admins only. Never holds a secret or an environment value. */
+            system?: components["schemas"]["SystemStatus"];
+        };
+        StatusConsumer: {
+            name: string;
+            /** Format: int64 */
+            offset: number;
+            /** Format: int64 */
+            lag: number;
+            /**
+             * Format: int64
+             * @description Age of the oldest event it has not processed.
+             */
+            lag_seconds: number;
+        };
+        StatusGuard: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: date-time */
+            last_seen_at?: string;
+            guard_version?: string;
+            /** @description Seen in the last 90 seconds. */
+            online: boolean;
+        };
+        SystemStatus: {
+            version: string;
+            /** Format: int64 */
+            uptime_seconds: number;
+            database: {
+                ok: boolean;
+                /** Format: double */
+                latency_ms: number;
+            };
+            /** Format: int64 */
+            event_head: number;
+            consumers: components["schemas"]["StatusConsumer"][];
+            connections: {
+                human: number;
+                agent: number;
+                host: number;
+            };
+            guards: components["schemas"]["StatusGuard"][];
+            scheduler: {
+                /** Format: date-time */
+                next_run_at?: string;
+                failed_24h: number;
+            };
+            compaction: {
+                /** Format: int64 */
+                running: number;
+                /** Format: int64 */
+                failed_24h: number;
+            };
+            gitea_configured: boolean;
         };
         EmergencyClearRequest: {
             password: string;
@@ -2661,6 +2804,9 @@ export interface components {
         };
         AuditPage: {
             entries: components["schemas"]["AuditEntry"][];
+        };
+        AuditActions: {
+            actions: string[];
         };
         AuditVerify: {
             ok: boolean;
@@ -4950,6 +5096,11 @@ export interface operations {
     listAudit: {
         parameters: {
             query?: {
+                actor_id?: string;
+                action?: string[];
+                target_type?: string;
+                from?: string;
+                to?: string;
                 /** @description Return entries older than this seq */
                 before?: number;
                 limit?: number;
@@ -4972,6 +5123,54 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listAuditActions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditActions"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportAudit: {
+        parameters: {
+            query?: {
+                actor_id?: string;
+                action?: string[];
+                target_type?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     verifyAudit: {
         parameters: {
             query?: never;
@@ -4988,6 +5187,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditVerify"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setActorRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserList"];
                 };
             };
             default: components["responses"]["Problem"];

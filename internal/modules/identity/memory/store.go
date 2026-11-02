@@ -384,3 +384,39 @@ func (s *Store) SetEmergencyStop(_ context.Context, workspaceID ids.ID, at *time
 	s.workspaces[workspaceID] = w
 	return nil
 }
+
+// SessionStats counts each person's sessions alive at now, and their last login.
+func (s *Store) SessionStats(_ context.Context, workspaceID ids.ID, now time.Time) (map[ids.ID]identity.SessionStat, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := map[ids.ID]identity.SessionStat{}
+	for _, x := range s.sessions {
+		a, ok := s.actors[x.ActorID]
+		if !ok || a.WorkspaceID != workspaceID {
+			continue
+		}
+		st := out[x.ActorID]
+		if !s.revoked[x.ID] && x.ExpiresAt.After(now) {
+			st.Active++
+		}
+		if st.LastLogin == nil || x.CreatedAt.After(*st.LastLogin) {
+			at := x.CreatedAt
+			st.LastLogin = &at
+		}
+		out[x.ActorID] = st
+	}
+	return out, nil
+}
+
+// SetActorRole changes an actor's role.
+func (s *Store) SetActorRole(_ context.Context, id ids.ID, role identity.Role) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.actors[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	a.Role = role
+	s.actors[id] = a
+	return nil
+}

@@ -321,3 +321,22 @@ func (s *Store) SetEmergencyStop(ctx context.Context, workspaceID ids.ID, at *ti
 	}
 	return s.q(ctx).SetEmergencyStop(ctx, sqlcgen.SetEmergencyStopParams{At: at, By: byPtr, ID: workspaceID})
 }
+
+// SessionStats counts each person's sessions alive at now, and their last login.
+func (s *Store) SessionStats(ctx context.Context, workspaceID ids.ID, now time.Time) (map[ids.ID]identity.SessionStat, error) {
+	rows, err := s.q(ctx).SessionStats(ctx, sqlcgen.SessionStatsParams{WorkspaceID: workspaceID, NowAt: now})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[ids.ID]identity.SessionStat, len(rows))
+	for _, r := range rows {
+		last := r.LastLogin
+		out[r.ActorID] = identity.SessionStat{Active: int(r.Active), LastLogin: &last}
+	}
+	return out, nil
+}
+
+// SetActorRole changes an actor's role.
+func (s *Store) SetActorRole(ctx context.Context, id ids.ID, role identity.Role) error {
+	return s.q(ctx).SetActorRole(ctx, sqlcgen.SetActorRoleParams{ID: id, Role: string(role)})
+}

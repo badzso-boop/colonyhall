@@ -70,6 +70,20 @@ type Gateway struct {
 	progress   map[progressKey]*runProgress
 }
 
+// ConnectionCounts counts the open WebSocket connections of people and agents.
+func (g *Gateway) ConnectionCounts() (humans, agents int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for c := range g.conns {
+		if c.actor.Kind == identity.KindHuman {
+			humans++
+		} else {
+			agents++
+		}
+	}
+	return humans, agents
+}
+
 type activityKey struct {
 	agentID      ids.ID
 	channelID    ids.ID

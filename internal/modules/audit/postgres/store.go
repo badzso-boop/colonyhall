@@ -46,6 +46,45 @@ func (s *Store) Forward(ctx context.Context, workspaceID ids.ID, after int64, li
 	return many(s.q(ctx).ForwardEntries(ctx, sqlcgen.ForwardEntriesParams{WorkspaceID: workspaceID, Seq: after, Limit: int32(limit)}))
 }
 
+// Search is Page with a filter.
+func (s *Store) Search(ctx context.Context, workspaceID ids.ID, f audit.Filter) ([]audit.Entry, error) {
+	actions := f.Actions
+	if actions == nil {
+		actions = []string{}
+	}
+	p := sqlcgen.SearchEntriesParams{WorkspaceID: workspaceID, Before: f.Before, Actions: actions, TargetType: f.TargetType,
+		FromAt: f.From, ToAt: f.To, RowLimit: int32(f.Limit)}
+	if f.ActorID != ids.Nil {
+		p.ActorID = &f.ActorID
+	}
+	return many(s.q(ctx).SearchEntries(ctx, p))
+}
+
+// Count counts the entries a filter selects.
+func (s *Store) Count(ctx context.Context, workspaceID ids.ID, f audit.Filter) (int64, error) {
+	actions := f.Actions
+	if actions == nil {
+		actions = []string{}
+	}
+	p := sqlcgen.CountEntriesParams{WorkspaceID: workspaceID, Actions: actions, TargetType: f.TargetType, FromAt: f.From, ToAt: f.To}
+	if f.ActorID != ids.Nil {
+		p.ActorID = &f.ActorID
+	}
+	return s.q(ctx).CountEntries(ctx, p)
+}
+
+// Actions lists the workspace's distinct actions, sorted.
+func (s *Store) Actions(ctx context.Context, workspaceID ids.ID) ([]string, error) {
+	out, err := s.q(ctx).DistinctActions(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out, nil
+}
+
 func toEntry(r sqlcgen.AuditLog) audit.Entry {
 	return audit.Entry{Seq: r.Seq, WorkspaceID: r.WorkspaceID, ActorID: r.ActorID, Action: r.Action,
 		TargetType: r.TargetType, TargetID: r.TargetID, Payload: r.Payload, At: r.At, PrevHash: r.PrevHash, Hash: r.Hash}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -19,6 +20,8 @@ const (
 	EventTokenIssued        = "token.issued"
 	EventTokenRevoked       = "token.revoked"
 	EventActorStateChanged  = "actor.state_changed"
+	EventActorRoleChanged   = "actor.role_changed"
+	EventPasswordReset      = "actor.password_reset"
 	EventEmergencyActivated = "workspace.emergency_activated"
 	EventEmergencyCleared   = "workspace.emergency_cleared"
 	EventLogin              = "auth.login"
@@ -30,6 +33,18 @@ type TokenEvent struct {
 	TokenID string `json:"token_id"`
 	ActorID string `json:"actor_id"`
 	Label   string `json:"label,omitempty"`
+}
+
+// RoleChanged is the payload of EventActorRoleChanged.
+type RoleChanged struct {
+	ActorID string `json:"actor_id"`
+	Old     string `json:"old"`
+	New     string `json:"new"`
+}
+
+// PasswordReset is the payload of EventPasswordReset: who, never the password.
+type PasswordReset struct {
+	ActorID string `json:"actor_id"`
 }
 
 // StateChanged is the payload of EventActorStateChanged.
@@ -133,6 +148,12 @@ func (s *Service) SetActorState(ctx context.Context, by Actor, actorID ids.ID, s
 	if err != nil {
 		return err
 	}
+	if target.Kind == KindHuman {
+		// Only the owner disables people, and never themself.
+		if by.Role != RoleOwner || target.ID == by.ID {
+			return ErrForbidden
+		}
+	}
 	return s.record(ctx, by, EventActorStateChanged, "actor", target.ID, StateChanged{ActorID: target.ID.String(), State: state},
 		func(ctx context.Context) error {
 			if err := s.Store.SetActorState(ctx, target.ID, state); err != nil {
@@ -143,6 +164,63 @@ func (s *Service) SetActorState(ctx context.Context, by Actor, actorID ids.ID, s
 			}
 			return nil
 		})
+}
+
+// SetActorRole changes a person's role. Only the owner may, and not their own;
+// nobody can be made owner, and agents have no role to change.
+func (s *Service) SetActorRole(ctx context.Context, by Actor, actorID ids.ID, role Role) error {
+	if by.Kind != KindHuman || by.Role != RoleOwner || by.Halted {
+		return ErrForbidden
+	}
+	if role != RoleAdmin && role != RoleMember && role != RoleObserver {
+		return ErrInvalidRole
+	}
+	target, err := s.Store.ActorByID(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if target.WorkspaceID != by.WorkspaceID {
+		return db.ErrNotFound
+	}
+	if target.Kind != KindHuman || target.ID == by.ID {
+		return ErrForbidden
+	}
+	if target.Role == role {
+		return nil
+	}
+	return s.record(ctx, by, EventActorRoleChanged, "actor", target.ID, RoleChanged{ActorID: target.ID.String(), Old: string(target.Role), New: string(role)},
+		func(ctx context.Context) error { return s.Store.SetActorRole(ctx, target.ID, role) })
+}
+
+// UserRow is a person with their login activity, for the owner's users page.
+type UserRow struct {
+	Actor          Actor
+	ActiveSessions int
+	LastLoginAt    *time.Time
+}
+
+// ListUsers lists the people of the workspace (the owner only).
+func (s *Service) ListUsers(ctx context.Context, by Actor) ([]UserRow, error) {
+	if by.Kind != KindHuman || by.Role != RoleOwner {
+		return nil, ErrForbidden
+	}
+	actors, err := s.Store.ListActors(ctx, by.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	stats, err := s.Store.SessionStats(ctx, by.WorkspaceID, s.Clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	out := []UserRow{}
+	for _, a := range actors {
+		if a.Kind != KindHuman {
+			continue
+		}
+		st := stats[a.ID]
+		out = append(out, UserRow{Actor: a, ActiveSessions: st.Active, LastLoginAt: st.LastLogin})
+	}
+	return out, nil
 }
 
 // UpdateProfileInput specifies fields to update in an actor's profile.

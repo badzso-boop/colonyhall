@@ -31,15 +31,20 @@ func TestAdminCannotTakeOverOwner(t *testing.T) {
 		map[string]any{"kind": "human", "handle": "mallory", "role": "admin"}, nil); s != http.StatusForbidden {
 		t.Fatalf("admin creates another admin: status %d", s)
 	}
+	// Round 35: only the owner creates people and resets their passwords.
+	if s := e.do("POST", "/api/v1/actors", admin,
+		map[string]any{"kind": "human", "handle": "bela", "role": "member"}, nil); s != http.StatusForbidden {
+		t.Fatalf("admin creates member: status %d", s)
+	}
 	var member struct {
 		Actor struct{ ID string }
 	}
-	if s := e.do("POST", "/api/v1/actors", admin,
+	if s := e.do("POST", "/api/v1/actors", server.DevAdminToken,
 		map[string]any{"kind": "human", "handle": "bela", "role": "member"}, &member); s != http.StatusCreated {
-		t.Fatalf("admin creates member: status %d", s)
+		t.Fatalf("owner creates member: status %d", s)
 	}
 	if s := e.do("PUT", "/api/v1/actors/"+member.Actor.ID+"/password", admin,
-		map[string]any{"new_password": "a-fine-member-password"}, nil); s != http.StatusNoContent {
+		map[string]any{"new_password": "a-fine-member-password"}, nil); s != http.StatusForbidden {
 		t.Fatalf("admin sets member password: status %d", s)
 	}
 	if s := e.do("POST", "/api/v1/actors", server.DevAgentToken,

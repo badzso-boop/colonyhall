@@ -97,3 +97,14 @@ SELECT * FROM workspace WHERE id = $1;
 
 -- name: SetEmergencyStop :exec
 UPDATE workspace SET emergency_stop_at = sqlc.narg(at), emergency_stop_by = sqlc.narg(by) WHERE id = sqlc.arg(id);
+
+-- name: SessionStats :many
+SELECT s.actor_id,
+       COUNT(*) FILTER (WHERE s.revoked_at IS NULL AND s.expires_at > sqlc.arg(now_at)::timestamptz)::int AS active,
+       MAX(s.created_at)::timestamptz AS last_login
+FROM session s JOIN actor a ON a.id = s.actor_id
+WHERE a.workspace_id = sqlc.arg(workspace_id)
+GROUP BY s.actor_id;
+
+-- name: SetActorRole :exec
+UPDATE actor SET role = $2 WHERE id = $1;

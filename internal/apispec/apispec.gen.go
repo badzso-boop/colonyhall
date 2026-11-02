@@ -1397,6 +1397,9 @@ type AddPriceRequest struct {
 // AdminStatus defines model for AdminStatus.
 type AdminStatus struct {
 	EmergencyStop EmergencyStop `json:"emergency_stop"`
+
+	// System Admins only. Never holds a secret or an environment value.
+	System *SystemStatus `json:"system,omitempty"`
 }
 
 // AgentActivityRequest defines model for AgentActivityRequest.
@@ -1692,6 +1695,11 @@ type AssignRequestClient string
 // AssignRequestMode defines model for AssignRequest.Mode.
 type AssignRequestMode string
 
+// AuditActions defines model for AuditActions.
+type AuditActions struct {
+	Actions []string `json:"actions"`
+}
+
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
 	Action     string                 `json:"action"`
@@ -1871,7 +1879,10 @@ type CreateActorRequest struct {
 	// Handle 2-32 characters: lowercase letters, digits and '-'
 	Handle string    `json:"handle"`
 	Kind   ActorKind `json:"kind"`
-	Role   *Role     `json:"role,omitempty"`
+
+	// Password The owner creating a person: their initial password
+	Password *string `json:"password,omitempty"`
+	Role     *Role   `json:"role,omitempty"`
 }
 
 // CreateActorResponse defines model for CreateActorResponse.
@@ -3174,6 +3185,11 @@ type SetPasswordRequest struct {
 	NewPassword     string  `json:"new_password"`
 }
 
+// SetRoleRequest defines model for SetRoleRequest.
+type SetRoleRequest struct {
+	Role Role `json:"role"`
+}
+
 // SetSidebarItemRequest defines model for SetSidebarItemRequest.
 type SetSidebarItemRequest struct {
 	Position *int `json:"position,omitempty"`
@@ -3205,6 +3221,54 @@ type SidebarSection struct {
 // SidebarSectionList defines model for SidebarSectionList.
 type SidebarSectionList struct {
 	Sections []SidebarSection `json:"sections"`
+}
+
+// StatusConsumer defines model for StatusConsumer.
+type StatusConsumer struct {
+	Lag int64 `json:"lag"`
+
+	// LagSeconds Age of the oldest event it has not processed.
+	LagSeconds int64  `json:"lag_seconds"`
+	Name       string `json:"name"`
+	Offset     int64  `json:"offset"`
+}
+
+// StatusGuard defines model for StatusGuard.
+type StatusGuard struct {
+	GuardVersion *string            `json:"guard_version,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	LastSeenAt   *time.Time         `json:"last_seen_at,omitempty"`
+	Name         string             `json:"name"`
+
+	// Online Seen in the last 90 seconds.
+	Online bool `json:"online"`
+}
+
+// SystemStatus defines model for SystemStatus.
+type SystemStatus struct {
+	Compaction struct {
+		Failed24h int64 `json:"failed_24h"`
+		Running   int64 `json:"running"`
+	} `json:"compaction"`
+	Connections struct {
+		Agent int `json:"agent"`
+		Host  int `json:"host"`
+		Human int `json:"human"`
+	} `json:"connections"`
+	Consumers []StatusConsumer `json:"consumers"`
+	Database  struct {
+		LatencyMs float64 `json:"latency_ms"`
+		Ok        bool    `json:"ok"`
+	} `json:"database"`
+	EventHead       int64         `json:"event_head"`
+	GiteaConfigured bool          `json:"gitea_configured"`
+	Guards          []StatusGuard `json:"guards"`
+	Scheduler       struct {
+		Failed24h int        `json:"failed_24h"`
+		NextRunAt *time.Time `json:"next_run_at,omitempty"`
+	} `json:"scheduler"`
+	UptimeSeconds int64  `json:"uptime_seconds"`
+	Version       string `json:"version"`
 }
 
 // TerminalStartRequest defines model for TerminalStartRequest.
@@ -3377,6 +3441,18 @@ type UsageTotals struct {
 	UnpricedRuns int `json:"unpriced_runs"`
 }
 
+// UserList defines model for UserList.
+type UserList struct {
+	Users []UserRow `json:"users"`
+}
+
+// UserRow defines model for UserRow.
+type UserRow struct {
+	ActiveSessions int        `json:"active_sessions"`
+	Actor          Actor      `json:"actor"`
+	LastLoginAt    *time.Time `json:"last_login_at,omitempty"`
+}
+
 // WikiPage defines model for WikiPage.
 type WikiPage struct {
 	Body      string             `json:"body"`
@@ -3447,9 +3523,24 @@ type ListActorsParams struct {
 
 // ListAuditParams defines parameters for ListAudit.
 type ListAuditParams struct {
+	ActorId    *openapi_types.UUID `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	Action     *[]string           `form:"action,omitempty" json:"action,omitempty"`
+	TargetType *string             `form:"target_type,omitempty" json:"target_type,omitempty"`
+	From       *time.Time          `form:"from,omitempty" json:"from,omitempty"`
+	To         *time.Time          `form:"to,omitempty" json:"to,omitempty"`
+
 	// Before Return entries older than this seq
 	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
 	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ExportAuditParams defines parameters for ExportAudit.
+type ExportAuditParams struct {
+	ActorId    *openapi_types.UUID `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	Action     *[]string           `form:"action,omitempty" json:"action,omitempty"`
+	TargetType *string             `form:"target_type,omitempty" json:"target_type,omitempty"`
+	From       *time.Time          `form:"from,omitempty" json:"from,omitempty"`
+	To         *time.Time          `form:"to,omitempty" json:"to,omitempty"`
 }
 
 // GetAgentContextParams defines parameters for GetAgentContext.
@@ -3603,6 +3694,9 @@ type SetPasswordJSONRequestBody = SetPasswordRequest
 
 // UpdateActorProfileJSONRequestBody defines body for UpdateActorProfile for application/json ContentType.
 type UpdateActorProfileJSONRequestBody = UpdateActorProfileRequest
+
+// SetActorRoleJSONRequestBody defines body for SetActorRole for application/json ContentType.
+type SetActorRoleJSONRequestBody = SetRoleRequest
 
 // SetActorStateJSONRequestBody defines body for SetActorState for application/json ContentType.
 type SetActorStateJSONRequestBody = SetStateRequest

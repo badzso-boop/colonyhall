@@ -189,6 +189,21 @@ func (s *Store) PendingCompaction(_ context.Context, channelID, threadRootID ids
 	return latest, nil
 }
 
+func (s *Store) CompactionCounts(_ context.Context, workspaceID ids.ID, since time.Time) (running, failed int64, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range s.compactions {
+		switch {
+		case c.WorkspaceID != workspaceID:
+		case c.State == compaction.StatePending:
+			running++
+		case c.State == compaction.StateFailed && c.CompletedAt != nil && !c.CompletedAt.Before(since):
+			failed++
+		}
+	}
+	return running, failed, nil
+}
+
 func (s *Store) FailPendingCompaction(_ context.Context, id ids.ID, errorCode string, completedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -148,11 +148,43 @@ paths:
       tags: [admin]
       description: Every recorded event of the workspace, newest first. Admins only.
       parameters:
+        - { name: actor_id, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, explode: true, schema: { type: array, items: { type: string } } }
+        - { name: target_type, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
         - { name: before, in: query, schema: { type: integer, format: int64 }, description: Return entries older than this seq }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuditPage" } } } }
+
+  /admin/audit/actions:
+    get:
+      operationId: listAuditActions
+      tags: [admin]
+      description: Admins only. The actions that occur in the log, for the filter.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuditActions" } } } }
+
+  /admin/audit/export:
+    get:
+      operationId: exportAudit
+      tags: [admin]
+      description: |
+        Admins only, audited. CSV (UTF-8 with BOM) with the filters of GET
+        /admin/audit, newest first, at most 100 000 rows; a comment line says
+        so when it is cut.
+      parameters:
+        - { name: actor_id, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, explode: true, schema: { type: array, items: { type: string } } }
+        - { name: target_type, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: The CSV, content: { text/csv: { schema: { type: string } } } }
 
   /admin/audit/verify:
     get:
@@ -162,6 +194,29 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuditVerify" } } } }
+
+  /actors/{actorId}/role:
+    parameters:
+      - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setActorRole
+      tags: [identity]
+      description: The owner only, audited. A person's role (admin, member, observer); not their own, and nobody becomes owner.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetRoleRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Changed }
+
+  /admin/users:
+    get:
+      operationId: listUsers
+      tags: [identity]
+      description: The owner only. The people of the workspace with their active sessions and last login.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UserList" } } } }
 
   /actors/{actorId}/password:
     parameters:
@@ -2431,6 +2486,24 @@ components:
         handle: { type: string, description: "2-32 characters: lowercase letters, digits and '-'" }
         display_name: { type: string }
         role: { $ref: "#/components/schemas/Role" }
+        password: { type: string, minLength: 12, maxLength: 256, description: "The owner creating a person: their initial password" }
+    SetRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+    UserRow:
+      type: object
+      required: [actor, active_sessions]
+      properties:
+        actor: { $ref: "#/components/schemas/Actor" }
+        active_sessions: { type: integer }
+        last_login_at: { type: string, format: date-time, nullable: true }
+    UserList:
+      type: object
+      required: [users]
+      properties:
+        users: { type: array, items: { $ref: "#/components/schemas/UserRow" } }
     LoginRequest:
       type: object
       required: [handle, password]
@@ -2491,6 +2564,65 @@ components:
       required: [emergency_stop]
       properties:
         emergency_stop: { $ref: "#/components/schemas/EmergencyStop" }
+        system:
+          description: Admins only. Never holds a secret or an environment value.
+          allOf: [{ $ref: "#/components/schemas/SystemStatus" }]
+    StatusConsumer:
+      type: object
+      required: [name, offset, lag, lag_seconds]
+      properties:
+        name: { type: string }
+        offset: { type: integer, format: int64 }
+        lag: { type: integer, format: int64 }
+        lag_seconds: { type: integer, format: int64, description: Age of the oldest event it has not processed. }
+    StatusGuard:
+      type: object
+      required: [id, name, online]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        last_seen_at: { type: string, format: date-time }
+        guard_version: { type: string }
+        online: { type: boolean, description: Seen in the last 90 seconds. }
+    SystemStatus:
+      type: object
+      required: [version, uptime_seconds, database, event_head, consumers, connections, guards, scheduler, compaction, gitea_configured]
+      properties:
+        version: { type: string }
+        uptime_seconds: { type: integer, format: int64 }
+        database:
+          type: object
+          required: [ok, latency_ms]
+          properties:
+            ok: { type: boolean }
+            latency_ms: { type: number, format: double }
+        event_head: { type: integer, format: int64 }
+        consumers:
+          type: array
+          items: { $ref: "#/components/schemas/StatusConsumer" }
+        connections:
+          type: object
+          required: [human, agent, host]
+          properties:
+            human: { type: integer }
+            agent: { type: integer }
+            host: { type: integer }
+        guards:
+          type: array
+          items: { $ref: "#/components/schemas/StatusGuard" }
+        scheduler:
+          type: object
+          required: [failed_24h]
+          properties:
+            next_run_at: { type: string, format: date-time }
+            failed_24h: { type: integer }
+        compaction:
+          type: object
+          required: [running, failed_24h]
+          properties:
+            running: { type: integer, format: int64 }
+            failed_24h: { type: integer, format: int64 }
+        gitea_configured: { type: boolean }
     EmergencyClearRequest:
       type: object
       required: [password]
@@ -2512,6 +2644,11 @@ components:
       required: [entries]
       properties:
         entries: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+    AuditActions:
+      type: object
+      required: [actions]
+      properties:
+        actions: { type: array, items: { type: string } }
     AuditVerify:
       type: object
       required: [ok, checked]

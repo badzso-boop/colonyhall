@@ -306,6 +306,14 @@ func (s *Store) PendingCompaction(ctx context.Context, channelID, threadRootID i
 	return toDomainCompaction(row), nil
 }
 
+func (s *Store) CompactionCounts(ctx context.Context, workspaceID ids.ID, since time.Time) (running, failed int64, err error) {
+	row, err := s.q(ctx).CompactionCounts(ctx, sqlcgen.CompactionCountsParams{WorkspaceID: workspaceID, Since: &since})
+	if err != nil {
+		return 0, 0, err
+	}
+	return row.Running, row.Failed, nil
+}
+
 func (s *Store) FailPendingCompaction(ctx context.Context, id ids.ID, errorCode string, completedAt time.Time) error {
 	return s.q(ctx).FailPendingCompaction(ctx, sqlcgen.FailPendingCompactionParams{
 		ID:          uuid.UUID(id),

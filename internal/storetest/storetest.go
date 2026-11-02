@@ -257,6 +257,14 @@ func testIdentity(t *testing.T, b Backend) {
 		t.Fatalf("ListActors must be sorted by handle: %+v", list)
 	}
 
+	// Roles and session statistics.
+	must(t, b.Identity.SetActorRole(ctx, f.human.ID, identity.RoleAdmin))
+	if a, err := b.Identity.ActorByID(ctx, f.human.ID); err != nil || a.Role != identity.RoleAdmin {
+		t.Fatalf("role not stored: %+v %v", a, err)
+	}
+	if st, err := b.Identity.SessionStats(ctx, f.ws.ID, t0); err != nil || st == nil {
+		t.Fatalf("session stats: %+v %v", st, err)
+	}
 	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Renamed Human", "Lead Developer", "🚀", "Europe/Budapest", "Busy coding", ""))
 	if renamed, err := b.Identity.ActorByID(ctx, f.human.ID); err != nil || renamed.DisplayName != "Renamed Human" {
 		t.Fatalf("display name not stored: %q %v", renamed.DisplayName, err)

@@ -37,6 +37,8 @@ type NewActorInput struct {
 	Handle      string
 	DisplayName string
 	Role        Role
+	// Password, if set, is the person's initial password.
+	Password string
 	// Secret, if set, is used as the token instead of a random one.
 	// Only the development seed uses this.
 	Secret string
@@ -85,6 +87,15 @@ func (s *Service) CreateActor(ctx context.Context, by Actor, in NewActorInput) (
 		// Agents are configured once, as a whole (POST /agents).
 		return Actor{}, "", ErrAgentConfigImmutable
 	}
+	// Only the owner creates people.
+	if by.Role != RoleOwner {
+		return Actor{}, "", ErrForbidden
+	}
+	if in.Password != "" {
+		if err := ValidatePassword(in.Password); err != nil {
+			return Actor{}, "", err
+		}
+	}
 	in.WorkspaceID = by.WorkspaceID
 	var a Actor
 	var secret string
@@ -92,7 +103,10 @@ func (s *Service) CreateActor(ctx context.Context, by Actor, in NewActorInput) (
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
 		var err error
 		a, secret, seq, err = s.createActor(ctx, by.ID, in)
-		return err
+		if err != nil || in.Password == "" {
+			return err
+		}
+		return s.ResetPassword(ctx, a.ID, in.Password)
 	})
 	if err != nil {
 		return Actor{}, "", err

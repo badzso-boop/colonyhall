@@ -57,4 +57,8 @@ type Store interface {
 	// RevokeSessionsForActor revokes every session of the actor except keep
 	// (ids.Nil keeps none).
 	RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID, at time.Time) error
+	// SessionStats counts each person's sessions alive at now, and their last login.
+	SessionStats(ctx context.Context, workspaceID ids.ID, now time.Time) (map[ids.ID]SessionStat, error)
+	// SetActorRole changes an actor's role.
+	SetActorRole(ctx context.Context, id ids.ID, role Role) error
 }

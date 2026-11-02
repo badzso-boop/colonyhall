@@ -3,6 +3,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 
@@ -87,4 +88,59 @@ func (s *Store) Tamper(seq int64, payload []byte) {
 	e := s.entries[seq]
 	e.Payload = payload
 	s.entries[seq] = e
+}
+
+func selected(e audit.Entry, f audit.Filter) bool {
+	switch {
+	case f.ActorID != ids.Nil && e.ActorID != f.ActorID,
+		len(f.Actions) > 0 && !slices.Contains(f.Actions, e.Action),
+		f.TargetType != "" && e.TargetType != f.TargetType,
+		f.From != nil && e.At.Before(*f.From),
+		f.To != nil && !e.At.Before(*f.To):
+		return false
+	}
+	return true
+}
+
+// Search is Page with a filter.
+func (s *Store) Search(_ context.Context, workspaceID ids.ID, f audit.Filter) ([]audit.Entry, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	all := s.sorted(workspaceID)
+	var out []audit.Entry
+	for i := len(all) - 1; i >= 0 && len(out) < f.Limit; i-- {
+		if (f.Before == 0 || all[i].Seq < f.Before) && selected(all[i], f) {
+			out = append(out, all[i])
+		}
+	}
+	return out, nil
+}
+
+// Count counts the entries a filter selects.
+func (s *Store) Count(_ context.Context, workspaceID ids.ID, f audit.Filter) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var n int64
+	for _, e := range s.sorted(workspaceID) {
+		if selected(e, f) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// Actions lists the workspace's distinct actions, sorted.
+func (s *Store) Actions(_ context.Context, workspaceID ids.ID) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := map[string]bool{}
+	out := []string{}
+	for _, e := range s.sorted(workspaceID) {
+		if !seen[e.Action] {
+			seen[e.Action] = true
+			out = append(out, e.Action)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }

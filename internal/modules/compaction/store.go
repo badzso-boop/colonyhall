@@ -29,5 +29,7 @@ type Store interface {
 	PendingCompaction(ctx context.Context, channelID, threadRootID ids.ID) (Compaction, error)
 	FailPendingCompaction(ctx context.Context, id ids.ID, errorCode string, completedAt time.Time) error
 	CompleteCompaction(ctx context.Context, id ids.ID, fileID, sysMsgID ids.ID, messagesCount, approxTokensIn, summaryTokens int, completedAt time.Time) error
+	// CompactionCounts counts the running compactions and those failed since.
+	CompactionCounts(ctx context.Context, workspaceID ids.ID, since time.Time) (running, failed int64, err error)
 	CompactionIDsBySystemMessageIDs(ctx context.Context, msgIDs []ids.ID) (map[ids.ID]ids.ID, error)
 }

@@ -553,6 +553,60 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 	return i, err
 }
 
+const sessionStats = `-- name: SessionStats :many
+SELECT s.actor_id,
+       COUNT(*) FILTER (WHERE s.revoked_at IS NULL AND s.expires_at > $1::timestamptz)::int AS active,
+       MAX(s.created_at)::timestamptz AS last_login
+FROM session s JOIN actor a ON a.id = s.actor_id
+WHERE a.workspace_id = $2
+GROUP BY s.actor_id
+`
+
+type SessionStatsParams struct {
+	NowAt       time.Time
+	WorkspaceID uuid.UUID
+}
+
+type SessionStatsRow struct {
+	ActorID   uuid.UUID
+	Active    int32
+	LastLogin time.Time
+}
+
+func (q *Queries) SessionStats(ctx context.Context, arg SessionStatsParams) ([]SessionStatsRow, error) {
+	rows, err := q.db.Query(ctx, sessionStats, arg.NowAt, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SessionStatsRow
+	for rows.Next() {
+		var i SessionStatsRow
+		if err := rows.Scan(&i.ActorID, &i.Active, &i.LastLogin); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setActorRole = `-- name: SetActorRole :exec
+UPDATE actor SET role = $2 WHERE id = $1
+`
+
+type SetActorRoleParams struct {
+	ID   uuid.UUID
+	Role string
+}
+
+func (q *Queries) SetActorRole(ctx context.Context, arg SetActorRoleParams) error {
+	_, err := q.db.Exec(ctx, setActorRole, arg.ID, arg.Role)
+	return err
+}
+
 const setActorState = `-- name: SetActorState :exec
 UPDATE actor SET state = $2 WHERE id = $1
 `

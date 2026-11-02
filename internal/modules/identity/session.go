@@ -22,6 +22,12 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+// SessionStat is one actor's login activity.
+type SessionStat struct {
+	Active    int
+	LastLogin *time.Time
+}
+
 // SessionTTL is how long a login lasts.
 const SessionTTL = 30 * 24 * time.Hour
 
@@ -187,7 +193,6 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 	if target.Kind != KindHuman {
 		return ErrForbidden
 	}
-	keep := ids.Nil // session that survives the change
 	switch {
 	case by.ID == target.ID:
 		hash, err := s.Store.Credential(ctx, target.ID)
@@ -202,8 +207,16 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return err
 		}
-		keep = currentSession
-	case by.CanManage(target):
+	case by.CanManage(target) && by.Role == RoleOwner:
+		// Only the owner resets another person's password.
+		if err := ValidatePassword(next); err != nil {
+			return err
+		}
+		if err := s.record(ctx, by, EventPasswordReset, "actor", target.ID, PasswordReset{ActorID: target.ID.String()},
+			func(ctx context.Context) error { return s.ResetPassword(ctx, target.ID, next) }); err != nil {
+			return err
+		}
+		return s.Store.RevokeSessionsForActor(ctx, target.ID, ids.Nil, s.Clock.Now())
 	default:
 		return ErrForbidden
 	}
@@ -211,7 +224,7 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 		return err
 	}
 	// A changed password logs out every other browser of that person.
-	return s.Store.RevokeSessionsForActor(ctx, target.ID, keep, s.Clock.Now())
+	return s.Store.RevokeSessionsForActor(ctx, target.ID, currentSession, s.Clock.Now())
 }
 
 // ResetPassword sets a password without any permission check. Only trusted

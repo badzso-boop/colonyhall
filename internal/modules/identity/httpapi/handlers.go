@@ -28,7 +28,8 @@ func tokenToAPI(t identity.Token) apispec.Token {
 	return apispec.Token{Id: t.ID, ActorId: t.ActorID, Label: t.Label, CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt}
 }
 
-func workspaceStatus(w identity.Workspace) apispec.AdminStatus {
+// WorkspaceStatus is the part of the status every actor sees.
+func WorkspaceStatus(w identity.Workspace) apispec.AdminStatus {
 	st := apispec.AdminStatus{EmergencyStop: apispec.EmergencyStop{Active: w.EmergencyStopAt != nil, Since: w.EmergencyStopAt}}
 	if w.EmergencyStopAt != nil {
 		st.EmergencyStop.By = &w.EmergencyStopBy
@@ -177,7 +178,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			return
 		}
 		a, secret, err := svc.CreateActor(r.Context(), httpx.Actor(r), identity.NewActorInput{
-			Kind: identity.Kind(in.Kind), Handle: in.Handle, DisplayName: httpx.Deref(in.DisplayName, ""), Role: role,
+			Kind: identity.Kind(in.Kind), Handle: in.Handle, DisplayName: httpx.Deref(in.DisplayName, ""), Role: role, Password: httpx.Deref(in.Password, ""),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -275,15 +276,6 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 		httpx.JSON(w, http.StatusOK, ToAPI(updated))
 	}))
 
-	mux.Handle("GET /api/v1/admin/status", auth(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := svc.Workspace(r.Context(), httpx.Actor(r))
-		if err != nil {
-			httpx.Error(w, r, err)
-			return
-		}
-		httpx.JSON(w, http.StatusOK, workspaceStatus(ws))
-	}))
-
 	mux.Handle("POST /api/v1/admin/emergency-stop", auth(func(w http.ResponseWriter, r *http.Request) {
 		by := httpx.Actor(r)
 		if err := svc.EmergencyStop(r.Context(), by); err != nil {
@@ -295,7 +287,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, workspaceStatus(ws))
+		httpx.JSON(w, http.StatusOK, WorkspaceStatus(ws))
 	}))
 
 	mux.Handle("POST /api/v1/admin/emergency-clear", auth(func(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +306,37 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, workspaceStatus(ws))
+		httpx.JSON(w, http.StatusOK, WorkspaceStatus(ws))
+	}))
+
+	mux.Handle("PUT /api/v1/actors/{id}/role", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in apispec.SetRoleRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if err := svc.SetActorRole(r.Context(), httpx.Actor(r), id, identity.Role(in.Role)); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("GET /api/v1/admin/users", auth(func(w http.ResponseWriter, r *http.Request) {
+		list, err := svc.ListUsers(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.UserList{Users: make([]apispec.UserRow, 0, len(list))}
+		for _, u := range list {
+			out.Users = append(out.Users, apispec.UserRow{Actor: ToAPI(u.Actor), ActiveSessions: u.ActiveSessions, LastLoginAt: u.LastLoginAt})
+		}
+		httpx.JSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("PUT /api/v1/actors/{id}/password", auth(func(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,63 @@ import (
 	"github.com/google/uuid"
 )
 
+const countEntries = `-- name: CountEntries :one
+SELECT count(*) FROM audit_log
+WHERE workspace_id = $1
+  AND ($2::uuid IS NULL OR actor_id = $2::uuid)
+  AND ($3::text[] = '{}' OR action = ANY($3::text[]))
+  AND ($4::text = '' OR target_type = $4::text)
+  AND ($5::timestamptz IS NULL OR at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR at < $6::timestamptz)
+`
+
+type CountEntriesParams struct {
+	WorkspaceID uuid.UUID
+	ActorID     *uuid.UUID
+	Actions     []string
+	TargetType  string
+	FromAt      *time.Time
+	ToAt        *time.Time
+}
+
+func (q *Queries) CountEntries(ctx context.Context, arg CountEntriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEntries,
+		arg.WorkspaceID,
+		arg.ActorID,
+		arg.Actions,
+		arg.TargetType,
+		arg.FromAt,
+		arg.ToAt,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const distinctActions = `-- name: DistinctActions :many
+SELECT DISTINCT action FROM audit_log WHERE workspace_id = $1 ORDER BY action
+`
+
+func (q *Queries) DistinctActions(ctx context.Context, workspaceID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, distinctActions, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var action string
+		if err := rows.Scan(&action); err != nil {
+			return nil, err
+		}
+		items = append(items, action)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const forwardEntries = `-- name: ForwardEntries :many
 SELECT seq, workspace_id, actor_id, action, target_type, target_id, payload, at, prev_hash, hash FROM audit_log WHERE workspace_id = $1 AND seq > $2 ORDER BY seq LIMIT $3
 `
@@ -124,6 +181,70 @@ type PageEntriesParams struct {
 
 func (q *Queries) PageEntries(ctx context.Context, arg PageEntriesParams) ([]AuditLog, error) {
 	rows, err := q.db.Query(ctx, pageEntries, arg.WorkspaceID, arg.Before, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.Seq,
+			&i.WorkspaceID,
+			&i.ActorID,
+			&i.Action,
+			&i.TargetType,
+			&i.TargetID,
+			&i.Payload,
+			&i.At,
+			&i.PrevHash,
+			&i.Hash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchEntries = `-- name: SearchEntries :many
+SELECT seq, workspace_id, actor_id, action, target_type, target_id, payload, at, prev_hash, hash FROM audit_log
+WHERE workspace_id = $1
+  AND ($2::bigint = 0 OR seq < $2::bigint)
+  AND ($3::uuid IS NULL OR actor_id = $3::uuid)
+  AND ($4::text[] = '{}' OR action = ANY($4::text[]))
+  AND ($5::text = '' OR target_type = $5::text)
+  AND ($6::timestamptz IS NULL OR at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR at < $7::timestamptz)
+ORDER BY seq DESC
+LIMIT $8
+`
+
+type SearchEntriesParams struct {
+	WorkspaceID uuid.UUID
+	Before      int64
+	ActorID     *uuid.UUID
+	Actions     []string
+	TargetType  string
+	FromAt      *time.Time
+	ToAt        *time.Time
+	RowLimit    int32
+}
+
+func (q *Queries) SearchEntries(ctx context.Context, arg SearchEntriesParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, searchEntries,
+		arg.WorkspaceID,
+		arg.Before,
+		arg.ActorID,
+		arg.Actions,
+		arg.TargetType,
+		arg.FromAt,
+		arg.ToAt,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

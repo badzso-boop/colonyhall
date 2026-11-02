@@ -46,6 +46,30 @@ func (q *Queries) CompactionByID(ctx context.Context, id uuid.UUID) (Compaction,
 	return i, err
 }
 
+const compactionCounts = `-- name: CompactionCounts :one
+SELECT count(*) FILTER (WHERE state = 'pending') AS running,
+       count(*) FILTER (WHERE state = 'failed' AND completed_at >= $1) AS failed
+FROM compaction
+WHERE workspace_id = $2
+`
+
+type CompactionCountsParams struct {
+	Since       *time.Time
+	WorkspaceID uuid.UUID
+}
+
+type CompactionCountsRow struct {
+	Running int64
+	Failed  int64
+}
+
+func (q *Queries) CompactionCounts(ctx context.Context, arg CompactionCountsParams) (CompactionCountsRow, error) {
+	row := q.db.QueryRow(ctx, compactionCounts, arg.Since, arg.WorkspaceID)
+	var i CompactionCountsRow
+	err := row.Scan(&i.Running, &i.Failed)
+	return i, err
+}
+
 const compactionIDsBySystemMessageIDs = `-- name: CompactionIDsBySystemMessageIDs :many
 SELECT system_message_id, id
 FROM compaction
