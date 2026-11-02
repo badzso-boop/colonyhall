@@ -280,3 +280,94 @@ func TestEmergencyClearIsRateLimited(t *testing.T) {
 		t.Fatalf("after the window: %d", st)
 	}
 }
+
+// Revoking the token a socket authenticated with closes it; another token's does not.
+func TestRevokedTokenClosesItsSocket(t *testing.T) {
+	e := newEnv(t)
+	ctx := t.Context()
+	memberID, memberTok := e.createActor("human", "anna", "member")
+	var second apispec.IssueTokenResponse
+	if st := e.do("POST", "/api/v1/actors/"+memberID+"/tokens", memberTok, map[string]any{"label": "second"}, &second); st != http.StatusCreated {
+		t.Fatalf("issue: %d", st)
+	}
+	staying := uiSocket(ctx, e, memberTok)
+	going := uiSocket(ctx, e, second.Secret)
+	if st := e.do("DELETE", "/api/v1/tokens/"+second.Token.Id.String(), server.DevAdminToken, nil, nil); st != http.StatusNoContent {
+		t.Fatalf("revoke: %d", st)
+	}
+	closesSoon(ctx, e, going)
+	readCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	for {
+		var frame map[string]any
+		if err := wsjson.Read(readCtx, staying, &frame); err != nil {
+			if readCtx.Err() == nil {
+				t.Fatalf("the other token's socket closed: %v", err)
+			}
+			return
+		}
+	}
+}
+
+// A deleted agent loses its socket.
+func TestArchivedAgentLosesItsSocket(t *testing.T) {
+	e := newEnv(t)
+	ctx := t.Context()
+	var me apispec.Actor
+	e.do("GET", "/api/v1/me", server.DevAgentToken, nil, &me)
+	ws := uiSocket(ctx, e, server.DevAgentToken)
+	if st := e.do("DELETE", "/api/v1/agents/"+me.Id.String(), server.DevAdminToken, nil, nil); st/100 != 2 {
+		t.Fatalf("delete: %d", st)
+	}
+	closesSoon(ctx, e, ws)
+}
+
+// A logout leaves no event: the periodic re-check closes that browser's socket.
+func TestLogoutClosesTheSocketSoon(t *testing.T) {
+	e := newEnv(t)
+	ctx := t.Context()
+	e.app.Gateway.SetRevalidateEvery(50 * time.Millisecond)
+	b := e.browser()
+	if st := b.login("norbi", server.DevAdminPassword); st != http.StatusOK {
+		t.Fatalf("login: %d", st)
+	}
+	ws, res, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(e.srv.URL, "http")+"/ws/ui", &websocket.DialOptions{HTTPClient: b.client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Body != nil {
+		_ = res.Body.Close()
+	}
+	t.Cleanup(func() { _ = ws.CloseNow() })
+	if err := wsjson.Write(ctx, ws, map[string]any{"type": "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	var frame map[string]any
+	if err := wsjson.Read(ctx, ws, &frame); err != nil || frame["type"] != "welcome" {
+		t.Fatalf("welcome: %v %v", frame, err)
+	}
+	// A cancelled read closes the socket, so one reader runs until the server closes it.
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		for {
+			var f map[string]any
+			if err := wsjson.Read(ctx, ws, &f); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-closed:
+		t.Fatal("closed while logged in")
+	case <-time.After(250 * time.Millisecond):
+	}
+	if st := b.do("POST", "/api/v1/auth/logout", nil, nil); st/100 != 2 {
+		t.Fatalf("logout: %d", st)
+	}
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the socket stayed open after the logout")
+	}
+}

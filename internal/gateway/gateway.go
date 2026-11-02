@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -51,6 +52,8 @@ const (
 	// maxReplay bounds how far back a client may replay; older cursors must
 	// reload state over REST.
 	maxReplay = 5000
+	// defaultRevalidate bounds how long a logged-out browser keeps its socket.
+	defaultRevalidate = time.Minute
 )
 
 // Gateway accepts WebSocket connections.
@@ -63,6 +66,8 @@ type Gateway struct {
 	Logger       *slog.Logger
 	// OriginPatterns allows cross-origin browsers (e.g. a Vite dev server).
 	OriginPatterns []string
+
+	revalidate atomic.Int64
 
 	mu         sync.Mutex
 	conns      map[*connection]struct{}
@@ -82,6 +87,16 @@ func (g *Gateway) ConnectionCounts() (humans, agents int) {
 		}
 	}
 	return humans, agents
+}
+
+// SetRevalidateEvery changes how often people's connections are re-checked.
+func (g *Gateway) SetRevalidateEvery(d time.Duration) { g.revalidate.Store(int64(d)) }
+
+func (g *Gateway) revalidateEvery() time.Duration {
+	if d := g.revalidate.Load(); d > 0 {
+		return time.Duration(d)
+	}
+	return defaultRevalidate
 }
 
 type activityKey struct {
@@ -478,18 +493,21 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "expected hello")
 		return
 	}
-	// Read before authenticating: a change in between closes once too often, never too rarely.
-	authSeq, err := g.Events.Head(ctx)
+	// Read before authenticating and start from it: an access change in between
+	// is replayed, so it closes once too often, never too rarely.
+	head, err := g.Events.Head(ctx)
 	if err != nil {
 		_ = c.Close(websocket.StatusInternalError, "unavailable")
 		return
 	}
-	var actor identity.Actor
-	if h.Token != "" {
-		actor, err = g.Auth.Authenticate(ctx, h.Token)
-	} else {
-		actor, _, err = g.Auth.AuthenticateSession(ctx, cookie)
+	reauth := func(ctx context.Context) (identity.Actor, error) {
+		if h.Token != "" {
+			return g.Auth.Authenticate(ctx, h.Token)
+		}
+		a, _, err := g.Auth.AuthenticateSession(ctx, cookie)
+		return a, err
 	}
+	actor, err := reauth(ctx)
 	if err != nil {
 		_ = c.Close(websocket.StatusPolicyViolation, "unauthorized")
 		return
@@ -498,11 +516,6 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	signals, unsubscribe := g.Bus.Subscribe()
 	defer unsubscribe()
 
-	head, err := g.Events.Head(ctx)
-	if err != nil {
-		_ = c.Close(websocket.StatusInternalError, "unavailable")
-		return
-	}
 	cursor := head
 	if h.LastSeq != nil {
 		cursor = *h.LastSeq
@@ -517,7 +530,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn := &connection{g: g, ws: c, actor: actor, cursor: cursor, authSeq: authSeq, canRead: map[ids.ID]bool{}}
+	conn := &connection{g: g, ws: c, actor: actor, cursor: cursor, authSeq: head, reauth: reauth, canRead: map[ids.ID]bool{}}
 	g.register(conn)
 	defer g.unregister(conn)
 
@@ -530,10 +543,22 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Reading is only needed to notice the client closing.
 	ctx = c.CloseRead(ctx)
+	// Logouts and expiries leave no event, and agents' short-lived tokens are
+	// rotated by the guard, so only people's connections are re-checked.
+	var recheck <-chan time.Time
+	if actor.Kind == identity.KindHuman {
+		ticker := time.NewTicker(g.revalidateEvery())
+		defer ticker.Stop()
+		recheck = ticker.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-recheck:
+			if !conn.stillValid(ctx) {
+				return
+			}
 		case <-signals:
 			if err := conn.catchUp(ctx); err != nil {
 				if !errors.Is(err, context.Canceled) {
@@ -565,6 +590,8 @@ type connection struct {
 	cursor int64
 	// authSeq is the log head when the actor was authenticated.
 	authSeq int64
+	// reauth checks the connection's credentials again.
+	reauth func(context.Context) (identity.Actor, error)
 
 	writeMu sync.Mutex
 	mu      sync.Mutex
@@ -590,7 +617,7 @@ func (c *connection) catchUp(ctx context.Context) error {
 			return nil
 		}
 		for _, e := range events {
-			if c.accessChanged(e) {
+			if c.accessChanged(ctx, e) {
 				return errAccessChanged
 			}
 			visible, err := c.visible(ctx, e)
@@ -615,14 +642,32 @@ func (c *connection) catchUp(ctx context.Context) error {
 // the client reconnects, and authenticates with the current role or not at all.
 var errAccessChanged = errors.New("gateway: the actor's access changed")
 
+// stillValid authenticates the connection's credentials again; an error closes
+// it, because the client can always reconnect.
+func (c *connection) stillValid(ctx context.Context) bool {
+	a, err := c.reauth(ctx)
+	return err == nil && a.Role == c.actor.Role
+}
+
 // accessChanged tells whether the event, newer than the authentication, makes
 // the connection's actor (with its role and read cache) out of date.
-func (c *connection) accessChanged(e eventlog.Event) bool {
-	if e.Seq <= c.authSeq || e.AggregateID != c.actor.ID {
+func (c *connection) accessChanged(ctx context.Context, e eventlog.Event) bool {
+	if e.Seq <= c.authSeq {
+		return false
+	}
+	if e.Type == identity.EventTokenRevoked {
+		// The actor may hold other tokens: only this connection's own one counts.
+		var p identity.TokenEvent
+		if json.Unmarshal(e.Payload, &p) != nil {
+			return true
+		}
+		return p.ActorID == c.actor.ID.String() && !c.stillValid(ctx)
+	}
+	if e.AggregateID != c.actor.ID {
 		return false
 	}
 	switch e.Type {
-	case identity.EventActorRoleChanged, identity.EventPasswordReset:
+	case identity.EventActorRoleChanged, identity.EventPasswordReset, identity.EventActorArchived:
 		return true
 	case identity.EventActorStateChanged:
 		var p identity.StateChanged
