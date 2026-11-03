@@ -561,10 +561,11 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	// agy logs to ~/.gemini/antigravity-cli/log; a sandboxed agent's ~/.gemini
 	// is its own config copy (see clientMounts).
 	if home, err := os.UserHomeDir(); err == nil {
-		agent.AgyLogDir = filepath.Join(home, ".gemini", "antigravity-cli", "log")
+		agent.AgyConfigDir = filepath.Join(home, ".gemini")
 	}
 	if ha.Sandbox && s.sandbox != nil {
-		agent.AgyLogDir = filepath.Join(dir+".config", "gemini", "antigravity-cli", "log")
+		agent.AgyConfigDir = filepath.Join(dir+".config", "gemini")
+		agent.AgyScope = "@" + ha.Handle
 	}
 	if ha.Sandbox && s.sandbox != nil {
 		sb := s.sandbox

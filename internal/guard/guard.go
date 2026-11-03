@@ -100,10 +100,14 @@ type Agent struct {
 	ClaudeLimiter         *ClaudeLimiter
 	notedRateLimitThreads map[string]bool
 	// AgyLimiter pauses this machine's Antigravity models after a quota
-	// error; AgyLogDir is where this agent's agy writes its logs (the
-	// fallback for an error agy did not put in its result).
-	AgyLimiter *AgyLimiter
-	AgyLogDir  string
+	// error; AgyConfigDir is this agent's agy config folder (~/.gemini),
+	// whose log is the fallback for an error agy did not put in its result.
+	AgyLimiter   *AgyLimiter
+	AgyConfigDir string
+	// AgyScope limits the agent's pauses to itself. Set for sandboxed
+	// agents: their config folder (and log) is writable from the sandbox, so
+	// what it says must not stop other agents on the machine.
+	AgyScope string
 
 	fileFetchMu       sync.Mutex
 	fileFetchInFlight map[string]bool
@@ -1363,6 +1367,15 @@ func (a *Agent) agyModels() []string {
 	return []string{a.Cfg.Model, a.Cfg.WorkModel}
 }
 
+// agyKey is the limiter key of model for this agent: the model, and the
+// agent too when its pauses are its own.
+func (a *Agent) agyKey(model string) string {
+	if a.AgyScope == "" {
+		return AgyModelKey(model)
+	}
+	return AgyModelKey(model) + " " + a.AgyScope
+}
+
 // agyPausedUntil is the earliest end of a pause on one of the agent's
 // models, or zero.
 func (a *Agent) agyPausedUntil() time.Time {
@@ -1371,7 +1384,7 @@ func (a *Agent) agyPausedUntil() time.Time {
 	}
 	var until time.Time
 	for _, m := range a.agyModels() {
-		if p, ok := a.AgyLimiter.Paused(m); ok && (until.IsZero() || p.Until.Before(until)) {
+		if p, ok := a.AgyLimiter.Paused(a.agyKey(m)); ok && (until.IsZero() || p.Until.Before(until)) {
 			until = p.Until
 		}
 	}
@@ -1385,8 +1398,8 @@ func (a *Agent) agyPaused(ctx context.Context, items []Item) bool {
 		return false
 	}
 	for _, m := range a.agyModels() {
-		if p, ok := a.AgyLimiter.Paused(m); ok {
-			a.postAgyNotes(ctx, items, m, p)
+		if p, ok := a.AgyLimiter.Paused(a.agyKey(m)); ok {
+			a.postAgyNotes(ctx, items, a.agyKey(m), p)
 			return true
 		}
 	}
@@ -1397,7 +1410,7 @@ func (a *Agent) agyPaused(ctx context.Context, items []Item) bool {
 func (a *Agent) agyReason(err error, started time.Time) error {
 	var re *AgyRunError
 	if a.isAgyClient() && errors.As(err, &re) && re.Reason == "" {
-		re.Reason = agyLogReason(a.AgyLogDir, started)
+		re.Reason = agyLogReason(a.AgyConfigDir, started)
 	}
 	return err
 }
@@ -1412,8 +1425,8 @@ func (a *Agent) agyQuotaHit(ctx context.Context, err error, model string, items 
 	if !ok {
 		return false
 	}
-	p := a.AgyLimiter.Pause(model, q)
-	a.postAgyNotes(ctx, items, model, p)
+	p := a.AgyLimiter.Pause(a.agyKey(model), q)
+	a.postAgyNotes(ctx, items, a.agyKey(model), p)
 	return true
 }
 

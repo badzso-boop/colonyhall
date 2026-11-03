@@ -37,6 +37,15 @@ HostsPage.test.tsx                    a Gépek oldal sorai és jelvénye
 make test, make lint, make test-web, race (guard, e2e)   ok
 ```
 
+## A commit utáni biztonsági átnézés javításai
+
+1. **A sandboxos agent naplómappája a sandboxból írható.** Egy hamis kvótasorral az egész gépen megállíthatott volna egy modellt, egy köztes symlinkkel pedig máshonnan olvastathatott volna. Javítás:
+   - a sandboxos agent szünete csak őt érinti;
+   - a napló mindenestül `os.Root`-on át nyílik meg.
+
+   Tesztek: `TestAgySandboxedPauseIsScoped`, és a `TestAgyLogReason` köztes linkes esete.
+2. **Korlátlan visszaállási idő:** egy óriási „Resets in” túlcsordulhatott volna. Most legfeljebb 6 számjegy és 7 nap fogadható el, efölött 30 perc múlva újrapróbál. Teszt: `TestParseAgyReset`.
+
 ## Ami kimaradt
 
 - **Mérés, mielőtt elfogy:** az agy nem ad használati adatot.

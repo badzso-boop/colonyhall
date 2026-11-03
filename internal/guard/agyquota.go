@@ -50,7 +50,7 @@ type agyQuota struct {
 var (
 	agyQuotaRe = regexp.MustCompile(`(?i)resource_exhausted|code 429|quota reached|quota exceeded`)
 	agyResetRe = regexp.MustCompile(`(?i)resets in\s+((?:\d+\s*[hms]\s*)+)`)
-	agyPartRe  = regexp.MustCompile(`(\d+)\s*([hms])`)
+	agyPartRe  = regexp.MustCompile(`(\d{1,6})\s*([hms])`)
 )
 
 // asAgyQuota recognises a quota failure in the reason of a failed agy run.
@@ -65,6 +65,10 @@ func asAgyQuota(err error, now time.Time) (agyQuota, bool) {
 	}
 	return q, true
 }
+
+// agyMaxReset bounds a reset time read from agy: anything longer is not
+// believed, and the model is retried after agyRetryAfter instead.
+const agyMaxReset = 7 * 24 * time.Hour
 
 // parseAgyReset reads "Resets in 6h43m54s"; any part may be missing.
 func parseAgyReset(msg string) (time.Duration, bool) {
@@ -87,7 +91,7 @@ func parseAgyReset(msg string) (time.Duration, bool) {
 			d += time.Duration(n) * time.Second
 		}
 	}
-	return d, d > 0
+	return d, d > 0 && d <= agyMaxReset
 }
 
 const (
@@ -99,24 +103,39 @@ const (
 
 var agyLogName = regexp.MustCompile(`^cli-(\d{8}_\d{6})\.log$`)
 
-// agyLogReason fills an empty reason from agy's log in dir: only from a log
-// that agy started during this run, only its tail, and only the line that
-// carries the run's error. Nothing else from the log (it holds account
-// details) is ever returned. Several matching logs with different reasons
-// (parallel runs) give no reason rather than a wrong one.
-func agyLogReason(dir string, started time.Time) string {
-	if dir == "" {
+// agyLogPath is where agy writes its logs, under its config folder (~/.gemini).
+const agyLogPath = "antigravity-cli/log"
+
+// agyLogReason fills an empty reason from agy's log under the config folder
+// gemini: only from a log that agy started during this run, only its tail,
+// and only the line that carries the run's error. Nothing else from the log
+// (it holds account details) is ever returned. Several matching logs with
+// different reasons (parallel runs) give no reason rather than a wrong one.
+// Everything is opened inside gemini through os.Root, so no link (not even an
+// intermediate folder) leads out of it.
+func agyLogReason(gemini string, started time.Time) string {
+	if gemini == "" {
 		return ""
 	}
-	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
+	if fi, err := os.Lstat(gemini); err != nil || !fi.IsDir() {
 		return ""
 	}
-	root, err := os.OpenRoot(dir)
+	base, err := os.OpenRoot(gemini)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = base.Close() }()
+	root, err := base.OpenRoot(agyLogPath)
 	if err != nil {
 		return ""
 	}
 	defer func() { _ = root.Close() }()
-	entries, err := os.ReadDir(dir)
+	d, err := root.Open(".")
+	if err != nil {
+		return ""
+	}
+	entries, err := d.ReadDir(-1)
+	_ = d.Close()
 	if err != nil {
 		return ""
 	}

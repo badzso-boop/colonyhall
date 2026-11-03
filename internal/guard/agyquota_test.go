@@ -55,9 +55,22 @@ func TestParseAgyReset(t *testing.T) {
 			t.Errorf("%q: %v %v", in, got, ok)
 		}
 	}
-	if _, ok := parseAgyReset("Individual quota reached."); ok {
-		t.Error("no reset time must not parse")
+	for _, bad := range []string{"Individual quota reached.", "Resets in 999999h", "Resets in 99999999999999999999h", "Resets in 169h"} {
+		if _, ok := parseAgyReset(bad); ok {
+			t.Errorf("%q must not parse", bad)
+		}
 	}
+}
+
+// logDir makes a config folder (~/.gemini) with agy's log folder in it.
+func logDir(t *testing.T) (gemini, logs string) {
+	t.Helper()
+	gemini = t.TempDir()
+	logs = filepath.Join(gemini, "antigravity-cli", "log")
+	if err := os.MkdirAll(logs, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return gemini, logs
 }
 
 func writeLog(t *testing.T, dir string, at time.Time, lines ...string) string {
@@ -70,7 +83,7 @@ func writeLog(t *testing.T, dir string, at time.Time, lines ...string) string {
 }
 
 func TestAgyLogReason(t *testing.T) {
-	dir := t.TempDir()
+	gemini, dir := logDir(t)
 	started := time.Now().Truncate(time.Second)
 	noise := []string{
 		"I1101 09:14:03.223216 1 server_oauth.go:224] applyAuthResult: email=someone@example.com, authMethod=consumer",
@@ -82,7 +95,7 @@ func TestAgyLogReason(t *testing.T) {
 	writeLog(t, dir, started.Add(-time.Hour), "E1101 08:00:00.0 1 session.go:280] Print mode: run ended with error and no response: something else")
 	writeLog(t, dir, started.Add(time.Second), append(noise, "E1101 09:14:12.875254 1 session.go:280] Print mode: run ended with error and no response: Individual quota reached. Resets in 6h43m54s.")...)
 
-	got := agyLogReason(dir, started)
+	got := agyLogReason(gemini, started)
 	if got != "Individual quota reached. Resets in 6h43m54s." {
 		t.Fatalf("reason: %q", got)
 	}
@@ -93,24 +106,35 @@ func TestAgyLogReason(t *testing.T) {
 	// A log that is only a link is not followed.
 	outside := filepath.Join(t.TempDir(), "secret.log")
 	_ = os.WriteFile(outside, []byte("run ended with error and no response: from outside\n"), 0o600)
-	linkDir := t.TempDir()
+	linkGemini, linkDir := logDir(t)
 	if err := os.Symlink(outside, filepath.Join(linkDir, "cli-"+started.Add(time.Second).Format("20060102_150405")+".log")); err != nil {
 		t.Fatal(err)
 	}
-	if got := agyLogReason(linkDir, started); got != "" {
+	if got := agyLogReason(linkGemini, started); got != "" {
 		t.Fatalf("followed a symlink: %q", got)
+	}
+	// Nor is an intermediate folder that is a link out of the config folder.
+	elsewhere := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(elsewhere, "log"), 0o700)
+	writeLog(t, filepath.Join(elsewhere, "log"), started.Add(time.Second), "E 1 session.go:280] Print mode: run ended with error and no response: planted")
+	hop := t.TempDir()
+	if err := os.Symlink(elsewhere, filepath.Join(hop, "antigravity-cli")); err != nil {
+		t.Fatal(err)
+	}
+	if got := agyLogReason(hop, started); got != "" {
+		t.Fatalf("followed an intermediate link: %q", got)
 	}
 
 	// Two parallel runs with different reasons: no guess.
 	writeLog(t, dir, started.Add(2*time.Second), "E 1 session.go:280] Print mode: run ended with error and no response: another reason")
-	if got := agyLogReason(dir, started); got != "" {
+	if got := agyLogReason(gemini, started); got != "" {
 		t.Fatalf("picked one of two reasons: %q", got)
 	}
 
 	// Without the session line, the RESOURCE_EXHAUSTED line is the reason.
-	only := t.TempDir()
+	onlyGemini, only := logDir(t)
 	writeLog(t, only, started, noise...)
-	if got := agyLogReason(only, started); !strings.HasPrefix(got, "RESOURCE_EXHAUSTED (code 429)") {
+	if got := agyLogReason(onlyGemini, started); !strings.HasPrefix(got, "RESOURCE_EXHAUSTED (code 429)") {
 		t.Fatalf("exhausted line: %q", got)
 	}
 }
@@ -259,5 +283,28 @@ func TestAgyOtherFailureStillCountsAttempts(t *testing.T) {
 	_ = s.agent.Tick(context.Background())
 	if s.agent.attempts["item-gemini-3.8-flash-high"] != 1 {
 		t.Fatalf("attempts %d", s.agent.attempts["item-gemini-3.8-flash-high"])
+	}
+}
+
+// A sandboxed agent's pause is its own: its log folder is writable from the sandbox.
+func TestAgySandboxedPauseIsScoped(t *testing.T) {
+	now := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	limiter := NewAgyLimiter("", nil, func() time.Time { return now })
+	boxed := newAgyAgent(t, "gemini-3.8-flash-high", limiter, &now, func(int) (RunResult, error) {
+		return RunResult{}, &AgyRunError{Status: "ERROR", Reason: quotaReason}
+	})
+	boxed.agent.AgyScope = "@boxed"
+	if err := boxed.agent.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := limiter.Paused("gemini-3.8-flash-high @boxed"); !ok {
+		t.Fatal("the sandboxed agent itself is not paused")
+	}
+	other := newAgyAgent(t, "gemini-3.8-flash-high", limiter, &now, func(int) (RunResult, error) { return RunResult{Text: "ok"}, nil })
+	if err := other.agent.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if *other.runs != 1 {
+		t.Fatal("a sandboxed agent paused the model for the whole machine")
 	}
 }
