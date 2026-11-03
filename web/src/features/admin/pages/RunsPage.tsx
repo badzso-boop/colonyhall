@@ -199,21 +199,36 @@ function RunsBody() {
 function MachineLimits() {
   const { t, i18n } = useTranslation("admin");
   const hosts = useHosts(true, 60_000);
-  const withLimits = (hosts.data ?? []).filter((h) => h.report.claude_limits?.five_hour);
+  const withLimits = (hosts.data ?? []).filter((h) => h.report.claude_limits?.five_hour || h.report.agy_usage?.length);
   if (!withLimits.length) return null;
   const when = (at: string | undefined) => (at ? new Date(at).toLocaleString(localeOf(i18n.language), { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "–");
   return (
     <Card title={t("runs.limits")}>
       <ul className="flex flex-wrap gap-x-8 gap-y-3">
         {withLimits.map((h) => {
-          const l = h.report.claude_limits!;
-          const five = Math.round((l.five_hour?.utilization ?? 0) * 100);
-          const week = Math.round((l.seven_day?.utilization ?? 0) * 100);
+          const l = h.report.claude_limits;
+          const five = Math.round((l?.five_hour?.utilization ?? 0) * 100);
+          const week = Math.round((l?.seven_day?.utilization ?? 0) * 100);
+          const used = (remaining: number) => Math.round((1 - remaining) * 100);
           return (
             <li key={h.id} className="flex flex-wrap items-center gap-3">
               <span className="font-medium">{h.name}</span>
-              <LimitRing pct={five} label={t("runs.fiveHour")} title={t("runs.ringTitle", { name: h.name, window: t("runs.fiveHour"), pct: five, reset: when(l.five_hour?.resets_at) })} />
-              <LimitRing pct={week} label={t("runs.week")} title={t("runs.ringTitle", { name: h.name, window: t("runs.week"), pct: week, reset: when(l.seven_day?.resets_at) })} />
+              {l?.five_hour ? (
+                <>
+                  <span className="text-meta text-fg-subtle">Claude</span>
+                  <LimitRing pct={five} label={t("runs.fiveHour")} title={t("runs.ringTitle", { name: `${h.name} Claude`, window: t("runs.fiveHour"), pct: five, reset: when(l.five_hour?.resets_at) })} />
+                  <LimitRing pct={week} label={t("runs.week")} title={t("runs.ringTitle", { name: `${h.name} Claude`, window: t("runs.week"), pct: week, reset: when(l.seven_day?.resets_at) })} />
+                </>
+              ) : null}
+              {(h.report.agy_usage ?? []).map((g) => (
+                <span key={g.name} className="flex flex-wrap items-center gap-3">
+                  <span className="text-meta text-fg-subtle" title={g.models ?? undefined}>
+                    {g.name}
+                  </span>
+                  {g.five_hour ? <LimitRing pct={used(g.five_hour.remaining)} label={t("runs.fiveHour")} title={t("runs.ringTitle", { name: g.name, window: t("runs.fiveHour"), pct: used(g.five_hour.remaining), reset: when(g.five_hour.resets_at) })} /> : null}
+                  {g.weekly ? <LimitRing pct={used(g.weekly.remaining)} label={t("runs.week")} title={t("runs.ringTitle", { name: g.name, window: t("runs.week"), pct: used(g.weekly.remaining), reset: when(g.weekly.resets_at) })} /> : null}
+                </span>
+              ))}
             </li>
           );
         })}

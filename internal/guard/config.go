@@ -21,17 +21,20 @@ type Config struct {
 	Server string        `yaml:"server"`
 	Agents []AgentConfig `yaml:"agents"`
 
-	HostTokenFile    string            `yaml:"host_token_file"`
-	Roots            []string          `yaml:"roots"`             // the only folders agents can ever get
-	SandboxDir       string            `yaml:"sandbox_dir"`       // default ~/.local/share/colonyhall/sandbox
-	SandboxNetwork   string            `yaml:"sandbox_network"`   // filtered (default), log, open
-	SandboxAllow     []string          `yaml:"sandbox_allow"`     // additional machine-wide host:port allowlist entries
-	WebReadAllow     []string          `yaml:"web_read_allow"`    // if set, only these hosts for web_read (*.domain or exact)
-	WebReadDeny      []string          `yaml:"web_read_deny"`     // always refused hosts for web_read
-	RequireSandbox   *bool             `yaml:"require_sandbox"`   // default true: no work runs without bwrap
-	AllowUnsandboxed bool              `yaml:"allow_unsandboxed"` // default false: permit agents with sandbox: false
-	ConfigPoll       time.Duration     `yaml:"config_poll"`
-	Commands         map[string]string `yaml:"commands"` // client → binary, e.g. claude-code: claude
+	HostTokenFile    string        `yaml:"host_token_file"`
+	Roots            []string      `yaml:"roots"`             // the only folders agents can ever get
+	SandboxDir       string        `yaml:"sandbox_dir"`       // default ~/.local/share/colonyhall/sandbox
+	SandboxNetwork   string        `yaml:"sandbox_network"`   // filtered (default), log, open
+	SandboxAllow     []string      `yaml:"sandbox_allow"`     // additional machine-wide host:port allowlist entries
+	WebReadAllow     []string      `yaml:"web_read_allow"`    // if set, only these hosts for web_read (*.domain or exact)
+	WebReadDeny      []string      `yaml:"web_read_deny"`     // always refused hosts for web_read
+	RequireSandbox   *bool         `yaml:"require_sandbox"`   // default true: no work runs without bwrap
+	AllowUnsandboxed bool          `yaml:"allow_unsandboxed"` // default false: permit agents with sandbox: false
+	ConfigPoll       time.Duration `yaml:"config_poll"`
+	// UsagePoll is how often the guard asks the clients for their usage
+	// (/usage, no model call); default 15m, negative turns it off.
+	UsagePoll time.Duration     `yaml:"usage_poll"`
+	Commands  map[string]string `yaml:"commands"` // client → binary, e.g. claude-code: claude
 	// ClaudeTokenFile holds a token from `claude setup-token`; sandboxed
 	// Claude runs use it instead of a copy of the user's login file.
 	ClaudeTokenFile string      `yaml:"claude_token_file"`

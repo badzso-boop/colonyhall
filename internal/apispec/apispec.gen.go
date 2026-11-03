@@ -1649,6 +1649,25 @@ type AgyLimit struct {
 	ResetKnown bool `json:"reset_known"`
 }
 
+// AgyUsageGroup defines model for AgyUsageGroup.
+type AgyUsageGroup struct {
+	FiveHour *AgyUsageWindow `json:"five_hour,omitempty"`
+
+	// Models Which models share the group's limits, as agy describes it
+	Models *string `json:"models,omitempty"`
+
+	// Name e.g. "Gemini Models"
+	Name   string          `json:"name"`
+	Weekly *AgyUsageWindow `json:"weekly,omitempty"`
+}
+
+// AgyUsageWindow defines model for AgyUsageWindow.
+type AgyUsageWindow struct {
+	// Remaining Fraction left, 0 to 1
+	Remaining float32    `json:"remaining"`
+	ResetsAt  *time.Time `json:"resets_at,omitempty"`
+}
+
 // AnswerQuestionRequest defines model for AnswerQuestionRequest.
 type AnswerQuestionRequest struct {
 	Answer string `json:"answer"`
@@ -2476,6 +2495,9 @@ type HostReport struct {
 	// AgyLimits Antigravity models paused on this machine after a quota error.
 	AgyLimits *[]AgyLimit `json:"agy_limits,omitempty"`
 
+	// AgyUsage The Antigravity quota groups, from `agy -p /usage` (no model call).
+	AgyUsage *[]AgyUsageGroup `json:"agy_usage,omitempty"`
+
 	// AllowUnsandboxed True when guard.yaml permits agents with sandbox: false
 	AllowUnsandboxed *bool         `json:"allow_unsandboxed,omitempty"`
 	ClaudeLimits     *ClaudeLimits `json:"claude_limits,omitempty"`
@@ -2499,8 +2521,11 @@ type HostReport struct {
 	Roots []string `json:"roots"`
 
 	// Sandbox e.g. bwrap 0.9.0; empty when none
-	Sandbox   *string `json:"sandbox,omitempty"`
-	Worktrees *[]struct {
+	Sandbox *string `json:"sandbox,omitempty"`
+
+	// UsageCheckedAt When the guard last asked the clients for their usage (`/usage`)
+	UsageCheckedAt *time.Time `json:"usage_checked_at,omitempty"`
+	Worktrees      *[]struct {
 		AgentId string `json:"agent_id"`
 		Branch  string `json:"branch"`
 		Path    string `json:"path"`

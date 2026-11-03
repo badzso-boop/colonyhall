@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"colonyhall/internal/apispec"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -545,6 +546,22 @@ func (s *Service) SaveReport(ctx context.Context, h Host, r Report) error {
 	}
 	for i := range r.AgyLimits {
 		r.AgyLimits[i].Model = clip(r.AgyLimits[i].Model, 80)
+	}
+	if len(r.AgyUsage) > 10 {
+		r.AgyUsage = r.AgyUsage[:10]
+	}
+	for i := range r.AgyUsage {
+		g := &r.AgyUsage[i]
+		g.Name = clip(g.Name, 80)
+		if g.Models != nil {
+			m := clip(*g.Models, 200)
+			g.Models = &m
+		}
+		for _, w := range []*apispec.AgyUsageWindow{g.FiveHour, g.Weekly} {
+			if w != nil {
+				w.Remaining = min(max(w.Remaining, 0), 1)
+			}
+		}
 	}
 	r.Roots = clipList(r.Roots, 32, 1024)
 	if len(r.Clients) > 16 {

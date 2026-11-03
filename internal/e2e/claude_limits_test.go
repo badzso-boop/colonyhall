@@ -94,10 +94,12 @@ func TestRateLimitHostReportAndOverview(t *testing.T) {
 	}
 
 	err = hostClient.Report(ctx, guard.HostReport{
-		GuardVersion: "test-guard",
-		Roots:        []string{root},
-		ClaudeLimits: limits,
-		AgyLimits:    []apispec.AgyLimit{{Model: "gemini-3.8-flash-high", PausedUntil: resetsAt, ResetKnown: true}},
+		GuardVersion:   "test-guard",
+		Roots:          []string{root},
+		ClaudeLimits:   limits,
+		AgyLimits:      []apispec.AgyLimit{{Model: "gemini-3.8-flash-high", PausedUntil: resetsAt, ResetKnown: true}},
+		AgyUsage:       []apispec.AgyUsageGroup{{Name: "Gemini Models", Weekly: &apispec.AgyUsageWindow{Remaining: 0.49, ResetsAt: &resetsAt}}},
+		UsageCheckedAt: &resetsAt,
 	})
 	if err != nil {
 		t.Fatalf("host report: %v", err)
@@ -117,6 +119,9 @@ func TestRateLimitHostReportAndOverview(t *testing.T) {
 	hReport := hlAfter.Hosts[0].Report
 	if hReport.AgyLimits == nil || len(*hReport.AgyLimits) != 1 || (*hReport.AgyLimits)[0].Model != "gemini-3.8-flash-high" || !(*hReport.AgyLimits)[0].ResetKnown {
 		t.Fatalf("agy_limits: %+v", hReport.AgyLimits)
+	}
+	if hReport.AgyUsage == nil || len(*hReport.AgyUsage) != 1 || (*hReport.AgyUsage)[0].Weekly.Remaining != 0.49 || hReport.UsageCheckedAt == nil {
+		t.Fatalf("agy_usage: %+v", hReport.AgyUsage)
 	}
 	if hReport.ClaudeLimits == nil {
 		t.Fatal("expected claude_limits on host report, got nil")

@@ -103,7 +103,11 @@
     "agy": "Antigravity quota",
     "agyPaused": "{{model}}: ⏸ until {{until}}",
     "agyRetry": "{{model}}: ⏸ used up, next try at {{until}}",
-    "agyNone": "no paused model"
+    "agyNone": "no paused model",
+    "agyUsage": "Antigravity usage",
+    "agyGroup": "{{name}}: 5 hours {{five}}% (resets {{fiveReset}}), week {{week}}% (resets {{weekReset}})",
+    "agyUsageNone": "no data yet",
+    "usageChecked": "last checked: {{when}}"
   },
   "agents": {
     "new": "New agent on this machine",

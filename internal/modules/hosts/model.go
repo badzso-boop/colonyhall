@@ -64,18 +64,20 @@ type Host struct {
 // Report is what the guard says about its machine. It is informational
 // for the admin; the guard enforces its own roots regardless.
 type Report struct {
-	GuardVersion     string                `json:"guard_version,omitempty"`
-	OS               string                `json:"os,omitempty"`
-	Roots            []string              `json:"roots"`
-	Clients          []Client              `json:"clients"`
-	Sandbox          string                `json:"sandbox,omitempty"` // e.g. "bwrap 0.9.0"; empty: none
-	AllowUnsandboxed bool                  `json:"allow_unsandboxed"`
-	ExchangeDir      string                `json:"exchange_dir,omitempty"`
-	ExchangeOK       bool                  `json:"exchange_ok"`
-	Rejected         []Rejected            `json:"rejected"`
-	Worktrees        []Worktree            `json:"worktrees,omitempty"`
-	ClaudeLimits     *apispec.ClaudeLimits `json:"claude_limits,omitempty"`
-	AgyLimits        []apispec.AgyLimit    `json:"agy_limits,omitempty"`
+	GuardVersion     string                  `json:"guard_version,omitempty"`
+	OS               string                  `json:"os,omitempty"`
+	Roots            []string                `json:"roots"`
+	Clients          []Client                `json:"clients"`
+	Sandbox          string                  `json:"sandbox,omitempty"` // e.g. "bwrap 0.9.0"; empty: none
+	AllowUnsandboxed bool                    `json:"allow_unsandboxed"`
+	ExchangeDir      string                  `json:"exchange_dir,omitempty"`
+	ExchangeOK       bool                    `json:"exchange_ok"`
+	Rejected         []Rejected              `json:"rejected"`
+	Worktrees        []Worktree              `json:"worktrees,omitempty"`
+	ClaudeLimits     *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
+	AgyLimits        []apispec.AgyLimit      `json:"agy_limits,omitempty"`
+	AgyUsage         []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
+	UsageCheckedAt   *time.Time              `json:"usage_checked_at,omitempty"`
 }
 
 // Worktree describes a git worktree reported by the guard.

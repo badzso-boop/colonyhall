@@ -57,7 +57,7 @@
     "unpriced_other": "{{count}} futásnak nincs ára",
     "noPrice": "nincs ár",
     "subscriptionShort": "előfizetésben, API-n ennyi lenne",
-    "limits": "Claude-keretek gépenként",
+    "limits": "Keretek gépenként (Claude, Antigravity)",
     "fiveHour": "5 óra",
     "week": "Hét",
     "ringTitle": "{{name}}, {{window}}: {{pct}}%, újraindul: {{reset}}",

@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"colonyhall/internal/apispec"
 	"context"
 	"errors"
 	"fmt"
@@ -72,6 +73,18 @@ type Supervisor struct {
 	exchangeOK       bool
 	worktrees        []Worktree
 	fileFetchLimiter chan struct{}
+	agyUsage         []apispec.AgyUsageGroup
+	usageCheckedAt   time.Time
+}
+
+// stateDir is the guard's own state folder.
+func (s *Supervisor) stateDir() string { return filepath.Dir(s.Cfg.SandboxDir) }
+
+func (s *Supervisor) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
 }
 
 type managed struct {
@@ -177,6 +190,7 @@ func (s *Supervisor) RunHost(ctx context.Context) error {
 	s.Log.Info("guard: host mode", "server", s.Cfg.Server, "roots", strings.Join(s.roots, ","), "sandbox", sandbox, "sandbox_network", s.Cfg.SandboxNetwork)
 	s.report(ctx)
 	go s.hostWS().Run(ctx)
+	go s.pollUsage(ctx)
 	t := time.NewTicker(s.Cfg.ConfigPoll)
 	defer t.Stop()
 	for {
@@ -822,6 +836,13 @@ func (s *Supervisor) report(ctx context.Context) {
 	if s.agyLimiter != nil {
 		r.AgyLimits = s.agyLimiter.Report()
 	}
+	s.mu.Lock()
+	r.AgyUsage = s.agyUsage
+	if !s.usageCheckedAt.IsZero() {
+		at := s.usageCheckedAt
+		r.UsageCheckedAt = &at
+	}
+	s.mu.Unlock()
 	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
 	r.ExchangeDir = s.Cfg.ExchangeDir
 	r.ExchangeOK = s.exchangeOK

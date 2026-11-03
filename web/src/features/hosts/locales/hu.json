@@ -103,7 +103,11 @@
     "agy": "Antigravity-keret",
     "agyPaused": "{{model}}: ⏸ {{until}}-ig",
     "agyRetry": "{{model}}: ⏸ elfogyott, újrapróbálás {{until}}-kor",
-    "agyNone": "nincs szüneteltetett modell"
+    "agyNone": "nincs szüneteltetett modell",
+    "agyUsage": "Antigravity-felhasználás",
+    "agyGroup": "{{name}}: 5 óra {{five}}% (visszaáll {{fiveReset}}), heti {{week}}% (visszaáll {{weekReset}})",
+    "agyUsageNone": "még nincs adat",
+    "usageChecked": "utoljára lekérdezve: {{when}}"
   },
   "agents": {
     "new": "Új agent ezen a gépen",

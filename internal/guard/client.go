@@ -423,18 +423,20 @@ type HostConfig struct {
 
 // HostReport is what the guard tells the server about this machine.
 type HostReport struct {
-	GuardVersion     string                `json:"guard_version"`
-	OS               string                `json:"os"`
-	Roots            []string              `json:"roots"`
-	Clients          []ReportClient        `json:"clients"`
-	Sandbox          string                `json:"sandbox"`
-	AllowUnsandboxed bool                  `json:"allow_unsandboxed"`
-	ExchangeDir      string                `json:"exchange_dir,omitempty"`
-	ExchangeOK       bool                  `json:"exchange_ok"`
-	Rejected         []Rejected            `json:"rejected"`
-	Worktrees        []Worktree            `json:"worktrees,omitempty"`
-	ClaudeLimits     *apispec.ClaudeLimits `json:"claude_limits,omitempty"`
-	AgyLimits        []apispec.AgyLimit    `json:"agy_limits,omitempty"`
+	GuardVersion     string                  `json:"guard_version"`
+	OS               string                  `json:"os"`
+	Roots            []string                `json:"roots"`
+	Clients          []ReportClient          `json:"clients"`
+	Sandbox          string                  `json:"sandbox"`
+	AllowUnsandboxed bool                    `json:"allow_unsandboxed"`
+	ExchangeDir      string                  `json:"exchange_dir,omitempty"`
+	ExchangeOK       bool                    `json:"exchange_ok"`
+	Rejected         []Rejected              `json:"rejected"`
+	Worktrees        []Worktree              `json:"worktrees,omitempty"`
+	ClaudeLimits     *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
+	AgyLimits        []apispec.AgyLimit      `json:"agy_limits,omitempty"`
+	AgyUsage         []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
+	UsageCheckedAt   *time.Time              `json:"usage_checked_at,omitempty"`
 }
 
 // Worktree is an active git worktree on this machine.

@@ -98,6 +98,26 @@ export function OverviewTab({ host, now }: { host: Host; now: Date }) {
             t("overview.none")
           )}
         </Row>
+        <Row label={t("overview.agyUsage")}>
+          {r.agy_usage?.length ? (
+            <ul>
+              {r.agy_usage.map((g) => (
+                <li key={g.name} className="tabular" title={g.models ?? undefined}>
+                  {t("overview.agyGroup", {
+                    name: g.name,
+                    five: g.five_hour ? Math.round((1 - g.five_hour.remaining) * 100) : "–",
+                    fiveReset: g.five_hour?.resets_at ? agyWhen(g.five_hour.resets_at, now, i18n.language) : "–",
+                    week: g.weekly ? Math.round((1 - g.weekly.remaining) * 100) : "–",
+                    weekReset: g.weekly?.resets_at ? stamp(g.weekly.resets_at, i18n.language) : "–",
+                  })}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            t("overview.agyUsageNone")
+          )}
+          {r.usage_checked_at ? <p className="text-meta text-fg-subtle">{t("overview.usageChecked", { when: stamp(r.usage_checked_at, i18n.language) })}</p> : null}
+        </Row>
         <Row label={t("overview.agy")}>
           {r.agy_limits?.length ? (
             <ul>

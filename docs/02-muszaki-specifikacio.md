@@ -1279,6 +1279,15 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
 - **Gépjelentés:** `HostReport.agy_limits` (`model`, `paused_until`, `reset_known`; legfeljebb 20). A Gépek oldal: „⏸ agy” jelvény a kártyán, az Áttekintésben „gemini-3.8-flash-high: ⏸ 15:58-ig”.
 - **Ami kimaradt:** a keret mérése, mielőtt elfogy (az agy nem ad használati adatot), és automatikus átváltás másik modellre. A tömörítő (scribe) futások nem állnak meg, csak a hibájuk okát kapják meg.
 
+## A kliensek kerete a `/usage` paranccsal (2026-11-03)
+
+- **Kérdezés:** az őr 15 percenként (`guard.yaml` `usage_poll`; negatív értékkel kikapcsolható) lefuttatja a `claude -p /usage --output-format json --no-session-persistence --strict-mcp-config` és az `agy -p /usage --output-format json` parancsot, egy saját, üres mappában (`<állapotmappa>/usage`). Egyik sem hív modellt (0 token, 0 kör), így nem fogyaszt a keretből. Munkamenetet nem ment, a felhasználó MCP-szervereit nem indítja el.
+- **Claude:** a válasz szöveges („Current session: 13% used · resets Nov 4, 3:39am (Europe/Budapest)”, „Current week (all models): 29% used · …”). Az őr ebből olvassa ki a két ablakot, és a meglévő `ClaudeLimiter`-be adja, mintha egy futás `rate_limit` eseménye jött volna. Így a 90%-os tartalék futás nélkül is időben megállít, és a gyűrűk frissek maradnak. Ha a szöveg formája megváltozik, az őr nem frissít (nem talál ki értéket).
+- **Antigravity:** a válasz strukturált (`command.data.groups[].buckets[]`: `window` `5h`/`weekly`, `remaining_fraction`, `reset_time`). Csoportonként kerül a gépjelentésbe: `HostReport.agy_usage` (`name`, `models`, `five_hour`, `weekly`: `remaining` 0–1, `resets_at`; legfeljebb 10 csoport), mellette `usage_checked_at`. Ez csak kijelzés; a szünetet továbbra is a kvótahiba indítja (37. kör).
+- **Felület:**
+  - Gépek oldal, Áttekintés: „Gemini Models: 5 óra 25% (visszaáll 03:50), heti 50% (…)”.
+  - Futások oldal: gyűrűk gépenként, a Claude és az agy-csoportok külön.
+
 ## Saját feladatlista és naptár (`planner` modul, 2026-10-29)
 
 - **Táblák (`migrations/00036_planner.sql`):** `planner_task` (cím, leírás, `status` = `scheduled|started|done`, `position` double, `started_at`, `done_at`, `status_changed_at`, `deleted_at`), `planner_access` (tulajdonosonként: `task_all`, `task_agent_ids`, `cal_agent_ids`), `planner_calendar` (név, URL — titok, soha nem adjuk vissza —, szín, utolsó letöltés és hiba), `planner_calendar_event` (a feldolgozott előfordulások gyorsítótára, letöltésenként cserélődik; nem append-only adat).

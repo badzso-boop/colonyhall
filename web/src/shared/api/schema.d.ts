@@ -3391,6 +3391,13 @@ export interface components {
             claude_limits?: components["schemas"]["ClaudeLimits"];
             /** @description Antigravity models paused on this machine after a quota error. */
             agy_limits?: components["schemas"]["AgyLimit"][];
+            /** @description The Antigravity quota groups, from `agy -p /usage` (no model call). */
+            agy_usage?: components["schemas"]["AgyUsageGroup"][];
+            /**
+             * Format: date-time
+             * @description When the guard last asked the clients for their usage (`/usage`)
+             */
+            usage_checked_at?: string;
         };
         FolderGrant: {
             /** Format: uuid */
@@ -4220,6 +4227,20 @@ export interface components {
             rate_limit_warn?: number;
             five_hour?: components["schemas"]["ClaudeRateLimitWindow"];
             seven_day?: components["schemas"]["ClaudeRateLimitWindow"];
+        };
+        AgyUsageGroup: {
+            /** @description e.g. "Gemini Models" */
+            name: string;
+            /** @description Which models share the group's limits, as agy describes it */
+            models?: string;
+            five_hour?: components["schemas"]["AgyUsageWindow"];
+            weekly?: components["schemas"]["AgyUsageWindow"];
+        };
+        AgyUsageWindow: {
+            /** @description Fraction left, 0 to 1 */
+            remaining: number;
+            /** Format: date-time */
+            resets_at?: string;
         };
         AgyLimit: {
             /** @description "default" when the agent sets no model */

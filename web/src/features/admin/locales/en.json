@@ -57,7 +57,7 @@
     "unpriced_other": "{{count}} runs have no price",
     "noPrice": "no price",
     "subscriptionShort": "under a subscription, this on the API",
-    "limits": "Claude limits per machine",
+    "limits": "Limits per machine (Claude, Antigravity)",
     "fiveHour": "5 hours",
     "week": "Week",
     "ringTitle": "{{name}}, {{window}}: {{pct}}%, resets: {{reset}}",

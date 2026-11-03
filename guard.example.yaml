@@ -63,6 +63,11 @@ roots:
 
 # Claude Code rate limit reserve and warning thresholds (guard-wide):
 # rate_limit_reserve: 90  # pause new Claude Code runs at or above 90% utilization (default 90)
+# How often to ask claude and agy for their usage (`/usage`, no model call,
+# nothing is used up); the answer shows on the Machines and Runs pages, and a
+# Claude reading above rate_limit_reserve pauses Claude runs. Default 15m;
+# a negative value turns it off.
+# usage_poll: 15m
 # rate_limit_warn: 80     # show warning colour on UI at or above 80% utilization (default 80)
 
 # --- Agents mode (quick single-machine setup, no pairing) ---------------

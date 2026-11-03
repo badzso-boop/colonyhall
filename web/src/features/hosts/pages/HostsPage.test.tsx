@@ -31,6 +31,7 @@ function hosts(): Host[] {
         sandbox: "bwrap 0.9.0", exchange_dir: "/mnt/z", exchange_ok: true,
         worktrees: [{ agent_id: "a1", path: "/mnt/g/Projects/x-wt", branch: "colony/backend/work" }],
         claude_limits: { five_hour: { utilization: 0.42, status: "allowed" } },
+        agy_usage: [{ name: "Gemini Models", models: "Gemini Flash, Gemini Pro", five_hour: { remaining: 0.75, resets_at: new Date(Date.now() + 3_600_000).toISOString() }, weekly: { remaining: 0.5 } }],
         agy_limits: [
           { model: "gemini-3.8-flash-high", paused_until: new Date(Date.now() + 3_600_000).toISOString(), reset_known: true },
           { model: "default", paused_until: new Date(Date.now() + 1_800_000).toISOString(), reset_known: false },
@@ -118,6 +119,7 @@ test("overview shows the report", async () => {
   expect(screen.getByText(/^gemini-3\.8-flash-high: ⏸ .+-ig$/)).toBeTruthy();
   expect(screen.getByText(/^default: ⏸ elfogyott, újrapróbálás .+-kor$/)).toBeTruthy();
   expect(screen.getAllByText("⏸ agy ×2").length).toBeGreaterThan(0);
+  expect(screen.getByText(/^Gemini Models: 5 óra 25% \(visszaáll .+\), heti 50% \(visszaáll –\)$/)).toBeTruthy();
 });
 
 test("agents tab: overview pane, settings params and the new-agent link", async () => {

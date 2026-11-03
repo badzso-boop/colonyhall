@@ -81,6 +81,8 @@
 - `rate_limit_reserve`: 90 (alapértelmezett). Ha a Claude 5 órás vagy heti kerete eléri ezt a százalékot, az őr egyetlen új Claude Code futást sem indít el. A feladatok nem vesznek el, az inboxban várakoznak, az `attempts` számláló nem nő, és a szálba szálanként egyszer csendes üzenet kerül ki. Az újraindulás (`resets_at + 1m`) után a feldolgozás automatikusan folytatódik.
 - `rate_limit_warn`: 80 (alapértelmezett). A felületen 80%-tól figyelmeztető kiemelés jelzi a keret fogyását.
 
+**Keretek (2026-11-03):** a Claude 5 órás és heti, és az Antigravity csoportonkénti (Gemini; Claude és GPT) kerete a Futások oldalon és a Gépek oldal Áttekintésében látszik, 15 percenként frissül (a kliensek saját `/usage` parancsából, keret fogyasztása nélkül). Ha nem frissül: az őr naplója, és kézzel `claude -p /usage` vagy `agy -p /usage`.
+
 **Antigravity kvóta (37. kör):** ha egy agy-modell kerete elfogy, a szálban csendes üzenet jelenik meg („⏸ Az Antigravity kerete (modell) elfogyott, 15:58-kor folytatom.”), az üzenetek megmaradnak, és a visszaállás után maguktól lefutnak. A Gépek oldalon a gép kártyáján „⏸ agy” jelvény látszik, az Áttekintésben a modell és az időpont. Ugyanazon a gépen a többi modell és a Claude-agentek tovább dolgoznak. Az ok az őr naplójában van; ha az agy a kimenetében nem adta meg, az agy saját naplójából: `~/.gemini/antigravity-cli/log/cli-*.log` (sandboxos agentnél `<agentmappa>.config/gemini/antigravity-cli/log/`). A szünet állapota: az őr állapotmappájában az `agy_quota.json`; ha kézzel kell feloldani, törölhető, és az őrt újra kell indítani.
 
 ## Munkamódszer
