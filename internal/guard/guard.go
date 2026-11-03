@@ -99,6 +99,11 @@ type Agent struct {
 
 	ClaudeLimiter         *ClaudeLimiter
 	notedRateLimitThreads map[string]bool
+	// AgyLimiter pauses this machine's Antigravity models after a quota
+	// error; AgyLogDir is where this agent's agy writes its logs (the
+	// fallback for an error agy did not put in its result).
+	AgyLimiter *AgyLimiter
+	AgyLogDir  string
 
 	fileFetchMu       sync.Mutex
 	fileFetchInFlight map[string]bool
@@ -233,6 +238,11 @@ func (a *Agent) waitInterval() time.Duration {
 			}
 		}
 	}
+	if until := a.agyPausedUntil(); !until.IsZero() {
+		if d := a.until(until); d > 0 {
+			return d
+		}
+	}
 	if !a.budgetExhaustedUntil.IsZero() && a.now().Before(a.budgetExhaustedUntil) {
 		d := a.until(a.budgetExhaustedUntil)
 		if d > 0 {
@@ -343,6 +353,12 @@ func (a *Agent) Tick(ctx context.Context) error {
 		}
 		a.notedRateLimitThreads = nil
 	}
+	if a.isAgyClient() && a.AgyLimiter != nil {
+		if a.agyPaused(ctx, items) {
+			return nil
+		}
+		a.notedRateLimitThreads = nil
+	}
 
 	if a.Mode == "direct" || (a.Mode == "" && a.Cfg.Mode == "direct") {
 		if err := a.handleDirect(ctx, items); err != nil {
@@ -403,6 +419,9 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		a.postRateLimitNotes(ctx, items)
 		return nil
 	}
+	if a.agyPaused(ctx, items) {
+		return nil
+	}
 
 	if len(items) > 0 {
 		ok, err := a.checkBudget(runCtx, items[0])
@@ -441,8 +460,10 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		a.workMu.Unlock()
 	}()
 	dctx, cancel := context.WithTimeout(runCtx, a.Cfg.DecideTimeout)
+	started := time.Now()
 	res, err := a.Adapter.Decide(dctx, DecideRequest{Handle: a.getMe().Handle, Items: pitems, Model: a.Cfg.Model, Dir: a.Cfg.Dir, Wrap: a.DecideWrap})
 	cancel()
+	err = a.agyReason(err, started)
 	a.logRun("decide", a.Cfg.Model, len(items), res, err)
 	decideStatus := "ok"
 	if err != nil {
@@ -460,6 +481,9 @@ func (a *Agent) handle(ctx context.Context, items []Item) error {
 		if a.isClaudeClient() && a.ClaudeLimiter != nil && isClaudeLimitMessage(err.Error()) {
 			a.ClaudeLimiter.RecordLimitFailure(err.Error(), a.now())
 			a.postRateLimitNotes(ctx, items)
+			return nil
+		}
+		if a.agyQuotaHit(ctx, err, a.Cfg.Model, items) {
 			return nil
 		}
 		if runCtx.Err() != nil && ctx.Err() == nil {
@@ -879,6 +903,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				origOnStep(s)
 			}
 		}
+		started := time.Now()
 		res, err := a.Adapter.Work(rtc, WorkRequest{
 			Prompt:         WorkPromptWithTools(a.getMe().Handle, promptBranch, p.AllowWebRead, allowPlanner, it, task, p.Grants...),
 			Model:          a.Cfg.WorkModel,
@@ -917,6 +942,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 		if tracker != nil {
 			visitedURLs = tracker.VisitedURLs()
 		}
+		err = a.agyReason(err, started)
 		a.logRun("work", a.Cfg.WorkModel, 1, res, err)
 		if wasLeft {
 			a.Log.Info("guard: work run stopped, the channel is no longer the agent's", "agent", a.logName(), "channel_id", it.ChannelID)
@@ -965,6 +991,9 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				a.postRateLimitNotes(ctx, []Item{it.Item})
 				return nil
 			}
+		}
+		if a.agyQuotaHit(ctx, err, a.Cfg.WorkModel, []Item{it.Item}) {
+			return nil
 		}
 		if err != nil && !stopped {
 			errID, rerr := a.reportError(ctx, it.Item, "work run failed", err.Error(), "gw-"+it.ID)
@@ -1321,14 +1350,101 @@ func (a *Agent) isClaudeClient() bool {
 	return a.Cfg.Client == "claude-code"
 }
 
+func (a *Agent) isAgyClient() bool {
+	return a.Cfg.Client == "antigravity"
+}
+
+// agyModels are the models this agent's runs use: the work model in direct
+// mode, the decision and the work model otherwise.
+func (a *Agent) agyModels() []string {
+	if a.Mode == "direct" || (a.Mode == "" && a.Cfg.Mode == "direct") {
+		return []string{a.Cfg.WorkModel}
+	}
+	return []string{a.Cfg.Model, a.Cfg.WorkModel}
+}
+
+// agyPausedUntil is the earliest end of a pause on one of the agent's
+// models, or zero.
+func (a *Agent) agyPausedUntil() time.Time {
+	if !a.isAgyClient() || a.AgyLimiter == nil {
+		return time.Time{}
+	}
+	var until time.Time
+	for _, m := range a.agyModels() {
+		if p, ok := a.AgyLimiter.Paused(m); ok && (until.IsZero() || p.Until.Before(until)) {
+			until = p.Until
+		}
+	}
+	return until
+}
+
+// agyPaused keeps the items pending (no run, no ack, no attempt) while a
+// model the agent needs is paused, with one silent note per thread.
+func (a *Agent) agyPaused(ctx context.Context, items []Item) bool {
+	if !a.isAgyClient() || a.AgyLimiter == nil {
+		return false
+	}
+	for _, m := range a.agyModels() {
+		if p, ok := a.AgyLimiter.Paused(m); ok {
+			a.postAgyNotes(ctx, items, m, p)
+			return true
+		}
+	}
+	return false
+}
+
+// agyReason fills an empty agy error reason from agy's own log.
+func (a *Agent) agyReason(err error, started time.Time) error {
+	var re *AgyRunError
+	if a.isAgyClient() && errors.As(err, &re) && re.Reason == "" {
+		re.Reason = agyLogReason(a.AgyLogDir, started)
+	}
+	return err
+}
+
+// agyQuotaHit pauses model when a failed run's error is a quota error. The
+// items stay pending and their attempts do not count.
+func (a *Agent) agyQuotaHit(ctx context.Context, err error, model string, items []Item) bool {
+	if !a.isAgyClient() || a.AgyLimiter == nil || err == nil {
+		return false
+	}
+	q, ok := asAgyQuota(err, a.now())
+	if !ok {
+		return false
+	}
+	p := a.AgyLimiter.Pause(model, q)
+	a.postAgyNotes(ctx, items, model, p)
+	return true
+}
+
+func (a *Agent) postAgyNotes(ctx context.Context, items []Item, model string, p AgyPause) {
+	if a.Client == nil {
+		return
+	}
+	window := "agy_quota"
+	if !p.ResetKnown {
+		window = "agy_quota_retry"
+	}
+	a.postNotes(ctx, items, func(ch, th string) error {
+		return a.Client.PostAgyQuotaNote(ctx, ch, th, window, AgyModelKey(model), p.Until)
+	})
+}
+
 func (a *Agent) postRateLimitNotes(ctx context.Context, items []Item) {
 	if a.ClaudeLimiter == nil || a.Client == nil {
 		return
 	}
+	info := a.ClaudeLimiter.PauseInfo()
+	a.postNotes(ctx, items, func(ch, th string) error {
+		return a.Client.PostRateLimitNote(ctx, ch, th, info.Window, info.Utilization, info.ResetsAt)
+	})
+}
+
+// postNotes posts one silent pause note per thread of the items.
+func (a *Agent) postNotes(ctx context.Context, items []Item, post func(channelID, threadRootID string) error) {
 	if a.notedRateLimitThreads == nil {
 		a.notedRateLimitThreads = make(map[string]bool)
 	}
-	info := a.ClaudeLimiter.PauseInfo()
 
 	for _, it := range items {
 		targetChannelID := it.ChannelID
@@ -1346,7 +1462,7 @@ func (a *Agent) postRateLimitNotes(ctx context.Context, items []Item) {
 		if a.notedRateLimitThreads[key] {
 			continue
 		}
-		if err := a.Client.PostRateLimitNote(ctx, targetChannelID, targetThreadID, info.Window, info.Utilization, info.ResetsAt); err != nil {
+		if err := post(targetChannelID, targetThreadID); err != nil {
 			a.Log.Warn("guard: post rate limit note failed", "channel_id", targetChannelID, "thread_root_id", targetThreadID, "err", err)
 		} else {
 			a.notedRateLimitThreads[key] = true

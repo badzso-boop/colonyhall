@@ -394,6 +394,9 @@ func (a *Agent) runDirectGroup(ctx context.Context, stateDir, stateFile string, 
 		a.postRateLimitNotes(ctx, group)
 		return nil
 	}
+	if a.agyPaused(ctx, group) {
+		return nil
+	}
 	threadRoot := ThreadRoot(group[0])
 	actChanID := group[0].ChannelID
 	actThreadID := threadRoot
@@ -674,7 +677,9 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	a.currentRetractedMsgID = ""
 	a.currentRunLeft = false
 	a.workMu.Unlock()
+	started := time.Now()
 	res, err := a.Adapter.Direct(rtc, req)
+	err = a.agyReason(err, started)
 	timedOut := rtc.Finish()
 	a.workMu.Lock()
 	wasRetracted := a.currentRunRetracted
@@ -760,6 +765,9 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			a.postRateLimitNotes(ctx, group)
 			return nil
 		}
+	}
+	if a.agyQuotaHit(ctx, err, req.Model, group) {
+		return nil
 	}
 	if err != nil {
 		a.reportRun(ctx, "direct", req.Model, sessionID, targetChannelID, targetThreadID, len(group), res, "error", "", steps, "")

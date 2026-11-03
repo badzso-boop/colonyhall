@@ -935,13 +935,19 @@ func (e QuestionState) Valid() bool {
 
 // Defines values for RateLimitNoteRequestWindow.
 const (
-	FiveHour RateLimitNoteRequestWindow = "five_hour"
-	SevenDay RateLimitNoteRequestWindow = "seven_day"
+	AgyQuota      RateLimitNoteRequestWindow = "agy_quota"
+	AgyQuotaRetry RateLimitNoteRequestWindow = "agy_quota_retry"
+	FiveHour      RateLimitNoteRequestWindow = "five_hour"
+	SevenDay      RateLimitNoteRequestWindow = "seven_day"
 )
 
 // Valid indicates whether the value is a known member of the RateLimitNoteRequestWindow enum.
 func (e RateLimitNoteRequestWindow) Valid() bool {
 	switch e {
+	case AgyQuota:
+		return true
+	case AgyQuotaRetry:
+		return true
 	case FiveHour:
 		return true
 	case SevenDay:
@@ -1631,6 +1637,16 @@ type AgentStepState string
 type AgentToken struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	Token     string    `json:"token"`
+}
+
+// AgyLimit defines model for AgyLimit.
+type AgyLimit struct {
+	// Model "default" when the agent sets no model
+	Model       string    `json:"model"`
+	PausedUntil time.Time `json:"paused_until"`
+
+	// ResetKnown false: agy gave no reset time, paused_until is the next try
+	ResetKnown bool `json:"reset_known"`
 }
 
 // AnswerQuestionRequest defines model for AnswerQuestionRequest.
@@ -2457,6 +2473,9 @@ type HostPreviewReportState string
 
 // HostReport defines model for HostReport.
 type HostReport struct {
+	// AgyLimits Antigravity models paused on this machine after a quota error.
+	AgyLimits *[]AgyLimit `json:"agy_limits,omitempty"`
+
 	// AllowUnsandboxed True when guard.yaml permits agents with sandbox: false
 	AllowUnsandboxed *bool         `json:"allow_unsandboxed,omitempty"`
 	ClaudeLimits     *ClaudeLimits `json:"claude_limits,omitempty"`
@@ -2899,14 +2918,21 @@ type QuestionState string
 
 // RateLimitNoteRequest Agents only. The server builds the silent rate limit note text.
 type RateLimitNoteRequest struct {
-	ChannelId    openapi_types.UUID         `json:"channel_id"`
-	ResetsAt     time.Time                  `json:"resets_at"`
-	ThreadRootId *openapi_types.UUID        `json:"thread_root_id,omitempty"`
-	Utilization  int                        `json:"utilization"`
-	Window       RateLimitNoteRequestWindow `json:"window"`
+	ChannelId openapi_types.UUID `json:"channel_id"`
+
+	// Model agy_quota only: the paused model
+	Model        *string             `json:"model,omitempty"`
+	ResetsAt     time.Time           `json:"resets_at"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+
+	// Utilization Claude windows only; 0 for agy_quota
+	Utilization int `json:"utilization"`
+
+	// Window agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try.
+	Window RateLimitNoteRequestWindow `json:"window"`
 }
 
-// RateLimitNoteRequestWindow defines model for RateLimitNoteRequest.Window.
+// RateLimitNoteRequestWindow agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try.
 type RateLimitNoteRequestWindow string
 
 // Reaction defines model for Reaction.

@@ -97,6 +97,7 @@ func TestRateLimitHostReportAndOverview(t *testing.T) {
 		GuardVersion: "test-guard",
 		Roots:        []string{root},
 		ClaudeLimits: limits,
+		AgyLimits:    []apispec.AgyLimit{{Model: "gemini-3.8-flash-high", PausedUntil: resetsAt, ResetKnown: true}},
 	})
 	if err != nil {
 		t.Fatalf("host report: %v", err)
@@ -114,6 +115,9 @@ func TestRateLimitHostReportAndOverview(t *testing.T) {
 		t.Fatal("no hosts returned")
 	}
 	hReport := hlAfter.Hosts[0].Report
+	if hReport.AgyLimits == nil || len(*hReport.AgyLimits) != 1 || (*hReport.AgyLimits)[0].Model != "gemini-3.8-flash-high" || !(*hReport.AgyLimits)[0].ResetKnown {
+		t.Fatalf("agy_limits: %+v", hReport.AgyLimits)
+	}
 	if hReport.ClaudeLimits == nil {
 		t.Fatal("expected claude_limits on host report, got nil")
 	}
@@ -236,6 +240,37 @@ func TestRateLimitNoteEndpoint(t *testing.T) {
 	expectedBodyWeekly := "⏸ A Claude heti kerete 95%-on, hétfőn 18:00-kor folytatom."
 	if noteMsgWeekly.Body != expectedBodyWeekly {
 		t.Errorf("expected weekly body %q, got %q", expectedBodyWeekly, noteMsgWeekly.Body)
+	}
+
+	// Antigravity: the model and the reset, or the next try when the reset is unknown.
+	seen := map[string]bool{noteMsg5h.Id.String(): true, noteMsgWeekly.Id.String(): true}
+	agyNote := func(window apispec.RateLimitNoteRequestWindow, model string) (int, string) {
+		req := apispec.RateLimitNoteRequest{ChannelId: ch.Id, ThreadRootId: &rootMsgID, Window: window, ResetsAt: reset5h.Add(-2 * time.Hour), Model: &model}
+		st := e.do("POST", "/api/v1/agent/ratelimit-note", agentToken, req, nil)
+		if st != http.StatusNoContent {
+			return st, ""
+		}
+		var th apispec.Thread
+		e.do("GET", fmt.Sprintf("/api/v1/messages/%s/thread", rootMsgID), server.DevAdminToken, nil, &th)
+		for _, m := range th.Replies {
+			if !seen[m.Id.String()] {
+				seen[m.Id.String()] = true
+				return st, m.Body
+			}
+		}
+		return st, ""
+	}
+	if _, body := agyNote(apispec.AgyQuota, "gemini-3.8-flash-high"); body != "⏸ Az Antigravity kerete (gemini-3.8-flash-high) elfogyott, 16:00-kor folytatom." {
+		t.Errorf("agy note: %q", body)
+	}
+	if _, body := agyNote(apispec.AgyQuotaRetry, "default"); body != "⏸ Az Antigravity kerete (default) elfogyott, 16:00-kor újrapróbálom." {
+		t.Errorf("agy retry note: %q", body)
+	}
+	if st, _ := agyNote(apispec.AgyQuota, ""); st != http.StatusBadRequest {
+		t.Errorf("an agy note without a model: %d", st)
+	}
+	if _, body := agyNote(apispec.AgyQuota, "flash\u202e\nx"); strings.ContainsAny(body, "\u202e\n") {
+		t.Errorf("control characters reached the note: %q", body)
 	}
 }
 

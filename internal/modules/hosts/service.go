@@ -540,6 +540,12 @@ func (s *Service) SaveReport(ctx context.Context, h Host, r Report) error {
 	r.GuardVersion = clip(r.GuardVersion, 40)
 	r.OS = clip(r.OS, 40)
 	r.Sandbox = clip(r.Sandbox, 80)
+	if len(r.AgyLimits) > 20 {
+		r.AgyLimits = r.AgyLimits[:20]
+	}
+	for i := range r.AgyLimits {
+		r.AgyLimits[i].Model = clip(r.AgyLimits[i].Model, 80)
+	}
 	r.Roots = clipList(r.Roots, 32, 1024)
 	if len(r.Clients) > 16 {
 		r.Clients = r.Clients[:16]

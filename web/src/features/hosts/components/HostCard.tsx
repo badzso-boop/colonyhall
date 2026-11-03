@@ -56,6 +56,11 @@ export function HostCard({ host, now, selected }: { host: Host; now: Date; selec
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate font-semibold">{host.name}</span>
         <LimitRing limits={r.claude_limits} />
+        {r.agy_limits?.length ? (
+          <span className="rounded-full border border-warning/40 bg-warning-soft px-1.5 text-meta text-warning" title={r.agy_limits.map((l) => l.model).join(", ")}>
+            {t("agyBadge", { count: r.agy_limits.length })}
+          </span>
+        ) : null}
         <OnlineBadge host={host} now={now} />
       </div>
       <p className="mt-0.5 truncate text-meta text-fg-muted">

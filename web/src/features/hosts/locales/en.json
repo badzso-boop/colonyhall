@@ -99,7 +99,11 @@
     "claude": "Claude limit",
     "five_hour": "5 hours: {{pct}}%, resets {{reset}}",
     "seven_day": "7 days: {{pct}}%, resets {{reset}}",
-    "noLimits": "not reported"
+    "noLimits": "not reported",
+    "agy": "Antigravity quota",
+    "agyPaused": "{{model}}: ⏸ until {{until}}",
+    "agyRetry": "{{model}}: ⏸ used up, next try at {{until}}",
+    "agyNone": "no paused model"
   },
   "agents": {
     "new": "New agent on this machine",
@@ -214,5 +218,7 @@
     "copy": "Copy {{what}}",
     "copied": "Copied.",
     "copyFailed": "Could not copy."
-  }
+  },
+  "agyBadge_one": "⏸ agy",
+  "agyBadge_other": "⏸ agy ×{{count}}"
 }

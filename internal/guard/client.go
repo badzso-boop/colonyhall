@@ -308,6 +308,21 @@ func (c *Client) PostRateLimitNote(ctx context.Context, channelID, threadRootID,
 	return c.do(ctx, http.MethodPost, "/api/v1/agent/ratelimit-note", in, nil)
 }
 
+// PostAgyQuotaNote posts the silent note of a paused Antigravity model.
+func (c *Client) PostAgyQuotaNote(ctx context.Context, channelID, threadRootID, window, model string, until time.Time) error {
+	in := map[string]any{
+		"channel_id":  channelID,
+		"window":      window,
+		"utilization": 0,
+		"resets_at":   until.UTC().Format(time.RFC3339),
+		"model":       clip(model, 80),
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/ratelimit-note", in, nil)
+}
+
 // Thread returns a thread's root and replies.
 func (c *Client) Thread(ctx context.Context, messageID string) (Message, []Message, error) {
 	var r struct {
@@ -419,6 +434,7 @@ type HostReport struct {
 	Rejected         []Rejected            `json:"rejected"`
 	Worktrees        []Worktree            `json:"worktrees,omitempty"`
 	ClaudeLimits     *apispec.ClaudeLimits `json:"claude_limits,omitempty"`
+	AgyLimits        []apispec.AgyLimit    `json:"agy_limits,omitempty"`
 }
 
 // Worktree is an active git worktree on this machine.

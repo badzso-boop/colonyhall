@@ -56,6 +56,7 @@ type Supervisor struct {
 
 	host          *Client
 	claudeLimiter *ClaudeLimiter
+	agyLimiter    *AgyLimiter
 	roots         []string
 	home          string
 	sandbox       *Sandbox
@@ -144,6 +145,13 @@ func (s *Supervisor) start(ctx context.Context) error {
 	nowFn := time.Now
 	if s.Now != nil {
 		nowFn = s.Now
+	}
+	if s.agyLimiter == nil {
+		s.agyLimiter = NewAgyLimiter(filepath.Join(stateDir, "agy_quota.json"), s.Log, nowFn)
+		s.agyLimiter.SetOnResume(func() {
+			s.report(context.Background())
+			s.WakeAll()
+		})
 	}
 	if s.claudeLimiter == nil {
 		s.claudeLimiter = NewClaudeLimiter(usageFile, s.Cfg.RateLimitReserve, s.Cfg.RateLimitWarn, s.Log, nowFn)
@@ -534,6 +542,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		WebReadDeny:   s.Cfg.WebReadDeny,
 		Roots:         s.roots,
 		ClaudeLimiter: s.claudeLimiter,
+		AgyLimiter:    s.agyLimiter,
 		Now:           s.Now,
 		GrantsFunc: func() []Grant {
 			s.mu.Lock()
@@ -549,6 +558,14 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		agent.WorktreePath = wt.Path
 	}
 	agent.Policy = func() WorkPolicy { return s.policy(m, dir) }
+	// agy logs to ~/.gemini/antigravity-cli/log; a sandboxed agent's ~/.gemini
+	// is its own config copy (see clientMounts).
+	if home, err := os.UserHomeDir(); err == nil {
+		agent.AgyLogDir = filepath.Join(home, ".gemini", "antigravity-cli", "log")
+	}
+	if ha.Sandbox && s.sandbox != nil {
+		agent.AgyLogDir = filepath.Join(dir+".config", "gemini", "antigravity-cli", "log")
+	}
 	if ha.Sandbox && s.sandbox != nil {
 		sb := s.sandbox
 		decideDir, client := ac.Dir, ha.Client
@@ -800,6 +817,9 @@ func (s *Supervisor) report(ctx context.Context) {
 	}
 	if s.claudeLimiter != nil {
 		r.ClaudeLimits = s.claudeLimiter.ReportLimits()
+	}
+	if s.agyLimiter != nil {
+		r.AgyLimits = s.agyLimiter.Report()
 	}
 	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
 	r.ExchangeDir = s.Cfg.ExchangeDir

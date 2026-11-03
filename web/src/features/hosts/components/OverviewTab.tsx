@@ -22,6 +22,11 @@ export function Mono({ children }: { children: ReactNode }) {
 }
 
 /** Áttekintés: what the guard reported about the machine. */
+/** "15:58", or with the day when the pause ends on another day. */
+function agyWhen(at: string, now: Date, lang: string): string {
+  return new Date(at).toDateString() === now.toDateString() ? clock(at, lang) : stamp(at, lang);
+}
+
 export function OverviewTab({ host, now }: { host: Host; now: Date }) {
   const { t, i18n } = useTranslation("hosts");
   const actors = useActors();
@@ -91,6 +96,19 @@ export function OverviewTab({ host, now }: { host: Host; now: Date }) {
             </ul>
           ) : (
             t("overview.none")
+          )}
+        </Row>
+        <Row label={t("overview.agy")}>
+          {r.agy_limits?.length ? (
+            <ul>
+              {r.agy_limits.map((l) => (
+                <li key={l.model} className="tabular">
+                  {t(l.reset_known ? "overview.agyPaused" : "overview.agyRetry", { model: l.model, until: agyWhen(l.paused_until, now, i18n.language) })}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            t("overview.agyNone")
           )}
         </Row>
         <Row label={t("overview.claude")}>

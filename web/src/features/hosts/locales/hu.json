@@ -99,7 +99,11 @@
     "claude": "Claude-keret",
     "five_hour": "5 óra: {{pct}}%, visszaáll {{reset}}",
     "seven_day": "7 nap: {{pct}}%, visszaáll {{reset}}",
-    "noLimits": "nincs jelentés"
+    "noLimits": "nincs jelentés",
+    "agy": "Antigravity-keret",
+    "agyPaused": "{{model}}: ⏸ {{until}}-ig",
+    "agyRetry": "{{model}}: ⏸ elfogyott, újrapróbálás {{until}}-kor",
+    "agyNone": "nincs szüneteltetett modell"
   },
   "agents": {
     "new": "Új agent ezen a gépen",
@@ -214,5 +218,7 @@
     "copy": "{{what}} másolása",
     "copied": "Kimásolva.",
     "copyFailed": "Nem sikerült másolni."
-  }
+  },
+  "agyBadge_one": "⏸ agy",
+  "agyBadge_other": "⏸ agy ×{{count}}"
 }

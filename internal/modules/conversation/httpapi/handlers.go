@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
@@ -593,6 +594,22 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			}
 			dayName := dayNames[in.ResetsAt.In(loc).Weekday()]
 			body = fmt.Sprintf("⏸ A Claude heti kerete %d%%-on, %s %s-kor folytatom.", in.Utilization, dayName, resetTime)
+		case apispec.AgyQuota, apispec.AgyQuotaRetry:
+			model := strings.Map(func(r rune) rune {
+				if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+					return -1
+				}
+				return r
+			}, httpx.Deref(in.Model, ""))
+			if len([]rune(model)) > 80 || model == "" {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "model must be 1-80 characters"})
+				return
+			}
+			if in.Window == apispec.AgyQuota {
+				body = fmt.Sprintf("⏸ Az Antigravity kerete (%s) elfogyott, %s-kor folytatom.", model, resetTime)
+			} else {
+				body = fmt.Sprintf("⏸ Az Antigravity kerete (%s) elfogyott, %s-kor újrapróbálom.", model, resetTime)
+			}
 		default:
 			body = fmt.Sprintf("⏸ A Claude kerete %d%%-on, %s-kor folytatom.", in.Utilization, resetTime)
 		}

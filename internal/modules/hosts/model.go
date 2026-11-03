@@ -75,6 +75,7 @@ type Report struct {
 	Rejected         []Rejected            `json:"rejected"`
 	Worktrees        []Worktree            `json:"worktrees,omitempty"`
 	ClaudeLimits     *apispec.ClaudeLimits `json:"claude_limits,omitempty"`
+	AgyLimits        []apispec.AgyLimit    `json:"agy_limits,omitempty"`
 }
 
 // Worktree describes a git worktree reported by the guard.

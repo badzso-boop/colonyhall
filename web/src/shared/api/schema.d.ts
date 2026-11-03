@@ -1567,7 +1567,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Agents only. Post a silent note when Claude usage hits reserve or reset pause. */
+        /** @description Agents only. Post a silent note when Claude usage hits reserve or reset pause, or an Antigravity model's quota runs out. */
         post: operations["reportRateLimitNote"];
         delete?: never;
         options?: never;
@@ -3377,6 +3377,8 @@ export interface components {
                 branch: string;
             }[];
             claude_limits?: components["schemas"]["ClaudeLimits"];
+            /** @description Antigravity models paused on this machine after a quota error. */
+            agy_limits?: components["schemas"]["AgyLimit"][];
         };
         FolderGrant: {
             /** Format: uuid */
@@ -4184,11 +4186,17 @@ export interface components {
             channel_id: string;
             /** Format: uuid */
             thread_root_id?: string | null;
-            /** @enum {string} */
-            window: "five_hour" | "seven_day";
+            /**
+             * @description agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try.
+             * @enum {string}
+             */
+            window: "five_hour" | "seven_day" | "agy_quota" | "agy_quota_retry";
+            /** @description Claude windows only; 0 for agy_quota */
             utilization: number;
             /** Format: date-time */
             resets_at: string;
+            /** @description agy_quota only: the paused model */
+            model?: string;
         };
         ClaudeLimits: {
             paused?: boolean;
@@ -4196,6 +4204,14 @@ export interface components {
             rate_limit_warn?: number;
             five_hour?: components["schemas"]["ClaudeRateLimitWindow"];
             seven_day?: components["schemas"]["ClaudeRateLimitWindow"];
+        };
+        AgyLimit: {
+            /** @description "default" when the agent sets no model */
+            model: string;
+            /** Format: date-time */
+            paused_until: string;
+            /** @description false: agy gave no reset time, paused_until is the next try */
+            reset_known: boolean;
         };
         ClaudeRateLimitWindow: {
             /** @description Ratio between 0.0 and 1.0 (e.g. 0.72 for 72%) */

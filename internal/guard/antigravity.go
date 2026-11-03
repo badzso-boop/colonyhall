@@ -23,6 +23,7 @@ type agyOutput struct {
 	Response       string          `json:"response"`
 	Structured     json.RawMessage `json:"structured_output"`
 	Status         string          `json:"status"`
+	Error          string          `json:"error"`
 	ConversationID string          `json:"conversation_id"`
 	Denied         []struct {
 		Action string `json:"action"`
@@ -50,6 +51,7 @@ type agyStreamLine struct {
 	Usage           *agyStreamUsage `json:"usage"`
 	Status          string          `json:"status"`
 	Response        string          `json:"response"`
+	Error           string          `json:"error"`
 	DeniedActions   []struct {
 		Action string `json:"action"`
 	} `json:"denied_actions"`
@@ -233,6 +235,7 @@ func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, 
 			resultFound = true
 			out.Status = sl.Status
 			out.Response = sl.Response
+			out.Error = sl.Error
 			out.ConversationID = sl.ConversationID
 			if sl.Usage != nil {
 				out.Usage.Input = sl.Usage.Input
@@ -300,7 +303,7 @@ func (a *Antigravity) execStream(ctx context.Context, dir string, wrap Wrapper, 
 			res.ClientWarning = fmt.Sprintf("agy: run status %q after an answer", out.Status)
 			return res, out, nil
 		}
-		return res, out, fmt.Errorf("agy: run status %q: %s", out.Status, clip(strings.TrimSpace(out.Response), 200))
+		return res, out, &AgyRunError{Status: out.Status, Reason: out.Error, Response: out.Response}
 	}
 	return res, out, nil
 }
@@ -408,7 +411,7 @@ func (a *Antigravity) execAs(ctx context.Context, dir string, wrap Wrapper, args
 			res.ClientWarning = fmt.Sprintf("agy: run status %q after an answer", out.Status)
 			return res, out, nil
 		}
-		return res, out, fmt.Errorf("agy: run status %q: %s", out.Status, clip(strings.TrimSpace(out.Response), 200))
+		return res, out, &AgyRunError{Status: out.Status, Reason: out.Error, Response: out.Response}
 	}
 	return res, out, nil
 }

@@ -32,6 +32,8 @@
 
 ## Kész
 
+- [x] **Antigravity kvótahiba: ok és modellenkénti szünet (37. kör)** (2026-11-03, `docs/handoff/37-agy-quota-report.md`, ág: `feature/agy-quota`): az őr kiolvassa az agy hibájának okát (`error` mező, tartaléknak az agy naplója), kvótahibánál a modellt a visszaállásig szünetelteti, nem számolja próbálkozásnak, szálanként egy csendes üzenetet küld, a Gépek oldal mutatja.
+
 - [x] **PWA: a csevegés teljessé tétele (34. kör)** (2026-11-02, `docs/handoff/34-pwa-chat-complete-report.md`, ág: `feature/pwa-chat`): csatorna szerkesztése, archiválása, tagkezelés, `channel_info` eszköz, a kizárt vagy archivált csatorna futásának leállítása, némítás, Szálaim, Válaszra vár, jóváhagyási, delegációs, engedély- és tömörítési kártyák, Gitea-kártyák, fájlnéző, lépésfiók, profilok, oldalsáv-szekciók, feladat- és naptár-hozzáférés. Élesítés: előbb a szerver (migrációk `00040`–`00042`), utána a guardok.
 
 - [x] **Planner eszközök sandboxos agenteknek és döntési fázis „dolgozik…” jelzése** (2026-10-29, commitok: `cc5b7bc`, `6108e68`, `docs/handoff/29-sandbox-planner-tools-report.md`, ág: `feature/sandbox-planner-tools`):
