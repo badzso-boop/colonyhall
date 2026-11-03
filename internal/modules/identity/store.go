@@ -37,6 +37,10 @@ type Store interface {
 	// ActorByTokenHash finds the actor of a token that is neither revoked
 	// nor expired at now.
 	ActorByTokenHash(ctx context.Context, hash []byte, now time.Time) (Actor, error)
+	// TouchToken records a token's use unless it was recorded after notBefore.
+	TouchToken(ctx context.Context, hash []byte, at, notBefore time.Time) error
+	// TouchSession records a session's use unless it was recorded after notBefore.
+	TouchSession(ctx context.Context, id ids.ID, at, notBefore time.Time) error
 	// RevokeHostTokens revokes the host's agent tokens (one agent, or all
 	// when agentID is ids.Nil).
 	RevokeHostTokens(ctx context.Context, hostID, agentID ids.ID, at time.Time) error

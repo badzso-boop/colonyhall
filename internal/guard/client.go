@@ -512,25 +512,27 @@ func (c *Client) ReportError(ctx context.Context, channelID, threadRootID, summa
 
 // ReportRunInput is the payload sent when reporting an agent run.
 type ReportRunInput struct {
-	HostID           string   `json:"host_id,omitempty"`
-	Phase            string   `json:"phase"`
-	Client           string   `json:"client"`
-	Model            string   `json:"model"`
-	SessionID        string   `json:"session_id"`
-	ChannelID        string   `json:"channel_id,omitempty"`
-	ThreadRootID     string   `json:"thread_root_id,omitempty"`
-	Items            int      `json:"items"`
-	InputTokens      int64    `json:"input_tokens"`
-	OutputTokens     int64    `json:"output_tokens"`
-	CacheReadTokens  int64    `json:"cache_read_tokens"`
-	CacheWriteTokens int64    `json:"cache_write_tokens"`
-	ContextTokens    int64    `json:"context_tokens,omitempty"`
-	DurationMS       int      `json:"duration_ms"`
-	Status           string   `json:"status"`
-	ErrorID          string   `json:"error_id,omitempty"`
-	WebReads         []string `json:"web_reads,omitempty"`
-	Steps            []Step   `json:"steps,omitempty"`
-	ReplyMessageID   string   `json:"reply_message_id,omitempty"`
+	HostID           string `json:"host_id,omitempty"`
+	Phase            string `json:"phase"`
+	Client           string `json:"client"`
+	Model            string `json:"model"`
+	SessionID        string `json:"session_id"`
+	ChannelID        string `json:"channel_id,omitempty"`
+	ThreadRootID     string `json:"thread_root_id,omitempty"`
+	Items            int    `json:"items"`
+	InputTokens      int64  `json:"input_tokens"`
+	OutputTokens     int64  `json:"output_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	ContextTokens    int64  `json:"context_tokens,omitempty"`
+	// InstructionsVersion is the instructions version a work or direct run got.
+	InstructionsVersion int      `json:"instructions_version,omitempty"`
+	DurationMS          int      `json:"duration_ms"`
+	Status              string   `json:"status"`
+	ErrorID             string   `json:"error_id,omitempty"`
+	WebReads            []string `json:"web_reads,omitempty"`
+	Steps               []Step   `json:"steps,omitempty"`
+	ReplyMessageID      string   `json:"reply_message_id,omitempty"`
 }
 
 // ReportRun reports a finished run with token counts and duration to the server.

@@ -1313,6 +1313,17 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
 - **Audit:** `GET /admin/audit` szűrői: `actor_id`, többször megadható `action`, `target_type`, `from`, `to`, `before`, `limit`. `GET /admin/audit/actions`: az előforduló műveletek. `GET /admin/audit/export` (admin): CSV UTF-8 BOM-mal, oszlopok `seq, at, actor, action, target_type, target_id, payload`; folyamatosan ír, legfeljebb 100 000 sor, levágáskor egy `# truncated: …` sorral kezd; a képletként értelmezhető cellák `'` előtagot kapnak; az exportot `audit.exported` esemény rögzíti.
 - **Rendszerállapot:** `GET /admin/status` mindenkinek adja az `emergency_stop`-ot, adminnak a `system` mezőt is: `version`, `uptime_seconds`, `database` (`ok`, `latency_ms`), `event_head`, `consumers` (`offset`, `lag`, `lag_seconds`), `connections` (`human`, `agent`, `host`), `guards` (`last_seen_at`, `guard_version`, `online`: 90 mp), `scheduler` (`next_run_at`, `failed_24h`), `compaction` (`running`, `failed_24h`), `gitea_configured`, `gitea_webhook_configured`, `max_upload_mb`. Titok és környezeti érték soha nincs benne. A fájltár mérete kimarad (nem olcsó megmérni).
 - **Saját token:** `POST /actors/{id}/tokens` önmagára embernek engedett, agentnek nem.
+- **Pótolva (2026-11-03, migráció `00045`):**
+  - `api_token.prefix` (`col_` + 4 karakter, a többi kitalálásához kevés) és `last_used_at`;
+  - `session.last_seen_at`;
+  - `agent_run.instructions_version`.
+  
+  A hitelesítés tokenenként és munkamenetenként legfeljebb percenként egyszer ír (feltételes `UPDATE`, ha a régi érték egy percnél régebbi). Az API-ban:
+  - `Token.prefix`, `Token.last_used_at`;
+  - `UserRow.last_active_at` (a munkamenetek és tokenek legutóbbi használata; a belépés is aktivitásnak számít);
+  - `Run.instructions_version` és `ReportRunRequest.instructions_version` (az őr munka- és közvetlen futásnál küldi; döntésnél nem).
+  
+  A régebbi tokeneknek nincs előtagjuk.
 
 ## Verziózás, kompatibilitás, bővíthetőség
 

@@ -80,7 +80,10 @@ function UsersTable({ onAction }: { onAction: (a: Action) => void }) {
                   <Badge tone={roleTone[a.role]}>{t(`roles.${a.role}`)}</Badge>
                 </td>
                 <td className="px-2">{stopped ? <Badge tone="danger">{t("users.disabled")}</Badge> : <span>{t("users.enabled")}</span>}</td>
-                <td className="px-2 whitespace-nowrap text-fg-muted">{row.last_login_at ? fullTime(row.last_login_at, i18n.language) : t("users.never")}</td>
+                <td className="px-2 whitespace-nowrap text-fg-muted">
+                  {row.last_active_at ? fullTime(row.last_active_at, i18n.language) : t("users.never")}
+                  {row.last_login_at ? <span className="block text-meta text-fg-subtle">{t("users.lastLogin", { when: fullTime(row.last_login_at, i18n.language) })}</span> : null}
+                </td>
                 <td className="tabular px-2 text-right">{row.active_sessions}</td>
                 <td className="px-2 text-right whitespace-nowrap">
                   {self ? (
@@ -104,7 +107,6 @@ function UsersTable({ onAction }: { onAction: (a: Action) => void }) {
           })}
         </tbody>
       </table>
-      <p className="mt-3 text-meta text-fg-subtle">{t("users.lastSeenNote")}</p>
     </div>
   );
 }

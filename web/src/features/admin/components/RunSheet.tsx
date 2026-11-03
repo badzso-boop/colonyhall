@@ -24,6 +24,7 @@ export function RunSheet({ run, agent, channel, rate, onClose }: { run: Schemas[
     [t("runs.sheet.cache"), `${num(run.cache_read_tokens)} / ${num(run.cache_write_tokens)}`],
     [t("runs.sheet.context"), run.context_tokens ? num(run.context_tokens) : "–"],
     [t("runs.sheet.session"), run.session_id || "–"],
+    [t("runs.sheet.instructions"), run.instructions_version ? `v${run.instructions_version}` : "–"],
     [
       t("runs.sheet.cost"),
       run.estimated_usd == null

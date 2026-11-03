@@ -91,25 +91,26 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			}
 		}
 		run, err := svc.ReportRun(r.Context(), httpx.Actor(r), runs.ReportRunInput{
-			HostID:           httpx.Deref(in.HostId, ids.Nil),
-			Phase:            string(in.Phase),
-			Client:           in.Client,
-			Model:            in.Model,
-			SessionID:        in.SessionId,
-			ChannelID:        httpx.Deref(in.ChannelId, ids.Nil),
-			ThreadRootID:     httpx.Deref(in.ThreadRootId, ids.Nil),
-			Items:            in.Items,
-			InputTokens:      in.InputTokens,
-			OutputTokens:     in.OutputTokens,
-			CacheReadTokens:  in.CacheReadTokens,
-			CacheWriteTokens: in.CacheWriteTokens,
-			ContextTokens:    httpx.Deref(in.ContextTokens, 0),
-			DurationMS:       in.DurationMs,
-			Status:           string(in.Status),
-			ErrorID:          httpx.Deref(in.ErrorId, ids.Nil),
-			WebReads:         webReads,
-			Steps:            steps,
-			ReplyMessageID:   httpx.Deref(in.ReplyMessageId, ids.Nil),
+			HostID:              httpx.Deref(in.HostId, ids.Nil),
+			Phase:               string(in.Phase),
+			Client:              in.Client,
+			Model:               in.Model,
+			SessionID:           in.SessionId,
+			ChannelID:           httpx.Deref(in.ChannelId, ids.Nil),
+			ThreadRootID:        httpx.Deref(in.ThreadRootId, ids.Nil),
+			Items:               in.Items,
+			InputTokens:         in.InputTokens,
+			OutputTokens:        in.OutputTokens,
+			CacheReadTokens:     in.CacheReadTokens,
+			CacheWriteTokens:    in.CacheWriteTokens,
+			ContextTokens:       httpx.Deref(in.ContextTokens, 0),
+			InstructionsVersion: httpx.Deref(in.InstructionsVersion, 0),
+			DurationMS:          in.DurationMs,
+			Status:              string(in.Status),
+			ErrorID:             httpx.Deref(in.ErrorId, ids.Nil),
+			WebReads:            webReads,
+			Steps:               steps,
+			ReplyMessageID:      httpx.Deref(in.ReplyMessageId, ids.Nil),
 		})
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -178,6 +179,10 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			if item.ContextTokens > 0 {
 				ct := item.ContextTokens
 				ar.ContextTokens = &ct
+			}
+			if item.InstructionsVersion > 0 {
+				v := item.InstructionsVersion
+				ar.InstructionsVersion = &v
 			}
 			if item.ReplyMessageID != ids.Nil {
 				ar.ReplyMessageId = &item.ReplyMessageID

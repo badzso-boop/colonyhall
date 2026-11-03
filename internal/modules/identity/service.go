@@ -151,7 +151,7 @@ func (s *Service) createActor(ctx context.Context, byID ids.ID, in NewActorInput
 				return Actor{}, "", 0, err
 			}
 		}
-		tok := Token{ID: s.IDs.New(), ActorID: a.ID, Hash: HashSecret(secret), Label: "default", CreatedAt: s.Clock.Now()}
+		tok := Token{ID: s.IDs.New(), ActorID: a.ID, Hash: HashSecret(secret), Prefix: TokenPrefix(secret), Label: "default", CreatedAt: s.Clock.Now()}
 		if err := s.Store.CreateToken(ctx, tok); err != nil {
 			return Actor{}, "", 0, err
 		}
@@ -233,6 +233,9 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if err != nil {
 		return Actor{}, err
 	}
+	// The last use is shown on the Tokens page; losing one is harmless.
+	now := s.Clock.Now()
+	_ = s.Store.TouchToken(ctx, HashSecret(secret), now, now.Add(-touchEvery))
 	return s.load(ctx, a)
 }
 

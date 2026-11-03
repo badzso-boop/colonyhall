@@ -26,15 +26,15 @@ Minden pont elkészült, az alábbi eltérésekkel.
 
 - **Függő ébresztések zárolt csatornában: megmaradnak,** a feloldás után ébresztenek. Teszt: `internal/e2e/channel_lock_test.go`.
 - **Letiltás: a meglévő `stopped` állapot.** Embernél is megfelel: a tokeneket és a munkameneteket elutasítja, a munkameneteket visszavonja.
-- **„Utoljára látva” = utolsó belépés,** mert a munkamenetek nem tárolnak utolsó használatot. A felület ki is írja.
+- **„Utoljára látva”:** ~~= utolsó belépés~~. Pótolva 2026-11-03-án: a munkamenetek és a tokenek legutóbbi használata, percnyi pontossággal.
 - **Jelszóreset után az API-tokenek érvényesek maradnak;** a Dialog megmondja, és a Tokenek oldalon visszavonhatók. A kiválasztás szándékos: a reset nem feltétlenül jelent kompromittálódást, és egy kikapcsolt token csendben eltörhetne egy szkriptet. Ha mást szeretnél, kis változtatás.
 - **Új ember létrehozásakor** a szerver API-tokent is ad (a meglévő viselkedés); a felület ezt nem mutatja, csak a jelszót.
 - **Nincs „Javasolt értékek” gomb és nincs alapár:** forrás-URL nélkül nem ajánlok árat.
 
 ## Eltérések és korlátok
 
-- **Tokenek:** a szerver csak hash-t tárol, nincs előtag és „utoljára használva”. A lista és a kulcscsere ezért névvel és dátummal azonosít. A pótláshoz migráció kellene, és a régi tokeneknél akkor is üres maradna.
-- **Futás-Sheet:** nincs benne az utasítások verziója, mert a futás nem tárolja. Külön, kis szerverbővítés lenne.
+- **Tokenek:** ~~nincs előtag és „utoljára használva”~~. Pótolva 2026-11-03-án (`feature/admin-details`, migráció `00045`); a régebbi tokeneknek nincs előtagjuk.
+- **Futás-Sheet:** ~~nincs benne az utasítások verziója~~. Pótolva ugyanott; a régebbi futásoknál és a döntési futásoknál „–”.
 - **Agenttáblázat „Utolsó futás”:** napi pontosságú (a `/usage`-ból jön).
 - **Egyéni időszak:** legfeljebb 90 nap vissza. Ha nem a mai napig tart, az átlagos időtartam „–”, mert a szerver összesítője a teljes lekért időre szól. A KPI költsége mindig a kiválasztott napok összege.
 - **Tag is olvashatja a `/runs` és `/usage` végpontot** (a 22. kör óta embereknek szól, az agent-áttekintő használja). Az admin oldal rejtett előlük, de ezekre nem 403 jön. Az árak és az audit admin-only.

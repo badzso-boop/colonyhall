@@ -265,6 +265,40 @@ func testIdentity(t *testing.T, b Backend) {
 	if st, err := b.Identity.SessionStats(ctx, f.ws.ID, t0); err != nil || st == nil {
 		t.Fatalf("session stats: %+v %v", st, err)
 	}
+
+	// Last use of tokens and sessions, at most once a minute.
+	used := identity.Token{ID: gen.New(), ActorID: f.human.ID, Hash: identity.HashSecret("col_usedtoken"), Label: "used", CreatedAt: t0, Prefix: "col_used"}
+	must(t, b.Identity.CreateToken(ctx, used))
+	must(t, b.Identity.TouchToken(ctx, used.Hash, t0.Add(time.Minute), t0))
+	must(t, b.Identity.TouchToken(ctx, used.Hash, t0.Add(90*time.Second), t0.Add(30*time.Second)))
+	usedList, err := b.Identity.ListTokens(ctx, f.human.ID)
+	must(t, err)
+	var usedTok identity.Token
+	for _, x := range usedList {
+		if x.ID == used.ID {
+			usedTok = x
+		}
+	}
+	if usedTok.Prefix != "col_used" || usedTok.LastUsedAt == nil || !usedTok.LastUsedAt.Equal(t0.Add(time.Minute)) {
+		t.Fatalf("token use: prefix %q, last used %v (a second touch within the minute must not move it)", usedTok.Prefix, usedTok.LastUsedAt)
+	}
+	seenSess := identity.Session{ID: gen.New(), ActorID: f.human.ID, TokenHash: identity.HashSecret("seen-session"), CSRFToken: "c", CreatedAt: t0, ExpiresAt: t0.Add(time.Hour)}
+	must(t, b.Identity.CreateSession(ctx, seenSess))
+	stats, err := b.Identity.SessionStats(ctx, f.ws.ID, t0)
+	must(t, err)
+	if s := stats[f.human.ID]; s.LastSeen == nil || s.LastSeen.Before(t0) {
+		t.Fatalf("a login counts as activity: %+v", s)
+	}
+	seenAt := t0.Add(20 * time.Minute)
+	must(t, b.Identity.TouchSession(ctx, seenSess.ID, seenAt, seenAt.Add(-time.Minute)))
+	stats, err = b.Identity.SessionStats(ctx, f.ws.ID, t0)
+	must(t, err)
+	if s := stats[f.human.ID]; s.LastSeen == nil || !s.LastSeen.Equal(seenAt) {
+		t.Fatalf("session last seen: %+v", s)
+	}
+	if s, _, err := b.Identity.SessionByTokenHash(ctx, seenSess.TokenHash); err != nil || s.LastSeenAt == nil || !s.LastSeenAt.Equal(seenAt) {
+		t.Fatalf("session read back: %+v %v", s, err)
+	}
 	must(t, b.Identity.UpdateActorProfile(ctx, f.human.ID, "Renamed Human", "Lead Developer", "🚀", "Europe/Budapest", "Busy coding", ""))
 	if renamed, err := b.Identity.ActorByID(ctx, f.human.ID); err != nil || renamed.DisplayName != "Renamed Human" {
 		t.Fatalf("display name not stored: %q %v", renamed.DisplayName, err)

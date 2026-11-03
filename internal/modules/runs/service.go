@@ -114,25 +114,26 @@ func (s *Service) GetError(ctx context.Context, by identity.Actor, id ids.ID) (E
 
 // ReportRunInput is a finished run reported by an agent.
 type ReportRunInput struct {
-	HostID           ids.ID
-	Phase            string
-	Client           string
-	Model            string
-	SessionID        string
-	ChannelID        ids.ID
-	ThreadRootID     ids.ID
-	Items            int
-	InputTokens      int64
-	OutputTokens     int64
-	CacheReadTokens  int64
-	CacheWriteTokens int64
-	ContextTokens    int64
-	DurationMS       int
-	Status           string
-	ErrorID          ids.ID
-	WebReads         []string
-	Steps            []Step
-	ReplyMessageID   ids.ID
+	HostID              ids.ID
+	Phase               string
+	Client              string
+	Model               string
+	SessionID           string
+	ChannelID           ids.ID
+	ThreadRootID        ids.ID
+	Items               int
+	InputTokens         int64
+	OutputTokens        int64
+	CacheReadTokens     int64
+	CacheWriteTokens    int64
+	ContextTokens       int64
+	InstructionsVersion int
+	DurationMS          int
+	Status              string
+	ErrorID             ids.ID
+	WebReads            []string
+	Steps               []Step
+	ReplyMessageID      ids.ID
 }
 
 // ReportRun records a finished run for the calling agent.
@@ -191,29 +192,30 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 	}
 
 	r := Run{
-		ID:               s.IDs.New(),
-		WorkspaceID:      by.WorkspaceID,
-		AgentID:          by.ID,
-		HostID:           in.HostID,
-		Phase:            in.Phase,
-		Client:           strings.TrimSpace(in.Client),
-		Model:            strings.TrimSpace(in.Model),
-		SessionID:        strings.TrimSpace(in.SessionID),
-		ChannelID:        in.ChannelID,
-		ThreadRootID:     in.ThreadRootID,
-		Items:            in.Items,
-		InputTokens:      in.InputTokens,
-		OutputTokens:     in.OutputTokens,
-		CacheReadTokens:  in.CacheReadTokens,
-		CacheWriteTokens: in.CacheWriteTokens,
-		ContextTokens:    in.ContextTokens,
-		DurationMS:       in.DurationMS,
-		Status:           in.Status,
-		ErrorID:          in.ErrorID,
-		CreatedAt:        s.Clock.Now(),
-		WebReads:         in.WebReads,
-		Steps:            in.Steps,
-		ReplyMessageID:   in.ReplyMessageID,
+		ID:                  s.IDs.New(),
+		WorkspaceID:         by.WorkspaceID,
+		AgentID:             by.ID,
+		HostID:              in.HostID,
+		Phase:               in.Phase,
+		Client:              strings.TrimSpace(in.Client),
+		Model:               strings.TrimSpace(in.Model),
+		SessionID:           strings.TrimSpace(in.SessionID),
+		ChannelID:           in.ChannelID,
+		ThreadRootID:        in.ThreadRootID,
+		Items:               in.Items,
+		InputTokens:         in.InputTokens,
+		OutputTokens:        in.OutputTokens,
+		CacheReadTokens:     in.CacheReadTokens,
+		CacheWriteTokens:    in.CacheWriteTokens,
+		ContextTokens:       in.ContextTokens,
+		InstructionsVersion: max(in.InstructionsVersion, 0),
+		DurationMS:          in.DurationMS,
+		Status:              in.Status,
+		ErrorID:             in.ErrorID,
+		CreatedAt:           s.Clock.Now(),
+		WebReads:            in.WebReads,
+		Steps:               in.Steps,
+		ReplyMessageID:      in.ReplyMessageID,
 	}
 
 	var seq int64

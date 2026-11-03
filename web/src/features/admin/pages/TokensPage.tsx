@@ -62,8 +62,14 @@ function TokenList({ actorId, hide }: { actorId: string | undefined; hide?: stri
       <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
         {list.map((tok) => (
           <li key={tok.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-ui">
-            <span className="min-w-0 flex-1 basis-40 truncate font-medium">{tok.label || t("tokens.noLabel")}</span>
-            <span className="text-meta text-fg-muted">{t("tokens.created", { when: fullTime(tok.created_at, i18n.language) })}</span>
+            <span className="min-w-0 flex-1 basis-40 truncate font-medium">
+              {tok.label || t("tokens.noLabel")}
+              {tok.prefix ? <code className="ml-2 font-mono text-meta text-fg-subtle">{tok.prefix}…</code> : null}
+            </span>
+            <span className="flex flex-col text-right text-meta text-fg-muted">
+              <span>{t("tokens.created", { when: fullTime(tok.created_at, i18n.language) })}</span>
+              <span>{tok.last_used_at ? t("tokens.lastUsed", { when: fullTime(tok.last_used_at, i18n.language) }) : t("tokens.neverUsed")}</span>
+            </span>
             {tok.revoked_at ? (
               <Badge tone="neutral">{t("tokens.revoked")}</Badge>
             ) : (
@@ -311,8 +317,13 @@ function StepRevoke({ actorId, state, dispatch, onFinish }: { actorId: string | 
         <ul className="flex flex-col divide-y divide-border">
           {old.map((tok) => (
             <li key={tok.id} className="flex flex-wrap items-center gap-x-3 py-2">
-              <span className="min-w-0 flex-1 basis-40 truncate font-medium">{tok.label || t("tokens.noLabel")}</span>
-              <span className="text-meta text-fg-muted">{t("tokens.created", { when: fullTime(tok.created_at, i18n.language) })}</span>
+              <span className="min-w-0 flex-1 basis-40 truncate font-medium">
+                {tok.label || t("tokens.noLabel")}
+                {tok.prefix ? <code className="ml-2 font-mono text-meta text-fg-subtle">{tok.prefix}…</code> : null}
+              </span>
+              <span className="text-meta text-fg-muted">
+                {tok.last_used_at ? t("tokens.lastUsed", { when: fullTime(tok.last_used_at, i18n.language) }) : t("tokens.created", { when: fullTime(tok.created_at, i18n.language) })}
+              </span>
               <Button size="sm" variant="danger" onClick={() => setRevoking(tok)}>
                 {t("wizard.revokeOld")}
               </Button>

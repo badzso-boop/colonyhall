@@ -117,6 +117,10 @@ type Token struct {
 	Label     string
 	CreatedAt time.Time
 	RevokedAt *time.Time
+	// Prefix is the token's first characters, for telling tokens apart;
+	// empty on tokens made before it was kept.
+	Prefix     string
+	LastUsedAt *time.Time
 	// HostID and ExpiresAt are set on short-lived tokens a guard requested
 	// for an agent assigned to its host.
 	HostID    ids.ID
@@ -202,6 +206,12 @@ func ValidateHandle(h string) error {
 const tokenPrefix = "col_"
 
 // NewSecret returns a new random token secret.
+// TokenPrefix is what of a secret may be shown: the "col_" and four more
+// characters, far too few to guess the rest.
+func TokenPrefix(secret string) string {
+	return secret[:min(len(secret), len(tokenPrefix)+4)]
+}
+
 func NewSecret() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

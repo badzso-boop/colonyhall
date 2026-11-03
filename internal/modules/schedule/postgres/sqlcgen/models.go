@@ -77,40 +77,43 @@ type AgentRule struct {
 }
 
 type AgentRun struct {
-	ID               uuid.UUID
-	WorkspaceID      uuid.UUID
-	AgentID          uuid.UUID
-	HostID           *uuid.UUID
-	Phase            string
-	Client           string
-	Model            string
-	SessionID        string
-	ChannelID        *uuid.UUID
-	ThreadRootID     *uuid.UUID
-	Items            int32
-	InputTokens      int64
-	OutputTokens     int64
-	CacheReadTokens  int64
-	CacheWriteTokens int64
-	DurationMs       int32
-	Status           string
-	ErrorID          *uuid.UUID
-	CreatedAt        time.Time
-	WebReads         []string
-	Steps            []byte
-	ReplyMessageID   *uuid.UUID
-	ContextTokens    int64
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	AgentID             uuid.UUID
+	HostID              *uuid.UUID
+	Phase               string
+	Client              string
+	Model               string
+	SessionID           string
+	ChannelID           *uuid.UUID
+	ThreadRootID        *uuid.UUID
+	Items               int32
+	InputTokens         int64
+	OutputTokens        int64
+	CacheReadTokens     int64
+	CacheWriteTokens    int64
+	DurationMs          int32
+	Status              string
+	ErrorID             *uuid.UUID
+	CreatedAt           time.Time
+	WebReads            []string
+	Steps               []byte
+	ReplyMessageID      *uuid.UUID
+	ContextTokens       int64
+	InstructionsVersion *int32
 }
 
 type ApiToken struct {
-	ID        uuid.UUID
-	ActorID   uuid.UUID
-	TokenHash []byte
-	Label     string
-	CreatedAt time.Time
-	RevokedAt *time.Time
-	HostID    *uuid.UUID
-	ExpiresAt *time.Time
+	ID         uuid.UUID
+	ActorID    uuid.UUID
+	TokenHash  []byte
+	Label      string
+	CreatedAt  time.Time
+	RevokedAt  *time.Time
+	HostID     *uuid.UUID
+	ExpiresAt  *time.Time
+	Prefix     *string
+	LastUsedAt *time.Time
 }
 
 type ApprovalRequest struct {
@@ -564,14 +567,15 @@ type Schedule struct {
 }
 
 type Session struct {
-	ID        uuid.UUID
-	ActorID   uuid.UUID
-	TokenHash []byte
-	CsrfToken string
-	UserAgent string
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	RevokedAt *time.Time
+	ID         uuid.UUID
+	ActorID    uuid.UUID
+	TokenHash  []byte
+	CsrfToken  string
+	UserAgent  string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	RevokedAt  *time.Time
+	LastSeenAt *time.Time
 }
 
 type SidebarItem struct {

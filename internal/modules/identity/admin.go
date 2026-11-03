@@ -118,7 +118,7 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, actorID ids.ID, labe
 	if label == "" {
 		label = "token"
 	}
-	t := Token{ID: s.IDs.New(), ActorID: target.ID, Hash: HashSecret(secret), Label: truncate(label, 64), CreatedAt: s.Clock.Now()}
+	t := Token{ID: s.IDs.New(), ActorID: target.ID, Hash: HashSecret(secret), Prefix: TokenPrefix(secret), Label: truncate(label, 64), CreatedAt: s.Clock.Now()}
 	err = s.record(ctx, by, EventTokenIssued, "token", t.ID, TokenEvent{TokenID: t.ID.String(), ActorID: target.ID.String(), Label: t.Label},
 		func(ctx context.Context) error { return s.Store.CreateToken(ctx, t) })
 	if err != nil {
@@ -199,6 +199,8 @@ type UserRow struct {
 	Actor          Actor
 	ActiveSessions int
 	LastLoginAt    *time.Time
+	// LastActiveAt is the latest use of the person's sessions or tokens.
+	LastActiveAt *time.Time
 }
 
 // ListUsers lists the people of the workspace (the owner only).
@@ -220,7 +222,17 @@ func (s *Service) ListUsers(ctx context.Context, by Actor) ([]UserRow, error) {
 			continue
 		}
 		st := stats[a.ID]
-		out = append(out, UserRow{Actor: a, ActiveSessions: st.Active, LastLoginAt: st.LastLogin})
+		row := UserRow{Actor: a, ActiveSessions: st.Active, LastLoginAt: st.LastLogin, LastActiveAt: st.LastSeen}
+		tokens, err := s.Store.ListTokens(ctx, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range tokens {
+			if t.LastUsedAt != nil && (row.LastActiveAt == nil || t.LastUsedAt.After(*row.LastActiveAt)) {
+				row.LastActiveAt = t.LastUsedAt
+			}
+		}
+		out = append(out, row)
 	}
 	return out, nil
 }

@@ -2499,6 +2499,7 @@ components:
         actor: { $ref: "#/components/schemas/Actor" }
         active_sessions: { type: integer }
         last_login_at: { type: string, format: date-time, nullable: true }
+        last_active_at: { type: string, format: date-time, nullable: true, description: "Latest use of a session or token (a minute's precision)" }
     UserList:
       type: object
       required: [users]
@@ -2532,6 +2533,8 @@ components:
         label: { type: string }
         created_at: { type: string, format: date-time }
         revoked_at: { type: string, format: date-time }
+        prefix: { type: string, description: 'The first characters ("col_" + 4); absent on tokens made before round 35b' }
+        last_used_at: { type: string, format: date-time, description: "Latest use, recorded at most once a minute" }
     TokenList:
       type: object
       required: [tokens]
@@ -3465,6 +3468,7 @@ components:
         output_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         cache_read_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
         cache_write_tokens: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+        instructions_version: { type: integer, minimum: 0, description: The version of the agent instructions the run got (work and direct runs) }
         context_tokens:
           type: integer
           format: int64
@@ -3511,6 +3515,7 @@ components:
         cache_read_tokens: { type: integer, format: int64 }
         cache_write_tokens: { type: integer, format: int64 }
         context_tokens: { type: integer, format: int64, description: "Context size after the run; 0 when unknown." }
+        instructions_version: { type: integer, description: The version of the agent instructions the run got }
         duration_ms: { type: integer }
         status: { type: string, enum: [ok, error, halted] }
         error_id: { type: string, format: uuid }

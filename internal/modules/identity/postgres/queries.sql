@@ -38,8 +38,16 @@ WHERE id = sqlc.arg(id) AND archived_at IS NULL;
 UPDATE api_token SET revoked_at = sqlc.arg(at) WHERE actor_id = sqlc.arg(actor_id) AND revoked_at IS NULL;
 
 -- name: CreateToken :exec
-INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at)
-VALUES ($1, $2, $3, $4, $5, sqlc.narg(host_id), sqlc.narg(expires_at));
+INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at, prefix)
+VALUES ($1, $2, $3, $4, $5, sqlc.narg(host_id), sqlc.narg(expires_at), sqlc.narg(prefix));
+
+-- name: TouchToken :exec
+UPDATE api_token SET last_used_at = sqlc.arg(at)
+WHERE token_hash = sqlc.arg(token_hash) AND (last_used_at IS NULL OR last_used_at < sqlc.arg(not_before));
+
+-- name: TouchSession :exec
+UPDATE session SET last_seen_at = sqlc.arg(at)
+WHERE id = sqlc.arg(id) AND (last_seen_at IS NULL OR last_seen_at < sqlc.arg(not_before));
 
 -- name: ActorByTokenHash :one
 SELECT a.* FROM api_token t JOIN actor a ON a.id = t.actor_id
@@ -101,7 +109,9 @@ UPDATE workspace SET emergency_stop_at = sqlc.narg(at), emergency_stop_by = sqlc
 -- name: SessionStats :many
 SELECT s.actor_id,
        COUNT(*) FILTER (WHERE s.revoked_at IS NULL AND s.expires_at > sqlc.arg(now_at)::timestamptz)::int AS active,
-       MAX(s.created_at)::timestamptz AS last_login
+       MAX(s.created_at)::timestamptz AS last_login,
+       -- A login is activity too; sessions from before last_seen_at existed have only it.
+       COALESCE(MAX(s.last_seen_at), MAX(s.created_at))::timestamptz AS last_seen
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE a.workspace_id = sqlc.arg(workspace_id)
 GROUP BY s.actor_id;

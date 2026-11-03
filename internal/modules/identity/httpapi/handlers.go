@@ -25,7 +25,11 @@ func init() {
 }
 
 func tokenToAPI(t identity.Token) apispec.Token {
-	return apispec.Token{Id: t.ID, ActorId: t.ActorID, Label: t.Label, CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt}
+	out := apispec.Token{Id: t.ID, ActorId: t.ActorID, Label: t.Label, CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt, LastUsedAt: t.LastUsedAt}
+	if t.Prefix != "" {
+		out.Prefix = &t.Prefix
+	}
+	return out
 }
 
 // WorkspaceStatus is the part of the status every actor sees.
@@ -334,7 +338,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 		}
 		out := apispec.UserList{Users: make([]apispec.UserRow, 0, len(list))}
 		for _, u := range list {
-			out.Users = append(out.Users, apispec.UserRow{Actor: ToAPI(u.Actor), ActiveSessions: u.ActiveSessions, LastLoginAt: u.LastLoginAt})
+			out.Users = append(out.Users, apispec.UserRow{Actor: ToAPI(u.Actor), ActiveSessions: u.ActiveSessions, LastLoginAt: u.LastLoginAt, LastActiveAt: u.LastActiveAt})
 		}
 		httpx.JSON(w, http.StatusOK, out)
 	}))

@@ -24,7 +24,7 @@ func (s *Service) IssueHostToken(ctx context.Context, agentID, hostID ids.ID, tt
 	}
 	now := s.Clock.Now()
 	exp := now.Add(ttl)
-	t := Token{ID: s.IDs.New(), ActorID: a.ID, Hash: HashSecret(secret), Label: "host", CreatedAt: now, HostID: hostID, ExpiresAt: &exp}
+	t := Token{ID: s.IDs.New(), ActorID: a.ID, Hash: HashSecret(secret), Prefix: TokenPrefix(secret), Label: "host", CreatedAt: now, HostID: hostID, ExpiresAt: &exp}
 	if err := s.Store.CreateToken(ctx, t); err != nil {
 		return "", time.Time{}, err
 	}

@@ -20,13 +20,20 @@ type Session struct {
 	UserAgent string
 	CreatedAt time.Time
 	ExpiresAt time.Time
+	// LastSeenAt is when it last authenticated a request (a minute apart at most).
+	LastSeenAt *time.Time
 }
 
 // SessionStat is one actor's login activity.
 type SessionStat struct {
 	Active    int
 	LastLogin *time.Time
+	// LastSeen is the latest use of any of the person's sessions.
+	LastSeen *time.Time
 }
+
+// touchEvery throttles the last-use writes of tokens and sessions.
+const touchEvery = time.Minute
 
 // SessionTTL is how long a login lasts.
 const SessionTTL = 30 * 24 * time.Hour
@@ -170,6 +177,8 @@ func (s *Service) AuthenticateSession(ctx context.Context, secret string) (Actor
 	if err != nil {
 		return Actor{}, Session{}, err
 	}
+	now := s.Clock.Now()
+	_ = s.Store.TouchSession(ctx, sess.ID, now, now.Add(-touchEvery))
 	return a, sess, nil
 }
 

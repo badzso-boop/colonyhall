@@ -139,39 +139,40 @@ INSERT INTO agent_run (
     id, workspace_id, agent_id, host_id, phase, client, model, session_id,
     channel_id, thread_root_id, items, input_tokens, output_tokens,
     cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at,
-    web_reads, steps, reply_message_id, context_tokens
+    web_reads, steps, reply_message_id, context_tokens, instructions_version
 ) VALUES (
     $1, $2, $3, $19, $4, $5, $6, $7,
     $20, $21, $8, $9, $10,
     $11, $12, $13, $14, $22, $15,
-    $16, $17, $23, $18
+    $16, $17, $23, $18, $24
 )
 `
 
 type InsertRunParams struct {
-	ID               uuid.UUID
-	WorkspaceID      uuid.UUID
-	AgentID          uuid.UUID
-	Phase            string
-	Client           string
-	Model            string
-	SessionID        string
-	Items            int32
-	InputTokens      int64
-	OutputTokens     int64
-	CacheReadTokens  int64
-	CacheWriteTokens int64
-	DurationMs       int32
-	Status           string
-	CreatedAt        time.Time
-	WebReads         []string
-	Steps            []byte
-	ContextTokens    int64
-	HostID           *uuid.UUID
-	ChannelID        *uuid.UUID
-	ThreadRootID     *uuid.UUID
-	ErrorID          *uuid.UUID
-	ReplyMessageID   *uuid.UUID
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	AgentID             uuid.UUID
+	Phase               string
+	Client              string
+	Model               string
+	SessionID           string
+	Items               int32
+	InputTokens         int64
+	OutputTokens        int64
+	CacheReadTokens     int64
+	CacheWriteTokens    int64
+	DurationMs          int32
+	Status              string
+	CreatedAt           time.Time
+	WebReads            []string
+	Steps               []byte
+	ContextTokens       int64
+	HostID              *uuid.UUID
+	ChannelID           *uuid.UUID
+	ThreadRootID        *uuid.UUID
+	ErrorID             *uuid.UUID
+	ReplyMessageID      *uuid.UUID
+	InstructionsVersion *int32
 }
 
 func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
@@ -199,12 +200,13 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 		arg.ThreadRootID,
 		arg.ErrorID,
 		arg.ReplyMessageID,
+		arg.InstructionsVersion,
 	)
 	return err
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id, context_tokens FROM agent_run
+SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id, context_tokens, instructions_version FROM agent_run
 WHERE workspace_id = $1
   AND ($3::uuid IS NULL OR agent_id = $3::uuid)
 ORDER BY created_at DESC
@@ -250,6 +252,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]AgentRun,
 			&i.Steps,
 			&i.ReplyMessageID,
 			&i.ContextTokens,
+			&i.InstructionsVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -321,7 +324,7 @@ func (q *Queries) PutCurrency(ctx context.Context, arg PutCurrencyParams) error 
 }
 
 const searchRuns = `-- name: SearchRuns :many
-SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id, context_tokens FROM agent_run
+SELECT id, workspace_id, agent_id, host_id, phase, client, model, session_id, channel_id, thread_root_id, items, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at, web_reads, steps, reply_message_id, context_tokens, instructions_version FROM agent_run
 WHERE workspace_id = $1
   AND ($3::uuid IS NULL OR agent_id = $3::uuid)
   AND ($4::uuid IS NULL OR host_id = $4::uuid)
@@ -391,6 +394,7 @@ func (q *Queries) SearchRuns(ctx context.Context, arg SearchRunsParams) ([]Agent
 			&i.Steps,
 			&i.ReplyMessageID,
 			&i.ContextTokens,
+			&i.InstructionsVersion,
 		); err != nil {
 			return nil, err
 		}

@@ -696,6 +696,17 @@ func (a *Agent) OnChannelLeft(channelID, reason string) {
 // fetchRules fetches the agent's instructions (rendered rules) from the server,
 // caching it and refetching when the host config version changes or every 10 minutes.
 // On error, the last good text is kept; if none, it runs without rules and logs a warning.
+// runInstructionsVersion is the instructions version work and direct runs
+// got (fetchRules ran just before them); decision runs get none.
+func (a *Agent) runInstructionsVersion(phase string) int {
+	if phase == "decide" {
+		return 0
+	}
+	a.rulesMu.Lock()
+	defer a.rulesMu.Unlock()
+	return a.cachedRulesVer
+}
+
 func (a *Agent) fetchRules(ctx context.Context) (int, string) {
 	a.rulesMu.Lock()
 	defer a.rulesMu.Unlock()
@@ -1274,24 +1285,25 @@ func (a *Agent) reportRun(ctx context.Context, phase, model, sessionID, channelI
 		urls = webReads[0]
 	}
 	_, err := a.Client.ReportRun(rctx, ReportRunInput{
-		Phase:            phase,
-		Client:           a.Cfg.Client,
-		Model:            model,
-		SessionID:        sessionID,
-		ChannelID:        channelID,
-		ThreadRootID:     threadRootID,
-		Items:            items,
-		InputTokens:      int64(res.Usage.Input),
-		OutputTokens:     int64(res.Usage.Output),
-		CacheReadTokens:  int64(res.Usage.CacheRead),
-		CacheWriteTokens: int64(res.Usage.CacheWrite),
-		ContextTokens:    int64(a.contextTokens(res)),
-		DurationMS:       dur,
-		Status:           status,
-		ErrorID:          errorID,
-		WebReads:         urls,
-		Steps:            steps,
-		ReplyMessageID:   replyMessageID,
+		Phase:               phase,
+		Client:              a.Cfg.Client,
+		Model:               model,
+		SessionID:           sessionID,
+		ChannelID:           channelID,
+		ThreadRootID:        threadRootID,
+		Items:               items,
+		InputTokens:         int64(res.Usage.Input),
+		OutputTokens:        int64(res.Usage.Output),
+		CacheReadTokens:     int64(res.Usage.CacheRead),
+		CacheWriteTokens:    int64(res.Usage.CacheWrite),
+		ContextTokens:       int64(a.contextTokens(res)),
+		InstructionsVersion: a.runInstructionsVersion(phase),
+		DurationMS:          dur,
+		Status:              status,
+		ErrorID:             errorID,
+		WebReads:            urls,
+		Steps:               steps,
+		ReplyMessageID:      replyMessageID,
 	})
 	if err != nil && a.Log != nil {
 		a.Log.Warn("guard: could not report run", "phase", phase, "err", err)

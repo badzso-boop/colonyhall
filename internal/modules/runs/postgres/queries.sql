@@ -10,12 +10,12 @@ INSERT INTO agent_run (
     id, workspace_id, agent_id, host_id, phase, client, model, session_id,
     channel_id, thread_root_id, items, input_tokens, output_tokens,
     cache_read_tokens, cache_write_tokens, duration_ms, status, error_id, created_at,
-    web_reads, steps, reply_message_id, context_tokens
+    web_reads, steps, reply_message_id, context_tokens, instructions_version
 ) VALUES (
     $1, $2, $3, sqlc.narg(host_id), $4, $5, $6, $7,
     sqlc.narg(channel_id), sqlc.narg(thread_root_id), $8, $9, $10,
     $11, $12, $13, $14, sqlc.narg(error_id), $15,
-    $16, $17, sqlc.narg(reply_message_id), $18
+    $16, $17, sqlc.narg(reply_message_id), $18, sqlc.narg(instructions_version)
 );
 
 -- name: ListRuns :many

@@ -130,7 +130,8 @@
       "web_one": "{{count}} weboldal",
       "web_other": "{{count}} weboldal",
       "steps": "Lépések",
-      "noSteps": "Ehhez a futáshoz nincsenek lépések."
+      "noSteps": "Ehhez a futáshoz nincsenek lépések.",
+      "instructions": "Utasítások verziója"
     }
   },
   "settings": {
@@ -224,7 +225,7 @@
     "name": "Név",
     "role": "Szerepkör",
     "state": "Állapot",
-    "lastSeen": "Utoljára belépett",
+    "lastSeen": "Utoljára aktív",
     "sessions": "Aktív munkamenet",
     "actions": "Műveletek",
     "disabled": "Letiltva",
@@ -235,7 +236,6 @@
     "passwordAction": "Jelszó visszaállítása",
     "disable": "Letiltás",
     "enable": "Engedélyezés",
-    "lastSeenNote": "A „utoljára belépett” a legutóbbi bejelentkezés ideje: a rendszer nem követi a munkamenetek utolsó használatát.",
     "initialPassword": "Jelszó",
     "generate": "Generálás",
     "passwordHint": "Legalább {{min}} karakter. Írd be, vagy generálj egyet.",
@@ -252,7 +252,8 @@
     "disableTitle": "Letiltod: @{{handle}}?",
     "disableBody": "Nem léphet be, a munkamenetei és a tokenjei érvénytelenek, amíg újra nem engedélyezed.",
     "enableTitle": "Engedélyezed: @{{handle}}?",
-    "enableBody": "Újra beléphet. A korábbi munkamenetei nem élednek fel."
+    "enableBody": "Újra beléphet. A korábbi munkamenetei nem élednek fel.",
+    "lastLogin": "belépett: {{when}}"
   },
   "tokens": {
     "title": "Tokenek",
@@ -269,7 +270,9 @@
     "label": "Név",
     "issue": "Létrehozás",
     "others": "Mások tokenjei",
-    "pickActor": "Válassz szereplőt"
+    "pickActor": "Válassz szereplőt",
+    "lastUsed": "utoljára használva: {{when}}",
+    "neverUsed": "még nem használták"
   },
   "wizard": {
     "title": "Tulajdonosi kulcs cseréje",

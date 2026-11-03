@@ -270,8 +270,8 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const createToken = `-- name: CreateToken :exec
-INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at, prefix)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateTokenParams struct {
@@ -282,6 +282,7 @@ type CreateTokenParams struct {
 	CreatedAt time.Time
 	HostID    *uuid.UUID
 	ExpiresAt *time.Time
+	Prefix    *string
 }
 
 func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error {
@@ -293,6 +294,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error 
 		arg.CreatedAt,
 		arg.HostID,
 		arg.ExpiresAt,
+		arg.Prefix,
 	)
 	return err
 }
@@ -404,7 +406,7 @@ func (q *Queries) ListAllActors(ctx context.Context, workspaceID uuid.UUID) ([]A
 }
 
 const listTokens = `-- name: ListTokens :many
-SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at FROM api_token WHERE actor_id = $1 ORDER BY created_at, id
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at FROM api_token WHERE actor_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken, error) {
@@ -425,6 +427,8 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 			&i.RevokedAt,
 			&i.HostID,
 			&i.ExpiresAt,
+			&i.Prefix,
+			&i.LastUsedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -512,7 +516,7 @@ func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error 
 }
 
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by
+SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL
 `
@@ -534,6 +538,7 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 		&i.Session.CreatedAt,
 		&i.Session.ExpiresAt,
 		&i.Session.RevokedAt,
+		&i.Session.LastSeenAt,
 		&i.Actor.ID,
 		&i.Actor.WorkspaceID,
 		&i.Actor.Kind,
@@ -556,7 +561,9 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 const sessionStats = `-- name: SessionStats :many
 SELECT s.actor_id,
        COUNT(*) FILTER (WHERE s.revoked_at IS NULL AND s.expires_at > $1::timestamptz)::int AS active,
-       MAX(s.created_at)::timestamptz AS last_login
+       MAX(s.created_at)::timestamptz AS last_login,
+       -- A login is activity too; sessions from before last_seen_at existed have only it.
+       COALESCE(MAX(s.last_seen_at), MAX(s.created_at))::timestamptz AS last_seen
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE a.workspace_id = $2
 GROUP BY s.actor_id
@@ -571,6 +578,7 @@ type SessionStatsRow struct {
 	ActorID   uuid.UUID
 	Active    int32
 	LastLogin time.Time
+	LastSeen  time.Time
 }
 
 func (q *Queries) SessionStats(ctx context.Context, arg SessionStatsParams) ([]SessionStatsRow, error) {
@@ -582,7 +590,12 @@ func (q *Queries) SessionStats(ctx context.Context, arg SessionStatsParams) ([]S
 	var items []SessionStatsRow
 	for rows.Next() {
 		var i SessionStatsRow
-		if err := rows.Scan(&i.ActorID, &i.Active, &i.LastLogin); err != nil {
+		if err := rows.Scan(
+			&i.ActorID,
+			&i.Active,
+			&i.LastLogin,
+			&i.LastSeen,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -653,7 +666,7 @@ func (q *Queries) SetEmergencyStop(ctx context.Context, arg SetEmergencyStopPara
 }
 
 const tokenByID = `-- name: TokenByID :one
-SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at FROM api_token WHERE id = $1
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at FROM api_token WHERE id = $1
 `
 
 func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error) {
@@ -668,8 +681,42 @@ func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error)
 		&i.RevokedAt,
 		&i.HostID,
 		&i.ExpiresAt,
+		&i.Prefix,
+		&i.LastUsedAt,
 	)
 	return i, err
+}
+
+const touchSession = `-- name: TouchSession :exec
+UPDATE session SET last_seen_at = $1
+WHERE id = $2 AND (last_seen_at IS NULL OR last_seen_at < $3)
+`
+
+type TouchSessionParams struct {
+	At        *time.Time
+	ID        uuid.UUID
+	NotBefore *time.Time
+}
+
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
+	_, err := q.db.Exec(ctx, touchSession, arg.At, arg.ID, arg.NotBefore)
+	return err
+}
+
+const touchToken = `-- name: TouchToken :exec
+UPDATE api_token SET last_used_at = $1
+WHERE token_hash = $2 AND (last_used_at IS NULL OR last_used_at < $3)
+`
+
+type TouchTokenParams struct {
+	At        *time.Time
+	TokenHash []byte
+	NotBefore *time.Time
+}
+
+func (q *Queries) TouchToken(ctx context.Context, arg TouchTokenParams) error {
+	_, err := q.db.Exec(ctx, touchToken, arg.At, arg.TokenHash, arg.NotBefore)
+	return err
 }
 
 const updateActorProfile = `-- name: UpdateActorProfile :exec

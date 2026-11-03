@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -77,29 +78,30 @@ func (s *Store) InsertRun(ctx context.Context, r runs.Run) error {
 		}
 	}
 	return s.q(ctx).InsertRun(ctx, sqlcgen.InsertRunParams{
-		ID:               r.ID,
-		WorkspaceID:      r.WorkspaceID,
-		AgentID:          r.AgentID,
-		HostID:           hostID,
-		Phase:            r.Phase,
-		Client:           r.Client,
-		Model:            r.Model,
-		SessionID:        r.SessionID,
-		ChannelID:        channelID,
-		ThreadRootID:     threadRootID,
-		Items:            int32(r.Items),
-		InputTokens:      r.InputTokens,
-		OutputTokens:     r.OutputTokens,
-		CacheReadTokens:  r.CacheReadTokens,
-		CacheWriteTokens: r.CacheWriteTokens,
-		ContextTokens:    r.ContextTokens,
-		DurationMs:       int32(r.DurationMS),
-		Status:           r.Status,
-		ErrorID:          errorID,
-		CreatedAt:        r.CreatedAt,
-		WebReads:         webReads,
-		Steps:            stepsJSON,
-		ReplyMessageID:   replyMsgID,
+		ID:                  r.ID,
+		WorkspaceID:         r.WorkspaceID,
+		AgentID:             r.AgentID,
+		HostID:              hostID,
+		Phase:               r.Phase,
+		Client:              r.Client,
+		Model:               r.Model,
+		SessionID:           r.SessionID,
+		ChannelID:           channelID,
+		ThreadRootID:        threadRootID,
+		Items:               int32(r.Items),
+		InputTokens:         r.InputTokens,
+		OutputTokens:        r.OutputTokens,
+		CacheReadTokens:     r.CacheReadTokens,
+		CacheWriteTokens:    r.CacheWriteTokens,
+		ContextTokens:       r.ContextTokens,
+		InstructionsVersion: versionParam(r.InstructionsVersion),
+		DurationMs:          int32(r.DurationMS),
+		Status:              r.Status,
+		ErrorID:             errorID,
+		CreatedAt:           r.CreatedAt,
+		WebReads:            webReads,
+		Steps:               stepsJSON,
+		ReplyMessageID:      replyMsgID,
 	})
 }
 
@@ -162,23 +164,24 @@ func (s *Store) TokensSince(ctx context.Context, workspaceID, agentID ids.ID, si
 
 func runFromRow(r sqlcgen.AgentRun) runs.Run {
 	item := runs.Run{
-		ID:               r.ID,
-		WorkspaceID:      r.WorkspaceID,
-		AgentID:          r.AgentID,
-		Phase:            r.Phase,
-		Client:           r.Client,
-		Model:            r.Model,
-		SessionID:        r.SessionID,
-		Items:            int(r.Items),
-		InputTokens:      r.InputTokens,
-		OutputTokens:     r.OutputTokens,
-		CacheReadTokens:  r.CacheReadTokens,
-		CacheWriteTokens: r.CacheWriteTokens,
-		ContextTokens:    r.ContextTokens,
-		DurationMS:       int(r.DurationMs),
-		Status:           r.Status,
-		CreatedAt:        r.CreatedAt,
-		WebReads:         r.WebReads,
+		ID:                  r.ID,
+		WorkspaceID:         r.WorkspaceID,
+		AgentID:             r.AgentID,
+		Phase:               r.Phase,
+		Client:              r.Client,
+		Model:               r.Model,
+		SessionID:           r.SessionID,
+		Items:               int(r.Items),
+		InputTokens:         r.InputTokens,
+		OutputTokens:        r.OutputTokens,
+		CacheReadTokens:     r.CacheReadTokens,
+		CacheWriteTokens:    r.CacheWriteTokens,
+		ContextTokens:       r.ContextTokens,
+		InstructionsVersion: instructionsVersion(r.InstructionsVersion),
+		DurationMS:          int(r.DurationMs),
+		Status:              r.Status,
+		CreatedAt:           r.CreatedAt,
+		WebReads:            r.WebReads,
 	}
 	if r.HostID != nil {
 		item.HostID = *r.HostID
@@ -291,4 +294,19 @@ func (s *Store) Currency(ctx context.Context, workspaceID ids.ID) (runs.Currency
 // PutCurrency stores the workspace's exchange rate.
 func (s *Store) PutCurrency(ctx context.Context, c runs.Currency) error {
 	return s.q(ctx).PutCurrency(ctx, sqlcgen.PutCurrencyParams{WorkspaceID: c.WorkspaceID, UsdHuf: c.USDHUF, UpdatedBy: c.UpdatedBy, UpdatedAt: c.UpdatedAt})
+}
+
+func versionParam(v int) *int32 {
+	if v <= 0 {
+		return nil
+	}
+	n := int32(min(v, math.MaxInt32))
+	return &n
+}
+
+func instructionsVersion(v *int32) int {
+	if v == nil {
+		return 0
+	}
+	return int(*v)
 }

@@ -2975,15 +2975,18 @@ type ReportRunRequest struct {
 	Client           string              `json:"client"`
 
 	// ContextTokens Context size of the session after the run, as the client measured it; 0 or absent when unknown.
-	ContextTokens *int64                `json:"context_tokens,omitempty"`
-	DurationMs    int                   `json:"duration_ms"`
-	ErrorId       *openapi_types.UUID   `json:"error_id,omitempty"`
-	HostId        *openapi_types.UUID   `json:"host_id,omitempty"`
-	InputTokens   int64                 `json:"input_tokens"`
-	Items         int                   `json:"items"`
-	Model         string                `json:"model"`
-	OutputTokens  int64                 `json:"output_tokens"`
-	Phase         ReportRunRequestPhase `json:"phase"`
+	ContextTokens *int64              `json:"context_tokens,omitempty"`
+	DurationMs    int                 `json:"duration_ms"`
+	ErrorId       *openapi_types.UUID `json:"error_id,omitempty"`
+	HostId        *openapi_types.UUID `json:"host_id,omitempty"`
+	InputTokens   int64               `json:"input_tokens"`
+
+	// InstructionsVersion The version of the agent instructions the run got (work and direct runs)
+	InstructionsVersion *int                  `json:"instructions_version,omitempty"`
+	Items               int                   `json:"items"`
+	Model               string                `json:"model"`
+	OutputTokens        int64                 `json:"output_tokens"`
+	Phase               ReportRunRequestPhase `json:"phase"`
 
 	// ReplyMessageId Message ID of the reply posted by the agent.
 	ReplyMessageId *openapi_types.UUID    `json:"reply_message_id,omitempty"`
@@ -3029,21 +3032,24 @@ type Run struct {
 	ErrorId       *openapi_types.UUID `json:"error_id,omitempty"`
 
 	// EstimatedUsd At the price valid at created_at; null when no price matches. Under a subscription: what it would cost on the API
-	EstimatedUsd   *float64            `json:"estimated_usd,omitempty"`
-	HostId         *openapi_types.UUID `json:"host_id,omitempty"`
-	Id             openapi_types.UUID  `json:"id"`
-	InputTokens    int64               `json:"input_tokens"`
-	Items          int                 `json:"items"`
-	Model          string              `json:"model"`
-	OutputTokens   int64               `json:"output_tokens"`
-	Phase          RunPhase            `json:"phase"`
-	ReplyMessageId *openapi_types.UUID `json:"reply_message_id,omitempty"`
-	SessionId      string              `json:"session_id"`
-	Status         RunStatus           `json:"status"`
-	Steps          *[]AgentStep        `json:"steps,omitempty"`
-	ThreadRootId   *openapi_types.UUID `json:"thread_root_id,omitempty"`
-	WebReads       *[]string           `json:"web_reads,omitempty"`
-	WorkspaceId    openapi_types.UUID  `json:"workspace_id"`
+	EstimatedUsd *float64            `json:"estimated_usd,omitempty"`
+	HostId       *openapi_types.UUID `json:"host_id,omitempty"`
+	Id           openapi_types.UUID  `json:"id"`
+	InputTokens  int64               `json:"input_tokens"`
+
+	// InstructionsVersion The version of the agent instructions the run got
+	InstructionsVersion *int                `json:"instructions_version,omitempty"`
+	Items               int                 `json:"items"`
+	Model               string              `json:"model"`
+	OutputTokens        int64               `json:"output_tokens"`
+	Phase               RunPhase            `json:"phase"`
+	ReplyMessageId      *openapi_types.UUID `json:"reply_message_id,omitempty"`
+	SessionId           string              `json:"session_id"`
+	Status              RunStatus           `json:"status"`
+	Steps               *[]AgentStep        `json:"steps,omitempty"`
+	ThreadRootId        *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	WebReads            *[]string           `json:"web_reads,omitempty"`
+	WorkspaceId         openapi_types.UUID  `json:"workspace_id"`
 }
 
 // RunBilling defines model for Run.Billing.
@@ -3339,7 +3345,13 @@ type Token struct {
 	CreatedAt time.Time          `json:"created_at"`
 	Id        openapi_types.UUID `json:"id"`
 	Label     string             `json:"label"`
-	RevokedAt *time.Time         `json:"revoked_at,omitempty"`
+
+	// LastUsedAt Latest use, recorded at most once a minute
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// Prefix The first characters ("col_" + 4); absent on tokens made before round 35b
+	Prefix    *string    `json:"prefix,omitempty"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }
 
 // TokenList defines model for TokenList.
@@ -3476,9 +3488,12 @@ type UserList struct {
 
 // UserRow defines model for UserRow.
 type UserRow struct {
-	ActiveSessions int        `json:"active_sessions"`
-	Actor          Actor      `json:"actor"`
-	LastLoginAt    *time.Time `json:"last_login_at,omitempty"`
+	ActiveSessions int   `json:"active_sessions"`
+	Actor          Actor `json:"actor"`
+
+	// LastActiveAt Latest use of a session or token (a minute's precision)
+	LastActiveAt *time.Time `json:"last_active_at,omitempty"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 }
 
 // WikiPage defines model for WikiPage.

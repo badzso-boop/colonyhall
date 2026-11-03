@@ -76,8 +76,25 @@ func (s *Store) ListActors(ctx context.Context, workspaceID ids.ID) ([]identity.
 func (s *Store) CreateToken(ctx context.Context, t identity.Token) error {
 	return s.q(ctx).CreateToken(ctx, sqlcgen.CreateTokenParams{
 		ID: t.ID, ActorID: t.ActorID, TokenHash: t.Hash, Label: t.Label, CreatedAt: t.CreatedAt,
-		HostID: nullID(t.HostID), ExpiresAt: t.ExpiresAt,
+		HostID: nullID(t.HostID), ExpiresAt: t.ExpiresAt, Prefix: strOrNil(t.Prefix),
 	})
+}
+
+// TouchToken records a token's use unless it was recorded after notBefore.
+func (s *Store) TouchToken(ctx context.Context, hash []byte, at, notBefore time.Time) error {
+	return s.q(ctx).TouchToken(ctx, sqlcgen.TouchTokenParams{TokenHash: hash, At: &at, NotBefore: &notBefore})
+}
+
+// TouchSession records a session's use unless it was recorded after notBefore.
+func (s *Store) TouchSession(ctx context.Context, id ids.ID, at, notBefore time.Time) error {
+	return s.q(ctx).TouchSession(ctx, sqlcgen.TouchSessionParams{ID: id, At: &at, NotBefore: &notBefore})
+}
+
+func strOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // ActorByTokenHash finds the actor owning a non-revoked token.
@@ -215,7 +232,7 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (identity.S
 	}
 	x := r.Session
 	return identity.Session{ID: x.ID, ActorID: x.ActorID, TokenHash: x.TokenHash, CSRFToken: x.CsrfToken,
-		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt}, toActor(r.Actor), nil
+		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt, LastSeenAt: x.LastSeenAt}, toActor(r.Actor), nil
 }
 
 // RevokeSession ends a session.
@@ -238,7 +255,10 @@ func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
 
 func toToken(t sqlcgen.ApiToken) identity.Token {
 	out := identity.Token{ID: t.ID, ActorID: t.ActorID, Hash: t.TokenHash, Label: t.Label,
-		CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt, ExpiresAt: t.ExpiresAt}
+		CreatedAt: t.CreatedAt, RevokedAt: t.RevokedAt, ExpiresAt: t.ExpiresAt, LastUsedAt: t.LastUsedAt}
+	if t.Prefix != nil {
+		out.Prefix = *t.Prefix
+	}
 	if t.HostID != nil {
 		out.HostID = *t.HostID
 	}
@@ -330,8 +350,8 @@ func (s *Store) SessionStats(ctx context.Context, workspaceID ids.ID, now time.T
 	}
 	out := make(map[ids.ID]identity.SessionStat, len(rows))
 	for _, r := range rows {
-		last := r.LastLogin
-		out[r.ActorID] = identity.SessionStat{Active: int(r.Active), LastLogin: &last}
+		last, seen := r.LastLogin, r.LastSeen
+		out[r.ActorID] = identity.SessionStat{Active: int(r.Active), LastLogin: &last, LastSeen: &seen}
 	}
 	return out, nil
 }

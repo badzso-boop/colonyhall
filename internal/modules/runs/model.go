@@ -79,14 +79,17 @@ type Run struct {
 	CacheWriteTokens int64
 	// ContextTokens is the session's context size after the run as the
 	// client measured it; 0 when unknown.
-	ContextTokens  int64
-	DurationMS     int
-	Status         string
-	ErrorID        ids.ID
-	CreatedAt      time.Time
-	WebReads       []string
-	Steps          []Step
-	ReplyMessageID ids.ID
+	ContextTokens int64
+	// InstructionsVersion is the agent instructions version the run got;
+	// 0 when unknown (decision runs, older guards).
+	InstructionsVersion int
+	DurationMS          int
+	Status              string
+	ErrorID             ids.ID
+	CreatedAt           time.Time
+	WebReads            []string
+	Steps               []Step
+	ReplyMessageID      ids.ID
 	// EstimatedUSD and Billing are computed on reads: nil when no price fits.
 	EstimatedUSD *float64
 	Billing      string

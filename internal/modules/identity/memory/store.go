@@ -109,6 +109,31 @@ func (s *Store) CreateToken(_ context.Context, t identity.Token) error {
 }
 
 // ActorByTokenHash finds the token's actor.
+// TouchToken records a token's use unless it was recorded after notBefore.
+func (s *Store) TouchToken(_ context.Context, hash []byte, at, notBefore time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tokens[string(hash)]
+	if ok && (t.LastUsedAt == nil || t.LastUsedAt.Before(notBefore)) {
+		t.LastUsedAt = &at
+		s.tokens[string(hash)] = t
+	}
+	return nil
+}
+
+// TouchSession records a session's use unless it was recorded after notBefore.
+func (s *Store) TouchSession(_ context.Context, id ids.ID, at, notBefore time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, x := range s.sessions {
+		if x.ID == id && (x.LastSeenAt == nil || x.LastSeenAt.Before(notBefore)) {
+			x.LastSeenAt = &at
+			s.sessions[k] = x
+		}
+	}
+	return nil
+}
+
 func (s *Store) ActorByTokenHash(_ context.Context, hash []byte, now time.Time) (identity.Actor, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -402,6 +427,13 @@ func (s *Store) SessionStats(_ context.Context, workspaceID ids.ID, now time.Tim
 		if st.LastLogin == nil || x.CreatedAt.After(*st.LastLogin) {
 			at := x.CreatedAt
 			st.LastLogin = &at
+		}
+		seen := x.CreatedAt // a login is activity too
+		if x.LastSeenAt != nil {
+			seen = *x.LastSeenAt
+		}
+		if st.LastSeen == nil || seen.After(*st.LastSeen) {
+			st.LastSeen = &seen
 		}
 		out[x.ActorID] = st
 	}

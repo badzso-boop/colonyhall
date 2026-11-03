@@ -130,7 +130,8 @@
       "web_one": "{{count}} web page",
       "web_other": "{{count}} web pages",
       "steps": "Steps",
-      "noSteps": "This run has no steps."
+      "noSteps": "This run has no steps.",
+      "instructions": "Instructions version"
     }
   },
   "settings": {
@@ -224,7 +225,7 @@
     "name": "Name",
     "role": "Role",
     "state": "State",
-    "lastSeen": "Last logged in",
+    "lastSeen": "Last active",
     "sessions": "Active sessions",
     "actions": "Actions",
     "disabled": "Disabled",
@@ -235,7 +236,6 @@
     "passwordAction": "Reset password",
     "disable": "Disable",
     "enable": "Enable",
-    "lastSeenNote": "“Last logged in” is the latest login: the system does not track when a session was last used.",
     "initialPassword": "Password",
     "generate": "Generate",
     "passwordHint": "At least {{min}} characters. Type one or generate it.",
@@ -252,7 +252,8 @@
     "disableTitle": "Disable @{{handle}}?",
     "disableBody": "They cannot log in, and their sessions and tokens are invalid until you enable them again.",
     "enableTitle": "Enable @{{handle}}?",
-    "enableBody": "They can log in again. Their earlier sessions do not come back."
+    "enableBody": "They can log in again. Their earlier sessions do not come back.",
+    "lastLogin": "logged in: {{when}}"
   },
   "tokens": {
     "title": "Tokens",
@@ -269,7 +270,9 @@
     "label": "Name",
     "issue": "Create",
     "others": "Other people's tokens",
-    "pickActor": "Pick an actor"
+    "pickActor": "Pick an actor",
+    "lastUsed": "last used: {{when}}",
+    "neverUsed": "never used"
   },
   "wizard": {
     "title": "Replace the owner key",

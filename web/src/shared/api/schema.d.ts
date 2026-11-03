@@ -2674,6 +2674,11 @@ export interface components {
             active_sessions: number;
             /** Format: date-time */
             last_login_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Latest use of a session or token (a minute's precision)
+             */
+            last_active_at?: string | null;
         };
         UserList: {
             users: components["schemas"]["UserRow"][];
@@ -2703,6 +2708,13 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             revoked_at?: string;
+            /** @description The first characters ("col_" + 4); absent on tokens made before round 35b */
+            prefix?: string;
+            /**
+             * Format: date-time
+             * @description Latest use, recorded at most once a minute
+             */
+            last_used_at?: string;
         };
         TokenList: {
             tokens: components["schemas"]["Token"][];
@@ -3629,6 +3641,8 @@ export interface components {
             cache_read_tokens: number;
             /** Format: int64 */
             cache_write_tokens: number;
+            /** @description The version of the agent instructions the run got (work and direct runs) */
+            instructions_version?: number;
             /**
              * Format: int64
              * @description Context size of the session after the run, as the client measured it; 0 or absent when unknown.
@@ -3685,6 +3699,8 @@ export interface components {
              * @description Context size after the run; 0 when unknown.
              */
             context_tokens?: number;
+            /** @description The version of the agent instructions the run got */
+            instructions_version?: number;
             duration_ms: number;
             /** @enum {string} */
             status: "ok" | "error" | "halted";
