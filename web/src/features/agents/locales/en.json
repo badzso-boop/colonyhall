@@ -102,7 +102,10 @@
       "model": "Model",
       "workModel": "Work model",
       "client": "Client",
-      "hidden": "Only admins see the configuration."
+      "hidden": "Only admins see the configuration.",
+      "writeScope": "Write scope",
+      "docsOnly": "Docs only",
+      "partner": "code by @{{partner}}"
     },
     "collab": {
       "title": "Collaboration",
@@ -186,7 +189,11 @@
     "approvals": "Chat approvals work with Claude Code only.",
     "instructionsLong": "At most 8000 characters.",
     "secret": "This looks like a secret (a token, key or password). Secrets never go into an agent's prompt.",
-    "limits": "Limits cannot be negative."
+    "limits": "Limits cannot be negative.",
+    "docsOnly": "A docs-only agent must be a full-access Claude Code agent in direct mode.",
+    "docsOnlyApprovals": "A docs-only agent has no chat approvals: a refused step stays refused.",
+    "docsOnlyPreview": "A docs-only agent cannot run previews (they run commands).",
+    "partner": "Choose its sandboxed partner, who writes the code."
   },
   "create": {
     "title": "New agent",
@@ -277,7 +284,15 @@
     "tokenBody": "Shown only now: copy it into its client. A secret: never paste it into the chat.",
     "discardTitle": "Discard what you entered?",
     "discard": "Discard",
-    "keepEditing": "Keep editing"
+    "keepEditing": "Keep editing",
+    "docsOnly": "May write documentation only (its sandboxed partner writes the code)",
+    "docsOnlyHint": "It reads its folders but writes only .md files and runs no commands. Claude Code's permission rules enforce it: a refused step is refused, never asked about.",
+    "partner": "Sandboxed partner",
+    "partnerHint": "This agent gets its coding tasks.",
+    "noPartners": "There is no sandboxed agent yet: create one first.",
+    "docsOnlyBlock": "The server appends a fixed block to the instructions: it plans and documents, writes only Markdown, hands every code change to @{{partner}} as a clear task, and never asks a human to run code for it.",
+    "writeScope": "Write scope",
+    "docsOnlySummary": "docs only · code by @{{partner}}"
   },
   "settings": {
     "title": "Agent settings",

@@ -102,7 +102,10 @@
       "model": "Modell",
       "workModel": "Munkamodell",
       "client": "Kliens",
-      "hidden": "A konfigurációt csak adminisztrátor látja."
+      "hidden": "A konfigurációt csak adminisztrátor látja.",
+      "writeScope": "Írási kör",
+      "docsOnly": "Csak dokumentáció",
+      "partner": "kódot @{{partner}} ír"
     },
     "collab": {
       "title": "Együttműködés",
@@ -186,7 +189,11 @@
     "approvals": "A chates jóváhagyás csak Claude Code-dal működik.",
     "instructionsLong": "Legfeljebb 8000 karakter.",
     "secret": "Ez titoknak (tokennek, kulcsnak, jelszónak) látszik. Titok soha nem kerülhet egy agent promptjába.",
-    "limits": "A keretek nem lehetnek negatívak."
+    "limits": "A keretek nem lehetnek negatívak.",
+    "docsOnly": "Csak dokumentációt író agent csak teljes hozzáférésű, direct módú Claude Code-agent lehet.",
+    "docsOnlyApprovals": "A csak dokumentációt író agentnél nincs chates jóváhagyás: a tiltott lépés tiltott marad.",
+    "docsOnlyPreview": "A csak dokumentációt író agent nem indíthat előnézetet (az parancsot futtat).",
+    "partner": "Válaszd ki a sandboxos párját, aki a kódot írja."
   },
   "create": {
     "title": "Új agent",
@@ -277,7 +284,15 @@
     "tokenBody": "Csak most látod: másold ki, és a kliensében állítsd be. Titok: ne tedd a chatbe.",
     "discardTitle": "Elveted a beírt adatokat?",
     "discard": "Elvetés",
-    "keepEditing": "Folytatás"
+    "keepEditing": "Folytatás",
+    "docsOnly": "Csak dokumentációt írhat (kódot a sandboxos párja ír)",
+    "docsOnlyHint": "Olvashatja a mappáit, de csak .md fájlt írhat, parancsot nem futtathat. A Claude Code engedélyszabályai kényszerítik ki, a tiltott lépésre nem kérdez, hanem elutasít.",
+    "partner": "Sandboxos pár",
+    "partnerHint": "Ennek az agentnek adja át a kódolási feladatokat.",
+    "noPartners": "Még nincs sandboxos agent: előbb hozz létre egyet.",
+    "docsOnlyBlock": "A szerver az utasítás végére egy rögzített blokkot fűz: tervez és dokumentál, csak Markdownt ír, minden kódváltozást @{{partner}} kap meg világos feladatként, és soha nem kér embert, hogy kódot futtasson helyette.",
+    "writeScope": "Írási kör",
+    "docsOnlySummary": "csak dokumentáció · kódot @{{partner}} ír"
   },
   "settings": {
     "title": "Agent beállításai",

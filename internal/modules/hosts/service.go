@@ -342,6 +342,8 @@ type AssignInput struct {
 	WorktreeRepo     string
 	AllowPreview     bool
 	AllowWebRead     bool
+	WriteScope       string
+	PartnerID        ids.ID
 }
 
 // GrantInput is a folder an agent gets at creation.
@@ -458,6 +460,10 @@ func (s *Service) ValidateNewAgent(ctx context.Context, by identity.Actor, in As
 	if dailyTokenLimit < 0 {
 		return Assignment{}, nil, ErrBadDailyTokenLimit
 	}
+	writeScope, err := s.validateWriteScope(ctx, by, in, sandbox, approvals)
+	if err != nil {
+		return Assignment{}, nil, err
+	}
 	out := make([]GrantInput, 0, len(grants))
 	seen := map[string]bool{}
 	for _, g := range grants {
@@ -479,9 +485,56 @@ func (s *Service) ValidateNewAgent(ctx context.Context, by identity.Actor, in As
 		Mode: in.Mode, RootDir: clip(in.RootDir, 1024), WorktreeRepo: clip(in.WorktreeRepo, 1024), Sandbox: sandbox, Approvals: approvals, AllowPreview: in.AllowPreview,
 		AllowWebRead:     in.AllowWebRead,
 		MaxSessionTokens: maxSessionTokens, DailyTokenLimit: dailyTokenLimit,
+		WriteScope: writeScope, PartnerID: in.PartnerID,
 		CreatedBy: by.ID, CreatedAt: s.Clock.Now(),
 	}
 	return a, out, nil
+}
+
+// validateWriteScope checks a docs-only planner (round 38): only a
+// full-access Claude Code agent can be one, since the restriction is
+// enforced by Claude Code's permission rules on the guard; chat approvals
+// would turn a refusal into a question and previews run commands, so
+// both are refused. Its partner must be a sandboxed agent of the
+// workspace (an archived agent has no assignment).
+func (s *Service) validateWriteScope(ctx context.Context, by identity.Actor, in AssignInput, sandbox bool, approvals string) (string, error) {
+	scope := in.WriteScope
+	if scope == "" {
+		scope = WriteScopeAll
+	}
+	switch scope {
+	case WriteScopeAll:
+		if in.PartnerID != ids.Nil {
+			return "", ErrPartnerDocsOnly
+		}
+		return scope, nil
+	case WriteScopeDocs:
+	default:
+		return "", ErrBadWriteScope
+	}
+	if in.Client != "claude-code" || sandbox || in.Mode != AgentModeDirect {
+		return "", ErrDocsOnlyClient
+	}
+	if approvals == ApprovalsChat {
+		return "", ErrDocsOnlyApprovals
+	}
+	if in.AllowPreview {
+		return "", ErrDocsOnlyPreview
+	}
+	if in.PartnerID == ids.Nil {
+		return "", ErrPartnerRequired
+	}
+	pa, err := s.Store.AssignmentByAgent(ctx, in.PartnerID)
+	if errors.Is(err, db.ErrNotFound) {
+		return "", ErrBadPartner
+	}
+	if err != nil {
+		return "", err
+	}
+	if pa.WorkspaceID != by.WorkspaceID || !pa.Sandbox {
+		return "", ErrBadPartner
+	}
+	return scope, nil
 }
 
 // CreateAgentConfig writes a validated assignment and its grants for a new
@@ -492,12 +545,24 @@ func (s *Service) CreateAgentConfig(ctx context.Context, by identity.Actor, agen
 	}
 	a.AgentID = agent.ID
 	cfg := AgentConfig{Assignment: a, Handle: agent.Handle, Grants: []Grant{}}
+	if a.PartnerID != ids.Nil {
+		p, err := s.Directory.ActorByID(ctx, a.PartnerID)
+		if err != nil {
+			return AgentConfig{}, err
+		}
+		cfg.PartnerHandle = p.Handle
+	}
+	var partnerID string
+	if a.PartnerID != ids.Nil {
+		partnerID = a.PartnerID.String()
+	}
 	err := s.record(ctx, by.WorkspaceID, by.ID, EventAgentAssigned, a.HostID,
 		AssignmentEvent{
 			AgentID: agent.ID.String(), HostID: a.HostID.String(), Client: a.Client, Model: a.Model,
 			AllowWork: a.AllowWork, Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: a.Approvals,
 			MaxSessionTokens: a.MaxSessionTokens, DailyTokenLimit: a.DailyTokenLimit,
 			AllowPreview: a.AllowPreview, AllowWebRead: a.AllowWebRead,
+			WriteScope: a.WriteScope, PartnerID: partnerID,
 		},
 		func(ctx context.Context) error { return s.Store.SetAssignment(ctx, a) })
 	if err != nil {
@@ -693,6 +758,9 @@ func (s *Service) agentConfigs(ctx context.Context, hostID ids.ID) ([]AgentConfi
 	agentIDs := make([]ids.ID, 0, len(as))
 	for _, a := range as {
 		agentIDs = append(agentIDs, a.AgentID)
+		if a.PartnerID != ids.Nil {
+			agentIDs = append(agentIDs, a.PartnerID)
+		}
 	}
 	actors, err := s.Directory.ActorsByIDs(ctx, agentIDs)
 	if err != nil {
@@ -708,7 +776,7 @@ func (s *Service) agentConfigs(ctx context.Context, hostID ids.ID) ([]AgentConfi
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, AgentConfig{Assignment: a, Handle: handles[a.AgentID], Grants: gs})
+		out = append(out, AgentConfig{Assignment: a, Handle: handles[a.AgentID], PartnerHandle: handles[a.PartnerID], Grants: gs})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Handle < out[j].Handle })
 	return out, nil

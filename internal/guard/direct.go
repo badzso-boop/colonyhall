@@ -500,8 +500,14 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		model = a.Cfg.Model
 	}
 
+	docsOnly := a.Cfg.WriteScope == WriteScopeDocs
+	if docsOnly && (a.Cfg.Client != "claude-code" || a.Sandbox) {
+		// Only Claude Code's permission rules can enforce it: never run
+		// such an agent another way.
+		return fmt.Errorf("guard: a docs-only agent must be a full-access claude-code agent")
+	}
 	var exchangeDir string
-	if a.ExchangeOK {
+	if a.ExchangeOK && !docsOnly { // outside its root: it could not read it
 		exchangeDir = a.ExchangeDir
 	}
 
@@ -580,7 +586,8 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		if err != nil {
 			return fmt.Errorf("guard: direct token: %w", err)
 		}
-		if a.Cfg.Approvals == "chat" {
+		req.DocsOnly = docsOnly
+		if a.Cfg.Approvals == "chat" && !docsOnly {
 			req.PermissionPromptTool = "mcp__colonyhall__approve"
 			mcpTimeout := (DefaultApprovalTimeout + 60*time.Second).Milliseconds()
 			req.Env = append(req.Env, fmt.Sprintf("MCP_TOOL_TIMEOUT=%d", mcpTimeout))
@@ -590,7 +597,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			colonyBin = "colony"
 		}
 		var extraServers map[string]mcpServerDoc
-		if !a.Sandbox {
+		if !a.Sandbox && !docsOnly { // terminals run commands
 			extraServers = map[string]mcpServerDoc{
 				"colony-terminal": {
 					Command: colonyBin,

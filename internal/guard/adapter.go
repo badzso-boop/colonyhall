@@ -70,13 +70,18 @@ type DirectRequest struct {
 	PermissionMode       string
 	MCPConfigPath        string
 	PermissionPromptTool string
-	Env                  []string
-	AddDirs              []string
-	Rules                string
-	RulesVersion         int
-	OnStep               func(Step)
-	OnActivity           func()
-	OnRateLimit          func(RateLimit)
+	// DocsOnly: a docs-only planner (round 38). Claude Code starts with
+	// permission rules that leave it no command tool and allow writes only
+	// to Markdown in Dir; PermissionMode and PermissionPromptTool are
+	// ignored (see ClaudeCode.docsOnlyArgs).
+	DocsOnly     bool
+	Env          []string
+	AddDirs      []string
+	Rules        string
+	RulesVersion int
+	OnStep       func(Step)
+	OnActivity   func()
+	OnRateLimit  func(RateLimit)
 }
 
 // SummarizeRequest is the input of a summarization run.

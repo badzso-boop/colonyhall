@@ -111,7 +111,7 @@ func (q *Queries) AgentHostColors(ctx context.Context, workspaceID uuid.UUID) ([
 }
 
 const assignmentByAgent = `-- name: AssignmentByAgent :one
-SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, worktree_repo, allow_preview, allow_web_read FROM agent_host WHERE agent_id = $1
+SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, worktree_repo, allow_preview, allow_web_read, write_scope, partner_id FROM agent_host WHERE agent_id = $1
 `
 
 func (q *Queries) AssignmentByAgent(ctx context.Context, agentID uuid.UUID) (AgentHost, error) {
@@ -137,12 +137,14 @@ func (q *Queries) AssignmentByAgent(ctx context.Context, agentID uuid.UUID) (Age
 		&i.WorktreeRepo,
 		&i.AllowPreview,
 		&i.AllowWebRead,
+		&i.WriteScope,
+		&i.PartnerID,
 	)
 	return i, err
 }
 
 const assignmentsForHost = `-- name: AssignmentsForHost :many
-SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, worktree_repo, allow_preview, allow_web_read FROM agent_host WHERE host_id = $1 ORDER BY agent_id
+SELECT agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, created_by, created_at, mode, root_dir, sandbox, approvals, max_session_tokens, daily_token_limit, worktree_repo, allow_preview, allow_web_read, write_scope, partner_id FROM agent_host WHERE host_id = $1 ORDER BY agent_id
 `
 
 func (q *Queries) AssignmentsForHost(ctx context.Context, hostID uuid.UUID) ([]AgentHost, error) {
@@ -174,6 +176,8 @@ func (q *Queries) AssignmentsForHost(ctx context.Context, hostID uuid.UUID) ([]A
 			&i.WorktreeRepo,
 			&i.AllowPreview,
 			&i.AllowWebRead,
+			&i.WriteScope,
+			&i.PartnerID,
 		); err != nil {
 			return nil, err
 		}
@@ -399,13 +403,14 @@ func (q *Queries) SaveReport(ctx context.Context, arg SaveReportParams) error {
 }
 
 const setAssignment = `-- name: SetAssignment :exec
-INSERT INTO agent_host (agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, worktree_repo, sandbox, approvals, max_session_tokens, daily_token_limit, allow_preview, allow_web_read, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+INSERT INTO agent_host (agent_id, host_id, workspace_id, client, model, work_model, allow_work, permission_mode, mode, root_dir, worktree_repo, sandbox, approvals, max_session_tokens, daily_token_limit, allow_preview, allow_web_read, created_by, created_at, write_scope, partner_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 ON CONFLICT (agent_id) DO UPDATE SET host_id = EXCLUDED.host_id, client = EXCLUDED.client, model = EXCLUDED.model,
   work_model = EXCLUDED.work_model, allow_work = EXCLUDED.allow_work, permission_mode = EXCLUDED.permission_mode,
   mode = EXCLUDED.mode, root_dir = EXCLUDED.root_dir, worktree_repo = EXCLUDED.worktree_repo, sandbox = EXCLUDED.sandbox, approvals = EXCLUDED.approvals,
   max_session_tokens = EXCLUDED.max_session_tokens, daily_token_limit = EXCLUDED.daily_token_limit,
   allow_preview = EXCLUDED.allow_preview, allow_web_read = EXCLUDED.allow_web_read,
+  write_scope = EXCLUDED.write_scope, partner_id = EXCLUDED.partner_id,
   created_by = EXCLUDED.created_by, created_at = EXCLUDED.created_at
 `
 
@@ -429,6 +434,8 @@ type SetAssignmentParams struct {
 	AllowWebRead     bool
 	CreatedBy        uuid.UUID
 	CreatedAt        time.Time
+	WriteScope       string
+	PartnerID        *uuid.UUID
 }
 
 func (q *Queries) SetAssignment(ctx context.Context, arg SetAssignmentParams) error {
@@ -452,6 +459,8 @@ func (q *Queries) SetAssignment(ctx context.Context, arg SetAssignmentParams) er
 		arg.AllowWebRead,
 		arg.CreatedBy,
 		arg.CreatedAt,
+		arg.WriteScope,
+		arg.PartnerID,
 	)
 	return err
 }

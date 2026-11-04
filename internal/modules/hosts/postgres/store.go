@@ -152,6 +152,7 @@ func (s *Store) SetAssignment(ctx context.Context, a hosts.Assignment) error {
 		Mode: a.Mode, RootDir: a.RootDir, WorktreeRepo: a.WorktreeRepo, Sandbox: a.Sandbox, Approvals: approvals, AllowPreview: a.AllowPreview,
 		AllowWebRead:     a.AllowWebRead,
 		MaxSessionTokens: int32(a.MaxSessionTokens), DailyTokenLimit: a.DailyTokenLimit,
+		WriteScope: writeScope(a.WriteScope), PartnerID: nilID(a.PartnerID),
 		CreatedBy: a.CreatedBy, CreatedAt: a.CreatedAt,
 	})
 }
@@ -166,14 +167,33 @@ func toAssignment(r sqlcgen.AgentHost) hosts.Assignment {
 	if approvals == "" {
 		approvals = hosts.ApprovalsNone
 	}
-	return hosts.Assignment{
+	a := hosts.Assignment{
 		AgentID: r.AgentID, HostID: r.HostID, WorkspaceID: r.WorkspaceID, Client: r.Client,
 		Model: r.Model, WorkModel: r.WorkModel, AllowWork: r.AllowWork, PermissionMode: r.PermissionMode,
 		Mode: r.Mode, RootDir: r.RootDir, WorktreeRepo: r.WorktreeRepo, Sandbox: r.Sandbox, Approvals: approvals, AllowPreview: r.AllowPreview,
 		AllowWebRead:     r.AllowWebRead,
 		MaxSessionTokens: int(r.MaxSessionTokens), DailyTokenLimit: r.DailyTokenLimit,
-		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
+		WriteScope: writeScope(r.WriteScope),
+		CreatedBy:  r.CreatedBy, CreatedAt: r.CreatedAt,
 	}
+	if r.PartnerID != nil {
+		a.PartnerID = *r.PartnerID
+	}
+	return a
+}
+
+func writeScope(s string) string {
+	if s == "" {
+		return hosts.WriteScopeAll
+	}
+	return s
+}
+
+func nilID(id ids.ID) *ids.ID {
+	if id == ids.Nil {
+		return nil
+	}
+	return &id
 }
 
 // AssignmentByAgent loads an agent's assignment.

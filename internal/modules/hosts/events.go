@@ -40,6 +40,8 @@ type AssignmentEvent struct {
 	WorktreeRepo     string `json:"worktree_repo,omitempty"`
 	AllowPreview     bool   `json:"allow_preview"`
 	AllowWebRead     bool   `json:"allow_web_read"`
+	WriteScope       string `json:"write_scope,omitempty"`
+	PartnerID        string `json:"partner_id,omitempty"`
 }
 
 // GrantEvent is the payload of grant events.

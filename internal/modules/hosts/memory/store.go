@@ -156,6 +156,9 @@ func (s *Store) SetAssignment(_ context.Context, a hosts.Assignment) error {
 	if a.Approvals == "" {
 		a.Approvals = hosts.ApprovalsNone
 	}
+	if a.WriteScope == "" {
+		a.WriteScope = hosts.WriteScopeAll
+	}
 	s.assigns[a.AgentID] = a
 	return nil
 }

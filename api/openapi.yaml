@@ -3318,6 +3318,9 @@ components:
         daily_token_limit: { type: integer, format: int64, default: 0, description: "Max tokens per Budapest calendar day (0 = none)" }
         allow_preview: { type: boolean }
         allow_web_read: { type: boolean }
+        write_scope: { type: string, enum: [all, docs], description: "docs: a full-access Claude Code planner that may write only Markdown and hands code changes to its sandboxed partner (enforced by Claude Code permission rules on the guard)" }
+        partner_id: { type: string, format: uuid, description: "docs only: the sandboxed agent that writes the code" }
+        partner_handle: { type: string, description: "docs only: the partner's handle, without @" }
         grants: { type: array, items: { $ref: "#/components/schemas/FolderGrant" } }
     AssignRequest:
       type: object
@@ -3338,6 +3341,8 @@ components:
         daily_token_limit: { type: integer, format: int64, minimum: 0, default: 0 }
         allow_preview: { type: boolean }
         allow_web_read: { type: boolean }
+        write_scope: { type: string, enum: [all, docs], default: all, description: "docs: only for a full-access (direct, not sandboxed) claude-code agent without chat approvals or previews; it writes only Markdown. Immutable." }
+        partner_id: { type: string, format: uuid, description: "Required with write_scope docs, refused otherwise: a sandboxed agent of the workspace that gets the code changes" }
     CreateAgentRequest:
       type: object
       required: [handle]
@@ -4460,6 +4465,8 @@ components:
         max_session_tokens: { type: integer }
         daily_token_limit: { type: integer, format: int64 }
         allow_web_read: { type: boolean }
+        write_scope: { type: string, enum: [all, docs] }
+        partner_handle: { type: string, description: "docs only: the sandboxed partner's handle, without @" }
         grants:
           type: array
           items: { $ref: "#/components/schemas/FolderGrant" }

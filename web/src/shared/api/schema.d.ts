@@ -3485,6 +3485,18 @@ export interface components {
             daily_token_limit: number;
             allow_preview?: boolean;
             allow_web_read?: boolean;
+            /**
+             * @description docs: a full-access Claude Code planner that may write only Markdown and hands code changes to its sandboxed partner (enforced by Claude Code permission rules on the guard)
+             * @enum {string}
+             */
+            write_scope?: "all" | "docs";
+            /**
+             * Format: uuid
+             * @description docs only: the sandboxed agent that writes the code
+             */
+            partner_id?: string;
+            /** @description docs only: the partner's handle, without @ */
+            partner_handle?: string;
             grants: components["schemas"]["FolderGrant"][];
         };
         AssignRequest: {
@@ -3513,6 +3525,17 @@ export interface components {
             daily_token_limit: number;
             allow_preview?: boolean;
             allow_web_read?: boolean;
+            /**
+             * @description docs: only for a full-access (direct, not sandboxed) claude-code agent without chat approvals or previews; it writes only Markdown. Immutable.
+             * @default all
+             * @enum {string}
+             */
+            write_scope: "all" | "docs";
+            /**
+             * Format: uuid
+             * @description Required with write_scope docs, refused otherwise: a sandboxed agent of the workspace that gets the code changes
+             */
+            partner_id?: string;
         };
         CreateAgentRequest: {
             /** @description 2-32 characters: lowercase letters, digits and '-'; free among agents that are not archived */
@@ -4658,6 +4681,10 @@ export interface components {
             /** Format: int64 */
             daily_token_limit: number;
             allow_web_read?: boolean;
+            /** @enum {string} */
+            write_scope?: "all" | "docs";
+            /** @description docs only: the sandboxed partner's handle, without @ */
+            partner_handle?: string;
             grants: components["schemas"]["FolderGrant"][];
             claude_limits?: components["schemas"]["ClaudeLimits"];
         };

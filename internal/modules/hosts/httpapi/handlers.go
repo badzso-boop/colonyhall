@@ -19,7 +19,9 @@ func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
 	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName, hosts.ErrBadColor, hosts.ErrOutsideRoots, hosts.ErrClientNotReported, hosts.ErrBadDailyTokenLimit, hosts.ErrBadMaxSessionTokens,
 		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
-		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient)
+		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient,
+		hosts.ErrBadWriteScope, hosts.ErrDocsOnlyClient, hosts.ErrDocsOnlyApprovals, hosts.ErrDocsOnlyPreview, hosts.ErrPartnerRequired,
+		hosts.ErrPartnerDocsOnly, hosts.ErrBadPartner)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)
 }
 
@@ -91,6 +93,16 @@ func AgentOut(a hosts.AgentConfig) apispec.HostAgent {
 		AllowPreview: &a.AllowPreview,
 		AllowWebRead: &a.AllowWebRead,
 		Grants:       make([]apispec.FolderGrant, 0, len(a.Grants))}
+	scope := a.WriteScope
+	if scope == "" {
+		scope = hosts.WriteScopeAll
+	}
+	ws := apispec.HostAgentWriteScope(scope)
+	out.WriteScope = &ws
+	if a.PartnerID != ids.Nil {
+		pid, ph := a.PartnerID, a.PartnerHandle
+		out.PartnerId, out.PartnerHandle = &pid, &ph
+	}
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, grantOut(g, nil))
 	}

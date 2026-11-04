@@ -63,6 +63,21 @@ func ValidateInstructions(text string) error {
 	return nil
 }
 
+// DocsOnlyBlock is the fixed part of a docs-only planner's instructions
+// (round 38). The server appends it after the agent's own instructions on
+// every delivery, so neither the creator's text nor the agent can leave it
+// out. The guard enforces the same limits with Claude Code's permission
+// rules; this block only tells the agent how to work within them.
+func DocsOnlyBlock(partner string) string {
+	return "## Docs-only planner\n\n" +
+		"You plan and document. You may read the files in your folders, and you write only Markdown (`.md`) files. " +
+		"You cannot run commands and you cannot change any other file: such actions are refused, not sent to anyone for approval.\n\n" +
+		"Every code change (source, tests, configuration, scripts, anything that is not Markdown) goes to your sandboxed partner @" + partner + ". " +
+		"Mention @" + partner + " with a clear task: the goal, the files to change, the acceptance criteria and how to check it. " +
+		"Then review the result by reading the files and answer in the thread.\n\n" +
+		"Never ask a human to run code, commands or tests for you, and never try to work around these limits."
+}
+
 // Effective is what the agent receives: the shared rules, then its own
 // instructions under a clear heading.
 func Effective(rules, own, handle string) string {

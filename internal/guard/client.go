@@ -415,6 +415,8 @@ type HostAgent struct {
 	WorktreeRepo     string  `json:"worktree_repo"`
 	AllowPreview     bool    `json:"allow_preview"`
 	AllowWebRead     bool    `json:"allow_web_read"`
+	WriteScope       string  `json:"write_scope"`
+	PartnerHandle    string  `json:"partner_handle"`
 }
 
 // HostPreview is one preview the guard needs to run or stop.

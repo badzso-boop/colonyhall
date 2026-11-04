@@ -28,6 +28,8 @@ type Hosts interface {
 	ValidateNewAgent(ctx context.Context, by identity.Actor, in hosts.AssignInput, grants []hosts.GrantInput) (hosts.Assignment, []hosts.GrantInput, error)
 	CreateAgentConfig(ctx context.Context, by identity.Actor, agent identity.Actor, a hosts.Assignment, grants []hosts.GrantInput) (hosts.AgentConfig, error)
 	EndAssignment(ctx context.Context, by identity.Actor, agentID ids.ID) error
+	// AssignmentByAgent returns db.ErrNotFound for an agent without one.
+	AssignmentByAgent(ctx context.Context, agentID ids.ID) (hosts.Assignment, error)
 }
 
 // Channels is what the agents module needs from conversation.
@@ -127,12 +129,20 @@ func (s *Service) Create(ctx context.Context, by identity.Actor, in CreateInput)
 	if err := ValidateInstructions(in.Instructions); err != nil {
 		return Created{}, err
 	}
-	if in.Instructions != "" && s.Rules != nil {
+	own := in.Instructions
+	if assignment.WriteScope == hosts.WriteScopeDocs {
+		p, err := s.Identity.ActorByID(ctx, assignment.PartnerID)
+		if err != nil {
+			return Created{}, err
+		}
+		own = withDocsOnly(own, p.Handle)
+	}
+	if own != "" && s.Rules != nil {
 		_, shared, err := s.Rules.RenderShared(ctx, by.WorkspaceID, in.Profile.Handle)
 		if err != nil {
 			return Created{}, err
 		}
-		if utf8.RuneCountInString(Effective(shared, in.Instructions, in.Profile.Handle)) > MaxEffective {
+		if utf8.RuneCountInString(Effective(shared, own, in.Profile.Handle)) > MaxEffective {
 			return Created{}, ErrEffectiveTooLong
 		}
 	}
@@ -258,13 +268,49 @@ func (s *Service) Archive(ctx context.Context, by identity.Actor, agentID ids.ID
 
 // OwnInstructions returns an agent's own instructions ("" when none);
 // for the shared-rules delivery (no caller check: the agent's own, or a
-// human's request already checked).
+// human's request already checked). A docs-only planner's fixed block
+// follows them.
 func (s *Service) OwnInstructions(ctx context.Context, agentID ids.ID) (string, error) {
+	var text string
 	in, err := s.Store.InstructionsByAgent(ctx, agentID)
-	if errors.Is(err, db.ErrNotFound) {
-		return "", nil
+	if err == nil {
+		text = in.Text
+	} else if !errors.Is(err, db.ErrNotFound) {
+		return "", err
 	}
-	return in.Text, err
+	return s.withFixedBlocks(ctx, agentID, text)
+}
+
+// withFixedBlocks appends the blocks the configuration dictates (the
+// docs-only planner's, round 38) to an agent's own instructions.
+func (s *Service) withFixedBlocks(ctx context.Context, agentID ids.ID, own string) (string, error) {
+	if s.Hosts == nil {
+		return own, nil
+	}
+	a, err := s.Hosts.AssignmentByAgent(ctx, agentID)
+	if errors.Is(err, db.ErrNotFound) {
+		return own, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if a.WriteScope != hosts.WriteScopeDocs {
+		return own, nil
+	}
+	partner := "your-sandboxed-partner"
+	if a.PartnerID != ids.Nil {
+		if p, err := s.Identity.ActorByID(ctx, a.PartnerID); err == nil {
+			partner = p.Handle
+		}
+	}
+	return withDocsOnly(own, partner), nil
+}
+
+func withDocsOnly(own, partner string) string {
+	if own == "" {
+		return DocsOnlyBlock(partner)
+	}
+	return own + "\n\n" + DocsOnlyBlock(partner)
 }
 
 // InstructionsView is an agent's own instructions and what it receives.
@@ -298,7 +344,11 @@ func (s *Service) Instructions(ctx context.Context, by identity.Actor, agentID i
 		if err != nil {
 			return InstructionsView{}, err
 		}
-		v.Effective = Effective(shared, s.Rules.RenderText(ctx, by.WorkspaceID, v.Text, a.Handle), a.Handle)
+		own, err := s.withFixedBlocks(ctx, agentID, v.Text)
+		if err != nil {
+			return InstructionsView{}, err
+		}
+		v.Effective = Effective(shared, s.Rules.RenderText(ctx, by.WorkspaceID, own, a.Handle), a.Handle)
 	}
 	return v, nil
 }

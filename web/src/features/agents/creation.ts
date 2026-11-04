@@ -1,5 +1,5 @@
 import type { Schemas } from "@/shared/api";
-import type { Actor, HostAgent } from "./directory";
+import type { Actor, Host, HostAgent } from "./directory";
 
 // The "Új agent" dialog's model (docs/handoff/33, part 4). An agent is
 // configured once: everything here goes to POST /agents in one call.
@@ -30,6 +30,10 @@ export type Draft = {
   approvals: "none" | "chat";
   allowPreview: boolean;
   allowWebRead: boolean;
+  /** A docs-only planner (round 38): writes only Markdown, hands code to its sandboxed partner. */
+  docsOnly: boolean;
+  /** The partner's agent id (docsOnly only). */
+  partnerId: string;
   instructions: string;
   /** 0 = no limit. */
   maxSessionTokens: number;
@@ -42,7 +46,7 @@ export function emptyDraft(hostId = ""): Draft {
     handle: "", displayName: "", avatarEmoji: "", color: "", description: "", apiKey: false, hostId,
     client: "claude-code", model: "", workModel: "", mode: "compact", allowWork: true, permissionMode: "auto",
     sandbox: true, rootDir: "", worktreeRepo: "", grants: new Map(), approvals: "none", allowPreview: false, allowWebRead: false,
-    instructions: "", maxSessionTokens: 150000, dailyTokenLimit: 0, channelIds: [],
+    docsOnly: false, partnerId: "", instructions: "", maxSessionTokens: 150000, dailyTokenLimit: 0, channelIds: [],
   };
 }
 
@@ -87,6 +91,12 @@ export function stepErrors(d: Draft, step: Step, handles: HandleInfo): Errors {
     if (d.allowWebRead && !d.sandbox) e.allowWebRead = "errors.webRead";
     if (d.worktreeRepo && d.mode === "direct" && d.sandbox) e.worktreeRepo = "errors.worktree";
     if (d.approvals === "chat" && d.client !== "claude-code") e.approvals = "errors.approvals";
+    if (d.docsOnly) {
+      if (!canBeDocsOnly(d)) e.docsOnly = "errors.docsOnly";
+      else if (d.approvals === "chat") e.approvals = "errors.docsOnlyApprovals";
+      else if (d.allowPreview) e.allowPreview = "errors.docsOnlyPreview";
+      if (!d.partnerId) e.partnerId = "errors.partner";
+    }
   }
   if (step === "instructions") {
     if ([...d.instructions].length > MaxInstructions) e.instructions = "errors.instructionsLong";
@@ -94,6 +104,16 @@ export function stepErrors(d: Draft, step: Step, handles: HandleInfo): Errors {
   }
   if (step === "limits" && (d.maxSessionTokens < 0 || d.dailyTokenLimit < 0)) e.limits = "errors.limits";
   return e;
+}
+
+/** Only a full-access Claude Code agent in direct mode can be a docs-only planner (the server checks it too). */
+export const canBeDocsOnly = (d: Draft) => !d.apiKey && d.client === "claude-code" && d.mode === "direct" && !d.sandbox;
+
+/** The partners a docs-only planner can get: the sandboxed agents on any machine. */
+export function partnerCandidates(hosts: Host[] | undefined): { id: string; handle: string; host: string }[] {
+  return (hosts ?? [])
+    .flatMap((h) => h.agents.filter((a) => a.sandbox).map((a) => ({ id: a.agent_id, handle: a.handle, host: h.name })))
+    .sort((a, b) => a.handle.localeCompare(b.handle));
 }
 
 export function firstInvalidStep(d: Draft, handles: HandleInfo): Step | null {
@@ -129,6 +149,8 @@ export function toRequest(d: Draft): Schemas["CreateAgentRequest"] {
       allow_web_read: d.sandbox && d.allowWebRead,
       max_session_tokens: d.maxSessionTokens,
       daily_token_limit: d.dailyTokenLimit,
+      write_scope: d.docsOnly ? "docs" : "all",
+      ...(d.docsOnly ? { partner_id: d.partnerId } : {}),
     },
     ...(d.grants.size ? { grants: [...d.grants].map(([path, mode]) => ({ path, mode })) } : {}),
   };
@@ -148,6 +170,7 @@ export function fromAgent(actor: Actor, config: HostAgent | undefined, instructi
           rootDir: config.worktree_repo && config.root_dir === config.worktree_repo ? "" : config.root_dir, worktreeRepo: config.worktree_repo,
           grants: new Map(config.grants.map((g) => [g.path, g.mode as GrantAccess])), approvals: config.approvals as Draft["approvals"],
           allowPreview: Boolean(config.allow_preview), allowWebRead: Boolean(config.allow_web_read),
+          docsOnly: config.write_scope === "docs", partnerId: config.partner_id ?? "",
           maxSessionTokens: config.max_session_tokens, dailyTokenLimit: config.daily_token_limit,
         }
       : {}),
@@ -160,6 +183,6 @@ export function stepForError(detail: string): Step {
   if (/handle|avatar|colou?r|description/.test(m)) return "profile";
   if (/instruction|secret|prompt/.test(m)) return "instructions";
   if (/channel|limit|max_session|daily/.test(m)) return "limits";
-  if (/path|root|grant|folder|worktree|preview|web_read|approvals|sandbox/.test(m)) return "access";
+  if (/path|root|grant|folder|worktree|preview|web_read|approvals|sandbox|write_scope|partner/.test(m)) return "access";
   return "machine";
 }

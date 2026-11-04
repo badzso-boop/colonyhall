@@ -136,6 +136,10 @@ type Assignment struct {
 	WorktreeRepo     string
 	AllowPreview     bool
 	AllowWebRead     bool
+	// WriteScope is WriteScopeAll or WriteScopeDocs (round 38); PartnerID
+	// is the docs-only agent's sandboxed partner (ids.Nil otherwise).
+	WriteScope string
+	PartnerID  ids.ID
 }
 
 // HostPreview is what a guard needs to know about an active/requested preview.
@@ -167,7 +171,9 @@ type Grant struct {
 type AgentConfig struct {
 	Assignment
 	Handle string
-	Grants []Grant
+	// PartnerHandle is the docs-only agent's partner ("" otherwise).
+	PartnerHandle string
+	Grants        []Grant
 }
 
 // Errors.
@@ -195,6 +201,19 @@ var (
 	ErrNotAgent             = errors.New("only agents can be assigned to a host")
 	ErrHostRevoked          = errors.New("the host is revoked")
 	ErrBadState             = errors.New("state must be approved or revoked")
+	ErrBadWriteScope        = errors.New("write_scope must be all or docs")
+	ErrDocsOnlyClient       = errors.New("write_scope docs needs a full-access claude-code agent (direct mode, no sandbox)")
+	ErrDocsOnlyApprovals    = errors.New("write_scope docs cannot use chat approvals: a refused action must stay refused")
+	ErrDocsOnlyPreview      = errors.New("write_scope docs cannot run previews (they run commands)")
+	ErrPartnerRequired      = errors.New("write_scope docs needs a partner: the sandboxed agent that writes the code")
+	ErrPartnerDocsOnly      = errors.New("partner_id is only for write_scope docs")
+	ErrBadPartner           = errors.New("the partner must be a sandboxed agent of this workspace")
+)
+
+// Write scopes of an agent (round 38).
+const (
+	WriteScopeAll  = "all"
+	WriteScopeDocs = "docs"
 )
 
 // Clients the guard knows.
