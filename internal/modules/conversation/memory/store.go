@@ -136,6 +136,20 @@ func (s *Store) RemoveMember(_ context.Context, channelID, actorID ids.ID, at ti
 	return nil
 }
 
+// SetMemberCanWrite changes an active member's write permission.
+func (s *Store) SetMemberCanWrite(_ context.Context, channelID, actorID ids.ID, canWrite bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := memberKey{channelID, actorID}
+	m, ok := s.members[k]
+	if !ok || m.LeftAt != nil {
+		return db.ErrNotFound
+	}
+	m.CanWrite = canWrite
+	s.members[k] = m
+	return nil
+}
+
 // Member loads a membership.
 func (s *Store) Member(_ context.Context, channelID, actorID ids.ID) (conversation.Member, error) {
 	s.mu.RLock()

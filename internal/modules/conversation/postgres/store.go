@@ -89,6 +89,18 @@ func (s *Store) RemoveMember(ctx context.Context, channelID, actorID ids.ID, at 
 	})
 }
 
+// SetMemberCanWrite changes an active member's write permission.
+func (s *Store) SetMemberCanWrite(ctx context.Context, channelID, actorID ids.ID, canWrite bool) error {
+	n, err := s.q(ctx).SetMemberCanWrite(ctx, sqlcgen.SetMemberCanWriteParams{ChannelID: channelID, ActorID: actorID, CanWrite: canWrite})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return db.ErrNotFound
+	}
+	return nil
+}
+
 // Member loads a membership.
 func (s *Store) Member(ctx context.Context, channelID, actorID ids.ID) (conversation.Member, error) {
 	r, err := s.q(ctx).Member(ctx, sqlcgen.MemberParams{ChannelID: channelID, ActorID: actorID})

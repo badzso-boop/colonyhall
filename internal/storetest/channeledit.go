@@ -34,6 +34,19 @@ func testChannelEdit(t *testing.T, b Backend) {
 		t.Fatalf("rename to a taken name: want ErrConflict, got %v", err)
 	}
 
+	// Write permission changes in place; only active members can change.
+	must(t, b.Conversation.SetMemberCanWrite(ctx, f.channel.ID, f.agent.ID, false))
+	if m, err := b.Conversation.Member(ctx, f.channel.ID, f.agent.ID); err != nil || m.CanWrite {
+		t.Fatalf("read-only member: %+v %v", m, err)
+	}
+	must(t, b.Conversation.SetMemberCanWrite(ctx, f.channel.ID, f.agent.ID, true))
+	if m, err := b.Conversation.Member(ctx, f.channel.ID, f.agent.ID); err != nil || !m.CanWrite || !m.JoinedAt.Equal(t0) {
+		t.Fatalf("writable again: %+v %v", m, err)
+	}
+	if err := b.Conversation.SetMemberCanWrite(ctx, other.ID, f.agent.ID, false); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("non-member: want ErrNotFound, got %v", err)
+	}
+
 	// Lock against agents and unlock.
 	lockedAt := t0.Add(time.Minute)
 	must(t, b.Conversation.SetAgentLocked(ctx, f.channel.ID, &lockedAt, &f.human.ID))
@@ -212,6 +225,9 @@ func testMyThreads(t *testing.T, b Backend, f fixture) {
 
 	// Leaving the channel drops its threads.
 	must(t, b.Conversation.RemoveMember(ctx, f.channel.ID, f.human.ID, at(20)))
+	if err := b.Conversation.SetMemberCanWrite(ctx, f.channel.ID, f.human.ID, true); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a member who left: want ErrNotFound, got %v", err)
+	}
 	list, err = b.Conversation.ThreadsForActor(ctx, f.ws.ID, f.human.ID, nil, 10, false)
 	must(t, err)
 	if len(list) != 0 {

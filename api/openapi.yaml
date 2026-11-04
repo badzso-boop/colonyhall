@@ -454,6 +454,27 @@ paths:
         in: path
         required: true
         schema: { type: string, format: uuid }
+    patch:
+      operationId: updateChannelMember
+      tags: [conversation]
+      description: |
+        Admins only. Change a member's write permission without removing and
+        re-adding it: a read-only member reads the channel but cannot post,
+        reply, react, upload or otherwise act in it. Audited (event
+        channel.member_updated) with a silent system note. Setting the
+        current value is a no-op. A DM's members cannot change (409).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMemberRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200":
+          description: The member after the change
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChannelMember" } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
     delete:
       operationId: removeChannelMember
       tags: [conversation]
@@ -2817,6 +2838,11 @@ components:
         actor_id: { type: string, format: uuid }
         actor_ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
         can_write: { type: boolean, default: true }
+    UpdateMemberRequest:
+      type: object
+      required: [can_write]
+      properties:
+        can_write: { type: boolean }
 
     Message:
       type: object
@@ -2974,8 +3000,8 @@ components:
         message.created → EventMessageCreated; message.retracted →
         EventMessageRetracted; reaction.added, reaction.removed →
         EventReaction; channel.created → EventChannelCreated;
-        channel.member_added → EventMemberAdded; channel.member_removed →
-        EventMemberRemoved; channel.updated → EventChannelUpdated;
+        channel.member_added, channel.member_updated → EventMemberAdded;
+        channel.member_removed → EventMemberRemoved; channel.updated → EventChannelUpdated;
         channel.archived, channel.unarchived, channel.locked, channel.unlocked → EventChannelArchived;
         channel.locked, channel.unlocked → EventChannelLocked;
         channel.mute_changed (the muting viewer only) → EventMuteChanged;

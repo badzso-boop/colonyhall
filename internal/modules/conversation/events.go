@@ -4,9 +4,11 @@ import "time"
 
 // Event types emitted by the conversation module.
 const (
-	EventChannelCreated   = "channel.created"
-	EventMemberAdded      = "channel.member_added"
-	EventMemberRemoved    = "channel.member_removed"
+	EventChannelCreated = "channel.created"
+	EventMemberAdded    = "channel.member_added"
+	EventMemberRemoved  = "channel.member_removed"
+	// EventMemberUpdated: a member's write permission changed (payload MemberAdded).
+	EventMemberUpdated    = "channel.member_updated"
 	EventChannelUpdated   = "channel.updated"
 	EventChannelArchived  = "channel.archived"
 	EventChannelUnarchive = "channel.unarchived"

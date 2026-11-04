@@ -912,6 +912,25 @@ func (q *Queries) SetChannelArchived(ctx context.Context, arg SetChannelArchived
 	return err
 }
 
+const setMemberCanWrite = `-- name: SetMemberCanWrite :execrows
+UPDATE channel_member SET can_write = $3
+WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL
+`
+
+type SetMemberCanWriteParams struct {
+	ChannelID uuid.UUID
+	ActorID   uuid.UUID
+	CanWrite  bool
+}
+
+func (q *Queries) SetMemberCanWrite(ctx context.Context, arg SetMemberCanWriteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setMemberCanWrite, arg.ChannelID, arg.ActorID, arg.CanWrite)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setMute = `-- name: SetMute :exec
 INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at)
 VALUES ($1, $2, $3, $4)
