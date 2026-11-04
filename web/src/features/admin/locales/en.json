@@ -100,7 +100,9 @@
       "channel": "Channel",
       "channelAll": "All channels",
       "status": "Status",
-      "statusAll": "All statuses"
+      "statusAll": "All statuses",
+      "owner": "Person",
+      "ownerAll": "Everyone's agents"
     },
     "status": {
       "ok": "Succeeded",

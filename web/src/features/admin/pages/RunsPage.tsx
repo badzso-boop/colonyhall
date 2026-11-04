@@ -74,11 +74,14 @@ function RunsBody() {
   const today = budapestDay(new Date());
   const [period, setPeriod] = useState<Period>({ kind: "7" });
   const [groupBy, setGroupBy] = useState<GroupBy>("agent");
+  // Személy (round 38): the agents of one person, for the tiles, the chart and the list.
+  const [owner, setOwner] = useState("");
   const range = periodDays(period, today);
   const days = useMemo(() => dayList(range.from, range.to), [range.from, range.to]);
-  const usage = useUsage(range.fetchDays, groupBy);
-  const byAgent = useUsage(range.fetchDays, "agent");
+  const usage = useUsage(range.fetchDays, groupBy, owner);
+  const byAgent = useUsage(range.fetchDays, "agent", owner);
   const actors = useActors();
+  const people = [...(actors.data?.values() ?? [])].filter((a) => a.kind === "human" && !a.archived_at);
   const hosts = useHosts(true, 60_000);
   const currency = useCurrency();
   const rate = currency.data?.usd_huf;
@@ -147,6 +150,14 @@ function RunsBody() {
             <Input type="date" aria-label={t("runs.to")} value={period.to} max={today} onChange={(e) => e.target.value && setPeriod({ ...period, to: e.target.value })} className="w-36" />
           </span>
         ) : null}
+        <Select aria-label={t("runs.filter.owner")} value={owner} onChange={(e) => setOwner(e.target.value)} className="w-auto">
+          <option value="">{t("runs.filter.ownerAll")}</option>
+          {people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.display_name} (@{p.handle})
+            </option>
+          ))}
+        </Select>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -191,7 +202,7 @@ function RunsBody() {
 
       <AgentsTable rows={agentRows(agentGroups, days)} name={actorName} rate={rate} />
       <Budgets />
-      <RunList from={range.from} to={range.to} rate={rate} />
+      <RunList from={range.from} to={range.to} rate={rate} owner={owner} />
     </div>
   );
 }
@@ -351,7 +362,7 @@ function StatusIcon({ status }: { status: Schemas["Run"]["status"] }) {
   return <CircleCheck role="img" aria-label={label} className="size-4 shrink-0 text-success" />;
 }
 
-function RunList({ from, to, rate }: { from: string; to: string; rate?: number }) {
+function RunList({ from, to, rate, owner }: { from: string; to: string; rate?: number; owner: string }) {
   const { t, i18n } = useTranslation("admin");
   const locale = localeOf(i18n.language);
   const actors = useActors();
@@ -359,8 +370,13 @@ function RunList({ from, to, rate }: { from: string; to: string; rate?: number }
   const channels = useChannels();
   const [filters, setFilters] = useState<Pick<RunFilters, "agent_id" | "host_id" | "channel_id" | "status">>({});
   const query = useMemo<RunFilters>(
-    () => ({ ...filters, from: new Date(`${from}T00:00:00`).toISOString(), to: new Date(new Date(`${to}T00:00:00`).getTime() + 86_400_000).toISOString() }),
-    [filters, from, to],
+    () => ({
+      ...filters,
+      ...(owner ? { owner_id: owner } : {}),
+      from: new Date(`${from}T00:00:00`).toISOString(),
+      to: new Date(new Date(`${to}T00:00:00`).getTime() + 86_400_000).toISOString(),
+    }),
+    [filters, from, to, owner],
   );
   const pages = useRunPages(query);
   const runs = pages.data?.pages.flatMap((p) => p.runs) ?? [];
@@ -377,7 +393,7 @@ function RunList({ from, to, rate }: { from: string; to: string; rate?: number }
     return () => seen.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   const set = (patch: Partial<typeof filters>) => setFilters((f) => ({ ...f, ...patch }));
-  const agents = [...(actors.data?.values() ?? [])].filter((a) => a.kind === "agent");
+  const agents = [...(actors.data?.values() ?? [])].filter((a) => a.kind === "agent" && (!owner || a.owner_id === owner));
   const channelName = (id?: string) => (id ? channels.data?.find((c) => c.id === id)?.name : undefined);
   const nameOf = (id: string) => {
     const a = actors.data?.get(id);

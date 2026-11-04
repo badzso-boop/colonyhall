@@ -100,7 +100,9 @@
       "channel": "Csatorna",
       "channelAll": "Minden csatorna",
       "status": "Állapot",
-      "statusAll": "Minden állapot"
+      "statusAll": "Minden állapot",
+      "owner": "Személy",
+      "ownerAll": "Mindenki agentjei"
     },
     "status": {
       "ok": "Sikeres",

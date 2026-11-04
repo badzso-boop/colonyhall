@@ -4,7 +4,7 @@ import { api, onEvent, onResync, unwrap, type Schemas } from "@/shared/api";
 export const adminKeys = {
   status: ["admin", "status"] as const,
   system: ["admin", "system"] as const,
-  usage: (days: number, groupBy: string) => ["admin", "usage", days, groupBy] as const,
+  usage: (days: number, groupBy: string, ownerId = "") => ["admin", "usage", days, groupBy, ownerId] as const,
   runs: (f: RunFilters) => ["admin", "runs", f] as const,
   prices: ["admin", "prices"] as const,
   currency: ["admin", "currency"] as const,
@@ -58,15 +58,16 @@ export function useSystemStatus(enabled = true, refetchInterval: number | false 
   });
 }
 
-export function useUsage(days: number, groupBy: "agent" | "host" | "model") {
+/** ownerId narrows to one person's agents (round 38); "" = everyone the viewer may see. */
+export function useUsage(days: number, groupBy: "agent" | "host" | "model", ownerId = "") {
   return useQuery({
-    queryKey: adminKeys.usage(days, groupBy),
+    queryKey: adminKeys.usage(days, groupBy, ownerId),
     placeholderData: (prev) => prev,
-    queryFn: async () => unwrap(await api.GET("/usage", { params: { query: { days, group_by: groupBy } } })),
+    queryFn: async () => unwrap(await api.GET("/usage", { params: { query: { days, group_by: groupBy, ...(ownerId ? { owner_id: ownerId } : {}) } } })),
   });
 }
 
-export type RunFilters = { agent_id?: string; host_id?: string; channel_id?: string; status?: "ok" | "error" | "halted"; from?: string; to?: string };
+export type RunFilters = { owner_id?: string; agent_id?: string; host_id?: string; channel_id?: string; status?: "ok" | "error" | "halted"; from?: string; to?: string };
 
 export function useRunPages(filters: RunFilters) {
   return useInfiniteQuery<Schemas["RunList"], Error, InfiniteData<Schemas["RunList"], string | undefined>, QueryKey, string | undefined>({
