@@ -152,7 +152,13 @@
       "removeTitle": "Remove @{{handle}}",
       "removeAgent": "@{{handle}} leaves #{{channel}}. If it is working here now, its run stops and its pending tasks are dropped.",
       "removeHuman": "@{{handle}} leaves #{{channel}} and can no longer read it.",
-      "initial": "Initial members"
+      "initial": "Initial members",
+      "access": "Access",
+      "accessOf": "Access of @{{handle}}",
+      "canWrite": "Can write",
+      "readOnly": "Read only",
+      "nowWrite": "@{{handle}} can now write in the channel",
+      "nowReadOnly": "@{{handle}} can now only read the channel"
     },
     "compaction": {
       "threshold": "Compaction threshold (tokens)",

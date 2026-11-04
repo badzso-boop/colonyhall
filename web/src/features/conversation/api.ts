@@ -266,9 +266,19 @@ export function useSetLocked(channelId: string) {
 export function useAddMembers(channelId: string) {
   const refresh = useChannelRefresh();
   return useMutation({
-    mutationFn: async (actorIds: string[]) => {
-      unwrap(await api.POST("/channels/{channelId}/members", { params: { path: { channelId } }, body: { actor_ids: actorIds, can_write: true } }));
+    mutationFn: async ({ actorIds, canWrite }: { actorIds: string[]; canWrite: boolean }) => {
+      unwrap(await api.POST("/channels/{channelId}/members", { params: { path: { channelId } }, body: { actor_ids: actorIds, can_write: canWrite } }));
     },
+    onSuccess: () => refresh(channelId),
+  });
+}
+
+/** Admins: switch a member between read-only and read-write without re-adding it. */
+export function useSetMemberCanWrite(channelId: string) {
+  const refresh = useChannelRefresh();
+  return useMutation({
+    mutationFn: async ({ actorId, canWrite }: { actorId: string; canWrite: boolean }) =>
+      unwrap(await api.PATCH("/channels/{channelId}/members/{actorId}", { params: { path: { channelId, actorId } }, body: { can_write: canWrite } })),
     onSuccess: () => refresh(channelId),
   });
 }

@@ -59,6 +59,7 @@ export function registerConversationEvents(qc: QueryClient): () => void {
     onEvent("reaction.removed", (e) => reloadChannel(e.data.channel_id)),
     onEvent("channel.created", channels),
     onEvent("channel.member_added", (e) => channelChanged(e.data.channel_id)),
+    onEvent("channel.member_updated", (e) => channelChanged(e.data.channel_id)),
     onEvent("channel.member_removed", (e) => {
       channelChanged(e.data.channel_id);
       threads();
