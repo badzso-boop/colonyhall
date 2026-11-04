@@ -732,6 +732,10 @@ func testHosts(t *testing.T, b Backend) {
 	if err != nil || ga.Approvals != hosts.ApprovalsChat || ga.MaxSessionTokens != 120000 || ga.DailyTokenLimit != 500000 || ga.WorktreeRepo != "/work/repo" || !ga.AllowPreview || ga.AllowWebRead {
 		t.Fatalf("approvals / limits / worktree / web_read: %+v %v", ga, err)
 	}
+	if ga.WriteScope != hosts.WriteScopeAll || ga.PartnerID != ids.Nil {
+		t.Fatalf("write_scope defaults to all, no partner: %+v", ga)
+	}
+	partner := gen.New()
 	a.Model = "opus"
 	a.Mode = hosts.AgentModeCompact
 	a.WorktreeRepo = "/work/repo2"
@@ -741,6 +745,8 @@ func testHosts(t *testing.T, b Backend) {
 	a.AllowWebRead = true
 	a.MaxSessionTokens = 80000
 	a.DailyTokenLimit = 250000
+	a.WriteScope = hosts.WriteScopeDocs
+	a.PartnerID = partner
 	must(t, hs.SetAssignment(ctx, a)) // replaces
 	ga, err = hs.AssignmentByAgent(ctx, f.agent.ID)
 	if err != nil || ga.Model != "opus" || !ga.AllowWork || ga.Mode != hosts.AgentModeCompact || ga.RootDir != "/work" || ga.WorktreeRepo != "/work/repo2" || !ga.Sandbox || ga.Approvals != hosts.ApprovalsNone || ga.MaxSessionTokens != 80000 || ga.DailyTokenLimit != 250000 || ga.AllowPreview || !ga.AllowWebRead {
@@ -749,6 +755,9 @@ func testHosts(t *testing.T, b Backend) {
 	as, err := hs.AssignmentsForHost(ctx, h.ID)
 	if err != nil || len(as) != 1 || as[0].Approvals != hosts.ApprovalsNone || as[0].WorktreeRepo != "/work/repo2" || as[0].MaxSessionTokens != 80000 || as[0].DailyTokenLimit != 250000 || as[0].AllowPreview || !as[0].AllowWebRead {
 		t.Fatalf("AssignmentsForHost: %+v %v", as, err)
+	}
+	if ga.WriteScope != hosts.WriteScopeDocs || ga.PartnerID != partner || as[0].WriteScope != hosts.WriteScopeDocs || as[0].PartnerID != partner {
+		t.Fatalf("write_scope / partner: %+v %+v", ga, as[0])
 	}
 
 	g1 := hosts.Grant{ID: gen.New(), WorkspaceID: f.ws.ID, AgentID: f.agent.ID, HostID: h.ID, Path: "/work/b", Mode: hosts.ModeWrite, CreatedBy: f.human.ID, CreatedAt: t0}

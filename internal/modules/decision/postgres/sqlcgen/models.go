@@ -48,6 +48,8 @@ type AgentHost struct {
 	WorktreeRepo     string
 	AllowPreview     bool
 	AllowWebRead     bool
+	WriteScope       string
+	PartnerID        *uuid.UUID
 }
 
 type AgentInstruction struct {

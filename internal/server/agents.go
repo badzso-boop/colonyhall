@@ -58,6 +58,10 @@ func registerAgents(mux *http.ServeMux, idSvc *identity.Service, agSvc *agents.S
 				RootDir: httpx.Deref(h.RootDir, ""), WorktreeRepo: httpx.Deref(h.WorktreeRepo, ""), Sandbox: h.Sandbox,
 				MaxSessionTokens: h.MaxSessionTokens, DailyTokenLimit: h.DailyTokenLimit,
 				AllowPreview: httpx.Deref(h.AllowPreview, false), AllowWebRead: httpx.Deref(h.AllowWebRead, false),
+				PartnerID: httpx.Deref(h.PartnerId, ids.Nil),
+			}
+			if h.WriteScope != nil {
+				in.Host.WriteScope = string(*h.WriteScope)
 			}
 			if h.Mode != nil {
 				in.Host.Mode = string(*h.Mode)

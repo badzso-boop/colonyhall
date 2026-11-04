@@ -324,6 +324,24 @@ func (e AssignRequestMode) Valid() bool {
 	}
 }
 
+// Defines values for AssignRequestWriteScope.
+const (
+	AssignRequestWriteScopeAll  AssignRequestWriteScope = "all"
+	AssignRequestWriteScopeDocs AssignRequestWriteScope = "docs"
+)
+
+// Valid indicates whether the value is a known member of the AssignRequestWriteScope enum.
+func (e AssignRequestWriteScope) Valid() bool {
+	switch e {
+	case AssignRequestWriteScopeAll:
+		return true
+	case AssignRequestWriteScopeDocs:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChannelKind.
 const (
 	Dm      ChannelKind = "dm"
@@ -645,6 +663,24 @@ func (e HostAgentMode) Valid() bool {
 	}
 }
 
+// Defines values for HostAgentWriteScope.
+const (
+	HostAgentWriteScopeAll  HostAgentWriteScope = "all"
+	HostAgentWriteScopeDocs HostAgentWriteScope = "docs"
+)
+
+// Valid indicates whether the value is a known member of the HostAgentWriteScope enum.
+func (e HostAgentWriteScope) Valid() bool {
+	switch e {
+	case HostAgentWriteScopeAll:
+		return true
+	case HostAgentWriteScopeDocs:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HostDirListingErrorCode.
 const (
 	HostDirListingErrorCodeDenied        HostDirListingErrorCode = "denied"
@@ -855,6 +891,24 @@ func (e MessageKind) Valid() bool {
 	case MessageKindSystem:
 		return true
 	case MessageKindText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OverviewAssignmentWriteScope.
+const (
+	OverviewAssignmentWriteScopeAll  OverviewAssignmentWriteScope = "all"
+	OverviewAssignmentWriteScopeDocs OverviewAssignmentWriteScope = "docs"
+)
+
+// Valid indicates whether the value is a known member of the OverviewAssignmentWriteScope enum.
+func (e OverviewAssignmentWriteScope) Valid() bool {
+	switch e {
+	case OverviewAssignmentWriteScopeAll:
+		return true
+	case OverviewAssignmentWriteScopeDocs:
 		return true
 	default:
 		return false
@@ -1712,13 +1766,19 @@ type AssignRequest struct {
 	MaxSessionTokens *int                    `json:"max_session_tokens,omitempty"`
 	Mode             *AssignRequestMode      `json:"mode,omitempty"`
 	Model            *string                 `json:"model,omitempty"`
-	PermissionMode   *string                 `json:"permission_mode,omitempty"`
-	RootDir          *string                 `json:"root_dir,omitempty"`
-	Sandbox          *bool                   `json:"sandbox,omitempty"`
-	WorkModel        *string                 `json:"work_model,omitempty"`
+
+	// PartnerId Required with write_scope docs, refused otherwise: a sandboxed agent of the workspace that gets the code changes
+	PartnerId      *openapi_types.UUID `json:"partner_id,omitempty"`
+	PermissionMode *string             `json:"permission_mode,omitempty"`
+	RootDir        *string             `json:"root_dir,omitempty"`
+	Sandbox        *bool               `json:"sandbox,omitempty"`
+	WorkModel      *string             `json:"work_model,omitempty"`
 
 	// WorktreeRepo Git repo path for worktree. For sandboxed agents, the guard commits for the agent; nothing is pushed.
 	WorktreeRepo *string `json:"worktree_repo,omitempty"`
+
+	// WriteScope docs: only for a full-access (direct, not sandboxed) claude-code agent without chat approvals or previews; it writes only Markdown. Immutable.
+	WriteScope *AssignRequestWriteScope `json:"write_scope,omitempty"`
 }
 
 // AssignRequestApprovals defines model for AssignRequest.Approvals.
@@ -1729,6 +1789,9 @@ type AssignRequestClient string
 
 // AssignRequestMode defines model for AssignRequest.Mode.
 type AssignRequestMode string
+
+// AssignRequestWriteScope docs: only for a full-access (direct, not sandboxed) claude-code agent without chat approvals or previews; it writes only Markdown. Immutable.
+type AssignRequestWriteScope string
 
 // AuditActions defines model for AuditActions.
 type AuditActions struct {
@@ -2372,11 +2435,20 @@ type HostAgent struct {
 	MaxSessionTokens int           `json:"max_session_tokens"`
 	Mode             HostAgentMode `json:"mode"`
 	Model            string        `json:"model"`
-	PermissionMode   string        `json:"permission_mode"`
-	RootDir          string        `json:"root_dir"`
-	Sandbox          bool          `json:"sandbox"`
-	WorkModel        string        `json:"work_model"`
-	WorktreeRepo     string        `json:"worktree_repo"`
+
+	// PartnerHandle docs only: the partner's handle, without @
+	PartnerHandle *string `json:"partner_handle,omitempty"`
+
+	// PartnerId docs only: the sandboxed agent that writes the code
+	PartnerId      *openapi_types.UUID `json:"partner_id,omitempty"`
+	PermissionMode string              `json:"permission_mode"`
+	RootDir        string              `json:"root_dir"`
+	Sandbox        bool                `json:"sandbox"`
+	WorkModel      string              `json:"work_model"`
+	WorktreeRepo   string              `json:"worktree_repo"`
+
+	// WriteScope docs: a full-access Claude Code planner that may write only Markdown and hands code changes to its sandboxed partner (enforced by Claude Code permission rules on the guard)
+	WriteScope *HostAgentWriteScope `json:"write_scope,omitempty"`
 }
 
 // HostAgentApprovals defines model for HostAgent.Approvals.
@@ -2387,6 +2459,9 @@ type HostAgentClient string
 
 // HostAgentMode defines model for HostAgent.Mode.
 type HostAgentMode string
+
+// HostAgentWriteScope docs: a full-access Claude Code planner that may write only Markdown and hands code changes to its sandboxed partner (enforced by Claude Code permission rules on the guard)
+type HostAgentWriteScope string
 
 // HostConfig defines model for HostConfig.
 type HostConfig struct {
@@ -2740,13 +2815,20 @@ type OverviewAssignment struct {
 	MaxSessionTokens int                `json:"max_session_tokens"`
 	Mode             string             `json:"mode"`
 	Model            string             `json:"model"`
-	PermissionMode   string             `json:"permission_mode"`
-	RootDir          string             `json:"root_dir"`
-	Sandbox          bool               `json:"sandbox"`
-	WorkModel        *string            `json:"work_model,omitempty"`
-	WorktreeBranch   *string            `json:"worktree_branch,omitempty"`
-	WorktreeRepo     string             `json:"worktree_repo"`
+
+	// PartnerHandle docs only: the sandboxed partner's handle, without @
+	PartnerHandle  *string                       `json:"partner_handle,omitempty"`
+	PermissionMode string                        `json:"permission_mode"`
+	RootDir        string                        `json:"root_dir"`
+	Sandbox        bool                          `json:"sandbox"`
+	WorkModel      *string                       `json:"work_model,omitempty"`
+	WorktreeBranch *string                       `json:"worktree_branch,omitempty"`
+	WorktreeRepo   string                        `json:"worktree_repo"`
+	WriteScope     *OverviewAssignmentWriteScope `json:"write_scope,omitempty"`
 }
+
+// OverviewAssignmentWriteScope defines model for OverviewAssignment.WriteScope.
+type OverviewAssignmentWriteScope string
 
 // OverviewCollaboration defines model for OverviewCollaboration.
 type OverviewCollaboration struct {

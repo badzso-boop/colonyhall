@@ -194,6 +194,15 @@ func registerOverview(
 				AllowWebRead:     &asgn.AllowWebRead,
 				Grants:           fgrants,
 			}
+			if asgn.WriteScope != "" {
+				ws := apispec.OverviewAssignmentWriteScope(asgn.WriteScope)
+				overviewAssignment.WriteScope = &ws
+			}
+			if asgn.PartnerID != ids.Nil {
+				if p, err := idSvc.ActorByID(ctx, asgn.PartnerID); err == nil {
+					overviewAssignment.PartnerHandle = strPtr(p.Handle)
+				}
+			}
 		}
 
 		// Non-admins see runs, notes and questions only from channels they can read.
