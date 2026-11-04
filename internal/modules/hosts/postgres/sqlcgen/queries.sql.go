@@ -274,7 +274,7 @@ func (q *Queries) GrantByID(ctx context.Context, id uuid.UUID) (FolderGrant, err
 }
 
 const hostByID = `-- name: HostByID :one
-SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color FROM host WHERE id = $1
+SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color, owner_id FROM host WHERE id = $1
 `
 
 func (q *Queries) HostByID(ctx context.Context, id uuid.UUID) (Host, error) {
@@ -291,12 +291,13 @@ func (q *Queries) HostByID(ctx context.Context, id uuid.UUID) (Host, error) {
 		&i.LastSeenAt,
 		&i.Report,
 		&i.Color,
+		&i.OwnerID,
 	)
 	return i, err
 }
 
 const hostByTokenHash = `-- name: HostByTokenHash :one
-SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color FROM host WHERE token_hash = $1
+SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color, owner_id FROM host WHERE token_hash = $1
 `
 
 func (q *Queries) HostByTokenHash(ctx context.Context, tokenHash []byte) (Host, error) {
@@ -313,12 +314,13 @@ func (q *Queries) HostByTokenHash(ctx context.Context, tokenHash []byte) (Host, 
 		&i.LastSeenAt,
 		&i.Report,
 		&i.Color,
+		&i.OwnerID,
 	)
 	return i, err
 }
 
 const listHosts = `-- name: ListHosts :many
-SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color FROM host WHERE workspace_id = $1 ORDER BY name, id
+SELECT id, workspace_id, name, token_hash, state, created_by, created_at, last_seen_at, report, color, owner_id FROM host WHERE workspace_id = $1 ORDER BY name, id
 `
 
 func (q *Queries) ListHosts(ctx context.Context, workspaceID uuid.UUID) ([]Host, error) {
@@ -341,6 +343,7 @@ func (q *Queries) ListHosts(ctx context.Context, workspaceID uuid.UUID) ([]Host,
 			&i.LastSeenAt,
 			&i.Report,
 			&i.Color,
+			&i.OwnerID,
 		); err != nil {
 			return nil, err
 		}
@@ -450,6 +453,20 @@ func (q *Queries) SetAssignment(ctx context.Context, arg SetAssignmentParams) er
 		arg.CreatedBy,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const setHostOwner = `-- name: SetHostOwner :exec
+UPDATE host SET owner_id = $1 WHERE id = $2
+`
+
+type SetHostOwnerParams struct {
+	OwnerID *uuid.UUID
+	ID      uuid.UUID
+}
+
+func (q *Queries) SetHostOwner(ctx context.Context, arg SetHostOwnerParams) error {
+	_, err := q.db.Exec(ctx, setHostOwner, arg.OwnerID, arg.ID)
 	return err
 }
 

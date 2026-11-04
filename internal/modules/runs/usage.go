@@ -3,6 +3,7 @@ package runs
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"time"
 
@@ -32,6 +33,11 @@ func (s *Service) SearchRuns(ctx context.Context, by identity.Actor, f RunFilter
 		f.Limit = 50
 	}
 	f.Limit = min(f.Limit, MaxRunPage)
+	// A person who is not an admin sees only their own agents' runs, whatever
+	// the filter says (round 38).
+	if f.AgentIDs, err = s.agentScope(ctx, by, f.OwnerID); err != nil {
+		return nil, nil, err
+	}
 	limit := f.Limit
 	f.Limit = limit + 1
 	list, err = s.Store.SearchRuns(ctx, by.WorkspaceID, f)
@@ -57,7 +63,9 @@ func (s *Service) SearchRuns(ctx context.Context, by identity.Actor, f RunFilter
 
 // UsageSummary returns usage per agent and day, per group and day, and the
 // totals of the last days, each run costed at the price of its time.
-func (s *Service) UsageSummary(ctx context.Context, by identity.Actor, days int, groupBy string) (UsageSummary, error) {
+// A person who is not an admin sees only their own agents; ownerID narrows
+// an admin's view to one person's agents (round 38).
+func (s *Service) UsageSummary(ctx context.Context, by identity.Actor, days int, groupBy string, ownerID ids.ID) (UsageSummary, error) {
 	if by.Kind != identity.KindHuman {
 		return UsageSummary{}, ErrForbidden
 	}
@@ -72,9 +80,16 @@ func (s *Service) UsageSummary(ctx context.Context, by identity.Actor, days int,
 	}
 	now := s.Clock.Now().In(Budapest)
 	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Budapest).AddDate(0, 0, -(days - 1))
+	scope, err := s.agentScope(ctx, by, ownerID)
+	if err != nil {
+		return UsageSummary{}, err
+	}
 	rows, err := s.Store.UsageRuns(ctx, by.WorkspaceID, since)
 	if err != nil {
 		return UsageSummary{}, err
+	}
+	if scope != nil {
+		rows = slices.DeleteFunc(rows, func(r UsageRun) bool { return !slices.Contains(scope, r.AgentID) })
 	}
 	prices, err := s.Store.Prices(ctx, by.WorkspaceID)
 	if err != nil {

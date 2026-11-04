@@ -59,11 +59,16 @@ type hostOut struct {
 	LastSeenAt *time.Time          `json:"last_seen_at,omitempty"`
 	Report     hosts.Report        `json:"report"`
 	Agents     []apispec.HostAgent `json:"agents"`
+	OwnerID    *ids.ID             `json:"owner_id,omitempty"`
 }
 
 func toHostOut(h hosts.HostView) hostOut {
 	ho := hostOut{ID: h.ID, Name: h.Name, Color: h.Color, State: h.State, CreatedAt: h.CreatedAt, LastSeenAt: h.LastSeenAt,
 		Report: h.Report, Agents: make([]apispec.HostAgent, 0, len(h.Agents))}
+	if h.OwnerID != ids.Nil {
+		owner := h.OwnerID
+		ho.OwnerID = &owner
+	}
 	if ho.Report.Roots == nil {
 		ho.Report.Roots = []string{}
 	}
@@ -159,18 +164,26 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			httpx.Error(w, r, err)
 			return
 		}
-		views, err := svc.ListHosts(r.Context(), by)
+		hostView(w, r, svc, by, h.ID)
+	}))
+
+	mux.Handle("PUT /api/v1/hosts/{hostId}/owner", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "hostId")
+		if !ok {
+			return
+		}
+		var in apispec.SetOwnerRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		by := httpx.Actor(r)
+		h, err := svc.SetHostOwner(r.Context(), by, id, httpx.Deref(in.OwnerId, ids.Nil))
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		for _, v := range views {
-			if v.ID == h.ID {
-				httpx.JSON(w, http.StatusOK, toHostOut(v))
-				return
-			}
-		}
-		httpx.Error(w, r, db.ErrNotFound)
+		hostView(w, r, svc, by, h.ID)
 	}))
 
 	mux.Handle("PUT /api/v1/hosts/{hostId}/state", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -285,4 +298,20 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 		}
 		httpx.JSON(w, http.StatusCreated, apispec.AgentToken{Token: secret, ExpiresAt: exp})
 	}))
+}
+
+// hostView answers with one machine as the caller sees it on the Machines page.
+func hostView(w http.ResponseWriter, r *http.Request, svc *hosts.Service, by identity.Actor, id ids.ID) {
+	views, err := svc.ListHosts(r.Context(), by)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	for _, v := range views {
+		if v.ID == id {
+			httpx.JSON(w, http.StatusOK, toHostOut(v))
+			return
+		}
+	}
+	httpx.Error(w, r, db.ErrNotFound)
 }

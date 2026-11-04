@@ -3,6 +3,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -179,6 +180,7 @@ func (s *Store) SearchRuns(_ context.Context, workspaceID ids.ID, f runs.RunFilt
 			f.HostID != ids.Nil && r.HostID != f.HostID,
 			f.ChannelID != ids.Nil && r.ChannelID != f.ChannelID,
 			f.Status != "" && r.Status != f.Status,
+			f.AgentIDs != nil && !slices.Contains(f.AgentIDs, r.AgentID),
 			f.From != nil && r.CreatedAt.Before(*f.From),
 			f.To != nil && !r.CreatedAt.Before(*f.To):
 			continue

@@ -160,23 +160,93 @@ type HostView struct {
 }
 
 // ListHosts lists the workspace's hosts with their agents and grants.
+// Admins see every machine; another person only the machines they own
+// (round 38), with only the agents they own.
 func (s *Service) ListHosts(ctx context.Context, by identity.Actor) ([]HostView, error) {
-	if err := admin(by); err != nil {
-		return nil, err
+	if by.Kind != identity.KindHuman {
+		return nil, ErrForbidden
 	}
+	all := admin(by) == nil
 	hs, err := s.Store.ListHosts(ctx, by.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]HostView, 0, len(hs))
 	for _, h := range hs {
+		if !all && (h.OwnerID == ids.Nil || h.OwnerID != by.ID) {
+			continue
+		}
 		agents, err := s.agentConfigs(ctx, h.ID)
 		if err != nil {
 			return nil, err
 		}
+		if !all {
+			agents, err = s.ownAgents(ctx, by, agents)
+			if err != nil {
+				return nil, err
+			}
+		}
 		out = append(out, HostView{Host: h, Agents: agents})
 	}
 	return out, nil
+}
+
+// ownAgents keeps the configurations of the agents by may see.
+func (s *Service) ownAgents(ctx context.Context, by identity.Actor, list []AgentConfig) ([]AgentConfig, error) {
+	if len(list) == 0 {
+		return list, nil
+	}
+	idList := make([]ids.ID, 0, len(list))
+	for _, a := range list {
+		idList = append(idList, a.AgentID)
+	}
+	actors, err := s.Directory.ActorsByIDs(ctx, idList)
+	if err != nil {
+		return nil, err
+	}
+	sees := map[ids.ID]bool{}
+	for _, a := range actors {
+		sees[a.ID] = by.SeesAgent(a)
+	}
+	out := list[:0:0]
+	for _, a := range list {
+		if sees[a.AgentID] {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// SetHostOwner gives the machine to a person, or to nobody (ids.Nil). Only
+// the workspace owner may (audited, host.owner_changed).
+func (s *Service) SetHostOwner(ctx context.Context, by identity.Actor, hostID, ownerID ids.ID) (Host, error) {
+	if by.Kind != identity.KindHuman || by.Role != identity.RoleOwner || by.Halted {
+		return Host{}, ErrForbidden
+	}
+	h, err := s.hostIn(ctx, by.WorkspaceID, hostID)
+	if err != nil {
+		return Host{}, err
+	}
+	if ownerID != ids.Nil {
+		o, err := s.Directory.ActorByID(ctx, ownerID)
+		if errors.Is(err, db.ErrNotFound) || (err == nil && (o.WorkspaceID != by.WorkspaceID || o.Kind != identity.KindHuman || o.ArchivedAt != nil)) {
+			return Host{}, identity.ErrInvalidOwner
+		}
+		if err != nil {
+			return Host{}, err
+		}
+	}
+	if h.OwnerID == ownerID {
+		return h, nil
+	}
+	owner := ""
+	if ownerID != ids.Nil {
+		owner = ownerID.String()
+	}
+	err = s.record(ctx, by.WorkspaceID, by.ID, EventHostOwner, h.ID, HostEvent{HostID: h.ID.String(), Name: h.Name, Owner: owner},
+		func(ctx context.Context) error { return s.Store.SetHostOwner(ctx, h.ID, ownerID) })
+	h.OwnerID = ownerID
+	return h, err
 }
 
 // UpdateHostInput changes a host's name or colour; nil leaves it.

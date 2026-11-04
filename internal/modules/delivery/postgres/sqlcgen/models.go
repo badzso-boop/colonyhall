@@ -26,6 +26,7 @@ type Actor struct {
 	Color       *string
 	ArchivedAt  *time.Time
 	ArchivedBy  *uuid.UUID
+	OwnerID     *uuid.UUID
 }
 
 type AgentHost struct {
@@ -376,6 +377,7 @@ type Host struct {
 	LastSeenAt  *time.Time
 	Report      []byte
 	Color       string
+	OwnerID     *uuid.UUID
 }
 
 type HostPairingCode struct {

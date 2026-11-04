@@ -96,6 +96,15 @@ func TestTerminalRelayE2E(t *testing.T) {
 		t.Fatalf("user without channel access POST /fs: got %d, want 403", code)
 	}
 
+	// Another person's agent's terminals are not found (round 38); the
+	// user lists them as the agent's owner.
+	if code := e.do("POST", "/api/v1/agents/"+agent.ID.String()+"/fs", userToken, map[string]any{"channel_id": general, "op": "term_list"}, nil); code != http.StatusNotFound {
+		t.Fatalf("term_list of another person's agent: %d", code)
+	}
+	if code := e.do("PUT", "/api/v1/agents/"+agent.ID.String()+"/owner", server.DevAdminToken, map[string]any{"owner_id": userActor.ID}, nil); code != http.StatusOK {
+		t.Fatalf("set owner: %d", code)
+	}
+
 	// 5. Successful term_list relay
 	pusher := &capturingPusher{ch: make(chan string, 10)}
 	e.app.Files.FsPusher = pusher

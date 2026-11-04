@@ -50,6 +50,9 @@ type NewActorInput struct {
 	Description string
 	AvatarEmoji string
 	Color       string
+	// OwnerID is an agent's owner (round 38); the caller checked it with
+	// ValidOwner.
+	OwnerID ids.ID
 }
 
 // Bootstrap creates a workspace and its owner. It returns the owner's token.
@@ -136,6 +139,9 @@ func (s *Service) createActor(ctx context.Context, byID ids.ID, in NewActorInput
 		ID: s.IDs.New(), WorkspaceID: in.WorkspaceID, Kind: in.Kind, Handle: in.Handle,
 		DisplayName: in.DisplayName, Role: in.Role, State: "active", CreatedAt: s.Clock.Now(),
 		Description: in.Description, AvatarEmoji: in.AvatarEmoji, Color: in.Color,
+	}
+	if in.Kind == KindAgent {
+		a.OwnerID = in.OwnerID
 	}
 	if err := s.Store.CreateActor(ctx, a); err != nil {
 		if errors.Is(err, db.ErrConflict) {

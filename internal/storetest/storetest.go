@@ -181,6 +181,25 @@ func testIdentity(t *testing.T, b Backend) {
 	if _, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("other"), t0); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("unknown token: got %v", err)
 	}
+	// An agent's owner (round 38): set, seen by every lookup, cleared.
+	must(t, b.Identity.SetActorOwner(ctx, f.agent.ID, f.human.ID))
+	if a, err := b.Identity.ActorByTokenHash(ctx, identity.HashSecret("s3cret"), t0); err != nil || a.OwnerID != f.human.ID {
+		t.Fatalf("owner via token: %v %+v", err, a.OwnerID)
+	}
+	if list, err := b.Identity.ListAllActors(ctx, f.ws.ID); err != nil || len(list) != 2 {
+		t.Fatalf("list: %v %d", err, len(list))
+	} else {
+		for _, a := range list {
+			if a.ID == f.agent.ID && a.OwnerID != f.human.ID {
+				t.Fatalf("owner via list: %+v", a.OwnerID)
+			}
+		}
+	}
+	must(t, b.Identity.SetActorOwner(ctx, f.agent.ID, ids.Nil))
+	if a, err := b.Identity.ActorByID(ctx, f.agent.ID); err != nil || a.OwnerID != ids.Nil {
+		t.Fatalf("clear owner: %v %+v", err, a.OwnerID)
+	}
+
 	// Credentials and sessions.
 	if _, err := b.Identity.Credential(ctx, f.human.ID); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("no credential yet: got %v", err)
@@ -255,6 +274,12 @@ func testIdentity(t *testing.T, b Backend) {
 	must(t, err)
 	if len(list) != 2 || list[0].Handle != "bot" {
 		t.Fatalf("ListActors must be sorted by handle: %+v", list)
+	}
+	owned := f.agent
+	owned.ID, owned.Handle, owned.OwnerID = gen.New(), "owned-bot", f.human.ID
+	must(t, b.Identity.CreateActor(ctx, owned))
+	if a, err := b.Identity.ActorByID(ctx, owned.ID); err != nil || a.OwnerID != f.human.ID {
+		t.Fatalf("owner at creation: %v %+v", err, a.OwnerID)
 	}
 
 	// Roles and session statistics.
@@ -696,6 +721,17 @@ func testHosts(t *testing.T, b Backend) {
 	if err != nil || got.ID != h.ID || got.Name != "laptop" || got.Color != "blue" {
 		t.Fatalf("HostByTokenHash: %+v %v", got, err)
 	}
+	if got.OwnerID != ids.Nil {
+		t.Fatalf("a new machine has no owner: %v", got.OwnerID)
+	}
+	must(t, hs.SetHostOwner(ctx, h.ID, f.human.ID))
+	if got, err := hs.HostByID(ctx, h.ID); err != nil || got.OwnerID != f.human.ID {
+		t.Fatalf("SetHostOwner: %+v %v", got.OwnerID, err)
+	}
+	must(t, hs.SetHostOwner(ctx, h.ID, ids.Nil))
+	if got, err := hs.HostByID(ctx, h.ID); err != nil || got.OwnerID != ids.Nil {
+		t.Fatalf("clear host owner: %+v %v", got.OwnerID, err)
+	}
 	must(t, hs.UpdateHost(ctx, h.ID, "pc", "violet"))
 	if got, err := hs.HostByID(ctx, h.ID); err != nil || got.Name != "pc" || got.Color != "violet" {
 		t.Fatalf("UpdateHost: %+v %v", got, err)
@@ -943,6 +979,13 @@ func testRuns(t *testing.T, b Backend) {
 	}
 	if none, err := b.Runs.SearchRuns(ctx, f.ws.ID, runs.RunFilter{Status: "nonsense", Limit: 10}); err != nil || len(none) != 0 {
 		t.Fatalf("status filter: %+v %v", none, err)
+	}
+	// AgentIDs (round 38): an empty set matches nothing, a set its agents.
+	if none, err := b.Runs.SearchRuns(ctx, f.ws.ID, runs.RunFilter{AgentIDs: []ids.ID{}, Limit: 10}); err != nil || len(none) != 0 {
+		t.Fatalf("empty agent set: %+v %v", none, err)
+	}
+	if set, err := b.Runs.SearchRuns(ctx, f.ws.ID, runs.RunFilter{AgentIDs: []ids.ID{gen.New(), f.agent.ID}, Limit: 100}); err != nil || len(set) != len(found) {
+		t.Fatalf("agent set: %d of %d, %v", len(set), len(found), err)
 	}
 	urows, err := b.Runs.UsageRuns(ctx, f.ws.ID, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
 	must(t, err)

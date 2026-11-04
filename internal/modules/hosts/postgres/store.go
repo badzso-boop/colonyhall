@@ -75,6 +75,9 @@ func (s *Store) AgentHostColors(ctx context.Context, workspaceID ids.ID) (map[id
 func toHost(r sqlcgen.Host) (hosts.Host, error) {
 	h := hosts.Host{ID: r.ID, WorkspaceID: r.WorkspaceID, Name: r.Name, Color: r.Color, TokenHash: r.TokenHash, State: r.State,
 		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, LastSeenAt: r.LastSeenAt}
+	if r.OwnerID != nil {
+		h.OwnerID = *r.OwnerID
+	}
 	if len(r.Report) > 0 {
 		if err := json.Unmarshal(r.Report, &h.Report); err != nil {
 			return h, err
@@ -236,4 +239,13 @@ func (s *Store) ActiveGrants(ctx context.Context, hostID, agentID ids.ID) ([]hos
 // RevokeGrantsForAgent revokes every active grant of the agent.
 func (s *Store) RevokeGrantsForAgent(ctx context.Context, agentID ids.ID, at time.Time) error {
 	return s.q(ctx).RevokeGrantsForAgent(ctx, sqlcgen.RevokeGrantsForAgentParams{AgentID: agentID, RevokedAt: &at})
+}
+
+// SetHostOwner sets or clears the machine's owner.
+func (s *Store) SetHostOwner(ctx context.Context, id, ownerID ids.ID) error {
+	var owner *ids.ID
+	if ownerID != ids.Nil {
+		owner = &ownerID
+	}
+	return s.q(ctx).SetHostOwner(ctx, sqlcgen.SetHostOwnerParams{ID: id, OwnerID: owner})
 }

@@ -287,18 +287,27 @@ func TestOverviewE2E(t *testing.T) {
 	}, &carol); s != http.StatusCreated {
 		t.Fatalf("create carol: %d", s)
 	}
+	// Another person's agent is not found at all (round 38).
+	if s := e.do("GET", fmt.Sprintf("/api/v1/agents/%s/overview", agentIDStr), carol.Token, nil, nil); s != http.StatusNotFound {
+		t.Fatalf("member overview of another person's agent: %d", s)
+	}
+	// As its owner, Carol sees its machine, but still no threads, runs or
+	// questions from a channel she cannot read.
+	if s := e.do("PUT", "/api/v1/agents/"+agentIDStr+"/owner", server.DevAdminToken, map[string]any{"owner_id": carol.Actor.Id}, nil); s != http.StatusOK {
+		t.Fatalf("set owner: %d", s)
+	}
 	var limited apispec.AgentOverview
 	if s := e.do("GET", fmt.Sprintf("/api/v1/agents/%s/overview", agentIDStr), carol.Token, nil, &limited); s != http.StatusOK {
-		t.Fatalf("member overview: %d", s)
+		t.Fatalf("owner overview: %d", s)
 	}
-	if limited.Assignment != nil {
-		t.Fatalf("non-admin must not see the assignment: %+v", limited.Assignment)
+	if limited.Assignment == nil {
+		t.Fatal("the owner sees the assignment")
 	}
 	if limited.Threads != nil && len(*limited.Threads) != 0 {
-		t.Fatalf("non-admin must not see threads of unreadable channels: %+v", *limited.Threads)
+		t.Fatalf("threads of unreadable channels: %+v", *limited.Threads)
 	}
-	if len(limited.Usage.LastRuns) != 0 || len(limited.Collaboration.Notes) != 0 || len(limited.Collaboration.OpenQuestions) != 0 {
-		t.Fatalf("non-admin saw runs, notes or questions: %+v %+v", limited.Usage.LastRuns, limited.Collaboration)
+	if len(limited.Usage.LastRuns) != 0 || len(limited.Collaboration.OpenQuestions) != 0 {
+		t.Fatalf("runs or questions from an unreadable channel: %+v %+v", limited.Usage.LastRuns, limited.Collaboration)
 	}
 	_ = secret
 	_ = conversation.KindPublic

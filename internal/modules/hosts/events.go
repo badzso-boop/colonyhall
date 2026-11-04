@@ -6,6 +6,7 @@ const (
 	EventHostEnrolled    = "host.enrolled"
 	EventHostState       = "host.state_changed"
 	EventHostUpdated     = "host.updated"
+	EventHostOwner       = "host.owner_changed"
 	EventAgentAssigned   = "host.agent_assigned"
 	EventAgentUnassigned = "host.agent_unassigned"
 	EventAgentLimits     = "host.agent_limits_changed"
@@ -19,6 +20,8 @@ type HostEvent struct {
 	Name   string `json:"name,omitempty"`
 	State  string `json:"state,omitempty"`
 	Color  string `json:"color,omitempty"`
+	// Owner is the new owner's id on host.owner_changed ("" is nobody).
+	Owner string `json:"owner,omitempty"`
 }
 
 // AssignmentEvent is the payload of agent assignment events.

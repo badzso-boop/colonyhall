@@ -14,6 +14,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 -- name: UpdateHost :exec
 UPDATE host SET name = $2, color = $3 WHERE id = $1;
 
+-- name: SetHostOwner :exec
+UPDATE host SET owner_id = sqlc.narg(owner_id) WHERE id = sqlc.arg(id);
+
 -- name: AgentHostColors :many
 SELECT ah.agent_id, h.color FROM agent_host ah JOIN host h ON h.id = ah.host_id WHERE h.workspace_id = $1;
 

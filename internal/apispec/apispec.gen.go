@@ -1356,14 +1356,17 @@ type Actor struct {
 	EffectiveColor *Hue `json:"effective_color,omitempty"`
 
 	// Halted Only on /me: true while the actor may not write (paused, stopped or emergency stop)
-	Halted     *bool              `json:"halted,omitempty"`
-	Handle     string             `json:"handle"`
-	Id         openapi_types.UUID `json:"id"`
-	Kind       ActorKind          `json:"kind"`
-	Role       Role               `json:"role"`
-	State      string             `json:"state"`
-	StatusText *string            `json:"status_text,omitempty"`
-	Timezone   *string            `json:"timezone,omitempty"`
+	Halted *bool              `json:"halted,omitempty"`
+	Handle string             `json:"handle"`
+	Id     openapi_types.UUID `json:"id"`
+	Kind   ActorKind          `json:"kind"`
+
+	// OwnerId Agents only: the person the agent belongs to (round 38); absent: nobody's
+	OwnerId    *openapi_types.UUID `json:"owner_id,omitempty"`
+	Role       Role                `json:"role"`
+	State      string              `json:"state"`
+	StatusText *string             `json:"status_text,omitempty"`
+	Timezone   *string             `json:"timezone,omitempty"`
 }
 
 // ActorKind defines model for ActorKind.
@@ -1954,6 +1957,9 @@ type CreateAgentRequest struct {
 
 	// Instructions The agent's own instructions, appended to the shared rules; never secrets
 	Instructions *string `json:"instructions,omitempty"`
+
+	// OwnerId The person the agent belongs to (round 38): they see its runs, steps, errors, folders and terminals and may give it tasks. Absent: nobody's (admins only).
+	OwnerId *openapi_types.UUID `json:"owner_id,omitempty"`
 }
 
 // CreateChannelRequest defines model for CreateChannelRequest.
@@ -2346,8 +2352,11 @@ type Host struct {
 	Id         openapi_types.UUID `json:"id"`
 	LastSeenAt *time.Time         `json:"last_seen_at,omitempty"`
 	Name       string             `json:"name"`
-	Report     HostReport         `json:"report"`
-	State      HostState          `json:"state"`
+
+	// OwnerId The person the machine belongs to (round 38): they see it on the Machines page; absent: nobody's (admins only)
+	OwnerId *openapi_types.UUID `json:"owner_id,omitempty"`
+	Report  HostReport          `json:"report"`
+	State   HostState           `json:"state"`
 }
 
 // HostState defines model for Host.State.
@@ -3236,6 +3245,12 @@ type SetHostStateRequest struct {
 // SetHostStateRequestState defines model for SetHostStateRequest.State.
 type SetHostStateRequestState string
 
+// SetOwnerRequest defines model for SetOwnerRequest.
+type SetOwnerRequest struct {
+	// OwnerId A person of the workspace; absent: nobody's
+	OwnerId *openapi_types.UUID `json:"owner_id,omitempty"`
+}
+
 // SetPasswordRequest defines model for SetPasswordRequest.
 type SetPasswordRequest struct {
 	CurrentPassword *string `json:"current_password,omitempty"`
@@ -3723,14 +3738,17 @@ type ListQuestionsParams struct {
 
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
-	AgentId   *openapi_types.UUID   `form:"agent_id,omitempty" json:"agent_id,omitempty"`
-	HostId    *openapi_types.UUID   `form:"host_id,omitempty" json:"host_id,omitempty"`
-	ChannelId *openapi_types.UUID   `form:"channel_id,omitempty" json:"channel_id,omitempty"`
-	Status    *ListRunsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
-	From      *time.Time            `form:"from,omitempty" json:"from,omitempty"`
-	To        *time.Time            `form:"to,omitempty" json:"to,omitempty"`
-	Cursor    *string               `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit     *int                  `form:"limit,omitempty" json:"limit,omitempty"`
+	AgentId   *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	HostId    *openapi_types.UUID `form:"host_id,omitempty" json:"host_id,omitempty"`
+	ChannelId *openapi_types.UUID `form:"channel_id,omitempty" json:"channel_id,omitempty"`
+
+	// OwnerId The person whose agents ran (round 38). A person who is not an admin always sees only their own agents' runs.
+	OwnerId *openapi_types.UUID   `form:"owner_id,omitempty" json:"owner_id,omitempty"`
+	Status  *ListRunsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	From    *time.Time            `form:"from,omitempty" json:"from,omitempty"`
+	To      *time.Time            `form:"to,omitempty" json:"to,omitempty"`
+	Cursor  *string               `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit   *int                  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListRunsParamsStatus defines parameters for ListRuns.
@@ -3740,6 +3758,9 @@ type ListRunsParamsStatus string
 type GetUsageParams struct {
 	GroupBy *GetUsageParamsGroupBy `form:"group_by,omitempty" json:"group_by,omitempty"`
 	Days    *int                   `form:"days,omitempty" json:"days,omitempty"`
+
+	// OwnerId The person whose agents ran (round 38). A person who is not an admin always sees only their own agents.
+	OwnerId *openapi_types.UUID `form:"owner_id,omitempty" json:"owner_id,omitempty"`
 }
 
 // GetUsageParamsGroupBy defines parameters for GetUsage.
@@ -3836,6 +3857,9 @@ type AssignAgentJSONRequestBody = AssignRequest
 // SetAgentLimitsJSONRequestBody defines body for SetAgentLimits for application/json ContentType.
 type SetAgentLimitsJSONRequestBody = AgentLimitsRequest
 
+// SetAgentOwnerJSONRequestBody defines body for SetAgentOwner for application/json ContentType.
+type SetAgentOwnerJSONRequestBody = SetOwnerRequest
+
 // DecideApprovalJSONRequestBody defines body for DecideApproval for application/json ContentType.
 type DecideApprovalJSONRequestBody = DecideApprovalRequest
 
@@ -3895,6 +3919,9 @@ type UpdateHostJSONRequestBody = UpdateHostRequest
 
 // HostFsRequestJSONRequestBody defines body for HostFsRequest for application/json ContentType.
 type HostFsRequestJSONRequestBody = HostFsRequest
+
+// SetHostOwnerJSONRequestBody defines body for SetHostOwner for application/json ContentType.
+type SetHostOwnerJSONRequestBody = SetOwnerRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest

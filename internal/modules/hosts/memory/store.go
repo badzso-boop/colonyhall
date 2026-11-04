@@ -121,6 +121,11 @@ func (s *Store) UpdateHost(_ context.Context, id ids.ID, name, color string) err
 	return s.update(id, func(h *hosts.Host) { h.Name, h.Color = name, color })
 }
 
+// SetHostOwner sets or clears the machine's owner.
+func (s *Store) SetHostOwner(_ context.Context, id, ownerID ids.ID) error {
+	return s.update(id, func(h *hosts.Host) { h.OwnerID = ownerID })
+}
+
 // AgentHostColors maps assigned agents to their host's colour.
 func (s *Store) AgentHostColors(_ context.Context, workspaceID ids.ID) (map[ids.ID]string, error) {
 	s.mu.RLock()

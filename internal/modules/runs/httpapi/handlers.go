@@ -232,7 +232,16 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			}
 			days = d
 		}
-		usage, err := svc.UsageSummary(r.Context(), httpx.Actor(r), days, r.URL.Query().Get("group_by"))
+		owner := ids.Nil
+		if raw := r.URL.Query().Get("owner_id"); raw != "" {
+			id, err := ids.Parse(raw)
+			if err != nil {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "owner_id must be a UUID"})
+				return
+			}
+			owner = id
+		}
+		usage, err := svc.UsageSummary(r.Context(), httpx.Actor(r), days, r.URL.Query().Get("group_by"), owner)
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
@@ -332,7 +341,7 @@ func runFilter(w http.ResponseWriter, r *http.Request) (runs.RunFilter, bool) {
 		httpx.Error(w, r, &httpx.BadRequest{Detail: detail})
 		return f, false
 	}
-	for name, dst := range map[string]*ids.ID{"agent_id": &f.AgentID, "host_id": &f.HostID, "channel_id": &f.ChannelID} {
+	for name, dst := range map[string]*ids.ID{"agent_id": &f.AgentID, "host_id": &f.HostID, "channel_id": &f.ChannelID, "owner_id": &f.OwnerID} {
 		if raw := q.Get(name); raw != "" {
 			id, err := ids.Parse(raw)
 			if err != nil {

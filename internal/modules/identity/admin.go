@@ -21,6 +21,7 @@ const (
 	EventTokenRevoked       = "token.revoked"
 	EventActorStateChanged  = "actor.state_changed"
 	EventActorRoleChanged   = "actor.role_changed"
+	EventAgentOwnerChanged  = "actor.owner_changed"
 	EventPasswordReset      = "actor.password_reset"
 	EventEmergencyActivated = "workspace.emergency_activated"
 	EventEmergencyCleared   = "workspace.emergency_cleared"
@@ -40,6 +41,13 @@ type RoleChanged struct {
 	ActorID string `json:"actor_id"`
 	Old     string `json:"old"`
 	New     string `json:"new"`
+}
+
+// OwnerChanged is the payload of EventAgentOwnerChanged; "" is nobody.
+type OwnerChanged struct {
+	AgentID string `json:"agent_id"`
+	Old     string `json:"old,omitempty"`
+	New     string `json:"new,omitempty"`
 }
 
 // PasswordReset is the payload of EventPasswordReset: who, never the password.
@@ -192,6 +200,72 @@ func (s *Service) SetActorRole(ctx context.Context, by Actor, actorID ids.ID, ro
 	}
 	return s.record(ctx, by, EventActorRoleChanged, "actor", target.ID, RoleChanged{ActorID: target.ID.String(), Old: string(target.Role), New: string(role)},
 		func(ctx context.Context) error { return s.Store.SetActorRole(ctx, target.ID, role) })
+}
+
+// OwnedAgentIDs lists the agents, archived ones too, that the person owns.
+func (s *Service) OwnedAgentIDs(ctx context.Context, workspaceID, ownerID ids.ID) ([]ids.ID, error) {
+	list, err := s.Store.ListAllActors(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var out []ids.ID
+	for _, a := range list {
+		if a.Kind == KindAgent && a.OwnerID != ids.Nil && a.OwnerID == ownerID {
+			out = append(out, a.ID)
+		}
+	}
+	return out, nil
+}
+
+// ValidOwner checks that ownerID can own an agent or a machine: a person
+// of the workspace who is not archived. ids.Nil (nobody) is valid.
+func (s *Service) ValidOwner(ctx context.Context, workspaceID, ownerID ids.ID) error {
+	if ownerID == ids.Nil {
+		return nil
+	}
+	o, err := s.Store.ActorByID(ctx, ownerID)
+	if errors.Is(err, db.ErrNotFound) || (err == nil && (o.WorkspaceID != workspaceID || o.Kind != KindHuman || o.ArchivedAt != nil)) {
+		return ErrInvalidOwner
+	}
+	return err
+}
+
+// SetAgentOwner gives an agent to a person, or to nobody (ids.Nil). Only
+// the workspace owner may: the owner of an agent sees its runs and folders
+// and may give it tasks. Audited (actor.owner_changed).
+func (s *Service) SetAgentOwner(ctx context.Context, by Actor, agentID, ownerID ids.ID) (Actor, error) {
+	if by.Kind != KindHuman || by.Role != RoleOwner || by.Halted {
+		return Actor{}, ErrForbidden
+	}
+	target, err := s.Store.ActorByID(ctx, agentID)
+	if err != nil {
+		return Actor{}, err
+	}
+	if target.WorkspaceID != by.WorkspaceID {
+		return Actor{}, db.ErrNotFound
+	}
+	if target.Kind != KindAgent {
+		return Actor{}, ErrNotAnAgent
+	}
+	if err := s.ValidOwner(ctx, by.WorkspaceID, ownerID); err != nil {
+		return Actor{}, err
+	}
+	if target.OwnerID == ownerID {
+		return target, nil
+	}
+	str := func(id ids.ID) string {
+		if id == ids.Nil {
+			return ""
+		}
+		return id.String()
+	}
+	err = s.record(ctx, by, EventAgentOwnerChanged, "actor", target.ID, OwnerChanged{AgentID: target.ID.String(), Old: str(target.OwnerID), New: str(ownerID)},
+		func(ctx context.Context) error { return s.Store.SetActorOwner(ctx, target.ID, ownerID) })
+	if err != nil {
+		return Actor{}, err
+	}
+	target.OwnerID = ownerID
+	return target, nil
 }
 
 // UserRow is a person with their login activity, for the owner's users page.

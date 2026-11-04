@@ -28,11 +28,16 @@ type Conversation interface {
 type Service struct {
 	Store        Store
 	Conversation Conversation
-	Events       eventlog.Store
-	Bus          bus.Bus
-	Tx           db.TxRunner
-	IDs          ids.Generator
-	Clock        clock.Clock
+	// Agents loads the requesting agent: only its owner or an admin sees and
+	// decides its requests (round 38). nil: anyone who reads the channel.
+	Agents interface {
+		ActorByID(ctx context.Context, id ids.ID) (identity.Actor, error)
+	}
+	Events eventlog.Store
+	Bus    bus.Bus
+	Tx     db.TxRunner
+	IDs    ids.Generator
+	Clock  clock.Clock
 }
 
 // CreateInput is the input for creating a tool approval request.
@@ -176,6 +181,9 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, id ids.ID) (Approv
 		}
 		return ApprovalRequest{}, err
 	}
+	if err := s.seesAgent(ctx, by, r.AgentID); err != nil {
+		return ApprovalRequest{}, err
+	}
 	return r, nil
 }
 
@@ -202,6 +210,9 @@ func (s *Service) Decide(ctx context.Context, by identity.Actor, id ids.ID, deci
 		if err == nil {
 			err = ErrForbidden
 		}
+		return ApprovalRequest{}, err
+	}
+	if err := s.seesAgent(ctx, by, r.AgentID); err != nil {
 		return ApprovalRequest{}, err
 	}
 	if r.State != StatePending {
@@ -274,6 +285,22 @@ func (s *Service) HandleEvent(ctx context.Context, ev eventlog.Event) error {
 	if ev.Type == identity.EventEmergencyActivated {
 		_, err := s.Store.ExpirePendingByWorkspace(ctx, ev.WorkspaceID, s.Clock.Now())
 		return err
+	}
+	return nil
+}
+
+// seesAgent answers db.ErrNotFound when the request belongs to another
+// person's agent: approving its tool use is giving it a task (round 38).
+func (s *Service) seesAgent(ctx context.Context, by identity.Actor, agentID ids.ID) error {
+	if s.Agents == nil || by.IsAdmin() {
+		return nil
+	}
+	a, err := s.Agents.ActorByID(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if !by.SeesAgent(a) {
+		return db.ErrNotFound
 	}
 	return nil
 }

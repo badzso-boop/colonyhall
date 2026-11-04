@@ -20,6 +20,7 @@ type Identity interface {
 	CreateAgentActor(ctx context.Context, by identity.Actor, in identity.AgentActorInput) (identity.Actor, string, error)
 	ArchiveAgent(ctx context.Context, by identity.Actor, agentID ids.ID) (identity.Actor, error)
 	ActorByID(ctx context.Context, id ids.ID) (identity.Actor, error)
+	ValidOwner(ctx context.Context, workspaceID, ownerID ids.ID) error
 }
 
 // Hosts is what the agents module needs from hosts.
@@ -106,6 +107,9 @@ func (s *Service) Create(ctx context.Context, by identity.Actor, in CreateInput)
 	}
 	if st.Taken {
 		return Created{}, ErrHandleTaken
+	}
+	if err := s.Identity.ValidOwner(ctx, by.WorkspaceID, in.Profile.OwnerID); err != nil {
+		return Created{}, err
 	}
 	if in.APIKey && (in.Host != nil || len(in.Grants) > 0) {
 		return Created{}, ErrAPIKeyWithHost
@@ -279,7 +283,7 @@ func (s *Service) Instructions(ctx context.Context, by identity.Actor, agentID i
 	if err != nil {
 		return InstructionsView{}, err
 	}
-	if a.WorkspaceID != by.WorkspaceID || a.Kind != identity.KindAgent {
+	if a.WorkspaceID != by.WorkspaceID || a.Kind != identity.KindAgent || !by.SeesAgent(a) {
 		return InstructionsView{}, db.ErrNotFound
 	}
 	var v InstructionsView

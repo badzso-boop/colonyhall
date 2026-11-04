@@ -2,8 +2,8 @@
 INSERT INTO workspace (id, name, created_at) VALUES ($1, $2, $3);
 
 -- name: CreateActor :exec
-INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, sqlc.narg(color));
+INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, owner_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, sqlc.narg(color), sqlc.narg(owner_id));
 
 -- name: UpdateActorProfile :exec
 UPDATE actor
@@ -118,3 +118,6 @@ GROUP BY s.actor_id;
 
 -- name: SetActorRole :exec
 UPDATE actor SET role = $2 WHERE id = $1;
+
+-- name: SetActorOwner :exec
+UPDATE actor SET owner_id = sqlc.narg(owner_id) WHERE id = sqlc.arg(id);

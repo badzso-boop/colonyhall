@@ -15,7 +15,7 @@ import (
 
 func init() {
 	httpx.RegisterProblemType(http.StatusConflict, "agent_config_immutable", identity.ErrAgentConfigImmutable)
-	httpx.RegisterValidation(identity.ErrNotAnAgent)
+	httpx.RegisterValidation(identity.ErrNotAnAgent, identity.ErrInvalidOwner)
 	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
 		identity.ErrWorkspaceRequired, identity.ErrInvalidState, identity.ErrInvalidTimezone,
 		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidDisplayName, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor)
@@ -63,7 +63,13 @@ func ToAPI(a identity.Actor) apispec.Actor {
 	if a.StatusText != "" {
 		status = &a.StatusText
 	}
+	var owner *ids.ID
+	if a.OwnerID != ids.Nil {
+		o := a.OwnerID
+		owner = &o
+	}
 	return apispec.Actor{
+		OwnerId:        owner,
 		Id:             a.ID,
 		Kind:           apispec.ActorKind(a.Kind),
 		Handle:         a.Handle,

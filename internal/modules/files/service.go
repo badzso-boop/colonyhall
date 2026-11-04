@@ -243,6 +243,17 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, fileID ids.ID) (Fi
 	if f.HumanOnly && by.Kind != identity.KindHuman {
 		return File{}, ErrForbidden
 	}
+	if f.HumanOnly && !by.IsAdmin() && s.Actors != nil {
+		// A file fetched from another person's agent's folder is not found
+		// (round 38); the fetching agent is its uploader.
+		agent, err := s.Actors.ActorByID(ctx, f.UploadedBy)
+		if err != nil {
+			return File{}, err
+		}
+		if !by.SeesAgent(agent) {
+			return File{}, ErrNotFound
+		}
+	}
 
 	canRead, err := s.Conversation.CanRead(ctx, by, f.ChannelID)
 	if err != nil {
@@ -305,6 +316,29 @@ func (s *Service) ListByChannel(ctx context.Context, by identity.Actor, channelI
 			if !f.HumanOnly {
 				filtered = append(filtered, f)
 			}
+		}
+		return filtered, nil
+	}
+	if !by.IsAdmin() && s.Actors != nil {
+		// Files fetched from another person's agent's folder stay theirs.
+		sees := map[ids.ID]bool{}
+		filtered := make([]File, 0, len(list))
+		for _, f := range list {
+			if f.HumanOnly {
+				ok, known := sees[f.UploadedBy]
+				if !known {
+					agent, err := s.Actors.ActorByID(ctx, f.UploadedBy)
+					if err != nil {
+						return nil, err
+					}
+					ok = by.SeesAgent(agent)
+					sees[f.UploadedBy] = ok
+				}
+				if !ok {
+					continue
+				}
+			}
+			filtered = append(filtered, f)
 		}
 		return filtered, nil
 	}
@@ -398,6 +432,10 @@ func (s *Service) RequestFileFetch(ctx context.Context, by identity.Actor, messa
 	if author.Kind != identity.KindAgent {
 		return FileFetchRequest{}, false, ErrAuthorNotAgent
 	}
+	// Another person's agent's folder is not reachable (round 38).
+	if !by.SeesAgent(author) {
+		return FileFetchRequest{}, false, ErrNotFound
+	}
 
 	normPath := NormalizePath(rawPath)
 	if normPath == "" {
@@ -479,6 +517,10 @@ func (s *Service) RequestAgentFileFetch(ctx context.Context, by identity.Actor, 
 	}
 	if !slices.Contains(members, agentID) {
 		return FileFetchRequest{}, false, ErrForbidden
+	}
+	// Another person's agent's folder is not reachable (round 38).
+	if !by.SeesAgent(targetAgent) {
+		return FileFetchRequest{}, false, ErrNotFound
 	}
 	if s.Hosts == nil {
 		return FileFetchRequest{}, false, ErrAgentNotAssigned
@@ -571,6 +613,10 @@ func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID
 	if !slices.Contains(members, agentID) {
 		return nil, ErrForbidden
 	}
+	// Another person's agent's folders and terminals are not found (round 38).
+	if !by.SeesAgent(targetAgent) {
+		return nil, ErrNotFound
+	}
 	if s.Hosts == nil {
 		return nil, ErrAgentNotAssigned
 	}
@@ -649,6 +695,16 @@ func (s *Service) GetFileFetch(ctx context.Context, by identity.Actor, id ids.ID
 	}
 	if req.WorkspaceID != by.WorkspaceID {
 		return FileFetchRequest{}, nil, ErrNotFound
+	}
+	if !by.IsAdmin() && s.Actors != nil {
+		// A file fetched from another person's agent's folder stays theirs.
+		agent, err := s.Actors.ActorByID(ctx, req.AgentID)
+		if err != nil {
+			return FileFetchRequest{}, nil, err
+		}
+		if !by.SeesAgent(agent) {
+			return FileFetchRequest{}, nil, ErrNotFound
+		}
 	}
 
 	canRead, err := s.Conversation.CanRead(ctx, by, req.ChannelID)

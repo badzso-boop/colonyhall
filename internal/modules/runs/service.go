@@ -3,6 +3,7 @@ package runs
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,9 +22,17 @@ type Hosts interface {
 	AssignmentByAgent(ctx context.Context, agentID ids.ID) (hosts.Assignment, error)
 }
 
+// Agents tells the runs module whose agents a person may see (identity).
+type Agents interface {
+	ActorByID(ctx context.Context, id ids.ID) (identity.Actor, error)
+	// OwnedAgentIDs lists the agents (archived too) the person owns.
+	OwnedAgentIDs(ctx context.Context, workspaceID, ownerID ids.ID) ([]ids.ID, error)
+}
+
 // Service holds the runs use cases.
 type Service struct {
 	Store        Store
+	Agents       Agents
 	Conversation conversation.Reader
 	Hosts        Hosts
 	Events       eventlog.Store
@@ -107,6 +116,10 @@ func (s *Service) GetError(ctx context.Context, by identity.Actor, id ids.ID) (E
 		if err == nil {
 			err = ErrForbidden
 		}
+		return Error{}, err
+	}
+	// Another person's agent's errors are not found (round 38).
+	if err := s.seesAgent(ctx, by, e.AgentID); err != nil {
 		return Error{}, err
 	}
 	return e, nil
@@ -272,6 +285,15 @@ func (s *Service) ListRuns(ctx context.Context, by identity.Actor, agentID ids.I
 	if limit > 200 {
 		limit = 200
 	}
+	if !by.IsAdmin() {
+		// A person lists one of their own agents' runs at a time.
+		if agentID == ids.Nil {
+			return nil, ErrForbidden
+		}
+		if err := s.seesAgent(ctx, by, agentID); err != nil {
+			return nil, err
+		}
+	}
 	return s.Store.ListRuns(ctx, by.WorkspaceID, agentID, limit)
 }
 
@@ -286,7 +308,15 @@ func (s *Service) Usage(ctx context.Context, by identity.Actor, days int) ([]Day
 	now := s.Clock.Now().In(Budapest)
 	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Budapest)
 	since := todayMidnight.AddDate(0, 0, -(days - 1))
-	return s.Store.Usage(ctx, by.WorkspaceID, since)
+	scope, err := s.agentScope(ctx, by, ids.Nil)
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.Store.Usage(ctx, by.WorkspaceID, since)
+	if err != nil || scope == nil {
+		return list, err
+	}
+	return slices.DeleteFunc(list, func(d DayUsage) bool { return !slices.Contains(scope, d.AgentID) }), nil
 }
 
 // AgentBudget returns the daily token budget and usage for the calling agent.
@@ -334,4 +364,42 @@ func (s *Service) TokensToday(ctx context.Context, workspaceID, agentID ids.ID) 
 	now := s.Clock.Now().In(Budapest)
 	todayMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, Budapest)
 	return s.Store.TokensSince(ctx, workspaceID, agentID, todayMidnight)
+}
+
+// seesAgent answers db.ErrNotFound unless by may see the agent's runs,
+// steps and errors: admins see every agent, a person their own (round 38).
+func (s *Service) seesAgent(ctx context.Context, by identity.Actor, agentID ids.ID) error {
+	if by.IsAdmin() || s.Agents == nil {
+		return nil
+	}
+	a, err := s.Agents.ActorByID(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if !by.SeesAgent(a) {
+		return db.ErrNotFound
+	}
+	return nil
+}
+
+// agentScope is the set of agents whose runs by may see under an owner
+// filter; nil means every agent (an admin without an owner filter).
+func (s *Service) agentScope(ctx context.Context, by identity.Actor, ownerID ids.ID) ([]ids.ID, error) {
+	if !by.IsAdmin() {
+		if ownerID != ids.Nil && ownerID != by.ID {
+			return []ids.ID{}, nil
+		}
+		ownerID = by.ID
+	}
+	if ownerID == ids.Nil {
+		return nil, nil
+	}
+	if s.Agents == nil {
+		return []ids.ID{}, nil
+	}
+	list, err := s.Agents.OwnedAgentIDs(ctx, by.WorkspaceID, ownerID)
+	if list == nil {
+		list = []ids.ID{}
+	}
+	return list, err
 }

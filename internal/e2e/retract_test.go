@@ -33,6 +33,8 @@ func TestMessageRetractAuthorAndPermissions(t *testing.T) {
 	// Create an agent in general channel
 	hID, _ := e.enroll("machine-retract")
 	agentIDStr, agentTok := createFullAccessAgent(e, hID, "retract-agent", "Retract Agent")
+	// Only its owner (or an admin) wakes a full-access agent (round 38).
+	e.do("PUT", "/api/v1/agents/"+agentIDStr+"/owner", server.DevAdminToken, map[string]any{"owner_id": user1ID}, nil)
 	agentUUID, _ := ids.Parse(agentIDStr)
 	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/members", general), server.DevAdminToken, apispec.AddMemberRequest{ActorId: httpx.Ptr(agentUUID)}, nil)
 

@@ -45,6 +45,7 @@ func (s *Store) CreateActor(ctx context.Context, a identity.Actor) error {
 		Timezone:    tz,
 		StatusText:  a.StatusText,
 		Color:       nullString(a.Color),
+		OwnerID:     nullID(a.OwnerID),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -124,6 +125,7 @@ func toActor(r sqlcgen.Actor) identity.Actor {
 		Color:       deref(r.Color),
 		ArchivedAt:  r.ArchivedAt,
 		ArchivedBy:  derefID(r.ArchivedBy),
+		OwnerID:     derefID(r.OwnerID),
 	}
 }
 
@@ -359,4 +361,9 @@ func (s *Store) SessionStats(ctx context.Context, workspaceID ids.ID, now time.T
 // SetActorRole changes an actor's role.
 func (s *Store) SetActorRole(ctx context.Context, id ids.ID, role identity.Role) error {
 	return s.q(ctx).SetActorRole(ctx, sqlcgen.SetActorRoleParams{ID: id, Role: string(role)})
+}
+
+// SetActorOwner sets or clears an agent's owner.
+func (s *Store) SetActorOwner(ctx context.Context, id, ownerID ids.ID) error {
+	return s.q(ctx).SetActorOwner(ctx, sqlcgen.SetActorOwnerParams{ID: id, OwnerID: nullID(ownerID)})
 }

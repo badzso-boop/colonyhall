@@ -103,6 +103,11 @@ type RunCursor struct {
 
 // RunFilter selects runs; zero values do not filter.
 type RunFilter struct {
+	// OwnerID narrows to the agents of one person (round 38).
+	OwnerID ids.ID
+	// AgentIDs, when not nil, is the only agents whose runs match (the
+	// service sets it from OwnerID and from what the caller may see).
+	AgentIDs  []ids.ID
 	AgentID   ids.ID
 	HostID    ids.ID
 	ChannelID ids.ID

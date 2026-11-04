@@ -21,6 +21,8 @@ type Store interface {
 	SetHostState(ctx context.Context, id ids.ID, state string) error
 	// UpdateHost sets the name and colour (operational state, round 33).
 	UpdateHost(ctx context.Context, id ids.ID, name, color string) error
+	// SetHostOwner sets (or, with ids.Nil, clears) the machine's owner.
+	SetHostOwner(ctx context.Context, id, ownerID ids.ID) error
 	SaveReport(ctx context.Context, id ids.ID, r Report, at time.Time) error
 	Touch(ctx context.Context, id ids.ID, at time.Time) error
 

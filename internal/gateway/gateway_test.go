@@ -78,13 +78,17 @@ func TestGatewayProgressCapsAndExpiry(t *testing.T) {
 	}
 
 	wsID := newID()
+	// The human owns the agent: only its owner (or an admin) sees its
+	// steps (round 38).
+	humanID := newID()
 	agentActor := identity.Actor{
 		ID:          newID(),
 		WorkspaceID: wsID,
 		Kind:        identity.KindAgent,
+		OwnerID:     humanID,
 	}
 	humanActor := identity.Actor{
-		ID:          newID(),
+		ID:          humanID,
 		WorkspaceID: wsID,
 		Kind:        identity.KindHuman,
 	}
@@ -217,13 +221,17 @@ func TestGatewayProgressChannelPermissions(t *testing.T) {
 		Clock:        clk,
 	}
 
+	// The human owns the agent: only its owner (or an admin) sees its
+	// steps (round 38).
+	humanID := newID()
 	agentActor := identity.Actor{
 		ID:          agentID,
 		WorkspaceID: wsID,
 		Kind:        identity.KindAgent,
+		OwnerID:     humanID,
 	}
 	humanActor := identity.Actor{
-		ID:          newID(),
+		ID:          humanID,
 		WorkspaceID: wsID,
 		Kind:        identity.KindHuman,
 	}

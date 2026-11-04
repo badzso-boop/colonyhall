@@ -187,6 +187,17 @@ func (s *Service) Ask(ctx context.Context, by identity.Actor, in AskInput) (Ques
 					toActorHandle = target.Handle
 				}
 			} else {
+				// Only its owner or an admin gives a full-access agent a
+				// task (round 38); a question is one.
+				if !by.SeesAgent(target) {
+					isFullAccess, err := s.Hosts.IsFullAccess(ctx, target.ID)
+					if err != nil {
+						return Question{}, err
+					}
+					if isFullAccess {
+						return Question{}, ErrForbidden
+					}
+				}
 				toHuman = false
 				toActorID = &target.ID
 				toActorHandle = target.Handle

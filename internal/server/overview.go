@@ -72,12 +72,17 @@ func registerOverview(
 			httpx.Error(w, r, err)
 			return
 		}
-		if targetActor.WorkspaceID != caller.WorkspaceID {
+		// Another person's agent is not found (round 38): its name and
+		// avatar show in shared channels, its overview does not.
+		if targetActor.WorkspaceID != caller.WorkspaceID || !caller.SeesAgent(targetActor) {
 			httpx.Error(w, r, db.ErrNotFound)
 			return
 		}
 
 		actorSpec := toOverviewActorSpec(targetActor)
+		// full: admins and the agent's owner (round 38) see its machine,
+		// notes and inbox; the rest stays bound to readable channels.
+		full := caller.IsAdmin() || (targetActor.OwnerID != ids.Nil && targetActor.OwnerID == caller.ID)
 
 		// For humans: profile, role, their channels in common.
 		if targetActor.Kind == identity.KindHuman {
@@ -151,7 +156,7 @@ func registerOverview(
 		var overviewAssignment *apispec.OverviewAssignment
 		// Machines, folders and grants are admin-only, as in the hosts API.
 		asgn, err := hoSvc.AssignmentByAgent(ctx, targetActor.ID)
-		if err == nil && caller.IsAdmin() {
+		if err == nil && full {
 			host, err := hoSvc.HostByID(ctx, asgn.HostID)
 			hostName := ""
 			if err == nil {
@@ -320,7 +325,7 @@ func registerOverview(
 
 		// 4. Collaboration: notes, leases, questions
 		var agentNotes []notes.Note
-		if caller.IsAdmin() { // a note names no channel; non-admins see notes in the thread itself
+		if full { // a note names no channel; others see notes in the thread itself
 			agentNotes, _ = ntSvc.ListNotes(ctx, caller, targetActor.ID, nil)
 		}
 		seenNoteThreads := make(map[ids.ID]bool)
@@ -393,7 +398,7 @@ func registerOverview(
 			CommonChannels: &agentCommon,
 		}
 		// The unacked inbox (round 33): admins only, like the assignment.
-		if caller.IsAdmin() && dlSvc != nil {
+		if full && dlSvc != nil {
 			if pending, total, err := dlSvc.Store.Pending(ctx, targetActor.ID, 1); err == nil {
 				res.Inbox = &struct {
 					Count    int        `json:"count"`

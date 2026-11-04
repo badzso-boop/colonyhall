@@ -114,7 +114,10 @@ type progressKey struct {
 }
 
 type runProgress struct {
-	AgentID      ids.ID
+	AgentID ids.ID
+	// Agent is the reporting agent as it authenticated; its steps go only
+	// to the people who may see it (its owner and admins, round 38).
+	Agent        identity.Actor
 	ChannelID    ids.ID
 	ThreadRootID ids.ID
 	RunKey       string
@@ -372,6 +375,7 @@ func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in a
 	if !ok {
 		rp = &runProgress{
 			AgentID:      actor.ID,
+			Agent:        actor,
 			ChannelID:    ids.ID(in.ChannelId),
 			ThreadRootID: trID,
 			RunKey:       in.RunKey,
@@ -412,8 +416,9 @@ func (g *Gateway) ReportProgress(ctx context.Context, actor identity.Actor, in a
 	}
 
 	for _, c := range recipients {
-		// Steps are for humans only: other agents' guards never get them.
-		if c.actor.Kind != identity.KindHuman {
+		// Steps are for humans only: other agents' guards never get them,
+		// and another person's agent's steps stay its owner's (round 38).
+		if c.actor.Kind != identity.KindHuman || !c.actor.SeesAgent(actor) {
 			continue
 		}
 		visible, err := c.visibleChannel(ctx, ids.ID(in.ChannelId))
@@ -444,7 +449,7 @@ func (g *Gateway) ChannelProgress(ctx context.Context, actor identity.Actor, cha
 
 	out := make([]apispec.ActiveRunProgress, 0)
 	for _, rp := range g.progress {
-		if rp.ChannelID == channelID {
+		if rp.ChannelID == channelID && actor.SeesAgent(rp.Agent) {
 			var tr *openapi_types.UUID
 			if rp.ThreadRootID != ids.Nil {
 				u := openapi_types.UUID(rp.ThreadRootID)

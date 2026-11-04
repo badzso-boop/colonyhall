@@ -1046,7 +1046,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Human admins. Machines with their report, agents and active folder grants. */
+        /** @description Human admins see every machine; a person sees only the machines they own (round 38), with only their own agents. Machines with their report, agents and active folder grants. */
         get: operations["listHosts"];
         put?: never;
         post?: never;
@@ -1073,6 +1073,25 @@ export interface paths {
         head?: never;
         /** @description Human admins. Renames or recolours a machine (operational state, audited, event host.updated). */
         patch: operations["updateHost"];
+        trace?: never;
+    };
+    "/hosts/{hostId}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The workspace owner only. Gives the machine to a person, or to nobody (owner_id absent): its owner sees it on the Machines page and sets its Claude login. Audited (event host.owner_changed). */
+        put: operations["setHostOwner"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/hosts/{hostId}/state": {
@@ -1199,6 +1218,25 @@ export interface paths {
         post?: never;
         /** @description Human admins. Archives the agent in one transaction: it stops, its tokens, machine assignment, folder grants, channel memberships and active delegation grants end, its pending inbox items are acked without waking. Its messages stay; its handle becomes free. */
         delete: operations["deleteAgent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The workspace owner only. Gives the agent to a person, or to nobody (owner_id absent). The owner sees the agent's runs, steps, errors, folders and terminals and may give it tasks. Audited (event actor.owner_changed). */
+        put: operations["setAgentOwner"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2642,6 +2680,11 @@ export interface components {
              * @description Set on a deleted (archived) agent; its handle may belong to a newer agent
              */
             archived_at?: string;
+            /**
+             * Format: uuid
+             * @description Agents only: the person the agent belongs to (round 38); absent: nobody's
+             */
+            owner_id?: string;
             /** @description The colour to show: the agent's own, else its machine's; absent when neither */
             effective_color?: components["schemas"]["Hue"];
         };
@@ -3485,6 +3528,18 @@ export interface components {
             channel_ids?: string[];
             /** @description The agent's own instructions, appended to the shared rules; never secrets */
             instructions?: string;
+            /**
+             * Format: uuid
+             * @description The person the agent belongs to (round 38): they see its runs, steps, errors, folders and terminals and may give it tasks. Absent: nobody's (admins only).
+             */
+            owner_id?: string;
+        };
+        SetOwnerRequest: {
+            /**
+             * Format: uuid
+             * @description A person of the workspace; absent: nobody's
+             */
+            owner_id?: string;
         };
         CreatedAgent: {
             actor: components["schemas"]["Actor"];
@@ -3544,6 +3599,11 @@ export interface components {
             last_seen_at?: string;
             report: components["schemas"]["HostReport"];
             agents: components["schemas"]["HostAgent"][];
+            /**
+             * Format: uuid
+             * @description The person the machine belongs to (round 38): they see it on the Machines page; absent: nobody's (admins only)
+             */
+            owner_id?: string;
         };
         HostList: {
             hosts: components["schemas"]["Host"][];
@@ -6646,6 +6706,36 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    setHostOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetOwnerRequest"];
+            };
+        };
+        responses: {
+            /** @description The machine */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Host"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     setHostState: {
         parameters: {
             query?: never;
@@ -6804,6 +6894,36 @@ export interface operations {
                 content?: never;
             };
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAgentOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetOwnerRequest"];
+            };
+        };
+        responses: {
+            /** @description The agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Actor"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -7443,6 +7563,8 @@ export interface operations {
                 agent_id?: string;
                 host_id?: string;
                 channel_id?: string;
+                /** @description The person whose agents ran (round 38). A person who is not an admin always sees only their own agents' runs. */
+                owner_id?: string;
                 status?: "ok" | "error" | "halted" | "stopped";
                 from?: string;
                 to?: string;
@@ -7472,6 +7594,8 @@ export interface operations {
             query?: {
                 group_by?: "agent" | "host" | "model";
                 days?: number;
+                /** @description The person whose agents ran (round 38). A person who is not an admin always sees only their own agents. */
+                owner_id?: string;
             };
             header?: never;
             path?: never;

@@ -58,6 +58,8 @@ type AgentActorInput struct {
 	WithToken bool
 	// Secret, if set, is the token (the development seed only).
 	Secret string
+	// OwnerID is the person the agent belongs to (round 38); ids.Nil: nobody's.
+	OwnerID ids.ID
 }
 
 // ValidateAgentActor checks the profile before anything is written.
@@ -90,6 +92,7 @@ func (s *Service) CreateAgentActor(ctx context.Context, by Actor, in AgentActorI
 	a, secret, _, err := s.createActor(ctx, by.ID, NewActorInput{
 		WorkspaceID: by.WorkspaceID, Kind: KindAgent, Handle: in.Handle, DisplayName: in.DisplayName, Role: RoleMember,
 		NoToken: !in.WithToken, Secret: in.Secret, Description: in.Description, AvatarEmoji: in.AvatarEmoji, Color: in.Color,
+		OwnerID: in.OwnerID,
 	})
 	if err != nil {
 		return Actor{}, "", err

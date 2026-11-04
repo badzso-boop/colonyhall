@@ -30,6 +30,8 @@ func TestAgentOverviewCommonChannelsIncludeTheDM(t *testing.T) {
 	_, memberToken := e.createActor("human", "anna", "member")
 	general := e.generalID()
 	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": e.actorIDByHandle("anna")}, nil)
+	// Only the agent's owner (or an admin) sees its overview (round 38).
+	e.do("PUT", "/api/v1/agents/"+agent+"/owner", server.DevAdminToken, map[string]any{"owner_id": e.actorIDByHandle("anna")}, nil)
 	if s := e.do("GET", "/api/v1/agents/"+agent+"/overview", memberToken, nil, &ov); s != http.StatusOK {
 		t.Fatalf("member overview: %d", s)
 	}

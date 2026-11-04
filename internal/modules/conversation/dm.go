@@ -72,6 +72,11 @@ func (s *Service) OpenDM(ctx context.Context, by identity.Actor, others []ids.ID
 			if err != nil || a.WorkspaceID != by.WorkspaceID {
 				return ErrBadDM
 			}
+			// A person opens a DM only with their own agents (round 38):
+			// another person's agent is not theirs to give tasks.
+			if by.Kind == identity.KindHuman && a.Kind == identity.KindAgent && !by.SeesAgent(a) {
+				return ErrForbidden
+			}
 		}
 		c = Channel{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, Kind: KindDM, Name: name, CreatedBy: by.ID, CreatedAt: s.Clock.Now()}
 		if err := s.Store.CreateChannel(ctx, c); err != nil {

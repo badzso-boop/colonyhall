@@ -76,11 +76,30 @@ type Actor struct {
 	// the author of its messages, and its handle is free again.
 	ArchivedAt *time.Time
 	ArchivedBy ids.ID
+	// OwnerID is the person an agent belongs to (round 38), ids.Nil when
+	// nobody's. A member sees only their own agents' runs, steps, errors,
+	// folders and terminals, and only the owner or an admin wakes a
+	// full-access agent.
+	OwnerID ids.ID
 
 	// Halted is computed when the actor is loaded for a request, never
 	// stored: the actor is paused, or it is an agent while the workspace's
 	// emergency stop is on. Halted actors may read but not write.
 	Halted bool
+}
+
+// SeesAgent reports whether the actor may see an agent's details (overview,
+// runs, steps, errors, usage, folders, terminals): admins see every agent,
+// a person only the agents they own. For any other target it is true; the
+// caller checks its own rules for humans.
+func (a Actor) SeesAgent(target Actor) bool {
+	if a.Kind != KindHuman || a.WorkspaceID != target.WorkspaceID {
+		return false
+	}
+	if target.Kind != KindAgent || a.IsAdmin() {
+		return true
+	}
+	return target.OwnerID != ids.Nil && target.OwnerID == a.ID
 }
 
 // IsAdmin reports whether the actor may see and control everything.
@@ -138,6 +157,7 @@ var (
 	ErrHalted             = errors.New("writing is paused for this actor (paused or emergency stop)")
 	ErrInvalidTimezone    = errors.New("timezone must be a valid IANA timezone name")
 	ErrInvalidDescription = errors.New("description must be at most 300 characters")
+	ErrInvalidOwner       = errors.New("the owner must be a person of the workspace who is not deleted")
 	ErrInvalidStatusText  = errors.New("status text must be at most 80 characters")
 	ErrInvalidDisplayName = errors.New("display name must be 1 to 80 characters on one line")
 	ErrInvalidAvatarEmoji = errors.New("avatar emoji must be a valid emoji")

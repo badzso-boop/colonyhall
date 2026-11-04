@@ -452,3 +452,16 @@ func (s *Store) SetActorRole(_ context.Context, id ids.ID, role identity.Role) e
 	s.actors[id] = a
 	return nil
 }
+
+// SetActorOwner sets or clears an agent's owner.
+func (s *Store) SetActorOwner(_ context.Context, id, ownerID ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.actors[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	a.OwnerID = ownerID
+	s.actors[id] = a
+	return nil
+}

@@ -227,6 +227,9 @@ func (s *Store) SearchRuns(ctx context.Context, workspaceID ids.ID, f runs.RunFi
 	if f.Before != nil {
 		p.BeforeAt, p.BeforeID = &f.Before.CreatedAt, &f.Before.ID
 	}
+	if f.AgentIDs != nil {
+		p.RestrictAgents, p.AgentIds = true, f.AgentIDs
+	}
 	rows, err := s.q(ctx).SearchRuns(ctx, p)
 	if err != nil {
 		return nil, err

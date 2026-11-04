@@ -65,4 +65,6 @@ type Store interface {
 	SessionStats(ctx context.Context, workspaceID ids.ID, now time.Time) (map[ids.ID]SessionStat, error)
 	// SetActorRole changes an actor's role.
 	SetActorRole(ctx context.Context, id ids.ID, role Role) error
+	// SetActorOwner sets (or, with ids.Nil, clears) an agent's owner.
+	SetActorOwner(ctx context.Context, id, ownerID ids.ID) error
 }

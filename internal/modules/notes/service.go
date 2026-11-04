@@ -134,6 +134,10 @@ func (s *Service) ListNotes(ctx context.Context, caller identity.Actor, targetAg
 	if targetAgent.WorkspaceID != caller.WorkspaceID {
 		return nil, db.ErrNotFound
 	}
+	// Another person's agent's notebook is not found (round 38).
+	if caller.Kind == identity.KindHuman && !caller.SeesAgent(targetAgent) {
+		return nil, db.ErrNotFound
+	}
 
 	var rootID *ids.ID
 	if threadMsgID != nil {

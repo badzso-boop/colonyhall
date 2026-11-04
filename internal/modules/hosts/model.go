@@ -59,6 +59,9 @@ type Host struct {
 	CreatedAt   time.Time
 	LastSeenAt  *time.Time
 	Report      Report
+	// OwnerID is the person the machine belongs to (round 38), ids.Nil
+	// when nobody's: they see it on the Machines page and set its Claude login.
+	OwnerID ids.ID
 }
 
 // Report is what the guard says about its machine. It is informational

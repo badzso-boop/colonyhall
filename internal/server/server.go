@@ -328,7 +328,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	// An agent without its own colour shows its machine's (round 33).
 	idSvc.HostColors = hoSvc.AgentHostColors
 	scSvc := &schedule.Service{Store: scStore, Conversation: cvSvc, Actors: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
-	apSvc := &approval.Service{Store: apStore, Conversation: cvSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	apSvc := &approval.Service{Store: apStore, Conversation: cvSvc, Agents: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	wiSvc := &wiki.Service{Store: wiStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	qSvc := &question.Service{Store: qStore, Conversation: cvSvc, Directory: idSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	fiSvc := &files.Service{
@@ -417,6 +417,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Clock:        opt.Clock,
 	}
 	dlSvc.Approval = dgSvc
+	dlSvc.FullAccess = hoSvc
 	qSvc.Delegation = dgSvc
 	// Agent lifecycle (round 33): one configuration at creation, deleting
 	// archives. The delegation and inbox clean-ups run in its transaction.
@@ -470,7 +471,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	wikihttp.Register(mux, wiSvc, idSvc)
 	previewhttp.Register(mux, prSvc, idSvc, hoSvc)
 	schedhttp.Register(mux, scSvc, idSvc)
-	ruSvc := &runs.Service{Store: ruStore, Conversation: cvSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	ruSvc := &runs.Service{Store: ruStore, Agents: idSvc, Conversation: cvSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	runhttp.Register(mux, ruSvc, idSvc)
 	apphttp.Register(mux, apSvc, idSvc)
 	qhttp.Register(mux, qSvc, idSvc, cvSvc, idSvc)

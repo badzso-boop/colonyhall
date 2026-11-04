@@ -35,8 +35,13 @@ type Service struct {
 	Conversation conversation.Reader
 	Directory    identity.Directory
 	Approval     ApprovalChecker
-	IDs          ids.Generator
-	Clock        clock.Clock
+	// FullAccess tells full-access agents apart (hosts): only their owner
+	// or an admin gives them a task (round 38). nil: no such check.
+	FullAccess interface {
+		IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error)
+	}
+	IDs   ids.Generator
+	Clock clock.Clock
 }
 
 // HandleEvent reacts to events from other modules. It runs inside the
@@ -243,6 +248,16 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 		// A locked channel wakes no agent, not even after the unlock.
 		if ch.AgentLocked() && a.Kind == identity.KindAgent {
 			continue
+		}
+		if author.Kind == identity.KindHuman && a.Kind == identity.KindAgent && !author.SeesAgent(a) && s.FullAccess != nil {
+			// Only its owner or an admin wakes a full-access agent (round 38).
+			full, err := s.FullAccess.IsFullAccess(ctx, a.ID)
+			if err != nil {
+				return err
+			}
+			if full {
+				continue
+			}
 		}
 		if author.Kind == identity.KindAgent && a.Kind == identity.KindAgent && s.Approval != nil {
 			needsApproval, err := s.Approval.NeedsApproval(ctx, author.ID, a.ID)

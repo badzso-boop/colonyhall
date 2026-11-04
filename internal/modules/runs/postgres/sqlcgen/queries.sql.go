@@ -330,24 +330,27 @@ WHERE workspace_id = $1
   AND ($4::uuid IS NULL OR host_id = $4::uuid)
   AND ($5::uuid IS NULL OR channel_id = $5::uuid)
   AND ($6::text IS NULL OR status = $6::text)
-  AND ($7::timestamptz IS NULL OR created_at >= $7::timestamptz)
-  AND ($8::timestamptz IS NULL OR created_at < $8::timestamptz)
-  AND ($9::timestamptz IS NULL OR (created_at, id) < ($9::timestamptz, $10::uuid))
+  AND (NOT $7::boolean OR agent_id = ANY($8::uuid[]))
+  AND ($9::timestamptz IS NULL OR created_at >= $9::timestamptz)
+  AND ($10::timestamptz IS NULL OR created_at < $10::timestamptz)
+  AND ($11::timestamptz IS NULL OR (created_at, id) < ($11::timestamptz, $12::uuid))
 ORDER BY created_at DESC, id DESC
 LIMIT $2
 `
 
 type SearchRunsParams struct {
-	WorkspaceID uuid.UUID
-	Limit       int32
-	AgentID     *uuid.UUID
-	HostID      *uuid.UUID
-	ChannelID   *uuid.UUID
-	Status      *string
-	FromAt      *time.Time
-	ToAt        *time.Time
-	BeforeAt    *time.Time
-	BeforeID    *uuid.UUID
+	WorkspaceID    uuid.UUID
+	Limit          int32
+	AgentID        *uuid.UUID
+	HostID         *uuid.UUID
+	ChannelID      *uuid.UUID
+	Status         *string
+	RestrictAgents bool
+	AgentIds       []uuid.UUID
+	FromAt         *time.Time
+	ToAt           *time.Time
+	BeforeAt       *time.Time
+	BeforeID       *uuid.UUID
 }
 
 func (q *Queries) SearchRuns(ctx context.Context, arg SearchRunsParams) ([]AgentRun, error) {
@@ -358,6 +361,8 @@ func (q *Queries) SearchRuns(ctx context.Context, arg SearchRunsParams) ([]Agent
 		arg.HostID,
 		arg.ChannelID,
 		arg.Status,
+		arg.RestrictAgents,
+		arg.AgentIds,
 		arg.FromAt,
 		arg.ToAt,
 		arg.BeforeAt,

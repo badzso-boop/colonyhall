@@ -43,7 +43,7 @@ func registerAgents(mux *http.ServeMux, idSvc *identity.Service, agSvc *agents.S
 		in := agents.CreateInput{
 			Profile: identity.AgentActorInput{
 				Handle: req.Handle, DisplayName: httpx.Deref(req.DisplayName, ""), AvatarEmoji: httpx.Deref(req.AvatarEmoji, ""),
-				Description: httpx.Deref(req.Description, ""),
+				Description: httpx.Deref(req.Description, ""), OwnerID: httpx.Deref(req.OwnerId, ids.Nil),
 			},
 			APIKey:       httpx.Deref(req.ApiKey, false),
 			Instructions: httpx.Deref(req.Instructions, ""),
@@ -100,6 +100,24 @@ func registerAgents(mux *http.ServeMux, idSvc *identity.Service, agSvc *agents.S
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("PUT /api/v1/agents/{agentId}/owner", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := agentID(w, r)
+		if !ok {
+			return
+		}
+		var req apispec.SetOwnerRequest
+		if err := httpx.Decode(r, &req); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		a, err := idSvc.SetAgentOwner(r.Context(), httpx.Actor(r), id, httpx.Deref(req.OwnerId, ids.Nil))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, identityhttp.ToAPI(a))
 	}))
 
 	mux.Handle("GET /api/v1/agents/{agentId}/instructions", auth(func(w http.ResponseWriter, r *http.Request) {
