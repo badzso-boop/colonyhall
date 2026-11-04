@@ -15,7 +15,8 @@ import (
 
 type readAll struct{}
 
-func (readAll) CanRead(context.Context, identity.Actor, ids.ID) (bool, error) { return true, nil }
+func (readAll) CanRead(context.Context, identity.Actor, ids.ID) (bool, error)  { return true, nil }
+func (readAll) CanWrite(context.Context, identity.Actor, ids.ID) (bool, error) { return true, nil }
 func (readAll) SendMessage(context.Context, identity.Actor, conversation.SendInput) (conversation.SendResult, error) {
 	return conversation.SendResult{}, nil
 }
