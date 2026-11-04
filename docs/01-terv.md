@@ -1151,6 +1151,22 @@ A rendszer akkor sikeres, ha több feladat végződik sikeresen, miközben a ker
 - **Felhasználókezelés:** embert csak a tulajdonos hoz létre és módosít (szerepkör, letiltás, jelszó). Admin nem csinálhat másik admint. A tulajdonos önmagát nem fokozhatja le és nem tilthatja le. Minden változás auditált.
 - **Saját token:** ember a saját magának kiadhat tokent (a kulcscseréhez kell), agent önmagának nem.
 
+## Kolléga saját agentekkel (38. kör, döntések: Norbi, 2026-11-04)
+
+Norbi egy kollégát vesz maga mellé (kód és dokumentáció). A modell:
+
+- **Saját előfizetés.** A kolléga a saját Claude Code előfizetését használja, soha nem Norbiét. A gépén `claude setup-token`-t futtat, és a tokent ő maga adja meg a PWA-ban (Gépek → Claude-belépés). A token csak a kolléga gépének őréhez jut el; a szerver nem tárolja, nem naplózza, eseménybe és auditba nem kerül (csak az, hogy ki és mikor állította be).
+- **Tulajdonos.** Az agentnek és a gépnek lehet tulajdonosa (egy személy). Az agentet Norbi hozza létre, és a kollégát adja meg tulajdonosnak; később új agentként hoz létre másikat (a meglévő tulajdonosa a felületen nem módosítható, csak a workspace tulajdonosa az API-n).
+- **Láthatóság.** Egy nem admin személy csak a saját agentjei áttekintőjét, futásait, lépéseit, hibáit, fogyasztását, mappáit és termináljait látja; minden másra 404. Egy közös csatornában a többi agent neve és avatarja látszik, a részletei nem. A Gépek oldalon csak a saját gépe látszik.
+- **Feladatadás.** Teljes hozzáférésű agentet csak a tulajdonosa vagy admin ébreszthet (megszólítás, szálkövetés, DM, kérdés). Sandboxos agentet bárki, aki a csatornában írhat. DM-et egy személy csak a saját agentjével nyithat. Egy agent eszközjóváhagyását is csak a tulajdonosa vagy admin döntheti el.
+- **Csatornák.** A kolléga csak azokat a csatornákat látja, amelyekbe Norbi beteszi; tagonként „Csak olvashat” vagy „Írhat”, ami újra hozzáadás nélkül átállítható. Olvasó tag semmit nem írhat a csatornába (üzenet, reakció, fájl, visszavonás, döntés, ütemezés, fájllekérés, jóváhagyás), és olvasó agent nem kap feladatot.
+- **Két agent kollégánként, a homelabon:** egy teljes hozzáférésű **tervező** (`write_scope: docs`: csak `.md`-t ír, parancsot nem futtat, ezt a Claude Code jogosultsági szabályai kényszerítik ki, nem csak a prompt), és egy **sandboxos kódoló**, akinek a tervező a kódmunkát adja.
+- **Külön Linux-felhasználó** a homelabon (nincs `sudo`, nincs `docker` csoport), rajta egy második őr, ami a Colonyhallban külön gép (`homelab-colleague`, tulajdonosa a kolléga). Ok: Norbi homelab-felhasználójának jelszó nélküli `sudo`-ja és Docker-hozzáférése van. Beállítás: `10-kollega-beallitasa.md`.
+- **Kis gép:** `max_concurrent_runs` a `guard.yaml`-ban; a limit fölötti futás sorban áll („⏳ sorban állok, a gép most foglalt”).
+- **A Futások oldal** személyre szűrhető.
+
+Kimarad: Antigravity-belépés személyenként, Team-előfizetés, személyenkénti erőforráskvóta a `max_concurrent_runs`-on és az agentenkénti napi kereten túl.
+
 ## Későbbre hagyott döntések
 
 Ezek most nem kellenek, de a terv úgy készül, hogy később átírás nélkül hozzáadhatók legyenek.

@@ -85,6 +85,14 @@
 
 **Antigravity kvóta (37. kör):** ha egy agy-modell kerete elfogy, a szálban csendes üzenet jelenik meg („⏸ Az Antigravity kerete (modell) elfogyott, 15:58-kor folytatom.”), az üzenetek megmaradnak, és a visszaállás után maguktól lefutnak. A Gépek oldalon a gép kártyáján „⏸ agy” jelvény látszik, az Áttekintésben a modell és az időpont. Ugyanazon a gépen a többi modell és a Claude-agentek tovább dolgoznak. Az ok az őr naplójában van; ha az agy a kimenetében nem adta meg, az agy saját naplójából: `~/.gemini/antigravity-cli/log/cli-*.log` (sandboxos agentnél `<agentmappa>.config/gemini/antigravity-cli/log/`). A szünet állapota: az őr állapotmappájában az `agy_quota.json`; ha kézzel kell feloldani, törölhető, és az őrt újra kell indítani.
 
+### Ha a kolléga agentje nem fut (38. kör)
+
+1. **Gépek → `homelab-colleague`:** online-e, és „Claude-belépés: beállítva”? Ha „nincs”, a kolléga állítsa be (Gépek → Belépés beállítása). Ha „nincs beállítva a guard.yaml-ban”: a `claude_token_file` hiányzik a kolléga `guard.yaml`-jából.
+2. **Az őr naplója** a homelabon: `sudo machinectl shell kollega@ /bin/bash -lc 'journalctl --user -u colony-guard -n 100'`. Gyakori okok: `claude login not changed … check_failed` (a token lejárt vagy rossz: új `claude setup-token`), `this Claude Code version cannot enforce a docs-only agent` (régi Claude Code: frissíteni a kolléga felhasználójaként), `bwrap` hiba a kódolónál.
+3. **„⏳ sorban állok, a gép most foglalt”:** a `max_concurrent_runs` korlát; egy másik futás tart. Ha soha nem indul el, egy beragadt futás foglalja: az őr újraindítása (`systemctl --user restart colony-guard` a kolléga nevében).
+4. **Nem ébred fel:** a kolléga olvasó tag-e a csatornában (Csatorna beállításai → Tagok), és a saját agentjét szólította-e meg (más teljes hozzáférésű agentjét nem ébresztheti).
+5. **A tervező kódot akart írni:** ez szándékos (`write_scope: docs`); a kódot a párjának kell adnia. Ha a Claude Code jóváhagyást kérne, az hiba: a csak-dokumentáció módban kérdés nélkül el kell utasítania.
+
 ## Munkamódszer
 
 - **Tervezés és döntés:** Norbi dönt, Claude Code megírja a tervet a `task.md` „Tervezendő” részébe és a handoff promptot (`docs/handoff/NN-…-prompt.md`, alapszabályok: `00-ground-rules.md`).

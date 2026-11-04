@@ -12,6 +12,8 @@
 
 **Megvalósítva az Antigravityvel (2026-10-22, `docs/handoff/19-web-read-report.md`, ág: `feature/web-read`, külön worktree):** `web_read` a sandboxos agenteknek — az őr tölti le a nyilvános oldalakat, csak GET, csak szöveg, belső címek tiltva, agentenként bekapcsolható (alapból ki), minden URL naplózva, bridge forwarding a 3129-es porton Unix domain socketre.
 
+**Megvalósítva (2026-11-04, `docs/handoff/38-colleague-prompt.md`, jelentés: `docs/handoff/38-colleague-report.md`, ág: `feature/colleague`):** kolléga saját agentekkel — agent- és géptulajdonos, láthatóság, csatornatagok olvasási/írási joga, csak dokumentációt író tervező agent, Claude-belépés a PWA-ból, két őr egy gépen és `max_concurrent_runs`, runbook (`docs/10-kollega-beallitasa.md`), PWA (Gépek tagoknak, belépési ablak, tulajdonos a varázslóban, Futások személyszűrő).
+
 ## Nyitott
 
 - [ ] **Slack-szerű felület a React PWA-hoz** (31. kör kész, 2026-10-30: keret, csoportosított oldalsáv, szálak jobb oldali panelben, összesítő sor, munkapanel a bal helyen, terminál- és fájlpanel, telefonos nézet; jelentés: `docs/handoff/31-pwa-foundation-report.md`. 32. kör kész, 2026-10-31: lebegő ablakok, Feladatok, Naptár, Jegyzetek, Ütemezések az ütemezőablakkal, wiki fórumként, Foglalások, Szabályok, Döntések; jelentés: `docs/handoff/32-pwa-pages-report.md`. 33. kör kész, 2026-11-01: agent-áttekintő, agentkönyvtár, létrehozó és beállító ablak, megváltoztathatatlan agentek (archiválás, újra kiadható handle, saját utasítás), gép- és agentszínek, Gépek oldal, mappaválasztó; jelentés: `docs/handoff/33-pwa-agents-hosts-report.md`; hátravan: 34–35. kör) (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz). **A PWA legyen reszponzív, telefonon is teljes értékűen használható** (a részleteket később fejtjük ki: oszlopok, szál- és terminálpanel telefonon). A csatornákban most nagy a kavalkád, ezért: **35. kör kész, 2026-11-03:** Adminisztráció csoport (futások és költségbecslés, beállítások, felhasználók, tokenek és kulcscsere, audit CSV-vel, rendszerállapot), vészleállítás feloldása jelszóval, csatornazár; jelentés: `docs/handoff/35-pwa-admin-report.md`.
@@ -23,6 +25,8 @@
 - [ ] **Vállalkozási asszisztens (későbbi kör, Norbi döntése, 2026-10-29):** havi számlázási emlékeztető ügyfelenként, az alanyi adómentesség értékhatárának figyelése (a bevételt és a határt Norbi adja meg). Csak terv.
 
 - [ ] **Később az asszisztenshez (csak ötletek, Norbi egyelőre nem kéri, 2026-10-29):** napközbeni javaslatok, tanulás a reakciókból, gazdagabb feladatmezők (határidő, becsült idő), gyors rögzítés a chatből, Colonyhall-ügyek a reggeli összefoglalóban.
+
+- [ ] **Kolléga (38. kör) maradék:** egy meglévő agent tulajdonosának módosítása a felületen (Norbi döntése: nem kell, új agentet hoz létre); agentek száma a Felhasználók oldalon; a csak-dokumentáció mód kézi ellenőrzése a valódi Claude Code-dal (a jelentésben a recept).
 
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 

@@ -1344,6 +1344,41 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
   
   A régebbi tokeneknek nincs előtagjuk.
 
+## Tulajdonos, láthatóság, csatornajogok és Claude-belépés (38. kör, 2026-11-04)
+
+### 1. Tulajdonos és láthatóság
+
+- Migráció `00046`: `actor.owner_id` és `host.owner_id` (nullable, `actor(id)`). `identity.Actor.OwnerID`, `hosts.Host.OwnerID`.
+- `POST /agents` `owner_id` (admin; egy nem archivált személy, különben 400). `PUT /agents/{agentId}/owner` és `PUT /hosts/{hostId}/owner` `{owner_id?}` (hiányzó = senki): csak a workspace tulajdonosa, események `actor.owner_changed`, `host.owner_changed` (audit).
+- A szabály egy helyen: `identity.Actor.SeesAgent(target)` — admin minden agentet lát, más csak a sajátját (`owner_id = ő`); emberre mindig igaz.
+- Alkalmazva: `/agents/{id}/overview` (a tulajdonos a gépet, a jegyzeteket és az inboxot is látja), `/agents/{id}/instructions`, `/agents/{id}/notes`, `/agents/{id}/fs` (fájlböngésző, terminálok), `/agents/{id}/file-fetch`, `/messages/{id}/file-fetch`, `/file-fetch/{id}`, a gépről lekért (`human_only`) fájlok és listájuk, `/errors/{id}`, `/approvals/{id}` (olvasás és döntés), az élő lépések (`agent.progress` WebSocket-keret és `GET /channels/{id}/progress`). Másik személy agentje: 404 (a csatornahozzáférés hiánya előbb 403).
+- `GET /runs?owner_id=`, `GET /usage?owner_id=`: nem adminnak a szerver mindig a saját agentjeire szűkít (`runs.Service.agentScope`); a tár `RunFilter.AgentIDs` szűrője üres halmazra semmit sem ad.
+- `GET /hosts`: nem admin csak a saját gépeit kapja, rajtuk csak a saját agentjeivel.
+- Ébresztés (`delivery.onMessage`): ember szerző, nem az övé, teljes hozzáférésű cél → nincs inbox-elem. Ugyanígy a `question.Ask` (403) és a `conversation.OpenDM` (egy személy más agentjével: 403).
+
+### 2. Csatornatagok írási joga
+
+- `PATCH /channels/{channelId}/members/{actorId}` `{can_write}` (admin; DM-re 409; esemény `channel.member_updated`, csendes rendszerüzenet). Tár: `SetMemberCanWrite`.
+- `can_write` minden csatornához kötött írásnál: üzenet és szálválasz, reakció, feltöltés, visszavonás, döntés (és a wiki-bejegyzése), ütemezés létrehozása, fájllekérés, terminál-befejezés ébresztése, jóváhagyás kérése és eldöntése, előnézet indítása. Olvasó agent tag nem kap inbox-elemet.
+
+### 3. Csak dokumentációt író agent
+
+- Migráció `00047`: `agent_host.write_scope` (`all` | `docs`) és `agent_host.partner_id`. `docs` csak teljes hozzáférésű, `direct` módú Claude Code agentnek, chat-jóváhagyás és előnézet nélkül; a pár egy sandboxos agent a workspace-ben.
+- Az utasítás végére fix blokk kerül (`agents.DocsOnlyBlock`): tervez és dokumentál, csak Markdownt ír, minden kódváltozást a párjának ad.
+- Az őr (`docsOnlyArgs`, `DocsOnlySettings`): `--restricted --permission-mode dontAsk --permission-prompts none --tools Read,Write,Edit,Glob,Grep --disallowedTools Bash,NotebookEdit,PowerShell,Agent,WebFetch,WebSearch --settings '{"permissions":{"allow":["Edit(//<root>/**/*.md)","Write(//<root>/**/*.md)",…],"deny":[…],"defaultMode":"dontAsk"},"disableAllHooks":true}'`, soha `--permission-prompt-tool`. A szabályok sorrendje deny > ask > allow; Edit/Write-ra nincs deny, így a `.md` engedély érvényes, minden más írás kérdés nélkül elutasítva. Ha a `claude --help` nem ismeri a szükséges kapcsolókat, az őr nem indítja el (fail closed).
+
+### 4. Claude-belépés a PWA-ból
+
+- `PUT /hosts/{hostId}/claude-login` `{token}` → 200 `{set_at}`; `DELETE` → 204. Csak a gép tulajdonosa vagy admin, ember; agent 403, más személy gépe 404. Sebességkorlát: 5 próbálkozás / 10 perc / személy (429).
+- Út: a szerver a tokent csak a `hosts.LoginRelay` memóriájában tartja; a host WebSocketen (`/ws/host`) csak a kérés azonosítója megy (`host.claude_login.request`); az őr géptokennel lekéri (`GET /host/claude-login/{id}`, a tokent egyszer adja ki), és válaszol (`POST …/result` `{ok, error_code?, set_at?}`). A hívás végén a kérés törlődik. Események: `host.claude_login_set`, `host.claude_login_cleared` (ki, melyik gép; a token soha).
+- Hibák: 409 `host_offline`, 422 `claude_login_check_failed` | `claude_login_not_configured` | `claude_login_write_failed`, 504 időtúllépés (90 s).
+- Őr (`guard.ClaudeLogin`): `claude_token_file` (host módban alapból a géptoken mellett `claude.token`), `0600`, atomikus írás, a deny-listán. Új tokennél előbb `claude -p /usage --output-format json --no-session-persistence --strict-mcp-config` a jelölt tokennel; hiba esetén a régi marad. Minden Claude Code futás (direct, work, decide, összefoglaló, `/usage`) `CLAUDE_CODE_OAUTH_TOKEN`-ként kapja, csak a gyermekfolyamat környezetében; sandboxban ilyenkor nincs másolat a felhasználó belépési fájljáról. A jelentés (`HostReport`) csak `claude_login_configured` és `claude_login_set_at`.
+
+### 5. Két őr egy gépen, futáskorlát
+
+- Minden állapot a felhasználó `sandbox_dir`-jéből (`~/.local/share/colonyhall/sandbox`) származik: őrállapot, előnézetek (`<state>/previews`), usage-mappa, socketek; `tmux_socket` (alapból `colonyhall`, a tmux felhasználónként külön könyvtárat használ); `preview_ports` ütközésnél a foglalt portot kihagyja.
+- `max_concurrent_runs` (0 = nincs korlát): a fölötte érkező elem pending marad, kísérletet nem számol; szálanként egyszer csendes jegyzet (`POST /agent/ratelimit-note`, `window: machine_busy`); felszabaduláskor csak a várakozókat ébreszti.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.
