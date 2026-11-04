@@ -419,6 +419,42 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
+	mux.Handle("PATCH /api/v1/channels/{id}/members/{actorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		actorID, ok := pathID(w, r, "actorId")
+		if !ok {
+			return
+		}
+		// apispec.UpdateMemberRequest has a plain bool: a missing field
+		// must not silently mean "read-only".
+		var in struct {
+			CanWrite *bool `json:"can_write"`
+		}
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if in.CanWrite == nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "can_write is required"})
+			return
+		}
+		m, err := svc.UpdateMember(r.Context(), httpx.Actor(r), channelID, actorID, *in.CanWrite)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.ChannelMember{
+			ActorId:     m.ActorID,
+			Handle:      m.Handle,
+			DisplayName: httpx.Ptr(m.DisplayName),
+			Kind:        apispec.ActorKind(m.Kind),
+			CanWrite:    m.CanWrite,
+		})
+	}))
+
 	mux.Handle("DELETE /api/v1/channels/{id}/members/{actorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
 		channelID, ok := pathID(w, r, "id")
 		if !ok {

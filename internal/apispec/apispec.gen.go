@@ -3626,6 +3626,11 @@ type UpdateHostRequest struct {
 	Name  *string `json:"name,omitempty"`
 }
 
+// UpdateMemberRequest defines model for UpdateMemberRequest.
+type UpdateMemberRequest struct {
+	CanWrite bool `json:"can_write"`
+}
+
 // UpdatePlannerTaskRequest defines model for UpdatePlannerTaskRequest.
 type UpdatePlannerTaskRequest struct {
 	AfterId     *openapi_types.UUID `json:"after_id,omitempty"`
@@ -4048,6 +4053,9 @@ type UploadFileMultipartRequestBody UploadFileMultipartBody
 
 // AddChannelMemberJSONRequestBody defines body for AddChannelMember for application/json ContentType.
 type AddChannelMemberJSONRequestBody = AddMemberRequest
+
+// UpdateChannelMemberJSONRequestBody defines body for UpdateChannelMember for application/json ContentType.
+type UpdateChannelMemberJSONRequestBody = UpdateMemberRequest
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendMessageRequest

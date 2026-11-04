@@ -17,7 +17,7 @@ import (
 
 // Conversation is what the scheduler needs from the conversation module.
 type Conversation interface {
-	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	SendMessage(ctx context.Context, by identity.Actor, in conversation.SendInput) (conversation.SendResult, error)
 }
 
@@ -96,7 +96,8 @@ func (s *Service) Create(ctx context.Context, by identity.Actor, in CreateInput)
 	default:
 		return Schedule{}, ErrBadTime
 	}
-	if ok, err := s.Conversation.CanRead(ctx, by, in.ChannelID); err != nil || !ok {
+	// A schedule posts into the channel: its creator must be able to write there.
+	if ok, err := s.Conversation.CanWrite(ctx, by, in.ChannelID); err != nil || !ok {
 		if err == nil {
 			err = ErrForbidden
 		}

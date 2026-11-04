@@ -21,6 +21,7 @@ const ConsumerName = "approval"
 // Conversation is what the approval module needs from conversation.
 type Conversation interface {
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	SendMessage(ctx context.Context, by identity.Actor, in conversation.SendInput) (conversation.SendResult, error)
 }
 
@@ -58,7 +59,8 @@ func (s *Service) CreateRequest(ctx context.Context, by identity.Actor, in Creat
 	if toolName == "" {
 		return ApprovalRequest{}, ErrBadToolName
 	}
-	if ok, err := s.Conversation.CanRead(ctx, by, in.ChannelID); err != nil || !ok {
+	// The request posts a notice in the thread: the agent must be able to write there.
+	if ok, err := s.Conversation.CanWrite(ctx, by, in.ChannelID); err != nil || !ok {
 		if err == nil {
 			err = ErrForbidden
 		}
@@ -206,7 +208,8 @@ func (s *Service) Decide(ctx context.Context, by identity.Actor, id ids.ID, deci
 	if by.ID == r.AgentID {
 		return ApprovalRequest{}, ErrForbidden
 	}
-	if ok, err := s.Conversation.CanRead(ctx, by, r.ChannelID); err != nil || !ok {
+	// Deciding acts in the channel: a read-only member may watch, not decide.
+	if ok, err := s.Conversation.CanWrite(ctx, by, r.ChannelID); err != nil || !ok {
 		if err == nil {
 			err = ErrForbidden
 		}

@@ -44,6 +44,9 @@ type Store interface {
 	AddMember(ctx context.Context, m Member) error
 	RemoveMember(ctx context.Context, channelID, actorID ids.ID, at time.Time) error
 	Member(ctx context.Context, channelID, actorID ids.ID) (Member, error)
+	// SetMemberCanWrite changes an active member's write permission;
+	// db.ErrNotFound when the actor is not a member.
+	SetMemberCanWrite(ctx context.Context, channelID, actorID ids.ID, canWrite bool) error
 	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
 	ListMembers(ctx context.Context, channelID ids.ID) ([]Member, error)
 

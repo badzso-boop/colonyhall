@@ -10,6 +10,7 @@ export type EventPayloads = {
   "reaction.removed": S["EventReaction"];
   "channel.created": S["EventChannelCreated"];
   "channel.member_added": S["EventMemberAdded"];
+  "channel.member_updated": S["EventMemberAdded"];
   "channel.member_removed": S["EventMemberRemoved"];
   "channel.updated": S["EventChannelUpdated"];
   "channel.archived": S["EventChannelArchived"];

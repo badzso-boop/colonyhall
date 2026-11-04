@@ -411,11 +411,13 @@ func (s *Service) RequestFileFetch(ctx context.Context, by identity.Actor, messa
 		return FileFetchRequest{}, false, ErrNotFound
 	}
 
-	canRead, err := s.Conversation.CanRead(ctx, by, msg.ChannelID)
+	// A fetch puts the agent's file into the channel: a read-only member
+	// may open what was fetched, not ask for more.
+	canWrite, err := s.Conversation.CanWrite(ctx, by, msg.ChannelID)
 	if err != nil {
 		return FileFetchRequest{}, false, err
 	}
-	if !canRead {
+	if !canWrite {
 		return FileFetchRequest{}, false, ErrForbidden
 	}
 
@@ -504,11 +506,12 @@ func (s *Service) RequestAgentFileFetch(ctx context.Context, by identity.Actor, 
 	if targetAgent.WorkspaceID != by.WorkspaceID || targetAgent.Kind != identity.KindAgent {
 		return FileFetchRequest{}, false, ErrNotFound
 	}
-	canRead, err := s.Conversation.CanRead(ctx, by, channelID)
+	// A fetch puts the agent's file into the channel (see RequestFileFetch).
+	canWrite, err := s.Conversation.CanWrite(ctx, by, channelID)
 	if err != nil {
 		return FileFetchRequest{}, false, err
 	}
-	if !canRead {
+	if !canWrite {
 		return FileFetchRequest{}, false, ErrForbidden
 	}
 	members, err := s.Conversation.MemberIDs(ctx, channelID)

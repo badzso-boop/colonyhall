@@ -542,7 +542,14 @@ export interface paths {
         delete: operations["removeChannelMember"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * @description Admins only. Change a member's write permission without removing and
+         *     re-adding it: a read-only member reads the channel but cannot post,
+         *     reply, react, upload or otherwise act in it. Audited (event
+         *     channel.member_updated) with a silent system note. Setting the
+         *     current value is a no-op. A DM's members cannot change (409).
+         */
+        patch: operations["updateChannelMember"];
         trace?: never;
     };
     "/channels/{channelId}/messages": {
@@ -3079,6 +3086,9 @@ export interface components {
             /** @default true */
             can_write: boolean;
         };
+        UpdateMemberRequest: {
+            can_write: boolean;
+        };
         Message: {
             /** Format: uuid */
             id: string;
@@ -3242,8 +3252,8 @@ export interface components {
          *     message.created → EventMessageCreated; message.retracted →
          *     EventMessageRetracted; reaction.added, reaction.removed →
          *     EventReaction; channel.created → EventChannelCreated;
-         *     channel.member_added → EventMemberAdded; channel.member_removed →
-         *     EventMemberRemoved; channel.updated → EventChannelUpdated;
+         *     channel.member_added, channel.member_updated → EventMemberAdded;
+         *     channel.member_removed → EventMemberRemoved; channel.updated → EventChannelUpdated;
          *     channel.archived, channel.unarchived, channel.locked, channel.unlocked → EventChannelArchived;
          *     channel.locked, channel.unlocked → EventChannelLocked;
          *     channel.mute_changed (the muting viewer only) → EventMuteChanged;
@@ -5918,6 +5928,38 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateChannelMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+                actorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description The member after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelMember"];
+                };
+            };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

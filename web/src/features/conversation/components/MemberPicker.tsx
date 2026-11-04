@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
 import { cn, fuzzyScore, hueVar } from "@/shared/lib";
-import { Avatar, Badge, Button, Checkbox, Dialog, Input } from "@/shared/ui";
+import { Avatar, Badge, Button, Checkbox, Dialog, Input, Select } from "@/shared/ui";
 import type { Actor } from "../model";
 
 /** Humans and agents (not archived) matching the query, humans first; the viewer is left out. */
@@ -58,16 +58,28 @@ export function MemberChecklist({ actors, selected, onToggle, members = [], excl
   );
 }
 
-/** "Tagok hozzáadása…": pick several, add them with one batch request. */
+/** The member's access: "Írhat" or "Csak olvashat" (read-only: reads, never posts, reacts or uploads). */
+export function AccessSelect({ canWrite, onChange, label, disabled }: { canWrite: boolean; onChange: (canWrite: boolean) => void; label: string; disabled?: boolean }) {
+  const { t } = useTranslation("conversation");
+  return (
+    <Select aria-label={label} value={canWrite ? "write" : "read"} disabled={disabled} onChange={(e) => onChange(e.target.value === "write")} className="w-36">
+      <option value="write">{t("channel.members.canWrite")}</option>
+      <option value="read">{t("channel.members.readOnly")}</option>
+    </Select>
+  );
+}
+
+/** "Tagok hozzáadása…": pick several, add them with one batch request, all with the chosen access. */
 export function MemberPicker({ actors, members, pending, onAdd, onClose }: {
   actors: Actor[];
   members: string[];
   pending: boolean;
-  onAdd: (ids: string[]) => void;
+  onAdd: (ids: string[], canWrite: boolean) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation("conversation");
   const [selected, setSelected] = useState<string[]>([]);
+  const [canWrite, setCanWrite] = useState(true);
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   return (
     <Dialog
@@ -80,13 +92,17 @@ export function MemberPicker({ actors, members, pending, onAdd, onClose }: {
           <Button variant="ghost" onClick={onClose}>
             {t("new.cancel")}
           </Button>
-          <Button variant="primary" disabled={selected.length === 0} loading={pending} onClick={() => onAdd(selected)}>
+          <Button variant="primary" disabled={selected.length === 0} loading={pending} onClick={() => onAdd(selected, canWrite)}>
             {t("channel.members.addCount", { count: selected.length })}
           </Button>
         </>
       }
     >
       <MemberChecklist actors={actors} selected={selected} onToggle={toggle} members={members} />
+      <label className="mt-3 flex items-center gap-2">
+        <span className="flex-1 text-meta font-semibold text-fg-muted">{t("channel.members.access")}</span>
+        <AccessSelect canWrite={canWrite} onChange={setCanWrite} label={t("channel.members.access")} />
+      </label>
     </Dialog>
   );
 }

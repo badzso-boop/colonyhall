@@ -39,6 +39,10 @@ UPDATE channel_member
 SET left_at = $3
 WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL;
 
+-- name: SetMemberCanWrite :execrows
+UPDATE channel_member SET can_write = $3
+WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL;
+
 -- name: ListMembers :many
 SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at
 FROM channel_member

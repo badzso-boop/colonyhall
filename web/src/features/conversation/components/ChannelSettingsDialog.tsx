@@ -6,10 +6,10 @@ import { useActivity } from "@/features/agents";
 import { api, unwrap } from "@/shared/api";
 import { hueVar } from "@/shared/lib";
 import { Avatar, Badge, Button, Dialog, Input, LargeDialog, Markdown, Notice, Textarea, toast } from "@/shared/ui";
-import { useAddMembers, useMembers, useRemoveMember, useSetArchived, useSetLocked, useUpdateChannel } from "../api";
+import { useAddMembers, useMembers, useRemoveMember, useSetArchived, useSetLocked, useSetMemberCanWrite, useUpdateChannel } from "../api";
 import { channelTabs, MAX_DESCRIPTION, orderMembers, validChannelName, type ChannelTab } from "../channel";
 import type { Actor, Channel } from "../model";
-import { MemberPicker } from "./MemberPicker";
+import { AccessSelect, MemberPicker } from "./MemberPicker";
 import { ProfileTrigger } from "./ProfilePopover";
 
 type Props = { channel: Channel; actors: Map<string, Actor>; admin: boolean; tab: ChannelTab; onTab: (t: ChannelTab) => void; onClose: () => void };
@@ -120,6 +120,7 @@ function Members({ channel, actors, admin }: { channel: Channel; actors: Map<str
   const working = useActivity((s) => s.working);
   const add = useAddMembers(channel.id);
   const remove = useRemoveMember(channel.id);
+  const access = useSetMemberCanWrite(channel.id);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Actor | null>(null);
@@ -145,7 +146,7 @@ function Members({ channel, actors, admin }: { channel: Channel; actors: Map<str
       </div>
       <p className="text-meta text-fg-muted">{t("channel.members.count", { count: members.data?.length ?? 0 })}</p>
       <ul aria-label={t("channel.tabs.tagok")} className="flex flex-col gap-px">
-        {rows.map(({ actor }) => {
+        {rows.map(({ actor, member }) => {
           const here = (working[actor.id] ?? []).some((p) => p.channelId === channel.id);
           return (
             <li key={actor.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-sunken">
@@ -158,6 +159,24 @@ function Members({ channel, actors, admin }: { channel: Channel; actors: Map<str
               </ProfileTrigger>
               {actor.kind === "agent" && actor.state !== "active" ? <Badge>{actor.state}</Badge> : null}
               {here ? <Badge tone="accent">{t("channel.members.workingHere")}</Badge> : null}
+              {admin && !dm ? (
+                <AccessSelect
+                  canWrite={member.can_write}
+                  label={t("channel.members.accessOf", { handle: actor.handle })}
+                  disabled={access.isPending}
+                  onChange={(canWrite) =>
+                    access.mutate(
+                      { actorId: actor.id, canWrite },
+                      {
+                        onSuccess: () => toast(t(canWrite ? "channel.members.nowWrite" : "channel.members.nowReadOnly", { handle: actor.handle })),
+                        onError: (e) => toast(e.message, { tone: "danger" }),
+                      },
+                    )
+                  }
+                />
+              ) : !member.can_write ? (
+                <Badge>{t("channel.members.readOnly")}</Badge>
+              ) : null}
               {admin && !dm ? (
                 <Button size="sm" variant="ghost" onClick={() => setRemoving(actor)}>
                   {t("channel.members.remove")}
@@ -173,8 +192,8 @@ function Members({ channel, actors, admin }: { channel: Channel; actors: Map<str
           members={(members.data ?? []).map((m) => m.actor_id)}
           pending={add.isPending}
           onClose={() => setAdding(false)}
-          onAdd={(ids) =>
-            add.mutate(ids, {
+          onAdd={(ids, canWrite) =>
+            add.mutate({ actorIds: ids, canWrite }, {
               onSuccess: () => {
                 setAdding(false);
                 toast(t("channel.members.added", { count: ids.length }));

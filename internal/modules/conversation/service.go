@@ -312,6 +312,66 @@ func (s *Service) addMembers(ctx context.Context, by identity.Actor, channelID i
 	return nil
 }
 
+// UpdateMember changes a member's write permission (admins, humans only,
+// as the channel editor). It records channel.member_updated and leaves a
+// silent note; setting the current value changes nothing. A DM's members
+// are fixed.
+func (s *Service) UpdateMember(ctx context.Context, by identity.Actor, channelID, actorID ids.ID, canWrite bool) (ChannelMemberView, error) {
+	if !policy.CanManageMembers(subject(by)) || by.Kind != identity.KindHuman {
+		return ChannelMemberView{}, ErrForbidden
+	}
+	var seq int64
+	var view ChannelMemberView
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+		c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
+		if err != nil {
+			return err
+		}
+		if c.Kind == KindDM {
+			return ErrDMUnchangeable
+		}
+		target, err := s.Directory.ActorByID(ctx, actorID)
+		if err != nil {
+			return fmt.Errorf("actor: %w", err)
+		}
+		if target.WorkspaceID != by.WorkspaceID {
+			return fmt.Errorf("actor: %w", db.ErrNotFound)
+		}
+		m, err := s.Store.Member(ctx, c.ID, actorID)
+		if errors.Is(err, db.ErrNotFound) {
+			return ErrMemberNotFound
+		}
+		if err != nil {
+			return err
+		}
+		view = ChannelMemberView{ActorID: target.ID, Handle: target.Handle, DisplayName: target.DisplayName,
+			Kind: target.Kind, CanWrite: canWrite}
+		if m.CanWrite == canWrite {
+			return nil
+		}
+		if err := s.Store.SetMemberCanWrite(ctx, c.ID, actorID, canWrite); err != nil {
+			return err
+		}
+		if _, err := s.appendEvent(ctx, by, c.ID, EventMemberUpdated, "channel", c.ID,
+			MemberAdded{ChannelID: c.ID.String(), ActorID: actorID.String(), CanWrite: canWrite}); err != nil {
+			return err
+		}
+		note := fmt.Sprintf("🔒 @%s mostantól csak olvashatja a csatornát", target.Handle)
+		if canWrite {
+			note = fmt.Sprintf("✏️ @%s mostantól írhatja a csatornát", target.Handle)
+		}
+		seq, err = s.postChangeNote(ctx, by, c, note)
+		return err
+	})
+	if err != nil {
+		return ChannelMemberView{}, err
+	}
+	if seq > 0 {
+		s.Bus.Notify(seq)
+	}
+	return view, nil
+}
+
 func (s *Service) addMember(ctx context.Context, by identity.Actor, c Channel, actorID ids.ID, canWrite bool) (int64, error) {
 	if _, err := s.Store.Member(ctx, c.ID, actorID); err == nil {
 		return 0, nil
@@ -1241,6 +1301,12 @@ func (s *Service) RetractMessage(ctx context.Context, by identity.Actor, message
 		return err
 	}
 	if m.AuthorID != by.ID {
+		return ErrForbidden
+	}
+	// Retracting changes the channel: a read-only member may not.
+	if ok, err := s.CanWrite(ctx, by, m.ChannelID); err != nil {
+		return err
+	} else if !ok {
 		return ErrForbidden
 	}
 	if m.DeletedAt != nil {
