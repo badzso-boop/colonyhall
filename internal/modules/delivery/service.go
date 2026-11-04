@@ -244,6 +244,19 @@ func (s *Service) onMessage(ctx context.Context, e eventlog.Event, p conversatio
 		if ch.AgentLocked() && a.Kind == identity.KindAgent {
 			continue
 		}
+		// A read-only agent member gets no task: it could not answer. Only
+		// the membership counts here: a paused agent still gets its items.
+		if a.Kind == identity.KindAgent {
+			member := a
+			member.Halted = false
+			canWrite, err := s.Conversation.CanWrite(ctx, member, ch.ID)
+			if err != nil {
+				return err
+			}
+			if !canWrite {
+				continue
+			}
+		}
 		if author.Kind == identity.KindAgent && a.Kind == identity.KindAgent && s.Approval != nil {
 			needsApproval, err := s.Approval.NeedsApproval(ctx, author.ID, a.ID)
 			if err != nil {
@@ -527,7 +540,9 @@ func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, na
 		return ErrForbidden
 	}
 	if channelID != ids.Nil && s.Conversation != nil {
-		ok, err := s.Conversation.CanRead(ctx, by, channelID)
+		// The wake asks the agent to report in the channel: it must be able
+		// to write there (a read-only member is never woken).
+		ok, err := s.Conversation.CanWrite(ctx, by, channelID)
 		if err != nil {
 			return err
 		}

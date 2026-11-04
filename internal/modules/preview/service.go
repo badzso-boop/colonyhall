@@ -28,7 +28,7 @@ type Hosts interface {
 
 // Conversation is what preview needs from conversation.
 type Conversation interface {
-	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	SendMessage(ctx context.Context, by identity.Actor, in conversation.SendInput) (conversation.SendResult, error)
 }
 
@@ -78,8 +78,9 @@ func (s *Service) Start(ctx context.Context, by identity.Actor, in StartInput) (
 		return Preview{}, ErrBadTTL
 	}
 
+	// The preview's link is posted into the channel: the agent must be able to write there.
 	if in.ChannelID != ids.Nil {
-		ok, err := s.Conversation.CanRead(ctx, by, in.ChannelID)
+		ok, err := s.Conversation.CanWrite(ctx, by, in.ChannelID)
 		if err != nil || !ok {
 			if err == nil {
 				err = ErrForbidden

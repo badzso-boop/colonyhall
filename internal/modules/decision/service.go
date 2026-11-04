@@ -24,6 +24,7 @@ type WikiAppender interface {
 // ConversationReader defines the conversation capabilities needed by decisions.
 type ConversationReader interface {
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
 	ResolveChannel(ctx context.Context, by identity.Actor, nameOrID string) (conversation.Channel, error)
 	ChannelByID(ctx context.Context, id ids.ID) (conversation.Channel, error)
@@ -127,11 +128,13 @@ func (s *Service) AddDecision(ctx context.Context, actor identity.Actor, in AddD
 		channelID = ch.ID
 	}
 
-	canRead, err := s.conv.CanRead(ctx, actor, channelID)
+	// Recording a decision writes into the channel's history (and the
+	// wiki): a read-only member may not.
+	canWrite, err := s.conv.CanWrite(ctx, actor, channelID)
 	if err != nil {
 		return Decision{}, err
 	}
-	if !canRead {
+	if !canWrite {
 		return Decision{}, ErrForbidden
 	}
 	if actor.Kind == identity.KindAgent {

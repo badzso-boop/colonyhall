@@ -17,7 +17,7 @@ import (
 
 // Conversation defines the conversation module methods needed by question service.
 type Conversation interface {
-	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
+	CanWrite(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
 	SendMessage(ctx context.Context, by identity.Actor, in conversation.SendInput) (conversation.SendResult, error)
 	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
 }
@@ -115,8 +115,8 @@ func (s *Service) Ask(ctx context.Context, by identity.Actor, in AskInput) (Ques
 		deadline = &dl
 	}
 
-	// Check channel read access
-	ok, err := s.Conversation.CanRead(ctx, by, in.ChannelID)
+	// Asking posts into the channel: the asker must be able to write there.
+	ok, err := s.Conversation.CanWrite(ctx, by, in.ChannelID)
 	if err != nil || !ok {
 		return Question{}, ErrForbidden
 	}
