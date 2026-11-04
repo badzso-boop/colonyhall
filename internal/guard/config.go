@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -42,10 +43,22 @@ type Config struct {
 	Defaults        AgentConfig `yaml:"defaults"`      // poll, debounce, batch, timeouts for host-mode agents
 	PreviewPorts    string      `yaml:"preview_ports"` // port range for previews, e.g. 41000-41999
 	PreviewHost     string      `yaml:"preview_host"`  // address where previews are published
+	// TmuxSocket is the tmux socket name (tmux -L) of the agents'
+	// terminals. tmux keeps sockets per user ($TMUX_TMPDIR/tmux-<uid>/), so
+	// guards of different Linux users never share one; two guards of the
+	// same user need different names. Default colonyhall.
+	TmuxSocket string `yaml:"tmux_socket"`
+	// MaxConcurrentRuns caps the client runs (decide, work, direct) of all
+	// agents on this machine; the rest wait with their items pending.
+	// 0 (default) means no limit.
+	MaxConcurrentRuns int `yaml:"max_concurrent_runs"`
 
 	RateLimitReserve int `yaml:"rate_limit_reserve"` // default 90 (%)
 	RateLimitWarn    int `yaml:"rate_limit_warn"`    // default 80 (%)
 }
+
+// tmuxSocketRe limits tmux_socket to a plain file name (tmux -L).
+var tmuxSocketRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$`)
 
 // HostMode reports whether the server manages this machine's agents.
 func (c *Config) HostMode() bool { return c.HostTokenFile != "" }
@@ -103,6 +116,15 @@ func (c *Config) Validate() error {
 	if c.Server == "" {
 		return fmt.Errorf("guard: server is required")
 	}
+	if c.MaxConcurrentRuns < 0 {
+		return fmt.Errorf("guard: max_concurrent_runs must be 0 (no limit) or more")
+	}
+	if c.TmuxSocket == "" {
+		c.TmuxSocket = DefaultTmuxSocket
+	}
+	if !tmuxSocketRe.MatchString(c.TmuxSocket) {
+		return fmt.Errorf("guard: invalid tmux_socket %q (a file name: letters, digits, ., _ or -, at most 64, not starting with .)", c.TmuxSocket)
+	}
 	if c.HostMode() {
 		return c.validateHost()
 	}
@@ -154,6 +176,9 @@ func (c *Config) validateHost() error {
 	}
 	if c.PreviewHost == "" {
 		c.PreviewHost = "127.0.0.1"
+	}
+	if _, err := NewPortPool(c.PreviewPorts); err != nil {
+		return fmt.Errorf("guard: preview_ports: %w", err)
 	}
 	if c.SandboxNetwork == "" {
 		c.SandboxNetwork = "filtered"

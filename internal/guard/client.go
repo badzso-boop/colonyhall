@@ -323,6 +323,21 @@ func (c *Client) PostAgyQuotaNote(ctx context.Context, channelID, threadRootID, 
 	return c.do(ctx, http.MethodPost, "/api/v1/agent/ratelimit-note", in, nil)
 }
 
+// PostBusyNote posts the silent note of an agent that waits for a free run
+// slot on its machine (max_concurrent_runs).
+func (c *Client) PostBusyNote(ctx context.Context, channelID, threadRootID string, now time.Time) error {
+	in := map[string]any{
+		"channel_id":  channelID,
+		"window":      "machine_busy",
+		"utilization": 0,
+		"resets_at":   now.UTC().Format(time.RFC3339),
+	}
+	if threadRootID != "" {
+		in["thread_root_id"] = threadRootID
+	}
+	return c.do(ctx, http.MethodPost, "/api/v1/agent/ratelimit-note", in, nil)
+}
+
 // Thread returns a thread's root and replies.
 func (c *Client) Thread(ctx context.Context, messageID string) (Message, []Message, error) {
 	var r struct {

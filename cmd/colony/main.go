@@ -100,6 +100,7 @@ func runTerminalMCP(ctx context.Context, args []string) error {
 	channelID := fs.String("channel", "", "channel ID")
 	threadRootID := fs.String("thread", "", "thread root ID")
 	sandbox := fs.Bool("sandbox", false, "whether agent is sandboxed")
+	tmuxSocket := fs.String("tmux-socket", "", "tmux socket name of the guard (default colonyhall)")
 	_ = fs.Parse(args)
 
 	if *sandbox {
@@ -109,7 +110,7 @@ func runTerminalMCP(ctx context.Context, args []string) error {
 		return errors.New("-agent and -state are required")
 	}
 
-	return guard.RunTerminalMCPServer(ctx, *agent, *stateDir, *channelID, *threadRootID)
+	return guard.RunTerminalMCPServer(ctx, *agent, *stateDir, *channelID, *threadRootID, *tmuxSocket)
 }
 
 func enroll(ctx context.Context, args []string) error {

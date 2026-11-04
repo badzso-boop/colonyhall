@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +65,7 @@ type Supervisor struct {
 	sandbox       *Sandbox
 	previews      *PreviewSupervisor
 	terminals     *TerminalManager
+	runSlots      *RunSlots // max_concurrent_runs, shared by all agents
 
 	mu               sync.Mutex
 	lastOK           time.Time
@@ -102,6 +105,7 @@ type managed struct {
 // Start prepares the machine: token, roots, sandbox.
 func (s *Supervisor) start(ctx context.Context) error {
 	s.fileFetchLimiter = make(chan struct{}, 2)
+	s.runSlots = NewRunSlots(s.Cfg.MaxConcurrentRuns)
 	raw, err := os.ReadFile(s.Cfg.HostTokenFile)
 	if err != nil {
 		return fmt.Errorf("guard: host token: %w (run `colony guard enroll` first)", err)
@@ -145,10 +149,15 @@ func (s *Supervisor) start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("guard: preview supervisor: %w", err)
 	}
+	stateDir := filepath.Dir(s.Cfg.SandboxDir)
+	ps.Dir = filepath.Join(stateDir, "previews")
+	ps.Ports.Bindable = bindable(ps.PreviewHost)
 	s.previews = ps
 
-	stateDir := filepath.Dir(s.Cfg.SandboxDir)
 	s.terminals = NewTerminalManager(stateDir, s.roots, s.home)
+	if s.Cfg.TmuxSocket != "" {
+		s.terminals.SetSocketName(s.Cfg.TmuxSocket)
+	}
 	s.terminals.SetOnStart(s.handleTerminalStart)
 	s.terminals.SetOnFinish(s.handleTerminalFinish)
 	_ = s.terminals.AdoptExisting()
@@ -566,6 +575,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		DenyFiles:        []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile},
 		FileFetchLimiter: s.fileFetchLimiter,
 		Terminals:        s.terminals,
+		RunSlots:         s.runSlots,
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch
@@ -910,4 +920,18 @@ func (t *hostTokens) Invalidate() {
 	t.mu.Lock()
 	t.token = ""
 	t.mu.Unlock()
+}
+
+// bindable reports whether a preview port is still free on host: a port
+// another program holds (another guard on this machine, a developer's
+// server) is skipped instead of failing in docker compose.
+func bindable(host string) func(port int) bool {
+	return func(port int) bool {
+		l, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		if err != nil {
+			return false
+		}
+		_ = l.Close()
+		return true
+	}
 }

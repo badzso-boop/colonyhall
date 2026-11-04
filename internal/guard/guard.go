@@ -99,6 +99,10 @@ type Agent struct {
 
 	ClaudeLimiter         *ClaudeLimiter
 	notedRateLimitThreads map[string]bool
+	// RunSlots is the machine-wide limit of concurrent runs
+	// (max_concurrent_runs); nil means no limit.
+	RunSlots         *RunSlots
+	notedBusyThreads map[string]bool
 	// AgyLimiter pauses this machine's Antigravity models after a quota
 	// error; AgyConfigDir is this agent's agy config folder (~/.gemini),
 	// whose log is the fallback for an error agy did not put in its result.
@@ -337,7 +341,14 @@ func (a *Agent) Tick(ctx context.Context) error {
 	var chatItems []Item
 	for _, it := range items {
 		if it.Kind == "compact" {
-			if err := a.handleCompact(ctx, it); err != nil {
+			// A summary run is a run too; without a slot the item stays
+			// pending (it is not the user's thread, so no note).
+			if !a.RunSlots.TryAcquire(a.Wake) {
+				continue
+			}
+			err := a.handleCompact(ctx, it)
+			a.RunSlots.Release()
+			if err != nil {
 				a.Log.Error("guard: handle compact failed", "item", it.ID, "err", err)
 			}
 		} else {
@@ -363,6 +374,15 @@ func (a *Agent) Tick(ctx context.Context) error {
 		}
 		a.notedRateLimitThreads = nil
 	}
+
+	// The machine runs max_concurrent_runs already: the items stay pending
+	// (no run, no ack, no attempt) until a slot frees and wakes this agent.
+	if !a.RunSlots.TryAcquire(a.Wake) {
+		a.postBusyNotes(ctx, items)
+		return nil
+	}
+	defer a.RunSlots.Release()
+	a.notedBusyThreads = nil
 
 	if a.Mode == "direct" || (a.Mode == "" && a.Cfg.Mode == "direct") {
 		if err := a.handleDirect(ctx, items); err != nil {
@@ -1465,11 +1485,30 @@ func (a *Agent) postRateLimitNotes(ctx context.Context, items []Item) {
 	})
 }
 
+// postBusyNotes tells each waiting thread once that the machine is busy.
+func (a *Agent) postBusyNotes(ctx context.Context, items []Item) {
+	if a.Client == nil {
+		return
+	}
+	if a.notedBusyThreads == nil {
+		a.notedBusyThreads = make(map[string]bool)
+	}
+	a.postNotesOnce(ctx, items, a.notedBusyThreads, func(ch, th string) error {
+		return a.Client.PostBusyNote(ctx, ch, th, a.now())
+	})
+}
+
 // postNotes posts one silent pause note per thread of the items.
 func (a *Agent) postNotes(ctx context.Context, items []Item, post func(channelID, threadRootID string) error) {
 	if a.notedRateLimitThreads == nil {
 		a.notedRateLimitThreads = make(map[string]bool)
 	}
+	a.postNotesOnce(ctx, items, a.notedRateLimitThreads, post)
+}
+
+// postNotesOnce posts a silent note into each thread of the items that is
+// not in noted yet, and records it there.
+func (a *Agent) postNotesOnce(ctx context.Context, items []Item, noted map[string]bool, post func(channelID, threadRootID string) error) {
 
 	for _, it := range items {
 		targetChannelID := it.ChannelID
@@ -1484,13 +1523,13 @@ func (a *Agent) postNotes(ctx context.Context, items []Item, post func(channelID
 			}
 		}
 		key := targetChannelID + "/" + targetThreadID
-		if a.notedRateLimitThreads[key] {
+		if noted[key] {
 			continue
 		}
 		if err := post(targetChannelID, targetThreadID); err != nil {
-			a.Log.Warn("guard: post rate limit note failed", "channel_id", targetChannelID, "thread_root_id", targetThreadID, "err", err)
+			a.Log.Warn("guard: post silent note failed", "channel_id", targetChannelID, "thread_root_id", targetThreadID, "err", err)
 		} else {
-			a.notedRateLimitThreads[key] = true
+			noted[key] = true
 		}
 	}
 }
@@ -1528,6 +1567,7 @@ func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error
 			break
 		}
 	}
+	slots := NewRunSlots(cfg.MaxConcurrentRuns)
 	var wg sync.WaitGroup
 	errs := make(chan error, len(cfg.Agents))
 	for _, ac := range cfg.Agents {
@@ -1536,6 +1576,7 @@ func RunAll(ctx context.Context, cfg Config, run Runner, log *slog.Logger) error
 			return err
 		}
 		agent := &Agent{
+			RunSlots:      slots,
 			Cfg:           ac,
 			Client:        &Client{BaseURL: cfg.Server, Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}},
 			Adapter:       Adapters[ac.Client](ac, run),

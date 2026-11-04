@@ -594,7 +594,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			extraServers = map[string]mcpServerDoc{
 				"colony-terminal": {
 					Command: colonyBin,
-					Args:    []string{"terminal-mcp", "-agent", a.Cfg.Name, "-state", stateDir, "-channel", targetChannelID, "-thread", targetThreadID},
+					Args:    a.terminalMCPArgs(stateDir, targetChannelID, targetThreadID),
 				},
 			}
 		}
@@ -632,7 +632,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 			agyExtraServers = map[string]any{
 				"colony-terminal": map[string]any{
 					"command": colonyBin,
-					"args":    []string{"terminal-mcp", "-agent", a.Cfg.Name, "-state", stateDir, "-channel", targetChannelID, "-thread", targetThreadID},
+					"args":    a.terminalMCPArgs(stateDir, targetChannelID, targetThreadID),
 				},
 			}
 		}
@@ -1069,4 +1069,14 @@ func inGroup(id string, group []Item) bool {
 		}
 	}
 	return false
+}
+
+// terminalMCPArgs are the arguments of the colony-terminal MCP server; it
+// uses the guard's tmux socket, so two guards never share terminals.
+func (a *Agent) terminalMCPArgs(stateDir, channelID, threadID string) []string {
+	args := []string{"terminal-mcp", "-agent", a.Cfg.Name, "-state", stateDir, "-channel", channelID, "-thread", threadID}
+	if a.Terminals != nil {
+		args = append(args, "-tmux-socket", a.Terminals.SocketName())
+	}
+	return args
 }

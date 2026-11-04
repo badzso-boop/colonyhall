@@ -229,10 +229,17 @@ func (s *TerminalMCPServer) handleKill(_ context.Context, _ *mcp.CallToolRequest
 }
 
 // RunTerminalMCPServer starts the stdio MCP server for agent.
-func RunTerminalMCPServer(ctx context.Context, agent, stateDir, channelID, threadRootID string) error {
+// tmuxSocket is the guard's tmux socket name; empty means the default.
+func RunTerminalMCPServer(ctx context.Context, agent, stateDir, channelID, threadRootID, tmuxSocket string) error {
 	srv, err := NewTerminalMCPServer(agent, stateDir, channelID, threadRootID)
 	if err != nil {
 		return err
+	}
+	if tmuxSocket != "" {
+		if !tmuxSocketRe.MatchString(tmuxSocket) {
+			return fmt.Errorf("invalid tmux socket name %q", tmuxSocket)
+		}
+		srv.tm.SetSocketName(tmuxSocket)
 	}
 
 	mcpSrv := mcp.NewServer(&mcp.Implementation{Name: "colony-terminal", Version: "1.0"}, &mcp.ServerOptions{})

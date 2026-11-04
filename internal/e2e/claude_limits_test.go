@@ -277,6 +277,10 @@ func TestRateLimitNoteEndpoint(t *testing.T) {
 	if _, body := agyNote(apispec.AgyQuota, "flash\u202e\nx"); strings.ContainsAny(body, "\u202e\n") {
 		t.Errorf("control characters reached the note: %q", body)
 	}
+	// max_concurrent_runs: the agent waits for its machine.
+	if _, body := agyNote(apispec.MachineBusy, ""); body != "⏳ sorban állok, a gép most foglalt" {
+		t.Errorf("busy note: %q", body)
+	}
 }
 
 func TestGuard_ClaudeLimiterPause_E2E(t *testing.T) {
