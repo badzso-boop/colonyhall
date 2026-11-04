@@ -2,12 +2,20 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
 
 	"colonyhall/internal/apispec"
+	"colonyhall/internal/fakeagent"
+	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/preview"
+	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/server"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Round 38: agents and machines have an owner. A person who is not an admin
@@ -277,5 +285,96 @@ func TestMachineOwnerSeesOwnMachineOnly(t *testing.T) {
 	}
 	if l := list(server.DevAdminToken); len(l.Hosts) != 1 || len(l.Hosts[0].Agents) != 4 {
 		t.Fatalf("admin view: %+v", l)
+	}
+}
+
+// A person sees only the leases of agents they may see.
+func TestLeasesFollowAgentVisibility(t *testing.T) {
+	f := newOwnerFixture(t)
+	ctx := context.Background()
+	for _, tok := range []string{f.norbiAgentTok, f.ownSandboxTok} {
+		s, err := fakeagent.Connect(ctx, f.e.srv.URL+"/mcp", tok, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := s.CallTool(ctx, &mcp.CallToolParams{Name: "lease_acquire", Arguments: map[string]any{"resource": "res-" + tok[len(tok)-6:], "ttl_minutes": 30}})
+		if err != nil || res.IsError {
+			t.Fatalf("acquire: %v %+v", err, res)
+		}
+		_ = s.Close()
+	}
+	count := func(token string) (n int, holders map[string]bool) {
+		var out struct {
+			Leases []struct {
+				HolderID string `json:"holder_id"`
+			} `json:"leases"`
+		}
+		if st := f.e.do("GET", "/api/v1/leases?state=all", token, nil, &out); st != http.StatusOK {
+			t.Fatalf("leases: %d", st)
+		}
+		holders = map[string]bool{}
+		for _, l := range out.Leases {
+			holders[l.HolderID] = true
+		}
+		return len(out.Leases), holders
+	}
+	if n, h := count(f.colleagueTok); n != 1 || !h[f.ownSandbox] {
+		t.Fatalf("colleague sees %d leases: %v", n, h)
+	}
+	if n, _ := count(server.DevAdminToken); n != 2 {
+		t.Fatalf("admin sees %d leases", n)
+	}
+}
+
+// A person sees only the previews of agents they may see; an agent's own
+// (MCP) view does not change.
+func TestPreviewsFollowAgentVisibility(t *testing.T) {
+	f := newOwnerFixture(t)
+	ctx := context.Background()
+	parse := func(id string) ids.ID {
+		v, err := ids.Parse(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	actor := func(id string) identity.Actor {
+		a, err := f.e.app.Identity.ActorByID(ctx, parse(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	colleague, mine, norbis := actor(f.colleagueID), actor(f.ownSandbox), actor(f.norbiAgent)
+	admin, err := f.e.app.Identity.Authenticate(ctx, server.DevAdminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := parse(f.hostID)
+	own := preview.Preview{ID: ids.V7{}.New(), WorkspaceID: colleague.WorkspaceID, AgentID: mine.ID, HostID: host, Name: "mine", State: preview.StateRunning}
+	other := preview.Preview{ID: ids.V7{}.New(), WorkspaceID: colleague.WorkspaceID, AgentID: norbis.ID, HostID: host, Name: "norbis", State: preview.StateRunning}
+	for _, p := range []preview.Preview{own, other} {
+		if err := f.e.app.Preview.Store.Create(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := f.e.app.Preview
+	if list, err := svc.List(ctx, colleague, ids.Nil); err != nil || len(list) != 1 || list[0].ID != own.ID {
+		t.Fatalf("colleague list: %+v %v", list, err)
+	}
+	if list, _ := svc.List(ctx, colleague, norbis.ID); len(list) != 0 {
+		t.Fatalf("filtered by another person's agent: %+v", list)
+	}
+	if _, err := svc.Get(ctx, colleague, other.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("get another person's preview: %v", err)
+	}
+	if _, err := svc.Get(ctx, colleague, own.ID); err != nil {
+		t.Fatalf("get own: %v", err)
+	}
+	if list, _ := svc.List(ctx, admin, ids.Nil); len(list) != 2 {
+		t.Fatalf("admin sees all: %+v", list)
+	}
+	if list, _ := svc.List(ctx, norbis, ids.Nil); len(list) != 2 {
+		t.Fatalf("agent view changed: %+v", list)
 	}
 }

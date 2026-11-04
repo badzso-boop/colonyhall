@@ -348,7 +348,37 @@ func (s *Service) ListActive(ctx context.Context, actor identity.Actor) ([]Lease
 	if actor.Kind != identity.KindHuman || actor.Halted {
 		return nil, ErrForbidden
 	}
-	return s.store.ListActive(ctx, actor.WorkspaceID, s.clock.Now())
+	list, err := s.store.ListActive(ctx, actor.WorkspaceID, s.clock.Now())
+	if err != nil {
+		return nil, err
+	}
+	return s.visible(ctx, actor, list)
+}
+
+// visible drops the leases of agents the person may not see (round 38).
+func (s *Service) visible(ctx context.Context, actor identity.Actor, list []Lease) ([]Lease, error) {
+	if actor.IsAdmin() || len(list) == 0 {
+		return list, nil
+	}
+	holders := make([]ids.ID, 0, len(list))
+	for _, l := range list {
+		holders = append(holders, l.HolderID)
+	}
+	actors, err := s.actors.ActorsByIDs(ctx, holders)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[ids.ID]identity.Actor, len(actors))
+	for _, a := range actors {
+		byID[a.ID] = a
+	}
+	out := list[:0:0]
+	for _, l := range list {
+		if a, ok := byID[l.HolderID]; ok && actor.SeesAgent(a) {
+			out = append(out, l)
+		}
+	}
+	return out, nil
 }
 
 // History is how far back state=all may look.
@@ -376,7 +406,11 @@ func (s *Service) List(ctx context.Context, actor identity.Actor, state string, 
 	if from.Before(now.Add(-History)) || from.After(now) {
 		return nil, ErrBadSince
 	}
-	return s.store.ListSince(ctx, actor.WorkspaceID, from)
+	list, err := s.store.ListSince(ctx, actor.WorkspaceID, from)
+	if err != nil {
+		return nil, err
+	}
+	return s.visible(ctx, actor, list)
 }
 
 // HandleEvent handles background events: agent halted/deleted or emergency stop.

@@ -260,18 +260,42 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, id ids.ID) (Previe
 	if err != nil {
 		return Preview{}, err
 	}
-	if p.WorkspaceID != by.WorkspaceID {
+	if p.WorkspaceID != by.WorkspaceID || !s.seen(ctx, by, p.AgentID) {
 		return Preview{}, db.ErrNotFound
 	}
 	return p, nil
 }
 
-// List returns previews for a workspace, optionally filtered by agentID.
+// List returns previews for a workspace, optionally filtered by agentID. A
+// person sees only the previews of agents they may see (round 38).
 func (s *Service) List(ctx context.Context, by identity.Actor, agentID ids.ID) ([]Preview, error) {
+	var list []Preview
+	var err error
 	if agentID != ids.Nil {
-		return s.Store.ListByAgent(ctx, by.WorkspaceID, agentID)
+		list, err = s.Store.ListByAgent(ctx, by.WorkspaceID, agentID)
+	} else {
+		list, err = s.Store.ListByWorkspace(ctx, by.WorkspaceID)
 	}
-	return s.Store.ListByWorkspace(ctx, by.WorkspaceID)
+	if err != nil || by.Kind != identity.KindHuman || by.IsAdmin() {
+		return list, err
+	}
+	out := list[:0:0]
+	for _, p := range list {
+		if s.seen(ctx, by, p.AgentID) {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// seen: agents (MCP) keep their old view; a person sees only the previews of
+// agents they may see.
+func (s *Service) seen(ctx context.Context, by identity.Actor, agentID ids.ID) bool {
+	if by.Kind != identity.KindHuman || by.IsAdmin() {
+		return true
+	}
+	a, err := s.Directory.ActorByID(ctx, agentID)
+	return err == nil && by.SeesAgent(a)
 }
 
 // ReportStatus updates the state of a preview as reported by a guard.

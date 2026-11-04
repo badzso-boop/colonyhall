@@ -110,3 +110,11 @@ A beolvasztott `feature/colleague` ágon, a `227cdf5` állapoton:
 - A régi fejlesztői oldal (`internal/httpserver/web/index.html`) nem kapta meg az új funkciókat.
 - Olvasóra állított tag futó munkáját az őr nem állítja le (csak `member_removed`-re); a futás a válasznál bukik el.
 - **Gyanított régi hiba (nem javítva, nem ellenőrizve):** a `colony terminal-mcp` a terminálok állapotát a `<sandbox_dir>/<handle>/terminals` alá írja (`-state <agent mappa>`), a felügyelő viszont a `<state>/terminals`-t figyeli (`host.go`, `filepath.Dir(SandboxDir)`). Ha így van, az agent által indított terminál befejezése nem ébreszt, és vészleállításkor nem áll le.
+
+## Átnézés (Claude Code, 2026-11-04)
+
+- **A csak-dokumentáció mód kézi ellenőrzése lefutott** (Claude Code 2.1.317, haiku, a jelentés receptjével, egy üres próbamappában): a `notes.md` létrejött („hello”); a `main.go`, a `keep.txt` módosítása és a `../outside.md` elutasítva (`permission_denials`); shell-eszköz nem volt, a modell fájlírással próbálta, az is elutasítva; jóváhagyási kérdés egyik futásnál sem jött. Minden futás 0-s kóddal, magától ért véget.
+- **Javítva, két hiányzó láthatósági szűrő** (teszttel, ami nélküle elbukik):
+  - az előnézetek (`/previews`, `/previews/{id}`) a tag számára a más agentjeiét is mutatták; `TestPreviewsFollowAgentVisibility`;
+  - a foglalások emberi listája (`/leases`) is; `TestLeasesFollowAgentVisibility`. Az agentek (MCP) nézete nem változott, az összehangoláshoz kell.
+- **Kivéve a repóból:** a `web/tsconfig.tsbuildinfo` build-melléktermék; `*.tsbuildinfo` a `.gitignore`-ba.
