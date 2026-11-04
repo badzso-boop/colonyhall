@@ -1,4 +1,4 @@
-import { buildRows, filterRows, filtersFromParams, filtersToParams, groupRows, noFilters, searchRows, type Actor, type Host } from "./directory";
+import { buildRows, visibleAgents, filterRows, filtersFromParams, filtersToParams, groupRows, noFilters, searchRows, type Actor, type Host } from "./directory";
 
 const now = new Date("2026-10-31T10:00:00Z");
 const actor = (id: string, handle: string, extra: Partial<Actor> = {}): Actor => ({ id, kind: "agent", handle, display_name: handle, role: "member", state: "active", created_at: "", ...extra });
@@ -53,4 +53,16 @@ test("filters combine, archived ones only on request, and round-trip through the
 test("grouping by machine (API-key agents last) or state", () => {
   expect(groupRows(rows, "host").map((g) => [g.host?.name ?? "-", g.rows.length])).toEqual([["homelab", 1], ["pc-wsl", 2], ["-", 2]]);
   expect(groupRows(rows, "state").map((g) => g.key)).toEqual(["working", "idle", "paused", "offline", "archived"]);
+});
+
+test("a person who is not an admin sees only their own agents", () => {
+  const list = [
+    { id: "a", kind: "agent", owner_id: "kollega" },
+    { id: "b", kind: "agent", owner_id: "norbi" },
+    { id: "c", kind: "agent" },
+    { id: "h", kind: "human" },
+  ];
+  expect(visibleAgents(list, { id: "kollega", role: "member" }).map((a) => a.id)).toEqual(["a", "h"]);
+  expect(visibleAgents(list, { id: "norbi", role: "owner" }).map((a) => a.id)).toEqual(["a", "b", "c", "h"]);
+  expect(visibleAgents(list, undefined)).toEqual([]);
 });

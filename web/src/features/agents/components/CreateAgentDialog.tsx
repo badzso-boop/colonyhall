@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, FileText, FolderOpen, KeyRound, Lock, ShieldAlert, Unlock } from "lucide-react";
 import { FolderPicker, useHosts, type Host, type Selection } from "@/features/hosts";
+import { useActors } from "@/features/identity";
 import { ApiError } from "@/shared/api";
 import { cn, hueVar, hues } from "@/shared/lib";
 import { Button, Checkbox, Dialog, Input, LargeDialog, Markdown, Notice, Select, Switch, Textarea, toast } from "@/shared/ui";
@@ -130,6 +131,8 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
   const host: Host | undefined = hosts.data?.find((h) => h.id === d.hostId);
   const partners = useMemo(() => partnerCandidates(hosts.data), [hosts.data]);
   const partner = partners.find((p) => p.id === d.partnerId);
+  const everyone = useActors();
+  const people = useMemo(() => [...(everyone.data?.values() ?? [])].filter((a) => a.kind === "human" && !a.archived_at), [everyone.data]);
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
   const errs = stepErrors(d, step, handles);
   const go = (s: Step) => {
@@ -205,6 +208,16 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
         </Field>
         <Field label={t("create.color")} lock="mutable">
           <ColorSwatches value={d.color} onChange={(color) => set({ color })} inherit="" />
+        </Field>
+        <Field label={t("create.owner")} lock="mutable" hint={t("create.ownerHint")}>
+          <Select value={d.ownerId} onChange={(e) => set({ ownerId: e.target.value })}>
+            <option value="">{t("create.ownerNobody")}</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.display_name} (@{p.handle})
+              </option>
+            ))}
+          </Select>
         </Field>
         <div className="sm:col-span-2">
           <Field label={t("create.description")} lock="mutable" error={errs.description ? t(errs.description) : undefined}>

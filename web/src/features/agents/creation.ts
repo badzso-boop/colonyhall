@@ -34,6 +34,8 @@ export type Draft = {
   docsOnly: boolean;
   /** The partner's agent id (docsOnly only). */
   partnerId: string;
+  /** The person the agent belongs to (round 38); "" = nobody's (admins only). */
+  ownerId: string;
   instructions: string;
   /** 0 = no limit. */
   maxSessionTokens: number;
@@ -46,7 +48,7 @@ export function emptyDraft(hostId = ""): Draft {
     handle: "", displayName: "", avatarEmoji: "", color: "", description: "", apiKey: false, hostId,
     client: "claude-code", model: "", workModel: "", mode: "compact", allowWork: true, permissionMode: "auto",
     sandbox: true, rootDir: "", worktreeRepo: "", grants: new Map(), approvals: "none", allowPreview: false, allowWebRead: false,
-    docsOnly: false, partnerId: "", instructions: "", maxSessionTokens: 150000, dailyTokenLimit: 0, channelIds: [],
+    docsOnly: false, partnerId: "", ownerId: "", instructions: "", maxSessionTokens: 150000, dailyTokenLimit: 0, channelIds: [],
   };
 }
 
@@ -129,6 +131,7 @@ export function toRequest(d: Draft): Schemas["CreateAgentRequest"] {
     ...(d.description.trim() ? { description: d.description.trim() } : {}),
     ...(d.instructions.trim() ? { instructions: d.instructions.trim() } : {}),
     ...(d.channelIds.length ? { channel_ids: d.channelIds } : {}),
+    ...(d.ownerId ? { owner_id: d.ownerId } : {}),
   };
   if (d.apiKey) return { ...req, api_key: true };
   return {
@@ -162,7 +165,7 @@ export function fromAgent(actor: Actor, config: HostAgent | undefined, instructi
   return {
     ...d,
     handle: actor.handle, displayName: actor.display_name, avatarEmoji: actor.avatar_emoji ?? "", color: actor.color ?? "",
-    description: actor.description ?? "", apiKey: !config, instructions,
+    description: actor.description ?? "", apiKey: !config, instructions, ownerId: actor.owner_id ?? "",
     ...(config
       ? {
           client: config.client as Draft["client"], model: config.model, workModel: config.work_model === config.model ? "" : config.work_model,

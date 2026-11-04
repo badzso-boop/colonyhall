@@ -292,7 +292,10 @@
     "noPartners": "There is no sandboxed agent yet: create one first.",
     "docsOnlyBlock": "The server appends a fixed block to the instructions: it plans and documents, writes only Markdown, hands every code change to @{{partner}} as a clear task, and never asks a human to run code for it.",
     "writeScope": "Write scope",
-    "docsOnlySummary": "docs only · code by @{{partner}}"
+    "docsOnlySummary": "docs only · code by @{{partner}}",
+    "owner": "Owner",
+    "ownerHint": "Who sees the agent's runs and folders and may give it tasks. The workspace owner can change it later.",
+    "ownerNobody": "nobody (admins only)"
   },
   "settings": {
     "title": "Agent settings",

@@ -115,3 +115,13 @@ export function groupRows(rows: AgentRow[], by: Grouping): Group[] {
   // Machines by name; API-key agents (no machine) last.
   return out.sort((a, b) => (!a.host ? 1 : !b.host ? -1 : a.host.name.localeCompare(b.host.name)));
 }
+
+/**
+ * The agents a person sees on the Agents page (round 38): admins every
+ * agent, others only the agents they own. Humans pass through.
+ */
+export function visibleAgents<A extends { kind: string; owner_id?: string }>(actors: A[], me: { id: string; role: string } | undefined): A[] {
+  if (!me) return [];
+  if (me.role === "owner" || me.role === "admin") return actors;
+  return actors.filter((a) => a.kind !== "agent" || a.owner_id === me.id);
+}

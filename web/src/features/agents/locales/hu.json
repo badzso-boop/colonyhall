@@ -292,7 +292,10 @@
     "noPartners": "Még nincs sandboxos agent: előbb hozz létre egyet.",
     "docsOnlyBlock": "A szerver az utasítás végére egy rögzített blokkot fűz: tervez és dokumentál, csak Markdownt ír, minden kódváltozást @{{partner}} kap meg világos feladatként, és soha nem kér embert, hogy kódot futtasson helyette.",
     "writeScope": "Írási kör",
-    "docsOnlySummary": "csak dokumentáció · kódot @{{partner}} ír"
+    "docsOnlySummary": "csak dokumentáció · kódot @{{partner}} ír",
+    "owner": "Tulajdonos",
+    "ownerHint": "Aki látja az agent futásait és mappáit, és feladatot adhat neki. Később a workspace tulajdonosa módosíthatja.",
+    "ownerNobody": "senki (csak adminok)"
   },
   "settings": {
     "title": "Agent beállításai",

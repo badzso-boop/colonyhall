@@ -10,7 +10,7 @@ import { usePanes } from "@/shared/panes";
 import { Avatar, Badge, Button, EmptyState, Highlight, IconButton, Input, PageHeader, Select, Skeleton } from "@/shared/ui";
 import { useActivity } from "../activity";
 import { useAgentActors } from "../api";
-import { buildRows, filterRows, filtersFromParams, filtersToParams, groupRows, hostOnline, searchRows, type AgentRow, type AgentState, type Filters, type Grouping } from "../directory";
+import { buildRows, visibleAgents, filterRows, filtersFromParams, filtersToParams, groupRows, hostOnline, searchRows, type AgentRow, type AgentState, type Filters, type Grouping } from "../directory";
 
 const stateTone: Record<AgentState, "success" | "neutral" | "warning" | "danger" | "info"> = {
   working: "success", idle: "neutral", offline: "warning", paused: "warning", stopped: "danger", archived: "neutral",
@@ -49,8 +49,9 @@ export default function AgentsPage() {
 
   const now = new Date();
   const rows = useMemo(
-    () => buildRows(actors.data ?? [], hosts.data ?? [], new Set(Object.keys(working).filter((k) => working[k]!.length > 0)), new Date()),
-    [actors.data, hosts.data, working],
+    () =>
+      buildRows(visibleAgents(actors.data ?? [], session.data?.actor), hosts.data ?? [], new Set(Object.keys(working).filter((k) => working[k]!.length > 0)), new Date()),
+    [actors.data, hosts.data, working, session.data?.actor],
   );
   const shown = useMemo(() => searchRows(filterRows(rows, filters), q), [rows, filters, q]);
   const groups = groupRows(shown, q ? "none" : grouping);
