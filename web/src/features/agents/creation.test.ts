@@ -1,4 +1,4 @@
-import { emptyDraft, firstInvalidStep, fromAgent, looksSecret, stepErrors, stepForError, toRequest } from "./creation";
+import { canBeDocsOnly, emptyDraft, firstInvalidStep, fromAgent, looksSecret, partnerCandidates, stepErrors, stepForError, toRequest } from "./creation";
 
 const handles = { active: new Set(["backend"]), archived: new Set(["old"]) };
 
@@ -25,7 +25,7 @@ test("the request: a machine agent with grants, or an API-key agent", () => {
   expect(toRequest(d)).toEqual({
     handle: "ok-bot", color: "teal", instructions: "Légy tömör.", channel_ids: ["c1"],
     host: { host_id: "h1", client: "claude-code", model: "sonnet", allow_work: true, permission_mode: "auto", mode: "compact", sandbox: true,
-      approvals: "none", allow_preview: false, allow_web_read: false, max_session_tokens: 150000, daily_token_limit: 0 },
+      approvals: "none", allow_preview: false, allow_web_read: false, max_session_tokens: 150000, daily_token_limit: 0, write_scope: "all" },
     grants: [{ path: "/work/app", mode: "write" }],
   });
   expect(toRequest({ ...emptyDraft(), handle: "api-bot", apiKey: true })).toEqual({ handle: "api-bot", api_key: true });
@@ -49,4 +49,35 @@ test("a server error goes to its step", () => {
   expect(stepForError("the instructions look like they contain a secret")).toBe("instructions");
   expect(stepForError("a chosen channel does not exist")).toBe("limits");
   expect(stepForError("the machine has not reported this client")).toBe("machine");
+});
+
+test("a docs-only planner: full-access Claude Code in direct mode, no chat approvals or preview, a sandboxed partner", () => {
+  const planner = { ...emptyDraft("h1"), handle: "planner", mode: "direct" as const, sandbox: false, rootDir: "/work", docsOnly: true, partnerId: "p1" };
+  expect(canBeDocsOnly(planner)).toBe(true);
+  expect(stepErrors(planner, "access", handles)).toEqual({});
+  expect(stepErrors({ ...planner, partnerId: "" }, "access", handles)).toEqual({ partnerId: "errors.partner" });
+  expect(stepErrors({ ...planner, sandbox: true }, "access", handles)).toMatchObject({ docsOnly: "errors.docsOnly" });
+  expect(stepErrors({ ...planner, client: "antigravity" }, "access", handles)).toMatchObject({ docsOnly: "errors.docsOnly" });
+  expect(stepErrors({ ...planner, approvals: "chat" }, "access", handles)).toEqual({ approvals: "errors.docsOnlyApprovals" });
+  expect(stepErrors({ ...planner, allowPreview: true }, "access", handles)).toEqual({ allowPreview: "errors.docsOnlyPreview" });
+  expect(toRequest(planner).host).toMatchObject({ write_scope: "docs", partner_id: "p1", sandbox: false, mode: "direct" });
+  expect(toRequest({ ...planner, docsOnly: false }).host).toMatchObject({ write_scope: "all" });
+  expect(toRequest({ ...planner, docsOnly: false }).host).not.toHaveProperty("partner_id");
+  const config = { ...toRequest(planner).host, agent_id: "a", handle: "planner", work_model: "", worktree_repo: "", grants: [], allow_work: true } as never;
+  const copy = fromAgent({ id: "a", handle: "planner", display_name: "P" } as never, config, "");
+  expect(copy).toMatchObject({ docsOnly: true, partnerId: "p1" });
+  expect(stepForError("write_scope docs needs a partner: the sandboxed agent that writes the code")).toBe("access");
+});
+
+test("partner candidates are the sandboxed agents of every machine", () => {
+  const agent = (id: string, handle: string, sandbox: boolean) => ({ agent_id: id, handle, sandbox }) as never;
+  const hosts = [
+    { name: "pc", agents: [agent("1", "zed", true), agent("2", "full", false)] },
+    { name: "box", agents: [agent("3", "coder", true)] },
+  ] as never;
+  expect(partnerCandidates(hosts)).toEqual([
+    { id: "3", handle: "coder", host: "box" },
+    { id: "1", handle: "zed", host: "pc" },
+  ]);
+  expect(partnerCandidates(undefined)).toEqual([]);
 });

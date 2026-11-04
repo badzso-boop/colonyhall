@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, FolderOpen, KeyRound, Lock, ShieldAlert, Unlock } from "lucide-react";
+import { Copy, FileText, FolderOpen, KeyRound, Lock, ShieldAlert, Unlock } from "lucide-react";
 import { FolderPicker, useHosts, type Host, type Selection } from "@/features/hosts";
 import { ApiError } from "@/shared/api";
 import { cn, hueVar, hues } from "@/shared/lib";
@@ -8,10 +8,12 @@ import { Button, Checkbox, Dialog, Input, LargeDialog, Markdown, Notice, Select,
 import { useAgentActors, useCreateAgent, useJoinableChannels, useSharedRules } from "../api";
 import {
   MaxInstructions,
+  canBeDocsOnly,
   emptyDraft,
   firstInvalidStep,
   knownModels,
   looksSecret,
+  partnerCandidates,
   permissionModes,
   riskyModes,
   sessionPresets,
@@ -126,6 +128,8 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
     return { active, archived };
   }, [actors.data]);
   const host: Host | undefined = hosts.data?.find((h) => h.id === d.hostId);
+  const partners = useMemo(() => partnerCandidates(hosts.data), [hosts.data]);
+  const partner = partners.find((p) => p.id === d.partnerId);
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
   const errs = stepErrors(d, step, handles);
   const go = (s: Step) => {
@@ -230,7 +234,7 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
         {!d.apiKey && host ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={t("create.client")} lock="fixed">
-              <Select value={d.client} onChange={(e) => set({ client: e.target.value as Draft["client"], permissionMode: "auto", approvals: "none" })}>
+              <Select value={d.client} onChange={(e) => set({ client: e.target.value as Draft["client"], permissionMode: "auto", approvals: "none", docsOnly: false })}>
                 {(["claude-code", "antigravity"] as const).map((c) => (
                   <option key={c} value={c} disabled={!clientList.some((x) => x.name === c)}>
                     {c}
@@ -251,7 +255,7 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
               ))}
             </datalist>
             <Field label={t("create.mode")} lock="fixed" hint={t(`create.modeHint.${d.mode}`)}>
-              <Select value={d.mode} onChange={(e) => set({ mode: e.target.value as Draft["mode"], sandbox: e.target.value === "compact" })}>
+              <Select value={d.mode} onChange={(e) => set({ mode: e.target.value as Draft["mode"], sandbox: e.target.value === "compact", docsOnly: false })}>
                 <option value="direct">direct</option>
                 <option value="compact">compact</option>
               </Select>
@@ -279,7 +283,7 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
     ) : (
       <div className="flex flex-col gap-4">
         <div role="radiogroup" aria-label={t("create.access")} className="flex gap-2 max-sm:flex-col">
-          <Choice selected={d.sandbox} onSelect={() => set({ sandbox: true, allowPreview: false })} icon={<Lock className="size-4" />} title={t("create.sandbox")} body={t("create.sandboxBody")} />
+          <Choice selected={d.sandbox} onSelect={() => set({ sandbox: true, allowPreview: false, docsOnly: false })} icon={<Lock className="size-4" />} title={t("create.sandbox")} body={t("create.sandboxBody")} />
           <Choice
             selected={!d.sandbox}
             onSelect={() => set({ sandbox: false, allowWebRead: false })}
@@ -288,6 +292,35 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
             body={t("create.fullAccessBody")}
           />
         </div>
+        {canBeDocsOnly(d) || d.docsOnly ? (
+          <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+            <label className="flex items-center gap-2 text-ui">
+              <Switch checked={d.docsOnly} onCheckedChange={(v) => set(v ? { docsOnly: true, approvals: "none", allowPreview: false } : { docsOnly: false, partnerId: "" })} />
+              <Lock aria-hidden className="size-3 text-fg-muted" />
+              <FileText aria-hidden className="size-4 text-fg-muted" />
+              {t("create.docsOnly")}
+            </label>
+            <span className="text-meta text-fg-subtle">{t("create.docsOnlyHint")}</span>
+            {errs.docsOnly ? <span className="text-meta text-danger">{t(errs.docsOnly)}</span> : null}
+            {d.docsOnly ? (
+              <Field
+                label={t("create.partner")}
+                lock="fixed"
+                hint={partners.length ? t("create.partnerHint") : t("create.noPartners")}
+                error={errs.partnerId ? t(errs.partnerId) : undefined}
+              >
+                <Select value={d.partnerId} onChange={(e) => set({ partnerId: e.target.value })}>
+                  <option value="">{t("create.choose")}</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      @{p.handle} · {p.host}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+          </div>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("create.rootDir")} lock="fixed" error={errs.rootDir ? t(errs.rootDir) : undefined}>
             <Button size="sm" icon={<FolderOpen className="size-3.5" />} onClick={() => setPicker("root")}>
@@ -316,12 +349,14 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
           <Field label={t("create.approvals")} lock="fixed" error={errs.approvals ? t(errs.approvals) : undefined} hint={t("create.approvalsHint")}>
             <Select value={d.approvals} onChange={(e) => set({ approvals: e.target.value as Draft["approvals"] })}>
               <option value="none">none</option>
-              <option value="chat">chat</option>
+              <option value="chat" disabled={d.docsOnly}>
+                chat
+              </option>
             </Select>
           </Field>
           <div className="flex flex-col gap-2">
             <label className="flex items-center gap-2 text-ui">
-              <Switch checked={d.allowPreview} disabled={d.sandbox || d.mode !== "direct"} onCheckedChange={(v) => set({ allowPreview: v })} />
+              <Switch checked={d.allowPreview} disabled={d.sandbox || d.mode !== "direct" || d.docsOnly} onCheckedChange={(v) => set({ allowPreview: v })} />
               <Lock aria-hidden className="size-3 text-fg-muted" />
               {t("create.preview")}
             </label>
@@ -359,6 +394,7 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
           </span>
         </div>
         <Notice tone={looksSecret(d.instructions) ? "danger" : "warning"}>{t("create.secretWarning")}</Notice>
+        {d.docsOnly ? <Notice icon={<FileText className="size-4" />}>{t("create.docsOnlyBlock", { partner: partner?.handle ?? "…" })}</Notice> : null}
         <div className="grid gap-3 md:grid-cols-2">
           <Textarea aria-label={t("create.instructions")} rows={14} value={d.instructions} onChange={(e) => set({ instructions: e.target.value })} className="font-mono text-ui" />
           <section aria-label={t("create.effective")} className="max-h-96 overflow-y-auto rounded-md border border-border p-3">
@@ -431,6 +467,12 @@ export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClo
                   </dd>
                   <dt className="text-fg-muted">{t("create.access")}</dt>
                   <dd>{d.sandbox ? t("create.sandbox") : t("create.fullAccess")}</dd>
+                  {d.docsOnly ? (
+                    <>
+                      <dt className="text-fg-muted">{t("create.writeScope")}</dt>
+                      <dd>{t("create.docsOnlySummary", { partner: partner?.handle ?? "–" })}</dd>
+                    </>
+                  ) : null}
                   <dt className="text-fg-muted">{t("create.permission")}</dt>
                   <dd>{d.permissionMode}</dd>
                   <dt className="text-fg-muted">{t("create.rootDir")}</dt>

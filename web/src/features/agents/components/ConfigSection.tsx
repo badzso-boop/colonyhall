@@ -62,6 +62,12 @@ export function ConfigSection({ overview, onDetails }: { overview: AgentOverview
             )}
           </Row>
           <Row label={t("overview.config.mode")}>{a.sandbox ? t("overview.sandbox") : t("overview.fullAccess")}</Row>
+          {a.write_scope === "docs" ? (
+            <Row label={t("overview.config.writeScope")}>
+              <Badge tone="info">{t("overview.config.docsOnly")}</Badge>
+              {a.partner_handle ? <span className="ml-1.5">{t("overview.config.partner", { partner: a.partner_handle })}</span> : null}
+            </Row>
+          ) : null}
           <Row label={t("overview.config.webRead")}>{onOff(a.allow_web_read)}</Row>
           <Row label={t("overview.config.approvals")}>{a.approvals}</Row>
           <Row label={t("overview.config.permissionMode")}>{a.permission_mode}</Row>
