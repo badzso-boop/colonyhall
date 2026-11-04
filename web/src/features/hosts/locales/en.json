@@ -48,7 +48,6 @@
   "empty": "No machines yet",
   "emptyBody": "Pair one with “New machine”.",
   "notFound": "This machine was not found.",
-  "adminsOnly": "Only admins see the machines.",
   "online": "online",
   "lastSeen": "last seen {{when}}",
   "neverSeen": "never reported",
@@ -224,5 +223,43 @@
     "copyFailed": "Could not copy."
   },
   "agyBadge_one": "⏸ agy",
-  "agyBadge_other": "⏸ agy ×{{count}}"
+  "agyBadge_other": "⏸ agy ×{{count}}",
+  "emptyOwn": "You have no machine",
+  "emptyOwnBody": "When a machine is given to you, it shows here, and you set your Claude login on it here.",
+  "access": {
+    "owner": "Owner",
+    "nobody": "nobody (admins only)",
+    "ownerSaved": "The machine's owner changed.",
+    "ownerFailed": "Could not change the owner.",
+    "login": "Claude login",
+    "set": "set ({{when}})",
+    "unset": "none",
+    "notConfigured": "none: the machine's guard.yaml has no claude_token_file",
+    "setButton": "Set login",
+    "clearButton": "Remove login",
+    "clearTitle": "Remove the Claude login: {{name}}",
+    "clearBody": "The guard deletes the token file; the machine's Claude runs then use its user's own login, if any.",
+    "clearConfirm": "Remove",
+    "cleared": "The Claude login was removed.",
+    "saved": "The Claude login is set.",
+    "dialogTitle": "Claude login: {{name}}",
+    "dialogBody": "Your agents on this machine work with your own Claude subscription.",
+    "step1": "On your own computer (not this server), open a terminal where Claude Code is installed.",
+    "step2": "run it and sign in with your own subscription.",
+    "step3": "Copy the token it prints and paste it here.",
+    "tokenLabel": "Token",
+    "save": "Save",
+    "checking": "The guard is checking the token (claude /usage); this can take a minute…",
+    "privacy": "The token reaches only this machine's guard. The server never stores or logs it; it records only who set it and when.",
+    "errors": {
+      "offline": "The machine is not reachable (its guard is not running or not connected). Nothing was stored.",
+      "timeout": "The guard did not answer in time. Try again.",
+      "check": "Claude did not accept the token. The previous login stays.",
+      "notConfigured": "The machine's guard.yaml has no claude_token_file.",
+      "write": "The guard could not save the token. The previous login stays.",
+      "tooMany": "Too many attempts. Wait a few minutes.",
+      "badToken": "This does not look like the output of claude setup-token (one line, no spaces).",
+      "error": "That did not work. Try again."
+    }
+  }
 }

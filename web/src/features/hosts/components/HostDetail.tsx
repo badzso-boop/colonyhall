@@ -13,10 +13,13 @@ import { WorktreesTab } from "./WorktreesTab";
 
 const tabs = ["overview", "agents", "folders", "worktrees", "settings"] as const;
 type TabId = (typeof tabs)[number];
+// A machine's owner who is not an admin (round 38): folders and settings are admin-only.
+const memberTabs: readonly TabId[] = ["overview", "agents", "worktrees"];
 
 /** One machine: a header and five tabs (docs/handoff/33, part 5). */
-export function HostDetail({ host, now }: { host: Host; now: Date }) {
+export function HostDetail({ host, now, admin = true }: { host: Host; now: Date; admin?: boolean }) {
   const { t } = useTranslation("hosts");
+  const shown = admin ? tabs : memberTabs;
   const [tab, setTab] = useState<TabId>("overview");
   return (
     <section aria-labelledby={`host-title-${host.id}`} className="flex min-w-0 flex-col gap-3 p-4">
@@ -33,7 +36,7 @@ export function HostDetail({ host, now }: { host: Host; now: Date }) {
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
         <div className="overflow-x-auto">
           <TabList label={t("tabs.label")}>
-            {tabs.map((id) => (
+            {shown.map((id) => (
               <Tab key={id} value={id}>
                 {t(`tabs.${id}`)}
               </Tab>
@@ -47,15 +50,19 @@ export function HostDetail({ host, now }: { host: Host; now: Date }) {
           <TabPanel value="agents">
             <AgentsTab host={host} />
           </TabPanel>
-          <TabPanel value="folders">
-            <FoldersTab host={host} />
-          </TabPanel>
+          {admin ? (
+            <TabPanel value="folders">
+              <FoldersTab host={host} />
+            </TabPanel>
+          ) : null}
           <TabPanel value="worktrees">
             <WorktreesTab host={host} now={now} />
           </TabPanel>
-          <TabPanel value="settings">
-            <SettingsTab key={`${host.name}:${host.color}`} host={host} />
-          </TabPanel>
+          {admin ? (
+            <TabPanel value="settings">
+              <SettingsTab key={`${host.name}:${host.color}`} host={host} />
+            </TabPanel>
+          ) : null}
         </div>
       </Tabs>
     </section>

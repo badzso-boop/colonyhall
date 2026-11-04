@@ -92,6 +92,57 @@ export function useSetHostState() {
   });
 }
 
+/** Give the machine to a person, or to nobody (the workspace owner only). */
+export function useSetHostOwner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ hostId, ownerId }: { hostId: string; ownerId: string | null }) =>
+      unwrap(await api.PUT("/hosts/{hostId}/owner", { params: { path: { hostId } }, body: ownerId ? { owner_id: ownerId } : {} })),
+    onSettled: () => invalidateHosts(qc),
+  });
+}
+
+/** Why setting the Claude login failed (round 38). */
+export type LoginFailure = "offline" | "timeout" | "check" | "notConfigured" | "write" | "tooMany" | "badToken" | "error";
+
+export function loginFailure(err: unknown): LoginFailure {
+  if (!(err instanceof ApiError)) return "error";
+  const detail = err.problem?.detail ?? "";
+  if (err.status === 409 && detail === "host_offline") return "offline";
+  if (err.status === 504) return "timeout";
+  if (err.status === 429) return "tooMany";
+  if (err.status === 400) return "badToken";
+  if (err.status === 422) {
+    if (detail.startsWith("claude_login_not_configured")) return "notConfigured";
+    if (detail.startsWith("claude_login_write_failed")) return "write";
+    return "check";
+  }
+  return "error";
+}
+
+/**
+ * Set the machine's Claude login (the owner or an admin). The token goes
+ * only into the request body: never into the cache, a key or a log.
+ */
+export function useSetClaudeLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    // The variables (the token) must not linger in the mutation cache.
+    gcTime: 0,
+    mutationFn: async ({ hostId, token }: { hostId: string; token: string }) =>
+      unwrap(await api.PUT("/hosts/{hostId}/claude-login", { params: { path: { hostId } }, body: { token } })),
+    onSettled: () => invalidateHosts(qc),
+  });
+}
+
+export function useClearClaudeLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (hostId: string) => unwrap(await api.DELETE("/hosts/{hostId}/claude-login", { params: { path: { hostId } } })),
+    onSettled: () => invalidateHosts(qc),
+  });
+}
+
 /** A one-time pairing code (10 minutes) for `colony guard enroll`. */
 export function useCreatePairingCode() {
   return useMutation({ mutationFn: async () => unwrap(await api.POST("/hosts/pairing-codes")) });
@@ -119,6 +170,9 @@ const hostEvents = [
   "host.agent_limits_changed",
   "host.grant_added",
   "host.grant_revoked",
+  "host.owner_changed",
+  "host.claude_login_set",
+  "host.claude_login_cleared",
   "agent.created",
   "agent.archived",
 ];

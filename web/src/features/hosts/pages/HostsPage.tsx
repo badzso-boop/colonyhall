@@ -18,19 +18,11 @@ export default function HostsPage() {
   const role = session.data?.actor.role;
   const admin = role === "owner" || role === "admin";
   // last_seen_at and the reports change without an event: re-read while the page is open.
-  const hosts = useHosts(admin, 30_000);
+  // A person who is not an admin gets only the machines they own (round 38).
+  const hosts = useHosts(session.isSuccess, 30_000);
   const now = useNow(10_000);
   const narrow = useWidth() === "narrow";
   const [wizard, setWizard] = useState(false);
-
-  if (session.isSuccess && !admin) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <PageHeader icon={<Server className="size-5" />} title={t("title")} />
-        <EmptyState icon={<Server className="size-8" />} title={t("adminsOnly")} />
-      </div>
-    );
-  }
 
   const list = hosts.data ?? [];
   const selected = hostId ? list.find((h) => h.id === hostId) : narrow ? undefined : list[0];
@@ -41,9 +33,11 @@ export default function HostsPage() {
         icon={<Server className="size-5" />}
         title={t("title")}
         actions={
-          <Button variant="primary" size="sm" icon={<Plus className="size-4" />} onClick={() => setWizard(true)}>
-            {t("new")}
-          </Button>
+          admin ? (
+            <Button variant="primary" size="sm" icon={<Plus className="size-4" />} onClick={() => setWizard(true)}>
+              {t("new")}
+            </Button>
+          ) : undefined
         }
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
@@ -64,18 +58,18 @@ export default function HostsPage() {
               ))}
             </ul>
           ) : (
-            <EmptyState icon={<Server className="size-8" />} title={t("empty")} body={t("emptyBody")} />
+            <EmptyState icon={<Server className="size-8" />} title={t(admin ? "empty" : "emptyOwn")} body={admin ? t("emptyBody") : t("emptyOwnBody")} />
           )}
         </nav>
         <div className="min-w-0 flex-1 border-t border-border md:overflow-y-auto md:border-t-0">
           {selected ? (
-            <HostDetail key={selected.id} host={selected} now={now} />
+            <HostDetail key={selected.id} host={selected} now={now} admin={admin} />
           ) : hostId && hosts.isSuccess ? (
             <EmptyState title={t("notFound")} />
           ) : null}
         </div>
       </div>
-      <NewHostWizard open={wizard} onOpenChange={setWizard} />
+      {admin ? <NewHostWizard open={wizard} onOpenChange={setWizard} /> : null}
     </div>
   );
 }

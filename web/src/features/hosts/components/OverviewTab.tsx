@@ -5,6 +5,7 @@ import { useActors } from "@/features/identity";
 import { Badge, Notice } from "@/shared/ui";
 import type { Host } from "../api";
 import { clock, stamp } from "./bits";
+import { ClaudeLoginRow, OwnerRow } from "./HostAccess";
 import { OnlineBadge } from "./HostCard";
 
 /** A label and its value in the detail's definition lists. */
@@ -58,6 +59,8 @@ export function OverviewTab({ host, now }: { host: Host; now: Date }) {
             <OnlineBadge host={host} now={now} />
           </span>
         </Row>
+        <OwnerRow host={host} />
+        <ClaudeLoginRow host={host} />
         <Row label={t("overview.os")}>{r.os || "–"}</Row>
         <Row label={t("overview.guard")}>{r.guard_version || "–"}</Row>
         <Row label={t("overview.clients")}>

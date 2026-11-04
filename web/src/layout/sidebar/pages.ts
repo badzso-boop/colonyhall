@@ -14,7 +14,8 @@ export const pages: PageEntry[] = [
   { id: "decisions", route: "/decisions", icon: Gavel },
   { id: "leases", route: "/leases", icon: KeyRound },
   { id: "rules", route: "/rules", icon: ScrollText, adminOnly: true },
-  { id: "hosts", route: "/hosts", icon: Server, adminOnly: true },
+  // Round 38: a person sees the machines they own (the server filters).
+  { id: "hosts", route: "/hosts", icon: Server },
   { id: "design", route: "/design", icon: Palette },
 ];
 

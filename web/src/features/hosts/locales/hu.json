@@ -48,7 +48,6 @@
   "empty": "Még nincs gép",
   "emptyBody": "Az „Új gép” gombbal párosíthatsz egyet.",
   "notFound": "Ez a gép nem található.",
-  "adminsOnly": "A gépeket csak adminok látják.",
   "online": "online",
   "lastSeen": "utoljára {{when}}",
   "neverSeen": "még nem jelentkezett",
@@ -224,5 +223,43 @@
     "copyFailed": "Nem sikerült másolni."
   },
   "agyBadge_one": "⏸ agy",
-  "agyBadge_other": "⏸ agy ×{{count}}"
+  "agyBadge_other": "⏸ agy ×{{count}}",
+  "emptyOwn": "Nincs saját géped",
+  "emptyOwnBody": "Ha egy gépet hozzád rendelnek, itt látod, és itt állíthatod be rajta a Claude-belépésedet.",
+  "access": {
+    "owner": "Tulajdonos",
+    "nobody": "senki (csak adminok)",
+    "ownerSaved": "A gép tulajdonosa megváltozott.",
+    "ownerFailed": "Nem sikerült a tulajdonost módosítani.",
+    "login": "Claude-belépés",
+    "set": "beállítva ({{when}})",
+    "unset": "nincs",
+    "notConfigured": "nincs: a gép guard.yaml-jában nincs claude_token_file",
+    "setButton": "Belépés beállítása",
+    "clearButton": "Belépés törlése",
+    "clearTitle": "Claude-belépés törlése: {{name}}",
+    "clearBody": "Az őr törli a tokenfájlt; utána a gép Claude-futásai a gép felhasználójának saját belépésével mennek, ha van ilyen.",
+    "clearConfirm": "Törlés",
+    "cleared": "A Claude-belépés törölve.",
+    "saved": "A Claude-belépés beállítva.",
+    "dialogTitle": "Claude-belépés: {{name}}",
+    "dialogBody": "A gépen futó agentjeid a saját Claude-előfizetéseddel dolgoznak.",
+    "step1": "A saját gépeden (nem ezen a szerveren) nyiss egy terminált, ahol a Claude Code telepítve van.",
+    "step2": "futtasd, és jelentkezz be a saját előfizetéseddel.",
+    "step3": "Másold ki a kiírt tokent, és illeszd be ide.",
+    "tokenLabel": "Token",
+    "save": "Mentés",
+    "checking": "Az őr ellenőrzi a tokent (claude /usage), ez egy percig is tarthat…",
+    "privacy": "A token csak ennek a gépnek az őréhez jut el. A szerver nem tárolja és nem naplózza; csak azt jegyzi fel, ki és mikor állította be.",
+    "errors": {
+      "offline": "A gép nem elérhető (az őr nem fut vagy nem kapcsolódik). Semmi nem tárolódott.",
+      "timeout": "Az őr nem válaszolt időben. Próbáld újra.",
+      "check": "A Claude nem fogadta el a tokent. A korábbi belépés maradt érvényben.",
+      "notConfigured": "A gép guard.yaml-jában nincs claude_token_file.",
+      "write": "Az őr nem tudta elmenteni a tokent. A korábbi belépés maradt érvényben.",
+      "tooMany": "Túl sok próbálkozás. Várj néhány percet.",
+      "badToken": "Ez nem úgy néz ki, mint a claude setup-token kimenete (egy sor, szóköz nélkül).",
+      "error": "Nem sikerült. Próbáld újra."
+    }
+  }
 }
