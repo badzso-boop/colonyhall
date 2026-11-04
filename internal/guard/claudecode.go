@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +26,8 @@ type ClaudeCode struct {
 	helpMu                 sync.Mutex
 	hasAppendPromptChecked bool
 	hasAppendPrompt        bool
+	helpText               string
+	helpChecked            bool
 }
 
 type claudeOutput struct {
@@ -97,6 +101,24 @@ func (c *ClaudeCode) bin() string {
 		return "claude"
 	}
 	return c.Bin
+}
+
+// help returns `claude --help` (cached; "" when it cannot be run).
+func (c *ClaudeCode) help(ctx context.Context) string {
+	c.helpMu.Lock()
+	defer c.helpMu.Unlock()
+	if c.helpChecked {
+		return c.helpText
+	}
+	c.helpChecked = true
+	if c.Run == nil {
+		return ""
+	}
+	stdout, _, err := c.Run(ctx, "", c.bin(), []string{"--help"}, nil)
+	if err == nil {
+		c.helpText = string(stdout)
+	}
+	return c.helpText
 }
 
 // SupportsAppendSystemPrompt checks if the installed claude binary supports
@@ -208,14 +230,24 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	} else {
 		args = append(args, "--session-id", req.SessionID)
 	}
-	if req.PermissionMode != "" {
-		args = append(args, "--permission-mode", req.PermissionMode)
-	}
-	if req.MCPConfigPath != "" {
-		args = append(args, "--mcp-config", req.MCPConfigPath)
-	}
-	if req.PermissionPromptTool != "" {
-		args = append(args, "--permission-prompt-tool", req.PermissionPromptTool)
+	if req.DocsOnly {
+		// Never the agent's own permission mode or a permission prompt
+		// tool: a refused action must stay refused, not become a question.
+		docs, err := c.docsOnlyArgs(ctx, req.Dir, req.MCPConfigPath)
+		if err != nil {
+			return RunResult{}, err
+		}
+		args = append(args, docs...)
+	} else {
+		if req.PermissionMode != "" {
+			args = append(args, "--permission-mode", req.PermissionMode)
+		}
+		if req.MCPConfigPath != "" {
+			args = append(args, "--mcp-config", req.MCPConfigPath)
+		}
+		if req.PermissionPromptTool != "" {
+			args = append(args, "--permission-prompt-tool", req.PermissionPromptTool)
+		}
 	}
 	args = append(args, "--output-format", "stream-json", "--verbose")
 	if req.Model != "" {
@@ -573,4 +605,111 @@ func parseClaudeRateLimit(sl claudeStreamLine, raw string) RateLimit {
 		rl.ResetsAt = rl.FiveHour.ResetsAt
 	}
 	return rl
+}
+
+// DocsOnlyTools are the only built-in tools of a docs-only planner: read
+// and search, and the two file-writing tools, which its permission rules
+// confine to Markdown. No Bash, NotebookEdit, Agent or web tools.
+const DocsOnlyTools = "Read,Write,Edit,Glob,Grep"
+
+// docsOnlyDenied are denied by name as well, although --tools and
+// --restricted already leave them out: a deny rule given as a flag cannot
+// be dropped like a settings file that fails validation.
+const docsOnlyDenied = "Bash,NotebookEdit,PowerShell,Agent,WebFetch,WebSearch"
+
+// docsOnlyFlags must all be in `claude --help`: older clients do not know
+// them, and a docs-only planner never runs without them.
+var docsOnlyFlags = []string{"--restricted", "--permission-prompts", "dontAsk", "--settings", "--strict-mcp-config"}
+
+// ErrDocsOnlyUnsupported: the installed claude lacks a flag the docs-only
+// restriction needs; the run is refused rather than started unrestricted.
+var ErrDocsOnlyUnsupported = errors.New("claude: this Claude Code version cannot enforce a docs-only agent (needs --restricted, --permission-prompts and --permission-mode dontAsk; update Claude Code)")
+
+// ErrDocsOnlyRoot: the root folder cannot be written into a permission
+// rule exactly (a glob or separator character would widen or break it).
+var ErrDocsOnlyRoot = errors.New("claude: a docs-only agent's root folder must be an absolute path without spaces, commas, quotes, brackets, parentheses or glob characters")
+
+// docsOnlyArgs are the Claude Code arguments of a docs-only planner
+// (round 38). Every layer fails closed on its own:
+//
+//   - --restricted removes the command-running tools, ignores the user,
+//     project and local settings files (so no allow rule or hook written
+//     there by anyone, e.g. the sandboxed partner into the project's
+//     .claude folder, applies) and confines the file tools to the working
+//     directory; --tools leaves only DocsOnlyTools; --disallowedTools
+//     denies the command, notebook, sub-agent and web tools by name.
+//   - --permission-mode dontAsk denies whatever is not pre-approved by an
+//     allow rule, and --permission-prompts none denies anything that
+//     would still prompt. No --permission-prompt-tool is ever passed: a
+//     refused action is a refusal, not an approval question in the chat.
+//     The agent's configured mode (auto by default) is not used.
+//   - The allow rules (in --settings, a session-only JSON string, so a
+//     path is never split like a flag list) pre-approve only
+//     Edit/Write of **/*.md under the root and the Colonyhall MCP tools
+//     (also given as --allowedTools).
+//
+// Precedence relied on: Claude Code evaluates deny rules first, then ask,
+// then allow (deny > ask > allow, across all sources). There is no deny
+// or ask rule on Edit or Write here, so nothing overrides the .md allow;
+// a write to any other file matches no allow rule and, in dontAsk mode
+// with prompts off, is denied. Should --settings be ignored (Claude Code
+// silently skips settings that fail validation in -p mode), the .md
+// writes are refused too, and every other limit still holds.
+func (c *ClaudeCode) docsOnlyArgs(ctx context.Context, dir, mcpConfig string) ([]string, error) {
+	help := c.help(ctx)
+	for _, f := range docsOnlyFlags {
+		if !strings.Contains(help, f) {
+			return nil, ErrDocsOnlyUnsupported
+		}
+	}
+	settings, err := DocsOnlySettings(dir)
+	if err != nil {
+		return nil, err
+	}
+	args := []string{
+		"--restricted",
+		"--permission-mode", "dontAsk",
+		"--permission-prompts", "none",
+		"--tools", DocsOnlyTools,
+		"--disallowedTools", docsOnlyDenied,
+		"--allowedTools", "mcp__colonyhall",
+		"--settings", settings,
+		"--strict-mcp-config",
+	}
+	if mcpConfig != "" {
+		args = append(args, "--mcp-config", mcpConfig)
+	}
+	return args, nil
+}
+
+// DocsOnlySettings is the session-only settings JSON of a docs-only
+// planner whose root folder is dir (see docsOnlyArgs).
+func DocsOnlySettings(dir string) (string, error) {
+	roots := []string{dir}
+	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
+		roots = append(roots, real) // the rule must match the resolved path too
+	}
+	allow := []string{}
+	for _, r := range roots {
+		if !filepath.IsAbs(r) || filepath.Clean(r) != r || r == "/" || strings.ContainsAny(r, " \t\r\n,()[]{}*?!\"'\\`$") {
+			return "", ErrDocsOnlyRoot
+		}
+		// "//" starts an absolute path in a Claude Code permission rule.
+		allow = append(allow, "Edit(/"+r+"/**/*.md)", "Write(/"+r+"/**/*.md)")
+	}
+	allow = append(allow, "mcp__colonyhall")
+	doc := map[string]any{
+		"permissions": map[string]any{
+			"defaultMode":                  "dontAsk",
+			"allow":                        allow,
+			"deny":                         strings.Split(docsOnlyDenied, ","),
+			"disableBypassPermissionsMode": "disable",
+		},
+		"disableAllHooks": true,
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }

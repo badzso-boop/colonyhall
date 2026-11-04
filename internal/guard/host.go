@@ -316,7 +316,7 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		}
 		// The limits are not in the key: an admin may change them (round
 		// 33), and the agent takes them over without a restart.
-		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, ha.WorktreeRepo, fmt.Sprint(ha.Sandbox), ha.Approvals}, "|")
+		key := strings.Join([]string{ha.Client, ha.Model, ha.WorkModel, fmt.Sprint(ha.AllowWork), ha.PermissionMode, ha.Handle, ha.Mode, ha.RootDir, ha.WorktreeRepo, fmt.Sprint(ha.Sandbox), ha.Approvals, ha.WriteScope}, "|")
 		switch {
 		case m != nil && m.key == key:
 			s.mu.Lock()
@@ -526,9 +526,14 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 	ac.AllowWork, ac.PermissionMode, ac.Command = ha.AllowWork, ha.PermissionMode, s.Cfg.Commands[ha.Client]
 	ac.Mode, ac.RootDir = ha.Mode, ha.RootDir
 	ac.Approvals = ha.Approvals
+	ac.WriteScope = ha.WriteScope
 	ac.MaxSessionTokens, ac.DailyTokenLimit = ha.MaxSessionTokens, ha.DailyTokenLimit
 	ac.Dir = filepath.Join(dir, "decide") // decision runs: an empty folder, no tools
-	_ = ac.defaults()
+	if err := ac.defaults(); err != nil && ha.WriteScope != "" && ha.WriteScope != WriteScopeAll {
+		// A write scope this guard cannot enforce: never run it unrestricted.
+		s.Log.Error("guard: agent not started", "agent", "@"+ha.Handle, "err", err)
+		return
+	}
 
 	var httpClient *http.Client
 	if s.host != nil {

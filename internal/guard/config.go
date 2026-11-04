@@ -50,6 +50,12 @@ type Config struct {
 // HostMode reports whether the server manages this machine's agents.
 func (c *Config) HostMode() bool { return c.HostTokenFile != "" }
 
+// Write scopes of an agent (round 38): docs is a docs-only planner.
+const (
+	WriteScopeAll  = "all"
+	WriteScopeDocs = "docs"
+)
+
 // AgentConfig describes one agent the guard runs.
 type AgentConfig struct {
 	Name             string        `yaml:"name"`      // label for logs; defaults to the client name
@@ -61,10 +67,11 @@ type AgentConfig struct {
 	WorkModel        string        `yaml:"work_model"`
 	Dir              string        `yaml:"dir"` // work directory (its own git worktree)
 	PermissionMode   string        `yaml:"permission_mode"`
-	AllowWork        bool          `yaml:"allow_work"` // false: work requests are declined
-	Mode             string        `yaml:"mode"`       // compact | direct
-	RootDir          string        `yaml:"root_dir"`   // direct mode root directory
-	Approvals        string        `yaml:"approvals"`  // none | chat
+	AllowWork        bool          `yaml:"allow_work"`  // false: work requests are declined
+	Mode             string        `yaml:"mode"`        // compact | direct
+	RootDir          string        `yaml:"root_dir"`    // direct mode root directory
+	Approvals        string        `yaml:"approvals"`   // none | chat
+	WriteScope       string        `yaml:"write_scope"` // all (default) | docs: a docs-only planner (round 38)
 	MaxSessionTokens int           `yaml:"max_session_tokens"`
 	DailyTokenLimit  int64         `yaml:"daily_token_limit"`
 	Poll             time.Duration `yaml:"poll"`
@@ -204,6 +211,15 @@ func (a *AgentConfig) defaults() error {
 	}
 	if a.Approvals != "none" && a.Approvals != "chat" {
 		return fmt.Errorf("invalid approvals %q (must be none or chat)", a.Approvals)
+	}
+	if a.WriteScope == "" {
+		a.WriteScope = WriteScopeAll
+	}
+	if a.WriteScope != WriteScopeAll && a.WriteScope != WriteScopeDocs {
+		return fmt.Errorf("invalid write_scope %q (must be all or docs)", a.WriteScope)
+	}
+	if a.WriteScope == WriteScopeDocs && (a.Client != "claude-code" || a.Mode != "direct") {
+		return fmt.Errorf("write_scope docs needs client claude-code in direct mode")
 	}
 	return nil
 }
