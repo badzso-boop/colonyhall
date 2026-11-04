@@ -147,7 +147,8 @@
     "limit": "limit: {{limit}}",
     "lastRuns": "Recent runs",
     "dm": "DM",
-    "context": "context"
+    "context": "context",
+    "notYours": "This agent belongs to someone else"
   },
   "close": "Close",
   "back": "Back",
@@ -409,6 +410,7 @@
     "state": "State",
     "machine": "Machine",
     "client": "Client",
-    "overview": "Overview"
+    "overview": "Overview",
+    "notYours": "Its details (runs, folders, terminals) are visible to its owner and the admins only."
   }
 }

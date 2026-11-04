@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, type Schemas } from "@/shared/api";
+import { ApiError, api, unwrap, type Schemas } from "@/shared/api";
 
 export const agentKeys = {
   all: ["agents"] as const,
@@ -17,11 +17,18 @@ export const agentKeys = {
 };
 
 /** The overview; live events patch it, otherwise it is refetched at most every 15 s. */
+/** 404: another person's agent (round 38) or one that does not exist. */
+export function isNotFound(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 404;
+}
+
 export function useAgentOverview(agentId: string, enabled = true) {
   return useQuery({
     queryKey: agentKeys.overview(agentId),
     enabled: enabled && Boolean(agentId),
-    refetchInterval: 15_000,
+    // Another person's agent stays hidden: no retries, no polling.
+    retry: (count, err) => !isNotFound(err) && count < 2,
+    refetchInterval: (q) => (q.state.error ? false : 15_000),
     staleTime: 15_000,
     queryFn: async () => unwrap(await api.GET("/agents/{id}/overview", { params: { path: { id: agentId } } })),
   });

@@ -35,7 +35,7 @@ function Location() {
   return <output data-testid="loc">{loc.search}</output>;
 }
 
-function setup(opts: { me?: Schemas["Actor"]; overview?: Schemas["AgentOverview"]; id?: string } = {}) {
+function setup(opts: { me?: Schemas["Actor"]; overview?: Schemas["AgentOverview"]; id?: string; notFound?: boolean } = {}) {
   const calls: Array<{ method: string; path: string; body?: unknown }> = [];
   vi.stubGlobal(
     "fetch",
@@ -43,6 +43,8 @@ function setup(opts: { me?: Schemas["Actor"]; overview?: Schemas["AgentOverview"
       const u = new URL(req.url);
       const json = (b: unknown) => new Response(JSON.stringify(b), { headers: { "Content-Type": "application/json" } });
       calls.push({ method: req.method, path: u.pathname, body: req.method === "GET" ? undefined : await req.clone().text() });
+      if (u.pathname.endsWith("/overview") && opts.notFound)
+        return new Response(JSON.stringify({ type: "about:blank", title: "Not Found", status: 404, detail: "not found" }), { status: 404, headers: { "Content-Type": "application/problem+json" } });
       if (u.pathname.endsWith("/overview")) return json(opts.overview ?? agentOverview);
       if (u.pathname.endsWith("/hosts")) return json({ hosts: [{ id: "h1", name: "pc-wsl", color: "blue", state: "approved", created_at: "", last_seen_at: now.toISOString(), report: {}, agents: [] }] });
       if (u.pathname.endsWith("/runs")) return json({ runs: [] });
@@ -146,4 +148,11 @@ test("a human gets the small version: profile and common channels", async () => 
   expect(screen.getByRole("button", { name: "DM" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Munkamenetek" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Beállítások" })).toBeNull();
+});
+
+test("another person's agent: a calm note, no retries and no polling (round 38)", async () => {
+  const { calls } = setup({ me: member, notFound: true });
+  expect(await screen.findByText("Ez az agent mást illet")).toBeTruthy();
+  expect(screen.getByText(/csak a tulajdonosa és az adminok látják/)).toBeTruthy();
+  expect(calls.filter((c) => c.path.endsWith("/overview")).length).toBe(1);
 });

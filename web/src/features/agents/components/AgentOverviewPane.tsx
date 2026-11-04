@@ -8,7 +8,7 @@ import { usePanes } from "@/shared/panes";
 import { Avatar, Button, EmptyState, Skeleton, toast } from "@/shared/ui";
 import { useSession } from "@/features/identity";
 import { useActivity } from "../activity";
-import { useAgentOverview, useHosts, useOpenDm } from "../api";
+import { isNotFound, useAgentOverview, useHosts, useOpenDm } from "../api";
 import { displayState, type AgentOverview } from "../model";
 import { useOpenSettings } from "../settingsLink";
 import { CollaborationSection, CommonChannels } from "./CollaborationSection";
@@ -121,6 +121,7 @@ function AgentView({ overview, terminals }: { overview: AgentOverview; terminals
 export function AgentOverviewPane({ agentId, terminals }: { agentId: string; terminals?: ReactNode }) {
   const { t } = useTranslation("agents");
   const overview = useAgentOverview(agentId);
+  if (isNotFound(overview.error)) return <EmptyState title={t("overview.notYours")} body={t("profile.notYours")} />;
   if (overview.isError) return <EmptyState title={t("overview.notFound")} />;
   if (!overview.data) return <Skeleton className="m-4 h-6 w-1/2" />;
   if (overview.data.actor.kind !== "agent") return <HumanOverview overview={overview.data} />;

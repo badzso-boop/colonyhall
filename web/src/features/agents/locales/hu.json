@@ -147,7 +147,8 @@
     "limit": "keret: {{limit}}",
     "lastRuns": "Utolsó futások",
     "dm": "DM",
-    "context": "kontextus"
+    "context": "kontextus",
+    "notYours": "Ez az agent mást illet"
   },
   "close": "Bezárás",
   "back": "Vissza",
@@ -409,6 +410,7 @@
     "state": "Állapot",
     "machine": "Gép",
     "client": "Kliens",
-    "overview": "Áttekintés"
+    "overview": "Áttekintés",
+    "notYours": "A részleteit (futások, mappák, terminálok) csak a tulajdonosa és az adminok látják."
   }
 }

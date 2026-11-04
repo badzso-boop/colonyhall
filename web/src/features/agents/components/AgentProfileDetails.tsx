@@ -4,7 +4,7 @@ import { useNow } from "@/shared/hooks";
 import { usePanes } from "@/shared/panes";
 import { Badge, Button, Skeleton } from "@/shared/ui";
 import { useActivity } from "../activity";
-import { useAgentOverview } from "../api";
+import { isNotFound, useAgentOverview } from "../api";
 import { displayState } from "../model";
 
 const stateTone = { working: "accent", idle: "neutral", offline: "neutral", paused: "warning", stopped: "danger", archived: "neutral" } as const;
@@ -24,6 +24,10 @@ export function AgentProfileDetails({ agentId, onOpenOverview }: { agentId: stri
     dispatch({ type: "openWork", tab: { kind: "agent", agentId, ref: "" } });
     onOpenOverview?.();
   };
+  if (isNotFound(overview.error)) {
+    // Another person's agent (round 38): its name shows, its details do not.
+    return <p className="text-meta text-fg-muted">{t("profile.notYours")}</p>;
+  }
   return (
     <div className="flex flex-col gap-2">
       {o ? (
