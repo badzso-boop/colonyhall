@@ -594,6 +594,8 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			}
 			dayName := dayNames[in.ResetsAt.In(loc).Weekday()]
 			body = fmt.Sprintf("⏸ A Claude heti kerete %d%%-on, %s %s-kor folytatom.", in.Utilization, dayName, resetTime)
+		case apispec.MachineBusy:
+			body = "⏳ sorban állok, a gép most foglalt"
 		case apispec.AgyQuota, apispec.AgyQuotaRetry:
 			model := strings.Map(func(r rune) rune {
 				if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {

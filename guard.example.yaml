@@ -72,6 +72,14 @@ roots:
 # The attach line on the web page assumes the default.
 # tmux_socket: colonyhall
 
+# At most this many client runs (decide, work, direct, summaries) of all
+# agents on this machine at once; for a small machine. The others wait:
+# their messages stay in the inbox (no attempt is counted) and each thread
+# gets one silent note "⏳ sorban állok, a gép most foglalt"; a waiting
+# agent starts as soon as a run ends. The usage check (/usage) and agent
+# terminals do not count. Default 0: no limit.
+# max_concurrent_runs: 2
+
 # commands: { claude-code: claude, antigravity: agy }
 # Inactivity and duration caps for direct and work runs:
 # idle_timeout: kill when client produces no stream output for this duration (default 15m)

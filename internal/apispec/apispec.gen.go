@@ -938,6 +938,7 @@ const (
 	AgyQuota      RateLimitNoteRequestWindow = "agy_quota"
 	AgyQuotaRetry RateLimitNoteRequestWindow = "agy_quota_retry"
 	FiveHour      RateLimitNoteRequestWindow = "five_hour"
+	MachineBusy   RateLimitNoteRequestWindow = "machine_busy"
 	SevenDay      RateLimitNoteRequestWindow = "seven_day"
 )
 
@@ -949,6 +950,8 @@ func (e RateLimitNoteRequestWindow) Valid() bool {
 	case AgyQuotaRetry:
 		return true
 	case FiveHour:
+		return true
+	case MachineBusy:
 		return true
 	case SevenDay:
 		return true
@@ -2950,14 +2953,14 @@ type RateLimitNoteRequest struct {
 	ResetsAt     time.Time           `json:"resets_at"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 
-	// Utilization Claude windows only; 0 for agy_quota
+	// Utilization Claude windows only; 0 for agy_quota and machine_busy
 	Utilization int `json:"utilization"`
 
-	// Window agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try.
+	// Window agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try; machine_busy: the machine runs max_concurrent_runs already and the agent waits for a free slot (resets_at is ignored).
 	Window RateLimitNoteRequestWindow `json:"window"`
 }
 
-// RateLimitNoteRequestWindow agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try.
+// RateLimitNoteRequestWindow agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try; machine_busy: the machine runs max_concurrent_runs already and the agent waits for a free slot (resets_at is ignored).
 type RateLimitNoteRequestWindow string
 
 // Reaction defines model for Reaction.

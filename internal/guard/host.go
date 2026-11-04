@@ -65,6 +65,7 @@ type Supervisor struct {
 	sandbox       *Sandbox
 	previews      *PreviewSupervisor
 	terminals     *TerminalManager
+	runSlots      *RunSlots // max_concurrent_runs, shared by all agents
 
 	mu               sync.Mutex
 	lastOK           time.Time
@@ -104,6 +105,7 @@ type managed struct {
 // Start prepares the machine: token, roots, sandbox.
 func (s *Supervisor) start(ctx context.Context) error {
 	s.fileFetchLimiter = make(chan struct{}, 2)
+	s.runSlots = NewRunSlots(s.Cfg.MaxConcurrentRuns)
 	raw, err := os.ReadFile(s.Cfg.HostTokenFile)
 	if err != nil {
 		return fmt.Errorf("guard: host token: %w (run `colony guard enroll` first)", err)
@@ -573,6 +575,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		DenyFiles:        []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile},
 		FileFetchLimiter: s.fileFetchLimiter,
 		Terminals:        s.terminals,
+		RunSlots:         s.runSlots,
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch

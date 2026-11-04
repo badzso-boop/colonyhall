@@ -1567,7 +1567,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Agents only. Post a silent note when Claude usage hits reserve or reset pause, or an Antigravity model's quota runs out. */
+        /** @description Agents only. Post a silent note when Claude usage hits reserve or reset pause, an Antigravity model's quota runs out, or the agent waits for its machine (max_concurrent_runs). */
         post: operations["reportRateLimitNote"];
         delete?: never;
         options?: never;
@@ -4210,11 +4210,11 @@ export interface components {
             /** Format: uuid */
             thread_root_id?: string | null;
             /**
-             * @description agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try.
+             * @description agy_quota: an Antigravity model's quota ran out and resets_at is its reset; agy_quota_retry: the reset is unknown and resets_at is the next try; machine_busy: the machine runs max_concurrent_runs already and the agent waits for a free slot (resets_at is ignored).
              * @enum {string}
              */
-            window: "five_hour" | "seven_day" | "agy_quota" | "agy_quota_retry";
-            /** @description Claude windows only; 0 for agy_quota */
+            window: "five_hour" | "seven_day" | "agy_quota" | "agy_quota_retry" | "machine_busy";
+            /** @description Claude windows only; 0 for agy_quota and machine_busy */
             utilization: number;
             /** Format: date-time */
             resets_at: string;
