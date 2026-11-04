@@ -681,6 +681,45 @@ func (e HostAgentWriteScope) Valid() bool {
 	}
 }
 
+// Defines values for HostClaudeLoginRequestOp.
+const (
+	Clear HostClaudeLoginRequestOp = "clear"
+	Set   HostClaudeLoginRequestOp = "set"
+)
+
+// Valid indicates whether the value is a known member of the HostClaudeLoginRequestOp enum.
+func (e HostClaudeLoginRequestOp) Valid() bool {
+	switch e {
+	case Clear:
+		return true
+	case Set:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HostClaudeLoginResultErrorCode.
+const (
+	CheckFailed   HostClaudeLoginResultErrorCode = "check_failed"
+	NotConfigured HostClaudeLoginResultErrorCode = "not_configured"
+	WriteFailed   HostClaudeLoginResultErrorCode = "write_failed"
+)
+
+// Valid indicates whether the value is a known member of the HostClaudeLoginResultErrorCode enum.
+func (e HostClaudeLoginResultErrorCode) Valid() bool {
+	switch e {
+	case CheckFailed:
+		return true
+	case NotConfigured:
+		return true
+	case WriteFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HostDirListingErrorCode.
 const (
 	HostDirListingErrorCodeDenied        HostDirListingErrorCode = "denied"
@@ -1889,6 +1928,12 @@ type ClaudeLimits struct {
 	SevenDay         *ClaudeRateLimitWindow `json:"seven_day,omitempty"`
 }
 
+// ClaudeLoginState defines model for ClaudeLoginState.
+type ClaudeLoginState struct {
+	// SetAt When the guard saved the token; absent after a removal
+	SetAt *time.Time `json:"set_at,omitempty"`
+}
+
 // ClaudeRateLimitWindow defines model for ClaudeRateLimitWindow.
 type ClaudeRateLimitWindow struct {
 	ResetsAt *time.Time `json:"resets_at,omitempty"`
@@ -2475,6 +2520,29 @@ type HostAgentMode string
 // HostAgentWriteScope docs: a full-access Claude Code planner that may write only Markdown and hands code changes to its sandboxed partner (enforced by Claude Code permission rules on the guard)
 type HostAgentWriteScope string
 
+// HostClaudeLoginRequest defines model for HostClaudeLoginRequest.
+type HostClaudeLoginRequest struct {
+	Op        HostClaudeLoginRequestOp `json:"op"`
+	RequestId string                   `json:"request_id"`
+
+	// Token op set only; handed out once, then the server forgets it
+	Token *string `json:"token,omitempty"`
+}
+
+// HostClaudeLoginRequestOp defines model for HostClaudeLoginRequest.Op.
+type HostClaudeLoginRequestOp string
+
+// HostClaudeLoginResult defines model for HostClaudeLoginResult.
+type HostClaudeLoginResult struct {
+	// ErrorCode check_failed: claude /usage refused the token (the old one stays); not_configured: guard.yaml has no claude_token_file
+	ErrorCode *HostClaudeLoginResultErrorCode `json:"error_code,omitempty"`
+	Ok        bool                            `json:"ok"`
+	SetAt     *time.Time                      `json:"set_at,omitempty"`
+}
+
+// HostClaudeLoginResultErrorCode check_failed: claude /usage refused the token (the old one stays); not_configured: guard.yaml has no claude_token_file
+type HostClaudeLoginResultErrorCode string
+
 // HostConfig defines model for HostConfig.
 type HostConfig struct {
 	Agents   []HostAgent    `json:"agents"`
@@ -2588,6 +2656,12 @@ type HostReport struct {
 	// AllowUnsandboxed True when guard.yaml permits agents with sandbox: false
 	AllowUnsandboxed *bool         `json:"allow_unsandboxed,omitempty"`
 	ClaudeLimits     *ClaudeLimits `json:"claude_limits,omitempty"`
+
+	// ClaudeLoginConfigured Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA
+	ClaudeLoginConfigured *bool `json:"claude_login_configured,omitempty"`
+
+	// ClaudeLoginSetAt Round 38: when the Claude login token (claude setup-token) was set; absent when there is none. The token itself never leaves the machine.
+	ClaudeLoginSetAt *time.Time `json:"claude_login_set_at,omitempty"`
 	Clients          []struct {
 		Name    string  `json:"name"`
 		Version *string `json:"version,omitempty"`
@@ -3308,6 +3382,12 @@ type SessionInfo struct {
 	CsrfToken string `json:"csrf_token"`
 }
 
+// SetClaudeLoginRequest defines model for SetClaudeLoginRequest.
+type SetClaudeLoginRequest struct {
+	// Token The output of `claude setup-token`, run by the person on their own computer. Relayed to the machine's guard only; never stored on the server, logged or put in an event.
+	Token string `json:"token"`
+}
+
 // SetCurrencyRequest defines model for SetCurrencyRequest.
 type SetCurrencyRequest struct {
 	// UsdHuf Positive
@@ -3987,6 +4067,9 @@ type OpenDMJSONRequestBody = OpenDMRequest
 // SetGitMappingJSONRequestBody defines body for SetGitMapping for application/json ContentType.
 type SetGitMappingJSONRequestBody = SetGitRepoMappingRequest
 
+// PostHostClaudeLoginResultJSONRequestBody defines body for PostHostClaudeLoginResult for application/json ContentType.
+type PostHostClaudeLoginResultJSONRequestBody = HostClaudeLoginResult
+
 // PostHostFsResultJSONRequestBody defines body for PostHostFsResult for application/json ContentType.
 type PostHostFsResultJSONRequestBody = HostDirListing
 
@@ -4001,6 +4084,9 @@ type EnrollHostJSONRequestBody = EnrollRequest
 
 // UpdateHostJSONRequestBody defines body for UpdateHost for application/json ContentType.
 type UpdateHostJSONRequestBody = UpdateHostRequest
+
+// SetHostClaudeLoginJSONRequestBody defines body for SetHostClaudeLogin for application/json ContentType.
+type SetHostClaudeLoginJSONRequestBody = SetClaudeLoginRequest
 
 // HostFsRequestJSONRequestBody defines body for HostFsRequest for application/json ContentType.
 type HostFsRequestJSONRequestBody = HostFsRequest

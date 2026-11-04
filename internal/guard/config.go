@@ -36,8 +36,11 @@ type Config struct {
 	// (/usage, no model call); default 15m, negative turns it off.
 	UsagePoll time.Duration     `yaml:"usage_poll"`
 	Commands  map[string]string `yaml:"commands"` // client → binary, e.g. claude-code: claude
-	// ClaudeTokenFile holds a token from `claude setup-token`; sandboxed
-	// Claude runs use it instead of a copy of the user's login file.
+	// ClaudeTokenFile holds a token from `claude setup-token` (round 38:
+	// set from the PWA by the machine's owner). Every Claude Code run gets it
+	// as CLAUDE_CODE_OAUTH_TOKEN; sandboxed runs then get no copy of the
+	// user's login file. Host mode default: claude.token next to the host
+	// token. A missing file means no token.
 	ClaudeTokenFile string      `yaml:"claude_token_file"`
 	ExchangeDir     string      `yaml:"exchange_dir"`  // shared secrets exchange folder
 	Defaults        AgentConfig `yaml:"defaults"`      // poll, debounce, batch, timeouts for host-mode agents
@@ -167,6 +170,9 @@ func (c *Config) validateHost() error {
 		} else if strings.HasPrefix(*p, "~/") {
 			*p = filepath.Join(home, (*p)[2:])
 		}
+	}
+	if c.ClaudeTokenFile == "" {
+		c.ClaudeTokenFile = filepath.Join(filepath.Dir(c.HostTokenFile), "claude.token")
 	}
 	if c.RequireSandbox == nil {
 		t := true

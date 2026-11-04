@@ -1017,6 +1017,80 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /hosts/{hostId}/claude-login:
+    parameters:
+      - { name: hostId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setHostClaudeLogin
+      tags: [hosts]
+      description: |
+        Round 38. The machine's owner or an admin (never an agent) sets the
+        Claude Code login of the machine's guard: the token from `claude
+        setup-token`, for the person's own subscription. The token is relayed
+        over the host WebSocket (/ws/host) and kept only in memory until the
+        guard fetches it; it is never stored, logged, audited or put in an
+        event. The guard checks it with `claude -p /usage` before saving and
+        keeps the old one when the check fails (422 claude_login_check_failed).
+        Audited as host.claude_login_set (who, when, which machine). 409
+        host_offline when the guard is not connected; 429 after too many
+        attempts; 504 when the guard does not answer in time.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetClaudeLoginRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Saved by the guard, content: { application/json: { schema: { $ref: "#/components/schemas/ClaudeLoginState" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+        "504": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: clearHostClaudeLogin
+      tags: [hosts]
+      description: "Round 38. The machine's owner or an admin removes the guard's Claude login token file (audited, host.claude_login_cleared). 409 host_offline when the guard is not connected."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+        "504": { $ref: "#/components/responses/Problem" }
+
+  /host/claude-login/{requestId}:
+    parameters:
+      - { name: requestId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getHostClaudeLoginRequest
+      tags: [hosts]
+      description: "Guard (host token). A pending Claude login request of this machine; the token is handed out once."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: The request, content: { application/json: { schema: { $ref: "#/components/schemas/HostClaudeLoginRequest" } } } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /host/claude-login/{requestId}/result:
+    parameters:
+      - { name: requestId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: postHostClaudeLoginResult
+      tags: [hosts]
+      description: "Guard (host token). The outcome of a Claude login request."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HostClaudeLoginResult" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Delivered }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
+
   /hosts/{hostId}/state:
     parameters:
       - { name: hostId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3258,6 +3332,8 @@ components:
         allow_unsandboxed: { type: boolean, description: "True when guard.yaml permits agents with sandbox: false" }
         exchange_dir: { type: string, description: "Path to the secrets exchange folder (optional)" }
         exchange_ok: { type: boolean, description: "True when exchange_dir exists and is writable" }
+        claude_login_configured: { type: boolean, description: "Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA" }
+        claude_login_set_at: { type: string, format: date-time, description: "Round 38: when the Claude login token (claude setup-token) was set; absent when there is none. The token itself never leaves the machine." }
         rejected:
           type: array
           items:
@@ -4068,6 +4144,29 @@ components:
         op: { type: string, enum: [list_dirs] }
         path: { type: string, description: "Absolute folder on the machine; empty or omitted lists the roots." }
 
+    SetClaudeLoginRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 20, maxLength: 1000, description: "The output of `claude setup-token`, run by the person on their own computer. Relayed to the machine's guard only; never stored on the server, logged or put in an event." }
+    ClaudeLoginState:
+      type: object
+      properties:
+        set_at: { type: string, format: date-time, description: "When the guard saved the token; absent after a removal" }
+    HostClaudeLoginRequest:
+      type: object
+      required: [request_id, op]
+      properties:
+        request_id: { type: string }
+        op: { type: string, enum: [set, clear] }
+        token: { type: string, description: "op set only; handed out once, then the server forgets it" }
+    HostClaudeLoginResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        error_code: { type: string, enum: [check_failed, write_failed, not_configured], description: "check_failed: claude /usage refused the token (the old one stays); not_configured: guard.yaml has no claude_token_file" }
+        set_at: { type: string, format: date-time }
     HostFsPendingRequest:
       type: object
       required: [request_id, op]

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,10 @@ type ClaudeCode struct {
 	Run         Runner
 	StreamRun   StreamRunner
 	OnRateLimit func(RateLimit)
+	// Token gives the guard's Claude login token (round 38); a run outside
+	// the sandbox gets it as CLAUDE_CODE_OAUTH_TOKEN in its own environment
+	// only. nil or "": the user's own login.
+	Token func() string
 
 	helpMu                 sync.Mutex
 	hasAppendPromptChecked bool
@@ -276,6 +281,9 @@ func (c *ClaudeCode) execStream(ctx context.Context, dir string, wrap Wrapper, a
 		}
 	} else {
 		name = c.bin()
+		if tok := c.token(); tok != "" {
+			extraEnv = append(slices.Clip(extraEnv), "CLAUDE_CODE_OAUTH_TOKEN="+tok)
+		}
 		if len(extraEnv) > 0 {
 			env = os.Environ()
 		}
@@ -527,6 +535,9 @@ func (c *ClaudeCode) execAs(ctx context.Context, dir string, wrap Wrapper, args 
 		}
 	} else {
 		name = c.bin()
+		if tok := c.token(); tok != "" {
+			extraEnv = append(slices.Clip(extraEnv), "CLAUDE_CODE_OAUTH_TOKEN="+tok)
+		}
 		if len(extraEnv) > 0 {
 			env = os.Environ()
 		}
@@ -712,4 +723,11 @@ func DocsOnlySettings(dir string) (string, error) {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+func (c *ClaudeCode) token() string {
+	if c.Token == nil {
+		return ""
+	}
+	return c.Token()
 }

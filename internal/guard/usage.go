@@ -195,7 +195,11 @@ func (s *Supervisor) checkUsage(ctx context.Context, dir string) {
 	ask := func(name string, args []string) []byte {
 		cctx, cancel := context.WithTimeout(ctx, usageTimeout)
 		defer cancel()
-		stdout, _, err := run(cctx, dir, s.clientBin(name), args, nil)
+		var env []string
+		if tok := s.login.Token(); tok != "" && name == "claude-code" {
+			env = append(os.Environ(), "CLAUDE_CODE_OAUTH_TOKEN="+tok)
+		}
+		stdout, _, err := run(cctx, dir, s.clientBin(name), args, env)
 		if err != nil {
 			s.Log.Debug("guard: usage check failed", "client", name, "err", err)
 			return nil

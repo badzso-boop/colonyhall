@@ -112,9 +112,19 @@ func (g *HostGateway) Connected(hostID ids.ID) bool {
 	return false
 }
 
+// PushHostLoginRequest sends a host.claude_login.request frame (round 38)
+// to the host's connections only; the frame carries only the request id.
+func (g *HostGateway) PushHostLoginRequest(hostID ids.ID, requestID string) bool {
+	return g.push(hostID, HostFsRequestFrame{Type: "host.claude_login.request", RequestID: requestID})
+}
+
 // PushHostFsRequest sends a host.fs.request frame to the host's
 // connections only. It reports whether any connection took it.
 func (g *HostGateway) PushHostFsRequest(hostID ids.ID, requestID string) bool {
+	return g.push(hostID, HostFsRequestFrame{Type: "host.fs.request", RequestID: requestID})
+}
+
+func (g *HostGateway) push(hostID ids.ID, frame HostFsRequestFrame) bool {
 	g.mu.Lock()
 	var recipients []*hostConn
 	for c := range g.conns {
@@ -124,7 +134,6 @@ func (g *HostGateway) PushHostFsRequest(hostID ids.ID, requestID string) bool {
 	}
 	g.mu.Unlock()
 
-	frame := HostFsRequestFrame{Type: "host.fs.request", RequestID: requestID}
 	pushed := false
 	for _, c := range recipients {
 		if err := c.write(context.Background(), frame); err == nil {

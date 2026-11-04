@@ -59,6 +59,7 @@ type Supervisor struct {
 
 	host          *Client
 	claudeLimiter *ClaudeLimiter
+	login         *ClaudeLogin
 	agyLimiter    *AgyLimiter
 	roots         []string
 	home          string
@@ -121,13 +122,12 @@ func (s *Supervisor) start(ctx context.Context) error {
 	s.sandbox = DetectSandbox(ctx, s.home, s.Cfg.SandboxDir)
 	if s.sandbox != nil {
 		s.sandbox.NetworkMode = s.Cfg.SandboxNetwork
-		if s.Cfg.ClaudeTokenFile != "" {
-			raw, err := os.ReadFile(s.Cfg.ClaudeTokenFile)
-			if err != nil {
-				return fmt.Errorf("guard: claude_token_file: %w", err)
-			}
-			s.sandbox.ClaudeToken = strings.TrimSpace(string(raw))
-		}
+	}
+	if s.login, err = LoadClaudeLogin(s.Cfg.ClaudeTokenFile); err != nil {
+		return err
+	}
+	if s.sandbox != nil {
+		s.sandbox.TokenSource = s.login.Token
 	}
 	if s.sandbox == nil && *s.Cfg.RequireSandbox {
 		s.Log.Warn("guard: no working bwrap; work runs are disabled (install bubblewrap or set require_sandbox: false)")
@@ -216,8 +216,15 @@ func (s *Supervisor) RunHost(ctx context.Context) error {
 // hostWS is the guard's own WebSocket (host token) for host-level folder
 // listings; the deny rules are the same as for the agents of this machine.
 func (s *Supervisor) hostWS() *HostWS {
+	run := s.Run
+	if run == nil {
+		run = ExecRunner
+	}
 	return &HostWS{Client: s.host, Log: s.Log, Scope: HostFsScope{Roots: s.roots, Home: s.home,
-		DenyFiles: []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile}, ExchangeDir: s.Cfg.ExchangeDir}}
+		DenyFiles: []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile}, ExchangeDir: s.Cfg.ExchangeDir},
+		Login:      s.login,
+		CheckLogin: NewLoginChecker(run, s.clientBin("claude-code"), filepath.Join(s.stateDir(), "login-check")),
+		OnLogin:    func() { s.report(context.Background()) }}
 }
 
 func (s *Supervisor) sync(ctx context.Context) {
@@ -496,6 +503,9 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		}
 		newAdapter = func(ac AgentConfig) Adapter {
 			ad := factory(ac, agentRunner)
+			if cc, ok := ad.(*ClaudeCode); ok {
+				cc.Token = s.login.Token // the PWA-set login, read at each run
+			}
 			if s.StreamRun != nil {
 				switch a := ad.(type) {
 				case *ClaudeCode:
@@ -861,6 +871,10 @@ func (s *Supervisor) report(ctx context.Context) {
 	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
 	r.ExchangeDir = s.Cfg.ExchangeDir
 	r.ExchangeOK = s.exchangeOK
+	if s.login != nil {
+		r.ClaudeLoginConfigured = s.login.Path != ""
+		r.ClaudeLoginSetAt = s.login.SetAt()
+	}
 	s.mu.Lock()
 	r.Rejected = append([]Rejected{}, s.rejected...)
 	r.Worktrees = append([]Worktree{}, s.worktrees...)

@@ -195,6 +195,7 @@ type App struct {
 	Gateway      *gateway.Gateway
 	HostGateway  *gateway.HostGateway
 	HostFs       *hosts.FsRelay
+	HostLogin    *hosts.LoginRelay
 	logger       *slog.Logger
 	calRefresh   time.Duration
 	Consumers    []*eventlog.Consumer
@@ -467,6 +468,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	hostGw := &gateway.HostGateway{Auth: hoSvc, Logger: opt.Logger}
 	hostFs := &hosts.FsRelay{Hosts: hoSvc, Pusher: hostGw}
 	hosthttp.RegisterFs(mux, hoSvc, hostFs, idSvc)
+	hostLogin := &hosts.LoginRelay{Hosts: hoSvc, Pusher: hostGw}
+	hosthttp.RegisterLogin(mux, hoSvc, hostLogin, idSvc)
 	mux.Handle("GET /ws/host", hostGw)
 	wikihttp.Register(mux, wiSvc, idSvc)
 	previewhttp.Register(mux, prSvc, idSvc, hoSvc)
@@ -596,6 +599,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Gateway:      gw,
 		HostGateway:  hostGw,
 		HostFs:       hostFs,
+		HostLogin:    hostLogin,
 		logger:       opt.Logger,
 		Consumers:    consumers,
 		Events:       events,

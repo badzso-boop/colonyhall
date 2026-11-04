@@ -20,6 +20,14 @@ roots:
 # with mode 0600 instead of in chat.
 # exchange_dir: ~/colonyhall-exchange
 
+# Claude Code login of this machine (round 38). The machine's owner sets it
+# from the PWA (Machines page, "Claude-belépés"): the token from
+# `claude setup-token`, for their own subscription. Every Claude Code run of
+# this guard gets it as CLAUDE_CODE_OAUTH_TOKEN; without it the runs use the
+# machine user's own login. Default: claude.token next to host_token_file.
+# The file is 0600 and agents can never read it.
+# claude_token_file: ~/.config/colonyhall/claude.token
+
 # Each agent gets its own folder here (work dir, empty dir for wake-ups).
 # The guard's state lives next to it (its parent folder): usage checks,
 # terminals, preview override files, the proxy and web_read sockets.

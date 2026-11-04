@@ -252,10 +252,15 @@ func deref(p *string) string {
 // the host token and serves host.fs.request frames. It reconnects with
 // backoff until ctx ends.
 type HostWS struct {
-	Client  *Client // host token
-	Scope   HostFsScope
-	Log     *slog.Logger
-	Backoff func(attempt int) time.Duration // wsBackoff when nil
+	Client *Client // host token
+	Scope  HostFsScope
+	// Login, CheckLogin and OnLogin serve host.claude_login.request frames
+	// (round 38); nil Login answers not_configured.
+	Login      *ClaudeLogin
+	CheckLogin LoginChecker
+	OnLogin    func()
+	Log        *slog.Logger
+	Backoff    func(attempt int) time.Duration // wsBackoff when nil
 }
 
 // Run keeps the connection open until ctx ends.
@@ -333,6 +338,10 @@ func (h *HostWS) runConn(ctx context.Context) (bool, error) {
 		case "host.fs.request":
 			if frame.RequestID != "" {
 				go ServeHostFsRequest(connCtx, h.Client, h.Scope, frame.RequestID, h.Log)
+			}
+		case "host.claude_login.request":
+			if frame.RequestID != "" {
+				go ServeClaudeLoginRequest(connCtx, h.Client, h.Login, h.CheckLogin, frame.RequestID, h.Log, h.OnLogin)
 			}
 		}
 	}

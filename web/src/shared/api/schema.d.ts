@@ -1094,6 +1094,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hosts/{hostId}/claude-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Round 38. The machine's owner or an admin (never an agent) sets the
+         *     Claude Code login of the machine's guard: the token from `claude
+         *     setup-token`, for the person's own subscription. The token is relayed
+         *     over the host WebSocket (/ws/host) and kept only in memory until the
+         *     guard fetches it; it is never stored, logged, audited or put in an
+         *     event. The guard checks it with `claude -p /usage` before saving and
+         *     keeps the old one when the check fails (422 claude_login_check_failed).
+         *     Audited as host.claude_login_set (who, when, which machine). 409
+         *     host_offline when the guard is not connected; 429 after too many
+         *     attempts; 504 when the guard does not answer in time.
+         */
+        put: operations["setHostClaudeLogin"];
+        post?: never;
+        /** @description Round 38. The machine's owner or an admin removes the guard's Claude login token file (audited, host.claude_login_cleared). 409 host_offline when the guard is not connected. */
+        delete: operations["clearHostClaudeLogin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/claude-login/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Guard (host token). A pending Claude login request of this machine; the token is handed out once. */
+        get: operations["getHostClaudeLoginRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/host/claude-login/{requestId}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Guard (host token). The outcome of a Claude login request. */
+        post: operations["postHostClaudeLoginResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hosts/{hostId}/state": {
         parameters: {
             query?: never;
@@ -3421,6 +3490,13 @@ export interface components {
             exchange_dir?: string;
             /** @description True when exchange_dir exists and is writable */
             exchange_ok?: boolean;
+            /** @description Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA */
+            claude_login_configured?: boolean;
+            /**
+             * Format: date-time
+             * @description Round 38: when the Claude login token (claude setup-token) was set; absent when there is none. The token itself never leaves the machine.
+             */
+            claude_login_set_at?: string;
             rejected: {
                 agent_id: string;
                 path: string;
@@ -4364,6 +4440,34 @@ export interface components {
             op: "list_dirs";
             /** @description Absolute folder on the machine; empty or omitted lists the roots. */
             path?: string;
+        };
+        SetClaudeLoginRequest: {
+            /** @description The output of `claude setup-token`, run by the person on their own computer. Relayed to the machine's guard only; never stored on the server, logged or put in an event. */
+            token: string;
+        };
+        ClaudeLoginState: {
+            /**
+             * Format: date-time
+             * @description When the guard saved the token; absent after a removal
+             */
+            set_at?: string;
+        };
+        HostClaudeLoginRequest: {
+            request_id: string;
+            /** @enum {string} */
+            op: "set" | "clear";
+            /** @description op set only; handed out once, then the server forgets it */
+            token?: string;
+        };
+        HostClaudeLoginResult: {
+            ok: boolean;
+            /**
+             * @description check_failed: claude /usage refused the token (the old one stays); not_configured: guard.yaml has no claude_token_file
+             * @enum {string}
+             */
+            error_code?: "check_failed" | "write_failed" | "not_configured";
+            /** Format: date-time */
+            set_at?: string;
         };
         HostFsPendingRequest: {
             request_id: string;
@@ -6760,6 +6864,120 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setHostClaudeLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetClaudeLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved by the guard */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaudeLoginState"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    clearHostClaudeLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hostId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getHostClaudeLoginRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostClaudeLoginRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    postHostClaudeLoginResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostClaudeLoginResult"];
+            };
+        };
+        responses: {
+            /** @description Delivered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

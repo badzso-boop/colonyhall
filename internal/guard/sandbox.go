@@ -23,7 +23,10 @@ type Sandbox struct {
 	Root    string // the guard's sandbox folder (all agents)
 	// ClaudeToken, when set (from `claude setup-token`), is given to Claude
 	// instead of a copy of the user's login file.
-	ClaudeToken   string
+	ClaudeToken string
+	// TokenSource, when set, gives the current token instead (the login a
+	// person sets from the PWA, round 38); it wins over ClaudeToken.
+	TokenSource   func() string
 	HasUnshareNet bool
 	NetworkMode   string // "filtered", "log", "open"
 	ColonyBin     string
@@ -176,7 +179,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 	var env []string
 	env = append(env, "HOME="+s.Home)
 	for _, k := range passEnv {
-		if k == "CLAUDE_CODE_OAUTH_TOKEN" && s.ClaudeToken != "" {
+		if k == "CLAUDE_CODE_OAUTH_TOKEN" && s.claudeToken() != "" {
 			continue
 		}
 		if netIsolated {
@@ -244,8 +247,10 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlann
 	switch client {
 	case "claude-code":
 		dir, err := s.ownConfig(cfgRoot, "claude", func(r *os.Root) error {
-			if s.ClaudeToken != "" {
-				// passed as CLAUDE_CODE_OAUTH_TOKEN instead
+			if s.claudeToken() != "" {
+				// passed as CLAUDE_CODE_OAUTH_TOKEN instead; no copy of the
+				// guard user's login stays in the agent's config folder.
+				_ = r.Remove(".credentials.json")
 			} else {
 				if err := copyInto(r, filepath.Join(s.Home, ".claude", ".credentials.json"), ".credentials.json", true); err != nil {
 					return err
@@ -282,8 +287,8 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlann
 			return nil, nil, err
 		}
 		env := []string{"CLAUDE_CONFIG_DIR=" + dir}
-		if s.ClaudeToken != "" {
-			env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+s.ClaudeToken)
+		if tok := s.claudeToken(); tok != "" {
+			env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+tok)
 		}
 		return []string{"--bind", dir, dir}, env, nil
 	case "antigravity":
@@ -564,4 +569,15 @@ func worktreeCommonDir(gf, gitdir string) string {
 		return ""
 	}
 	return common
+}
+
+// claudeToken is the Claude login token for sandboxed Claude runs ("" when
+// none: the user's login file is copied instead).
+func (s *Sandbox) claudeToken() string {
+	if s.TokenSource != nil {
+		if tok := s.TokenSource(); tok != "" {
+			return tok
+		}
+	}
+	return s.ClaudeToken
 }
