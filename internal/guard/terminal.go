@@ -153,6 +153,13 @@ func (tm *TerminalManager) SetSocketName(name string) {
 	tm.socketName = name
 }
 
+// SocketName is the tmux socket name (tmux -L) of this manager.
+func (tm *TerminalManager) SocketName() string {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.socketName
+}
+
 // SetOnStart registers a callback invoked whenever a terminal starts.
 func (tm *TerminalManager) SetOnStart(fn func(m *TerminalMeta)) {
 	tm.mu.Lock()

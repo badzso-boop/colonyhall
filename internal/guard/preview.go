@@ -386,6 +386,10 @@ type PortPool struct {
 	numSlots  int
 	mu        sync.Mutex
 	used      map[int]string // port -> previewID
+	// Free, if set, reports whether a port can still be bound on this
+	// machine: another program (e.g. a second guard of another Linux user
+	// with an overlapping preview_ports range) may hold it.
+	Bindable func(port int) bool
 }
 
 // NewPortPool initializes a port pool from a range string (e.g. "41000-41999").
@@ -432,12 +436,21 @@ func (p *PortPool) Allocate(agentID, previewID string, count int) ([]int, error)
 	basePort := p.startPort + slot*10
 
 	var allocated []int
+	taken := 0
 	for port := basePort; port < basePort+10 && len(allocated) < count; port++ {
-		if _, inUse := p.used[port]; !inUse {
-			allocated = append(allocated, port)
+		if _, inUse := p.used[port]; inUse {
+			continue
 		}
+		if p.Bindable != nil && !p.Bindable(port) {
+			taken++
+			continue
+		}
+		allocated = append(allocated, port)
 	}
 	if len(allocated) < count {
+		if taken > 0 {
+			return nil, fmt.Errorf("not enough free preview ports for agent (have %d, needed %d in range %d-%d; %d held by another program, e.g. another guard on this machine: give each guard its own preview_ports range)", len(allocated), count, basePort, basePort+9, taken)
+		}
 		return nil, fmt.Errorf("not enough free preview ports for agent (have %d, needed %d in range %d-%d)", len(allocated), count, basePort, basePort+9)
 	}
 	for _, port := range allocated {
@@ -663,9 +676,13 @@ type PreviewSupervisor struct {
 	Roots       []string
 	PreviewHost string
 	Ports       *PortPool
-	mu          sync.Mutex
-	active      map[string]*activePreview
-	Log         *slog.Logger
+	// Dir holds the compose override files, one folder per preview. The
+	// guard sets it to its own state folder; empty means a per-user folder
+	// in the system temp dir.
+	Dir    string
+	mu     sync.Mutex
+	active map[string]*activePreview
+	Log    *slog.Logger
 }
 
 // NewPreviewSupervisor initializes the preview supervisor.
@@ -689,6 +706,28 @@ func NewPreviewSupervisor(client *Client, runner DockerRunner, roots []string, p
 		active:      make(map[string]*activePreview),
 		Log:         logger,
 	}, nil
+}
+
+func (s *PreviewSupervisor) dir() string {
+	if s.Dir != "" {
+		return s.Dir
+	}
+	// Not the shared /tmp/colony-previews: another user's guard could own it.
+	return filepath.Join(os.TempDir(), fmt.Sprintf("colony-previews-%d", os.Getuid()))
+}
+
+// recoveredOverride is the override file of a preview started before a
+// guard restart; previews started by an older guard kept it in
+// /tmp/colony-previews.
+func (s *PreviewSupervisor) recoveredOverride(id string) string {
+	p := filepath.Join(s.dir(), id, "docker-compose.override.yaml")
+	if _, err := os.Stat(p); err != nil {
+		legacy := filepath.Join(os.TempDir(), "colony-previews", id, "docker-compose.override.yaml")
+		if _, err := os.Stat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return p
 }
 
 // Reconcile handles requested and running previews from the host config.
@@ -774,7 +813,7 @@ func (s *PreviewSupervisor) Reconcile(ctx context.Context, previews []HostPrevie
 				continue
 			}
 
-			overrideDir := filepath.Join(os.TempDir(), "colony-previews", p.ID)
+			overrideDir := filepath.Join(s.dir(), p.ID)
 			if err := os.MkdirAll(overrideDir, 0700); err != nil {
 				s.Ports.Free(p.ID)
 				_ = s.Client.ReportPreview(ctx, p.ID, "failed", "", fmt.Sprintf("create override dir: %s", err))
@@ -821,8 +860,7 @@ func (s *PreviewSupervisor) Reconcile(ctx context.Context, previews []HostPrevie
 			// If not active locally (e.g. guard restart), recover it
 			if !isAct && hasAgent {
 				composePath := filepath.Join(a.RootDir, p.ComposePath)
-				overrideDir := filepath.Join(os.TempDir(), "colony-previews", p.ID)
-				overridePath := filepath.Join(overrideDir, "docker-compose.override.yaml")
+				overridePath := s.recoveredOverride(p.ID)
 				project := fmt.Sprintf("colony-%s-%s", a.Handle, p.Name)
 				actPrev := &activePreview{
 					ID:           p.ID,

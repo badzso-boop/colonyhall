@@ -21,6 +21,10 @@ roots:
 # exchange_dir: ~/colonyhall-exchange
 
 # Each agent gets its own folder here (work dir, empty dir for wake-ups).
+# The guard's state lives next to it (its parent folder): usage checks,
+# terminals, preview override files, the proxy and web_read sockets.
+# The default derives from the guard user's HOME, so a second guard under
+# another Linux user needs no change here.
 # sandbox_dir: ~/.local/share/colonyhall/sandbox
 
 # Work runs happen inside bwrap. Without bwrap, work is refused unless
@@ -54,6 +58,19 @@ roots:
 #   - "docs.python.org"
 # web_read_deny:
 #   - "unwanted.example.com"
+
+# Previews (docker compose, full-access agents): host ports come from this
+# range, 10 per agent. A port another program holds is skipped. Two guards
+# on one machine must get ranges that do not overlap, e.g. 41000-41999 and
+# 42000-42999.
+# preview_ports: 41000-41999
+# preview_host: 127.0.0.1
+
+# tmux socket name of the agents' terminals (tmux -L). tmux keeps sockets
+# per Linux user ($TMUX_TMPDIR/tmux-<uid>/), so guards of different users
+# never share one; only two guards of the same user need different names.
+# The attach line on the web page assumes the default.
+# tmux_socket: colonyhall
 
 # commands: { claude-code: claude, antigravity: agy }
 # Inactivity and duration caps for direct and work runs:
