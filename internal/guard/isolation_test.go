@@ -212,3 +212,23 @@ func indexOf(xs []string, x string) int {
 	}
 	return -1
 }
+
+// The agent's terminal server writes where its guard watches: a finished
+// terminal wakes the agent and the emergency stop reaches it.
+func TestTerminalMCPWritesWhereTheGuardWatches(t *testing.T) {
+	guardState := t.TempDir()
+	tm := NewTerminalManager(guardState, nil, t.TempDir())
+	a := &Agent{Cfg: AgentConfig{Name: "coder"}, Terminals: tm, StateDir: filepath.Join(t.TempDir(), "coder")}
+	args := a.terminalMCPArgs(a.StateDir, "ch", "th")
+	i := indexOf(args, "-state")
+	if i < 0 || args[i+1] != guardState {
+		t.Fatalf("the terminal server got %v, the guard watches %s", args, guardState)
+	}
+	srv, err := NewTerminalMCPServer("coder", args[i+1], "ch", "th")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := srv.tm.terminalsDir(), tm.terminalsDir(); got != want {
+		t.Fatalf("the terminal server writes to %s, the guard watches %s", got, want)
+	}
+}

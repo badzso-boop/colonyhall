@@ -154,6 +154,13 @@ func (tm *TerminalManager) SetSocketName(name string) {
 }
 
 // SocketName is the tmux socket name (tmux -L) of this manager.
+// StateDir is the folder whose terminals/ the manager watches.
+func (tm *TerminalManager) StateDir() string {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.stateDir
+}
+
 func (tm *TerminalManager) SocketName() string {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()

@@ -1079,8 +1079,14 @@ func inGroup(id string, group []Item) bool {
 }
 
 // terminalMCPArgs are the arguments of the colony-terminal MCP server; it
-// uses the guard's tmux socket, so two guards never share terminals.
+// uses the guard's tmux socket, so two guards never share terminals, and
+// the guard's state folder, which the guard watches: with the agent's own
+// folder a finished terminal never woke the agent and the emergency stop
+// never reached it.
 func (a *Agent) terminalMCPArgs(stateDir, channelID, threadID string) []string {
+	if a.Terminals != nil {
+		stateDir = a.Terminals.StateDir()
+	}
 	args := []string{"terminal-mcp", "-agent", a.Cfg.Name, "-state", stateDir, "-channel", channelID, "-thread", threadID}
 	if a.Terminals != nil {
 		args = append(args, "-tmux-socket", a.Terminals.SocketName())
