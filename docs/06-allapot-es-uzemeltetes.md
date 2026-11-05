@@ -93,6 +93,10 @@
 4. **Nem ébred fel:** a kolléga olvasó tag-e a csatornában (Csatorna beállításai → Tagok), és a saját agentjét szólította-e meg (más teljes hozzáférésű agentjét nem ébresztheti).
 5. **A tervező kódot akart írni:** ez szándékos (`write_scope: docs`); a kódot a párjának kell adnia. Ha a Claude Code jóváhagyást kérne, az hiba: a csak-dokumentáció módban kérdés nélkül el kell utasítania.
 
+### Telepítés új gépre (41. kör)
+
+Új gépre, kollégának vagy más felhasználónak a telepítő: `install.sh` + `colony setup` (`docs/16-telepites.md`, terv: `docs/15-telepites-terv.md`). Kiadás: `v*` tag → `.github/workflows/release.yml` (binárisok, `SHA256SUMS`, GHCR-kép, attestation). Állapot gépenként: `colony doctor`, és a Gépek oldal „Állapot-ellenőrzés” sora. Norbi meglévő gépei (PC, homelab) továbbra is a `CLAUDE.md` szerinti kézi recepttel frissülnek, amíg az első kiadás el nem készül.
+
 ## Munkamódszer
 
 - **Tervezés és döntés:** Norbi dönt, Claude Code megírja a tervet a `task.md` „Tervezendő” részébe és a handoff promptot (`docs/handoff/NN-…-prompt.md`, alapszabályok: `00-ground-rules.md`).
