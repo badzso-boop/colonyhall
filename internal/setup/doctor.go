@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/guard"
 )
 
@@ -225,3 +226,27 @@ func diskCheck(home string) Check {
 
 // DoctorJSON is the doctor's result for --json and the host report.
 func DoctorJSON(checks []Check) ([]byte, error) { return json.MarshalIndent(checks, "", "  ") }
+
+// ReportChecks runs the doctor for the guard's host report
+// (guard.DoctorHook): ids, statuses and facts, never secrets.
+func ReportChecks(ctx context.Context) []apispec.DoctorCheck {
+	e, err := newEnv(ctx)
+	if err != nil {
+		return nil
+	}
+	e.HTTP = &http.Client{Timeout: 10 * time.Second}
+	return toReport(Doctor(ctx, e))
+}
+
+func toReport(checks []Check) []apispec.DoctorCheck {
+	out := make([]apispec.DoctorCheck, 0, len(checks))
+	for _, c := range checks {
+		d := apispec.DoctorCheck{Id: c.ID, Status: apispec.DoctorCheckStatus(c.Status)}
+		if c.Detail != "" {
+			detail := c.Detail
+			d.Detail = &detail
+		}
+		out = append(out, d)
+	}
+	return out
+}

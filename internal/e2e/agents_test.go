@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"colonyhall/internal/apispec"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/server"
 )
@@ -303,4 +304,47 @@ func containsID(list []ids.ID, id string) bool {
 		}
 	}
 	return false
+}
+
+// Round 41: a machine without a sandbox (macOS) takes full-access agents only.
+func TestSandboxedAgentRefusedOnAMachineWithoutSandbox(t *testing.T) {
+	e := newEnv(t)
+	host, hostToken := e.enroll("mac")
+	report := map[string]any{"guard_version": "v0.3.0", "os": "darwin/arm64", "roots": []string{"/Users/a"},
+		"clients": []map[string]any{{"name": "claude-code", "version": "2"}}}
+	if s := e.do("POST", "/api/v1/host/report", hostToken, report, nil); s != http.StatusNoContent && s != http.StatusOK {
+		t.Fatalf("report: %d", s)
+	}
+	var p struct{ Detail string }
+	sandboxed := map[string]any{"handle": "mac-sand", "host": map[string]any{"host_id": host, "client": "claude-code", "mode": "compact", "sandbox": true}}
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, sandboxed, &p); s != http.StatusBadRequest || !strings.Contains(p.Detail, "no sandbox") {
+		t.Fatalf("sandboxed on macOS: %d %q", s, p.Detail)
+	}
+	full := map[string]any{"handle": "mac-full", "host": map[string]any{"host_id": host, "client": "claude-code", "mode": "direct", "sandbox": false, "root_dir": "/Users/a"}}
+	if s := e.do("POST", "/api/v1/agents", server.DevAdminToken, full, nil); s != http.StatusCreated {
+		t.Fatalf("full access on macOS: %d", s)
+	}
+}
+
+// Round 41: the guard's doctor checks reach the Machines page.
+func TestHostReportCarriesTheDoctor(t *testing.T) {
+	e := newEnv(t)
+	host, hostToken := e.enroll("box")
+	report := map[string]any{"guard_version": "v0.3.0", "os": "linux/amd64", "sandbox": "bwrap 0.9.0", "roots": []string{"/w"}, "clients": []any{},
+		"doctor":            []map[string]any{{"id": "claude", "status": "warn", "detail": "not logged in"}, {"id": "tmux", "status": "ok"}},
+		"doctor_checked_at": "2026-11-05T10:00:00Z"}
+	if s := e.do("POST", "/api/v1/host/report", hostToken, report, nil); s != http.StatusNoContent && s != http.StatusOK {
+		t.Fatalf("report: %d", s)
+	}
+	var list apispec.HostList
+	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &list)
+	for _, h := range list.Hosts {
+		if h.Id.String() == host {
+			if h.Report.Doctor == nil || len(*h.Report.Doctor) != 2 || (*h.Report.Doctor)[0].Status != "warn" {
+				t.Fatalf("doctor: %+v", h.Report.Doctor)
+			}
+			return
+		}
+	}
+	t.Fatal("host missing")
 }

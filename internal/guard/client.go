@@ -450,14 +450,17 @@ type HostReport struct {
 	ExchangeOK       bool           `json:"exchange_ok"`
 	// Round 38: whether the Claude login can be set from the PWA and when it
 	// was; never the token.
-	ClaudeLoginConfigured bool                    `json:"claude_login_configured,omitempty"`
-	ClaudeLoginSetAt      *time.Time              `json:"claude_login_set_at,omitempty"`
-	Rejected              []Rejected              `json:"rejected"`
-	Worktrees             []Worktree              `json:"worktrees,omitempty"`
-	ClaudeLimits          *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
-	AgyLimits             []apispec.AgyLimit      `json:"agy_limits,omitempty"`
-	AgyUsage              []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
-	UsageCheckedAt        *time.Time              `json:"usage_checked_at,omitempty"`
+	ClaudeLoginConfigured bool       `json:"claude_login_configured,omitempty"`
+	ClaudeLoginSetAt      *time.Time `json:"claude_login_set_at,omitempty"`
+	// Round 41: the doctor's checks (DoctorHook), refreshed with the usage poll.
+	Doctor          []apispec.DoctorCheck   `json:"doctor,omitempty"`
+	DoctorCheckedAt *time.Time              `json:"doctor_checked_at,omitempty"`
+	Rejected        []Rejected              `json:"rejected"`
+	Worktrees       []Worktree              `json:"worktrees,omitempty"`
+	ClaudeLimits    *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
+	AgyLimits       []apispec.AgyLimit      `json:"agy_limits,omitempty"`
+	AgyUsage        []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
+	UsageCheckedAt  *time.Time              `json:"usage_checked_at,omitempty"`
 }
 
 // Worktree is an active git worktree on this machine.

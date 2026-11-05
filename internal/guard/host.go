@@ -61,6 +61,8 @@ type Supervisor struct {
 	host          *Client
 	claudeLimiter *ClaudeLimiter
 	login         *ClaudeLogin
+	doctor        []apispec.DoctorCheck
+	doctorAt      time.Time
 	agyLimiter    *AgyLimiter
 	roots         []string
 	home          string
@@ -864,6 +866,10 @@ func (s *Supervisor) report(ctx context.Context) {
 	}
 	s.mu.Lock()
 	r.AgyUsage = s.agyUsage
+	if !s.doctorAt.IsZero() {
+		at := s.doctorAt
+		r.Doctor, r.DoctorCheckedAt = s.doctor, &at
+	}
 	if !s.usageCheckedAt.IsZero() {
 		at := s.usageCheckedAt
 		r.UsageCheckedAt = &at

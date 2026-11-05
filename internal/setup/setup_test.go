@@ -582,3 +582,10 @@ func TestDoctorReportsAndExplains(t *testing.T) {
 		}
 	}
 }
+
+func TestDoctorForTheHostReportCarriesNoFixText(t *testing.T) {
+	got := toReport([]Check{{ID: "claude", Status: StatusWarn, Detail: "not logged in", Fix: "loginClaude"}, {ID: "git", Status: StatusOK}})
+	if len(got) != 2 || got[0].Id != "claude" || string(got[0].Status) != "warn" || *got[0].Detail != "not logged in" || got[1].Detail != nil {
+		t.Fatalf("%+v", got)
+	}
+}

@@ -3500,6 +3500,10 @@ export interface components {
             exchange_dir?: string;
             /** @description True when exchange_dir exists and is writable */
             exchange_ok?: boolean;
+            /** @description Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes */
+            doctor?: components["schemas"]["DoctorCheck"][];
+            /** Format: date-time */
+            doctor_checked_at?: string;
             /** @description Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA */
             claude_login_configured?: boolean;
             /**
@@ -4450,6 +4454,13 @@ export interface components {
             op: "list_dirs";
             /** @description Absolute folder on the machine; empty or omitted lists the roots. */
             path?: string;
+        };
+        DoctorCheck: {
+            /** @description config, server, token, claude, agy, sandbox, tmux, git, service, disk */
+            id: string;
+            /** @enum {string} */
+            status: "ok" | "warn" | "fail";
+            detail?: string;
         };
         SetClaudeLoginRequest: {
             /** @description The output of `claude setup-token`, run by the person on their own computer. Relayed to the machine's guard only; never stored on the server, logged or put in an event. */

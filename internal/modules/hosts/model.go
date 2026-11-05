@@ -77,14 +77,17 @@ type Report struct {
 	ExchangeOK       bool     `json:"exchange_ok"`
 	// Round 38: the guard can take a Claude login from the PWA, and when one
 	// was set. Never the token.
-	ClaudeLoginConfigured bool                    `json:"claude_login_configured,omitempty"`
-	ClaudeLoginSetAt      *time.Time              `json:"claude_login_set_at,omitempty"`
-	Rejected              []Rejected              `json:"rejected"`
-	Worktrees             []Worktree              `json:"worktrees,omitempty"`
-	ClaudeLimits          *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
-	AgyLimits             []apispec.AgyLimit      `json:"agy_limits,omitempty"`
-	AgyUsage              []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
-	UsageCheckedAt        *time.Time              `json:"usage_checked_at,omitempty"`
+	ClaudeLoginConfigured bool       `json:"claude_login_configured,omitempty"`
+	ClaudeLoginSetAt      *time.Time `json:"claude_login_set_at,omitempty"`
+	// Round 41: the guard's doctor checks.
+	Doctor          []apispec.DoctorCheck   `json:"doctor,omitempty"`
+	DoctorCheckedAt *time.Time              `json:"doctor_checked_at,omitempty"`
+	Rejected        []Rejected              `json:"rejected"`
+	Worktrees       []Worktree              `json:"worktrees,omitempty"`
+	ClaudeLimits    *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
+	AgyLimits       []apispec.AgyLimit      `json:"agy_limits,omitempty"`
+	AgyUsage        []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
+	UsageCheckedAt  *time.Time              `json:"usage_checked_at,omitempty"`
 }
 
 // Worktree describes a git worktree reported by the guard.
@@ -192,6 +195,7 @@ var (
 	ErrWorktreeDirectOnly   = errors.New("worktree_repo is only supported for direct agents or sandboxed compact agents")
 	ErrPreviewFullAccess    = errors.New("allow_preview needs a full-access agent (direct mode, no sandbox)")
 	ErrWebReadSandboxedOnly = errors.New("allow_web_read is only available for sandboxed agents")
+	ErrNoSandboxOnHost      = errors.New("this machine has no sandbox (for example macOS, or Linux without bubblewrap): only full-access agents run on it")
 	ErrBadClient            = errors.New("client must be claude-code or antigravity")
 	ErrBadApprovals         = errors.New("approvals must be none or chat")
 	ErrApprovalsChatClient  = errors.New("approvals=chat requires client claude-code")

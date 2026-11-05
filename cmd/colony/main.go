@@ -75,6 +75,8 @@ func main() {
 		}
 		return
 	}
+	// The host report carries the doctor's checks (round 41).
+	guard.DoctorHook = setup.ReportChecks
 	if len(os.Args) < 2 || os.Args[1] != "guard" {
 		fmt.Fprintf(os.Stderr, usage, strings.Join(guard.AdapterNames(), ", "))
 		os.Exit(2)
