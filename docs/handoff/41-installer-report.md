@@ -96,3 +96,13 @@ A `484da8b` állapoton:
 - `make test-web`: zöld (82 tesztfájl, 526 teszt).
 - `make gen-check`: tiszta.
 - `make test-pg`: nem futott (ebben a körben tár nem változott; az új `HostReport` mezők a meglévő JSON-oszlopba kerülnek).
+
+## Átnézés (Claude Code, 2026-11-05)
+
+- **Rendben találtam:** az `install.sh` titokkezelése (a token stdin-en át megy a `curl`-nek, csak HTTPS, ellenőrzőösszeg, a beállítás indítása előtt törlődik); a `sudo`-s lépések mind megerősítéshez kötöttek; a Claude Code telepítője letöltés, cím, méret és SHA-256 után, kérésre megmutatva, megerősítéssel fut; `--yes` esetén csak a válaszfájlban felsorolt klienst telepíti; a „sandbox nélküli gép” szabály csak létrehozáskor érvényes, a meglévő agenteket nem érinti.
+- **Javítva a kiadási workflow-ban** (`.github/workflows/release.yml`, `actionlint` tiszta):
+  - a harmadik féltől származó Actions-ök commit-hash-re rögzítve (a címke megjegyzésben), hogy egy elmozdított címke ne futtathasson mást az írási jogokkal;
+  - a jogosultságok alapból üresek, minden job csak azt kapja, ami kell;
+  - a verzió (tag vagy kézi bemenet) csak környezeti változón át, ellenőrzés után jut a shellbe (nincs kifejezés-befecskendezés);
+  - előzetes verzió (`v0.3.0-rc1`) GitHubon előzetes kiadásként jelenik meg, és nem mozgatja a kép `latest` címkéjét.
+- **A rögzített Actions-öket frissíteni kell:** a 40. kör Dependabot-beállításába érdemes a `github-actions` ökoszisztémát is felvenni.

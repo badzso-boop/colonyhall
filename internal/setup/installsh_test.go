@@ -89,7 +89,9 @@ func newFakeGitHub(t *testing.T, private bool, corrupt bool) *fakeGitHub {
 		_, _ = w.Write(body)
 	}))
 	t.Cleanup(f.storage.Close)
-	f.api = httptest.NewServer(http.HandlerFunc(f.serveAPI))
+	// Started only after f.api is set: serveAPI reads f.api.URL.
+	f.api = httptest.NewUnstartedServer(http.HandlerFunc(f.serveAPI))
+	f.api.Start()
 	t.Cleanup(f.api.Close)
 	return f
 }
