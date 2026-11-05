@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +34,9 @@ func main() {
 	slog.SetDefault(logger)
 	var err error
 	switch {
+	case len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version"):
+		fmt.Printf("colonyhall %s (%s/%s)\n", server.Version, runtime.GOOS, runtime.GOARCH)
+		return
 	case len(os.Args) > 1 && os.Args[1] == "set-password":
 		err = setPassword(os.Args[2:])
 	case len(os.Args) > 1 && os.Args[1] == "bootstrap":

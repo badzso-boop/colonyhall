@@ -3,7 +3,7 @@ COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
-.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web
+.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -64,3 +64,12 @@ fmt:             ## gofmt
 
 build:           ## Build binaries into bin/
 	$(GO) build -o bin/ ./cmd/...
+
+VERSION    ?= v0.0.0-dev
+SHELLCHECK  = $(shell command -v shellcheck 2>/dev/null || echo docker run --rm -v "$(CURDIR)":/mnt -w /mnt koalaman/shellcheck:stable)
+
+release-local: $(WEB_DEPS) ## Build the release artifacts into dist/ (VERSION=v1.2.3)
+	scripts/release.sh $(VERSION) dist
+
+shellcheck:      ## shellcheck every shell script (local binary or the Docker image)
+	$(SHELLCHECK) scripts/*.sh

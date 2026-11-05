@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -30,6 +31,10 @@ clients: %s
 `
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Printf("colony %s (%s/%s)\n", guard.Version, runtime.GOOS, runtime.GOARCH)
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "sandbox-bridge" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

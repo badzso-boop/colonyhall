@@ -21,8 +21,9 @@ import (
 	"time"
 )
 
-// Version is reported to the server.
-const Version = "0.2.0"
+// Version is reported to the server; a release sets it with
+// -ldflags "-X colonyhall/internal/guard.Version=<tag>".
+var Version = "0.2.0"
 
 // configMaxAge is how long work may run on the last known grants when the
 // server cannot be reached; after that work is refused (fail closed).
