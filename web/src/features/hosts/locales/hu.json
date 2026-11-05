@@ -106,7 +106,28 @@
     "agyUsage": "Antigravity-felhasználás",
     "agyGroup": "{{name}}: 5 óra {{five}}% (visszaáll {{fiveReset}}), heti {{week}}% (visszaáll {{weekReset}})",
     "agyUsageNone": "még nincs adat",
-    "usageChecked": "utoljára lekérdezve: {{when}}"
+    "usageChecked": "utoljára lekérdezve: {{when}}",
+    "doctor": "Állapot-ellenőrzés",
+    "doctorChecked": "ellenőrizve: {{when}}",
+    "doctorHint": "A javításokért futtasd a gépen: colony doctor",
+    "doctorNone": "még nincs (régi őr, vagy még nem futott)",
+    "checks": {
+      "config": "guard.yaml",
+      "server": "szerver",
+      "token": "géptoken",
+      "claude": "Claude Code",
+      "agy": "Antigravity",
+      "sandbox": "sandbox",
+      "tmux": "tmux",
+      "git": "git",
+      "service": "szolgáltatás",
+      "disk": "szabad hely"
+    },
+    "status": {
+      "ok": "rendben",
+      "warn": "figyelmeztetés",
+      "fail": "hiba"
+    }
   },
   "agents": {
     "new": "Új agent ezen a gépen",
@@ -220,7 +241,20 @@
     "done": "Kész",
     "copy": "{{what}} másolása",
     "copied": "Kimásolva.",
-    "copyFailed": "Nem sikerült másolni."
+    "copyFailed": "Nem sikerült másolni.",
+    "platform": "A gép rendszere:",
+    "platforms": {
+      "linux": "Linux",
+      "wsl": "Windows (WSL2)",
+      "macos": "macOS"
+    },
+    "installRun": "Futtasd ezt a gépen, azzal a felhasználóval, aki az agenteket futtatja. Letölti és ellenőrzi a colony programot, majd végigvezet a beállításon (függőségek, guard.yaml, szolgáltatás). Amíg a repó privát, ehhez a GitHub CLI (gh) belépett állapota kell.",
+    "installCommand": "Telepítő parancs",
+    "platformNotes": {
+      "linux": "Debian, Ubuntu, Fedora: a hiányzó programokat (git, tmux, bubblewrap) megerősítés után telepíti. Az AI-kliensekbe (claude, agy) neked kell belépned.",
+      "wsl": "A WSL-ben systemd kell: ha nincs bekapcsolva, a telepítő bekapcsolja, utána Windowsban egy `wsl --shutdown` kell. Kérésre beállítja, hogy a WSL a Windows-bejelentkezés után is fusson.",
+      "macos": "macOS-en még nincs sandbox: ezen a gépen csak teljes hozzáférésű agent futhat. Az őr launchd-szolgáltatásként indul."
+    }
   },
   "agyBadge_one": "⏸ agy",
   "agyBadge_other": "⏸ agy ×{{count}}",

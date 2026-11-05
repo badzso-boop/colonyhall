@@ -134,6 +134,28 @@ export function OverviewTab({ host, now }: { host: Host; now: Date }) {
             t("overview.agyNone")
           )}
         </Row>
+        <Row label={t("overview.doctor")}>
+          {r.doctor?.length ? (
+            <div className="flex flex-col gap-1">
+              <ul className="flex flex-wrap gap-1.5">
+                {r.doctor.map((c) => (
+                  <li key={c.id}>
+                    <Badge tone={c.status === "ok" ? "success" : c.status === "warn" ? "warning" : "danger"}>
+                      <span title={`${t(`overview.status.${c.status}`)}${c.detail ? `: ${c.detail}` : ""}`}>
+                        {t(`overview.checks.${c.id}`, { defaultValue: c.id })}
+                        {c.status !== "ok" && c.detail ? `: ${c.detail}` : ""}
+                      </span>
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              {r.doctor_checked_at ? <p className="text-meta text-fg-subtle">{t("overview.doctorChecked", { when: stamp(r.doctor_checked_at, i18n.language) })}</p> : null}
+              {r.doctor.some((c) => c.status !== "ok") ? <p className="text-meta text-fg-muted">{t("overview.doctorHint")}</p> : null}
+            </div>
+          ) : (
+            t("overview.doctorNone")
+          )}
+        </Row>
         <Row label={t("overview.claude")}>
           {windows.length ? (
             <ul>

@@ -29,6 +29,7 @@ function hosts(): Host[] {
       report: {
         os: "linux", guard_version: "0.33.0", roots: ["/mnt/g/Projects"], clients: [{ name: "claude", version: "2.1.0" }], rejected: [],
         sandbox: "bwrap 0.9.0", exchange_dir: "/mnt/z", exchange_ok: true,
+        doctor: [{ id: "claude", status: "warn", detail: "not logged in" }, { id: "tmux", status: "ok" }], doctor_checked_at: ago(60),
         worktrees: [{ agent_id: "a1", path: "/mnt/g/Projects/x-wt", branch: "colony/backend/work" }],
         claude_limits: { five_hour: { utilization: 0.42, status: "allowed" } },
         agy_usage: [{ name: "Gemini Models", models: "Gemini Flash, Gemini Pro", five_hour: { remaining: 0.75, resets_at: new Date(Date.now() + 3_600_000).toISOString() }, weekly: { remaining: 0.5 } }],
@@ -195,4 +196,11 @@ test("the wizard shows the command and switches when the machine enrolls", async
   expect(within(dialog).getByLabelText("Telepítő parancs").textContent).toBe("colony guard install -config guard.yaml");
   fireEvent.click(within(dialog).getByRole("button", { name: "Kész" }));
   await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/hosts/h9"));
+});
+
+test("the overview shows the guard's health checks (round 41)", async () => {
+  setup();
+  expect(await screen.findByText("Claude Code: not logged in")).toBeTruthy();
+  expect(screen.getByText("tmux")).toBeTruthy();
+  expect(screen.getByText(/colony doctor/)).toBeTruthy();
 });

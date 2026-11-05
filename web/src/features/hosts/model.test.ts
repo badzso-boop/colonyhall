@@ -62,3 +62,10 @@ test("the newly enrolled host: not known before, preferring the suggested name",
   expect(newlyEnrolled(hosts, new Set(["old"]), "x")?.id).toBe("n1");
   expect(newlyEnrolled(hosts, new Set(["old", "n1", "n2"]), "laptop")).toBeNull();
 });
+
+test("the one-line install pairs the machine with the code (round 41)", async () => {
+  const { installCommand } = await import("./model");
+  expect(installCommand("http://100.85.0.1:8280", "K7Q2-MX4P", "lap top")).toBe(
+    "gh release download -R badzso-boop/colonyhall -p install.sh -O - | sh -s -- --guard --server-url http://100.85.0.1:8280 --pair-code K7Q2-MX4P --name 'lap top'",
+  );
+});
