@@ -1,6 +1,6 @@
 # Telepítő: terv (41. kör, tervezési kapu)
 
-Állapot: **javaslat, Norbi jóváhagyására vár** (2026-11-05). A kötelező döntések a `docs/handoff/41-installer-prompt.md`-ben; ez a dokumentum a megvalósítás terve és a nyitott kérdések. Angol összefoglaló a későbbi nyilvános README-hez: `15-telepites-terv.en.md`.
+Állapot: **jóváhagyva** (Norbi, 2026-11-05; a döntések a dokumentum végén). A kötelező döntések a `docs/handoff/41-installer-prompt.md`-ben; ez a dokumentum a megvalósítás terve és a nyitott kérdések. Angol összefoglaló a későbbi nyilvános README-hez: `15-telepites-terv.en.md`.
 
 Cél: valaki, aki még sosem látta a projektet, néhány paranccsal telepíti a szervert és a gépeire az őrt, és működő rendszert kap, Norbi homelabjára jellemző beállítás nélkül.
 
@@ -139,14 +139,14 @@ Ellenőrzi, és mindegyikhez javítást ír ki: a szerver elérhetősége és ve
 - `HostReport.doctor` (8.), a verzió kiírása (`--version` mindkét binárisnál).
 - A PWA „Új gép” varázslója platformonként a megfelelő egysoros telepítési parancsot mutatja a párosító kóddal, és gépenként a doctor eredményét.
 
-## Norbinak eldöntendő
+## Norbi döntései (2026-11-05)
 
-1. **A repó helye és neve** a letöltési címekhez (ma `badzso-boop/colonyhall`), és a terméknév (Colonyhall) végleges-e a nyilvános változatban.
-2. **A szerverkép a privát időszakban:** (a) a GHCR-csomag **nyilvános** (a kép a repótól függetlenül publikus lehet; a forráskód privát marad) – *javaslat, ez a legegyszerűbb*; (b) privát kép `docker login`-nal, amihez a token a Docker hitelesítő tárolójába kerülne (ez ütközik a „soha nem tárolódik” szabállyal, ezért csak `--password-stdin`, és telepítés után `docker logout`); (c) a szerver helyben épül a forráscsomagból (lassú, Docker build kell).
-3. **Az `install.sh` beszerzése privát időszakban:** `gh release download …` (javaslat) vagy böngészős letöltés.
-4. **A szerver futtatója Linuxon:** a felhasználó `docker` csoportba vétele (kényelmes, de root-egyenértékű), vagy `sudo docker …` (javaslat: kérdés, alapból `sudo`).
-5. **TLS:** az első körben nincs beépítve (javaslat), csak útmutató (Tailscale / fordított proxy).
-6. **Antigravity hivatalos telepítési módja:** milyen URL-ről és hogyan (ezt nem találom a repóban; Norbi adja meg, vagy kihagyjuk az automatikus telepítést, és csak útmutatót írunk).
-7. **macOS CI:** GitHub Actions macOS-futtató tagre és kézi indításra (≈60 perc keret / futás), vagy csak kézi tesztlista.
-8. **Alapértelmezett `max_concurrent_runs`** egy új gépen: 2 (javaslat) vagy korlátlan.
-9. **Kolléga-mód:** csak útmutató (javaslat) vagy automatizált felhasználó-létrehozás (root-művelet).
+1. A név végleges: **Colonyhall**; a meglévő privát repó (`badzso-boop/colonyhall`) lesz később nyilvános.
+2. A **szerverkép (GHCR-csomag) nyilvános**, a kód egyelőre privát.
+3. Az `install.sh` a privát időszakban **`gh release download`**-dal érhető el; később a GitHubról közvetlenül.
+4. Linuxon alapból **`sudo docker`** (a `docker` csoport csak külön, magyarázott kérésre).
+5. **TLS** az első körből kimarad; csak útmutató, hogyan állítható be.
+6. Az **Antigravity telepítési módja** üresen marad (helyőrző); később egy másik agent tölti ki.
+7. **macOS:** csak kézi tesztlista, nincs macOS CI-futtató.
+8. `max_concurrent_runs` alapértéke új gépen: **2**.
+9. **Kolléga-mód:** az első körben csak útmutató.
