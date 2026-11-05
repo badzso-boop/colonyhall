@@ -73,3 +73,6 @@ release-local: $(WEB_DEPS) ## Build the release artifacts into dist/ (VERSION=v1
 
 shellcheck:      ## shellcheck every shell script (local binary or the Docker image)
 	$(SHELLCHECK) scripts/*.sh
+
+test-install:    ## install.sh tests in Debian, Ubuntu and Fedora containers (needs Docker)
+	scripts/test-install.sh
