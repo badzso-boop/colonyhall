@@ -1,0 +1,27 @@
+# Colonyhall guard, written by colony setup (docs/16-telepites.md).
+# Edit and restart the service to apply (launchctl kickstart -k gui/$(id -u)/hu.colonyhall.guard).
+
+# The Colonyhall server this machine belongs to.
+server: "https://colony.example.com"
+
+# The machine's token (colony guard enroll writes it, 0600).
+host_token_file: /Users/anna/.config/colonyhall/host.token
+
+# Folders the admin may give agents (read or write); nothing outside them.
+roots:
+  - /Users/anna/projects
+
+# The Claude Code login token set from the web app (Machines → Claude login).
+claude_token_file: /Users/anna/.config/colonyhall/claude.token
+
+# No sandbox on this system: only full-access agents run here.
+require_sandbox: false
+
+# Full-access agents: no sandbox, this user's own login, settings and rights.
+allow_unsandboxed: true
+
+# How many agent runs at once (0: no limit); more wait their turn.
+max_concurrent_runs: 2
+
+# Ports for app previews (full-access agents with previews on).
+preview_ports: 41000-41999

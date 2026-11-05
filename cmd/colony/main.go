@@ -17,9 +17,18 @@ import (
 	"syscall"
 
 	"colonyhall/internal/guard"
+	"colonyhall/internal/setup"
 )
 
 const usage = `usage:
+  colony setup [--server | --guard | --both] [--yes] [--dry-run] [--answers FILE] [--lang en|hu]
+      install or repair the server and/or this machine's guard (interactive)
+  colony doctor [--json]
+      check this machine's guard and say how to fix what fails
+  colony upgrade [--version vX.Y.Z]
+      download, verify and switch to a new colony, then restart the guard
+  colony uninstall [--server] [--purge] [--dry-run]
+      remove the guard service and binary (or the server stack); data stays unless --purge
   colony guard enroll -server URL -code CODE -name NAME [-token-file PATH]
       pair this machine (the admin creates the code); stores the host token
   colony guard install -config PATH [-print] [-force]
@@ -34,6 +43,15 @@ func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
 		fmt.Printf("colony %s (%s/%s)\n", guard.Version, runtime.GOOS, runtime.GOARCH)
 		return
+	}
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "setup", "doctor", "upgrade", "uninstall":
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			code := setup.Main(ctx, os.Args[1], os.Args[2:], os.Stdout)
+			stop()
+			os.Exit(code)
+		}
 	}
 	if len(os.Args) > 1 && os.Args[1] == "sandbox-bridge" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

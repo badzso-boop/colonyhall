@@ -1,0 +1,34 @@
+# Colonyhall guard, written by colony setup (docs/16-telepites.md).
+# Edit and restart the service to apply (systemctl --user restart colony-guard).
+
+# The Colonyhall server this machine belongs to.
+server: "http://100.85.0.1:8080"
+
+# The machine's token (colony guard enroll writes it, 0600).
+host_token_file: /home/anna/.config/colonyhall/host.token
+
+# Folders the admin may give agents (read or write); nothing outside them.
+roots:
+  - /home/anna/projects
+  - /home/anna/my code
+  # Windows drives (/mnt/c …) are slow from WSL and Windows permissions apply; add one only if needed.
+
+# The Claude Code login token set from the web app (Machines → Claude login).
+claude_token_file: /home/anna/.config/colonyhall/claude.token
+
+# Sandboxed agents run under bubblewrap; without it they do not run (require_sandbox).
+require_sandbox: true
+# The sandbox's network: filtered (only the AI providers and this server), log, or open.
+sandbox_network: filtered
+
+# Full-access agents: no sandbox, this user's own login, settings and rights.
+allow_unsandboxed: false
+
+# How many agent runs at once (0: no limit); more wait their turn.
+max_concurrent_runs: 0
+
+# Ports for app previews (full-access agents with previews on).
+preview_ports: 42000-42999
+
+# A folder for handing secrets to agents instead of the chat.
+exchange_dir: /home/anna/exchange
