@@ -1,0 +1,452 @@
+# Continuous integration (docs/02-muszaki-specifikacio.md, "CI").
+#
+# Every check is its own job and starts at once; only the image build waits
+# for the build job (and the browser tests will, once they exist). A small
+# `changes` job decides from the changed paths which jobs a change needs
+# (scripts/ci-changes.sh), and `ci-ok` is the one required status check: it
+# passes when every needed job passed and the rest were skipped by the filter
+# (scripts/ci-ok.sh). Adding a job means adding it to ci-ok's needs and to
+# scripts/ci-ok.sh, never changing the branch protection.
+#
+# The same jobs run locally with `make ci` (scripts/ci.sh).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Nightly: the race detector and the vulnerability scan only.
+    - cron: "17 2 * * *"
+
+# A newer push to the same branch or pull request cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nothing by default; every job reads the repository and nothing else. No
+# secrets anywhere in this workflow, so pull requests from forks run it as is
+# (pull_request, never pull_request_target). Third-party actions are pinned to
+# a commit, the tag is in the comment.
+permissions: {}
+
+env:
+  GOLANGCI_LINT_VERSION: v2.15.0
+  NODE_VERSION: 22
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      web: ${{ steps.filter.outputs.web }}
+      devpage: ${{ steps.filter.outputs.devpage }}
+      shell: ${{ steps.filter.outputs.shell }}
+      install: ${{ steps.filter.outputs.install }}
+      actions: ${{ steps.filter.outputs.actions }}
+      gen: ${{ steps.filter.outputs.gen }}
+      build: ${{ steps.filter.outputs.build }}
+      docker: ${{ steps.filter.outputs.docker }}
+      race: ${{ steps.filter.outputs.race }}
+      vuln: ${{ steps.filter.outputs.vuln }}
+      browser: ${{ steps.filter.outputs.browser }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        # Commit ids reach the shell through the environment only.
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.sha }}
+        run: |
+          case "$EVENT" in
+            workflow_dispatch) mode="all" ;;
+            schedule) mode="nightly" ;;
+            pull_request) mode="pr"; range="$BASE...$HEAD" ;;
+            push) mode="push"; range="$BEFORE..$HEAD" ;;
+            *) mode="all" ;;
+          esac
+          files=""
+          if [ -n "${range:-}" ]; then
+            # A new branch or a force push has no usable "before": run all.
+            if ! files=$(git diff --name-only "$range"); then mode="all"; fi
+          fi
+          echo "mode: $mode"; printf '%s\n' "$files" | sed 's/^/  /'
+          printf '%s\n' "$files" | scripts/ci-changes.sh "$mode" | tee -a "$GITHUB_OUTPUT"
+
+  go-test:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make test-unit
+
+  go-e2e:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make test-e2e
+
+  # The slowest Go job: on pushes to main and nightly, not on every pull
+  # request push (scripts/ci-changes.sh, race).
+  go-race:
+    needs: changes
+    if: needs.changes.outputs.race == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make test-race
+
+  go-pg:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      # The dev stack's image (deploy/compose.dev.yaml); the pgvector image
+      # once the search round needs it.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: colony
+          POSTGRES_PASSWORD: colony
+          POSTGRES_DB: colony_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U colony -d colony_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make test-pg TEST_DB='postgres://colony:colony@localhost:5432/colony_test?sslmode=disable'
+
+  go-lint:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+  gen-check:
+    needs: changes
+    if: needs.changes.outputs.gen == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # oapi-codegen (go tool), openapi-typescript (npm), sqlc (pinned image).
+      - run: make gen-check
+
+  web-typecheck:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: make web-typecheck
+
+  web-lint:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: make web-lint
+
+  # Vitest. One shard today: on a runner the whole suite takes about 40 s
+  # with 2 workers, less than a shard job's own set-up costs. Raise `shard`
+  # and SHARDS together when it grows past a few minutes
+  # (docs/handoff/42-ci-report.md has the measurements).
+  web-test:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: 1
+        # vite.config.ts takes a quarter of the cores (for a busy WSL host);
+        # a runner has only this job, so use them all.
+        run: make web-vitest VITEST_ARGS="--shard=$SHARD/$SHARDS --maxWorkers=100%"
+
+  devpage-test:
+    needs: changes
+    if: needs.changes.outputs.devpage == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: make test-devpage
+
+  shellcheck:
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: make shellcheck
+
+  # The workflows themselves, and the tests of the CI's own scripts.
+  actionlint:
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: make actionlint ci-selftest
+
+  vuln:
+    needs: changes
+    if: needs.changes.outputs.vuln == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: make vuln
+
+  # install.sh in Debian, Ubuntu and Fedora containers. It needs no build
+  # artifact (the tests serve a fake release), so it starts at once.
+  install-test:
+    needs: changes
+    if: needs.changes.outputs.install == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make test-install
+
+  # The PWA build and the binaries with the real embedded web/dist. Starts at
+  # once (it does not wait for the tests); the jobs after it use its output.
+  build:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: make web build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: binaries
+          path: bin/
+          retention-days: 1
+
+  # deploy/Dockerfile still builds (no push, one platform).
+  docker-image:
+    needs: [changes, build]
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Browser end-to-end tests: not written yet (docs/02-muszaki-specifikacio.md,
+  # "CI", has the plan). Switched on by `browser=$build` in
+  # scripts/ci-changes.sh; ci-ok already expects them then.
+  e2e-browser:
+    needs: [changes, build]
+    if: needs.changes.outputs.browser == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          echo "TODO: download the binaries artifact, start colonyhall with memory stores and"
+          echo "the dev seed, run the Playwright smoke paths, upload traces on failure."
+          exit 1
+
+  # The one required status check.
+  ci-ok:
+    needs:
+      - changes
+      - go-test
+      - go-e2e
+      - go-race
+      - go-pg
+      - go-lint
+      - gen-check
+      - web-typecheck
+      - web-lint
+      - web-test
+      - devpage-test
+      - shellcheck
+      - actionlint
+      - vuln
+      - build
+      - install-test
+      - docker-image
+      - e2e-browser
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: scripts/ci-ok.sh
