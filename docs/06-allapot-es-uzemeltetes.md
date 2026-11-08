@@ -97,6 +97,16 @@
 
 Új gépre, kollégának vagy más felhasználónak a telepítő: `install.sh` + `colony setup` (`docs/16-telepites.md`, terv: `docs/15-telepites-terv.md`). Kiadás: `v*` tag → `.github/workflows/release.yml` (binárisok, `SHA256SUMS`, GHCR-kép, attestation). Állapot gépenként: `colony doctor`, és a Gépek oldal „Állapot-ellenőrzés” sora. Norbi meglévő gépei (PC, homelab) továbbra is a `CLAUDE.md` szerinti kézi recepttel frissülnek, amíg az első kiadás el nem készül.
 
+### CodeGraph (39. kör)
+
+- **Hol van:** mindhárom őrgépen (PC, homelab, nato) a `~/.codegraph/versions/<verzió>` mappában, az indító a `~/.local/bin/codegraph` (a homelabon nem szerepel a nem interaktív SSH `PATH`-ján: mindig a teljes útvonallal). A telemetria ki van kapcsolva, és az őr minden indított CodeGraph-folyamatnak is kikapcsolja (`DO_NOT_TRACK=1`, `CODEGRAPH_TELEMETRY=0`), a frissítés-ellenőrzéssel és a háttérdémonnal együtt.
+- **Az indexek** a repók saját `.codegraph/` mappájában vannak (a `CODEGRAPH_DIR` rögzíti ezt a nevet a Windows-meghajtón is, ahol a CodeGraph magától `.codegraph-wsl`-t választana). A repó `.git/info/exclude` fájlja kap egy `.codegraph*/` sort, így git sosem látja őket. Melyik repó van indexelve, mikor, hány fájl: a Gépek oldal „CodeGraph” sora.
+- **Mit indexel az őr:** a direkt agentek gyökerét, ha az egy repó gyökere, és a futás után azokat a repókat a gyökér alatt, amelyekben az agent dolgozott; a sandboxos agentek írható mappáit és worktree-jét. Egy projektek gyűjtőmappáját (pl. `/mnt/g/Projects`) soha egészben. A `codegraph.max_files` (alapból 20 000) fölötti repó kimarad. Egyszerre egy indexelés fut, alacsony CPU- és IO-prioritással; a futásokat soha nem várakoztatja (index nélkül az eszköz azt feleli, hogy nincs indexelve).
+- **Újraindexelés kézzel:** `~/.local/bin/codegraph index <repó>` (teljes újraépítés), vagy töröld a repó `.codegraph/` mappáját: a következő futás újraépíti. Egy hibás indexet az őr óránként egyszer próbál újra.
+- **Frissítés** (kézi lépés, mindhárom gépen, a kolléga felhasználóján is): `~/.local/bin/codegraph upgrade`, majd az őr újraindítása (`systemctl --user restart colony-guard`), hogy az új verziót és a bundle új útvonalát vegye fel. Futó agentmunka alatt ne.
+- **Kikapcsolás:** a `guard.yaml`-ben `codegraph: { enabled: false }`, majd az őr újraindítása.
+- **Csak olvasható mappa:** a sandboxos agent csak olvasható mappája nem kap CodeGraph-ot (a szerver a zárfájlja miatt írna az index mellé), és az őr nem is indexeli.
+
 ### Ha a CI piros (42. kör)
 
 A GitHub minden `main`-re pusholt commitra és minden pull requestre lefuttatja a `.github/workflows/ci.yml`-t. A kötelező ellenőrzés egyetlen job, a **`ci-ok`**; ha piros, a futás oldalán a `ci-ok` naplója egy táblázatban mutatja, melyik job bukott el, vagy melyik maradt ki tévesen.
