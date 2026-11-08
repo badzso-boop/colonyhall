@@ -269,12 +269,16 @@ test("mentions", () => {
   assert.ok(textAll.includes("test@example.com"));
 });
 
-test("pathological 20,000-character line finishes fast (< 500ms)", () => {
+test("pathological 20,000-character line finishes fast (< 2 s of CPU)", () => {
   const line = "*_".repeat(10000);
-  const start = Date.now();
+  // CPU time of this process, not wall time, and a wide bound: the parser
+  // needs 20-250 ms, but 500 ms of wall time failed on loaded machines (make
+  // ci, CI runners). A backtracking blow-up takes far longer than 2 s.
+  const start = process.cpuUsage();
   const blocks = md.parse(line);
-  const elapsed = Date.now() - start;
-  assert.ok(elapsed < 500, `Pathological line took too long: ${elapsed}ms`);
+  const used = process.cpuUsage(start);
+  const elapsed = (used.user + used.system) / 1000;
+  assert.ok(elapsed < 2000, `Pathological line took too long: ${elapsed}ms of CPU`);
   assert.ok(blocks.length >= 1);
 });
 

@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { CheckCircle2, Copy, KeyRound, Loader2 } from "lucide-react";
 import { useNow } from "@/shared/hooks";
-import { Button, Dialog, IconButton, Input, toast } from "@/shared/ui";
+import { Button, Dialog, IconButton, Input, Select, toast } from "@/shared/ui";
 import { useCreatePairingCode, useHosts } from "../api";
-import { enrollCommand, guardYaml, mmss, newlyEnrolled, secondsLeft } from "../model";
+import { enrollCommand, guardYaml, installCommand, mmss, newlyEnrolled, secondsLeft, type InstallPlatform } from "../model";
 
 /** A command or file to copy, with its copy button. */
 function CodeBlock({ text, label }: { text: string; label: string }) {
@@ -31,6 +31,7 @@ export function NewHostWizard({ open, onOpenChange }: { open: boolean; onOpenCha
   const navigate = useNavigate();
   const create = useCreatePairingCode();
   const [name, setName] = useState("");
+  const [platform, setPlatform] = useState<InstallPlatform>("linux");
   const [known, setKnown] = useState<Set<string> | null>(null);
   const waiting = open && known !== null;
   const hosts = useHosts(open, waiting ? 5000 : undefined);
@@ -106,8 +107,25 @@ export function NewHostWizard({ open, onOpenChange }: { open: boolean; onOpenCha
                   {t("wizard.expires", { left: mmss(left) })}
                 </span>
               </div>
-              <p className="text-ui">{t("wizard.runHint")}</p>
-              <CodeBlock text={enrollCommand(server, code.code, name)} label={t("wizard.command")} />
+              <div className="flex flex-wrap items-center gap-2 text-ui">
+                <span>{t("wizard.platform")}</span>
+                <Select aria-label={t("wizard.platform")} value={platform} onChange={(e) => setPlatform(e.target.value as InstallPlatform)} className="w-auto">
+                  {(["linux", "wsl", "macos"] as const).map((p) => (
+                    <option key={p} value={p}>
+                      {t(`wizard.platforms.${p}`)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <p className="text-ui">{t("wizard.installRun")}</p>
+              <CodeBlock text={installCommand(server, code.code, name)} label={t("wizard.installCommand")} />
+              <p className="text-meta text-fg-muted">{t(`wizard.platformNotes.${platform}`)}</p>
+              <details className="text-ui">
+                <summary className="cursor-pointer text-fg-muted">{t("wizard.runHint")}</summary>
+                <div className="pt-2">
+                  <CodeBlock text={enrollCommand(server, code.code, name)} label={t("wizard.command")} />
+                </div>
+              </details>
               <p role="status" className="flex items-center gap-2 text-ui text-fg-muted">
                 <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" />
                 {t("wizard.waiting")}

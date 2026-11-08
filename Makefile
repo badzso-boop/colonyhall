@@ -3,7 +3,8 @@ COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
-.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web
+.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
+        test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -27,6 +28,15 @@ fake-agent:      ## Run the fake agent against the local server
 test:            ## Unit, contract (memory) and end-to-end tests
 	$(GO) test ./...
 
+test-unit:       ## Go tests without the end-to-end tests (CI job go-test)
+	$(GO) test $$($(GO) list ./... | grep -v /internal/e2e)
+
+test-e2e:        ## Go end-to-end tests (CI job go-e2e)
+	$(GO) test ./internal/e2e/
+
+test-race:       ## Every Go test with the race detector (CI job go-race)
+	$(GO) test -race ./...
+
 WEB_DEPS = web/node_modules/.package-lock.json
 
 $(WEB_DEPS): web/package.json web/package-lock.json
@@ -35,11 +45,20 @@ $(WEB_DEPS): web/package.json web/package-lock.json
 web: $(WEB_DEPS) ## Build the PWA into web/dist (embedded, served at /app/)
 	npm --prefix web run build
 
-test-web: $(WEB_DEPS) ## Frontend tests: dev page (Node) and PWA (typecheck, lint, Vitest)
+test-web: test-devpage web-typecheck web-lint web-vitest ## Frontend tests: dev page (Node) and PWA (typecheck, lint, Vitest)
+
+test-devpage:    ## The dev page's Node tests
 	node --test internal/httpserver/web/*.test.mjs
+
+web-typecheck: $(WEB_DEPS) ## PWA typecheck
 	npm --prefix web run typecheck
+
+web-lint: $(WEB_DEPS) ## PWA lint (eslint, the layer rules)
 	npm --prefix web run lint
-	npm --prefix web test
+
+VITEST_ARGS ?=
+web-vitest: $(WEB_DEPS) ## PWA Vitest (VITEST_ARGS="--shard=1/3" and the like)
+	npm --prefix web test -- $(VITEST_ARGS)
 
 test-pg:         ## Store contract tests against Postgres (needs `make dev`)
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
@@ -64,3 +83,37 @@ fmt:             ## gofmt
 
 build:           ## Build binaries into bin/
 	$(GO) build -o bin/ ./cmd/...
+
+VERSION    ?= v0.0.0-dev
+# Pinned tool images: the same version on every machine and in CI.
+SHELLCHECK  = docker run --rm -v "$(CURDIR)":/mnt -w /mnt koalaman/shellcheck:v0.11.0
+ACTIONLINT  = docker run --rm -v "$(CURDIR)":/repo -w /repo rhysd/actionlint:1.7.12
+GOVULNCHECK = $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0
+
+release-local: $(WEB_DEPS) ## Build the release artifacts into dist/ (VERSION=v1.2.3)
+	scripts/release.sh $(VERSION) dist
+
+shellcheck:      ## shellcheck every shell script (pinned Docker image)
+	$(SHELLCHECK) scripts/*.sh
+
+test-install:    ## install.sh tests in Debian, Ubuntu and Fedora containers (needs Docker)
+	scripts/test-install.sh
+
+actionlint:      ## actionlint on every GitHub workflow (Docker image)
+	$(ACTIONLINT) -color
+
+vuln:            ## Known vulnerabilities: govulncheck and npm audit (needs network)
+	$(GOVULNCHECK) ./...
+	npm --prefix web audit --omit=dev
+
+docker-image:    ## Build the server image without pushing it (CI job docker-image)
+	docker build -f deploy/Dockerfile -t colonyhall:ci .
+
+ci:              ## Every CI job that runs locally, in parallel, with a summary table
+	scripts/ci.sh
+
+ci-quick:        ## The fast subset while working: Go unit tests, lint, PWA typecheck and lint, changed Vitest files
+	scripts/ci.sh --quick
+
+ci-selftest:     ## Tests of the CI's own scripts (path filter, ci-ok gate)
+	scripts/ci-selftest.sh

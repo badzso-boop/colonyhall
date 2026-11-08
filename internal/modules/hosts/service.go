@@ -392,6 +392,11 @@ func (s *Service) ValidateNewAgent(ctx context.Context, by identity.Actor, in As
 	} else if in.Mode == AgentModeCompact {
 		sandbox = true
 	}
+	// A machine whose guard reported its system but no sandbox (macOS, or
+	// Linux without bubblewrap) cannot run a sandboxed agent (round 41).
+	if sandbox && h.Report.OS != "" && h.Report.Sandbox == "" {
+		return Assignment{}, nil, ErrNoSandboxOnHost
+	}
 	inRoots := func(p string) error {
 		if err := ValidatePath(p); err != nil {
 			return err
@@ -676,6 +681,16 @@ func (s *Service) SaveReport(ctx context.Context, h Host, r Report) error {
 	r.GuardVersion = clip(r.GuardVersion, 40)
 	r.OS = clip(r.OS, 40)
 	r.Sandbox = clip(r.Sandbox, 80)
+	if len(r.Doctor) > 40 {
+		r.Doctor = r.Doctor[:40]
+	}
+	for i := range r.Doctor {
+		r.Doctor[i].Id = clip(r.Doctor[i].Id, 40)
+		if d := r.Doctor[i].Detail; d != nil {
+			c := clip(*d, 200)
+			r.Doctor[i].Detail = &c
+		}
+	}
 	if len(r.AgyLimits) > 20 {
 		r.AgyLimits = r.AgyLimits[:20]
 	}

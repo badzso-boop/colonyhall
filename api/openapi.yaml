@@ -3358,6 +3358,12 @@ components:
         allow_unsandboxed: { type: boolean, description: "True when guard.yaml permits agents with sandbox: false" }
         exchange_dir: { type: string, description: "Path to the secrets exchange folder (optional)" }
         exchange_ok: { type: boolean, description: "True when exchange_dir exists and is writable" }
+        doctor:
+          type: array
+          maxItems: 40
+          description: "Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes"
+          items: { $ref: "#/components/schemas/DoctorCheck" }
+        doctor_checked_at: { type: string, format: date-time }
         claude_login_configured: { type: boolean, description: "Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA" }
         claude_login_set_at: { type: string, format: date-time, description: "Round 38: when the Claude login token (claude setup-token) was set; absent when there is none. The token itself never leaves the machine." }
         rejected:
@@ -4170,6 +4176,13 @@ components:
         op: { type: string, enum: [list_dirs] }
         path: { type: string, description: "Absolute folder on the machine; empty or omitted lists the roots." }
 
+    DoctorCheck:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, maxLength: 40, description: "config, server, token, claude, agy, sandbox, tmux, git, service, disk" }
+        status: { type: string, enum: [ok, warn, fail] }
+        detail: { type: string, maxLength: 200 }
     SetClaudeLoginRequest:
       type: object
       required: [token]

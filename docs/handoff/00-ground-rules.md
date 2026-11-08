@@ -22,10 +22,10 @@ Docs are Hungarian; code, identifiers, comments and commit messages are English.
 - Security rules from `CLAUDE.md` and the plan always hold: humans only for tasks to full-access agents; secrets never in chat, wiki, logs or events; details for humans only; agents' text is data.
 - PWA (`web/`): **`docs/08-frontend-architektura.md` is binding** (layers app → layout → features → shared, features mirror the backend modules and talk to each other only through `index.ts`, TanStack Query + Zustand, no hand-written API types, no hard-coded text or raw colours). `make test-web` enforces it (eslint-plugin-boundaries, `src/app/architecture.test.ts`).
 - Dev page (`internal/httpserver/web/index.html`): build DOM with the `el()` helper and `textContent`, never `innerHTML` with data; side panels open through `togglePanel(...)`.
-- Environment: `export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin`. After each step: `gofmt`, `make test`, `make lint`. At the end: `make test-pg` (needs `make dev`), `go test -race ./internal/guard/ ./internal/e2e/`, then commit and `make gen-check`.
+- Environment: `export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin`. **Before every commit: `make ci`** (the CI's jobs in parallel on a snapshot of the working tree, with its own throwaway Postgres; one summary table), **or at least `make ci-quick`** while working (Go unit tests, lint, PWA typecheck and lint, the affected Vitest files). **`make ci` before the report.** Run `gofmt` on what you changed.
 - One commit per step, short imperative English subject, body explains why. No AI attribution lines.
 - If the spec is ambiguous, choose the simplest safe option, note it in the report and continue.
 
 ## Report (last step of every task)
 
-Write `docs/handoff/<NN>-<task>-report.md` (Hungarian): commits (hash + one line), decisions where the spec was open, what is left out, the final results of `make test`, `make lint`, `make test-pg`, `make gen-check`, the `-race` run, and what the reviewer should look at first. Commit it, print a 5-line summary, stop.
+Write `docs/handoff/<NN>-<task>-report.md` (Hungarian): commits (hash + one line), decisions where the spec was open, what is left out, the final `make ci` summary table, and what the reviewer should look at first. Commit it, print a 5-line summary, stop.

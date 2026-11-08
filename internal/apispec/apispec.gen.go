@@ -453,6 +453,27 @@ func (e DelegationState) Valid() bool {
 	}
 }
 
+// Defines values for DoctorCheckStatus.
+const (
+	DoctorCheckStatusFail DoctorCheckStatus = "fail"
+	DoctorCheckStatusOk   DoctorCheckStatus = "ok"
+	DoctorCheckStatusWarn DoctorCheckStatus = "warn"
+)
+
+// Valid indicates whether the value is a known member of the DoctorCheckStatus enum.
+func (e DoctorCheckStatus) Valid() bool {
+	switch e {
+	case DoctorCheckStatusFail:
+		return true
+	case DoctorCheckStatusOk:
+		return true
+	case DoctorCheckStatusWarn:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FailFileFetchRequestErrorCode.
 const (
 	FailFileFetchRequestErrorCodeDenied      FailFileFetchRequestErrorCode = "denied"
@@ -2271,6 +2292,18 @@ type DelegationSettings struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// DoctorCheck defines model for DoctorCheck.
+type DoctorCheck struct {
+	Detail *string `json:"detail,omitempty"`
+
+	// Id config, server, token, claude, agy, sandbox, tmux, git, service, disk
+	Id     string            `json:"id"`
+	Status DoctorCheckStatus `json:"status"`
+}
+
+// DoctorCheckStatus defines model for DoctorCheck.Status.
+type DoctorCheckStatus string
+
 // EditWikiPageRequest defines model for EditWikiPageRequest.
 type EditWikiPageRequest struct {
 	BaseRev int       `json:"base_rev"`
@@ -2666,6 +2699,10 @@ type HostReport struct {
 		Name    string  `json:"name"`
 		Version *string `json:"version,omitempty"`
 	} `json:"clients"`
+
+	// Doctor Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes
+	Doctor          *[]DoctorCheck `json:"doctor,omitempty"`
+	DoctorCheckedAt *time.Time     `json:"doctor_checked_at,omitempty"`
 
 	// ExchangeDir Path to the secrets exchange folder (optional)
 	ExchangeDir *string `json:"exchange_dir,omitempty"`

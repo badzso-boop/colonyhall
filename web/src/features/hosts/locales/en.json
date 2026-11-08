@@ -106,7 +106,28 @@
     "agyUsage": "Antigravity usage",
     "agyGroup": "{{name}}: 5 hours {{five}}% (resets {{fiveReset}}), week {{week}}% (resets {{weekReset}})",
     "agyUsageNone": "no data yet",
-    "usageChecked": "last checked: {{when}}"
+    "usageChecked": "last checked: {{when}}",
+    "doctor": "Health checks",
+    "doctorChecked": "checked {{when}}",
+    "doctorHint": "For the fixes run on the machine: colony doctor",
+    "doctorNone": "none yet (an older guard, or it has not run)",
+    "checks": {
+      "config": "guard.yaml",
+      "server": "server",
+      "token": "machine token",
+      "claude": "Claude Code",
+      "agy": "Antigravity",
+      "sandbox": "sandbox",
+      "tmux": "tmux",
+      "git": "git",
+      "service": "service",
+      "disk": "free space"
+    },
+    "status": {
+      "ok": "ok",
+      "warn": "warning",
+      "fail": "failed"
+    }
   },
   "agents": {
     "new": "New agent on this machine",
@@ -220,7 +241,20 @@
     "done": "Done",
     "copy": "Copy {{what}}",
     "copied": "Copied.",
-    "copyFailed": "Could not copy."
+    "copyFailed": "Could not copy.",
+    "platform": "The machine's system:",
+    "platforms": {
+      "linux": "Linux",
+      "wsl": "Windows (WSL2)",
+      "macos": "macOS"
+    },
+    "installRun": "Run this on the machine, as the user who runs the agents. It downloads and verifies colony, then walks you through the setup (dependencies, guard.yaml, service). While the repository is private it needs the GitHub CLI (gh) to be logged in.",
+    "installCommand": "Install command",
+    "platformNotes": {
+      "linux": "Debian, Ubuntu, Fedora: it installs the missing programs (git, tmux, bubblewrap) after you confirm. Logging in to the AI clients (claude, agy) is your job.",
+      "wsl": "WSL needs systemd: if it is off, the installer turns it on, then `wsl --shutdown` in Windows is needed. On request it keeps WSL running after you log in to Windows.",
+      "macos": "macOS has no sandbox yet: only full-access agents run on this machine. The guard runs as a launchd service."
+    }
   },
   "agyBadge_one": "⏸ agy",
   "agyBadge_other": "⏸ agy ×{{count}}",

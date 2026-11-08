@@ -39,7 +39,7 @@ linters:
         guard-is-an-api-client:
           # The guard runs on agent machines and talks to the server only over
           # the public REST API.
-          files: ["**/internal/guard/**", "**/cmd/colony/**"]
+          files: ["**/internal/guard/**", "**/internal/setup/**", "**/cmd/colony/**"]
           deny:
             - pkg: colonyhall/internal/modules
               desc: the guard uses the REST API, not server internals

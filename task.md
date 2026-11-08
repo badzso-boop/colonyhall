@@ -14,6 +14,8 @@
 
 **Megvalósítva (2026-11-04, `docs/handoff/38-colleague-prompt.md`, jelentés: `docs/handoff/38-colleague-report.md`, ág: `feature/colleague`):** kolléga saját agentekkel — agent- és géptulajdonos, láthatóság, csatornatagok olvasási/írási joga, csak dokumentációt író tervező agent, Claude-belépés a PWA-ból, két őr egy gépen és `max_concurrent_runs`, runbook (`docs/10-kollega-beallitasa.md`), PWA (Gépek tagoknak, belépési ablak, tulajdonos a varázslóban, Futások személyszűrő).
 
+**Megvalósítva (2026-11-08, `docs/handoff/42-ci-prompt.md`, jelentés: `docs/handoff/42-ci-report.md`, ág: `feature/ci`, a `feature/installer`-re épül):** CI a GitHubon (`.github/workflows/ci.yml`): minden ellenőrzés külön, párhuzamos job, útvonalszűrő, egyetlen kötelező ellenőrzés (`ci-ok`), race és sérülékenységkeresés éjjel; `make ci` és `make ci-quick` helyben ugyanezzel a gráffal; a böngészős tesztek helye előkészítve. Norbira vár: az első futás a GitHubon és a branch protection (a jelentésben a lépések).
+
 ## Nyitott
 
 - [ ] **Slack-szerű felület a React PWA-hoz** (31. kör kész, 2026-10-30: keret, csoportosított oldalsáv, szálak jobb oldali panelben, összesítő sor, munkapanel a bal helyen, terminál- és fájlpanel, telefonos nézet; jelentés: `docs/handoff/31-pwa-foundation-report.md`. 32. kör kész, 2026-10-31: lebegő ablakok, Feladatok, Naptár, Jegyzetek, Ütemezések az ütemezőablakkal, wiki fórumként, Foglalások, Szabályok, Döntések; jelentés: `docs/handoff/32-pwa-pages-report.md`. 33. kör kész, 2026-11-01: agent-áttekintő, agentkönyvtár, létrehozó és beállító ablak, megváltoztathatatlan agentek (archiválás, újra kiadható handle, saját utasítás), gép- és agentszínek, Gépek oldal, mappaválasztó; jelentés: `docs/handoff/33-pwa-agents-hosts-report.md`; hátravan: 34–35. kör) (Norbi, 2026-10-29; a PWA-körhöz, nem a mostani fejlesztői oldalhoz). **A PWA legyen reszponzív, telefonon is teljes értékűen használható** (a részleteket később fejtjük ki: oszlopok, szál- és terminálpanel telefonon). A csatornákban most nagy a kavalkád, ezért: **35. kör kész, 2026-11-03:** Adminisztráció csoport (futások és költségbecslés, beállítások, felhasználók, tokenek és kulcscsere, audit CSV-vel, rendszerállapot), vészleállítás feloldása jelszóval, csatornazár; jelentés: `docs/handoff/35-pwa-admin-report.md`.
@@ -33,6 +35,15 @@
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
+
+- [ ] **Saját GitHub Actions runner a homelabon (Norbi, 2026-11-08).** Ok: privát repón a GitHub-runner percei fogynak (becslés: kódváltozásonként 28–36 számlázott perc, napi 10 pushnál havi 5–11 ezer perc a 2–3 ezer ingyenes helyett; `docs/handoff/42-ci-report.md`). A saját runner ingyenes, és a homelab erősebb is lehet a 2 magos GitHub-runnernél. Kiinduló pontok a tervhez:
+  - **Elszigetelés:** külön, eldobható környezet (VM vagy konténer saját felhasználóval), soha nem az élő Colonyhall-szerver, a közös Postgres, a Gitea vagy az őrök felhasználója; nincs hozzáférése a `~/homelab` titkaihoz és a Tailscale-hálózat többi gépéhez (tűzfal); `--ephemeral` runner, minden job tiszta környezetben indul.
+  - **Docker:** több job Dockert használ (sqlc, shellcheck, actionlint, `install-test`, a kép buildje, a Postgres service container). A runner nem kaphatja meg a homelab Docker-socketjét (az root-jogot ad a gépen): saját Docker (rootless, vagy Docker-in-Docker a VM-ben).
+  - **Csak privát repóhoz.** Ha a repó nyilvános lesz, idegen pull requestek kódja futna rajta: akkor vissza a GitHub-runnerekre (nyilvános repón ingyenesek), vagy a saját runner csak `main`-push és éjszakai futásra (`runs-on` címkével, pull requestre soha).
+  - **Workflow:** `runs-on: [self-hosted, linux, colonyhall]` címkével, vagy egy repóváltozóval (`vars.RUNNER`), hogy egy kapcsolóval vissza lehessen állni a GitHub-runnerre; a GHA cache és az artefaktok a saját runneren is működnek, a Go- és npm-cache a gépen is maradhat.
+  - **Erőforrások:** a homelab többi szolgáltatása ne lassuljon (CPU- és memóriakorlát a VM-nek/konténernek; a race detector és a Docker-build a legnehezebb); a régi runner-munkamappák és Docker-képek takarítása.
+  - **Üzemeltetés:** a runner frissítése (a GitHub a régi verziót egy idő után elutasítja), a regisztrációs token csak a gépen (soha nem a repóban vagy a chatben), naplók, és mi történik, ha a homelab nem fut (a jobok várnak: időkorlát vagy visszaállás a GitHub-runnerre).
+  - **Előfeltétel:** a homelabhoz nyúlás előtt a `~/homelab/CLAUDE.md` és `README.md`; a telepítést Norbi futtatja vagy hagyja jóvá.
 
 ## Kész
 

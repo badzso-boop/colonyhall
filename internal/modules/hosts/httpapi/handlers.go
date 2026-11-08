@@ -19,7 +19,7 @@ func init() {
 	httpx.RegisterForbidden(hosts.ErrForbidden, hosts.ErrNotAgent)
 	httpx.RegisterValidation(hosts.ErrBadPath, hosts.ErrBadMode, hosts.ErrBadClient, hosts.ErrBadName, hosts.ErrBadColor, hosts.ErrOutsideRoots, hosts.ErrClientNotReported, hosts.ErrBadDailyTokenLimit, hosts.ErrBadMaxSessionTokens,
 		hosts.ErrBadState, hosts.ErrNotAssigned, hosts.ErrHostRevoked, hosts.ErrBadAgentMode, hosts.ErrBadRootDir,
-		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient,
+		hosts.ErrWorktreeDirectOnly, hosts.ErrPreviewFullAccess, hosts.ErrWebReadSandboxedOnly, hosts.ErrNoSandboxOnHost, hosts.ErrBadApprovals, hosts.ErrApprovalsChatClient,
 		hosts.ErrBadWriteScope, hosts.ErrDocsOnlyClient, hosts.ErrDocsOnlyApprovals, hosts.ErrDocsOnlyPreview, hosts.ErrPartnerRequired,
 		hosts.ErrPartnerDocsOnly, hosts.ErrBadPartner)
 	httpx.RegisterStatus(http.StatusUnauthorized, hosts.ErrBadCode, hosts.ErrBadHostToken)

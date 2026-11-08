@@ -21,8 +21,9 @@ import (
 	"time"
 )
 
-// Version is reported to the server.
-const Version = "0.2.0"
+// Version is reported to the server; a release sets it with
+// -ldflags "-X colonyhall/internal/guard.Version=<tag>".
+var Version = "0.2.0"
 
 // configMaxAge is how long work may run on the last known grants when the
 // server cannot be reached; after that work is refused (fail closed).
@@ -60,6 +61,8 @@ type Supervisor struct {
 	host          *Client
 	claudeLimiter *ClaudeLimiter
 	login         *ClaudeLogin
+	doctor        []apispec.DoctorCheck
+	doctorAt      time.Time
 	agyLimiter    *AgyLimiter
 	roots         []string
 	home          string
@@ -863,6 +866,10 @@ func (s *Supervisor) report(ctx context.Context) {
 	}
 	s.mu.Lock()
 	r.AgyUsage = s.agyUsage
+	if !s.doctorAt.IsZero() {
+		at := s.doctorAt
+		r.Doctor, r.DoctorCheckedAt = s.doctor, &at
+	}
 	if !s.usageCheckedAt.IsZero() {
 		at := s.usageCheckedAt
 		r.UsageCheckedAt = &at

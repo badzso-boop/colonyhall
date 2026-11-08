@@ -187,6 +187,10 @@ func (s *Supervisor) clientBin(name string) string {
 	return defaultCommands[name]
 }
 
+// DoctorHook runs `colony doctor`'s checks for the host report (round 41);
+// cmd/colony sets it from the setup package. nil: no checks reported.
+var DoctorHook func(ctx context.Context) []apispec.DoctorCheck
+
 func (s *Supervisor) checkUsage(ctx context.Context, dir string) {
 	run := s.Run
 	if run == nil {
@@ -221,6 +225,13 @@ func (s *Supervisor) checkUsage(ctx context.Context, dir string) {
 			s.mu.Unlock()
 			changed = true
 		}
+	}
+	if DoctorHook != nil {
+		checks := DoctorHook(ctx)
+		s.mu.Lock()
+		s.doctor, s.doctorAt = checks, now
+		s.mu.Unlock()
+		changed = true
 	}
 	if changed {
 		s.mu.Lock()

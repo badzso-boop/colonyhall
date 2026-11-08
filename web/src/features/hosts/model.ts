@@ -81,6 +81,24 @@ export function enrollCommand(server: string, code: string, name: string): strin
   return `colony guard enroll -server ${shellWord(server)} -code ${shellWord(code)} -name ${shellWord(name.trim() || "gep")}`;
 }
 
+/** Where the releases come from; while the repository is private the
+ * installer is fetched with the GitHub CLI (Norbi, 2026-11-05). */
+export const releaseRepo = "badzso-boop/colonyhall";
+export const releasesPrivate = true;
+
+export type InstallPlatform = "linux" | "wsl" | "macos";
+
+/**
+ * The one-line install for a new machine: install.sh downloads and verifies
+ * colony, then `colony setup --guard` pairs it with this code.
+ */
+export function installCommand(server: string, code: string, name: string): string {
+  const setup = `--guard --server-url ${shellWord(server)} --pair-code ${shellWord(code)} --name ${shellWord(name.trim() || "gep")}`;
+  return releasesPrivate
+    ? `gh release download -R ${releaseRepo} -p install.sh -O - | sh -s -- ${setup}`
+    : `curl -fsSL https://github.com/${releaseRepo}/releases/latest/download/install.sh | sh -s -- ${setup}`;
+}
+
 /** Seconds until `expiresAt` (never negative). */
 export function secondsLeft(expiresAt: string, now: Date): number {
   return Math.max(0, Math.floor((new Date(expiresAt).getTime() - now.getTime()) / 1000));
