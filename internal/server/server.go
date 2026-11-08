@@ -137,6 +137,9 @@ var Version = "dev"
 
 // Options configures New.
 type Options struct {
+	// HTTPTimeouts bounds ordinary requests (not WebSockets, not /mcp).
+	HTTPTimeouts httpserver.Timeouts
+
 	Store       string // "postgres" or "memory"
 	DatabaseURL string
 	Clock       clock.Clock   // default: system clock
@@ -573,7 +576,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB)})
 
 	return &App{
-		Handler:      httpserver.New(mux, ready, opt.Logger),
+		Handler:      httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts),
 		Identity:     idSvc,
 		Conversation: cvSvc,
 		Delivery:     dlSvc,

@@ -23,6 +23,11 @@ var webFS embed.FS
 
 // New wraps the module routes with health endpoints, the dev page, the PWA and middleware.
 func New(api *http.ServeMux, ready func(context.Context) error, logger *slog.Logger) http.Handler {
+	return NewWithTimeouts(api, ready, logger, Timeouts{})
+}
+
+// NewWithTimeouts is New with per-request read and write deadlines.
+func NewWithTimeouts(api *http.ServeMux, ready func(context.Context) error, logger *slog.Logger, t Timeouts) http.Handler {
 	api.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -46,7 +51,7 @@ func New(api *http.ServeMux, ready func(context.Context) error, logger *slog.Log
 		panic(err)
 	}
 	api.Handle("GET /app/", appHandler(dist))
-	return recoverer(logger, logRequests(logger, api))
+	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist), deadlines(t, api))))
 }
 
 type statusWriter struct {
