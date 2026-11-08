@@ -67,6 +67,7 @@ type Supervisor struct {
 	roots         []string
 	home          string
 	sandbox       *Sandbox
+	codegraph     *CodeGraph
 	previews      *PreviewSupervisor
 	terminals     *TerminalManager
 	runSlots      *RunSlots // max_concurrent_runs, shared by all agents
@@ -134,6 +135,17 @@ func (s *Supervisor) start(ctx context.Context) error {
 	}
 	if s.sandbox == nil && s.Cfg.requireSandbox() {
 		s.Log.Warn("guard: no working bwrap; work runs are disabled (install bubblewrap or set require_sandbox: false)")
+	}
+	run := s.Run
+	if run == nil {
+		run = ExecRunner
+	}
+	if s.codegraph = DetectCodeGraph(ctx, s.Cfg.CodeGraph, s.home, run, s.Log); s.codegraph != nil {
+		s.codegraph.MaxFiles = s.Cfg.CodeGraph.MaxFiles
+		s.codegraph.Now = s.Now
+		s.codegraph.OnIndexed = func() { s.report(context.Background()) }
+		s.codegraph.Start(ctx)
+		s.Log.Info("guard: codegraph on", "version", s.codegraph.Version, "bin", s.codegraph.Bin)
 	}
 	if s.Cfg.ExchangeDir != "" {
 		if err := CheckExchangeDir(s.Cfg.ExchangeDir); err != nil {
@@ -594,6 +606,13 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 		FileFetchLimiter: s.fileFetchLimiter,
 		Terminals:        s.terminals,
 		RunSlots:         s.runSlots,
+		CodeGraph:        s.codegraph,
+	}
+	if ha.Sandbox && s.sandbox != nil && s.codegraph != nil {
+		sb, cg := s.sandbox, s.codegraph
+		agent.CodeGraphIndexWrap = func(repo, name string, args []string) (string, []string, []string, error) {
+			return sb.IndexCommand(cg, repo, name, args)
+		}
 	}
 	if wt != nil {
 		agent.WorktreeBranch = wt.Branch
@@ -695,12 +714,35 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		AllowWebRead: conf.Sandbox && conf.AllowWebRead && s.Cfg.SandboxNetwork != "open",
 		AllowPlanner: conf.Sandbox && s.Cfg.SandboxNetwork != "open",
 	}
+	// CodeGraph (round 39): in a writable working folder only. Its server
+	// cannot open an index in a read-only folder (it writes a lock file
+	// next to the database), so read-only grants are not indexed for it.
+	if cg := s.codegraph; cg != nil && (!conf.Sandbox || s.sandbox != nil) {
+		for _, g := range grants {
+			if g.Write {
+				p.IndexRepos = append(p.IndexRepos, g.Path)
+				if g.Path == work {
+					p.CodeGraph = true
+				}
+			}
+		}
+		if conf.Sandbox {
+			sb := s.sandbox
+			p.IndexWrap = func(repo, name string, args []string) (string, []string, []string, error) {
+				return sb.IndexCommand(cg, repo, name, args)
+			}
+		}
+	}
 	// Sandboxed agents may read and write their folders but not run
 	// commands (decision, 2026-10-15); full-access agents run as in a terminal.
 	p.NoExec = conf.Sandbox
 	if conf.Sandbox && s.sandbox != nil {
 		sb, client := s.sandbox, conf.Client
 		allowWebRead := conf.AllowWebRead
+		var cg *CodeGraph
+		if p.CodeGraph {
+			cg = s.codegraph
+		}
 		p.Wrap = func(name string, args []string) (string, []string, []string, error) {
 			if err := s.startProxyForRun(m, agentDir); err != nil {
 				return "", nil, nil, err
@@ -708,6 +750,7 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 			a, env, err := sb.CommandWithOptions(client, agentDir, work, grants, name, args, SandboxOptions{
 				AllowWebRead: allowWebRead,
 				AllowPlanner: true,
+				CodeGraph:    cg,
 			})
 			return sb.Bwrap, a, env, err
 		}
@@ -875,6 +918,7 @@ func (s *Supervisor) report(ctx context.Context) {
 		r.UsageCheckedAt = &at
 	}
 	s.mu.Unlock()
+	r.Codegraph = s.codegraph.Report()
 	r.AllowUnsandboxed = s.Cfg.AllowUnsandboxed
 	r.ExchangeDir = s.Cfg.ExchangeDir
 	r.ExchangeOK = s.exchangeOK

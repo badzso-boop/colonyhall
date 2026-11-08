@@ -158,6 +158,10 @@ type mcpServerDoc struct {
 	Headers map[string]string `json:"headers,omitempty"`
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	// AlwaysLoad: Claude Code loads the server's tools before the first
+	// prompt instead of deferring them behind a tool search.
+	AlwaysLoad bool `json:"alwaysLoad,omitempty"`
 }
 
 // DefaultApprovalTimeout is the time the approve tool waits for a human decision.
@@ -559,6 +563,15 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	}
 
 	rulesVer, rulesText := a.fetchRules(ctx)
+	codeGraph := a.CodeGraph != nil
+	if codeGraph {
+		var wrap IndexWrap
+		if a.Sandbox {
+			wrap = a.CodeGraphIndexWrap
+		}
+		a.CodeGraph.Ensure(rootDir, wrap)
+	}
+	rulesText = WithCodeGraphHint(rulesText, codeGraph)
 
 	req := DirectRequest{
 		Prompt:         prompt,
@@ -596,14 +609,16 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		if binErr != nil {
 			colonyBin = "colony"
 		}
-		var extraServers map[string]mcpServerDoc
+		extraServers := map[string]mcpServerDoc{}
 		if !a.Sandbox && !docsOnly { // terminals run commands
-			extraServers = map[string]mcpServerDoc{
-				"colony-terminal": {
-					Command: colonyBin,
-					Args:    a.terminalMCPArgs(stateDir, targetChannelID, targetThreadID),
-				},
+			extraServers["colony-terminal"] = mcpServerDoc{
+				Command: colonyBin,
+				Args:    a.terminalMCPArgs(stateDir, targetChannelID, targetThreadID),
 			}
+		}
+		if codeGraph { // read-only tools: the docs-only planner gets them too
+			extraServers["codegraph"] = a.CodeGraph.ClaudeServer()
+			req.CodeGraph = true
 		}
 		mcpPath, cl, err := writeMCPConfigWithServers(stateDir, a.Client.BaseURL, token, extraServers, extraHeaders)
 		if err != nil {
@@ -634,13 +649,14 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		if binErr != nil {
 			colonyBin = "colony"
 		}
-		var agyExtraServers map[string]any
+		agyExtraServers := map[string]any{}
+		if codeGraph {
+			agyExtraServers["codegraph"] = a.CodeGraph.AgyServer()
+		}
 		if !a.Sandbox {
-			agyExtraServers = map[string]any{
-				"colony-terminal": map[string]any{
-					"command": colonyBin,
-					"args":    a.terminalMCPArgs(stateDir, targetChannelID, targetThreadID),
-				},
+			agyExtraServers["colony-terminal"] = map[string]any{
+				"command": colonyBin,
+				"args":    a.terminalMCPArgs(stateDir, targetChannelID, targetThreadID),
 			}
 		}
 		cl, err := writeAgyMCPConfig(ws, a.Client.BaseURL, token, agyExtraServers, extraHeaders)
@@ -698,6 +714,13 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 	a.currentRunLeft = false
 	a.workMu.Unlock()
 	steps := pr.Finish()
+	if codeGraph && !a.Sandbox {
+		// The repositories under the root the run worked in (a root may be
+		// a folder of projects, which itself is never indexed).
+		for _, r := range reposFromSteps(rootDir, steps, 5) {
+			a.CodeGraph.Ensure(r, nil)
+		}
+	}
 
 	a.logDirectRun(sessionID, len(group), res, err)
 
