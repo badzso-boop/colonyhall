@@ -691,6 +691,28 @@ func (s *Service) SaveReport(ctx context.Context, h Host, r Report) error {
 			r.Doctor[i].Detail = &c
 		}
 	}
+	if cg := r.Codegraph; cg != nil {
+		cg.Version = clip(cg.Version, 40)
+		if len(cg.Repos) > 50 {
+			cg.Repos = cg.Repos[:50]
+		}
+		if cg.Repos == nil {
+			cg.Repos = []apispec.CodegraphRepo{}
+		}
+		for i := range cg.Repos {
+			rp := &cg.Repos[i]
+			rp.Path = clip(rp.Path, 1024)
+			switch rp.Status {
+			case apispec.CodegraphRepoStatusIndexed, apispec.CodegraphRepoStatusFailed, apispec.CodegraphRepoStatusSkipped:
+			default:
+				rp.Status = apispec.CodegraphRepoStatusFailed
+			}
+			if d := rp.Detail; d != nil {
+				c := clip(*d, 200)
+				rp.Detail = &c
+			}
+		}
+	}
 	if len(r.AgyLimits) > 20 {
 		r.AgyLimits = r.AgyLimits[:20]
 	}

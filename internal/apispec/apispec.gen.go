@@ -363,6 +363,27 @@ func (e ChannelKind) Valid() bool {
 	}
 }
 
+// Defines values for CodegraphRepoStatus.
+const (
+	CodegraphRepoStatusFailed  CodegraphRepoStatus = "failed"
+	CodegraphRepoStatusIndexed CodegraphRepoStatus = "indexed"
+	CodegraphRepoStatusSkipped CodegraphRepoStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the CodegraphRepoStatus enum.
+func (e CodegraphRepoStatus) Valid() bool {
+	switch e {
+	case CodegraphRepoStatusFailed:
+		return true
+	case CodegraphRepoStatusIndexed:
+		return true
+	case CodegraphRepoStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompactionState.
 const (
 	CompactionStateDone    CompactionState = "done"
@@ -1964,6 +1985,30 @@ type ClaudeRateLimitWindow struct {
 	Utilization float32 `json:"utilization"`
 }
 
+// CodegraphRepo defines model for CodegraphRepo.
+type CodegraphRepo struct {
+	// Detail Why it failed or was skipped
+	Detail *string `json:"detail,omitempty"`
+
+	// Files Files in the repository (git ls-files), counted before indexing
+	Files *int `json:"files,omitempty"`
+
+	// IndexedAt The last successful index or sync
+	IndexedAt *time.Time          `json:"indexed_at,omitempty"`
+	Path      string              `json:"path"`
+	Status    CodegraphRepoStatus `json:"status"`
+}
+
+// CodegraphRepoStatus defines model for CodegraphRepo.Status.
+type CodegraphRepoStatus string
+
+// CodegraphReport Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml.
+type CodegraphReport struct {
+	// Repos The indexed (or tried) repositories, most recent first.
+	Repos   []CodegraphRepo `json:"repos"`
+	Version string          `json:"version"`
+}
+
 // Compaction defines model for Compaction.
 type Compaction struct {
 	ChannelId            openapi_types.UUID  `json:"channel_id"`
@@ -2699,6 +2744,9 @@ type HostReport struct {
 		Name    string  `json:"name"`
 		Version *string `json:"version,omitempty"`
 	} `json:"clients"`
+
+	// Codegraph Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml.
+	Codegraph *CodegraphReport `json:"codegraph,omitempty"`
 
 	// Doctor Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes
 	Doctor          *[]DoctorCheck `json:"doctor,omitempty"`

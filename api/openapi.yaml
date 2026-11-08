@@ -3364,6 +3364,7 @@ components:
           description: "Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes"
           items: { $ref: "#/components/schemas/DoctorCheck" }
         doctor_checked_at: { type: string, format: date-time }
+        codegraph: { $ref: "#/components/schemas/CodegraphReport" }
         claude_login_configured: { type: boolean, description: "Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA" }
         claude_login_set_at: { type: string, format: date-time, description: "Round 38: when the Claude login token (claude setup-token) was set; absent when there is none. The token itself never leaves the machine." }
         rejected:
@@ -4183,6 +4184,26 @@ components:
         id: { type: string, maxLength: 40, description: "config, server, token, claude, agy, sandbox, tmux, git, service, disk" }
         status: { type: string, enum: [ok, warn, fail] }
         detail: { type: string, maxLength: 200 }
+    CodegraphReport:
+      type: object
+      description: "Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml."
+      required: [version, repos]
+      properties:
+        version: { type: string, maxLength: 40 }
+        repos:
+          type: array
+          maxItems: 50
+          description: The indexed (or tried) repositories, most recent first.
+          items: { $ref: "#/components/schemas/CodegraphRepo" }
+    CodegraphRepo:
+      type: object
+      required: [path, status]
+      properties:
+        path: { type: string, maxLength: 1024 }
+        status: { type: string, enum: [indexed, failed, skipped] }
+        files: { type: integer, description: "Files in the repository (git ls-files), counted before indexing" }
+        indexed_at: { type: string, format: date-time, description: "The last successful index or sync" }
+        detail: { type: string, maxLength: 200, description: "Why it failed or was skipped" }
     SetClaudeLoginRequest:
       type: object
       required: [token]
