@@ -36,6 +36,15 @@
 
 ## Tervezendő (csak terv, megvalósítás külön döntéssel)
 
+- [ ] **Saját GitHub Actions runner a homelabon (Norbi, 2026-11-08).** Ok: privát repón a GitHub-runner percei fogynak (becslés: kódváltozásonként 28–36 számlázott perc, napi 10 pushnál havi 5–11 ezer perc a 2–3 ezer ingyenes helyett; `docs/handoff/42-ci-report.md`). A saját runner ingyenes, és a homelab erősebb is lehet a 2 magos GitHub-runnernél. Kiinduló pontok a tervhez:
+  - **Elszigetelés:** külön, eldobható környezet (VM vagy konténer saját felhasználóval), soha nem az élő Colonyhall-szerver, a közös Postgres, a Gitea vagy az őrök felhasználója; nincs hozzáférése a `~/homelab` titkaihoz és a Tailscale-hálózat többi gépéhez (tűzfal); `--ephemeral` runner, minden job tiszta környezetben indul.
+  - **Docker:** több job Dockert használ (sqlc, shellcheck, actionlint, `install-test`, a kép buildje, a Postgres service container). A runner nem kaphatja meg a homelab Docker-socketjét (az root-jogot ad a gépen): saját Docker (rootless, vagy Docker-in-Docker a VM-ben).
+  - **Csak privát repóhoz.** Ha a repó nyilvános lesz, idegen pull requestek kódja futna rajta: akkor vissza a GitHub-runnerekre (nyilvános repón ingyenesek), vagy a saját runner csak `main`-push és éjszakai futásra (`runs-on` címkével, pull requestre soha).
+  - **Workflow:** `runs-on: [self-hosted, linux, colonyhall]` címkével, vagy egy repóváltozóval (`vars.RUNNER`), hogy egy kapcsolóval vissza lehessen állni a GitHub-runnerre; a GHA cache és az artefaktok a saját runneren is működnek, a Go- és npm-cache a gépen is maradhat.
+  - **Erőforrások:** a homelab többi szolgáltatása ne lassuljon (CPU- és memóriakorlát a VM-nek/konténernek; a race detector és a Docker-build a legnehezebb); a régi runner-munkamappák és Docker-képek takarítása.
+  - **Üzemeltetés:** a runner frissítése (a GitHub a régi verziót egy idő után elutasítja), a regisztrációs token csak a gépen (soha nem a repóban vagy a chatben), naplók, és mi történik, ha a homelab nem fut (a jobok várnak: időkorlát vagy visszaállás a GitHub-runnerre).
+  - **Előfeltétel:** a homelabhoz nyúlás előtt a `~/homelab/CLAUDE.md` és `README.md`; a telepítést Norbi futtatja vagy hagyja jóvá.
+
 ## Kész
 
 - [x] **Antigravity kvótahiba: ok és modellenkénti szünet (37. kör)** (2026-11-03, `docs/handoff/37-agy-quota-report.md`, ág: `feature/agy-quota`): az őr kiolvassa az agy hibájának okát (`error` mező, tartaléknak az agy naplója), kvótahibánál a modellt a visszaállásig szünetelteti, nem számolja próbálkozásnak, szálanként egy csendes üzenetet küld, a Gépek oldal mutatja.
