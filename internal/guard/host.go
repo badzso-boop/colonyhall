@@ -132,7 +132,7 @@ func (s *Supervisor) start(ctx context.Context) error {
 	if s.sandbox != nil {
 		s.sandbox.TokenSource = s.login.Token
 	}
-	if s.sandbox == nil && *s.Cfg.RequireSandbox {
+	if s.sandbox == nil && s.Cfg.requireSandbox() {
 		s.Log.Warn("guard: no working bwrap; work runs are disabled (install bubblewrap or set require_sandbox: false)")
 	}
 	if s.Cfg.ExchangeDir != "" {
@@ -520,7 +520,7 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			return ad
 		}
 	}
-	if ha.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox && ha.Client != "claude-code" {
+	if ha.Sandbox && s.sandbox == nil && s.Cfg.requireSandbox() && ha.Client != "claude-code" {
 		// Only Claude Code can run a decision without any tools; other
 		// clients would read untrusted messages with tools, unsandboxed.
 		s.Log.Error("guard: agent not started: its client needs the sandbox even to decide", "agent", "@"+ha.Handle, "client", ha.Client)
@@ -649,7 +649,7 @@ func (s *Supervisor) policy(m *managed, agentDir string) WorkPolicy {
 		return WorkPolicy{Reason: "I can only chat here; ask a human to run this task."}
 	case !fresh:
 		return WorkPolicy{Reason: "I cannot confirm my folder access with the server right now; try again later."}
-	case conf.Sandbox && s.sandbox == nil && *s.Cfg.RequireSandbox:
+	case conf.Sandbox && s.sandbox == nil && s.Cfg.requireSandbox():
 		return WorkPolicy{Reason: "Work is disabled on my machine: no sandbox (bwrap) is available there."}
 	case conf.Sandbox && s.sandbox != nil && !s.sandbox.HasUnshareNet && s.Cfg.SandboxNetwork != "open":
 		return WorkPolicy{Reason: "Work is disabled on my machine: sandbox network isolation (--unshare-net) is not available (update bubblewrap or set sandbox_network: open)."}

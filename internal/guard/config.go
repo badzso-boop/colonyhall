@@ -271,3 +271,9 @@ func (a AgentConfig) Token() (string, error) {
 	}
 	return strings.TrimSpace(string(raw)), nil
 }
+
+// requireSandbox is RequireSandbox with its default (true) when the config
+// did not go through Validate.
+func (c *Config) requireSandbox() bool {
+	return c.RequireSandbox == nil || *c.RequireSandbox
+}

@@ -21,6 +21,10 @@ import (
 )
 
 func TestE2E_SandboxPlannerTools(t *testing.T) {
+	// The guard writes the agent's mcp.json while building the bwrap command.
+	if guard.DetectSandbox(context.Background(), t.TempDir(), t.TempDir()) == nil {
+		t.Skip("bwrap not available")
+	}
 	e := newEnv(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

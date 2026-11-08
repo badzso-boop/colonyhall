@@ -137,10 +137,16 @@ func TestParseBoundsManyHostileRules(t *testing.T) {
 	b.WriteString("END:VCALENDAR\r\n")
 	from := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	start := time.Now()
-	if _, err := ParseCalendar([]byte(b.String()), time.UTC, from, from.AddDate(0, 0, 60)); err != nil {
+	evs, err := ParseCalendar([]byte(b.String()), time.UTC, from, from.AddDate(0, 0, 60))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	// The budget is the real bound; the time is only a backstop, wide enough
+	// for the race detector on a small CI runner (0.15 s plain, 1-2 s there).
+	if len(evs) > maxOccurrences {
+		t.Fatalf("500 hostile rules gave %d events, over the budget of %d", len(evs), maxOccurrences)
+	}
+	if d := time.Since(start); d > 10*time.Second {
 		t.Fatalf("500 hostile rules took %v", d)
 	}
 }

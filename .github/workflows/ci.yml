@@ -97,6 +97,14 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+      - name: Enable the sandbox tests (bwrap)
+        # The guard's sandbox tests skip themselves without a working bwrap,
+        # and Ubuntu 24.04 blocks unprivileged user namespaces by default.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --bind / / true
       - run: make test-unit
 
   go-e2e:
@@ -113,6 +121,14 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+      - name: Enable the sandbox tests (bwrap)
+        # The guard's sandbox tests skip themselves without a working bwrap,
+        # and Ubuntu 24.04 blocks unprivileged user namespaces by default.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --bind / / true
       - run: make test-e2e
 
   # The slowest Go job: on pushes to main and nightly, not on every pull
@@ -131,6 +147,14 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+      - name: Enable the sandbox tests (bwrap)
+        # The guard's sandbox tests skip themselves without a working bwrap,
+        # and Ubuntu 24.04 blocks unprivileged user namespaces by default.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --unshare-all --bind / / true
       - run: make test-race
 
   go-pg:
