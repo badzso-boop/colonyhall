@@ -5,12 +5,13 @@
 #
 #   scripts/ci.sh [--quick] [--only "job ..."] [--skip "job ..."] [--keep]
 #
-# The full run checks a snapshot of the working tree (HEAD plus uncommitted
-# and untracked files) in a temp folder, so you can keep editing meanwhile and
-# jobs that write files (gen-check, the PWA build) cannot disturb the others.
-# Its Postgres is a throwaway container on a free port, never the dev stack.
-# --quick runs a fast subset in place: Go unit tests, lint, PWA typecheck and
-# lint, and the Vitest files affected by uncommitted changes.
+# It checks a snapshot of the working tree (HEAD plus uncommitted and
+# untracked files) in a temp folder on a Linux filesystem: you can keep
+# editing meanwhile, jobs that write files (gen-check, the PWA build) cannot
+# disturb the others, and it is much faster than the Windows drive. Its
+# Postgres is a throwaway container on a free port, never the dev stack.
+# --quick runs a fast subset: Go unit tests, lint, PWA typecheck and lint, and
+# the Vitest files affected by uncommitted changes.
 set -euo pipefail
 
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
@@ -90,7 +91,8 @@ cmd[docker-image]="mk docker-image"
 
 if [ "$quick" = 1 ]; then
   jobs=(go-test go-lint web-typecheck web-lint web-test)
-  cmd[web-test]="mk web-vitest VITEST_ARGS=--changed"
+  # The snapshot is checked out at the stash commit: compare with the real HEAD.
+  cmd[web-test]="mk web-vitest VITEST_ARGS='--changed $(git -C "$repo" rev-parse HEAD)'"
 else
   jobs=(go-test go-e2e go-race go-pg go-lint web-typecheck web-lint web-test devpage-test
     shellcheck actionlint vuln install-test gen-check build docker-image)
@@ -108,36 +110,26 @@ has() { [[ " ${selected[*]} " == *" $1 "* ]]; }
 # The PWA's packages for the snapshots: one install per package-lock.json,
 # kept under ~/.cache (a Linux filesystem). On a Windows drive under WSL
 # (/mnt/g) jsdom loads so slowly that Vitest takes 20 minutes instead of 40 s.
-modules=""
-if [ "$quick" = 0 ]; then
-  lockhash=$(git -C "$repo" hash-object web/package-lock.json)
-  cache="${XDG_CACHE_HOME:-$HOME/.cache}/colonyhall-ci/web-$lockhash"
-  if [ ! -f "$cache/node_modules/.package-lock.json" ]; then
-    echo "npm ci into $cache (once per package-lock.json)"
-    rm -rf "$cache" && mkdir -p "$cache"
-    cp "$repo/web/package.json" "$repo/web/package-lock.json" "$cache/"
-    mkdir -p "$cache/scripts" && cp "$repo"/web/scripts/*.mjs "$cache/scripts/"
-    npm --prefix "$cache" ci --no-audit --no-fund >"$logs/npm-ci.log" 2>&1
-  fi
-  modules="$cache/node_modules"
-elif [ ! -d "$repo/web/node_modules" ] || [ "$repo/web/package-lock.json" -nt "$repo/web/node_modules/.package-lock.json" ]; then
-  echo "npm ci (web/package-lock.json changed)"
-  npm --prefix "$repo/web" ci --no-audit --no-fund >"$logs/npm-ci.log" 2>&1
+lockhash=$(git -C "$repo" hash-object web/package-lock.json)
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/colonyhall-ci/web-$lockhash"
+if [ ! -f "$cache/node_modules/.package-lock.json" ]; then
+  echo "npm ci into $cache (once per package-lock.json)"
+  rm -rf "$cache" && mkdir -p "$cache"
+  cp "$repo/web/package.json" "$repo/web/package-lock.json" "$cache/"
+  mkdir -p "$cache/scripts" && cp "$repo"/web/scripts/*.mjs "$cache/scripts/"
+  npm --prefix "$cache" ci --no-audit --no-fund >"$logs/npm-ci.log" 2>&1
 fi
+modules="$cache/node_modules"
 
-if [ "$quick" = 1 ]; then
-  main_dir=$repo chain_dir=$repo
-else
-  echo "snapshot of the working tree in $work"
-  main_dir="$work/src"
-  snapshot "$main_dir"
-  chain_dir="$work/src-build"
-  if has gen-check || has build || has docker-image; then snapshot "$chain_dir"; fi
-  # The snapshots' package.json is newer than the cached install now, and
-  # make would run npm ci through the link (it empties the shared cache; a
-  # recursive make does not inherit -o). Mark the install as fresh instead.
-  touch "$modules/.package-lock.json"
-fi
+echo "snapshot of the working tree in $work"
+main_dir="$work/src"
+snapshot "$main_dir"
+chain_dir="$work/src-build"
+if has gen-check || has build || has docker-image; then snapshot "$chain_dir"; fi
+# The snapshots' package.json is newer than the cached install now, and make
+# would run npm ci through the link (it empties the shared cache; a recursive
+# make does not inherit -o). Mark the install as fresh instead.
+touch "$modules/.package-lock.json"
 export -f mk
 
 pg_env=""
