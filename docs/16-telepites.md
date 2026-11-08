@@ -14,13 +14,15 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 
 ## A szerver
 
-- Mappa: `~/.local/share/colonyhall/server/` (`compose.yaml`, `.env` `0600`-val, `backup.sh`).
+- Mappa: `~/.local/share/colonyhall/server/` (`compose.yaml`, `.env` `0600`-val; macOS-en a `backup.sh` is).
 - Adatbázis: alapból saját Postgres a compose-ban; vagy meglévő Postgres kapcsolati URL-lel (a kérdés rejtett, mert jelszót tartalmaz). A konténerből a `localhost` maga a konténer: a gép címét vagy egy Docker-hálózat nevét kell megadni.
 - Cím: alapból `127.0.0.1:8080`. Választható a helyi hálózati vagy a Tailscale-cím. `0.0.0.0` csak külön megerősítéssel, felügyelet nélküli módban csak `allow_all_interfaces: true`-val.
 - Linuxon a Docker-parancsok **`sudo`-val** futnak (döntés: a `docker` csoport tagsága root-egyenértékű).
 - Első tulajdonos: felhasználónév, név, jelszó (rejtve, kétszer; üresen generál egyet, és egyszer kiírja). A jelszó a `colonyhall bootstrap`-nak stdin-en megy, parancssorba nem kerül.
-- Mentés (opció): éjjel 3:30-kor `pg_dump` és a fájlkötet archívuma a `~/colonyhall-backups/`-ba, 14 nap megőrzéssel (Linuxon rendszerszintű systemd-időzítő, mert a Docker `sudo`-val fut; macOS-en launchd).
-  - Visszaállítás: `sudo docker compose … exec -T db pg_restore -U colony -d colonyhall --clean < colonyhall-ÉÉÉÉHHNN-ÓÓPP.dump`, a fájlok: `docker run --rm -v colonyhall_files:/data -v ~/colonyhall-backups:/backup busybox tar xzf /backup/files-….tar.gz -C /data`.
+- Mentés (opció): éjjel 3:30-kor `pg_dump` és a fájlkötet archívuma, 14 nap megőrzéssel.
+  - **Linuxon** rendszerszintű systemd-időzítő rootként fut (mert a Docker `sudo`-val fut), ezért minden, amit használ, root tulajdonú: a szkript `/usr/local/lib/colonyhall/backup.sh`, a mentések helye `/var/backups/colonyhall/` (`0700`). A felhasználó által írható szkriptet vagy mappát a root nem futtathat és nem írhat, különben a felhasználó (vagy bármi, ami a nevében fut, pl. egy agent) rootot kapna. A szkript a felhasználó `compose.yaml`-jét és `.env`-jét sem olvassa: az adatbázis-konténert a compose címkéi alapján találja meg.
+  - **macOS-en** launchd ügynök a felhasználó nevében, a mentések a `~/colonyhall-backups/`-ba.
+  - Visszaállítás: `sudo docker compose … exec -T db pg_restore -U colony -d colonyhall --clean < colonyhall-ÉÉÉÉHHNN-ÓÓPP.dump`, a fájlok: `sudo docker run --rm -v colonyhall_files:/data -v /var/backups/colonyhall:/backup busybox tar xzf /backup/files-….tar.gz -C /data` (macOS-en `~/colonyhall-backups` és `sudo` nélkül).
 - Frissítés: `colony setup --server --upgrade` (az új képcímke az `.env`-be, `pull`, `up -d`; a migrációk induláskor futnak). Előbb a szerver, utána az őrök.
 - Eltávolítás: `colony uninstall --server` (az adat marad), `--purge`-dzsel az adat is törlődik.
 

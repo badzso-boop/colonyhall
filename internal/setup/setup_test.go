@@ -589,3 +589,34 @@ func TestDoctorForTheHostReportCarriesNoFixText(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// The Linux backup job runs as root, so nothing it runs, reads or writes may
+// be in the user's home: a user-writable script or backup folder would give
+// the user (or anything running as the user) root.
+func TestRootBackupUsesOnlyRootOwnedPaths(t *testing.T) {
+	e, fr, _ := testEnv(t, linux, "", true)
+	if err := e.installBackups(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(e.backupScript(), e.Home) {
+		t.Errorf("the root backup script refers to the user's home:\n%s", e.backupScript())
+	}
+	var script, unit bool
+	for _, c := range fr.Cmds {
+		if c.Name == "tee" && slices.Equal(c.Args, []string{rootBackupScript}) {
+			script = c.Sudo && c.Stdin == e.backupScript()
+		}
+		if c.Name == "tee" && slices.Equal(c.Args, []string{"/etc/systemd/system/colonyhall-backup.service"}) {
+			unit = strings.Contains(c.Stdin, "ExecStart=/bin/sh "+rootBackupScript+"\n")
+		}
+		if strings.Contains(c.Stdin, e.Home) || slices.ContainsFunc(c.Args, func(a string) bool { return strings.HasPrefix(a, e.Home) }) {
+			t.Errorf("a root step touches the user's home: %s", c.String())
+		}
+	}
+	if !script || !unit {
+		t.Errorf("want the script written by root to %s and run from there (script %v, unit %v):\n%s", rootBackupScript, script, unit, strings.Join(fr.Lines(), "\n"))
+	}
+	if _, err := os.Stat(filepath.Join(e.serverDir(), "backup.sh")); err == nil {
+		t.Error("a backup.sh in the user's home on Linux")
+	}
+}

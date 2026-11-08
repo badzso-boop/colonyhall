@@ -316,7 +316,19 @@ func (e *Env) askAdminPassword() (pw string, generated bool, err error) {
 	}
 }
 
-func (e *Env) backupDir() string { return filepath.Join(e.Home, "colonyhall-backups") }
+// backupDir is where the nightly backups go. On Linux the job runs as root
+// (Docker needs sudo), so it writes to a root-owned folder: in the user's home
+// a symlink at the predictable file name would make root overwrite any file.
+func (e *Env) backupDir() string {
+	if e.P.OS == "linux" {
+		return "/var/backups/colonyhall"
+	}
+	return filepath.Join(e.Home, "colonyhall-backups")
+}
+
+// rootBackupScript is the Linux backup script: root-owned, because root runs
+// it and a script the user can edit would give the user root.
+const rootBackupScript = "/usr/local/lib/colonyhall/backup.sh"
 
 // serverURL is where this machine reaches the server.
 func (e *Env) serverURL() string {
@@ -494,36 +506,36 @@ func (e *Env) waitReady(base string, limit time.Duration) error {
 }
 
 // backupScript dumps the database (own Postgres) and archives the files
-// volume into the backup folder, keeping 14 days.
+// volume into the backup folder, keeping 14 days. It reads nothing the user
+// can write: the database container is found by its compose labels, not
+// through the compose.yaml and .env in the user's home.
 func (e *Env) backupScript() string {
-	dir := e.serverDir()
-	c := e.compose()
-	base := strings.TrimPrefix(c.String(), "sudo ")
 	return fmt.Sprintf(`#!/bin/sh
 # Colonyhall nightly backup (colony setup). Restore: docs/16-telepites.md.
 set -eu
+umask 077
 out=%q
 mkdir -p "$out"
 stamp=$(date +%%Y%%m%%d-%%H%%M)
-cd %q
-if grep -q '^POSTGRES_PASSWORD=' .env; then
-  %s exec -T db pg_dump -U colony -d colonyhall -Fc > "$out/colonyhall-$stamp.dump"
+db=$(docker ps -q --filter label=com.docker.compose.project=colonyhall --filter label=com.docker.compose.service=db)
+if [ -n "$db" ]; then
+  docker exec "$db" pg_dump -U colony -d colonyhall -Fc > "$out/colonyhall-$stamp.dump"
 fi
 docker run --rm -v colonyhall_files:/data:ro -v "$out":/backup busybox tar czf "/backup/files-$stamp.tar.gz" -C /data .
 find "$out" -name 'colonyhall-*.dump' -mtime +14 -delete
 find "$out" -name 'files-*.tar.gz' -mtime +14 -delete
-`, e.backupDir(), dir, base)
+`, e.backupDir())
 }
 
 // installBackups writes the script and schedules it nightly: a root
 // systemd timer on Linux (Docker runs with sudo there), a launchd agent on
 // macOS.
 func (e *Env) installBackups() error {
-	script := filepath.Join(e.serverDir(), "backup.sh")
-	if err := e.WriteFile(script, []byte(e.backupScript()), 0o700); err != nil {
-		return err
-	}
 	if e.P.OS == "darwin" {
+		script := filepath.Join(e.serverDir(), "backup.sh")
+		if err := e.WriteFile(script, []byte(e.backupScript()), 0o700); err != nil {
+			return err
+		}
 		plist := launchdPlist("hu.colonyhall.backup", []string{"/bin/sh", script}, "", false, filepath.Join(e.Home, "Library", "Logs", "colonyhall"), 3)
 		path := filepath.Join(e.Home, "Library", "LaunchAgents", "hu.colonyhall.backup.plist")
 		if err := e.WriteFile(path, []byte(plist), 0o644); err != nil {
@@ -532,7 +544,13 @@ func (e *Env) installBackups() error {
 		_, err := e.Exec(Cmd{Name: "launchctl", Args: []string{"bootstrap", "gui/" + strconv.Itoa(os.Getuid()), path}})
 		return err
 	}
-	unit := fmt.Sprintf("[Unit]\nDescription=Colonyhall backup\n\n[Service]\nType=oneshot\nExecStart=/bin/sh %s\n", script)
+	if _, err := e.Exec(Cmd{Name: "install", Args: []string{"-d", "-o", "root", "-g", "root", "-m", "0755", filepath.Dir(rootBackupScript)}, Sudo: true}); err != nil {
+		return err
+	}
+	if _, err := e.Exec(Cmd{Name: "tee", Args: []string{rootBackupScript}, Stdin: e.backupScript(), Sudo: true}); err != nil {
+		return err
+	}
+	unit := fmt.Sprintf("[Unit]\nDescription=Colonyhall backup\n\n[Service]\nType=oneshot\nExecStart=/bin/sh %s\n", rootBackupScript)
 	timer := "[Unit]\nDescription=Colonyhall nightly backup\n\n[Timer]\nOnCalendar=*-*-* 03:30\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 	for name, body := range map[string]string{"colonyhall-backup.service": unit, "colonyhall-backup.timer": timer} {
 		if _, err := e.Exec(Cmd{Name: "tee", Args: []string{"/etc/systemd/system/" + name}, Stdin: body, Sudo: true}); err != nil {
