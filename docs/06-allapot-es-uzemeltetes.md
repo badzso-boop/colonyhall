@@ -97,6 +97,17 @@
 
 Új gépre, kollégának vagy más felhasználónak a telepítő: `install.sh` + `colony setup` (`docs/16-telepites.md`, terv: `docs/15-telepites-terv.md`). Kiadás: `v*` tag → `.github/workflows/release.yml` (binárisok, `SHA256SUMS`, GHCR-kép, attestation). Állapot gépenként: `colony doctor`, és a Gépek oldal „Állapot-ellenőrzés” sora. Norbi meglévő gépei (PC, homelab) továbbra is a `CLAUDE.md` szerinti kézi recepttel frissülnek, amíg az első kiadás el nem készül.
 
+### Ha a CI piros (42. kör)
+
+A GitHub minden `main`-re pusholt commitra és minden pull requestre lefuttatja a `.github/workflows/ci.yml`-t. A kötelező ellenőrzés egyetlen job, a **`ci-ok`**; ha piros, a futás oldalán a `ci-ok` naplója egy táblázatban mutatja, melyik job bukott el, vagy melyik maradt ki tévesen.
+
+- **Egy job elbukott** (`failure`): nyisd meg annak a jobnak a naplóját. Ugyanez helyben: `scripts/ci.sh --only "go-e2e"` (a jobnevek ugyanazok), a napló a futás végén kiírt mappában marad.
+- **`skipped although the change needs it`**: a job előfeltétele bukott el (pl. a `build`, és ezért a `docker-image` nem futott), vagy a job `if:` feltétele nem egyezik a `changes` job kimenetével. Az utóbbi a workflow hibája: `scripts/ci-changes.sh` és a job `if:` sora.
+- **`jobs missing from scripts/ci-ok.sh`**: új jobot vettek fel a workflow-ba, de a `scripts/ci-ok.sh` listájába nem.
+- **`cancelled`**: egy újabb push ugyanarra az ágra leállította a régit; a legújabb futás számít.
+- **Éjszakai futás** (02:17 UTC): csak a race detector és a sérülékenységkeresés. Ha a `vuln` piros, egy függőség kapott ismert sérülékenységet: `make vuln` helyben megmutatja, melyik, és van-e javított verzió.
+- **Kódváltozás nélkül piros** (pl. egy action vagy kép eltűnt): a workflow minden külső actiont commitra rögzít; frissítésük kézzel történik (a tag a kommentben).
+
 ## Munkamódszer
 
 - **Tervezés és döntés:** Norbi dönt, Claude Code megírja a tervet a `task.md` „Tervezendő” részébe és a handoff promptot (`docs/handoff/NN-…-prompt.md`, alapszabályok: `00-ground-rules.md`).

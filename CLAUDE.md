@@ -70,6 +70,9 @@ A Go a `/usr/local/go/bin`-ben van, a `golangci-lint` a `~/go/bin`-ben (mindkett
 | `colony doctor [--json]` / `colony upgrade` / `colony uninstall [--server] [--purge]` | Az őr ellenőrzése javítási tanácsokkal (a Gépek oldalon is) / frissítés kiadásból / eltávolítás |
 | `make release-local VERSION=v1.2.3` | A kiadás csomagjai helyben a `dist/`-be (ugyanaz a `scripts/release.sh`, mint a GitHub-workflow) |
 | `make test-install` / `make shellcheck` | Az `install.sh` tesztjei Debian, Ubuntu és Fedora konténerben (Docker kell) / shellcheck minden szkriptre |
+| `make ci` | A CI összes helyben futtatható jobja párhuzamosan, a munkafa pillanatképén, eldobható Postgresszel; a végén összesítő táblázat (job, eredmény, másodperc). Commit előtt ez, vagy legalább a `make ci-quick` |
+| `make ci-quick` | A gyors részhalmaz munka közben: Go egységtesztek, lint, PWA típusellenőrzés és lint, a változott fájlokat érintő Vitest-tesztek |
+| `make vuln` / `make actionlint` | Ismert sérülékenységek (`govulncheck`, `npm audit --omit=dev`; hálózat kell) / a GitHub-workflow-k ellenőrzése |
 
 Fejlesztői belépés (csak a `COLONY_DEV_SEED=1` helyi stacken): `@norbi` jelszava `colonyhall-dev-password`; Bearer tokenek: admin `col_dev_admin_token_do_not_use_in_production`, `@fake-agent` `col_dev_agent_token_do_not_use_in_production`.
 
@@ -81,7 +84,7 @@ Gitea a dev stacken: a `deploy/.env`-ben (gitignore-olva, minta: `deploy/.env.ex
 
 Fájltár környezeti változók: `COLONY_FILES_DIR` (fájltároló könyvtár, alapból `./data/files`), `COLONY_MAX_UPLOAD_MB` (maximális feltöltési méret megabájtban, alapból `25`).
 
-Minden változtatás után: `make lint test`, és ha az adattár változott, `make test-pg` is.
+Minden változtatás után: `make ci-quick` (vagy `make lint test`), commit és jelentés előtt `make ci`. A GitHubon ugyanezek a jobok futnak (`.github/workflows/ci.yml`; leírás: `docs/02-muszaki-specifikacio.md`, „CI”).
 
 ## Eltérések a tervtől (tudatos, átmeneti)
 

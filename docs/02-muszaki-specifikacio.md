@@ -1380,6 +1380,29 @@ A futó agentek tevékenységének valós idejű követése és az utólagos lé
 - Minden állapot a felhasználó `sandbox_dir`-jéből (`~/.local/share/colonyhall/sandbox`) származik: őrállapot, előnézetek (`<state>/previews`), usage-mappa, socketek; `tmux_socket` (alapból `colonyhall`, a tmux felhasználónként külön könyvtárat használ); `preview_ports` ütközésnél a foglalt portot kihagyja.
 - `max_concurrent_runs` (0 = nincs korlát): a fölötte érkező elem pending marad, kísérletet nem számol; szálanként egyszer csendes jegyzet (`POST /agent/ratelimit-note`, `window: machine_busy`); felszabaduláskor csak a várakozókat ébreszti.
 
+## CI (42. kör, 2026-11-08)
+
+**`.github/workflows/ci.yml`**: push a `main`-re, pull request a `main`-re, kézi indítás, és éjszakai futás (02:17 UTC). Ugyanarra az ágra egy újabb push leállítja a régebbi futást.
+
+- **Minden ellenőrzés külön job, és mind azonnal indul** (csak a `changes` jobra vár, ami pár másodperc): `go-test` (minden Go-teszt az `internal/e2e` nélkül), `go-e2e`, `go-race`, `go-pg` (Postgres service container, ugyanaz a kép, mint a dev stacké), `go-lint`, `gen-check`, `web-typecheck`, `web-lint`, `web-test` (Vitest; mátrixban, ma egy szelettel: egy runneren kb. 40 mp, ennél a szeletek saját előkészítése többe kerülne; ha nő, a `shard` lista és a `SHARDS` együtt emelhető), `devpage-test`, `shellcheck`, `actionlint` (a CI saját szkriptjeinek tesztjeivel), `vuln` (`govulncheck` és `npm audit --omit=dev`), `install-test` (az `install.sh` Debian, Ubuntu és Fedora konténerben; nem kell hozzá build, a tesztek hamis kiadást szolgálnak ki), `build` (a PWA buildje, majd a binárisok a valódi beágyazott `web/dist`-tel; artefaktként feltöltve, 1 napig).
+- **Ami épít valamire:** `docker-image` (a `deploy/Dockerfile` buildje push nélkül, `needs: build`); később az `e2e-browser` (`needs: build`).
+- **`ci-ok`: az egyetlen kötelező ellenőrzés** a branch protectionben. Minden jobra vár (`if: always()`), és a `scripts/ci-ok.sh` dönt: elbukik, ha egy job elbukott vagy megszakadt, vagy ha kimaradt, pedig a változás szerint futnia kellett volna, vagy ha egy job hiányzik a listájából. Új job felvétele: a `ci-ok` `needs` listája és a `scripts/ci-ok.sh` táblája, a védelmi szabály nem változik.
+- **Útvonalszűrő** (`scripts/ci-changes.sh`, a `changes` jobban, harmadik féltől származó action nélkül): csak dokumentáció (`docs/`, `*.md`) → csak a `ci-ok` fut (zöld); csak `web/` → a Go-jobok kimaradnak; csak `deploy/` → `build` és `docker-image`; `scripts/*.sh` → `shellcheck` (az `install.sh` és a `internal/setup` → `install-test` is); `api/` → Go és web; ismeretlen fájl → Go (inkább több fusson, mint kevesebb); a CI saját fájljai (`ci.yml`, `Makefile`, `scripts/ci*.sh`) → minden, a race detectorral együtt. A `vuln` csak függőségváltozáskor (`go.mod`, `go.sum`, `web/package*.json`) és éjjel fut.
+- **Race detector:** a `main`-re pusholt Go-változásokra és éjjel; pull request pushra nem (lassú, lásd a 42. kör jelentésének mérését).
+- **Biztonság:** a workflow tetején `permissions: {}`, jobonként csak `contents: read`; titok nincs benne, ezért forkból jövő pull request is futtathatja (`pull_request`, soha nem `pull_request_target`); a külső actionök commitra rögzítve (a tag kommentben); a `${{ }}` értékek csak `env:`-en át jutnak a shellbe; a checkout nem őrzi meg a tokent (`persist-credentials: false`). Rögzített eszközverziók: golangci-lint v2.15.0, sqlc 1.31.1, govulncheck v1.9.0, actionlint 1.7.12, shellcheck v0.11.0 (a `Makefile`-ban és a workflow-ban).
+- **Helyben ugyanez:** `make ci` (`scripts/ci.sh`): a munkafa pillanatképén (HEAD + nem commitolt és új fájlok, egy ideiglenes git worktree-ben) párhuzamosan futtatja a jobokat; a fájlokat író `gen-check` → `build` → `docker-image` lánc egy második pillanatképen fut, hogy ne zavarja a többit; a `go-pg` egy eldobható Postgres konténert kap szabad porton (a dev stack `colony_test` adatbázisához nem nyúl); a végén táblázat (job, eredmény, másodperc). `make ci-quick`: Go egységtesztek, lint, PWA típusellenőrzés és lint, a változásokat érintő Vitest-fájlok (`--changed`), helyben, pillanatkép nélkül. Egy job külön: `scripts/ci.sh --only "go-e2e web-test"`.
+- **Nincs benne:** saját futtatógép (self-hosted runner; nyilvános repóban idegen kód futna Norbi gépein), telepítés a CI-ból (kézi marad), lefedettségi küszöb.
+
+### Böngészős végponttól végpontig tartó tesztek (később)
+
+A felület még sokat változik, ezért ebben a körben nincsenek megírva; a helyük kész:
+
+- **Eszköz:** Playwright (a 33–35. kör képernyőképeihez már használtuk a `playwright-core`-t helyi Chromiummal), Chromium elég.
+- **Mi ellen fut:** a `build` job artefaktjából a `colonyhall` bináris memóriabeli tárakkal és a fejlesztői seeddel (`COLONY_STORE=memory COLONY_DEV_SEED=1 COLONY_SECURE_COOKIES=0`), a runneren `localhost`-on; adatbázis és Docker nem kell.
+- **Helye a gráfban:** az `e2e-browser` job (`needs: [changes, build]`), párhuzamosan a többi jobbal; bekapcsolása a `scripts/ci-changes.sh` `browser=false` sora (`browser=$build`-re) és a job lépései; a `ci-ok`-on nem kell változtatni. Hibánál a képernyőképek és a trace artefaktként.
+- **Stabilitás:** szerep- és címkealapú szelektorok (`getByRole`, `getByLabel`), CSS-szelektor soha; a szövegek az i18n-kulcsokból jönnek, ezért a tesztek a magyar alapnyelvre írnak; nincs fix várakozás, csak a Playwright automatikus várása.
+- **Első kör, kevés út:** belépés, üzenet küldése egy csatornába, egy szál megnyitása és válasz benne, az adminisztrációs oldalak betöltése hiba nélkül.
+
 ## Verziózás, kompatibilitás, bővíthetőség
 
 Egy új funkció új modult jelent, nem a meglévők átírását; egy frissítés pedig nem töri el a régebbi klienseket.

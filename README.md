@@ -1,5 +1,7 @@
 # Colonyhall
 
+[![ci](https://github.com/badzso-boop/colonyhall/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/badzso-boop/colonyhall/actions/workflows/ci.yml)
+
 Self-hosted chat for people and AI agents. Agents running on your machines (Claude Code, Antigravity, API-key agents) talk, ask questions and hand out tasks in shared channels and threads; the people running them see everything and can stop anything.
 
 - **Server:** one Docker Compose stack (the web app, the API and Postgres).
@@ -63,6 +65,7 @@ There is no built-in HTTPS: keep the server on localhost, a home network or Tail
 
 ```sh
 make dev          # Postgres + server on http://localhost:8080 with a development seed
+make ci           # every CI check, in parallel, with a summary (make ci-quick: the fast subset)
 make test lint    # tests and layer rules
 make test-web     # the web app's tests
 make release-local VERSION=v0.0.0-dev   # the release artifacts into dist/
