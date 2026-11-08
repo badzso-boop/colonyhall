@@ -15,7 +15,7 @@ After each part: `make ci-quick` if round 42 is merged (otherwise `gofmt`, `make
 
 **This round has a design gate.** Part 0 ends with a design document and measurements, and **you stop there** until Norbi approves it in the chat.
 
-**Depends on:** round 39 (CodeGraph wired into the guard) and round 36 (the search and RAG database, the embedding model on the Raspberry Pi, hybrid search with reranking). If they are not merged when you start, design against their prompts and say in the report what you had to assume. **Do not touch the GPU machine's setup** (drivers, Ollama, models) without Norbi: write runbooks, measure only what he has installed.
+**Depends on:** round 49 (the GPU services), round 39 (CodeGraph wired into the guard) and round 36 (the search and RAG database, the embedding model on the Raspberry Pi, hybrid search with reranking). If they are not merged when you start, design against their prompts and say in the report what you had to assume. **Do not touch the GPU machine's setup** (drivers, Ollama, models) without Norbi: write runbooks, measure only what he has installed.
 
 ## Why (Norbi, 2026-11-08)
 
@@ -41,7 +41,7 @@ A 7–14B model in 12 GB is much weaker than Claude: short context, weaker tool 
 
 ## 0. Design gate
 
-Write `docs/17-lokalis-agent-terv.md` (Hungarian). Measure where you can, otherwise say "estimate". Answer:
+The detailed design draft is `docs/19-lokalis-agent-harness-terv.md` (written with Norbi; it is the source of truth for this round). Update it with your findings. Measure where you can, otherwise say "estimate". Answer:
 
 1. **Model runtime and models on 12 GB:**
    - Ollama vs `llama.cpp` server vs others; constrained output (JSON schema or grammar) for reliable tool calls; the OpenAI-compatible tool-calling API as the one adapter (rule 7);
@@ -93,7 +93,7 @@ Write `docs/17-lokalis-agent-terv.md` (Hungarian). Measure where you can, otherw
     - **metrics:** solved yes or no, steps, wall time, tokens, rejected duplicates;
     - compare models, quantizations and harness options, and the local agent against a Claude agent on the same tasks.
 
-Also write the runbook `docs/18-gpu-beallitasa.md` (Hungarian): the NVIDIA driver on Windows, CUDA in WSL2, the model runtime as a service, the first models, a smoke test. **Then stop** and tell Norbi in the chat what you propose and what he has to decide.
+The GPU itself (driver, CUDA in WSL2, the model runtimes, the guard's GPU relay and scheduler) is prepared by round 49 (`docs/handoff/49-gpu-prompt.md`, runbook `docs/20-gpu-beallitasa.md`); build on it. **Then stop** and tell Norbi in the chat what you propose and what he has to decide.
 
 ## Parts after the gate (to be confirmed by the design)
 
@@ -114,7 +114,7 @@ Fine-tuning a model; more than one GPU; running the model on the homelab; replac
 
 ## Docs
 
-Hungarian: `docs/01-terv.md` (the planner and local coder model), `docs/02-muszaki-specifikacio.md` (the client, the MCP servers, the task format, the index), `docs/06-allapot-es-uzemeltetes.md` (the GPU, the queue, what to check), `docs/17-lokalis-agent-terv.md`, `docs/18-gpu-beallitasa.md`, `task.md`.
+Hungarian: `docs/01-terv.md` (the planner and local coder model), `docs/02-muszaki-specifikacio.md` (the client, the MCP servers, the task format, the index), `docs/06-allapot-es-uzemeltetes.md` (the GPU, the queue, what to check), `docs/19-lokalis-agent-harness-terv.md`, `task.md`.
 
 ## Report
 

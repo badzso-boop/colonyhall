@@ -1,10 +1,10 @@
-# Handoff prompt 42: making Colonyhall open source, and its GitHub Pages site
+# Handoff prompt 48: making Colonyhall open source, and its GitHub Pages site
 
 ```sh
 cd /mnt/g/Projects/new-chat && git switch main && git pull --ff-only
 git worktree add -b feature/open-source ../new-chat-worktrees/open-source main
 cd ../new-chat-worktrees/open-source
-claude "$(cat docs/handoff/00-ground-rules.md docs/handoff/42-open-source-prompt.md)"
+claude "$(cat docs/handoff/00-ground-rules.md docs/handoff/48-open-source-prompt.md)"
 ```
 
 ---
@@ -171,7 +171,7 @@ As in 0.5.
 
 ## Report
 
-`docs/handoff/42-open-source-report.md` (Hungarian), with:
+`docs/handoff/48-open-source-report.md` (Hungarian), with:
 - the commits;
 - the audit results (counts per class, no secrets);
 - the decisions Norbi made at the gates;
