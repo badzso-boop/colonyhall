@@ -80,6 +80,10 @@ func colonyBinaryPath() (string, error) {
 type SandboxOptions struct {
 	AllowWebRead bool
 	AllowPlanner bool
+	// CodeGraph, when set, gives the run the CodeGraph MCP server: its
+	// bundle is mounted read-only and the server runs inside the sandbox,
+	// with the agent's view of the filesystem and no network.
+	CodeGraph *CodeGraph
 }
 
 // Command builds the bwrap command line around the client command, after
@@ -171,7 +175,10 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 		a = append(a, "--tmpfs", s.Root)
 	}
 	a = append(a, "--bind", agentDir, agentDir)
-	mounts, clientEnv, err := s.clientMounts(client, agentDir, webRead, planner)
+	if cg := opts.CodeGraph; cg != nil && cg.Bundle != "" && exists(cg.Bundle) {
+		a = append(a, "--ro-bind", cg.Bundle, cg.Bundle)
+	}
+	mounts, clientEnv, err := s.clientMounts(client, agentDir, webRead, planner, opts.CodeGraph)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -239,7 +246,7 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 // which refuses to follow links out of it. Login tokens are copied in fresh
 // for every run and never written back: a run cannot plant its own
 // credentials into the user's real login.
-func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlanner bool) ([]string, []string, error) {
+func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlanner bool, cg *CodeGraph) ([]string, []string, error) {
 	cfgRoot := agentDir + ".config"
 	if err := os.MkdirAll(cfgRoot, 0o700); err != nil {
 		return nil, nil, err
@@ -256,8 +263,11 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlann
 					return err
 				}
 			}
-			if allowWebRead || allowPlanner {
+			if allowWebRead || allowPlanner || cg != nil {
 				servers := map[string]any{}
+				if cg != nil {
+					servers["codegraph"] = cg.ClaudeServer()
+				}
 				if allowWebRead {
 					servers["colony-web"] = map[string]any{
 						"type": "http",
@@ -306,11 +316,14 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlann
 					return err
 				}
 			}
-			if err := denyCommands(r, "antigravity-cli/settings.json", allowWebRead, allowPlanner); err != nil {
+			if err := denyCommands(r, "antigravity-cli/settings.json", allowWebRead, allowPlanner, cg); err != nil {
 				return err
 			}
-			if allowWebRead || allowPlanner {
+			if allowWebRead || allowPlanner || cg != nil {
 				servers := map[string]any{}
+				if cg != nil {
+					servers["codegraph"] = cg.AgyServer()
+				}
 				if allowWebRead {
 					servers["colony-web"] = map[string]any{
 						"disabled":  false,
@@ -432,7 +445,7 @@ func exists(p string) bool {
 // with accept-edits the agent can read and edit files and nothing else.
 // When allowWebRead or allowPlanner is true, the corresponding MCP server is configured and allowed.
 // Doing it every run also undoes any change a run made to its copy.
-func denyCommands(r *os.Root, name string, allowWebRead, allowPlanner bool) error {
+func denyCommands(r *os.Root, name string, allowWebRead, allowPlanner bool, cg *CodeGraph) error {
 	settings := map[string]any{}
 	if raw, err := r.ReadFile(name); err == nil {
 		if err := json.Unmarshal(raw, &settings); err != nil {
@@ -450,14 +463,20 @@ func denyCommands(r *os.Root, name string, allowWebRead, allowPlanner bool) erro
 	if allowPlanner {
 		allowList = append(allowList, "mcp(colony-planner/*)")
 	}
+	if cg != nil {
+		allowList = append(allowList, "mcp(codegraph/*)")
+	}
 	if allowList == nil {
 		allowList = []any{}
 	}
 	perms["allow"] = allowList
 	perms["deny"] = []any{"command(*)"}
 	settings["permissions"] = perms
-	if allowWebRead || allowPlanner {
+	if allowWebRead || allowPlanner || cg != nil {
 		servers := map[string]any{}
+		if cg != nil {
+			servers["codegraph"] = cg.AgyServer()
+		}
 		if allowWebRead {
 			servers["colony-web"] = map[string]any{
 				"disabled":  false,

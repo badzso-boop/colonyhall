@@ -156,6 +156,34 @@ export function OverviewTab({ host, now }: { host: Host; now: Date }) {
             t("overview.doctorNone")
           )}
         </Row>
+        <Row label={t("overview.codegraph")}>
+          {r.codegraph ? (
+            <div className="flex flex-col gap-1">
+              <p>{t("overview.codegraphVersion", { version: r.codegraph.version })}</p>
+              {r.codegraph.repos.length ? (
+                <ul className="flex flex-col gap-1">
+                  {r.codegraph.repos.map((repo) => (
+                    <li key={repo.path} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <Mono>{repo.path}</Mono>
+                      <Badge tone={repo.status === "indexed" ? "success" : repo.status === "skipped" ? "warning" : "danger"}>
+                        {t(`overview.codegraphStatus.${repo.status}`)}
+                      </Badge>
+                      {repo.files != null ? <span className="text-meta text-fg-muted tabular">{t("overview.codegraphFiles", { count: repo.files })}</span> : null}
+                      {repo.indexed_at ? (
+                        <span className="text-meta text-fg-subtle">{t("overview.codegraphIndexed", { when: stamp(repo.indexed_at, i18n.language) })}</span>
+                      ) : null}
+                      {repo.detail && repo.status !== "indexed" ? <span className="text-meta text-fg-muted">{repo.detail}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-meta text-fg-muted">{t("overview.codegraphNoRepos")}</p>
+              )}
+            </div>
+          ) : (
+            t("overview.codegraphNone")
+          )}
+        </Row>
         <Row label={t("overview.claude")}>
           {windows.length ? (
             <ul>

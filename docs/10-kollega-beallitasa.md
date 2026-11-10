@@ -50,6 +50,15 @@ docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 -v "$PWD":/
 sudo install -o kollega -g kollega -m 755 bin/colony /home/kollega/.local/bin/colony
 ```
 
+**CodeGraph (39. kör)** a kolléga felhasználójának is: ugyanazzal az átnézett telepítővel és ugyanazzal a verzióval, mint a többi gépen (ma v1.6.2), utána a telemetria ki. **`codegraph install` soha** (az a kolléga saját Claude-beállításaiba írna); az őr maga köti be és maga indexel.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh -o /tmp/codegraph-install.sh
+less /tmp/codegraph-install.sh        # átolvasni
+sudo -iu kollega env CODEGRAPH_VERSION=v1.6.2 sh /tmp/codegraph-install.sh
+sudo -iu kollega bash -lc '~/.local/bin/codegraph telemetry off && ~/.local/bin/codegraph --version'
+```
+
 ## 3. A kolléga a Colonyhallban
 
 A PWA-ban, Norbiként:

@@ -452,6 +452,8 @@ type HostReport struct {
 	// was; never the token.
 	ClaudeLoginConfigured bool       `json:"claude_login_configured,omitempty"`
 	ClaudeLoginSetAt      *time.Time `json:"claude_login_set_at,omitempty"`
+	// Round 39: CodeGraph's version and the repositories this guard indexed.
+	Codegraph *apispec.CodegraphReport `json:"codegraph,omitempty"`
 	// Round 41: the doctor's checks (DoctorHook), refreshed with the usage poll.
 	Doctor          []apispec.DoctorCheck   `json:"doctor,omitempty"`
 	DoctorCheckedAt *time.Time              `json:"doctor_checked_at,omitempty"`

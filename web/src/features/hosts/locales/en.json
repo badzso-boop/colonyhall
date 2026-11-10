@@ -111,6 +111,17 @@
     "doctorChecked": "checked {{when}}",
     "doctorHint": "For the fixes run on the machine: colony doctor",
     "doctorNone": "none yet (an older guard, or it has not run)",
+    "codegraph": "CodeGraph",
+    "codegraphVersion": "version {{version}}",
+    "codegraphNone": "none (not installed, or switched off in guard.yaml)",
+    "codegraphNoRepos": "no repository indexed yet",
+    "codegraphFiles": "{{count}} files",
+    "codegraphIndexed": "indexed {{when}}",
+    "codegraphStatus": {
+      "indexed": "indexed",
+      "failed": "failed",
+      "skipped": "skipped"
+    },
     "checks": {
       "config": "guard.yaml",
       "server": "server",

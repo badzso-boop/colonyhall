@@ -211,6 +211,9 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 		allowedTools = append(allowedTools, "mcp__colony-planner__planner_read", "mcp__colony-planner__calendar_read",
 			"mcp__colony-planner__channel_info")
 	}
+	if req.CodeGraph {
+		allowedTools = append(allowedTools, CodeGraphTool)
+	}
 	if len(allowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(allowedTools, ","))
 		if req.MCPConfigPath != "" {
@@ -238,7 +241,7 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 	if req.DocsOnly {
 		// Never the agent's own permission mode or a permission prompt
 		// tool: a refused action must stay refused, not become a question.
-		docs, err := c.docsOnlyArgs(ctx, req.Dir, req.MCPConfigPath)
+		docs, err := c.docsOnlyArgs(ctx, req.Dir, req.MCPConfigPath, req.CodeGraph)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -249,6 +252,11 @@ func (c *ClaudeCode) Direct(ctx context.Context, req DirectRequest) (RunResult, 
 		}
 		if req.MCPConfigPath != "" {
 			args = append(args, "--mcp-config", req.MCPConfigPath)
+		}
+		if req.CodeGraph {
+			// Read-only tools; without the rule the agent's own mode could
+			// turn every call into an approval question in the chat.
+			args = append(args, "--allowedTools", CodeGraphTool)
 		}
 		if req.PermissionPromptTool != "" {
 			args = append(args, "--permission-prompt-tool", req.PermissionPromptTool)
@@ -656,8 +664,9 @@ var ErrDocsOnlyRoot = errors.New("claude: a docs-only agent's root folder must b
 //     The agent's configured mode (auto by default) is not used.
 //   - The allow rules (in --settings, a session-only JSON string, so a
 //     path is never split like a flag list) pre-approve only
-//     Edit/Write of **/*.md under the root and the Colonyhall MCP tools
-//     (also given as --allowedTools).
+//     Edit/Write of **/*.md under the root, the Colonyhall MCP tools and,
+//     when the run has it, CodeGraph's read-only tools (round 39); the MCP
+//     rules are also given as --allowedTools.
 //
 // Precedence relied on: Claude Code evaluates deny rules first, then ask,
 // then allow (deny > ask > allow, across all sources). There is no deny
@@ -666,14 +675,18 @@ var ErrDocsOnlyRoot = errors.New("claude: a docs-only agent's root folder must b
 // with prompts off, is denied. Should --settings be ignored (Claude Code
 // silently skips settings that fail validation in -p mode), the .md
 // writes are refused too, and every other limit still holds.
-func (c *ClaudeCode) docsOnlyArgs(ctx context.Context, dir, mcpConfig string) ([]string, error) {
+func (c *ClaudeCode) docsOnlyArgs(ctx context.Context, dir, mcpConfig string, codeGraph bool) ([]string, error) {
 	help := c.help(ctx)
 	for _, f := range docsOnlyFlags {
 		if !strings.Contains(help, f) {
 			return nil, ErrDocsOnlyUnsupported
 		}
 	}
-	settings, err := DocsOnlySettings(dir)
+	mcpAllow := []string{"mcp__colonyhall"}
+	if codeGraph {
+		mcpAllow = append(mcpAllow, CodeGraphTool)
+	}
+	settings, err := DocsOnlySettings(dir, mcpAllow[1:]...)
 	if err != nil {
 		return nil, err
 	}
@@ -683,7 +696,7 @@ func (c *ClaudeCode) docsOnlyArgs(ctx context.Context, dir, mcpConfig string) ([
 		"--permission-prompts", "none",
 		"--tools", DocsOnlyTools,
 		"--disallowedTools", docsOnlyDenied,
-		"--allowedTools", "mcp__colonyhall",
+		"--allowedTools", strings.Join(mcpAllow, ","),
 		"--settings", settings,
 		"--strict-mcp-config",
 	}
@@ -695,7 +708,7 @@ func (c *ClaudeCode) docsOnlyArgs(ctx context.Context, dir, mcpConfig string) ([
 
 // DocsOnlySettings is the session-only settings JSON of a docs-only
 // planner whose root folder is dir (see docsOnlyArgs).
-func DocsOnlySettings(dir string) (string, error) {
+func DocsOnlySettings(dir string, extraAllow ...string) (string, error) {
 	roots := []string{dir}
 	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
 		roots = append(roots, real) // the rule must match the resolved path too
@@ -709,6 +722,7 @@ func DocsOnlySettings(dir string) (string, error) {
 		allow = append(allow, "Edit(/"+r+"/**/*.md)", "Write(/"+r+"/**/*.md)")
 	}
 	allow = append(allow, "mcp__colonyhall")
+	allow = append(allow, extraAllow...)
 	doc := map[string]any{
 		"permissions": map[string]any{
 			"defaultMode":                  "dontAsk",

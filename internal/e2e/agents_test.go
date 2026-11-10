@@ -348,3 +348,42 @@ func TestHostReportCarriesTheDoctor(t *testing.T) {
 	}
 	t.Fatal("host missing")
 }
+
+// Round 39: CodeGraph's version and indexed repositories reach the Machines
+// page; an unknown status from a guard is stored as failed, long fields are
+// clipped to the contract's limits.
+func TestHostReportCarriesCodeGraph(t *testing.T) {
+	e := newEnv(t)
+	host, hostToken := e.enroll("box")
+	report := map[string]any{"guard_version": "v0.3.0", "os": "linux/amd64", "roots": []string{"/w"}, "clients": []any{},
+		"codegraph": map[string]any{"version": "1.6.2", "repos": []map[string]any{
+			{"path": "/w/app", "status": "indexed", "files": 807, "indexed_at": "2026-11-08T10:00:00Z"},
+			{"path": "/w/huge", "status": "skipped", "files": 90000, "detail": strings.Repeat("x", 500)},
+			{"path": "/w/odd", "status": "exploded"},
+		}}}
+	if s := e.do("POST", "/api/v1/host/report", hostToken, report, nil); s != http.StatusNoContent && s != http.StatusOK {
+		t.Fatalf("report: %d", s)
+	}
+	var list apispec.HostList
+	e.do("GET", "/api/v1/hosts", server.DevAdminToken, nil, &list)
+	for _, h := range list.Hosts {
+		if h.Id.String() != host {
+			continue
+		}
+		cg := h.Report.Codegraph
+		if cg == nil || cg.Version != "1.6.2" || len(cg.Repos) != 3 {
+			t.Fatalf("codegraph: %+v", cg)
+		}
+		if r := cg.Repos[0]; r.Path != "/w/app" || r.Status != apispec.CodegraphRepoStatusIndexed || r.Files == nil || *r.Files != 807 || r.IndexedAt == nil {
+			t.Fatalf("repo 0: %+v", r)
+		}
+		if d := cg.Repos[1].Detail; d == nil || len(*d) != 200 {
+			t.Fatalf("detail not clipped: %v", d)
+		}
+		if cg.Repos[2].Status != apispec.CodegraphRepoStatusFailed {
+			t.Fatalf("unknown status kept: %q", cg.Repos[2].Status)
+		}
+		return
+	}
+	t.Fatal("host missing")
+}

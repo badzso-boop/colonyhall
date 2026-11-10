@@ -88,6 +88,19 @@ roots:
 # terminals do not count. Default 0: no limit.
 # max_concurrent_runs: 2
 
+# CodeGraph (round 39): a local index of a repository's symbols and calls,
+# one MCP call (codegraph_explore) instead of many greps. When the launcher
+# exists (default ~/.local/bin/codegraph, from CodeGraph's reviewed
+# install.sh), the guard indexes the agents' git repositories itself (one at
+# a time, at low priority; never `codegraph install`) and gives every work
+# and direct run the MCP server. Telemetry, the update check and the
+# background daemon are always off for the processes the guard starts.
+# Repositories with more files than max_files are skipped.
+# codegraph:
+#   bin: ~/.local/bin/codegraph
+#   enabled: true
+#   max_files: 20000
+
 # commands: { claude-code: claude, antigravity: agy }
 # Inactivity and duration caps for direct and work runs:
 # idle_timeout: kill when client produces no stream output for this duration (default 15m)

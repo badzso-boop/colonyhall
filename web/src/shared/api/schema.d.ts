@@ -3504,6 +3504,7 @@ export interface components {
             doctor?: components["schemas"]["DoctorCheck"][];
             /** Format: date-time */
             doctor_checked_at?: string;
+            codegraph?: components["schemas"]["CodegraphReport"];
             /** @description Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA */
             claude_login_configured?: boolean;
             /**
@@ -4460,6 +4461,26 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
+            detail?: string;
+        };
+        /** @description Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml. */
+        CodegraphReport: {
+            version: string;
+            /** @description The indexed (or tried) repositories, most recent first. */
+            repos: components["schemas"]["CodegraphRepo"][];
+        };
+        CodegraphRepo: {
+            path: string;
+            /** @enum {string} */
+            status: "indexed" | "failed" | "skipped";
+            /** @description Files in the repository (git ls-files), counted before indexing */
+            files?: number;
+            /**
+             * Format: date-time
+             * @description The last successful index or sync
+             */
+            indexed_at?: string;
+            /** @description Why it failed or was skipped */
             detail?: string;
         };
         SetClaudeLoginRequest: {

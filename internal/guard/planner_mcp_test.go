@@ -30,7 +30,7 @@ func TestPlannerMCP_ConfigsContainNoToken(t *testing.T) {
 	}
 
 	// 1. Claude code with AllowPlanner: true, AllowWebRead: false
-	_, _, err := sb.clientMounts("claude-code", agentDir, false, true)
+	_, _, err := sb.clientMounts("claude-code", agentDir, false, true, nil)
 	if err != nil {
 		t.Fatalf("clientMounts claude: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestPlannerMCP_ConfigsContainNoToken(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(geminiHome, "antigravity-cli"), 0o755)
 	_ = os.WriteFile(filepath.Join(geminiHome, "antigravity-cli", "settings.json"), []byte(`{}`), 0o600)
 
-	_, _, err = sb.clientMounts("antigravity", agentDir, false, true)
+	_, _, err = sb.clientMounts("antigravity", agentDir, false, true, nil)
 	if err != nil {
 		t.Fatalf("clientMounts antigravity: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestPlannerMCP_ConfigsContainNoToken(t *testing.T) {
 	}
 
 	// 3. Both AllowWebRead and AllowPlanner enabled
-	_, _, err = sb.clientMounts("claude-code", agentDir, true, true)
+	_, _, err = sb.clientMounts("claude-code", agentDir, true, true, nil)
 	if err != nil {
 		t.Fatalf("clientMounts claude both: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestPlannerMCP_ConfigsContainNoToken(t *testing.T) {
 		t.Errorf("expected both servers in claude mcp.json: %s", string(rawBoth))
 	}
 
-	_, _, err = sb.clientMounts("antigravity", agentDir, true, true)
+	_, _, err = sb.clientMounts("antigravity", agentDir, true, true, nil)
 	if err != nil {
 		t.Fatalf("clientMounts antigravity both: %v", err)
 	}
