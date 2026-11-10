@@ -54,15 +54,22 @@ func specRouter(t *testing.T, baseURL string) routers.Router {
 	return r
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T) *env { return newEnvWith(t, nil) }
+
+// newEnvWith lets a test adjust the server options (e.g. a fake embedder).
+func newEnvWith(t *testing.T, adjust func(*server.Options)) *env {
 	t.Helper()
 	ctx := context.Background()
 	clk := clock.NewManual(time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC))
-	app, err := server.New(ctx, server.Options{
+	opt := server.Options{
 		Store: "memory",
 		Clock: clk,
 		IDs:   &ids.Sequential{},
-	})
+	}
+	if adjust != nil {
+		adjust(&opt)
+	}
+	app, err := server.New(ctx, opt)
 	if err != nil {
 		t.Fatal(err)
 	}

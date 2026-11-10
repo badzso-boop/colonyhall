@@ -1449,6 +1449,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Hybrid search (keywords and meaning) over the chat messages, wiki pages, decisions and
+         *     compaction summaries the caller may read (round 36a). The access rule is applied before
+         *     ranking: channels by membership (admins every channel except other people's DMs), wiki
+         *     and decisions for the whole workspace. Without the embedding server the search answers
+         *     with keywords only, and says so in `degraded` and `notice`. Every search is logged.
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leases": {
         parameters: {
             query?: never;
@@ -2916,6 +2939,78 @@ export interface components {
             gitea_configured: boolean;
             gitea_webhook_configured: boolean;
             max_upload_mb: number;
+            search?: components["schemas"]["SearchStatus"];
+        };
+        /** @enum {string} */
+        SearchSourceKind: "message" | "wiki" | "decision" | "summary";
+        /** @description Each stage's score; a stage that did not see the hit has none. Admins only. */
+        SearchScores: {
+            /** Format: double */
+            keyword?: number;
+            /** Format: double */
+            semantic?: number;
+            /**
+             * Format: double
+             * @description Reciprocal Rank Fusion.
+             */
+            fused: number;
+            /** Format: double */
+            rerank?: number;
+        };
+        SearchHit: {
+            kind: components["schemas"]["SearchSourceKind"];
+            /**
+             * Format: uuid
+             * @description The message, wiki page, decision or compaction.
+             */
+            source_id: string;
+            /** @description The wiki page's slug, or the decision's number (D-12). */
+            ref?: string;
+            /** @description Which chunk of the source. */
+            part: number;
+            /** Format: uuid */
+            channel_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            author_id?: string;
+            /** Format: date-time */
+            at: string;
+            /** @description The chunk's context: channel, thread, author, date. */
+            header: string;
+            /** @description Plain text; keyword matches between « and ». */
+            snippet: string;
+            scores?: components["schemas"]["SearchScores"];
+        };
+        SearchResponse: {
+            /** @enum {string} */
+            mode: "keyword" | "semantic" | "hybrid";
+            hits: components["schemas"]["SearchHit"][];
+            /** @description What the search had to do without. */
+            degraded: ("no_embedder" | "no_reranker")[];
+            /** @description A short line when a configured backend did not answer. */
+            notice?: string;
+        };
+        SearchBackend: {
+            configured: boolean;
+            /** @description The last call succeeded. */
+            reachable: boolean;
+            model?: string;
+            /** Format: date-time */
+            last_ok_at?: string;
+            last_error?: string;
+        };
+        SearchStatus: {
+            chunks: number;
+            /** @description Chunks waiting for an embedding. */
+            pending: number;
+            /** Format: date-time */
+            last_embed_at?: string;
+            models: string[];
+            embedder: components["schemas"]["SearchBackend"];
+            reranker: components["schemas"]["SearchBackend"];
+            /** @description Set when the embedding server serves another model than the stored vectors. */
+            model_mismatch?: string;
         };
         EmergencyClearRequest: {
             password: string;
@@ -7422,6 +7517,37 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                mode?: "keyword" | "semantic" | "hybrid";
+                kind?: components["schemas"]["SearchSourceKind"][];
+                channel_id?: string;
+                author_id?: string;
+                since?: string;
+                until?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

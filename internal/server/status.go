@@ -14,6 +14,8 @@ import (
 	"colonyhall/internal/modules/identity"
 	idhttp "colonyhall/internal/modules/identity/httpapi"
 	"colonyhall/internal/modules/schedule"
+	"colonyhall/internal/modules/search"
+	searchhttp "colonyhall/internal/modules/search/httpapi"
 	"colonyhall/internal/platform/clock"
 )
 
@@ -36,6 +38,7 @@ type statusDeps struct {
 	GiteaOn     bool
 	WebhookOn   bool
 	MaxUploadMB int
+	Search      *search.Service
 }
 
 func registerStatus(mux *http.ServeMux, d statusDeps) {
@@ -122,5 +125,16 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 	}
 
 	out.Compaction.Running, out.Compaction.Failed24h, err = d.Compactions.CompactionCounts(ctx, by.WorkspaceID, since)
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	if d.Search != nil {
+		st, err := d.Search.Status(ctx, by.WorkspaceID)
+		if err != nil {
+			return out, err
+		}
+		ss := searchhttp.Status(st)
+		out.Search = &ss
+	}
+	return out, nil
 }

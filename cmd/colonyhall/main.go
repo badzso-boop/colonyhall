@@ -115,6 +115,9 @@ func run(logger *slog.Logger) error {
 		GiteaToken:         cfg.GiteaToken,
 		GiteaPublicURL:     cfg.GiteaPublicURL,
 		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
+		EmbedURL:           cfg.EmbedURL,
+		RerankURL:          cfg.RerankURL,
+		RerankTop:          cfg.RerankTop,
 	})
 	if err != nil {
 		return err

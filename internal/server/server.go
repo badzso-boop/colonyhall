@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -116,6 +117,12 @@ import (
 	schedhttp "colonyhall/internal/modules/schedule/httpapi"
 	schedmem "colonyhall/internal/modules/schedule/memory"
 	schedpg "colonyhall/internal/modules/schedule/postgres"
+	"colonyhall/internal/modules/search"
+	"colonyhall/internal/modules/search/embedhttp"
+	searchhttp "colonyhall/internal/modules/search/httpapi"
+	searchmcp "colonyhall/internal/modules/search/mcptools"
+	searchmem "colonyhall/internal/modules/search/memory"
+	searchpg "colonyhall/internal/modules/search/postgres"
 	"colonyhall/internal/modules/sidebar"
 	sidebarhttp "colonyhall/internal/modules/sidebar/httpapi"
 	sidebarmem "colonyhall/internal/modules/sidebar/memory"
@@ -131,6 +138,9 @@ import (
 	"colonyhall/internal/platform/ids"
 	"colonyhall/migrations"
 )
+
+// maxSummaryBytes bounds a compaction summary read for the search index.
+const maxSummaryBytes = 1 << 20
 
 // Version is set at build time with -ldflags "-X colonyhall/internal/server.Version=…".
 var Version = "dev"
@@ -169,6 +179,15 @@ type Options struct {
 	// (default 15 minutes); CalendarFetcher replaces the safe fetcher in tests.
 	CalendarRefresh time.Duration
 	CalendarFetcher planner.Fetcher
+
+	// Search (round 36a): the embedding server (the Raspberry Pi) and the
+	// reranker (the homelab); empty means keyword search only / no rerank.
+	EmbedURL  string
+	RerankURL string
+	RerankTop int
+	// Embedder and Reranker override the URLs (tests).
+	Embedder search.Embedder
+	Reranker search.Reranker
 }
 
 // App is a wired-up Colonyhall server.
@@ -195,6 +214,8 @@ type App struct {
 	Compaction   *compaction.Service
 	Delegation   *delegation.Service
 	Runs         *runs.Service
+	Search       *search.Service
+	Indexer      *search.Indexer
 	Gateway      *gateway.Gateway
 	HostGateway  *gateway.HostGateway
 	HostFs       *hosts.FsRelay
@@ -248,6 +269,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		sbStore        sidebar.Store
 		cmStore        compaction.Store
 		dgStore        delegation.Store
+		seStore        search.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -272,6 +294,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		sbStore = sidebarmem.New()
 		cmStore = compmem.NewStore()
 		dgStore = delegationmem.New()
+		seStore = searchmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -311,6 +334,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		sbStore = &sidebarpg.Store{DB: pg}
 		cmStore = &comppg.Store{DB: pg}
 		dgStore = &delegationpg.Store{DB: pg}
+		seStore = &searchpg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -392,6 +416,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	}
 	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock, opt.IDs)
 	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
+	dcSvc.Events, dcSvc.Bus = events, b
 	lsSvc := lease.NewService(lsStore, idSvc, events, b, tx, opt.Clock, opt.IDs)
 	sbSvc := sidebar.NewService(sbStore, cvSvc, opt.Clock, opt.IDs)
 	cmSvc := &compaction.Service{
@@ -449,6 +474,35 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	}
 	rlSvc.OwnInstructions = agSvc.OwnInstructions
 
+	embedder, reranker := opt.Embedder, opt.Reranker
+	if embedder == nil && opt.EmbedURL != "" {
+		c, err := embedhttp.New(opt.EmbedURL)
+		if err != nil {
+			return nil, fmt.Errorf("server: COLONY_EMBED_URL: %w", err)
+		}
+		embedder = c
+	}
+	if reranker == nil && opt.RerankURL != "" {
+		c, err := embedhttp.New(opt.RerankURL)
+		if err != nil {
+			return nil, fmt.Errorf("server: COLONY_RERANK_URL: %w", err)
+		}
+		reranker = c
+	}
+	seSvc := &search.Service{Store: seStore, Conv: cvSvc, Directory: idSvc, Embedder: embedder, Reranker: reranker,
+		RerankTop: opt.RerankTop, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
+	seIdx := &search.Indexer{Store: seStore, Conv: cvSvc, Directory: idSvc, Wiki: wiSvc, Decisions: dcSvc,
+		Summaries: func(ctx context.Context, fileID ids.ID) (string, error) {
+			_, rc, err := fiSvc.OpenContentAuthorized(ctx, fileID)
+			if err != nil {
+				return "", err
+			}
+			defer func() { _ = rc.Close() }()
+			raw, err := io.ReadAll(io.LimitReader(rc, maxSummaryBytes))
+			return string(raw), err
+		},
+		IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger, Indexed: seSvc.Wake}
+
 	consumers := []*eventlog.Consumer{
 		{Name: delivery.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dlSvc.HandleEvent, Logger: opt.Logger},
 		{Name: audit.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: auSvc.HandleEvent, Logger: opt.Logger},
@@ -458,6 +512,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		{Name: lease.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: lsSvc.HandleEvent, Logger: opt.Logger},
 		{Name: compaction.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: cmSvc.HandleEvent, Logger: opt.Logger},
 		{Name: delegation.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dgSvc.HandleEvent, Logger: opt.Logger},
+		{Name: search.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: seIdx.HandleEvent, Logger: opt.Logger},
 	}
 
 	mux := http.NewServeMux()
@@ -497,6 +552,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	sidebarhttp.Register(mux, sbSvc, idSvc)
 	compactionhttp.Register(mux, cmSvc, idSvc)
 	delegationhttp.Register(mux, dgSvc, idSvc)
+	searchhttp.Register(mux, seSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -511,7 +567,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		plannermcp.Register(s, plSvc, current)
 		decmcp.Register(s, dcSvc, current, r)
 		leasesmcp.Register(s, lsSvc, current)
-	}, rlSvc.InstructionsForActor, opt.Logger)
+		searchmcp.Register(s, seSvc, current)
+	}, func(ctx context.Context, actor identity.Actor) (string, error) {
+		text, err := rlSvc.InstructionsForActor(ctx, actor)
+		if err != nil || actor.Kind != identity.KindAgent {
+			return text, err
+		}
+		return text + searchmcp.Hint, nil
+	}, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
 	}
@@ -573,7 +636,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	registerAgents(mux, idSvc, agSvc)
 	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, Events: events,
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
-		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB)})
+		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB), Search: seSvc})
 
 	return &App{
 		Handler:      httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts),
@@ -599,6 +662,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Compaction:   cmSvc,
 		Delegation:   dgSvc,
 		Runs:         ruSvc,
+		Search:       seSvc,
+		Indexer:      seIdx,
 		Gateway:      gw,
 		HostGateway:  hostGw,
 		HostFs:       hostFs,
@@ -642,6 +707,30 @@ func (a *App) Run(ctx context.Context) error {
 				if a.Files != nil {
 					_, _ = a.Files.SweepPending(ctx)
 				}
+			}
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Search.RunEmbedder(ctx)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// The search log is kept 30 days.
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if n, err := a.Search.PurgeLogs(ctx); err != nil && ctx.Err() == nil {
+				a.logger.Warn("search: log purge failed", "err", err)
+			} else if n > 0 {
+				a.logger.Info("search: old log rows removed", "rows", n)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
 			}
 		}
 	}()

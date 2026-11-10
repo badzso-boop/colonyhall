@@ -1353,6 +1353,30 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/DecisionsResponse" } } }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /search:
+    get:
+      operationId: search
+      tags: [search]
+      description: |
+        Hybrid search (keywords and meaning) over the chat messages, wiki pages, decisions and
+        compaction summaries the caller may read (round 36a). The access rule is applied before
+        ranking: channels by membership (admins every channel except other people's DMs), wiki
+        and decisions for the whole workspace. Without the embedding server the search answers
+        with keywords only, and says so in `degraded` and `notice`. Every search is logged.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 500 } }
+        - { name: mode, in: query, schema: { type: string, enum: [keyword, semantic, hybrid], default: hybrid } }
+        - { name: kind, in: query, explode: true, schema: { type: array, items: { $ref: "#/components/schemas/SearchSourceKind" } } }
+        - { name: channel_id, in: query, schema: { type: string, format: uuid } }
+        - { name: author_id, in: query, schema: { type: string, format: uuid } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: until, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 8 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SearchResponse" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+
   /leases:
     get:
       operationId: listActiveLeases
@@ -2760,6 +2784,65 @@ components:
         gitea_configured: { type: boolean }
         gitea_webhook_configured: { type: boolean }
         max_upload_mb: { type: integer }
+        search: { $ref: "#/components/schemas/SearchStatus" }
+    SearchSourceKind:
+      type: string
+      enum: [message, wiki, decision, summary]
+    SearchScores:
+      type: object
+      description: Each stage's score; a stage that did not see the hit has none. Admins only.
+      required: [fused]
+      properties:
+        keyword: { type: number, format: double }
+        semantic: { type: number, format: double }
+        fused: { type: number, format: double, description: Reciprocal Rank Fusion. }
+        rerank: { type: number, format: double }
+    SearchHit:
+      type: object
+      required: [kind, source_id, part, header, snippet, at]
+      properties:
+        kind: { $ref: "#/components/schemas/SearchSourceKind" }
+        source_id: { type: string, format: uuid, description: "The message, wiki page, decision or compaction." }
+        ref: { type: string, description: "The wiki page's slug, or the decision's number (D-12)." }
+        part: { type: integer, description: Which chunk of the source. }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        header: { type: string, description: "The chunk's context: channel, thread, author, date." }
+        snippet: { type: string, description: "Plain text; keyword matches between « and »." }
+        scores: { $ref: "#/components/schemas/SearchScores" }
+    SearchResponse:
+      type: object
+      required: [mode, hits, degraded]
+      properties:
+        mode: { type: string, enum: [keyword, semantic, hybrid] }
+        hits: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+        degraded:
+          type: array
+          description: What the search had to do without.
+          items: { type: string, enum: [no_embedder, no_reranker] }
+        notice: { type: string, description: A short line when a configured backend did not answer. }
+    SearchBackend:
+      type: object
+      required: [configured, reachable]
+      properties:
+        configured: { type: boolean }
+        reachable: { type: boolean, description: The last call succeeded. }
+        model: { type: string }
+        last_ok_at: { type: string, format: date-time }
+        last_error: { type: string }
+    SearchStatus:
+      type: object
+      required: [chunks, pending, models, embedder, reranker]
+      properties:
+        chunks: { type: integer }
+        pending: { type: integer, description: Chunks waiting for an embedding. }
+        last_embed_at: { type: string, format: date-time }
+        models: { type: array, items: { type: string } }
+        embedder: { $ref: "#/components/schemas/SearchBackend" }
+        reranker: { $ref: "#/components/schemas/SearchBackend" }
+        model_mismatch: { type: string, description: Set when the embedding server serves another model than the stored vectors. }
     EmergencyClearRequest:
       type: object
       required: [password]

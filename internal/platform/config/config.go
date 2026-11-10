@@ -39,6 +39,13 @@ type Config struct {
 	GiteaWebhookSecret string
 	// CalendarRefresh is how often subscribed calendars are fetched (default 15m).
 	CalendarRefresh time.Duration
+	// EmbedURL is the search's embedding server (the Raspberry Pi); empty:
+	// keyword search only.
+	EmbedURL string
+	// RerankURL is the search's reranker (the homelab); empty: no rerank.
+	RerankURL string
+	// RerankTop is how many candidates go to the reranker (default 30).
+	RerankTop int
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
@@ -55,7 +62,18 @@ func FromEnv() (Config, error) {
 			calRefresh = d
 		}
 	}
+	rerankTop := 0
+	if v := os.Getenv("COLONY_RERANK_TOP"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 2 || n > 100 {
+			return Config{}, fmt.Errorf("config: COLONY_RERANK_TOP must be 2–100, got %q", v)
+		}
+		rerankTop = n
+	}
 	c := Config{
+		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
+		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
+		RerankTop:          rerankTop,
 		CalendarRefresh:    calRefresh,
 		Role:               getenv("COLONY_ROLE", "all"),
 		HTTPAddr:           getenv("COLONY_HTTP_ADDR", ":8080"),

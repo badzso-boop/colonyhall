@@ -494,3 +494,9 @@ func (s *Service) record(ctx context.Context, workspaceID, actorID ids.ID, typ s
 	}
 	return err
 }
+
+// PageForIndex returns a page's current state, deleted or not, for the
+// search indexer (no actor: the caller is the server itself).
+func (s *Service) PageForIndex(ctx context.Context, workspaceID ids.ID, slug string) (Page, error) {
+	return s.Store.PageBySlug(ctx, workspaceID, slug)
+}
