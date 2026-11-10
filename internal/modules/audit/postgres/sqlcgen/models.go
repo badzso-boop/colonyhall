@@ -570,6 +570,44 @@ type Schedule struct {
 	CreatedAt     time.Time
 }
 
+type SearchChunkText struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	SourceKind    string
+	SourceID      uuid.UUID
+	SourceRef     string
+	Part          int32
+	Visibility    string
+	ChannelID     *uuid.UUID
+	ThreadRootID  *uuid.UUID
+	AuthorID      *uuid.UUID
+	SourceAt      time.Time
+	Header        string
+	Body          string
+	ContentHash   string
+	TsvHu         interface{}
+	TsvSimple     interface{}
+	Embedding     *string
+	EmbedModel    *string
+	EmbeddedAt    *time.Time
+	EmbedAttempts int32
+	EmbedRetryAt  *time.Time
+	IndexedAt     time.Time
+}
+
+type SearchLog struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	At          time.Time
+	Query       string
+	Mode        string
+	ResultCount int32
+	ResultRefs  []string
+	TimingsMs   []byte
+	Degraded    []string
+}
+
 type Session struct {
 	ID         uuid.UUID
 	ActorID    uuid.UUID
