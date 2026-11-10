@@ -168,7 +168,7 @@ jobs:
       # The dev stack's image (deploy/compose.dev.yaml); the pgvector image
       # once the search round needs it.
       postgres:
-        image: postgres:17-alpine
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: colony
           POSTGRES_PASSWORD: colony

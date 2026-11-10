@@ -5,7 +5,7 @@ name: colonyhall-dev
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     # Comes back with Docker (e.g. after a WSL restart); `make down` stops it for good.
     restart: unless-stopped
     environment:

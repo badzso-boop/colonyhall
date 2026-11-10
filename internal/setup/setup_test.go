@@ -221,7 +221,7 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 		t.Fatalf(".env: %v", env)
 	}
 	compYAML, _ := os.ReadFile(filepath.Join(dir, "compose.yaml"))
-	if !strings.Contains(string(compYAML), "postgres:17-alpine") || strings.Contains(string(compYAML), env["POSTGRES_PASSWORD"]) {
+	if !strings.Contains(string(compYAML), "pgvector/pgvector:pg17") || strings.Contains(string(compYAML), env["POSTGRES_PASSWORD"]) {
 		t.Fatal("compose.yaml: its own Postgres, and no secret in it")
 	}
 	// Secrets never reach the log.
@@ -264,7 +264,7 @@ func TestServerWithAnExistingDatabase(t *testing.T) {
 	if own || v["COLONY_DATABASE_URL"] != e.Answers.Server.DatabaseURL || v["POSTGRES_PASSWORD"] != "" {
 		t.Fatalf("external: %v", v)
 	}
-	if strings.Contains(composeFile(false), "postgres:17") {
+	if strings.Contains(composeFile(false), "pgvector/pgvector") {
 		t.Fatal("no own Postgres with an existing database")
 	}
 	if e.docker("ps").Sudo {

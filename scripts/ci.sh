@@ -137,7 +137,7 @@ if has go-pg; then
   pg="colonyhall-ci-pg-$$"
   docker run -d --rm --name "$pg" -e POSTGRES_USER=colony -e POSTGRES_PASSWORD=colony \
     -e POSTGRES_DB=colony_test --tmpfs /var/lib/postgresql/data \
-    -p 127.0.0.1::5432 postgres:17-alpine >/dev/null
+    -p 127.0.0.1::5432 pgvector/pgvector:pg17 >/dev/null
   port=$(docker port "$pg" 5432/tcp | head -1 | sed 's/.*://')
   for _ in $(seq 1 60); do
     docker exec "$pg" pg_isready -U colony -d colony_test >/dev/null 2>&1 && break
