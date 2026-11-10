@@ -233,13 +233,14 @@ func (s *Service) Search(ctx context.Context, by identity.Actor, q Query) (Resul
 	}
 
 	hits := fuse(kw, sem)
-	if s.Reranker != nil && len(hits) > 1 {
+	// NoRerank: the evaluation's configurations without a reranker.
+	if s.Reranker != nil && len(hits) > 1 && !q.NoRerank {
 		t := s.Clock.Now()
 		if !s.rerankHits(ctx, q.Text, hits) {
 			res.Degraded = append(res.Degraded, DegradedNoReranker)
 		}
 		lap("rerank", t)
-	} else if s.Reranker == nil {
+	} else if s.Reranker == nil && !q.NoRerank {
 		res.Degraded = append(res.Degraded, DegradedNoReranker)
 	}
 	if len(hits) > q.Limit {
@@ -248,7 +249,9 @@ func (s *Service) Search(ctx context.Context, by identity.Actor, q Query) (Resul
 	res.Hits = hits
 	res.Notice = notice(res.Degraded, s.Embedder != nil, s.Reranker != nil)
 	lap("total", start)
-	s.writeLog(ctx, by, q, res)
+	if !q.NoLog {
+		s.writeLog(ctx, by, q, res)
+	}
 	return res, nil
 }
 

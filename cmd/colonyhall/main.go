@@ -29,6 +29,9 @@ import (
 //	colonyhall                                   run the server
 //	colonyhall set-password -handle norbi        set a password; reads it from stdin
 //	colonyhall bootstrap -handle norbi           first workspace + owner on an empty database; password from stdin
+//	colonyhall rag-backfill [-dry-run]           (re)build the search index from the event log
+//	colonyhall rag-reembed                       re-embed after an embedding model change
+//	colonyhall rag-eval -set FILE [-as HANDLE]   search quality: recall@k, MRR, nDCG, latency
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -41,6 +44,12 @@ func main() {
 		err = setPassword(os.Args[2:])
 	case len(os.Args) > 1 && os.Args[1] == "bootstrap":
 		err = bootstrapCmd(os.Args[2:], os.Stdin)
+	case len(os.Args) > 1 && os.Args[1] == "rag-backfill":
+		err = ragBackfill(os.Args[2:], os.Stdout)
+	case len(os.Args) > 1 && os.Args[1] == "rag-reembed":
+		err = ragReembed(os.Args[2:], os.Stdout)
+	case len(os.Args) > 1 && os.Args[1] == "rag-eval":
+		err = ragEval(os.Args[2:], os.Stdout)
 	default:
 		err = run(logger)
 	}

@@ -1,0 +1,57 @@
+{
+  "name": "synthetic (made-up data, CI)",
+  "seed": {
+    "channels": [
+      { "name": "fejlesztes" },
+      { "name": "uzemeltetes" },
+      { "name": "vezetoseg", "private": true }
+    ],
+    "messages": [
+      { "label": "m-deploy", "channel": "uzemeltetes", "body": "Az éles szerver a homelabon fut Dockerben, a frissítés: git pull, majd docker compose up -d --build." },
+      { "label": "m-deploy-r1", "channel": "uzemeltetes", "thread": "m-deploy", "body": "A migrációk induláskor futnak, külön lépés nem kell." },
+      { "label": "m-backup", "channel": "uzemeltetes", "body": "A közös Postgres mentése minden éjjel 3-kor fut, a mentéseket 14 napig tartjuk." },
+      { "label": "m-guard", "channel": "uzemeltetes", "body": "Az őrt systemd felhasználói szolgáltatásként futtatjuk, újraindítás: systemctl --user restart colony-guard." },
+      { "label": "m-pi", "channel": "fejlesztes", "body": "A szöveges beágyazó modell a Raspberry Pi-n fut, a reranker a homelabon." },
+      { "label": "m-reset", "channel": "fejlesztes", "body": "A parseAgyReset függvény olvassa ki az Antigravity kvóta visszaállási idejét a hibaüzenetből." },
+      { "label": "m-limit", "channel": "fejlesztes", "body": "A max_concurrent_runs beállítás korlátozza, hány agentfutás mehet egyszerre egy gépen." },
+      { "label": "m-sandbox", "channel": "fejlesztes", "body": "A sandboxos agent bwrap alatt fut, és csak a kiadott mappákat látja; hálózatot a proxy szűri." },
+      { "label": "m-flaky", "channel": "fejlesztes", "body": "A markdown parser időzítéses tesztje terhelés alatt néha elbukott, ezért CPU-időre mérünk." },
+      { "label": "m-ci", "channel": "fejlesztes", "body": "Commit előtt make ci, munka közben elég a make ci-quick." },
+      { "label": "m-lunch", "channel": "fejlesztes", "body": "Holnap közös ebéd a kantinban délben." },
+      { "label": "m-gitea", "channel": "uzemeltetes", "body": "Az agentek a Gitea belső címét használják, a nyilvános címet csak ember nyitja meg böngészőből." },
+      { "label": "m-secret-plan", "channel": "vezetoseg", "body": "A jövő évi költségvetés tervezete: két új gép a homelabba." },
+      { "label": "m-worktree", "channel": "fejlesztes", "body": "Minden kör külön git worktree-ben készül, a main ágra csak kérésre kerül commit." },
+      { "label": "m-push", "channel": "fejlesztes", "body": "A push-értesítés még nincs kész, a PWA után jön." }
+    ],
+    "wiki": [
+      { "label": "w-gitea", "title": "Gitea agent-hozzáférés", "body": "Az agentek fiókja colony-agents, nem admin. Az írási token a gép saját git-beállításába kerül, soha nem a chatbe." },
+      { "label": "w-restore", "title": "Visszaállítás mentésből", "body": "A Postgres mentést pg_restore paranccsal töltjük vissza egy üres adatbázisba, utána a szervert újraindítjuk." },
+      { "label": "w-colleague", "title": "Kolléga beállítása", "body": "A kolléga külön Linux-felhasználót kap a homelabon, sudo és docker csoport nélkül, saját őrrel." }
+    ],
+    "decisions": [
+      { "label": "d-github", "channel": "fejlesztes", "text": "A Colonyhall kódja GitHubon marad", "rationale": "A homelab Gitea az agentek által létrehozott repóké" },
+      { "label": "d-guard-native", "channel": "uzemeltetes", "text": "Az őr natívan fut, nem konténerben", "rationale": "A bejelentkezett CLI-ket használja, konténerben újra be kellene lépni" },
+      { "label": "d-two-spaces", "channel": "fejlesztes", "text": "Két beágyazási tér lesz: szöveg és kód", "rationale": "A kódhoz kódra tanított modell kell" }
+    ]
+  },
+  "questions": [
+    { "id": "q01", "kind": "keyword", "query": "docker compose frissítés", "relevant": ["m-deploy"] },
+    { "id": "q02", "kind": "inflection", "query": "mikor futnak a migrációk", "relevant": ["m-deploy-r1"] },
+    { "id": "q03", "kind": "inflection", "query": "mentések megőrzése", "relevant": ["m-backup"] },
+    { "id": "q04", "kind": "keyword", "query": "colony-guard újraindítás", "relevant": ["m-guard"] },
+    { "id": "q05", "kind": "inflection", "query": "Raspberry Pi beágyazó", "relevant": ["m-pi"] },
+    { "id": "q06", "kind": "identifier", "query": "parseAgyReset", "relevant": ["m-reset"] },
+    { "id": "q07", "kind": "identifier", "query": "max_concurrent_runs", "relevant": ["m-limit"] },
+    { "id": "q08", "kind": "keyword", "query": "bwrap sandbox mappák", "relevant": ["m-sandbox"] },
+    { "id": "q09", "kind": "paraphrase", "query": "miért bukott el a markdown teszt", "relevant": ["m-flaky"] },
+    { "id": "q10", "kind": "keyword", "query": "make ci-quick", "relevant": ["m-ci"] },
+    { "id": "q11", "kind": "keyword", "query": "Gitea belső cím agentek", "relevant": ["m-gitea", "w-gitea"] },
+    { "id": "q12", "kind": "wiki", "query": "pg_restore visszaállítás", "relevant": ["w-restore"] },
+    { "id": "q13", "kind": "wiki", "query": "kolléga Linux-felhasználó", "relevant": ["w-colleague"] },
+    { "id": "q14", "kind": "decision", "query": "hol marad a Colonyhall kódja", "relevant": ["d-github"] },
+    { "id": "q15", "kind": "decision", "query": "miért nem konténerben fut az őr", "relevant": ["d-guard-native"] },
+    { "id": "q16", "kind": "decision", "query": "beágyazási tér kódhoz", "relevant": ["d-two-spaces"] },
+    { "id": "q17", "kind": "keyword", "query": "git worktree kör", "relevant": ["m-worktree"] },
+    { "id": "q18", "kind": "keyword", "query": "push-értesítés", "relevant": ["m-push"] }
+  ]
+}

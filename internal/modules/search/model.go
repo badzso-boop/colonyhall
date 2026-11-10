@@ -132,6 +132,9 @@ type Query struct {
 	Mode    Mode
 	Filters Filters
 	Limit   int
+	// NoRerank and NoLog are for the evaluation tool only.
+	NoRerank bool
+	NoLog    bool
 }
 
 // Hit is one search result.

@@ -118,7 +118,8 @@ func (q *Queries) InsertLog(ctx context.Context, arg InsertLogParams) error {
 
 const keywordSearch = `-- name: KeywordSearch :many
 WITH q AS (
-    SELECT websearch_to_tsquery('hungarian', $9) AS hu, websearch_to_tsquery('simple', $9) AS si
+    SELECT regexp_replace(websearch_to_tsquery('hungarian', $9)::text, ' & (?!!)', ' | ', 'g')::tsquery AS hu,
+           regexp_replace(websearch_to_tsquery('simple', $9)::text, ' & (?!!)', ' | ', 'g')::tsquery AS si
 )
 SELECT c.id, c.workspace_id, c.source_kind, c.source_id, c.source_ref, c.part, c.visibility, c.channel_id, c.thread_root_id,
     c.author_id, c.source_at, c.header, c.body, c.content_hash, COALESCE(c.embed_model, '')::text AS embed_model,
@@ -172,7 +173,11 @@ type KeywordSearchRow struct {
 }
 
 // Access first: workspace-visible chunks, or chunks of a channel the
-// reader may search. Then the filters, then ranking.
+// reader may search. Then the filters, then ranking. The words are OR-ed
+// (a natural-language question rarely has all its words in the answer);
+// ts_rank_cd puts the chunks with more of them first. Phrases ("…") and
+// exclusions (-word) keep their meaning. The cast to tsquery does not
+// stem again.
 func (q *Queries) KeywordSearch(ctx context.Context, arg KeywordSearchParams) ([]KeywordSearchRow, error) {
 	rows, err := q.db.Query(ctx, keywordSearch,
 		arg.WorkspaceID,

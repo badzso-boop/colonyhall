@@ -55,9 +55,14 @@ WHERE embedding IS NOT NULL AND embed_model IS DISTINCT FROM @keep_model;
 
 -- name: KeywordSearch :many
 -- Access first: workspace-visible chunks, or chunks of a channel the
--- reader may search. Then the filters, then ranking.
+-- reader may search. Then the filters, then ranking. The words are OR-ed
+-- (a natural-language question rarely has all its words in the answer);
+-- ts_rank_cd puts the chunks with more of them first. Phrases ("…") and
+-- exclusions (-word) keep their meaning. The cast to tsquery does not
+-- stem again.
 WITH q AS (
-    SELECT websearch_to_tsquery('hungarian', @query) AS hu, websearch_to_tsquery('simple', @query) AS si
+    SELECT regexp_replace(websearch_to_tsquery('hungarian', @query)::text, ' & (?!!)', ' | ', 'g')::tsquery AS hu,
+           regexp_replace(websearch_to_tsquery('simple', @query)::text, ' & (?!!)', ' | ', 'g')::tsquery AS si
 )
 SELECT c.id, c.workspace_id, c.source_kind, c.source_id, c.source_ref, c.part, c.visibility, c.channel_id, c.thread_root_id,
     c.author_id, c.source_at, c.header, c.body, c.content_hash, COALESCE(c.embed_model, '')::text AS embed_model,
