@@ -45,6 +45,20 @@ SQL
 - A közös image `pgvector/pgvector:pg16`; a Colonyhall migrációi és tárolótesztjei ezen is átmennek (kipróbálva 2026-10-21).
 - A napi mentés (`homelab-shared-postgres-backup`) automatikusan ezt az adatbázist is menti.
 
+### A `vector` kiterjesztés (36. kör, egyszer, a keresés élesítése előtt)
+
+A keresés (`11-rag-terv.md`) a `pgvector`-t használja. A kiterjesztés a közös image-ben megvan (0.8.5), de nem *trusted*, ezért a migráció nem hozhatja létre: Norbi egyszer, superuserrel, **csak a `colonyhall` adatbázisban** (a többi projekt adatbázisát nem érinti, image-csere nem kell):
+
+```sh
+docker exec -i homelab-shared-postgres psql -U postgres -d colonyhall -v ON_ERROR_STOP=1 <<'SQL'
+CREATE EXTENSION IF NOT EXISTS vector;
+SQL
+```
+
+- Ellenőrzés: `docker exec -i homelab-shared-postgres psql -U postgres -d colonyhall -At -c "SELECT extversion FROM pg_extension WHERE extname = 'vector'"` → `0.8.5`.
+- A `pg_trgm` és az `unaccent` *trusted*: ezeket a Colonyhall migrációja maga hozza létre (az adatbázis tulajdonosa, `colonyhall_app` megteheti).
+- Ha ez a lépés kimarad, a keresés migrációja egyértelmű hibával áll meg induláskor („the vector extension is missing: run CREATE EXTENSION vector as superuser, see docs/05”), és a szerver nem indul el: ezért ez az **első** lépés a szerver frissítése előtt.
+
 ## 3. Beállítások: `deploy/.env`
 
 ```sh
