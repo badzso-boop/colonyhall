@@ -1,0 +1,30 @@
+# The search's text reranker on the homelab (round 36,
+# docs/13-rag-reranker-beallitasa.md): its own compose project in
+# ~/homelab/colonyhall-rerank/, not the shared docker-compose.yml.
+# Only the Colonyhall server reaches it, on shared-db-net, as http://rerank:8091.
+name: colonyhall-rerank
+
+services:
+  rerank:
+    build: ../colonyhall/deploy/embed
+    command: ["--mode", "rerank", "--model", "/model", "--name", "${RERANK_MODEL_NAME:-reranker}",
+              "--host", "0.0.0.0", "--port", "8091", "--threads", "2", "--batch", "10"]
+    volumes:
+      - ./model:/model:ro
+    networks:
+      shared-db-net:
+        aliases: [rerank]
+    mem_limit: 1536m
+    cpus: 2
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+
+networks:
+  shared-db-net:
+    external: true
