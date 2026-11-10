@@ -11,13 +11,13 @@ claude "$(cat docs/handoff/00-ground-rules.md docs/handoff/36-search-rag-prompt.
 
 Branch: `feature/rag`, **in its own git worktree** at `/mnt/g/Projects/new-chat-worktrees/rag`. This overrides the ground rules' "git switch -c" step: never work in `/mnt/g/Projects/new-chat` itself, never touch `main`, never merge, never push. Next free migration: check `migrations/`.
 
-After each part: `make ci-quick` if round 42 is merged (otherwise `gofmt`, `make test`, `make lint`); `make test-pg` whenever a store or a query changes (the vector parts need Postgres with pgvector: use the `pgvector/pgvector:pg16` image in `deploy/compose.dev.yaml` if the dev stack does not have it yet); `make test-web` for PWA parts; `make ci` before the report. **Commit only when they pass.** Every fix needs a test that fails without it.
+After each part: `make ci-quick`; `make test-pg` whenever a store or a query changes (the vector parts need Postgres with pgvector: use the `pgvector/pgvector:pg16` image in `deploy/compose.dev.yaml` if the dev stack does not have it yet); `make test-web` for PWA parts; `make ci` before the report. **Commit only when they pass.** Every fix needs a test that fails without it.
 
 **This round has a design gate.** Part 0 ends with a design document and measurements, and **you stop there** until Norbi approves it in the chat.
 
 **Do not touch shared infrastructure or Norbi's machines' setup.** No `CREATE EXTENSION` on the homelab, no software on the Raspberry Pi, the homelab or the PC's GPU runtime, no model downloads there. You write runbooks; Norbi (or Claude Code with his approval) runs them.
 
-> **⛔ Merge blocker: the evaluation set.** The Hungarian test questions with their expected results (part 7) are **written together by Norbi and Claude Code in a separate session**, from real data, and kept outside this repository. **This branch must not be merged until that set exists and `rag-eval` has run on it.** Build the evaluation tooling and the small synthetic CI set; leave a clear placeholder for the real set and say in the report that it is missing.
+> **⛔ Merge blocker: the evaluation set.** The Hungarian test questions with their expected results (the Measurement part) are **written together by Norbi and Claude Code in a separate session**, from real data, and kept outside this repository. **This branch must not be merged until that set exists and `rag-eval` has run on it.** Build the evaluation tooling and the small synthetic CI set; leave a clear placeholder for the real set and say in the report that it is missing.
 
 ## Why (Norbi, 2026-10-30, 2026-11-05 and 2026-11-08)
 
@@ -28,7 +28,7 @@ After each part: `make ci-quick` if round 42 is merged (otherwise `gofmt`, `make
 ## The phases
 
 - **36a — text sources:** chat messages (channels, threads, DMs), wiki pages, decisions (`D-NN`), compaction summaries. The whole retrieval stack: chunking, the text embedding space, hybrid search, reranking, access control, the MCP tool, the PWA search, logging, the evaluation tooling.
-- **36b — the code index:** after 36a, on the same branch or a follow-up branch (say which in part 0). Needs round 39 (CodeGraph in the guard).
+- **36b — the code index:** after 36a, on the same branch or a follow-up branch (say which in part 0). Needs round 39 (CodeGraph in the guard) **and round 49** (the GPU runtime, the guard's GPU relay, the VRAM scheduler) merged; if 49 is not merged when 36a is done, stop after 36a and say so.
 - **36c — documentation in the RAG database: later, not in this round.** For now the local DevDocs docsets have their own search (round 47). Norbi decides later whether docs go into the RAG database.
 
 ## Decisions (binding)
@@ -48,6 +48,7 @@ After each part: `make ci-quick` if round 42 is merged (otherwise `gofmt`, `make
   - code: an **agent sees only code inside its own folder grants**; **admins see every machine's code**; the colleague sees only his own folders;
   - applied in SQL **before** ranking, never by filtering a top k afterwards.
 - **pgvector stays in the shared Postgres** (`homelab-shared-postgres` runs the `pgvector/pgvector:pg16` image; `legymernok` already uses `vector` there). It is enabled once, only in the `colonyhall` database (`CREATE EXTENSION vector`, superuser, by Norbi). No image change.
+- **Decisions get their own event** (Norbi, 2026-11-09): today a decision only appends to the "Döntések" wiki page (`wiki.appended`). Add `decision.recorded` (`internal/modules/decision/events.go`, written in the same transaction as the decision, with its number, wiki slug and text) and index decisions from it as their own kind (`D-NN`), not by recognising the wiki page.
 - **Retrieved text is data, never instructions** (framed like chat messages). **Everything is logged.** **The agent decides** when to search: a tool, not a rule.
 
 ## 0. Design gate
@@ -72,7 +73,7 @@ Also write the runbooks (Hungarian): `docs/12-rag-pi-beallitasa.md` (the Pi: OS,
 ## 36a. Text sources
 
 1. **Storage and the embedding port:** the migration as approved (the migration does not create the extension; it fails with a clear message if `vector` is missing); an `Embedder` port with `http` (the Pi, `COLONY_EMBED_URL`) and `fake` adapters; a `Reranker` port with `http` (the homelab, `COLONY_RERANK_URL`) and `none`. Timeouts, batch limits, the model name and version checked against the stored ones. Store tests in `internal/storetest` for memory and Postgres.
-2. **Indexing:** a consumer on the event log creates, updates and removes chunks (message created, edited, retracted, deleted; wiki appended, deleted; decision recorded; compaction done, regenerated); chunks are written with `embedding = NULL` and an embedding worker fills them in batches, with retry and backoff; **when the Pi is down, keyword search keeps working**. `colonyhall rag-backfill` (resumable, idempotent by content hash, a progress line, a dry-run that only counts) and a re-embed command.
+2. **Indexing:** a consumer on the event log creates, updates and removes chunks. The events that exist today (check `internal/modules/*/events.go`): `message.created`, `message.retracted` (remove); `wiki.created`, `wiki.appended`, `wiki.edited`, `wiki.deleted`, `wiki.restored`; the new `decision.recorded`; `compaction.done` (also emitted by a summary edit and a regeneration, as a new compaction: replace the older summary's chunks of the same unit). **Messages cannot be edited yet**: there is no edit event; do not add editing. Write in `docs/02` (search indexing) that a future message-edit feature must emit an event and re-index (also noted in `task.md`, "Tervezendő"). The decisions' wiki section must not be indexed twice (as wiki text and as a decision): say how in part 0. Chunks are written with `embedding = NULL` and an embedding worker fills them in batches, with retry and backoff; **when the Pi is down, keyword search keeps working**. `colonyhall rag-backfill` (resumable, idempotent by content hash, a progress line, a dry-run that only counts) and a re-embed command.
 3. **Search:** one `Search` use case (`query`, `mode` `keyword` | `semantic` | `hybrid`, default `hybrid`; filters; `limit` default 8, max 20; the caller); access control in both legs' SQL; RRF, then the reranker on the top 50. Each result: kind, snippet (matched words for keyword hits), source reference, author, time, the score of each stage.
 4. **Interfaces:** the MCP tool `search` for every agent (sandboxed ones through their Colonyhall MCP access), results framed as data; `GET /search` (contract first); a short hint in the shared agent rules (not a rule).
 5. **PWA:** a search field (the command palette's search box opens it), results grouped by source, matched words highlighted as text, a "Kulcsszó / Jelentés / Hibrid" switch, and the stage scores for admins.
@@ -85,14 +86,14 @@ Also write the runbooks (Hungarian): `docs/12-rag-pi-beallitasa.md` (the Pi: OS,
 3. **Code search:** `search` gets `scope: code` (and `scope: text`, default both where allowed); hybrid with identifier splitting and trigram for the keyword leg; the code reranker; access control by folder grant (agents strictly their own, admins all, the colleague his own).
 4. **An MCP tool for round 47:** `search_code` (or `search` with `scope: code`) returning name, file, line, signature, description and score; CodeGraph remains the way to read the source.
 
-## 7. Measurement (tooling here; the real set is the merge blocker)
+## Measurement (tooling here; the real set is the merge blocker)
 
 - **Metrics:** recall@5, recall@10, MRR@10 (nDCG@10 if cheap), latency p50 and p95; for text and code separately; for keyword, semantic, hybrid, and hybrid + rerank.
 - `colonyhall rag-eval` reads a test set file (path from a flag; the format documented) and prints the metrics side by side.
 - **In the repository:** a small **synthetic** set (seeded demo data, made-up messages and a small sample repository) that runs in CI.
 - **Not in the repository, written later by Norbi and Claude Code together:** the real Hungarian set (30–50 text questions, about 20 code questions) from real data. **Until it exists and `rag-eval` has run on it, the branch is not merged.**
 
-## 8. Study guide
+## Study guide
 
 `docs/tanulas/kereses-es-rag.md` (Hungarian), built on this code and the measured numbers: tokenization and `tsvector`, `ts_rank_cd` vs BM25, identifier splitting and trigrams for code, embeddings and cosine similarity, why two embedding spaces, the `query:`/`passage:` prefixes, chunking trade-offs, HNSW and its parameters, hybrid search and RRF, cross-encoder reranking, access control in retrieval, prompt injection through retrieved text, recall@k and MRR, what to try next (docs in RAG, LLM-written context headers, query rewriting, GraphRAG with CodeGraph).
 

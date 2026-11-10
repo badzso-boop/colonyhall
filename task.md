@@ -44,6 +44,7 @@
   - **Erőforrások:** a homelab többi szolgáltatása ne lassuljon (CPU- és memóriakorlát a VM-nek/konténernek; a race detector és a Docker-build a legnehezebb); a régi runner-munkamappák és Docker-képek takarítása.
   - **Üzemeltetés:** a runner frissítése (a GitHub a régi verziót egy idő után elutasítja), a regisztrációs token csak a gépen (soha nem a repóban vagy a chatben), naplók, és mi történik, ha a homelab nem fut (a jobok várnak: időkorlát vagy visszaállás a GitHub-runnerre).
   - **Előfeltétel:** a homelabhoz nyúlás előtt a `~/homelab/CLAUDE.md` és `README.md`; a telepítést Norbi futtatja vagy hagyja jóvá.
+- [ ] **Üzenetszerkesztés esetén újraindexelés (Norbi, 2026-11-09).** Üzenetet ma csak visszavonni lehet (`message.retracted`), szerkeszteni nem. Ha egyszer lesz szerkesztés, az új verzió eseményt írjon (pl. `message.edited`), és a keresés (36. kör) indexelője erre cserélje az üzenet darabjait és vektorait; enélkül a keresés a régi szöveget találná meg.
 
 ## Kész
 
