@@ -59,6 +59,16 @@ const (
 	MaxQueryLen = 500
 )
 
+// KeywordWeight is the keyword leg's weight in the fusion (the semantic
+// leg's is 1). The keyword words are OR-ed, so the leg matches almost any
+// chunk sharing a common word; at equal weight that noise pushed good
+// semantic hits down, and hybrid was worse than semantic alone. On the
+// real eval set (32 questions, 2026-11-10) 0.2 gave the best result:
+// hybrid MRR@10 0.44 → 0.54, recall@10 0.73 → 0.83; with the reranker (10
+// candidates) MRR@10 0.70 → 0.79. A keyword hit still counts, so exact
+// names and numbers are found (docs/11, "Mérés").
+const KeywordWeight = 0.2
+
 // Degraded flags say what a search had to do without.
 const (
 	DegradedNoEmbedder = "no_embedder"

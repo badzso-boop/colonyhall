@@ -235,7 +235,7 @@ WHERE c.workspace_id = $ws AND (
 
 **Vektoros ág:** `ORDER BY embedding <=> $q LIMIT 50`, koszinusz; `hnsw.ef_search = 100`.
 
-**Egyesítés:** Reciprocal Rank Fusion, `k = 60` (a mérés a kis szintetikus készleten dönti el, kell-e más); mindkét ágból az első 50.
+**Egyesítés:** Reciprocal Rank Fusion, `k = 60`, mindkét ágból az első 50; **a kulcsszavas ág súlya 0,2** (a szemantikusé 1), a valódi készlet mérése alapján (2026-11-10, lásd „Mérés”).
 
 **Rerank:** az egyesített lista első **10** eleme (`COLONY_RERANK_TOP`; Norbi döntése a valódi készlet mérése után, 2026-11-10, lásd „Mérés”) a rerankerhez, legfeljebb `COLONY_RERANK_TIMEOUT` ideig (alap 5 mp; utána a keresés rerank nélkül válaszol), (a darab fejléce + szövege, max ~300 token); a végső sorrend a reranker pontszáma; a reranker nélküli helyek RRF szerint maradnak.
 
@@ -313,7 +313,29 @@ A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem p
 
 - **A reranker sokat javít, de CPU-n lassú:** a régi 30 jelölt és a fix 2 mp mellett **minden rerank kiesett volna** (a valódi darabok hosszabbak a szintetikusnál). **Döntés (Norbi, 2026-11-10):** 10 jelölt, MRR@10 ≈ 0,70 elfogadva (otthoni projekt, nem nagy szerver); az időkorlát állítható (`COLONY_RERANK_TIMEOUT`, alap 5 mp). Később a reranker a PC GPU-jára kerülhet (49. kör), akkor több jelölt is belefér.
 - **A homelabon** (i5-2500S, AVX2 nélkül) a 10 jelölt is lassabb lesz: élesítés előtt ott mérni kell (`docs/13`).
-- **A hibrid rosszabb a csak szemantikusnál:** a kulcsszavas ág VAGY-kapcsolata sok zajt hoz, és az RRF ezzel lehúzza a jó szemantikus találatokat. Hangolandó (pl. a kulcsszavas ág súlya vagy ÉS-kapcsolat, RRF `k`), a valódi készleten mérve.
+- **A hibrid egyenlő súllyal rosszabb volt a csak szemantikusnál:** a kulcsszavas ág VAGY-kapcsolata szinte minden darabra talál egy közös szót, és ez a zaj az RRF-ben lehúzta a jó szemantikus találatokat.
+
+### A hibrid hangolása (2026-11-10, Norbi kérésére)
+
+Ugyanazon a 32 kérdésen, reranker nélkül (a „hibrid” sor), majd a legjobbak rerankerrel (10 jelölt):
+
+| beállítás | recall@5 | recall@10 | MRR@10 | nDCG@10 |
+| --- | --- | --- | --- | --- |
+| csak szemantikus (összevetésnek) | 0,69 | 0,81 | 0,56 | 0,60 |
+| kulcsszavas súly 1 (régi) | 0,58 | 0,73 | 0,44 | 0,50 |
+| kulcsszavas súly 0,5 | 0,69 | 0,80 | 0,49 | 0,55 |
+| kulcsszavas súly 0,3 | 0,72 | 0,80 | 0,52 | 0,58 |
+| **kulcsszavas súly 0,2** | **0,75** | **0,83** | **0,54** | **0,60** |
+| kulcsszavas súly 0,1 | 0,73 | 0,81 | 0,57 | 0,61 |
+| kulcsszavas jelöltek: 5 / 10 / 20 (súly 1) | 0,56 / 0,53 / 0,55 | 0,72 / 0,75 / 0,73 | 0,42 / 0,44 / 0,44 | – |
+| RRF `k` = 10 / 30 (súly 0,3) | 0,73 / 0,75 | 0,81 / 0,81 | 0,53 / 0,55 | – |
+| súly 1 + rerank | 0,73 | 0,73 | 0,70 | 0,69 |
+| súly 0,3 + rerank | 0,77 | 0,80 | 0,74 | 0,73 |
+| **súly 0,2 + rerank** | **0,80** | **0,83** | **0,79** | **0,78** |
+
+- **Döntés:** a kulcsszavas ág súlya **0,2** (`KeywordWeight`). A hibrid így a recallban jobb a csak szemantikusnál (a pontos nevek és számok a kulcsszavas ágból jönnek), és rerankkel 10 jelöltből is annyit ér (MRR 0,79), mint korábban 20 jelöltből, 2,5 mp alatt.
+- A kulcsszavas jelöltek számának szűkítése nem segít; a `k` állítása alig változtat.
+- **Óvatosan:** 32 kérdésnél egy kérdés ~0,03; a 0,1 és a 0,3 közti különbség ezen belül van. Ha a készlet bővül vagy Norbi átírja, újra kell mérni.
 
 ## Norbi döntésére vár
 

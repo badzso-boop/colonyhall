@@ -300,7 +300,8 @@ func (s *Service) embedQuery(ctx context.Context, text string) ([]float32, strin
 	return vecs[0], model, true
 }
 
-// fuse merges the legs with Reciprocal Rank Fusion.
+// fuse merges the legs with Reciprocal Rank Fusion, the keyword leg
+// weighted by KeywordWeight.
 func fuse(kw, sem []Candidate) []Hit {
 	byID := map[ids.ID]*Hit{}
 	var order []ids.ID
@@ -320,7 +321,11 @@ func fuse(kw, sem []Candidate) []Hit {
 		} else {
 			h.Semantic = &score
 		}
-		h.Fused += 1 / float64(RRFK+c.Rank)
+		weight := 1.0
+		if keyword {
+			weight = KeywordWeight
+		}
+		h.Fused += weight / float64(RRFK+c.Rank)
 	}
 	for _, c := range kw {
 		add(c, true)

@@ -106,11 +106,16 @@ func TestFuseRRF(t *testing.T) {
 	if len(got) != 3 || got[0].Chunk.ID != (ids.ID{2}) {
 		t.Fatalf("the hit found by both legs comes first: %+v", got)
 	}
-	want := 1.0/float64(RRFK+2) + 1.0/float64(RRFK+1)
+	want := KeywordWeight/float64(RRFK+2) + 1.0/float64(RRFK+1)
 	if got[0].Fused != want || got[0].Keyword == nil || got[0].Semantic == nil {
 		t.Fatalf("fused score: %v want %v", got[0].Fused, want)
 	}
-	if got[1].Chunk.ID != (ids.ID{1}) || got[1].Snippet != "«x»" || got[1].Semantic != nil {
-		t.Fatalf("keyword-only hit: %+v", got[1])
+	// The keyword leg weighs less: a semantic-only hit ranks above a
+	// keyword-only one of the same or even a better rank.
+	if got[1].Chunk.ID != (ids.ID{3}) || got[1].Keyword != nil {
+		t.Fatalf("semantic-only hit second: %+v", got[1])
+	}
+	if got[2].Chunk.ID != (ids.ID{1}) || got[2].Snippet != "«x»" || got[2].Semantic != nil {
+		t.Fatalf("keyword-only hit last: %+v", got[2])
 	}
 }

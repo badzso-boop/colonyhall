@@ -109,7 +109,7 @@ Egy darab, ami mindkét listán az első, `2/61 ≈ 0,033` pontot kap; ami csak 
 
 A beágyazó modell **bi-encoder**: a kérdést és a dokumentumot külön kódolja, ezért a dokumentumok vektora előre kiszámolható (gyors). A **cross-encoder** a kérdést és a dokumentumot **együtt** olvassa, és közvetlenül egy relevancia-pontszámot ad: sokkal pontosabb, de minden (kérdés, dokumentum) párra futtatni kell.
 
-Ezért a kettő együtt dolgozik: a gyors keresés hoz 50 jelöltet, a cross-encoder az első 10-et újrarendezi. Mérés a PC-n (`jina-reranker-v2-base-multilingual` int8, 2 szál): ~0,6 mp kb. 20 jelöltre. A homelab processzora régebbi (AVX2 nélkül), ott ez lassabb lesz: ezért van `COLONY_RERANK_TOP` (alap 10) és `COLONY_RERANK_TIMEOUT` (alap 5 mp), utána a keresés rerank nélkül válaszol. A valódi adaton (hosszabb darabok) a PC-n 10 jelölt 2,8 mp, 20 jelölt 6,8 mp; a 10 jelölt MRR@10 0,70, a 20-é 0,79 (`docs/11`, „Mérés”).
+Ezért a kettő együtt dolgozik: a gyors keresés hoz 50 jelöltet, a cross-encoder az első 10-et újrarendezi. Az összefésülésnél (RRF) a kulcsszavas ág kisebb súlyt kap (0,2), mert a VAGY-kapcsolt szavak szinte mindenre találnak valamit; egyenlő súllyal a hibrid rosszabb volt a csak szemantikusnál (`docs/11`, „A hibrid hangolása”). Mérés a PC-n (`jina-reranker-v2-base-multilingual` int8, 2 szál): ~0,6 mp kb. 20 jelöltre. A homelab processzora régebbi (AVX2 nélkül), ott ez lassabb lesz: ezért van `COLONY_RERANK_TOP` (alap 10) és `COLONY_RERANK_TIMEOUT` (alap 5 mp), utána a keresés rerank nélkül válaszol. A valódi adaton (hosszabb darabok) a PC-n 10 jelölt 2,8 mp, 20 jelölt 6,8 mp; a 10 jelölt MRR@10 0,70, a 20-é 0,79 (`docs/11`, „Mérés”).
 
 Példa a pontszámra (mért):
 
