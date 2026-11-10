@@ -89,6 +89,10 @@ type InboxItem struct {
 	MessageAt    time.Time
 	DelegatedBy  string // handle of the approving admin (for delegated items)
 	ReplyOrigin  *ReplyOrigin
+	// RequestOrigin is set on another agent's request sent from a thread
+	// the recipient may write in (RequestMessageID is the request itself):
+	// the recipient handles it in that thread and answers there.
+	RequestOrigin *ReplyOrigin
 }
 
 // Limits.

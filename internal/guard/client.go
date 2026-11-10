@@ -58,6 +58,17 @@ type ReplyOrigin struct {
 	RequestMessageID string `json:"request_message_id"`
 }
 
+// Route is where the item's answer goes instead of where it arrived: the
+// origin thread of the agent's own request it answers (ReplyOrigin), or the
+// thread another agent's request was sent from (RequestOrigin); nil for
+// neither.
+func (it Item) Route() *ReplyOrigin {
+	if it.ReplyOrigin != nil {
+		return it.ReplyOrigin
+	}
+	return it.RequestOrigin
+}
+
 // Item is one inbox item.
 type Item struct {
 	ID           string       `json:"id"`
@@ -75,6 +86,10 @@ type Item struct {
 	DM           bool         `json:"dm"`
 	At           time.Time    `json:"at"`
 	ReplyOrigin  *ReplyOrigin `json:"reply_origin,omitempty"`
+	// RequestOrigin: another agent's request sent from a thread this agent
+	// may write in. The agent handles it in that thread's session and
+	// answers there (RequestMessageID is the request itself).
+	RequestOrigin *ReplyOrigin `json:"request_origin,omitempty"`
 	// AnswersMessageID is set by the guard on a reply target: the DM reply
 	// the answer in the origin thread responds to. Never from the server.
 	AnswersMessageID string `json:"-"`

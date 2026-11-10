@@ -3207,6 +3207,8 @@ export interface components {
             /** @description Whether this delegated item was delivered via an active delegation grant */
             via_grant?: boolean;
             reply_origin?: components["schemas"]["ReplyOrigin"];
+            /** @description A request another agent sent from a thread the recipient may write in (request_message_id is the request itself): the guard handles it in that thread's session and answers there. */
+            request_origin?: components["schemas"]["ReplyOrigin"];
         };
         ReplyOrigin: {
             /** Format: uuid */

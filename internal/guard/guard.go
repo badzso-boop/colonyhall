@@ -790,8 +790,8 @@ type activityEntry struct {
 }
 
 func (a *Agent) activityTarget(it Item) (string, string) {
-	if it.ReplyOrigin != nil && it.ReplyOrigin.ChannelID != "" {
-		return it.ReplyOrigin.ChannelID, it.ReplyOrigin.ThreadRootID
+	if r := it.Route(); r != nil && r.ChannelID != "" {
+		return r.ChannelID, r.ThreadRootID
 	}
 	chID := it.ChannelID
 	thID := it.ThreadRootID
@@ -1548,9 +1548,9 @@ func (a *Agent) postNotesOnce(ctx context.Context, items []Item, noted map[strin
 	for _, it := range items {
 		targetChannelID := it.ChannelID
 		targetThreadID := it.ThreadRootID
-		if it.ReplyOrigin != nil {
-			targetChannelID = it.ReplyOrigin.ChannelID
-			targetThreadID = it.ReplyOrigin.ThreadRootID
+		if r := it.Route(); r != nil {
+			targetChannelID = r.ChannelID
+			targetThreadID = r.ThreadRootID
 		} else if targetThreadID == "" && !it.DM {
 			targetThreadID = it.ItemID
 			if targetThreadID == "" {

@@ -3062,6 +3062,9 @@ components:
         delegated_by: { type: string, description: "Handle of the approving admin for kind=delegated" }
         via_grant: { type: boolean, description: "Whether this delegated item was delivered via an active delegation grant" }
         reply_origin: { $ref: "#/components/schemas/ReplyOrigin" }
+        request_origin:
+          description: "A request another agent sent from a thread the recipient may write in (request_message_id is the request itself): the guard handles it in that thread's session and answers there."
+          allOf: [{ $ref: "#/components/schemas/ReplyOrigin" }]
     ReplyOrigin:
       type: object
       required: [channel_id, channel, thread_root_id, request_message_id]

@@ -2799,14 +2799,17 @@ type InboxItem struct {
 	ChannelId  openapi_types.UUID  `json:"channel_id"`
 
 	// DelegatedBy Handle of the approving admin for kind=delegated
-	DelegatedBy  *string             `json:"delegated_by,omitempty"`
-	Dm           bool                `json:"dm"`
-	Id           openapi_types.UUID  `json:"id"`
-	ItemId       openapi_types.UUID  `json:"item_id"`
-	Kind         string              `json:"kind"`
-	Mentioned    bool                `json:"mentioned"`
-	ReplyOrigin  *ReplyOrigin        `json:"reply_origin,omitempty"`
-	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	DelegatedBy *string            `json:"delegated_by,omitempty"`
+	Dm          bool               `json:"dm"`
+	Id          openapi_types.UUID `json:"id"`
+	ItemId      openapi_types.UUID `json:"item_id"`
+	Kind        string             `json:"kind"`
+	Mentioned   bool               `json:"mentioned"`
+	ReplyOrigin *ReplyOrigin       `json:"reply_origin,omitempty"`
+
+	// RequestOrigin A request another agent sent from a thread the recipient may write in (request_message_id is the request itself): the guard handles it in that thread's session and answers there.
+	RequestOrigin *ReplyOrigin        `json:"request_origin,omitempty"`
+	ThreadRootId  *openapi_types.UUID `json:"thread_root_id,omitempty"`
 
 	// ViaGrant Whether this delegated item was delivered via an active delegation grant
 	ViaGrant *bool `json:"via_grant,omitempty"`

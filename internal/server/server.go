@@ -76,6 +76,7 @@ import (
 	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/modules/hosts"
 	hosthttp "colonyhall/internal/modules/hosts/httpapi"
+	hostsmcp "colonyhall/internal/modules/hosts/mcptools"
 	hostmem "colonyhall/internal/modules/hosts/memory"
 	hostpg "colonyhall/internal/modules/hosts/postgres"
 	"colonyhall/internal/modules/identity"
@@ -511,6 +512,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		plannermcp.Register(s, plSvc, current)
 		decmcp.Register(s, dcSvc, current, r)
 		leasesmcp.Register(s, lsSvc, current)
+		hostsmcp.Register(s, hoSvc, idSvc, current)
 	}, rlSvc.InstructionsForActor, opt.Logger)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)

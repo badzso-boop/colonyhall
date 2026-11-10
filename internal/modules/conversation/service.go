@@ -609,10 +609,11 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	return SendResult{Message: &msg}, nil
 }
 
-// checkedAnswers returns refID only if it is another actor's reply, in a DM
-// the agent belongs to, to the agent's own request that was sent from exactly
-// this channel and thread (the reply-routing case). Anything else is dropped,
-// so an agent cannot attach a link to an unrelated message.
+// checkedAnswers returns refID only if it is another actor's message, in a
+// DM the agent belongs to, that was sent from exactly this channel and thread
+// (another agent's request answered there), or that replies to the agent's
+// own request sent from there (the reply-routing case). Anything else is
+// dropped, so an agent cannot attach a link to an unrelated message.
 func (s *Service) checkedAnswers(ctx context.Context, by identity.Actor, channelID, threadRootID, refID ids.ID) ids.ID {
 	ref, err := s.Store.MessageByID(ctx, refID)
 	if err != nil || ref.DeletedAt != nil || ref.AuthorID == by.ID {
@@ -624,6 +625,11 @@ func (s *Service) checkedAnswers(ctx context.Context, by identity.Actor, channel
 	}
 	if mem, err := s.membership(ctx, ref.ChannelID, by.ID); err != nil || !mem.IsMember {
 		return ids.Nil
+	}
+	// The request-origin case: ref is another agent's request to this agent,
+	// sent from exactly this channel and thread; the answer goes there.
+	if ref.OriginChannelID == channelID && ref.OriginThreadID == threadRootID {
+		return ref.ID
 	}
 	var req Message
 	if ref.ThreadRootID != ids.Nil {

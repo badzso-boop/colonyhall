@@ -105,6 +105,7 @@
 - **Újraindexelés kézzel:** `~/.local/bin/codegraph index <repó>` (teljes újraépítés), vagy töröld a repó `.codegraph/` mappáját: a következő futás újraépíti. Egy hibás indexet az őr óránként egyszer próbál újra.
 - **Frissítés** (kézi lépés, mindhárom gépen, a kolléga felhasználóján is): `~/.local/bin/codegraph upgrade`, majd az őr újraindítása (`systemctl --user restart colony-guard`), hogy az új verziót és a bundle új útvonalát vegye fel. Futó agentmunka alatt ne.
 - **Kikapcsolás:** a `guard.yaml`-ben `codegraph: { enabled: false }`, majd az őr újraindítása.
+- **Antigravity-agent „The client refused: mcp” hibával:** a gép `~/.gemini/antigravity-cli/settings.json`-jából hiányzik a `permissions.allow` alól az `mcp(codegraph/*)` (a Colonyhall MCP-hez az `mcp(colonyhall/*)`). Fej nélküli módban az `agy` csak az itt engedélyezett MCP-eszközt hívja. Beállítva a PC-n és a homelabon (2026-11-10); új gépen ez is a telepítés része.
 - **Csak olvasható mappa:** a sandboxos agent csak olvasható mappája nem kap CodeGraph-ot (a szerver a zárfájlja miatt írna az index mellé), és az őr nem is indexeli.
 
 ### Ha a CI piros (42. kör)

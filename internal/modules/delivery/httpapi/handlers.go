@@ -36,14 +36,24 @@ func ToAPI(it delivery.InboxItem) apispec.InboxItem {
 			RequestMessageId: it.ReplyOrigin.RequestMessageID,
 		}
 	}
+	var requestOrigin *apispec.ReplyOrigin
+	if it.RequestOrigin != nil {
+		requestOrigin = &apispec.ReplyOrigin{
+			ChannelId:        it.RequestOrigin.ChannelID,
+			Channel:          it.RequestOrigin.Channel,
+			ThreadRootId:     it.RequestOrigin.ThreadRootID,
+			RequestMessageId: it.RequestOrigin.RequestMessageID,
+		}
+	}
 	return apispec.InboxItem{
 		Id: it.ID, Kind: it.ItemKind, ItemId: it.ItemID, Channel: it.ChannelName,
 		ChannelId: it.ChannelID, ThreadRootId: httpx.Ptr(it.ThreadRootID), Author: it.AuthorHandle,
 		AuthorKind: apispec.InboxItemAuthorKind(it.AuthorKind), Body: it.Body,
 		Mentioned: it.Flags.Has(delivery.FlagMentioned), Dm: it.Flags.Has(delivery.FlagDM), At: it.MessageAt,
-		DelegatedBy: delegatedBy,
-		ViaGrant:    viaGrant,
-		ReplyOrigin: replyOrigin,
+		DelegatedBy:   delegatedBy,
+		ViaGrant:      viaGrant,
+		ReplyOrigin:   replyOrigin,
+		RequestOrigin: requestOrigin,
 	}
 }
 
