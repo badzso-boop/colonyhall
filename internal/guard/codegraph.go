@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"colonyhall/internal/apispec"
@@ -345,6 +346,14 @@ func (e errSkip) Error() string { return e.reason }
 // prepare checks the repository and returns its file count and the
 // codegraph arguments (init for a new index, sync for an existing one).
 func (cg *CodeGraph) prepare(ctx context.Context, repo string, sandboxed bool) (int, []string, error) {
+	gitDir := ""
+	if sandboxed {
+		d, err := trustedGitDir(repo)
+		if err != nil {
+			return 0, nil, errSkip{err.Error()}
+		}
+		gitDir = d
+	}
 	top, err := gitExec(ctx, repo, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return 0, nil, errSkip{"not a git repository"}
@@ -362,7 +371,7 @@ func (cg *CodeGraph) prepare(ctx context.Context, repo string, sandboxed bool) (
 	if files > cg.maxFiles() {
 		return files, nil, errSkip{fmt.Sprintf("%d files, more than codegraph.max_files (%d)", files, cg.maxFiles())}
 	}
-	if err := excludeCodeGraph(ctx, repo); err != nil {
+	if err := excludeCodeGraph(ctx, repo, gitDir); err != nil {
 		return files, nil, fmt.Errorf("git exclude: %w", err)
 	}
 	dir := filepath.Join(repo, codeGraphIndexDir)
@@ -445,14 +454,33 @@ func (cg *CodeGraph) idle() bool {
 // excludeCodeGraph adds the index folders to the repository's local
 // exclude file (.git/info/exclude, shared by its worktrees): CodeGraph's own
 // .codegraph/.gitignore keeps the database out of git but not that file
-// itself, so `git add -A` by an agent would commit it.
-func excludeCodeGraph(ctx context.Context, repo string) error {
-	p, err := gitExec(ctx, repo, "rev-parse", "--git-path", "info/exclude")
-	if err != nil {
-		return err
-	}
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(repo, p)
+// itself, so `git add -A` by an agent would commit it. gitDir, when set, is
+// the checked git folder (trustedGitDir) of a sandboxed agent's repository:
+// the file is then written there only, never where git or a link points.
+func excludeCodeGraph(ctx context.Context, repo, gitDir string) error {
+	var p string
+	if gitDir != "" {
+		info := filepath.Join(gitDir, "info")
+		switch fi, err := os.Lstat(info); {
+		case errors.Is(err, os.ErrNotExist):
+			if err := os.Mkdir(info, 0o755); err != nil {
+				return err
+			}
+		case err != nil:
+			return err
+		case !fi.IsDir():
+			return fmt.Errorf("%s is not a folder", info)
+		}
+		p = filepath.Join(info, "exclude")
+	} else {
+		out, err := gitExec(ctx, repo, "rev-parse", "--git-path", "info/exclude")
+		if err != nil {
+			return err
+		}
+		p = out
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(repo, p)
+		}
 	}
 	raw, err := os.ReadFile(p)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -469,7 +497,7 @@ func excludeCodeGraph(ctx context.Context, repo string) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY|syscall.O_NOFOLLOW, 0o644)
 	if err != nil {
 		return err
 	}
@@ -640,4 +668,37 @@ func writeServersConfig(dir string, servers map[string]mcpServerDoc) (string, fu
 		return "", nil, err
 	}
 	return path, cleanup, nil
+}
+
+// trustedGitDir returns the git folder of a sandboxed agent's repository:
+// repo/.git when it is a real folder, or the repository's .git folder when
+// repo is a worktree whose pointer file passes worktreeCommonDir's back-link
+// check. The agent can write the repository, so a .git pointer it planted
+// (to a folder of its own with a crafted config, or elsewhere on the
+// machine) is refused instead of being followed by git and by the exclude
+// write.
+func trustedGitDir(repo string) (string, error) {
+	gf := filepath.Join(repo, ".git")
+	fi, err := os.Lstat(gf)
+	switch {
+	case err != nil:
+		return "", errors.New("not a git repository")
+	case fi.IsDir():
+		return gf, nil
+	case !fi.Mode().IsRegular():
+		return "", errors.New(".git is neither a folder nor a worktree link")
+	}
+	raw, err := os.ReadFile(gf)
+	if err != nil {
+		return "", err
+	}
+	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir:")
+	if !ok {
+		return "", errors.New(".git is not a worktree link")
+	}
+	common := worktreeCommonDir(gf, strings.TrimSpace(gitdir))
+	if common == "" {
+		return "", errors.New(".git points to a folder that is not this worktree's")
+	}
+	return common, nil
 }
