@@ -302,7 +302,7 @@ func (cg *CodeGraph) Ensure(repo string, wrap IndexWrap) {
 // index builds or syncs one repository's index.
 func (cg *CodeGraph) index(ctx context.Context, job codeGraphJob) {
 	repo := job.repo
-	files, args, err := cg.prepare(ctx, repo, job.wrap != nil)
+	files, args, err := cg.prepare(ctx, repo, job.wrap)
 	status, detail := apispec.CodegraphRepoStatusIndexed, ""
 	var skip errSkip
 	switch {
@@ -345,27 +345,38 @@ func (e errSkip) Error() string { return e.reason }
 
 // prepare checks the repository and returns its file count and the
 // codegraph arguments (init for a new index, sync for an existing one).
-func (cg *CodeGraph) prepare(ctx context.Context, repo string, sandboxed bool) (int, []string, error) {
-	gitDir := ""
-	if sandboxed {
+// wrap is set for a sandboxed agent's repository: the agent can write it,
+// .git included when it created that folder itself, so git never runs on
+// the host there (a crafted config would run as the guard); it runs in the
+// indexer's sandbox instead, with the repository read-only and no network.
+func (cg *CodeGraph) prepare(ctx context.Context, repo string, wrap IndexWrap) (int, []string, error) {
+	var gitDir string
+	var raw []byte
+	if wrap != nil {
 		d, err := trustedGitDir(repo)
 		if err != nil {
 			return 0, nil, errSkip{err.Error()}
 		}
 		gitDir = d
-	}
-	top, err := gitExec(ctx, repo, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return 0, nil, errSkip{"not a git repository"}
-	}
-	realRepo, err1 := filepath.EvalSymlinks(repo)
-	realTop, err2 := filepath.EvalSymlinks(top)
-	if err1 != nil || err2 != nil || realRepo != realTop {
-		return 0, nil, errSkip{"not the root of a git repository"}
-	}
-	raw, err := gitExecRaw(ctx, repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-	if err != nil {
-		return 0, nil, fmt.Errorf("git ls-files: %w", err)
+		if err := ensureIndexDir(repo); err != nil {
+			return 0, nil, err
+		}
+		if raw, err = cg.sandboxedGit(ctx, repo, wrap, "ls-files", "-z", "--cached", "--others", "--exclude-standard"); err != nil {
+			return 0, nil, fmt.Errorf("git ls-files: %w", err)
+		}
+	} else {
+		top, err := gitExec(ctx, repo, "rev-parse", "--show-toplevel")
+		if err != nil {
+			return 0, nil, errSkip{"not a git repository"}
+		}
+		realRepo, err1 := filepath.EvalSymlinks(repo)
+		realTop, err2 := filepath.EvalSymlinks(top)
+		if err1 != nil || err2 != nil || realRepo != realTop {
+			return 0, nil, errSkip{"not the root of a git repository"}
+		}
+		if raw, err = gitExecRaw(ctx, repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard"); err != nil {
+			return 0, nil, fmt.Errorf("git ls-files: %w", err)
+		}
 	}
 	files := bytes.Count(raw, []byte{0})
 	if files > cg.maxFiles() {
@@ -375,23 +386,54 @@ func (cg *CodeGraph) prepare(ctx context.Context, repo string, sandboxed bool) (
 		return files, nil, fmt.Errorf("git exclude: %w", err)
 	}
 	dir := filepath.Join(repo, codeGraphIndexDir)
-	fi, err := os.Lstat(dir)
-	switch {
-	case err == nil && (!fi.IsDir() || fi.Mode()&os.ModeSymlink != 0):
+	if fi, err := os.Lstat(dir); err == nil && (!fi.IsDir() || fi.Mode()&os.ModeSymlink != 0) {
 		return files, nil, errSkip{codeGraphIndexDir + " is not a folder"}
-	case errors.Is(err, os.ErrNotExist) && sandboxed:
-		// The indexer's sandbox binds it writable, so it must exist first
-		// (Mkdir never follows a link put in its place).
-		if err := os.Mkdir(dir, 0o755); err != nil {
-			return files, nil, err
-		}
-	case err != nil && !errors.Is(err, os.ErrNotExist):
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return files, nil, err
 	}
 	if exists(filepath.Join(dir, "codegraph.db")) {
 		return files, []string{"sync", "--quiet", repo}, nil
 	}
 	return files, []string{"init", "--yes", repo}, nil
+}
+
+// ensureIndexDir creates the index folder the indexer's sandbox binds
+// writable (Mkdir never follows a link put in its place), and refuses
+// anything that is not a plain folder there.
+func ensureIndexDir(repo string) error {
+	dir := filepath.Join(repo, codeGraphIndexDir)
+	fi, err := os.Lstat(dir)
+	switch {
+	case err == nil && (!fi.IsDir() || fi.Mode()&os.ModeSymlink != 0):
+		return errSkip{codeGraphIndexDir + " is not a folder"}
+	case errors.Is(err, os.ErrNotExist):
+		return os.Mkdir(dir, 0o755)
+	default:
+		return err
+	}
+}
+
+// sandboxedGit runs a read-only git query in the indexer's sandbox, with
+// the same hardening flags as gitExec.
+func (cg *CodeGraph) sandboxedGit(ctx context.Context, repo string, wrap IndexWrap, args ...string) ([]byte, error) {
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		return nil, err
+	}
+	args = append([]string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"}, args...)
+	name, argv, env, err := wrap(repo, bin, args)
+	if err != nil {
+		return nil, fmt.Errorf("sandbox: %w", err)
+	}
+	env = append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0")
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	run := cg.Run
+	if run == nil {
+		run = ExecRunner
+	}
+	out, _, err := run(ctx, repo, name, argv, env)
+	return out, err
 }
 
 // exec runs codegraph at low CPU and IO priority, in the indexer sandbox

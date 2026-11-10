@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,11 @@ func TestCodeGraphRefusesPlantedGitPointer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, ".git"), []byte("gitdir: "+filepath.Join(outside, ".git")+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := cg.prepare(context.Background(), repo, true); err == nil {
+	noWrap := func(string, string, []string) (string, []string, []string, error) {
+		t.Fatal("git ran for a refused repository")
+		return "", nil, nil, nil
+	}
+	if _, _, err := cg.prepare(context.Background(), repo, noWrap); err == nil {
 		t.Fatal("a planted .git pointer was accepted")
 	}
 	if _, err := os.Stat(filepath.Join(outside, ".git", "info", "exclude")); err == nil {
@@ -111,5 +116,56 @@ func TestCodeGraphAcceptsRealWorktree(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(repo, ".git", "info", "exclude"))
 	if err != nil || !strings.Contains(string(raw), codeGraphExclude) {
 		t.Fatalf("exclude %q, %v", raw, err)
+	}
+}
+
+// In a sandboxed agent's repository git never runs on the host: the agent
+// may have created .git itself, with commands in its config. The query goes
+// through the indexer's sandbox wrap.
+func TestCodeGraphGitRunsInSandboxForSandboxedRepo(t *testing.T) {
+	cg, _ := newTestCodeGraph(t)
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	var calls [][]string
+	wrap := func(r, name string, args []string) (string, []string, []string, error) {
+		calls = append(calls, append([]string{name}, args...))
+		return "/bin/sh", []string{"-c", `printf 'a\0b\0c\0'`}, nil, nil
+	}
+	files, args, err := cg.prepare(context.Background(), repo, wrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files != 3 || len(args) == 0 || args[0] != "init" {
+		t.Fatalf("files %d, args %q", files, args)
+	}
+	if len(calls) != 1 || filepath.Base(calls[0][0]) != "git" ||
+		!slices.Contains(calls[0], "core.fsmonitor=false") || !slices.Contains(calls[0], "ls-files") {
+		t.Fatalf("git did not go through the sandbox wrap: %q", calls)
+	}
+}
+
+// The same with a real bwrap: git works inside the indexer's sandbox.
+func TestCodeGraphSandboxedGitWithBwrap(t *testing.T) {
+	sbx := DetectSandbox(context.Background(), t.TempDir(), t.TempDir())
+	if sbx == nil {
+		t.Skip("no working bwrap")
+	}
+	sbx.Home = t.TempDir()
+	cg, _ := newTestCodeGraph(t)
+	repo := initTestRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wrap := func(r, name string, args []string) (string, []string, []string, error) {
+		return sbx.IndexCommand(cg, r, name, args)
+	}
+	files, _, err := cg.prepare(context.Background(), repo, wrap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files < 1 {
+		t.Fatalf("git ls-files in the sandbox found %d files", files)
 	}
 }
