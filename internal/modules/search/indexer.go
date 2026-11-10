@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"sort"
 	"strings"
@@ -89,9 +90,12 @@ func parseID(s string) ids.ID {
 	return id
 }
 
-// missing reports a source that is gone; the handler skips it.
+// missing reports a source that is gone; the handler skips it. A file
+// missing from the file store (a summary's content) counts too: retrying
+// cannot bring it back, and an error here would stall the consumer on that
+// event, so nothing after it would be indexed.
 func missing(err error) bool {
-	return errors.Is(err, db.ErrNotFound) || errors.Is(err, wiki.ErrNotFound)
+	return errors.Is(err, db.ErrNotFound) || errors.Is(err, wiki.ErrNotFound) || errors.Is(err, fs.ErrNotExist)
 }
 
 func (x *Indexer) handle(ctx context.Context, id ids.ID) string {
@@ -255,6 +259,7 @@ func (x *Indexer) indexSummary(ctx context.Context, workspaceID ids.ID, p compac
 	}
 	text, err := x.Summaries(ctx, fileID)
 	if missing(err) {
+		x.log().Warn("search: summary file missing; summary not indexed", "compaction", compID, "file", fileID)
 		return nil
 	}
 	if err != nil {
