@@ -37,10 +37,10 @@ docker run --rm --network shared-db-net curlimages/curl -s http://rerank:8091/v1
 
 Elvárt: két pontszám, az első dokumentumé a nagyobb.
 
-A Colonyhall `deploy/.env`-jében: `COLONY_RERANK_URL=http://rerank:8091`, és ha kell, `COLONY_RERANK_TOP=30`. Utána a szerver újraindítása (`docker compose -f deploy/compose.yaml up -d`).
+A Colonyhall `deploy/.env`-jében: `COLONY_RERANK_URL=http://rerank:8091`, és ha kell, `COLONY_RERANK_TOP` (alap 10) és `COLONY_RERANK_TIMEOUT` (alap 5 mp; a PC CPU-ján 10 jelölt 2,8 mp, p95 3,6 mp). Utána a szerver újraindítása (`docker compose -f deploy/compose.yaml up -d`).
 
 ## 4. Ha baj van
 
-- **Lassú a keresés:** a Colonyhall állapotlapján a rerank ideje; ha tartósan 2 mp fölött, kisebb `COLONY_RERANK_TOP` (pl. 20) vagy kisebb modell.
+- **Lassú a keresés:** a Colonyhall állapotlapján a rerank ideje; ha a rerank rendszeresen kiesik („not reranked”), kisebb `COLONY_RERANK_TOP`, nagyobb `COLONY_RERANK_TIMEOUT`, kisebb modell, vagy később a GPU.
 - **Memória:** `docker stats colonyhall-rerank-rerank-1`; a korlát 1,5 GB.
 - **Leállítás:** `docker compose down` – a keresés rerank nélkül megy tovább.

@@ -44,8 +44,10 @@ type Config struct {
 	EmbedURL string
 	// RerankURL is the search's reranker (the homelab); empty: no rerank.
 	RerankURL string
-	// RerankTop is how many candidates go to the reranker (default 30).
+	// RerankTop is how many candidates go to the reranker (default 10).
 	RerankTop int
+	// RerankTimeout bounds one rerank call (default 5 s).
+	RerankTimeout time.Duration
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
@@ -70,10 +72,19 @@ func FromEnv() (Config, error) {
 		}
 		rerankTop = n
 	}
+	var rerankTimeout time.Duration
+	if v := os.Getenv("COLONY_RERANK_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 100*time.Millisecond || d > time.Minute {
+			return Config{}, fmt.Errorf("config: COLONY_RERANK_TIMEOUT must be a duration of 100ms–1m, got %q", v)
+		}
+		rerankTimeout = d
+	}
 	c := Config{
 		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
 		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
 		RerankTop:          rerankTop,
+		RerankTimeout:      rerankTimeout,
 		CalendarRefresh:    calRefresh,
 		Role:               getenv("COLONY_ROLE", "all"),
 		HTTPAddr:           getenv("COLONY_HTTP_ADDR", ":8080"),

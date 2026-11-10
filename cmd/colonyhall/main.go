@@ -127,6 +127,7 @@ func run(logger *slog.Logger) error {
 		EmbedURL:           cfg.EmbedURL,
 		RerankURL:          cfg.RerankURL,
 		RerankTop:          cfg.RerankTop,
+		RerankTimeout:      cfg.RerankTimeout,
 	})
 	if err != nil {
 		return err

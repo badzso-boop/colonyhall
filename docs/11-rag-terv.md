@@ -237,7 +237,7 @@ WHERE c.workspace_id = $ws AND (
 
 **Egyesítés:** Reciprocal Rank Fusion, `k = 60` (a mérés a kis szintetikus készleten dönti el, kell-e más); mindkét ágból az első 50.
 
-**Rerank:** az egyesített lista első **30** eleme (`COLONY_RERANK_TOP`, a mérés után állítjuk) a rerankerhez (a darab fejléce + szövege, max ~300 token); a végső sorrend a reranker pontszáma; a reranker nélküli helyek RRF szerint maradnak.
+**Rerank:** az egyesített lista első **10** eleme (`COLONY_RERANK_TOP`; Norbi döntése a valódi készlet mérése után, 2026-11-10, lásd „Mérés”) a rerankerhez, legfeljebb `COLONY_RERANK_TIMEOUT` ideig (alap 5 mp; utána a keresés rerank nélkül válaszol), (a darab fejléce + szövege, max ~300 token); a végső sorrend a reranker pontszáma; a reranker nélküli helyek RRF szerint maradnak.
 
 **Végső korlát:** alapból 8, legfeljebb 20. Találatonként: típus, kivonat (a kulcsszavas találat szavai), forráshivatkozás (csatorna + üzenet, wiki slug, `D-NN`, tömörítés), szerző, idő, és embernek, ha admin, minden fokozat pontszáma. Az agent a találatokat `<colonyhall_search_result …>` keretben kapja; a szöveg HTML-escape-elt, így egy találat nem zárhatja be a keretét, és nem nyithat újat.
 
@@ -297,6 +297,23 @@ A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem p
 
 - **36a ezen az ágon** (`feature/rag`), a 36b **külön ágon** (`feature/rag-code`) a 39. és a 49. kör beolvasztása után: ma egyik sincs a `main`-en, a 3060 nincs bent, és a 36b-hez mérni kell.
 - A merge-blokkoló (a valódi magyar kiértékelő készlet) a 36a-ra is érvényes.
+
+### Az első mérés a valódi adaton (2026-11-10)
+
+32 kérdés (döntések, wiki, üzenetek, egy összefoglaló), az éles adat 2026-11-10-i mentésének másolatán, a PC CPU-ján (`multilingual-e5-small` int8, `jina-reranker-v2` int8, 4 szál). A készlet a repón kívül van (`/root/colonyhall-eval/`), Norbi még átnézi.
+
+| konfiguráció | recall@5 | recall@10 | MRR@10 | nDCG@10 | p50 |
+| --- | --- | --- | --- | --- | --- |
+| kulcsszavas | 0,30 | 0,44 | 0,31 | 0,31 | 40 ms |
+| szemantikus | 0,69 | 0,81 | 0,56 | 0,60 | 58 ms |
+| hibrid | 0,58 | 0,73 | 0,44 | 0,50 | 98 ms |
+| hibrid + rerank, 10 jelölt | 0,73 | 0,73 | 0,70 | 0,69 | 2,8 mp |
+| hibrid + rerank, 20 jelölt | 0,80 | 0,83 | 0,79 | 0,78 | 6,8 mp |
+| hibrid + rerank, 30 jelölt | 0,81 | 0,84 | 0,78 | 0,78 | 11,0 mp |
+
+- **A reranker sokat javít, de CPU-n lassú:** a régi 30 jelölt és a fix 2 mp mellett **minden rerank kiesett volna** (a valódi darabok hosszabbak a szintetikusnál). **Döntés (Norbi, 2026-11-10):** 10 jelölt, MRR@10 ≈ 0,70 elfogadva (otthoni projekt, nem nagy szerver); az időkorlát állítható (`COLONY_RERANK_TIMEOUT`, alap 5 mp). Később a reranker a PC GPU-jára kerülhet (49. kör), akkor több jelölt is belefér.
+- **A homelabon** (i5-2500S, AVX2 nélkül) a 10 jelölt is lassabb lesz: élesítés előtt ott mérni kell (`docs/13`).
+- **A hibrid rosszabb a csak szemantikusnál:** a kulcsszavas ág VAGY-kapcsolata sok zajt hoz, és az RRF ezzel lehúzza a jó szemantikus találatokat. Hangolandó (pl. a kulcsszavas ág súlya vagy ÉS-kapcsolat, RRF `k`), a valódi készleten mérve.
 
 ## Norbi döntésére vár
 

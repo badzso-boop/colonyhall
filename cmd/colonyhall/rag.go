@@ -27,7 +27,7 @@ func openApp(ctx context.Context, embedURL string) (*server.App, error) {
 		cfg.EmbedURL = embedURL
 	}
 	return server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, FilesDir: cfg.FilesDir,
-		MaxUploadMB: cfg.MaxUploadMB, EmbedURL: cfg.EmbedURL, RerankURL: cfg.RerankURL, RerankTop: cfg.RerankTop})
+		MaxUploadMB: cfg.MaxUploadMB, EmbedURL: cfg.EmbedURL, RerankURL: cfg.RerankURL, RerankTop: cfg.RerankTop, RerankTimeout: cfg.RerankTimeout})
 }
 
 func signalContext() (context.Context, context.CancelFunc) {

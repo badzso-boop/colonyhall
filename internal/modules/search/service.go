@@ -20,8 +20,10 @@ import (
 // Timeouts and back-off (docs/11-rag-terv.md, 9.).
 const (
 	queryEmbedTimeout = 1500 * time.Millisecond
-	rerankTimeout     = 2 * time.Second
-	batchEmbedTimeout = 30 * time.Second
+	// defaultRerankTimeout: 10 candidates take 2.8 s (p50) and 3.6 s (p95)
+	// on the PC's CPU with jina-reranker-v2 int8 (real data, 2026-11-10).
+	defaultRerankTimeout = 5 * time.Second
+	batchEmbedTimeout    = 30 * time.Second
 	// skipAfterFailure: after a failed call the service answers without
 	// that backend at once for this long, instead of waiting every time.
 	skipAfterFailure = 30 * time.Second
@@ -31,7 +33,9 @@ const (
 	// LogRetention is how long the search log is kept.
 	LogRetention = 30 * 24 * time.Hour
 	// DefaultRerankTop is how many fused candidates go to the reranker.
-	DefaultRerankTop = 30
+	// Norbi's decision (2026-11-10, real eval set): 10, MRR@10 0.70 against
+	// 0.78 with 20-30, at a third of the time; a GPU reranker may raise it.
+	DefaultRerankTop = 10
 )
 
 // backend tracks one remote service's health for the status page and the
@@ -110,9 +114,12 @@ type Service struct {
 	Embedder  Embedder // nil: keyword search only
 	Reranker  Reranker // nil: no reranking
 	RerankTop int      // default DefaultRerankTop
-	IDs       ids.Generator
-	Clock     Clock
-	Logger    *slog.Logger
+	// RerankTimeout bounds one rerank call (default defaultRerankTimeout);
+	// past it the search falls back to the fused order.
+	RerankTimeout time.Duration
+	IDs           ids.Generator
+	Clock         Clock
+	Logger        *slog.Logger
 
 	embed  backend
 	rerank backend
@@ -361,7 +368,11 @@ func (s *Service) rerankHits(ctx context.Context, query string, hits []Hit) bool
 	for i := range n {
 		docs[i] = hits[i].Chunk.Header + "\n" + hits[i].Chunk.Body
 	}
-	ctx, cancel := context.WithTimeout(ctx, rerankTimeout)
+	timeout := s.RerankTimeout
+	if timeout <= 0 {
+		timeout = defaultRerankTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	scores, model, err := s.Reranker.Rerank(ctx, query, docs)
 	if err == nil && len(scores) != n {

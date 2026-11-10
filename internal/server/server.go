@@ -185,6 +185,8 @@ type Options struct {
 	EmbedURL  string
 	RerankURL string
 	RerankTop int
+	// RerankTimeout bounds one rerank call (0: the search default).
+	RerankTimeout time.Duration
 	// Embedder and Reranker override the URLs (tests).
 	Embedder search.Embedder
 	Reranker search.Reranker
@@ -490,7 +492,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		reranker = c
 	}
 	seSvc := &search.Service{Store: seStore, Conv: cvSvc, Directory: idSvc, Embedder: embedder, Reranker: reranker,
-		RerankTop: opt.RerankTop, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
+		RerankTop: opt.RerankTop, RerankTimeout: opt.RerankTimeout, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
 	seIdx := &search.Indexer{Store: seStore, Conv: cvSvc, Directory: idSvc, Wiki: wiSvc, Decisions: dcSvc,
 		Summaries: func(ctx context.Context, fileID ids.ID) (string, error) {
 			_, rc, err := fiSvc.OpenContentAuthorized(ctx, fileID)
