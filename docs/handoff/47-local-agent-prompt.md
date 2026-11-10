@@ -33,16 +33,19 @@ A 7–14B model in 12 GB is much weaker than Claude: short context, weaker tool 
 ## Decisions (binding)
 
 - The GPU goes into **Norbi's PC (WSL2)**.
-- **Languages:** Colonyhall first (**Go, TypeScript/JavaScript/Node**), then **Python** and **Java**.
+- **Languages:** Colonyhall first (**Go, TypeScript/JavaScript/Node**), then **Python**, **Java** and **PHP**.
+- **Norbi's decisions of 2026-11-09** (one symbol per task with a deterministic task splitter, an approved and saved project profile editable at runtime, a separate networked fetch step, context on demand without a fixed cap, limits that can be switched off, module-only final runs) are in `docs/19`, section 16. They are binding.
 - **The code index is built on the PC** (the strong machine), with **the same embedding model and version as the Raspberry Pi** (round 36), so query-time embeddings from the Pi match.
 - **Ponytail's logic, implemented deterministically** in the harness; nothing that only works because a prompt asks for it.
 - **DevDocs (offline docsets) is the primary documentation source.**
 - **MCP servers** for CodeGraph, the code and docs search (the embedding model and the RAG database), and the harness tools.
+- **We do not write our own agent or model runtime** (decision, 2026-11-10; `docs/19` section 0, sources `docs/21`): the model runs in `llama.cpp` behind llama-swap (round 49); the agent loop is an **existing open-source coding agent** (candidates: little-coder/pi, OpenCode, Qwen Code) that the guard runs as a **new client**, like `claude` and `agy` (rule 7). What we write is the deterministic part: the task check, `run_task` with filtered errors, code and docs search, the reuse and duplicate checks, the gates after a run and the help request, as MCP servers and guard checks around the client.
 
 ## 0. Design gate
 
 The detailed design draft is `docs/19-lokalis-agent-harness-terv.md` (written with Norbi; it is the source of truth for this round). Update it with your findings. Measure where you can, otherwise say "estimate". Answer:
 
+0. **Choose the agent** (the first question of the gate): run little-coder (pi), OpenCode and Qwen Code with the same local model on 10–20 well-defined tasks from Norbi's repositories (in a sandbox; OpenCode auto-approves everything in non-interactive mode and read a hidden grader in a benchmark, `docs/21`), and compare: solved or not, tool-call failures, steps, wall time, how each can be driven non-interactively with a streamed, machine-readable log (for the live steps), how MCP servers are given to it, and its licence. Propose one, with the numbers.
 1. **Model runtime and models on 12 GB:**
    - Ollama vs `llama.cpp` server vs others; constrained output (JSON schema or grammar) for reliable tool calls; the OpenAI-compatible tool-calling API as the one adapter (rule 7);
    - candidates (e.g. Qwen2.5-Coder 7B and 14B, Qwen3 14B, DeepSeek-Coder-V2-Lite), quantization, the context that fits next to the weights, tokens per second, **tool-call reliability** on a small fixed set of prompts;
@@ -97,14 +100,14 @@ The GPU itself (driver, CUDA in WSL2, the model runtimes, the guard's GPU relay 
 
 ## Parts after the gate (to be confirmed by the design)
 
-1. The model adapter and the `local` client with the agent loop (a fake model server in tests: scripted tool calls).
+1. The chosen agent as a new client in the guard (adapter, sandbox, streamed steps, the MCP servers wired in; a fake model server in tests: scripted tool calls).
 2. Task profiles and error filters for Go and TypeScript/Node, with golden tests on real tool output.
 3. Structured edits with validation and rollback.
 4. The code index (build on the PC, incremental updates, access control) and the code-search MCP server.
 5. Reuse before writing: the candidate search and the duplicate check.
 6. DevDocs and the docs-search MCP server; the web-read fallback list.
 7. `local_task` and the hand-over from planners; the result back in the thread.
-8. Python and Java profiles and filters.
+8. Python, Java and PHP profiles and filters.
 9. The evaluation set and a report command; the first numbers.
 10. PWA: the local agent in the agent wizard (round 33), its queue and GPU state on the Machines page.
 

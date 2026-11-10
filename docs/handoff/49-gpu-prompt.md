@@ -40,16 +40,19 @@ They share **one 12 GB card**, and **the PC is not always on**. This round makes
 Write the runbook `docs/20-gpu-beallitasa.md` (Hungarian) and the design section in it, measure what Norbi has installed, then stop. Answer:
 
 1. **Hardware and Windows** (for Norbi, as a checklist): power supply (the card draws about 170 W, one 8-pin PCIe connector, NVIDIA recommends a 550 W supply), the Windows driver, WSL2 version, `nvidia-smi` inside WSL, `.wslconfig` (memory for WSL, since models also use system RAM when loading), keeping WSL running (the keepalive of rounds 38/41 if the guard should serve while no terminal is open).
-2. **Runtimes:**
-   - **Ollama** in WSL as a systemd service (`OLLAMA_HOST=127.0.0.1`, the model folder on the WSL ext4 disk, not under `/mnt/*`, for speed; `OLLAMA_KEEP_ALIVE`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_NUM_PARALLEL`) for the coding model and the embeddings;
-   - **`llama.cpp` server** with CUDA for what Ollama lacks (reranking: `--reranking`, `/v1/rerank`), as a second systemd service; how it is built (prebuilt CUDA release or a build with the CUDA toolkit for WSL) and pinned;
-   - versions pinned and recorded; how to upgrade.
+2. **Runtime (decision, 2026-11-10: `llama.cpp` behind llama-swap, no Ollama; `docs/19` section 0, `docs/21`):**
+   - **`llama-server`** (`llama.cpp`) with CUDA, for generation, embeddings and reranking (`--reranking`, `/v1/rerank`), with grammar or JSON-schema constrained output; thinking models with `--reasoning-format deepseek` so the reasoning comes in `reasoning_content`, apart from the answer; streaming on;
+   - **llama-swap** in front of it as **one** systemd service in WSL, listening on `127.0.0.1` only: the model list (file, quantization, context, flags) in its config, models loaded on the first request and swapped or unloaded after an idle time. The guard does **not** start model processes itself;
+   - how `llama.cpp` is built (prebuilt CUDA release or a build with the CUDA toolkit for WSL), the model files (GGUF) on the WSL ext4 disk (not under `/mnt/*`), each pinned by URL and sha256; versions pinned and recorded; how to upgrade;
+   - Ollama (already installed on the PC) is not used by Colonyhall; Norbi may keep it, or LM Studio, for his own experiments.
 3. **Models** (candidates only; rounds 36b and 47 choose with their measurements): a coding model (e.g. Qwen2.5-Coder 7B/14B, Qwen3 14B), a code embedding model (e.g. `jina-embeddings-v2-base-code`, `nomic-embed-code`, `bge-m3`), a code reranker, the Pi's text model for the backfill. For each: VRAM at the planned quantization and context, load time, what fits together on 12 GB.
-4. **The VRAM scheduler** (in the guard): one card, several kinds of work. Propose and justify:
+4. **The VRAM scheduler** (in the guard, on top of llama-swap: llama-swap loads and unloads, the guard decides **what may run when**): one card, several kinds of work. Propose and justify:
    - **priorities:** interactive queries (a code search's embedding and rerank: seconds) above the local agent's generation (minutes) above bulk indexing and backfills (hours, preemptible);
-   - **what stays loaded** (e.g. the small embedding model always, the coding model on demand with a keep-alive), what is unloaded when;
+   - **what stays loaded** (e.g. the small embedding model always, the coding model on demand with a keep-alive), what is unloaded when, expressed as llama-swap config (groups, idle times) rather than guard code where it can be;
+   - **model swaps** (decision, 2026-11-10): round 47 may use one model to scout and another to write; a swap (about 15 s on one card) is allowed, the request waits, and the PWA shows it ("model swap: A → B") in the run's live progress and on the GPU card;
    - **a queue** with limits, timeouts, cancellation; bulk jobs pause while interactive work waits;
-   - **out-of-memory** handling: detect, unload, retry once, report.
+   - **out-of-memory** handling: detect, unload, retry once, report;
+   - **other programs on the card** (decision, 2026-11-10): the card also drives Norbi's monitors and his games (about 1.6 GB for the Windows desktop alone, more while gaming). The scheduler reads the VRAM used by others (`nvidia-smi`), plans with what is really free, and when too little is left, local work waits (or uses a smaller model if the task allows it) instead of failing or stalling a game; the GPU card on the status page shows it ("busy: other programs use 9.8 GB").
 5. **The GPU relay:** the frames between server and guard (request id, kind: `embed` / `rerank` / `generate`, model, input; streaming for generation), size limits, timeouts, auth (only the server over the host connection; nothing from agents directly except through the guard's own tools), and what an offline guard returns.
 6. **What the guard reports:** in the host report (contract first): GPU name, VRAM total and used, temperature, utilization, the runtimes' health and versions, the loaded models, the queue length per priority. The Machines page and the status page (round 35) show it; the status page gets a "GPU" card.
 
@@ -58,7 +61,7 @@ Write the runbook `docs/20-gpu-beallitasa.md` (Hungarian) and the design section
 ## Parts after the gate
 
 1. **GPU detection and reporting** in the guard (`nvidia-smi --query-gpu=... --format=csv`, parsed; tests with recorded output; works without a GPU: reports none).
-2. **Runtime health checks** for Ollama and the `llama.cpp` server (`guard.yaml`: their URLs on localhost, the models they serve); reported.
+2. **Runtime health checks** for llama-swap and its `llama-server` models (`guard.yaml`: its URL on localhost; the models it serves and which are loaded); reported.
 3. **The GPU relay** (server ↔ guard), the server-side `GPU` port the later rounds use (`Embed`, `Rerank`, `Generate`), and **the fast, short error when the GPU machine is offline** (tests: offline guard, a slow runtime, an oversized request).
 4. **The VRAM scheduler** in the guard as designed (tests with fake runtimes: priorities, preemption of bulk work, out-of-memory retry, cancellation).
 5. **Status and Machines pages:** the GPU card and the per-machine GPU details.
