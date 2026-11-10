@@ -12,6 +12,7 @@ import {
   priceHistory,
   sortRows,
   stackDays,
+  searchTone,
   statusFindings,
   statusText,
   toHuf,
@@ -134,6 +135,18 @@ describe("status thresholds", () => {
     expect(tone(status({ scheduler: { failed_24h: 1 } }), "scheduler")).toBe("warning");
     expect(tone(status({ database: { ok: false, latency_ms: 0 } }), "database")).toBe("error");
     expect(tone({ ...status(), emergency_stop: { active: true } }, "emergency")).toBe("error");
+  });
+  test("search: a mismatch is an error, an unreachable configured backend a warning, an unconfigured one fine", () => {
+    const search = { chunks: 1, pending: 0, models: ["m"], embedder: { configured: true, reachable: true }, reranker: { configured: false, reachable: false } };
+    expect(tone(status(), "search")).toBeUndefined();
+    expect(tone(status({ search }), "search")).toBe("ok");
+    expect(searchTone({ ...search, reranker: { configured: true, reachable: false } })).toBe("warning");
+    expect(searchTone({ ...search, embedder: { configured: true, reachable: false } })).toBe("warning");
+    expect(searchTone({ ...search, model_mismatch: "x" })).toBe("error");
+    const text = statusText(status({ search: { ...search, model_mismatch: "stored a, served b" } }), new Date("2026-11-02T10:00:00Z"));
+    expect(text).toContain("search: 1 chunks, 0 waiting for embedding");
+    expect(text).toContain("reranker: not configured");
+    expect(text).toContain("MODEL MISMATCH: stored a, served b");
   });
   test("the copied summary names the facts", () => {
     const text = statusText(status(), new Date("2026-11-02T10:00:00Z"));

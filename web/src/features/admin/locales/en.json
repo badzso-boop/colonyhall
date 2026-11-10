@@ -365,6 +365,20 @@
     "running": "Running",
     "integrations": "Integrations",
     "backups": "Backups",
-    "backupsBody": "The homelab handles backups (docs/05-homelab-telepites.md); the server does not check them."
+    "backupsBody": "The homelab handles backups (docs/05-homelab-telepites.md); the server does not check them.",
+    "search": {
+      "title": "Search",
+      "chunks": "Indexed chunks",
+      "pending": "Waiting for embedding",
+      "lastEmbed": "Last embedding",
+      "models": "Stored models",
+      "embedder": "Embedding server",
+      "reranker": "Reranker",
+      "configured": "Configured",
+      "model": "Model",
+      "lastOk": "Last successful call",
+      "lastError": "Last error",
+      "mismatch": "Model mismatch: the embedding server serves another model than the stored vectors were made with, so meaning search is unreliable. Details: {{detail}}"
+    }
   }
 }

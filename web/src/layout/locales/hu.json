@@ -4,6 +4,7 @@
   "toggleSidebar": "Oldalsáv megjelenítése vagy elrejtése",
   "workspace": "Munkaterület",
   "pages": {
+    "search": "Keresés",
     "tasks": "Feladatok",
     "calendar": "Naptár",
     "notes": "Jegyzetek",
@@ -74,7 +75,9 @@
   },
   "palette": {
     "title": "Parancspaletta",
-    "placeholder": "Ugrás beszélgetésre, agentre vagy oldalra…",
+    "placeholder": "Ugrás beszélgetésre, agentre vagy oldalra, vagy keresés…",
+    "searchFor": "Keresés: {{q}}",
+    "search": "Keresés",
     "conversations": "Beszélgetések",
     "agents": "Agentek",
     "pages": "Oldalak",

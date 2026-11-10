@@ -1,10 +1,11 @@
-import { Activity, Bot, CalendarDays, Clock, FileClock, Gauge, Gavel, KeyRound, KeySquare, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Server, Settings, Users } from "lucide-react";
+import { Activity, Bot, CalendarDays, Clock, FileClock, Gauge, Gavel, KeyRound, KeySquare, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Search, Server, Settings, Users } from "lucide-react";
 import type { WindowKind } from "@/shared/windows";
 
 /** The workspace pages of the sidebar and the command palette (docs/handoff/32, part 2). */
 export type PageEntry = { id: string; route: string; icon: typeof ListChecks; window?: WindowKind; adminOnly?: boolean; ownerOnly?: boolean };
 
 export const pages: PageEntry[] = [
+  { id: "search", route: "/search", icon: Search },
   { id: "agents", route: "/agents", icon: Bot },
   { id: "tasks", route: "/tasks", icon: ListChecks, window: "tasks" },
   { id: "calendar", route: "/calendar", icon: CalendarDays, window: "calendar" },

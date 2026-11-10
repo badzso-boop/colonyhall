@@ -1,0 +1,32 @@
+{
+  "title": "Keresés",
+  "field": "Keresés az üzenetekben, a wikiben, a döntésekben és az összefoglalókban…",
+  "submit": "Keresés",
+  "mode": {
+    "label": "Keresési mód",
+    "keyword": "Kulcsszó",
+    "semantic": "Jelentés",
+    "hybrid": "Hibrid"
+  },
+  "hint": "Írd be, mit keresel, és nyomj Entert. A Kulcsszó a pontos szavakat, a Jelentés a hasonló értelmű szöveget, a Hibrid mindkettőt keresi.",
+  "loading": "Keresés…",
+  "empty": "Nincs találat erre: „{{q}}”.",
+  "emptyBody": "Próbálj más szavakat, vagy válts keresési módot.",
+  "failed": "A keresés nem sikerült: {{message}}",
+  "kinds": {
+    "message": "Üzenetek",
+    "wiki": "Wiki",
+    "decision": "Döntések",
+    "summary": "Összefoglalók"
+  },
+  "count_one": "{{count}} találat",
+  "count_other": "{{count}} találat",
+  "open": "Megnyitás",
+  "scores": {
+    "label": "Pontszámok",
+    "keyword": "kulcsszó",
+    "semantic": "jelentés",
+    "fused": "RRF",
+    "rerank": "rerank"
+  }
+}
