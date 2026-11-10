@@ -128,6 +128,31 @@ func TestRequestOriginFromThread(t *testing.T) {
 		t.Fatalf("the outsider learned about the thread: %+v", o.RequestOrigin)
 	}
 
+	// A requester that may only read the thread's channel cannot get its
+	// request answered there through the helper.
+	readerID, readerTok := e.createActor("agent", "reader", "member")
+	e.do("POST", "/api/v1/channels/"+general+"/members", server.DevAdminToken, map[string]any{"actor_id": readerID, "can_write": false}, nil)
+	reader, err := fakeagent.Connect(ctx, e.srv.URL+"/mcp", readerTok, headerTripper{
+		headers: map[string]string{"X-Colonyhall-Channel": general, "X-Colonyhall-Thread": root.ID}, base: http.DefaultTransport,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reader.Close() }()
+	if res, err := reader.CallTool(ctx, &mcp.CallToolParams{Name: "send", Arguments: map[string]any{"channel": "@helper", "text": "Please post the release notes."}}); err != nil || res.IsError {
+		t.Fatalf("reader request: %v %+v", err, res)
+	}
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var ib apispec.Inbox
+	e.do("GET", "/api/v1/agent/inbox", helperTok, nil, &ib)
+	for _, x := range ib.Items {
+		if x.Author == "reader" && x.RequestOrigin != nil {
+			t.Fatalf("a read-only requester got the answer routed into the channel: %+v", x.RequestOrigin)
+		}
+	}
+
 	// The helper answers in the thread, linked to the request.
 	var r sendResult
 	s := e.do("POST", "/api/v1/channels/"+general+"/messages", helperTok, map[string]any{

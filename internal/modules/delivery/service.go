@@ -621,7 +621,7 @@ func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, na
 }
 
 // requestOrigin is the thread another agent's request m was sent from, when
-// by may write there: by then answers in that thread, where the people who
+// both by and the requester may write there: by then answers in that thread, where the people who
 // asked see it, and its session there knows about the request. A thread by
 // cannot write in (or an archived or locked channel) keeps the request a
 // plain DM item, and reveals nothing about that thread.
@@ -630,6 +630,15 @@ func (s *Service) requestOrigin(ctx context.Context, by identity.Actor, m conver
 		return nil
 	}
 	if ok, err := s.Conversation.CanWrite(ctx, by, m.OriginChannelID); err != nil || !ok {
+		return nil
+	}
+	// The requester must be able to write there too: otherwise a read-only
+	// member could get its words answered into a channel it cannot post in.
+	author, err := s.Directory.ActorByID(ctx, m.AuthorID)
+	if err != nil {
+		return nil
+	}
+	if ok, err := s.Conversation.CanWrite(ctx, author, m.OriginChannelID); err != nil || !ok {
 		return nil
 	}
 	root, err := s.Conversation.MessageByID(ctx, m.OriginThreadID)
