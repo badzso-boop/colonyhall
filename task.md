@@ -30,6 +30,8 @@
 
 - [ ] **Kolléga (38. kör) maradék:** egy meglévő agent tulajdonosának módosítása a felületen (Norbi döntése: nem kell, új agentet hoz létre); agentek száma a Felhasználók oldalon; a csak-dokumentáció mód kézi ellenőrzése a valódi Claude Code-dal (a jelentésben a recept).
 
+- [ ] **Keresés és RAG (36. kör) maradék:** (1) **a valódi magyar kiértékelő készlet** (30–50 kérdés valódi adatból, a repón kívül; Norbi és Claude Code közösen), és a `colonyhall rag-eval` futtatása rajta: **amíg nincs meg, a `feature/rag` nem olvasztható be**; (2) a Raspberry Pi beállítása (`docs/12-rag-pi-beallitasa.md`) és a mérés rajta; (3) a homelab reranker (`docs/13`) és a mérése (50 jelölt ideje, `COLONY_RERANK_TOP`); (4) `CREATE EXTENSION vector` az éles adatbázisban (`docs/05`); (5) **36b**: a kódkeresés a GPU-n a 39. és a 49. kör után, külön ágon; (6) 36c (dokumentáció a RAG-ban) később, Norbi döntésével.
+
 - [ ] **A tulajdonosi API-kulcs** a beszélgetésben szerepelt (2026-10-21): érdemes lecserélni (új kulcs, a régi visszavonása). Norbi maga csinálja a felületen.
 
 **Elfogadott korlátok (Norbi, 2026-10-22, nem kell javítani):** a 2 percnél hosszabb fájlfeltöltést a szerver „gép nem elérhető”-ként zárja le; a „dolgozik…” jelzés kiküldése sok néző mellett kicsit lassíthatja az őr hívását.
@@ -48,6 +50,7 @@
 
 ## Kész
 
+- [x] **Keresés és RAG, szöveg (36a)** (2026-11-10, `docs/handoff/36-search-rag-report.md`, ág: `feature/rag`, **nincs beolvasztva**: a valódi kiértékelő készlet hiányzik): a csatornák, szálak, DM-ek, a wiki, a döntések (új `decision.recorded` esemény) és a tömörítési összefoglalók keresése kulcsszó (magyar szótövezés) és jelentés (pgvector, a Pi beágyazója) szerint, RRF, rerank a homelabon; jogosultság a lekérdezésben, rangsorolás előtt; REST, MCP `search`, PWA-keresőoldal, állapotlap-kártya; `rag-backfill`, `rag-reembed`, `rag-eval`; modellszerver (`deploy/embed`); terv: `docs/11`, runbookok: `docs/12`, `docs/13`; tananyag: `docs/tanulas/kereses-es-rag.md`.
 - [x] **Antigravity kvótahiba: ok és modellenkénti szünet (37. kör)** (2026-11-03, `docs/handoff/37-agy-quota-report.md`, ág: `feature/agy-quota`): az őr kiolvassa az agy hibájának okát (`error` mező, tartaléknak az agy naplója), kvótahibánál a modellt a visszaállásig szünetelteti, nem számolja próbálkozásnak, szálanként egy csendes üzenetet küld, a Gépek oldal mutatja.
 
 - [x] **PWA: a csevegés teljessé tétele (34. kör)** (2026-11-02, `docs/handoff/34-pwa-chat-complete-report.md`, ág: `feature/pwa-chat`): csatorna szerkesztése, archiválása, tagkezelés, `channel_info` eszköz, a kizárt vagy archivált csatorna futásának leállítása, némítás, Szálaim, Válaszra vár, jóváhagyási, delegációs, engedély- és tömörítési kártyák, Gitea-kártyák, fájlnéző, lépésfiók, profilok, oldalsáv-szekciók, feladat- és naptár-hozzáférés. Élesítés: előbb a szerver (migrációk `00040`–`00042`), utána a guardok.

@@ -1,6 +1,6 @@
 # Keresés és RAG: terv (36. kör, tervezési kapu)
 
-Állapot: **jóváhagyva a megvalósításra, a mérés hátravan** (Norbi, 2026-11-10: „most nem kell mérni, csak a kód”). A modellválasztás és a sebességszámok a Pi és a homelab reranker beállításakor, a valódi gépeken mérve kerülnek ide; addig a kód a modelltől független (HTTP-port, a modell neve beállítás). A kötelező döntések a `docs/handoff/36-search-rag-prompt.md`-ben; ez a dokumentum a megvalósítás terve, a mérések, és a végén a **Norbi döntésére váró kérdések**. Ahol egy szám nem a célgépen mért, ott a szöveg kimondja: „becslés”.
+Állapot: **a 36a megvalósítva a `feature/rag` ágon; a mérés a célgépeken hátravan** (Norbi, 2026-11-10: „most nem kell mérni, csak a kód”). A Pi- és a homelab-számok a gépek beállításakor kerülnek ide; a kód a modelltől független (HTTP-port, a modell neve a válaszból jön). A megvalósítás jelentése: `handoff/36-search-rag-report.md`. A kötelező döntések a `docs/handoff/36-search-rag-prompt.md`-ben; ez a dokumentum a megvalósítás terve, a mérések, és a végén a **Norbi döntésére váró kérdések**. Ahol egy szám nem a célgépen mért, ott a szöveg kimondja: „becslés”.
 
 ## Mai állapot (amire építünk)
 
@@ -43,7 +43,9 @@
 | `multilingual-e5-small` fp32 | 470 MB | ~1 150 MB | 70 % | 90 % | 0,78 |
 | `paraphrase-multilingual-MiniLM-L12-v2` int8 | 118 MB | ~750 MB | 65 % | 80 % | 0,72 |
 
-A jó válasz minden kérdésnél benne volt az első 20-ban (ezért van értelme a rerankernek). A csúcs-memória a Pi 1 GB-jához szoros: a szerver kis kötegekkel dolgozik (legfeljebb 8 bemenet egyszerre), és zram-swap kell.
+A jó válasz minden kérdésnél benne volt az első 20-ban (ezért van értelme a rerankernek). A csúcs-memória a Pi 1 GB-jához szoros: a szerver kis kötegekkel dolgozik (a Pi-n 4 bemenet egyszerre, `--batch 4`), a memóriaarénát kikapcsolja, és zram-swap kell.
+
+**A teljes lánc a PC-n, valódi modellekkel** (2026-11-10: a Colonyhall → `deploy/embed/server.py` az `e5-small` int8-cal és a `jina-reranker-v2` int8-cal → Postgres + pgvector; a szintetikus készlet, 18 kérdés): minden konfiguráció megtalálta a választ az első 5-ben; a kulcsszavas keresés ~1 ms, a hibrid ~10 ms, a rerank ~0,6 mp (kb. 20 jelölt, 2 szál). A szintetikus készlet könnyű: a minőséget a valódi készlet méri (merge-blokkoló).
 
 **Javaslat:** `intfloat/multilingual-e5-small` (384 dimenzió, 118 M paraméter, XLM-R szótár, magyarul tanítva), **int8-ra kvantált ONNX**-ban, ONNX Runtime alatt.
 
@@ -54,11 +56,11 @@ A jó válasz minden kérdésnél benne volt az első 20-ban (ezért van értelm
 
 **API-szerződés** (OpenAI-kompatibilis, hogy később cserélhető legyen):
 
-- `POST /v1/embeddings` `{"model": "...", "input": ["query: ...", ...]}` → `{"model": "multilingual-e5-small-int8@<sha256 első 12 jele>", "data": [{"embedding": [...]}]}`.
+- `POST /v1/embeddings` `{"input": ["query: ...", ...]}` → `{"model": "multilingual-e5-small-int8@4d24e2bc01a4", "data": [{"index": 0, "embedding": [...]}]}` (mean pooling, L2-normált).
 - **Az előtagot a Colonyhall teszi fel** (`query: ` a keresésnél, `passage: ` a darabokra), nem a szerver; így a szerver buta, és a teszt a kliensben van.
-- Kötegelés: legfeljebb 8 bemenet és 512 token bemenetenként (a hosszabbat a szerver levágja, és jelzi: `truncated: true`).
+- Kötegelés: a Colonyhall legfeljebb 8 bemenetet küld egyszerre; a szerver 512 tokenre vágja a bemenetet (a darabolás úgy készül, hogy ne kelljen), és egyszerre egy kérést számol.
 - **A modell neve és verziója minden válaszban**: a Colonyhall minden válasznál összeveti a tárolt modellnévvel; eltérésnél nem ír vektort, hibát naplóz, és az állapotlapon jelez (modellcsere = szándékos újrabeágyazás, lásd 5.).
-- `GET /healthz` → `{"ok": true, "model": "..."}`; a szerver 2 mp-enként nem kérdezi, csak a beágyazó munkás hívása előtt, ha az előző hívás hibás volt.
+- `GET /healthz` → `{"ok": true, "model": "..."}` (a telepítés ellenőrzéséhez). A Colonyhall nem kérdezgeti: az állapotot az utolsó valódi hívás eredménye adja.
 - Időkorlátok a Colonyhall felől: kereséskor (egy rövid kérdés) **1,5 mp**, kötegben **30 mp**. Kereséskor időtúllépés → a keresés kulcsszavas módban válaszol, és ezt kiírja.
 
 **A Pi üzemeltetése** (részletek: `12-rag-pi-beallitasa.md`): 64 bites Raspberry Pi OS Lite; 512 MB zram-swap (SD-kártyára nem swapolunk); a napló memóriában (`Storage=volatile`), hogy az SD-kártya ne kopjon; a modell a kártyán (csak olvasás); automatikus indulás bootkor; tűzfal: csak a homelab érheti el a portot (LAN, `ufw`); hozzáférés token nélkül, mert csak a homelab IP-je engedett (döntés, lásd a végén).
@@ -94,14 +96,16 @@ Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU mach
 
 **Jelöltek:** `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (118 M, gyors), `jinaai/jina-reranker-v2-base-multilingual` (278 M), `BAAI/bge-reranker-v2-m3` (568 M, valószínűleg túl lassú ezen a gépen). **Kiinduló választás:** a `jina-reranker-v2-base-multilingual` int8, és ha 50 jelölt 2 mp fölött van, a `mmarco` vagy kevesebb jelölt (`COLONY_RERANK_TOP`, alapból 30). A kód modellfüggetlen: a szerver a Jina/Cohere-formátumú `/v1/rerank`-et hívja.
 
-**Telepítés:** külön compose-projekt `~/homelab/colonyhall-rerank/` (nem a közös `docker-compose.yml`), ugyanaz az ONNX Runtime-os kis szerver, mint a Pi-n (`deploy/rerank/`, egy kép a beágyazóval, más modellel és végponttal: `POST /v1/rerank`, Jina/Cohere-formátum), memóriakorlát `mem_limit: 1g`, CPU-korlát 2 mag (a homelab többi szolgáltatása ne lassuljon), egészség-ellenőrzés, csak a `shared-db-net`-en vagy `127.0.0.1`-en elérhető. Részletek: `13-rag-reranker-beallitasa.md`.
+**Telepítés:** külön compose-projekt `~/homelab/colonyhall-rerank/` (nem a közös `docker-compose.yml`), ugyanaz az ONNX Runtime-os kis szerver, mint a Pi-n (`deploy/embed/Dockerfile`, `deploy/rerank/compose.yaml`; `POST /v1/rerank`, Jina/Cohere-formátum), memóriakorlát 1,5 GB, CPU-korlát 2 mag (a homelab többi szolgáltatása ne lassuljon), egészség-ellenőrzés, csak a `shared-db-net`-en vagy `127.0.0.1`-en elérhető. Részletek: `13-rag-reranker-beallitasa.md`.
 
 ## 4. Visszamenőleges beágyazás (backfill)
 
-**Szöveg:** az éles adat kb. 1 500 darab. (A Pi sebessége még nincs mérve; ennyi darab a legóvatosabb becsléssel is egy órán belül kész.) Ezért **a javaslat: nincs külön PC-s backfill**. A `colonyhall rag-backfill` a szerveren fut (konténerben), létrehozza a darabokat `embedding = NULL`-lal, és a szokásos beágyazó munkás tölti fel őket a Pi-vel. Így nem kell adatbázis-hozzáférés a szerveren kívül, nincs titok a `colonyhall-exchange`-en, és garantáltan ugyanaz a modell számol.
+**Szöveg:** az éles adat kb. 1 500 darab. (A Pi sebessége még nincs mérve; ennyi darab a legóvatosabb becsléssel is egy órán belül kész.) Ezért **nincs külön PC-s backfill** (D3).
 
-- A parancs: folytatható (a tartalom-hash alapján idempotens), `-dry-run` csak számol, egy sorban írja a haladást.
-- **Ha egyszer nagy lesz az előzmény** (pl. modellcsere 100 ezer darabnál): ugyanaz a parancs `-embed-url` kapcsolóval a PC-n futó beágyazóra mutathat egy SSH-alagúton át (a PC a homelab Postgresét nem éri el közvetlenül, és nem is kell: a parancs a szerverkonténerben fut, csak a beágyazó címe más). Ehhez nem kell titok a repóban vagy a chatben.
+**Hogyan:** az indexelő egy eseménynapló-fogyasztó (`search`), és minden forrást a *mostani* állapotából indexel. Egy új fogyasztó a napló elejéről indul, ezért **az első induláskor magától végigolvassa a teljes előzményt**: a darabok `embedding = NULL`-lal jönnek létre, és a szokásos beágyazó munkás tölti fel őket a Pi-vel. Kivétel a döntések: a régiekhez nincs `decision.recorded` esemény, ezeket a `colonyhall rag-backfill` indexeli (egyszer, élesítés után). Így nem kell adatbázis-hozzáférés a szerveren kívül, nincs titok a `colonyhall-exchange`-en, és garantáltan ugyanaz a modell számol.
+
+- `colonyhall rag-backfill`: a döntések, és `-restart`-tal a napló újraolvasása elölről (idempotens: a változatlan darab megtartja a vektorát); `-dry-run` csak számol; a haladást soronként írja; `-embed` a beágyazást is helyben végzi.
+- **Ha egyszer nagy lesz az előzmény** (pl. modellcsere 100 ezer darabnál): `colonyhall rag-backfill -embed -embed-url …` a PC-n futó (ugyanazzal a modellfájllal dolgozó) beágyazóra mutathat egy SSH-alagúton át (a PC a homelab Postgresét nem éri el közvetlenül, és nem is kell: a parancs a szerverkonténerben fut, csak a beágyazó címe más). Ehhez nem kell titok a repóban vagy a chatben.
 
 **Kód (36b):** a PC őre indexel (a 39. kör CodeGraph-listája), a GPU-n ágyaz be, és a darabokat a meglévő őr–szerver API-n küldi (új végpont, géptokennel). Nincs adatbázis-alagút. Becslés: egy Colonyhall-méretű repó ~6 600 szimbólum (5 700 Go, 900 TypeScript); a doc-comment nélküliek (~60 %) leírását a helyi modell írja, ~1 mp/szimbólum a 3060-on (becslés) → ~1–1,5 óra egyszer, utána csak a változás.
 
@@ -117,6 +121,7 @@ Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU mach
 | `workspace_id` | uuid | |
 | `source_kind` | text | `message` \| `wiki` \| `decision` \| `summary` |
 | `source_id` | uuid | üzenet, wikioldal, döntés vagy tömörítés |
+| `source_ref` | text | a wikioldal slugja, a döntés száma (`D-12`); egyébként üres |
 | `part` | int | hányadik darab a forrásban |
 | `visibility` | text | `channel` (csatornatagság) \| `workspace` (wiki, döntés) |
 | `channel_id`, `thread_root_id` | uuid null | |
@@ -124,12 +129,13 @@ Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU mach
 | `source_at` | timestamptz | a forrás ideje (szűréshez, rendezéshez) |
 | `header` | text | a determinisztikus kontextusfejléc (6.) |
 | `body` | text | a darab szövege |
-| `content_hash` | bytea | sha256(header + body + modellnév) |
+| `content_hash` | text | sha256(fejléc + `\0` + szöveg): változatlan darab újraindexelésnél megtartja a vektorát |
 | `tsv_hu`, `tsv_simple` | tsvector, generált | `to_tsvector('hungarian', ...)`, `to_tsvector('simple', ...)` |
 | `embedding` | vector(384) null | |
 | `embed_model` | text null | pl. `multilingual-e5-small-int8@3f9a…` |
 | `embedded_at` | timestamptz null | |
-| `embed_attempts`, `embed_error_at` | int, timestamptz null | újrapróbálkozás és visszalépés |
+| `embed_attempts`, `embed_retry_at` | int, timestamptz null | újrapróbálkozás: egy sikertelen köteg legkorábban ekkor jön újra |
+| `indexed_at` | timestamptz | |
 
 **`search_chunk_code`** (36b): `id`, `workspace_id`, `host_id`, `repo_root`, `path` (abszolút, a gépen), `kind` (`file` \| `function` \| `method` \| `type`), `qualified_name`, `signature`, `description`, `description_source` (`doc` \| `model`), `lang`, `line_start`, `line_end`, `ident_text` (a szétszedett azonosítók), `tsv` (generált, `simple`), `content_hash`, `embedding vector(768)` (a választott modell dimenziója), `embed_model`, `embedded_at`, `indexed_at`.
 
@@ -137,15 +143,15 @@ Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU mach
 
 - GIN a `tsv_hu`-n, a `tsv_simple`-n és a kód `tsv`-jén; `gin_trgm_ops` a `qualified_name`-en és a `path`-on (elírás, részleges név);
 - **HNSW** (`vector_cosine_ops`, `m = 16`, `ef_construction = 64`, a pgvector alapértékei; ennyi adatnál bőven elég);
-- B-tree: `(workspace_id, channel_id, source_at)`, `(source_kind, source_id)` (az esemény alapú frissítéshez), `(workspace_id, host_id, path)` a kódra; részleges index `WHERE embedding IS NULL` (ez maga a beágyazási sor).
+- B-tree: `(workspace_id, channel_id, source_at)`, egyedi `(source_kind, source_id, part)` (az esemény alapú frissítéshez), `(workspace_id, host_id, path)` a kódra; részleges index `WHERE embedding IS NULL` (ez maga a beágyazási sor).
 
-**A beágyazási sor** maga a tábla: a munkás `SELECT ... WHERE embedding IS NULL AND (embed_error_at IS NULL OR embed_error_at < now() - visszalépés) ORDER BY id LIMIT 8 FOR UPDATE SKIP LOCKED`-del vesz ki egy köteget. Nincs külön sortábla és nincs River-feladat: a sor állapota az adatban van.
+**A beágyazási sor** maga a tábla: a munkás `WHERE embedding IS NULL AND (embed_retry_at IS NULL OR embed_retry_at <= now)` szerint vesz ki 8 darabot. Egy munkás van (a szerverben), ezért nem kell `FOR UPDATE SKIP LOCKED`; nincs külön sortábla és nincs River-feladat: a sor állapota az adatban van. Egy sikertelen köteg 5 mp múlva jöhet újra (egy rossz darab nem állítja meg a többit), a munkás maga 5 mp-től 5 percig lép vissza.
 
-**Modellcsere:** a beállított modellnév eltér a tárolttól → a `rag-reembed` parancs `embedding = NULL`-ra állítja a régi modellű sorokat, és a munkás újraszámolja őket; közben a kulcsszavas keresés működik, és a szemantikus ág csak az új modellű sorokon keres (a lekérdezés a modellnévre szűr, két modell vektorát soha nem hasonlítja össze). **Más dimenziójú modell** = új migráció (a `vector(384)` oszlop típusa változik).
+**Modellcsere:** a beágyazó a válaszában mást nevez meg, mint a tárolt vektorok modellje → a munkás nem ír, az állapotlap kiírja („run colonyhall rag-reembed”); a `rag-reembed` parancs `embedding = NULL`-ra állítja a régi modellű sorokat, és a munkás újraszámolja őket; közben a kulcsszavas keresés működik, és a szemantikus ág csak az új modellű sorokon keres (a lekérdezés a modellnévre szűr, két modell vektorát soha nem hasonlítja össze). **Más dimenziójú modell** = új migráció (a `vector(384)` oszlop típusa változik).
 
 **Append-only:** a keresőtáblák **nem** elsődleges adatok, hanem újraépíthető vetületek (mint egy gyorsítótár): a forrás törlésekor vagy visszavonásakor a darab sora **törlődik**. Ezt a `docs/02` kimondja, hogy ne ütközzön a 4. szabállyal.
 
-**`search_log`:** `id`, `workspace_id`, `actor_id`, `at`, `query` (szöveg), `mode`, `scope`, `filters` (jsonb), `result_count`, `result_refs` (az első 20 találat forrása), `timings_ms` (jsonb: kulcsszavas, szemantikus, egyesítés, rerank, összesen), `degraded` (pl. `["no_embedder", "no_reranker"]`). **30 nap után törlődik** (napi takarító; a `search_log` nem tartozik az append-only adatok közé). Csak admin látja (a kérdésben lehet érzékeny szöveg).
+**`search_log`:** `id`, `workspace_id`, `actor_id`, `at`, `query` (szöveg), `mode`, `result_count`, `result_refs` (a találatok forrása), `timings_ms` (jsonb: kulcsszavas, szemantikus, rerank, összesen), `degraded` (pl. `["no_embedder", "no_reranker"]`). **30 nap után törlődik** (óránkénti takarító; a `search_log` nem tartozik az append-only adatok közé). Csak admin látja (a kérdésben lehet érzékeny szöveg).
 
 ## 6. Darabolás (chunking)
 
@@ -176,20 +182,17 @@ Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU mach
 
 ## 7. Hozzáférés-szabályozás
 
-**Szöveg**, a lekérdezés mindkét ágában ugyanaz a feltétel, **a rangsorolás előtt**:
+**Szöveg**, a lekérdezés mindkét ágában ugyanaz a feltétel, **a rangsorolás előtt**. A szolgáltatás minden keresésnél kiszámolja az olvasó kereshető csatornáit (a tagságai, a saját DM-jeivel; adminnak ezen felül minden nem-DM csatorna), és a lekérdezés ezt kapja tömbként:
 
 ```sql
 WHERE c.workspace_id = $ws
-  AND (c.embed_model = $model OR $leg = 'keyword')
-  AND (
-        c.visibility = 'workspace'
-     OR EXISTS (SELECT 1 FROM channel_member m
-                WHERE m.channel_id = c.channel_id AND m.actor_id = $actor)
-     OR ($is_admin AND ch.kind <> 'dm')          -- lásd: döntés D1
-      )
+  AND (c.visibility = 'workspace' OR c.channel_id = ANY($channel_ids))
+  -- a vektoros ágban még: AND c.embed_model = $model
 ```
 
-- csatorna: tagság (az agentekre is); admin minden nem-DM csatornát lát;
+Miért így, és nem `EXISTS (… channel_member …)`-ral a lekérdezésben: ugyanaz a szabály (`ChannelIDsOf`, `ListChannels`) dönt, mint a felület többi részén, és a memóriabeli tár is ugyanígy szűr, így a szerződéstesztek mindkét tárra ugyanazt mérik. A tömb kicsi (ma 20 csatorna).
+
+- csatorna: tagság (az agentekre is); admin (az admin szerepű agent is, ahogy a `policy.CanReadChannel` szerint ma is olvashatja) minden nem-DM csatornát lát;
 - **DM: csak a tagjainak**, adminnak sem (a prompt szerint; ma a felületen az admin minden DM-et láthat: **döntés D1**);
 - wiki, döntés: az egész workspace, ugyanúgy, mint ma (a kollégának is: **döntés D2**);
 - törölt wikioldal: kimarad (a keresés nem mutat törölt tartalmat, embernek sem);
@@ -222,11 +225,11 @@ WHERE c.workspace_id = $ws AND (
 
 **HNSW és szűrés:** a pgvector a `WHERE` feltételt maga alkalmazza, tehát jogosulatlan sor soha nem jön vissza; a szűrt HNSW-keresés gondja a *teljesség* (kevesebb találat), nem a szivárgás. Erre a pgvector 0.8 `hnsw.iterative_scan = relaxed_order` beállítását használjuk (a tranzakcióban `SET LOCAL`). Ennyi adatnál (néhány ezer sor) a tervező gyakran teljes átnézést választ, ami pontos.
 
-**Tesztek:** a `storetest` készletben mindkét ágra (kulcsszavas és vektoros): nem tag nem látja a csatornát, DM-et csak a tagja, visszavont engedély azonnal kizár, `/a/b` engedély nem ad `/a/bc`-t, a kolléga csak a saját agentjei mappáit.
+**Tesztek (36a, megvan):** a `storetest` készletben mindkét ágra (kulcsszavas és vektoros), memóriában és Postgresen: a nem tag csatornája nem jön vissza, más workspace semmit nem lát; az e2e-ben mindhárom módban: az agent csak a tag csatornáit és a saját DM-jét látja, az admin a privát csatornát igen, egy másik admin DM-jét nem. **36b-ben:** visszavont engedély azonnal kizár, `/a/b` engedély nem ad `/a/bc`-t, a kolléga csak a saját agentjei mappáit.
 
 ## 8. Rangsorolás
 
-**Kulcsszavas ág (szöveg):** `websearch_to_tsquery` mindkét konfigurációval (`hungarian` a szótövezett egyezésre: „szerverre” → „szerver”; `simple` a pontos szavakra, azonosítókra), a kettő `||`-vel; pontszám `ts_rank_cd(..., 32)`; a találati szavak kiemelése `ts_headline`-nal (csak szövegként, HTML nélkül a felületre).
+**Kulcsszavas ág (szöveg):** `websearch_to_tsquery` mindkét konfigurációval (`hungarian` a szótövezett egyezésre: „szerverre” → „szerver”; `simple` a pontos szavakra, azonosítókra), a kettő `||`-vel. **A szavak VAGY-kapcsolatban** vannak (a `&` helyett `|`, a kifejezések `"…"` és a kizárás `-szó` megmarad): egy természetes kérdés („miért bukott el a markdown teszt”) ritkán tartalmazza a válasz minden szavát; a `ts_rank_cd(..., 32)` a több egyezést előre teszi. A találati szavak kiemelése `ts_headline`-nal, `«` és `»` közé (sima szöveg, HTML nélkül).
 
 **Kulcsszavas ág (kód, 36b):** az `ident_text` az azonosítók szétszedve (`parseAgyReset` → `parse agy reset`, `max_concurrent_runs` → `max concurrent runs`), és ugyanez a kérdésre is; mellette `pg_trgm` hasonlóság a `qualified_name`-re és a `path`-ra (`%` operátor, `similarity` > 0,3).
 
@@ -236,7 +239,7 @@ WHERE c.workspace_id = $ws AND (
 
 **Rerank:** az egyesített lista első **30** eleme (`COLONY_RERANK_TOP`, a mérés után állítjuk) a rerankerhez (a darab fejléce + szövege, max ~300 token); a végső sorrend a reranker pontszáma; a reranker nélküli helyek RRF szerint maradnak.
 
-**Végső korlát:** alapból 8, legfeljebb 20. Találatonként: típus, kivonat (a kulcsszavas találat szavai), forráshivatkozás (csatorna + üzenet, wiki + bekezdés, `D-NN`, tömörítés), szerző, idő, és minden fokozat pontszáma.
+**Végső korlát:** alapból 8, legfeljebb 20. Találatonként: típus, kivonat (a kulcsszavas találat szavai), forráshivatkozás (csatorna + üzenet, wiki slug, `D-NN`, tömörítés), szerző, idő, és embernek, ha admin, minden fokozat pontszáma. Az agent a találatokat `<colonyhall_search_result …>` keretben kapja; a szöveg HTML-escape-elt, így egy találat nem zárhatja be a keretét, és nem nyithat újat.
 
 ## 9. Ha valami nem elérhető
 
@@ -247,9 +250,9 @@ WHERE c.workspace_id = $ws AND (
 | a PC (GPU) | kód szemantikus ága és rerank nélkül; a fenti rövid szöveg | azonnal, a kapcsolat állapotából (2.) |
 | beágyazási sor elmaradása | a még be nem ágyazott darabok csak kulcsszóra találhatók | – |
 
-A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem pörög.
+A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem pörög. Egy beállítatlan szolgáltatás (nincs `COLONY_EMBED_URL` vagy `COLONY_RERANK_URL`) nem kap figyelmeztető sort minden keresésnél, csak a `degraded` mezőben szerepel.
 
-**Állapotlap** (35. kör, `/admin/status`): egy „Keresés” kártya: a sor hossza (be nem ágyazott darabok), az utolsó beágyazás ideje, a Pi és a reranker elérhető-e (az utolsó hívás eredménye és ideje), a modellek neve és verziója, a GPU-szolgáltatások állapota (36b).
+**Állapotlap** (35. kör, `/admin/status`, `system.search`): darabszám, a sor hossza (be nem ágyazott darabok), az utolsó beágyazás ideje, a modellek, a Pi és a reranker: beállítva, elérhető, modell, utolsó sikeres hívás, és a hiba rövid osztálya (`timeout`, `unreachable`, `invalid answer`, `model changed`; a nyers hiba nem, mert benne van a szerver címe), modellcsere esetén figyelmeztetés. 36b-ben a GPU-szolgáltatások.
 
 ## 10. Üzemeltetés
 
@@ -260,16 +263,35 @@ A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem p
 | PC (36b) | ~1–1,8 GB VRAM | ~1 GB modellek | kód beágyazó, kód reranker |
 
 - **Sor:** egyetlen beágyazó munkás a szerveren (kötegenként 8, egyszerre egy köteg a Pi-n; a Pi egyszerre egy kérést szolgál ki).
-- **Ha a keresés lassú, üres, vagy azt mondja, a GPU-gép offline:** a `06-allapot-es-uzemeltetes.md` új szakasza (a megvalósításkor).
+- **Ha a keresés lassú, üres, vagy azt mondja, a GPU-gép offline:** `06-allapot-es-uzemeltetes.md`, „Keresés (36. kör)”.
 
 ## Telepítési sorrend (a megvalósítás után)
 
 1. Norbi: `CREATE EXTENSION vector` a `colonyhall` adatbázisban (`05-homelab-telepites.md`).
 2. A Pi beállítása (`12-rag-pi-beallitasa.md`), egészség-ellenőrzés a homelabról.
 3. A homelab reranker (`13-rag-reranker-beallitasa.md`).
-4. A szerver (migráció; `COLONY_EMBED_URL`, `COLONY_RERANK_URL`).
-5. `colonyhall rag-backfill` a szerverkonténerben.
-6. 36b: a 49. kör és a GPU-szolgáltatások, majd a PC őre.
+4. A szerver (migráció; `COLONY_EMBED_URL`, `COLONY_RERANK_URL` a `deploy/.env`-ben). Induláskor az indexelő magától végigolvassa az előzményt.
+5. `docker compose -f deploy/compose.yaml exec server colonyhall rag-backfill` (a régi döntések).
+6. Az őröket ez a kör nem érinti.
+7. 36b: a 49. kör és a GPU-szolgáltatások, majd a PC őre.
+
+## Mérés: a kiértékelő készlet
+
+`colonyhall rag-eval -set FÁJL` kiírja egymás mellett a négy konfiguráció (kulcsszavas, szemantikus, hibrid, hibrid + rerank) recall@5, recall@10, MRR@10, nDCG@10 értékét és a p50/p95 késleltetést. A készlet JSON:
+
+```json
+{
+  "name": "valódi magyar készlet, 2026-11",
+  "questions": [
+    { "id": "q01", "kind": "paraphrase", "query": "hol fut az éles szerver?", "relevant": ["message:0192…", "wiki:homelab-telepites"] },
+    { "id": "q02", "kind": "decision",   "query": "miért nem konténerben fut az őr?", "relevant": ["decision:D-4"] }
+  ]
+}
+```
+
+- `relevant`: `message:<uuid>`, `wiki:<slug>`, `decision:D-<szám>`, `summary:<tömörítés uuid>`; egy forrás több darabja egynek számít.
+- **Valódi készlet** (nincs `seed`): az éles adatbázison fut, egy ember nevében (`-as norbi`); a keresések nem kerülnek a naplóba. A készlet **nem kerül a repóba** (valódi szöveg van benne); Norbi és Claude Code közösen írja (30–50 szöveges kérdés). **Amíg nincs meg és nem futott le, az ág nem olvasztható be.**
+- **Szintetikus készlet** (`testdata/rag-eval/synthetic.json`, `seed`-del): kitalált csatornák, üzenetek, wiki és döntések egy eldobható szerveren (memóriában, vagy `-seed-db` egy üres Postgresre); hamis beágyazóval fut a CI-ban (`cmd/colonyhall` teszt), valódi modellekkel `-embed-url`, `-rerank-url`.
 
 ## Ütemezés (javaslat)
 

@@ -16,34 +16,14 @@ cd ~/homelab/colonyhall-rerank
 cp ~/homelab/colonyhall/deploy/rerank/compose.yaml .
 ```
 
-A `compose.yaml` (a repóban: `deploy/rerank/compose.yaml`) lényege:
-
-```yaml
-services:
-  rerank:
-    build: ../colonyhall/deploy/embed     # ugyanaz a kis ONNX-szerver, mint a Pi-n
-    command: ["--mode", "rerank", "--model", "/model", "--host", "0.0.0.0", "--port", "8091", "--threads", "2"]
-    volumes:
-      - ./model:/model:ro
-    networks: [shared-db-net]             # csak a Colonyhall szerver éri el
-    mem_limit: 1536m
-    cpus: 2
-    read_only: true
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8091/healthz')"]
-      interval: 30s
-networks:
-  shared-db-net:
-    external: true
-```
+A `compose.yaml` a repóban: `deploy/rerank/compose.yaml` (a kép a `deploy/embed/Dockerfile`-ból épül: ugyanaz a kis ONNX-szerver, mint a Pi-n, `--mode rerank`-kel). A lényeg: csak a `shared-db-net` hálózaton, `rerank` néven érhető el; `mem_limit: 1536m`, `cpus: 2`, csak olvasható fájlrendszer, egészség-ellenőrzés a `/healthz`-en. A modell nevét a `.env` adja: `RERANK_MODEL_NAME=jina-reranker-v2-int8`.
 
 - Nincs kiadott port a gépen (`ports:` nincs): a Colonyhall szerver a `shared-db-net` hálózaton, névvel éri el (`http://rerank:8091`).
 - `cpus: 2`: a homelab többi szolgáltatása ne lassuljon keresés közben.
 
 ## 2. A modell
 
-A választott modell ONNX int8 fájlja és tokenizere a `deploy/embed/MODEL.md`-ben rögzített Hugging Face-commitról, sha256-tal ellenőrizve, a `model/` mappába. A modellnév a válaszokban `<modell>-int8@<sha256 első 12 jele>`.
+A választott modell ONNX int8 fájlja és tokenizere a `deploy/embed/MODEL.md`-ben rögzített Hugging Face-commitról, sha256-tal ellenőrizve, a `model/` mappába (a letöltés receptje ott van). A modellnév a válaszokban `<név>@<sha256 első 12 jele>`, pl. `jina-reranker-v2-int8@c5220cf8fe02`. **Mérés hátravan:** az első indítás után mérd meg, mennyi ideig tart egy keresés reranke (az állapotlap `rerank` ideje, vagy a `colonyhall rag-eval` `hybrid+rerank` sora); a PC-n ~0,6 mp volt ~20 jelöltre, a homelab lassabb.
 
 ## 3. Indítás és ellenőrzés
 

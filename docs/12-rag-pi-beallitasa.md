@@ -27,12 +27,12 @@ sudo apt install -y python3-venv
 sudo mkdir -p /opt/colony-embed && sudo chown embed: /opt/colony-embed
 cd /opt/colony-embed
 python3 -m venv venv
-# a verziók a deploy/embed/requirements.txt-ből, rögzítve és hash-sel:
-venv/bin/pip install --require-hashes -r requirements.txt
+# a rögzített verziók a deploy/embed/requirements.txt-ből:
+venv/bin/pip install -r requirements.txt
 ```
 
 - A szerver (`deploy/embed/server.py`) és a `requirements.txt` a repóból kerül ide (`scp`).
-- **A modell:** az ONNX int8 fájl és a tokenizer a `deploy/embed/MODEL.md`-ben rögzített Hugging Face-commitról, sha256-tal ellenőrizve; `/opt/colony-embed/model/` (csak olvasható: `chmod -R a-w`). A modellnév a válaszokban `multilingual-e5-small-int8@<sha256 első 12 jele>`.
+- **A modell:** az ONNX int8 fájl és a tokenizer a `deploy/embed/MODEL.md`-ben rögzített Hugging Face-commitról, sha256-tal ellenőrizve; `/opt/colony-embed/model/` (csak olvasható: `chmod -R a-w`). A modellnév a válaszokban `multilingual-e5-small-int8@4d24e2bc01a4` (a PC-n ellenőrizve).
 - **systemd** (`/etc/systemd/system/colony-embed.service`):
 
 ```ini
@@ -44,7 +44,7 @@ Wants=network-online.target
 [Service]
 User=embed
 WorkingDirectory=/opt/colony-embed
-ExecStart=/opt/colony-embed/venv/bin/python server.py --model model --host 0.0.0.0 --port 8090 --threads 4
+ExecStart=/opt/colony-embed/venv/bin/python -I server.py --mode embed --model model --name multilingual-e5-small-int8 --host 0.0.0.0 --port 8090 --threads 4 --batch 4
 Restart=always
 RestartSec=5
 MemoryMax=900M

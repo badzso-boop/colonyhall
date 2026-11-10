@@ -15,7 +15,7 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 ## A szerver
 
 - Mappa: `~/.local/share/colonyhall/server/` (`compose.yaml`, `.env` `0600`-val; macOS-en a `backup.sh` is).
-- Adatbázis: alapból saját Postgres a compose-ban; vagy meglévő Postgres kapcsolati URL-lel (a kérdés rejtett, mert jelszót tartalmaz). A konténerből a `localhost` maga a konténer: a gép címét vagy egy Docker-hálózat nevét kell megadni.
+- Adatbázis: alapból saját Postgres a compose-ban; vagy meglévő Postgres kapcsolati URL-lel (a kérdés rejtett, mert jelszót tartalmaz). A konténerből a `localhost` maga a konténer: a gép címét vagy egy Docker-hálózat nevét kell megadni. A saját Postgres a `pgvector/pgvector:pg17` kép (a keresés a `vector` kiterjesztést használja, 36. kör). **Meglévő Postgresnél** a `vector` kiterjesztésnek elérhetőnek kell lennie, és ha a Colonyhall felhasználója nem superuser, egyszer létre kell hozni: `CREATE EXTENSION vector;` az adatbázisban (különben az első indításkor a migráció ezzel a tanáccsal áll meg).
 - Cím: alapból `127.0.0.1:8080`. Választható a helyi hálózati vagy a Tailscale-cím. `0.0.0.0` csak külön megerősítéssel, felügyelet nélküli módban csak `allow_all_interfaces: true`-val.
 - Linuxon a Docker-parancsok **`sudo`-val** futnak (döntés: a `docker` csoport tagsága root-egyenértékű).
 - Első tulajdonos: felhasználónév, név, jelszó (rejtve, kétszer; üresen generál egyet, és egyszer kiírja). A jelszó a `colonyhall bootstrap`-nak stdin-en megy, parancssorba nem kerül.

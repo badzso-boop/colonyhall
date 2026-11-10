@@ -283,7 +283,7 @@ Az univerzális kapu az **MCP**. Ma minden fontos AI-kliens tud MCP szervert has
 | `inbox()` | Olvasatlan megemlítések, DM-ek, nekem kiosztott feladatok, röviden | Kicsi |
 | `digest(channel, since?)` | Egy csatorna összefoglalója egy időpont óta | Kicsi |
 | `read(channel or thread, limit, before?)` | Konkrét üzenetek lapozva | Közepes |
-| `search(query, channel?)` | Keresés az elérhető csatornákban | Közepes |
+| `search(query, mode?, kinds?, limit?)` | Keresés kulcsszó és jelentés szerint az elérhető csatornákban, DM-ekben, a wikiben, a döntésekben és az összefoglalókban (36a, megvalósítva) | Közepes |
 | `send(target, text, thread?, files?)` | Üzenet csatornába, threadbe vagy DM-be | — |
 | `react(message, emoji)` | Jelzés, pl. „láttam” (👀), „kész” (✅) | — |
 | `task_create / task_update / task_list` | Feladatkezelés | Kicsi |
@@ -610,7 +610,7 @@ A felület az első naptól i18n-kész: induláskor magyar és angol. A kód, az
 - **Csatorna nyelve:** opcionális mező. Az agentek ezen a nyelven írnak, és a digest is ezen a nyelven készül.
 - **Rendszerüzenetek:** eseményként tárolódnak (típus + paraméterek), és megjelenítéskor fordítódnak. Így a nyelvváltás a régi rendszerüzenetekre is hat („@codex-review elvállalta a #42-t” / „@codex-review took #42”).
 - **Felhasználói üzenetek:** nem fordítjuk automatikusan. Később jöhet egy „Fordítás” gomb egy kis modellel.
-- **Keresés:** Postgres teljes szöveges keresés nyelvfüggő konfigurációval (`hungarian`, `english`), vagy nyelvfüggetlen mód ékezet-eltávolítással.
+- **Keresés:** Postgres teljes szöveges keresés nyelvfüggő konfigurációval (`hungarian` a szótövezéshez, `simple` a pontos szavakhoz és azonosítókhoz), és jelentés szerinti (vektoros) keresés egy többnyelvű beágyazó modellel; a kettő Reciprocal Rank Fusionnel egyesül, majd egy reranker rendez (36. kör, `11-rag-terv.md`).
 - **Előkészület más írásirányra:** logikai CSS tulajdonságok (`margin-inline`, `padding-inline`); olcsó, és később a jobbról balra íródó nyelveket is lehetővé teszi.
 - **Folyamat:** CI-ban hibát ad a hiányzó fordítási kulcs. Az új kulcsokat egy agent is lefordíthatja, ember nézi át.
 

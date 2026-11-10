@@ -16,6 +16,7 @@
 | Fájlok | csatolmányok; **helyi fájllinkek** megnyitása (az őr tölti fel az agent jogaival, csak ember látja); **fájlböngésző** (Monaco-néző, fa, kereső, git-állapot, `fájl:sor` hivatkozások), az agent saját mappájából |
 | Hosszú parancsok | **agent-terminálok** (`tmux -L colonyhall`): indításkor csendes szálüzenet (`🖥 <név> elindult: <parancs>`), a futást túlélik, a végén ébresztenek; fejlécben és aktivitásjelző mellett futó terminálok számlálója; élő, csak olvasható nézet az adatlapon; SSH: `tmux -L colonyhall attach -r -t colony-<agent>-<név>` |
 | Saját feladatok és naptár | **📝 Feladatok** (cím, leírás, állapot: ütemezve / elkezdve / befejezve, sorrend húzással vagy ↑/↓) és **📅 Naptár** (feliratkozás ICS-linkre, mai és 7 napos nézet). Csak a tulajdonos írja; az agentek a `planner_read` és `calendar_read` MCP-eszközzel olvashatják, ha a tulajdonos engedi (feladatok: alapból minden agent, naptár: alapból senki). |
+| Keresés (36a, `feature/rag`) | **kulcsszó és jelentés szerinti keresés** a csatornákban, szálakban, DM-ekben, a wikiben, a döntésnaplóban és a tömörítési összefoglalókban: REST (`GET /search`), MCP `search` eszköz minden agentnek, PWA-keresőoldal; csak a saját csatornák és DM-ek (más DM-je adminnak sem); magyar szótövezés; beágyazás a Raspberry Pi-n, újrarendezés a homelabon (beállításuk hátravan); nélkülük kulcsszavas |
 | Egyéb | ütemező (`/daily`, `/cron`, `/schedule`, DM-ben is), költségkeret, jóváhagyás a chatből, Gitea (link kártyák, webhookok), előnézetek, vészleállító, auditnapló |
 
 ## Hol fut
@@ -107,6 +108,18 @@ A GitHub minden `main`-re pusholt commitra és minden pull requestre lefuttatja 
 - **`cancelled`**: egy újabb push ugyanarra az ágra leállította a régit; a legújabb futás számít.
 - **Éjszakai futás** (02:17 UTC): csak a race detector és a sérülékenységkeresés. Ha a `vuln` piros, egy függőség kapott ismert sérülékenységet: `make vuln` helyben megmutatja, melyik, és van-e javított verzió.
 - **Kódváltozás nélkül piros** (pl. egy action vagy kép eltűnt): a workflow minden külső actiont commitra rögzít; frissítésük kézzel történik (a tag a kommentben).
+
+### Keresés (36. kör)
+
+A keresés (`11-rag-terv.md`) a szerverben fut; a szemantikus részhez a Raspberry Pi beágyazója (`COLONY_EMBED_URL`), az újrarendezéshez a homelab rerankere (`COLONY_RERANK_URL`) kell. Egyik sem kötelező: nélkülük a keresés kulcsszavas, illetve rerank nélküli, és ezt ki is írja.
+
+- **Hol látszik:** Adminisztráció → Rendszerállapot → „Keresés”: darabok, a beágyazásra váró sor, az utolsó beágyazás, a modell, a Pi és a reranker állapota (rövid hibaosztállyal: `timeout`, `unreachable`, `invalid answer`, `model changed`). Az eseményfogyasztók között a `search` késése az indexelés elmaradása.
+- **A keresés azt írja, hogy „keyword results only”:** a Pi nem válaszolt 1,5 mp-en belül. A Pi-n: `systemctl status colony-embed`, `journalctl -u colony-embed -n 50`, `vcgencmd get_throttled`, `free -m`; a homelabról: `curl -s http://PI_IP:8090/healthz`. Amíg a Pi nem fut, az új darabok sorban várnak, és kulcsszóra így is megtalálhatók; visszatérés után a munkás magától pótolja.
+- **„not reranked”:** a reranker nem válaszolt 2 mp-en belül. `cd ~/homelab/colonyhall-rerank && docker compose ps && docker compose logs --tail 50`. Ha rendszeresen lassú: kisebb `COLONY_RERANK_TOP` (pl. 20) a `deploy/.env`-ben, vagy kisebb modell (`deploy/embed/MODEL.md`).
+- **A keresés üres, pedig van ilyen üzenet:** a jogosultság szerint helyes lehet (csak a saját csatornák és DM-ek; más DM-je adminnak sem jön). Ha nem: az állapotlapon a `search` fogyasztó késése; `docker compose -f deploy/compose.yaml exec server colonyhall rag-backfill -dry-run` megmutatja, mennyi forrás van; `rag-backfill -restart` újraolvassa a naplót (a változatlan darabok vektora megmarad).
+- **Modellcsere** (új modell a Pi-n): az állapotlap figyelmeztet, a munkás addig nem ír vektort. `docker compose -f deploy/compose.yaml exec server colonyhall rag-reembed`, utána a munkás újraszámol; közben a kulcsszavas keresés működik.
+- **A keresési napló** (`search_log`) 30 nap után magától törlődik; csak admin láthatja az adatbázisban.
+- **A kód keresése a GPU-n (36b)** még nincs kész.
 
 ## Munkamódszer
 
