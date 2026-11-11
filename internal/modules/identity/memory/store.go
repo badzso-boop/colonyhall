@@ -579,3 +579,31 @@ func (s *Store) HandleWorkspaces(_ context.Context, handle string) ([]identity.W
 	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
 	return out, nil
 }
+
+// RevokeTokenByHash revokes a token by its hash and returns it.
+func (s *Store) RevokeTokenByHash(_ context.Context, hash []byte, at time.Time) (identity.Token, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tokens[string(hash)]
+	if !ok {
+		return identity.Token{}, db.ErrNotFound
+	}
+	if t.RevokedAt == nil {
+		t.RevokedAt = &at
+		s.tokens[string(hash)] = t
+	}
+	return t, nil
+}
+
+// SetWorkspaceState suspends or reactivates a workspace.
+func (s *Store) SetWorkspaceState(_ context.Context, id ids.ID, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	w.State = state
+	s.workspaces[id] = w
+	return nil
+}

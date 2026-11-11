@@ -2,9 +2,12 @@ package hosts
 
 // Event types (all recorded in the audit log; admins see them live).
 const (
-	EventPairingCreated  = "host.pairing_created"
-	EventHostEnrolled    = "host.enrolled"
-	EventHostState       = "host.state_changed"
+	EventPairingCreated = "host.pairing_created"
+	EventHostEnrolled   = "host.enrolled"
+	EventHostState      = "host.state_changed"
+	// EventHostCrossTenant: the host token was used on another workspace's
+	// subdomain; the host is revoked (round 45).
+	EventHostCrossTenant = "host.cross_tenant"
 	EventHostUpdated     = "host.updated"
 	EventHostOwner       = "host.owner_changed"
 	EventAgentAssigned   = "host.agent_assigned"

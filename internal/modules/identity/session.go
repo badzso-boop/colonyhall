@@ -10,6 +10,7 @@ import (
 
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/tenant"
 )
 
 // Session is a logged-in browser. Only the hash of the cookie value is stored.
@@ -128,7 +129,11 @@ func (s *Service) findLoginActor(ctx context.Context, in LoginInput) (context.Co
 	if err != nil {
 		return ctx, Actor{}, err
 	}
-	if in.Workspace != "" {
+	if t, ok := tenant.From(ctx); ok {
+		// Multi-tenant mode: only the subdomain's workspace; a handle that
+		// exists elsewhere is simply not found here.
+		wss = slices.DeleteFunc(wss, func(w Workspace) bool { return w.ID != t.Workspace })
+	} else if in.Workspace != "" {
 		wss = slices.DeleteFunc(wss, func(w Workspace) bool { return w.Name != in.Workspace })
 	}
 	switch len(wss) {
@@ -160,7 +165,7 @@ func (s *Service) AuthenticateSession(ctx context.Context, secret string) (Actor
 	if secret == "" {
 		return Actor{}, Session{}, ErrUnauthorized
 	}
-	ctx, err := s.credentialScope(ctx, s.Store.WorkspaceOfSession, HashSecret(secret))
+	ctx, err := s.credentialScope(ctx, credSession, s.Store.WorkspaceOfSession, HashSecret(secret))
 	if err != nil {
 		return Actor{}, Session{}, err
 	}

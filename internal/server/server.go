@@ -342,7 +342,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		fiStore = opt.FilesStore
 	}
 
-	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
 	cvSvc := &conversation.Service{Store: cvStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
 	auSvc := &audit.Service{Store: auStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
@@ -595,8 +595,12 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB)})
 
+	handler := httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts)
+	if opt.Multitenant {
+		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler)
+	}
 	return &App{
-		Handler:      httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts),
+		Handler:      handler,
 		Identity:     idSvc,
 		Conversation: cvSvc,
 		Delivery:     dlSvc,

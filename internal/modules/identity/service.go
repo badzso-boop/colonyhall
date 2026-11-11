@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"colonyhall/internal/eventlog"
@@ -11,6 +12,7 @@ import (
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/tenant"
 )
 
 // Service holds the identity use cases.
@@ -21,6 +23,8 @@ type Service struct {
 	Tx     db.TxRunner
 	IDs    ids.Generator
 	Clock  clock.Clock
+	// Logger receives the security log (round 45); nil: slog.Default.
+	Logger *slog.Logger
 
 	// HostColors maps assigned agents to their machine's colour, for
 	// Actor.EffectiveColor (wired to the hosts module; nil: none).
@@ -241,7 +245,7 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if secret == "" {
 		return Actor{}, ErrUnauthorized
 	}
-	ctx, err := s.credentialScope(ctx, s.Store.WorkspaceOfToken, HashSecret(secret))
+	ctx, err := s.credentialScope(ctx, credToken, s.Store.WorkspaceOfToken, HashSecret(secret))
 	if err != nil {
 		return Actor{}, err
 	}
@@ -342,10 +346,20 @@ func (s *Service) SetWorkspaceSlug(ctx context.Context, workspaceName, slug stri
 	return ws, nil
 }
 
+// Credential kinds for credentialScope and EventCrossTenant.
+const (
+	credToken   = "token"
+	credSession = "session"
+)
+
 // credentialScope finds the workspace a token or session belongs to and
 // narrows ctx to it, before anything else is read (round 45): with
 // row-level security, the credential's own rows are only visible there.
-func (s *Service) credentialScope(ctx context.Context, find func(context.Context, []byte) (ids.ID, error), hash []byte) (context.Context, error) {
+// In multi-tenant mode a credential of another workspace than the
+// subdomain's is a leaked secret: it is revoked, recorded in its own
+// workspace's audit log and logged as an error, and the caller gets the
+// same answer as for an unknown credential.
+func (s *Service) credentialScope(ctx context.Context, kind string, find func(context.Context, []byte) (ids.ID, error), hash []byte) (context.Context, error) {
 	ws, err := find(ctx, hash)
 	if errors.Is(err, db.ErrNotFound) {
 		return ctx, ErrUnauthorized
@@ -353,5 +367,50 @@ func (s *Service) credentialScope(ctx context.Context, find func(context.Context
 	if err != nil {
 		return ctx, err
 	}
+	if t, ok := tenant.From(ctx); ok && t.Workspace != ws {
+		s.crossTenant(db.WithWorkspace(ctx, ws), ws, t, kind, hash)
+		return ctx, ErrUnauthorized
+	}
 	return db.WithWorkspace(ctx, ws), nil
+}
+
+// crossTenant revokes a credential used on another workspace's subdomain
+// and records it; ctx is narrowed to the credential's workspace. Failures
+// are logged: the request is refused either way.
+func (s *Service) crossTenant(ctx context.Context, ws ids.ID, t tenant.Request, kind string, hash []byte) {
+	now := s.Clock.Now()
+	use := CrossTenantUse{Credential: kind, UsedOn: t.Slug, RemoteAddr: t.RemoteAddr}
+	var actorID ids.ID
+	var err error
+	switch kind {
+	case credToken:
+		var tok Token
+		if tok, err = s.Store.RevokeTokenByHash(ctx, hash, now); err == nil {
+			actorID, use.Prefix = tok.ActorID, tok.Prefix
+		}
+	case credSession:
+		var sess Session
+		if sess, _, err = s.Store.SessionByTokenHash(ctx, hash); err == nil {
+			actorID = sess.ActorID
+			err = s.Store.RevokeSession(ctx, sess.ID, now)
+		}
+	}
+	use.ActorID = actorID.String()
+	s.logger().Error("SECURITY: cross-tenant credential use; the credential is revoked",
+		"credential", kind, "prefix", use.Prefix, "actor_id", actorID, "credential_workspace", ws,
+		"request_workspace", t.Workspace, "subdomain", t.Slug, "remote_addr", t.RemoteAddr, "user_agent", t.UserAgent)
+	if err != nil {
+		s.logger().Error("cross-tenant: revoking the credential failed", "credential", kind, "err", err)
+	}
+	by := Actor{ID: actorID, WorkspaceID: ws}
+	if err := s.record(ctx, by, EventCrossTenant, "actor", actorID, use, func(context.Context) error { return nil }); err != nil {
+		s.logger().Error("cross-tenant: recording the audit event failed", "err", err)
+	}
+}
+
+func (s *Service) logger() *slog.Logger {
+	if s.Logger != nil {
+		return s.Logger
+	}
+	return slog.Default()
 }

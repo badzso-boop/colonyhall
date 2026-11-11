@@ -162,3 +162,10 @@ SELECT h.id::uuid AS id, h.name::text AS name FROM colony_handle_workspaces(sqlc
 -- name: WorkspaceBySlugAnywhere :one
 SELECT w.id::uuid AS id, w.name::text AS name, w.created_at::timestamptz AS created_at, w.slug::text AS slug, w.state::text AS state
 FROM colony_workspace_by_slug(sqlc.arg(slug)::text) AS w;
+
+-- name: RevokeTokenByHash :one
+UPDATE api_token SET revoked_at = coalesce(revoked_at, sqlc.arg(at)::timestamptz)
+WHERE token_hash = sqlc.arg(token_hash) RETURNING *;
+
+-- name: SetWorkspaceState :execrows
+UPDATE workspace SET state = sqlc.arg(state) WHERE id = sqlc.arg(id);

@@ -13,6 +13,7 @@ import (
 
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/tenant"
 )
 
 type actorKey struct{}
@@ -21,6 +22,20 @@ type sessionKey struct{}
 
 // SessionCookie is the name of the browser session cookie.
 const SessionCookie = "colony_session"
+
+// HostSessionCookie is its name in multi-tenant mode over HTTPS (round 45):
+// the __Host- prefix makes the browser refuse it from another subdomain
+// (no Domain attribute, Secure, Path=/), so one customer cannot plant a
+// cookie for another.
+const HostSessionCookie = "__Host-colony_session"
+
+// SessionCookieName is the session cookie's name for the request.
+func SessionCookieName(r *http.Request) string {
+	if t, ok := tenant.From(r.Context()); ok && t.HostCookie {
+		return HostSessionCookie
+	}
+	return SessionCookie
+}
 
 // CSRFHeader carries the session's CSRF token on unsafe browser requests.
 const CSRFHeader = "X-CSRF-Token"
@@ -71,7 +86,7 @@ func RequireAuth(auth identity.RequestAuthenticator, next http.Handler) http.Han
 			next.ServeHTTP(w, r.WithContext(WithActor(ctx, a)))
 			return
 		}
-		c, err := r.Cookie(SessionCookie)
+		c, err := r.Cookie(SessionCookieName(r))
 		if err != nil {
 			Error(w, r, identity.ErrUnauthorized)
 			return

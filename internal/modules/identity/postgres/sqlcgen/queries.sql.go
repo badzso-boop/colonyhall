@@ -612,6 +612,35 @@ func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error 
 	return err
 }
 
+const revokeTokenByHash = `-- name: RevokeTokenByHash :one
+UPDATE api_token SET revoked_at = coalesce(revoked_at, $1::timestamptz)
+WHERE token_hash = $2 RETURNING id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at, workspace_id
+`
+
+type RevokeTokenByHashParams struct {
+	At        time.Time
+	TokenHash []byte
+}
+
+func (q *Queries) RevokeTokenByHash(ctx context.Context, arg RevokeTokenByHashParams) (ApiToken, error) {
+	row := q.db.QueryRow(ctx, revokeTokenByHash, arg.At, arg.TokenHash)
+	var i ApiToken
+	err := row.Scan(
+		&i.ID,
+		&i.ActorID,
+		&i.TokenHash,
+		&i.Label,
+		&i.CreatedAt,
+		&i.RevokedAt,
+		&i.HostID,
+		&i.ExpiresAt,
+		&i.Prefix,
+		&i.LastUsedAt,
+		&i.WorkspaceID,
+	)
+	return i, err
+}
+
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
 SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, s.workspace_id, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
 FROM session s JOIN actor a ON a.id = s.actor_id
@@ -790,6 +819,23 @@ type SetWorkspaceSlugParams struct {
 
 func (q *Queries) SetWorkspaceSlug(ctx context.Context, arg SetWorkspaceSlugParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setWorkspaceSlug, arg.Slug, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setWorkspaceState = `-- name: SetWorkspaceState :execrows
+UPDATE workspace SET state = $1 WHERE id = $2
+`
+
+type SetWorkspaceStateParams struct {
+	State string
+	ID    uuid.UUID
+}
+
+func (q *Queries) SetWorkspaceState(ctx context.Context, arg SetWorkspaceStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setWorkspaceState, arg.State, arg.ID)
 	if err != nil {
 		return 0, err
 	}

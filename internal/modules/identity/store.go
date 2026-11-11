@@ -29,6 +29,9 @@ type Store interface {
 	ListTokens(ctx context.Context, actorID ids.ID) ([]Token, error)
 	TokenByID(ctx context.Context, id ids.ID) (Token, error)
 	RevokeToken(ctx context.Context, id ids.ID, at time.Time) error
+	// RevokeTokenByHash revokes the token with the hash (if not yet) and
+	// returns it; db.ErrNotFound when there is none.
+	RevokeTokenByHash(ctx context.Context, hash []byte, at time.Time) (Token, error)
 	SetActorState(ctx context.Context, actorID ids.ID, state string) error
 	UpdateActorProfile(ctx context.Context, actorID ids.ID, displayName, desc, avatarEmoji, tz, statusText, color string) error
 	WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error)
@@ -62,6 +65,8 @@ type Store interface {
 	// SetWorkspaceSlug renames a workspace's subdomain; db.ErrConflict when
 	// another workspace has it, db.ErrNotFound when the workspace is gone.
 	SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error
+	// SetWorkspaceState suspends or reactivates a workspace.
+	SetWorkspaceState(ctx context.Context, id ids.ID, state string) error
 
 	// Credential returns the actor's password hash.
 	Credential(ctx context.Context, actorID ids.ID) (string, error)

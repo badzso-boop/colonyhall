@@ -454,3 +454,21 @@ func (s *Store) SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) er
 	}
 	return nil
 }
+
+// RevokeTokenByHash revokes a token by its hash and returns it.
+func (s *Store) RevokeTokenByHash(ctx context.Context, hash []byte, at time.Time) (identity.Token, error) {
+	t, err := s.q(ctx).RevokeTokenByHash(ctx, sqlcgen.RevokeTokenByHashParams{At: at, TokenHash: hash})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Token{}, db.ErrNotFound
+	}
+	return toToken(t), err
+}
+
+// SetWorkspaceState suspends or reactivates a workspace.
+func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state string) error {
+	n, err := s.q(ctx).SetWorkspaceState(ctx, sqlcgen.SetWorkspaceStateParams{ID: id, State: state})
+	if err == nil && n == 0 {
+		return db.ErrNotFound
+	}
+	return err
+}

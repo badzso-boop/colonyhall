@@ -481,7 +481,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// request (the origin check below blocks cross-site use of it); agents
 	// and scripts send a token in the hello frame instead.
 	var cookie string
-	if c, err := r.Cookie(httpx.SessionCookie); err == nil {
+	if c, err := r.Cookie(httpx.SessionCookieName(r)); err == nil {
 		cookie = c.Value
 	}
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: g.OriginPatterns})
