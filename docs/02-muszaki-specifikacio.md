@@ -398,6 +398,8 @@ A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei be
 | `folder_grant` | id, agent_id, host_id, path, mode (`read`, `write`), created_by, created_at, revoked_at | Visszavonás jelöléssel; minden változás audit esemény |
 | `api_token` (bővítés) | host_id, expires_at | Az őr által kért agent-token: rövid lejáratú (1 óra), a géphez kötött |
 
+**Lejárt hitelesítők takarítása (50. kör):** a szerver induláskor, majd óránként törli azokat a rövid lejáratú, géphez kötött agent-tokeneket (`host_id` kitöltve), amelyek több mint 7 napja lejártak vagy vissza lettek vonva, és a több mint 30 napja lejárt vagy visszavont munkameneteket (1000 soros adagokban, `FOR UPDATE SKIP LOCKED`-dal, így több szerverpéldány is futtathatja egyszerre). A kézzel létrehozott tokenek (`host_id` nélkül) visszavonva is megmaradnak. A token és a munkamenet hitelesítő, nem append-only adat (4. szabály): a törlése nem visz el információt, mert hogy ki mit használt, az a futásnaplóban és az audit naplóban marad.
+
 **API:**
 
 | Végpont | Ki hívja | Mit csinál |

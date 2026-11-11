@@ -367,3 +367,32 @@ func (s *Store) SetActorRole(ctx context.Context, id ids.ID, role identity.Role)
 func (s *Store) SetActorOwner(ctx context.Context, id, ownerID ids.ID) error {
 	return s.q(ctx).SetActorOwner(ctx, sqlcgen.SetActorOwnerParams{ID: id, OwnerID: nullID(ownerID)})
 }
+
+// deleteBatch is how many rows one cleanup statement removes, so a first
+// sweep over thousands of rows never holds its locks for long.
+const deleteBatch = 1000
+
+// DeleteExpiredHostTokens deletes ended guard tokens, one batch per statement.
+func (s *Store) DeleteExpiredHostTokens(ctx context.Context, before time.Time) (int64, error) {
+	return deleteInBatches(func() (int64, error) {
+		return s.q(ctx).DeleteExpiredHostTokens(ctx, sqlcgen.DeleteExpiredHostTokensParams{Before: before, Batch: deleteBatch})
+	})
+}
+
+// DeleteEndedSessions deletes ended sessions, one batch per statement.
+func (s *Store) DeleteEndedSessions(ctx context.Context, before time.Time) (int64, error) {
+	return deleteInBatches(func() (int64, error) {
+		return s.q(ctx).DeleteEndedSessions(ctx, sqlcgen.DeleteEndedSessionsParams{Before: before, Batch: deleteBatch})
+	})
+}
+
+func deleteInBatches(step func() (int64, error)) (int64, error) {
+	var total int64
+	for {
+		n, err := step()
+		total += n
+		if err != nil || n < deleteBatch {
+			return total, err
+		}
+	}
+}

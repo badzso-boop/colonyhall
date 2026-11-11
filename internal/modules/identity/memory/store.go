@@ -22,7 +22,7 @@ type Store struct {
 	tokenByID  map[ids.ID]string         // token id → hash key
 	creds      map[ids.ID]string
 	sessions   map[string]identity.Session // key: string(token hash)
-	revoked    map[ids.ID]bool
+	revoked    map[ids.ID]time.Time        // session id → when it was revoked
 }
 
 // New returns an empty store.
@@ -34,7 +34,7 @@ func New() *Store {
 		tokenByID:  map[ids.ID]string{},
 		creds:      map[ids.ID]string{},
 		sessions:   map[string]identity.Session{},
-		revoked:    map[ids.ID]bool{},
+		revoked:    map[ids.ID]time.Time{},
 	}
 }
 
@@ -262,7 +262,7 @@ func (s *Store) SessionByTokenHash(_ context.Context, hash []byte) (identity.Ses
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	x, ok := s.sessions[string(hash)]
-	if !ok || s.revoked[x.ID] {
+	if _, gone := s.revoked[x.ID]; !ok || gone {
 		return identity.Session{}, identity.Actor{}, db.ErrNotFound
 	}
 	a, ok := s.actors[x.ActorID]
@@ -273,20 +273,27 @@ func (s *Store) SessionByTokenHash(_ context.Context, hash []byte) (identity.Ses
 }
 
 // RevokeSession ends a session.
-func (s *Store) RevokeSession(_ context.Context, id ids.ID, _ time.Time) error {
+func (s *Store) RevokeSession(_ context.Context, id ids.ID, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.revoked[id] = true
+	s.revokeSession(id, at)
 	return nil
 }
 
+// revokeSession records the first revocation only, like revoked_at IS NULL.
+func (s *Store) revokeSession(id ids.ID, at time.Time) {
+	if _, done := s.revoked[id]; !done {
+		s.revoked[id] = at
+	}
+}
+
 // RevokeSessionsForActor revokes every session of the actor except keep.
-func (s *Store) RevokeSessionsForActor(_ context.Context, actorID, keep ids.ID, _ time.Time) error {
+func (s *Store) RevokeSessionsForActor(_ context.Context, actorID, keep ids.ID, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, x := range s.sessions {
 		if x.ActorID == actorID && x.ID != keep {
-			s.revoked[x.ID] = true
+			s.revokeSession(x.ID, at)
 		}
 	}
 	return nil
@@ -421,7 +428,7 @@ func (s *Store) SessionStats(_ context.Context, workspaceID ids.ID, now time.Tim
 			continue
 		}
 		st := out[x.ActorID]
-		if !s.revoked[x.ID] && x.ExpiresAt.After(now) {
+		if _, gone := s.revoked[x.ID]; !gone && x.ExpiresAt.After(now) {
 			st.Active++
 		}
 		if st.LastLogin == nil || x.CreatedAt.After(*st.LastLogin) {
@@ -464,4 +471,38 @@ func (s *Store) SetActorOwner(_ context.Context, id, ownerID ids.ID) error {
 	a.OwnerID = ownerID
 	s.actors[id] = a
 	return nil
+}
+
+// DeleteExpiredHostTokens deletes ended guard tokens.
+func (s *Store) DeleteExpiredHostTokens(_ context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	for k, t := range s.tokens {
+		if t.HostID == ids.Nil {
+			continue
+		}
+		if (t.ExpiresAt != nil && t.ExpiresAt.Before(before)) || (t.RevokedAt != nil && t.RevokedAt.Before(before)) {
+			delete(s.tokens, k)
+			delete(s.tokenByID, t.ID)
+			n++
+		}
+	}
+	return n, nil
+}
+
+// DeleteEndedSessions deletes sessions that expired or were revoked before the cut-off.
+func (s *Store) DeleteEndedSessions(_ context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	for k, x := range s.sessions {
+		at, revoked := s.revoked[x.ID]
+		if x.ExpiresAt.Before(before) || (revoked && at.Before(before)) {
+			delete(s.sessions, k)
+			delete(s.revoked, x.ID)
+			n++
+		}
+	}
+	return n, nil
 }

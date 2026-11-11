@@ -647,6 +647,11 @@ func (a *App) Run(ctx context.Context) error {
 			}
 		}
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.maintenanceLoop(ctx, maintenanceInterval)
+	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)
 		go func() {

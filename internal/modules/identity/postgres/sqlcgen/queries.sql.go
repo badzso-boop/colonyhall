@@ -332,6 +332,53 @@ func (q *Queries) Credential(ctx context.Context, actorID uuid.UUID) (string, er
 	return password_hash, err
 }
 
+const deleteEndedSessions = `-- name: DeleteEndedSessions :execrows
+DELETE FROM session WHERE id IN (
+    SELECT s.id FROM session s
+    WHERE s.expires_at < $1::timestamptz OR s.revoked_at < $1::timestamptz
+    LIMIT $2::int
+    FOR UPDATE SKIP LOCKED
+)
+`
+
+type DeleteEndedSessionsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) DeleteEndedSessions(ctx context.Context, arg DeleteEndedSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEndedSessions, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteExpiredHostTokens = `-- name: DeleteExpiredHostTokens :execrows
+DELETE FROM api_token WHERE id IN (
+    SELECT t.id FROM api_token t
+    WHERE t.host_id IS NOT NULL
+      AND (t.expires_at < $1::timestamptz OR t.revoked_at < $1::timestamptz)
+    LIMIT $2::int
+    FOR UPDATE SKIP LOCKED
+)
+`
+
+type DeleteExpiredHostTokensParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+// One batch of short-lived guard tokens that expired or were revoked before
+// the cut-off. SKIP LOCKED lets several servers sweep at once without waiting.
+func (q *Queries) DeleteExpiredHostTokens(ctx context.Context, arg DeleteExpiredHostTokensParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredHostTokens, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listActors = `-- name: ListActors :many
 SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by, owner_id FROM actor WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY handle
 `

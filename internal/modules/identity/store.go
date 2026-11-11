@@ -67,4 +67,12 @@ type Store interface {
 	SetActorRole(ctx context.Context, id ids.ID, role Role) error
 	// SetActorOwner sets (or, with ids.Nil, clears) an agent's owner.
 	SetActorOwner(ctx context.Context, id, ownerID ids.ID) error
+
+	// DeleteExpiredHostTokens deletes short-lived guard tokens (host_id set)
+	// that expired or were revoked before the cut-off, in batches, and
+	// returns how many went. Tokens without a host are never deleted.
+	DeleteExpiredHostTokens(ctx context.Context, before time.Time) (int64, error)
+	// DeleteEndedSessions deletes sessions that expired or were revoked
+	// before the cut-off and returns how many went.
+	DeleteEndedSessions(ctx context.Context, before time.Time) (int64, error)
 }

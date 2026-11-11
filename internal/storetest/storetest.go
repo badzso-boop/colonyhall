@@ -71,6 +71,7 @@ type Backend struct {
 func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("eventlog", func(t *testing.T) { testEventlog(t, newBackend(t)) })
 	t.Run("identity", func(t *testing.T) { testIdentity(t, newBackend(t)) })
+	t.Run("credential cleanup", func(t *testing.T) { testCredentialCleanup(t, newBackend(t)) })
 	t.Run("conversation", func(t *testing.T) { testConversation(t, newBackend(t)) })
 	t.Run("delivery", func(t *testing.T) { testDelivery(t, newBackend(t)) })
 	t.Run("audit", func(t *testing.T) { testAudit(t, newBackend(t)) })
@@ -3077,5 +3078,88 @@ func testPlanner(t *testing.T, b Backend) {
 	must(t, st.DeleteCalendar(ctx, cal.ID))
 	if got2, _ = st.Events(ctx, owner, day, day.Add(24*time.Hour)); len(got2) != 0 {
 		t.Fatalf("events kept after calendar delete: %+v", got2)
+	}
+}
+
+// testCredentialCleanup: ended guard tokens and sessions older than the
+// cut-off go; recent, valid and hand-made ones stay; a second run is a no-op.
+func testCredentialCleanup(t *testing.T, b Backend) {
+	ctx := context.Background()
+	f := setup(t, b)
+	hostID := gen.New()
+	must(t, b.Hosts.CreateHost(ctx, hosts.Host{ID: hostID, WorkspaceID: f.ws.ID, Name: "cleanup-host", Color: "blue",
+		TokenHash: hosts.Hash("colh_cleanup"), State: hosts.StateApproved, CreatedBy: f.human.ID, CreatedAt: t0}))
+
+	cut := t0.Add(10 * 24 * time.Hour)
+	at := func(d time.Duration) *time.Time { x := cut.Add(d); return &x }
+	tok := func(secret string, host bool, exp, rev *time.Time) identity.Token {
+		x := identity.Token{ID: gen.New(), ActorID: f.agent.ID, Hash: identity.HashSecret(secret), Label: "host", CreatedAt: t0, ExpiresAt: exp}
+		if host {
+			x.HostID = hostID
+		}
+		must(t, b.Identity.CreateToken(ctx, x))
+		if rev != nil {
+			must(t, b.Identity.RevokeToken(ctx, x.ID, *rev))
+		}
+		return x
+	}
+	gone := []identity.Token{
+		tok("expired-old", true, at(-time.Hour), nil),
+		tok("expired-old-2", true, at(-48*time.Hour), nil),
+		tok("revoked-old", true, at(24*time.Hour), at(-time.Minute)),
+	}
+	kept := []identity.Token{
+		tok("expired-recent", true, at(time.Minute), nil),
+		tok("valid", true, at(30*24*time.Hour), nil),
+		tok("revoked-recent", true, at(24*time.Hour), at(time.Minute)),
+		tok("handmade-revoked", false, nil, at(-30*24*time.Hour)),
+		tok("handmade-expired", false, at(-30*24*time.Hour), nil),
+	}
+	n, err := b.Identity.DeleteExpiredHostTokens(ctx, cut)
+	must(t, err)
+	if n != int64(len(gone)) {
+		t.Fatalf("deleted %d host tokens, want %d", n, len(gone))
+	}
+	for _, x := range gone {
+		if _, err := b.Identity.TokenByID(ctx, x.ID); !errors.Is(err, db.ErrNotFound) {
+			t.Fatalf("token %q still there: %v", x.Label, err)
+		}
+	}
+	for _, x := range kept {
+		if _, err := b.Identity.TokenByID(ctx, x.ID); err != nil {
+			t.Fatalf("token %x deleted: %v", x.Hash[:4], err)
+		}
+	}
+	if n, err := b.Identity.DeleteExpiredHostTokens(ctx, cut); err != nil || n != 0 {
+		t.Fatalf("second run deleted %d: %v", n, err)
+	}
+
+	sess := func(secret string, exp time.Duration, rev *time.Time) identity.Session {
+		x := identity.Session{ID: gen.New(), ActorID: f.human.ID, TokenHash: identity.HashSecret(secret), CSRFToken: "x",
+			CreatedAt: t0, ExpiresAt: cut.Add(exp)}
+		must(t, b.Identity.CreateSession(ctx, x))
+		if rev != nil {
+			must(t, b.Identity.RevokeSession(ctx, x.ID, *rev))
+		}
+		return x
+	}
+	sess("s-expired-old", -time.Hour, nil)
+	sess("s-revoked-old", 24*time.Hour, at(-time.Hour))
+	sess("s-expired-recent", time.Hour, nil)
+	sess("s-revoked-recent", 24*time.Hour, at(time.Hour))
+	sess("s-live", 30*24*time.Hour, nil)
+	n, err = b.Identity.DeleteEndedSessions(ctx, cut)
+	must(t, err)
+	if n != 2 {
+		t.Fatalf("deleted %d sessions, want 2", n)
+	}
+	if _, _, err := b.Identity.SessionByTokenHash(ctx, identity.HashSecret("s-live")); err != nil {
+		t.Fatalf("live session deleted: %v", err)
+	}
+	if st, err := b.Identity.SessionStats(ctx, f.ws.ID, cut); err != nil || st[f.human.ID].Active != 2 {
+		t.Fatalf("sessions alive after cleanup: %+v %v", st, err)
+	}
+	if n, err := b.Identity.DeleteEndedSessions(ctx, cut); err != nil || n != 0 {
+		t.Fatalf("second session run deleted %d: %v", n, err)
 	}
 }
