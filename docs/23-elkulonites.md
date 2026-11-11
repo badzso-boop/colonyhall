@@ -8,7 +8,7 @@
 - **Javaslat:** a munkaterület (vagy a rendszermód) a `context`-ben utazik (`db.WithWorkspace`), és a pool **minden kapcsolatkiadáskor** (`pgxpool.Config.PrepareConn`) beállítja a kapcsolaton: `colony.workspace_id` és `colony.system`. Ez egyformán lefedi a tranzakciós és a tranzakción kívüli lekérdezéseket, és nem kell minden lekérdezés köré rövid tranzakció.
 - **A szabály minden táblán:** egy sor akkor látszik, és akkor írható, ha `workspace_id = colony_ws()` **vagy** `colony_system()`. Ha a beállítás hiányzik, `colony_ws()` NULL, tehát **semmi** nem látszik.
 - **A 15 `workspace_id` nélküli tábla:** 11 kap denormalizált `workspace_id`-t (a beállításból jövő alapértékkel, így az írási utak kódja nem változik), 2 csak rendszermódban látható, 1 munkaterületenkénti gyorsítótár lesz, és a `workspace` a saját `id`-ján szűr.
-- **Belépés előtti keresések** (token → munkaterület, slug → munkaterület stb.) szűk, `SECURITY DEFINER` SQL-függvényekkel mennek, amelyek csak azonosítót adnak vissza. Így kérést kiszolgáló kód **soha** nem kapcsol rendszermódba.
+- **Belépés előtti keresések** (token → munkaterület, slug → munkaterület stb.) szűk SQL-függvényekkel mennek, amelyek csak azonosítót adnak vissza. Így kérést kiszolgáló kód **soha** nem kapcsol rendszermódba.
 - **Rendszermódot** csak a háttérkód kap, egyetlen csomagon át (`internal/platform/db/system`), amit egy depguard-szabály csak a `internal/server`, az `internal/eventlog` fogyasztója és a `cmd/colonyhall` számára enged.
 
 ## 2. A beállítás útja az adatbázisig
@@ -88,7 +88,7 @@ Megjegyzések:
 | `planner_calendar_event` | `calendar_id → planner_calendar` | **D** | A naptárfrissítés sok sort ír; egységes szabály |
 | `wiki_revision` | `page_id → wiki_page` | **D** | Csak írás és előzmény; egységes szabály |
 | `workspace` | — | saját: `id = colony_ws() OR colony_system()` | A slug szerinti keresés belépés előtt függvényen át megy (4. pont) |
-| `consumer_offset` | — (szervertábla) | olvasás: mindenki; írás: **S** | Csak fogyasztónevek és sorszámok, ügyféladat nincs; a Rendszerállapot oldal olvassa |
+| `consumer_offset` | — (szervertábla) | **nincs szabály** (megvalósításkor módosítva) | Csak fogyasztónevek és sorszámok, ügyféladat nincs; a fogyasztó minden eseményt a saját munkaterülete hatókörében kezel, és ugyanabban a tranzakcióban lépteti az offsetet, ezért rendszermódhoz kötött írás nem működne |
 | `git_webhook_delivery` | — (szervertábla) | **S** | Csak a webhook-azonosítók ismétlésszűrése; függvényen át írva (4. pont) |
 | `git_link` | — (URL szerinti gyorsítótár) | **D**, kulcs `(workspace_id, url)` | Ma közös gyorsítótár: egy privát repó címe és állapota átlátszana egy másik ügyfélhez, aki ugyanazt az URL-t írja be. Munkaterületenként külön tárolva a kártya csak ott jön létre, ahol a link elhangzott |
 
@@ -110,9 +110,9 @@ Az `INSERT`-ek nem változnak: a sor a hatókör munkaterületét kapja. Ha a ha
 - **50. kör** (`feature/token-cleanup`): `db_size_sample` (a teljes adatbázis mérete) → **S** olvasásra is? A Rendszerállapot oldal olvassa, ami ügyféladmin-oldal; a 22. terv szerint operátori adat. Javaslat: olvasás mindenkinek (nincs benne ügyféladat), írás **S**. A karbantartó ciklus (a tokenek és munkamenetek törlése) rendszermódban fut.
 - **36. kör** (`feature/rag`): `search_chunk_text`, `search_log` (van `workspace_id`) → **W**. A `rag-backfill`, `rag-reembed` és `rag-eval` parancs rendszermódban indul, és munkaterületenként szűkít. Beolvasztáskor egy-egy sor a migrációban és a teszttáblában.
 
-## 4. Belépés előtti keresések: `SECURITY DEFINER` függvények
+## 4. Belépés előtti keresések: szűk SQL-függvények
 
-Ezek a keresések még nem tudják a munkaterületet, ezért egyik hatókörben sem futnának. Mindegyik egy szűk függvény, ami **csak azonosítót** ad vissza; a valódi lekérdezés utána a normál tárakon, munkaterületi hatókörben fut. A függvény belül rendszermódot kapcsol, és a végén visszaállítja (a tulajdonosra is érvényes a `FORCE`).
+Ezek a keresések még nem tudják a munkaterületet, ezért egyik hatókörben sem futnának. Mindegyik egy szűk függvény, ami **csak azonosítót** ad vissza; a valódi lekérdezés utána a normál tárakon, munkaterületi hatókörben fut. A függvény (plpgsql) a saját lekérdezésére bekapcsolja a rendszermódot, és utána visszaállítja az előző értéket. A függvény `SET` záradéka ezt magától tenné, de egyéni beállításra csak superusernek engedi a Postgres; hiba esetén a tranzakció úgyis megszakad. `SECURITY DEFINER` nem kell: az alkalmazás szerepköre maga a tulajdonos. Egy teszt ellenőrzi, hogy a rendszermód nem marad bent a hívó tranzakciójában.
 
 | Függvény | Ki hívja | Visszaad |
 | --- | --- | --- |
@@ -205,7 +205,7 @@ ALTER ROLE colonyhall_app NOSUPERUSER NOBYPASSRLS;
 2. Slug és állapot (migráció `00051`), `COLONY_MULTITENANT`, `COLONY_BASE_DOMAIN`, `bootstrap --slug`, a slug szabályai és tesztjei.
 3. Hatókör a `context`-ben, a pool `PrepareConn`-ja, a `system` csomag és a depguard-szabály; a hitelesítés, a gateway, az MCP, az őr, a webhook és a háttérciklusok szűkítése (a viselkedés még változatlan, RLS nélkül).
 4. A denormalizált oszlopok (`00052`): kiterjeszt, feltölt, szűkít; összetett idegen kulcsok (12/2).
-5. RLS-függvények, szabályok, `FORCE` (`00053`), a `SECURITY DEFINER` függvények; a storetest hatókörrel és a `colony_app` szerepkörrel; az indítási szerepkör-ellenőrzés.
+5. RLS-függvények, szabályok, `FORCE` (`00053`), a belépés előtti függvények; a storetest hatókörrel és a `colony_app` szerepkörrel; az indítási szerepkör-ellenőrzés.
 6. Aldomain-köztes réteg, süti, a keresztbérlős `401` és audit; `docs/16` helyi tesztelés.
 7. Az ügyfélszétválasztási készlet és a lefedettség-ellenőrzés.
 8. Dokumentáció: `docs/02` „Többbérlős működés”, `docs/22` 0. fázis kész, `CLAUDE.md` új szabály; a jelentés RLS-mérése.

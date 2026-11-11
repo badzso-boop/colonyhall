@@ -132,20 +132,27 @@ func (q *Queries) GetGitRepoChannel(ctx context.Context, arg GetGitRepoChannelPa
 }
 
 const getGitRepoChannelsByRepo = `-- name: GetGitRepoChannelsByRepo :many
-SELECT workspace_id, repo, channel_id, created_at
-FROM git_repo_channel
-WHERE repo = $1
+SELECT r.workspace_id::uuid AS workspace_id, r.repo::text AS repo, r.channel_id::uuid AS channel_id, r.created_at::timestamptz AS created_at
+FROM colony_repo_channels($1::text) AS r
 `
 
-func (q *Queries) GetGitRepoChannelsByRepo(ctx context.Context, repo string) ([]GitRepoChannel, error) {
+type GetGitRepoChannelsByRepoRow struct {
+	WorkspaceID uuid.UUID
+	Repo        string
+	ChannelID   uuid.UUID
+	CreatedAt   time.Time
+}
+
+// Every workspace's mapping of the repository (the webhook fans out).
+func (q *Queries) GetGitRepoChannelsByRepo(ctx context.Context, repo string) ([]GetGitRepoChannelsByRepoRow, error) {
 	rows, err := q.db.Query(ctx, getGitRepoChannelsByRepo, repo)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GitRepoChannel
+	var items []GetGitRepoChannelsByRepoRow
 	for rows.Next() {
-		var i GitRepoChannel
+		var i GetGitRepoChannelsByRepoRow
 		if err := rows.Scan(
 			&i.WorkspaceID,
 			&i.Repo,
@@ -175,10 +182,8 @@ func (q *Queries) GetWebhookDelivery(ctx context.Context, deliveryID string) (Gi
 	return i, err
 }
 
-const insertWebhookDelivery = `-- name: InsertWebhookDelivery :execrows
-INSERT INTO git_webhook_delivery (delivery_id, received_at)
-VALUES ($1, $2)
-ON CONFLICT (delivery_id) DO NOTHING
+const insertWebhookDelivery = `-- name: InsertWebhookDelivery :one
+SELECT colony_record_webhook_delivery($1::text, $2::timestamptz)::boolean AS recorded
 `
 
 type InsertWebhookDeliveryParams struct {
@@ -186,12 +191,13 @@ type InsertWebhookDeliveryParams struct {
 	ReceivedAt time.Time
 }
 
-func (q *Queries) InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertWebhookDelivery, arg.DeliveryID, arg.ReceivedAt)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+// Round 45: webhooks arrive before any workspace is known; the function
+// (migration 00053) records the id in system mode for this call only.
+func (q *Queries) InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (bool, error) {
+	row := q.db.QueryRow(ctx, insertWebhookDelivery, arg.DeliveryID, arg.ReceivedAt)
+	var recorded bool
+	err := row.Scan(&recorded)
+	return recorded, err
 }
 
 const listGitRepoChannels = `-- name: ListGitRepoChannels :many

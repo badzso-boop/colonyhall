@@ -100,6 +100,15 @@ func (s *Service) Enroll(ctx context.Context, code, name string) (Host, string, 
 	if err != nil {
 		return Host{}, "", err
 	}
+	// Round 45: the code's workspace first; the host is created there.
+	ws, err := s.Store.WorkspaceOfPairingCode(ctx, Hash(NormalizeCode(code)))
+	if errors.Is(err, db.ErrNotFound) {
+		return Host{}, "", ErrBadCode
+	}
+	if err != nil {
+		return Host{}, "", err
+	}
+	ctx = db.WithWorkspace(ctx, ws)
 	var h Host
 	var seq int64
 	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -142,6 +151,15 @@ func (s *Service) AuthenticateHost(ctx context.Context, secret string) (Host, er
 	if !strings.HasPrefix(secret, hostTokenPrefix) {
 		return Host{}, ErrBadHostToken
 	}
+	// Round 45: find the host's workspace first, then read the host there.
+	ws, err := s.Store.WorkspaceOfHostToken(ctx, Hash(secret))
+	if errors.Is(err, db.ErrNotFound) {
+		return Host{}, ErrBadHostToken
+	}
+	if err != nil {
+		return Host{}, err
+	}
+	ctx = db.WithWorkspace(ctx, ws)
 	h, err := s.Store.HostByTokenHash(ctx, Hash(secret))
 	if errors.Is(err, db.ErrNotFound) || (err == nil && h.State != StateApproved) {
 		return Host{}, ErrBadHostToken

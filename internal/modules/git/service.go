@@ -14,6 +14,7 @@ import (
 	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -195,6 +196,7 @@ func (s *Service) HandleWebhookEvent(ctx context.Context, ev provider.WebhookEve
 	}
 
 	for _, m := range mappings {
+		ctx := db.WithWorkspace(ctx, m.WorkspaceID) // each mapping in its own workspace (round 45)
 		bot, err := s.Identity.EnsureSystemActor(ctx, m.WorkspaceID, "gitea", "Gitea")
 		if err != nil {
 			return err

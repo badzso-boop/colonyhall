@@ -542,3 +542,40 @@ func (s *Store) DeleteEndedSessions(_ context.Context, before time.Time) (int64,
 	}
 	return n, nil
 }
+
+// WorkspaceOfToken finds the workspace of a token.
+func (s *Store) WorkspaceOfToken(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.tokens[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return s.actors[t.ActorID].WorkspaceID, nil
+}
+
+// WorkspaceOfSession finds the workspace of a session.
+func (s *Store) WorkspaceOfSession(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	x, ok := s.sessions[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return s.actors[x.ActorID].WorkspaceID, nil
+}
+
+// HandleWorkspaces lists the workspaces that have the handle, by id.
+func (s *Store) HandleWorkspaces(_ context.Context, handle string) ([]identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []identity.Workspace{}
+	for _, a := range s.actors {
+		if a.Handle == handle && a.ArchivedAt == nil {
+			w := s.workspaces[a.WorkspaceID]
+			out = append(out, identity.Workspace{ID: w.ID, Name: w.Name})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	return out, nil
+}

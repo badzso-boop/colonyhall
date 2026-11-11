@@ -390,6 +390,35 @@ func (q *Queries) DeleteExpiredHostTokens(ctx context.Context, arg DeleteExpired
 	return result.RowsAffected(), nil
 }
 
+const handleWorkspaces = `-- name: HandleWorkspaces :many
+SELECT h.id::uuid AS id, h.name::text AS name FROM colony_handle_workspaces($1::text) AS h
+`
+
+type HandleWorkspacesRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+func (q *Queries) HandleWorkspaces(ctx context.Context, handle string) ([]HandleWorkspacesRow, error) {
+	rows, err := q.db.Query(ctx, handleWorkspaces, handle)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HandleWorkspacesRow
+	for rows.Next() {
+		var i HandleWorkspacesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActors = `-- name: ListActors :many
 SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by, owner_id FROM actor WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY handle
 `
@@ -894,21 +923,52 @@ func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, 
 	return i, err
 }
 
-const workspaceBySlug = `-- name: WorkspaceBySlug :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE slug = $1
+const workspaceBySlugAnywhere = `-- name: WorkspaceBySlugAnywhere :one
+SELECT w.id::uuid AS id, w.name::text AS name, w.created_at::timestamptz AS created_at, w.slug::text AS slug, w.state::text AS state
+FROM colony_workspace_by_slug($1::text) AS w
 `
 
-func (q *Queries) WorkspaceBySlug(ctx context.Context, slug string) (Workspace, error) {
-	row := q.db.QueryRow(ctx, workspaceBySlug, slug)
-	var i Workspace
+type WorkspaceBySlugAnywhereRow struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedAt time.Time
+	Slug      string
+	State     string
+}
+
+func (q *Queries) WorkspaceBySlugAnywhere(ctx context.Context, slug string) (WorkspaceBySlugAnywhereRow, error) {
+	row := q.db.QueryRow(ctx, workspaceBySlugAnywhere, slug)
+	var i WorkspaceBySlugAnywhereRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.CreatedAt,
-		&i.EmergencyStopAt,
-		&i.EmergencyStopBy,
 		&i.Slug,
 		&i.State,
 	)
 	return i, err
+}
+
+const workspaceOfSession = `-- name: WorkspaceOfSession :one
+SELECT ws::uuid AS workspace_id FROM colony_session_workspace($1::bytea) AS ws WHERE ws IS NOT NULL
+`
+
+func (q *Queries) WorkspaceOfSession(ctx context.Context, hash []byte) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, workspaceOfSession, hash)
+	var workspace_id uuid.UUID
+	err := row.Scan(&workspace_id)
+	return workspace_id, err
+}
+
+const workspaceOfToken = `-- name: WorkspaceOfToken :one
+
+SELECT ws::uuid AS workspace_id FROM colony_token_workspace($1::bytea) AS ws WHERE ws IS NOT NULL
+`
+
+// Round 45: lookups before the workspace is known (migration 00053).
+func (q *Queries) WorkspaceOfToken(ctx context.Context, hash []byte) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, workspaceOfToken, hash)
+	var workspace_id uuid.UUID
+	err := row.Scan(&workspace_id)
+	return workspace_id, err
 }

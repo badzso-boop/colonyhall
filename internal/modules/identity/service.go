@@ -241,6 +241,10 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if secret == "" {
 		return Actor{}, ErrUnauthorized
 	}
+	ctx, err := s.credentialScope(ctx, s.Store.WorkspaceOfToken, HashSecret(secret))
+	if err != nil {
+		return Actor{}, err
+	}
 	a, err := s.Store.ActorByTokenHash(ctx, HashSecret(secret), s.Clock.Now())
 	if errors.Is(err, db.ErrNotFound) {
 		return Actor{}, ErrUnauthorized
@@ -336,4 +340,18 @@ func (s *Service) SetWorkspaceSlug(ctx context.Context, workspaceName, slug stri
 	}
 	ws.Slug = slug
 	return ws, nil
+}
+
+// credentialScope finds the workspace a token or session belongs to and
+// narrows ctx to it, before anything else is read (round 45): with
+// row-level security, the credential's own rows are only visible there.
+func (s *Service) credentialScope(ctx context.Context, find func(context.Context, []byte) (ids.ID, error), hash []byte) (context.Context, error) {
+	ws, err := find(ctx, hash)
+	if errors.Is(err, db.ErrNotFound) {
+		return ctx, ErrUnauthorized
+	}
+	if err != nil {
+		return ctx, err
+	}
+	return db.WithWorkspace(ctx, ws), nil
 }

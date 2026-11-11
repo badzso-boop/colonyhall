@@ -137,6 +137,8 @@ func run(logger *slog.Logger) error {
 
 	app, err := server.New(ctx, server.Options{
 		Store:              cfg.Store,
+		Multitenant:        cfg.Multitenant,
+		BaseDomain:         cfg.BaseDomain,
 		DatabaseURL:        cfg.DatabaseURL,
 		Logger:             logger,
 		SecureCookies:      cfg.SecureCookies,

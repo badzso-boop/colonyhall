@@ -12,7 +12,9 @@ RETURNING seq;
 SELECT * FROM event WHERE seq > $1 ORDER BY seq LIMIT $2;
 
 -- name: Head :one
-SELECT COALESCE(MAX(seq), 0)::bigint FROM event;
+-- The whole log's head, whatever the scope (a WebSocket hello reads it
+-- before authenticating; migration 00053).
+SELECT colony_event_head()::bigint;
 
 -- name: ConsumerOffset :one
 SELECT last_seq FROM consumer_offset WHERE consumer_name = $1;

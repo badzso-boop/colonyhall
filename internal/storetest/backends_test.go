@@ -70,11 +70,14 @@ func TestMemory(t *testing.T) {
 
 // TestPostgres runs the suite against a real database. It needs
 // COLONY_TEST_DATABASE_URL (see `make test-pg`) and wipes that database.
+// It connects as a role without BYPASSRLS that owns the tables, like the
+// server, so every store call that forgets its workspace scope fails.
 func TestPostgres(t *testing.T) {
 	url := os.Getenv("COLONY_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("COLONY_TEST_DATABASE_URL not set")
 	}
+	url = AppRoleDatabase(t, url)
 	ctx := context.Background()
 	pg, err := db.Open(ctx, url)
 	if err != nil {

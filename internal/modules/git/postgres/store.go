@@ -145,12 +145,8 @@ func (s *Store) DeleteRepoChannel(ctx context.Context, workspaceID ids.ID, repo 
 }
 
 func (s *Store) RecordDelivery(ctx context.Context, deliveryID string, now time.Time) (bool, error) {
-	rows, err := s.q(ctx).InsertWebhookDelivery(ctx, sqlcgen.InsertWebhookDeliveryParams{
+	return s.q(ctx).InsertWebhookDelivery(ctx, sqlcgen.InsertWebhookDeliveryParams{
 		DeliveryID: deliveryID,
 		ReceivedAt: now,
 	})
-	if err != nil {
-		return false, err
-	}
-	return rows > 0, nil
 }

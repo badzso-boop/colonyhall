@@ -174,6 +174,11 @@ type Options struct {
 	// (default 15 minutes); CalendarFetcher replaces the safe fetcher in tests.
 	CalendarRefresh time.Duration
 	CalendarFetcher planner.Fetcher
+
+	// Multitenant picks the workspace from the subdomain <slug>.BaseDomain
+	// (round 45, docs/23-elkulonites.md); off: one team, as before.
+	Multitenant bool
+	BaseDomain  string
 }
 
 // App is a wired-up Colonyhall server.
@@ -286,6 +291,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			return nil, err
 		}
 		if err := migrations.Up(ctx, pg.Pool); err != nil {
+			pg.Pool.Close()
+			return nil, err
+		}
+		if err := checkDatabaseRole(ctx, pg, opt); err != nil {
 			pg.Pool.Close()
 			return nil, err
 		}
@@ -742,4 +751,27 @@ func (a *App) SeedDev(ctx context.Context) error {
 		return fmt.Errorf("seed: %w", err)
 	}
 	return a.Conversation.AddMember(ctx, owner, ch.ID, agent.ID, true)
+}
+
+// checkDatabaseRole makes sure row-level security applies to the server's
+// database role (round 45): a superuser or a BYPASSRLS role skips it even
+// on forced tables. Multi-tenant mode refuses to start with such a role; a
+// single-team server only warns (installs from before round 45 connect as
+// the database superuser; docs/23-elkulonites.md, 6).
+func checkDatabaseRole(ctx context.Context, pg *db.Postgres, opt Options) error {
+	var role string
+	var super, bypass bool
+	err := pg.Pool.QueryRow(ctx, "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user").Scan(&role, &super, &bypass)
+	if err != nil {
+		return fmt.Errorf("db: read the role: %w", err)
+	}
+	if !super && !bypass {
+		return nil
+	}
+	if opt.Multitenant {
+		return fmt.Errorf("db: role %q bypasses row-level security (superuser or BYPASSRLS); multi-tenant mode needs a role without it (docs/23-elkulonites.md)", role)
+	}
+	opt.Logger.Warn("the database role bypasses row-level security; the workspace isolation in the database is off (docs/23-elkulonites.md)",
+		"role", role, "superuser", super, "bypassrls", bypass)
+	return nil
 }

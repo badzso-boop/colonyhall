@@ -17,6 +17,12 @@ type Store interface {
 	CreateHost(ctx context.Context, h Host) error
 	HostByID(ctx context.Context, id ids.ID) (Host, error)
 	HostByTokenHash(ctx context.Context, hash []byte) (Host, error)
+	// Lookups before the workspace is known (round 45). They see every
+	// workspace but answer only "which workspace"; the caller then narrows
+	// with db.WithWorkspace and runs the real query. db.ErrNotFound when
+	// nothing matches.
+	WorkspaceOfHostToken(ctx context.Context, hash []byte) (ids.ID, error)
+	WorkspaceOfPairingCode(ctx context.Context, hash []byte) (ids.ID, error)
 	ListHosts(ctx context.Context, workspaceID ids.ID) ([]Host, error)
 	SetHostState(ctx context.Context, id ids.ID, state string) error
 	// UpdateHost sets the name and colour (operational state, round 33).

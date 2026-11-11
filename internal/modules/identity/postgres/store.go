@@ -404,11 +404,41 @@ func deleteInBatches(step func() (int64, error)) (int64, error) {
 
 // WorkspaceBySlug loads a workspace by its subdomain name.
 func (s *Store) WorkspaceBySlug(ctx context.Context, slug string) (identity.Workspace, error) {
-	w, err := s.q(ctx).WorkspaceBySlug(ctx, slug)
+	w, err := s.q(ctx).WorkspaceBySlugAnywhere(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return identity.Workspace{}, db.ErrNotFound
 	}
-	return toWorkspace(w), err
+	return identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State}, err
+}
+
+// WorkspaceOfToken finds the workspace of a token, in any scope.
+func (s *Store) WorkspaceOfToken(ctx context.Context, hash []byte) (ids.ID, error) {
+	return lookup(s.q(ctx).WorkspaceOfToken(ctx, hash))
+}
+
+// WorkspaceOfSession finds the workspace of a session, in any scope.
+func (s *Store) WorkspaceOfSession(ctx context.Context, hash []byte) (ids.ID, error) {
+	return lookup(s.q(ctx).WorkspaceOfSession(ctx, hash))
+}
+
+// HandleWorkspaces lists the workspaces that have the handle, in any scope.
+func (s *Store) HandleWorkspaces(ctx context.Context, handle string) ([]identity.Workspace, error) {
+	rows, err := s.q(ctx).HandleWorkspaces(ctx, handle)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]identity.Workspace, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, identity.Workspace{ID: r.ID, Name: r.Name})
+	}
+	return out, nil
+}
+
+func lookup(id ids.ID, err error) (ids.ID, error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ids.Nil, db.ErrNotFound
+	}
+	return id, err
 }
 
 // SetWorkspaceSlug renames a workspace's subdomain.

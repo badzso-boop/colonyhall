@@ -269,3 +269,21 @@ func (s *Store) SetHostOwner(ctx context.Context, id, ownerID ids.ID) error {
 	}
 	return s.q(ctx).SetHostOwner(ctx, sqlcgen.SetHostOwnerParams{ID: id, OwnerID: owner})
 }
+
+// WorkspaceOfHostToken finds the workspace of a host token, in any scope.
+func (s *Store) WorkspaceOfHostToken(ctx context.Context, hash []byte) (ids.ID, error) {
+	id, err := s.q(ctx).WorkspaceOfHostToken(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ids.Nil, db.ErrNotFound
+	}
+	return id, err
+}
+
+// WorkspaceOfPairingCode finds the workspace of a pairing code, in any scope.
+func (s *Store) WorkspaceOfPairingCode(ctx context.Context, hash []byte) (ids.ID, error) {
+	id, err := s.q(ctx).WorkspaceOfPairingCode(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ids.Nil, db.ErrNotFound
+	}
+	return id, err
+}

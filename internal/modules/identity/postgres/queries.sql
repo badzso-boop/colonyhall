@@ -104,9 +104,6 @@ UPDATE api_token SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;
 -- name: SetActorState :exec
 UPDATE actor SET state = $2 WHERE id = $1;
 
--- name: WorkspaceBySlug :one
-SELECT * FROM workspace WHERE slug = $1;
-
 -- name: SetWorkspaceSlug :execrows
 UPDATE workspace SET slug = sqlc.arg(slug) WHERE id = sqlc.arg(id);
 
@@ -150,3 +147,18 @@ DELETE FROM session WHERE id IN (
     LIMIT sqlc.arg(batch)::int
     FOR UPDATE SKIP LOCKED
 );
+
+-- Round 45: lookups before the workspace is known (migration 00053).
+
+-- name: WorkspaceOfToken :one
+SELECT ws::uuid AS workspace_id FROM colony_token_workspace(sqlc.arg(hash)::bytea) AS ws WHERE ws IS NOT NULL;
+
+-- name: WorkspaceOfSession :one
+SELECT ws::uuid AS workspace_id FROM colony_session_workspace(sqlc.arg(hash)::bytea) AS ws WHERE ws IS NOT NULL;
+
+-- name: HandleWorkspaces :many
+SELECT h.id::uuid AS id, h.name::text AS name FROM colony_handle_workspaces(sqlc.arg(handle)::text) AS h;
+
+-- name: WorkspaceBySlugAnywhere :one
+SELECT w.id::uuid AS id, w.name::text AS name, w.created_at::timestamptz AS created_at, w.slug::text AS slug, w.state::text AS state
+FROM colony_workspace_by_slug(sqlc.arg(slug)::text) AS w;

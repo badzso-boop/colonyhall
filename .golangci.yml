@@ -17,7 +17,7 @@ linters:
           # composition root (background loops, consumers, seed), the CLI
           # and the db package itself may switch it on; everything else
           # narrows with db.WithWorkspace (docs/23-elkulonites.md).
-          files: ["$all", "!**/internal/server/**", "!**/cmd/colonyhall/**", "!**/internal/platform/db/**"]
+          files: ["$all", "!$test", "!**/internal/server/**", "!**/cmd/colonyhall/**", "!**/internal/platform/db/**"]
           deny:
             - pkg: colonyhall/internal/platform/db/system
               desc: system mode is for background code only; narrow with db.WithWorkspace
