@@ -25,51 +25,53 @@ func (s *Store) q(ctx context.Context) *sqlcgen.Queries {
 
 var _ git.Store = (*Store)(nil)
 
-func toLinkCard(row sqlcgen.GitLink) git.LinkCard {
+func toLinkCard(workspaceID ids.ID, row sqlcgen.GetGitLinkRow) git.LinkCard {
 	return git.LinkCard{
-		URL:       row.Url,
-		Kind:      git.LinkKind(row.Kind),
-		Title:     row.Title,
-		State:     row.State,
-		Author:    row.Author,
-		FetchedAt: row.FetchedAt,
+		WorkspaceID: workspaceID,
+		URL:         row.Url,
+		Kind:        git.LinkKind(row.Kind),
+		Title:       row.Title,
+		State:       row.State,
+		Author:      row.Author,
+		FetchedAt:   row.FetchedAt,
 	}
 }
 
-func (s *Store) GetLink(ctx context.Context, url string) (git.LinkCard, error) {
-	row, err := s.q(ctx).GetGitLink(ctx, url)
+func (s *Store) GetLink(ctx context.Context, workspaceID ids.ID, url string) (git.LinkCard, error) {
+	row, err := s.q(ctx).GetGitLink(ctx, sqlcgen.GetGitLinkParams{WorkspaceID: workspaceID, Url: url})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return git.LinkCard{}, git.ErrLinkNotFound
 		}
 		return git.LinkCard{}, err
 	}
-	return toLinkCard(row), nil
+	return toLinkCard(workspaceID, row), nil
 }
 
-func (s *Store) GetLinks(ctx context.Context, urls []string) ([]git.LinkCard, error) {
+func (s *Store) GetLinks(ctx context.Context, workspaceID ids.ID, urls []string) ([]git.LinkCard, error) {
 	if len(urls) == 0 {
 		return []git.LinkCard{}, nil
 	}
-	rows, err := s.q(ctx).GetGitLinks(ctx, urls)
+	rows, err := s.q(ctx).GetGitLinks(ctx, sqlcgen.GetGitLinksParams{WorkspaceID: workspaceID, Urls: urls})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]git.LinkCard, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, toLinkCard(r))
+		out = append(out, toLinkCard(workspaceID, sqlcgen.GetGitLinkRow(r)))
 	}
 	return out, nil
 }
 
 func (s *Store) SaveLink(ctx context.Context, card git.LinkCard) error {
 	return s.q(ctx).UpsertGitLink(ctx, sqlcgen.UpsertGitLinkParams{
-		Url:       card.URL,
-		Kind:      string(card.Kind),
-		Title:     card.Title,
-		State:     card.State,
-		Author:    card.Author,
-		FetchedAt: card.FetchedAt,
+		WorkspaceID: card.WorkspaceID,
+		Url:         card.URL,
+		Kind:        string(card.Kind),
+		Title:       card.Title,
+		State:       card.State,
+		Author:      card.Author,
+		FetchedAt:   card.FetchedAt,
 	})
 }
 

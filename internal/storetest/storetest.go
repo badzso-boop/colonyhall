@@ -113,8 +113,8 @@ type fixture struct {
 
 func setup(t *testing.T, b Backend) fixture {
 	t.Helper()
-	ctx := context.Background()
 	f := fixture{ws: identity.Workspace{ID: gen.New(), Name: "test", CreatedAt: t0}}
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
 	f.human = identity.Actor{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: identity.KindHuman, Handle: "norbi",
 		DisplayName: "Norbi", Role: identity.RoleOwner, State: "active", CreatedAt: t0}
 	f.agent = identity.Actor{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: identity.KindAgent, Handle: "bot",
@@ -133,6 +133,7 @@ func setup(t *testing.T, b Backend) fixture {
 func testEventlog(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	var seqs []int64
 	for i := 0; i < 3; i++ {
 		e, err := eventlog.NewEvent(gen.New(), f.ws.ID, "test.event", f.human.ID, f.channel.ID, "test", gen.New(), map[string]int{"n": i}, t0)
@@ -168,6 +169,7 @@ func testEventlog(t *testing.T, b Backend) {
 func testIdentity(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	dup := f.agent
 	dup.ID = gen.New()
 	if err := b.Identity.CreateActor(ctx, dup); !errors.Is(err, db.ErrConflict) {
@@ -246,8 +248,9 @@ func testIdentity(t *testing.T, b Backend) {
 		t.Fatalf("default slug and state: %+v %v", w, err)
 	}
 	other := identity.Workspace{ID: gen.New(), Name: "other", CreatedAt: t0, Slug: "acme"}
-	must(t, b.Identity.CreateWorkspace(ctx, other))
-	if err := b.Identity.CreateWorkspace(ctx, identity.Workspace{ID: gen.New(), Name: "dup", CreatedAt: t0, Slug: "acme"}); !errors.Is(err, db.ErrConflict) {
+	must(t, b.Identity.CreateWorkspace(db.WithWorkspace(ctx, other.ID), other))
+	dupWS := identity.Workspace{ID: gen.New(), Name: "dup", CreatedAt: t0, Slug: "acme"}
+	if err := b.Identity.CreateWorkspace(db.WithWorkspace(ctx, dupWS.ID), dupWS); !errors.Is(err, db.ErrConflict) {
 		t.Fatalf("duplicate slug: %v", err)
 	}
 	if err := b.Identity.SetWorkspaceSlug(ctx, f.ws.ID, "acme"); !errors.Is(err, db.ErrConflict) {
@@ -374,6 +377,7 @@ func testIdentity(t *testing.T, b Backend) {
 func testConversation(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	var msgs []conversation.Message
 	for i := 0; i < 3; i++ {
 		m := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: f.channel.ID, AuthorID: f.human.ID,
@@ -473,7 +477,7 @@ func testConversation(t *testing.T, b Backend) {
 // replier first, at most max, retracted replies left out. It uses its own
 // channel so the other conversation checks are not affected.
 func testReplyParticipants(t *testing.T, b Backend, f fixture) {
-	ctx := context.Background()
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
 	ch := conversation.Channel{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: conversation.KindPublic,
 		Name: "threads", CreatedBy: f.human.ID, CreatedAt: t0}
 	must(t, b.Conversation.CreateChannel(ctx, ch))
@@ -518,7 +522,7 @@ func testReplyParticipants(t *testing.T, b Backend, f fixture) {
 
 func testThreadsAndReactions(t *testing.T, b Backend, f fixture, msgs []conversation.Message) {
 	testReplyParticipants(t, b, f)
-	ctx := context.Background()
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
 	reply := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: f.channel.ID, AuthorID: f.agent.ID,
 		ThreadRootID: msgs[0].ID, Kind: "text", Body: "reply", CreatedAt: t0}
 	must(t, b.Conversation.InsertMessage(ctx, reply))
@@ -628,6 +632,7 @@ func testThreadsAndReactions(t *testing.T, b Backend, f fixture, msgs []conversa
 func testDelivery(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	item := gen.New()
 	d := delivery.Delivery{ID: gen.New(), WorkspaceID: f.ws.ID, RecipientID: f.agent.ID, ItemKind: delivery.ItemMessage,
 		ItemID: item, ChannelID: f.channel.ID, FromActorID: f.human.ID,
@@ -682,6 +687,7 @@ func testDelivery(t *testing.T, b Backend) {
 func testAudit(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	svc := &audit.Service{Store: b.Audit}
 	for i := 1; i <= 3; i++ {
 		e, err := eventlog.NewEvent(gen.New(), f.ws.ID, "test.event", f.human.ID, ids.Nil, "test", gen.New(), map[string]int{"n": i}, t0.Add(time.Duration(i)*time.Nanosecond*1500))
@@ -724,6 +730,7 @@ func must(t *testing.T, err error) {
 func testHosts(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	hs := b.Hosts
 
 	code := hosts.PairingCode{ID: gen.New(), WorkspaceID: f.ws.ID, CodeHash: hosts.Hash("CODE1"), CreatedBy: f.human.ID,
@@ -865,6 +872,7 @@ func testHosts(t *testing.T, b Backend) {
 func testRuns(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	e := runs.Error{ID: gen.New(), WorkspaceID: f.ws.ID, AgentID: f.agent.ID, ChannelID: f.channel.ID,
 		Summary: "provider unavailable", Detail: "503 from agy", CreatedAt: t0}
 	must(t, b.Runs.InsertError(ctx, e))
@@ -1101,6 +1109,7 @@ func testRuns(t *testing.T, b Backend) {
 func testSchedule(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Schedule
 	at := t0.Add(time.Hour)
 	sc := schedule.Schedule{ID: gen.New(), WorkspaceID: f.ws.ID, CreatedBy: f.human.ID, ChannelID: f.channel.ID, Body: "hi",
@@ -1145,6 +1154,7 @@ func testSchedule(t *testing.T, b Backend) {
 func testApproval(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Approval
 
 	now := t0
@@ -1220,6 +1230,7 @@ func testApproval(t *testing.T, b Backend) {
 func testWiki(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Wiki
 
 	pID := gen.New()
@@ -1390,6 +1401,7 @@ func testWiki(t *testing.T, b Backend) {
 func testQuestion(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Question
 
 	// We need a root message in conversation so foreign key constraint passes in Postgres
@@ -1726,8 +1738,8 @@ func testQuestion(t *testing.T, b Backend) {
 }
 
 func testFiles(t *testing.T, b Backend) {
-	ctx := context.Background()
 	ws := gen.New()
+	ctx := db.WithWorkspace(context.Background(), ws)
 	u1 := gen.New()
 	ch1 := gen.New()
 	ch2 := gen.New()
@@ -2012,42 +2024,49 @@ func testFiles(t *testing.T, b Backend) {
 func testGit(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Git
 
 	// 1. Link caching
 	card1 := git.LinkCard{
-		URL:       "https://gitea.local/owner/repo/pulls/1",
-		Kind:      git.KindPull,
-		Title:     "#1 Initial PR",
-		State:     "open",
-		Author:    "alice",
-		FetchedAt: t0,
+		WorkspaceID: f.ws.ID,
+		URL:         "https://gitea.local/owner/repo/pulls/1",
+		Kind:        git.KindPull,
+		Title:       "#1 Initial PR",
+		State:       "open",
+		Author:      "alice",
+		FetchedAt:   t0,
 	}
 	card2 := git.LinkCard{
-		URL:       "https://gitea.local/owner/repo/issues/2",
-		Kind:      git.KindIssue,
-		Title:     "#2 Bug report",
-		State:     "closed",
-		Author:    "bob",
-		FetchedAt: t0.Add(time.Minute),
+		WorkspaceID: f.ws.ID,
+		URL:         "https://gitea.local/owner/repo/issues/2",
+		Kind:        git.KindIssue,
+		Title:       "#2 Bug report",
+		State:       "closed",
+		Author:      "bob",
+		FetchedAt:   t0.Add(time.Minute),
 	}
 
 	must(t, st.SaveLink(ctx, card1))
 	must(t, st.SaveLink(ctx, card2))
 
-	got1, err := st.GetLink(ctx, card1.URL)
+	got1, err := st.GetLink(ctx, f.ws.ID, card1.URL)
 	must(t, err)
 	if got1.Title != card1.Title || got1.State != card1.State || got1.Author != card1.Author || got1.Kind != card1.Kind {
 		t.Fatalf("GetLink(card1) = %+v, want %+v", got1, card1)
 	}
 
 	// Non-existent link
-	if _, err := st.GetLink(ctx, "https://gitea.local/not/found"); !errors.Is(err, git.ErrLinkNotFound) {
+	if _, err := st.GetLink(ctx, f.ws.ID, "https://gitea.local/not/found"); !errors.Is(err, git.ErrLinkNotFound) {
 		t.Fatalf("expected ErrLinkNotFound, got %v", err)
+	}
+	// The cache is per workspace (round 45): another one does not see the card.
+	if _, err := st.GetLink(ctx, gen.New(), card1.URL); !errors.Is(err, git.ErrLinkNotFound) {
+		t.Fatalf("another workspace sees the link card: %v", err)
 	}
 
 	// Batch GetLinks
-	batch, err := st.GetLinks(ctx, []string{card1.URL, "https://gitea.local/not/found", card2.URL})
+	batch, err := st.GetLinks(ctx, f.ws.ID, []string{card1.URL, "https://gitea.local/not/found", card2.URL})
 	must(t, err)
 	if len(batch) != 2 {
 		t.Fatalf("GetLinks len = %d, want 2", len(batch))
@@ -2057,7 +2076,7 @@ func testGit(t *testing.T, b Backend) {
 	card1.Title = "#1 Updated Title"
 	card1.State = "merged"
 	must(t, st.SaveLink(ctx, card1))
-	gotUpdated, err := st.GetLink(ctx, card1.URL)
+	gotUpdated, err := st.GetLink(ctx, f.ws.ID, card1.URL)
 	must(t, err)
 	if gotUpdated.Title != "#1 Updated Title" || gotUpdated.State != "merged" {
 		t.Fatalf("GetLink updated = %+v", gotUpdated)
@@ -2137,6 +2156,7 @@ func testGit(t *testing.T, b Backend) {
 func testPreview(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Preview
 
 	// Host fixture
@@ -2267,6 +2287,7 @@ func testPreview(t *testing.T, b Backend) {
 func testAgentRules(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.AgentRules
 
 	// Initially empty
@@ -2334,6 +2355,7 @@ func testAgentRules(t *testing.T, b Backend) {
 func testNotes(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Notes
 
 	rootMsg := conversation.Message{
@@ -2427,6 +2449,7 @@ func testNotes(t *testing.T, b Backend) {
 func testDecisions(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Decisions
 
 	// 1. NextNumber on empty workspace returns 1
@@ -2535,6 +2558,7 @@ func testDecisions(t *testing.T, b Backend) {
 func testLeases(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Leases
 
 	// 1. GetActiveByResource on empty -> db.ErrNotFound
@@ -2697,6 +2721,7 @@ func testLeases(t *testing.T, b Backend) {
 func testSidebar(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Sidebar
 
 	ch2 := conversation.Channel{
@@ -2787,6 +2812,7 @@ func testSidebar(t *testing.T, b Backend) {
 func testCompaction(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Compaction
 
 	// 1. Settings
@@ -2997,6 +3023,7 @@ func testCompaction(t *testing.T, b Backend) {
 func testPlanner(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	st := b.Planner
 	owner := f.human.ID
 

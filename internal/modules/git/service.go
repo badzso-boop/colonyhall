@@ -75,18 +75,18 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 	if err := json.Unmarshal(e.Payload, &p); err != nil {
 		return fmt.Errorf("git: unmarshal message created: %w", err)
 	}
-	s.unfurlBody(ctx, p.Body)
+	s.unfurlBody(ctx, e.WorkspaceID, p.Body)
 	return nil
 }
 
-func (s *Service) unfurlBody(ctx context.Context, body string) {
+func (s *Service) unfurlBody(ctx context.Context, workspaceID ids.ID, body string) {
 	urls := ExtractURLs(body)
 	for _, u := range urls {
 		ref, ok := s.Provider.ParseURL(u)
 		if !ok {
 			continue
 		}
-		card, err := s.Store.GetLink(ctx, ref.URL)
+		card, err := s.Store.GetLink(ctx, workspaceID, ref.URL)
 		if err == nil && s.Clock.Now().Sub(card.FetchedAt) < 10*time.Minute {
 			continue
 		}
@@ -95,12 +95,13 @@ func (s *Service) unfurlBody(ctx context.Context, body string) {
 			continue
 		}
 		_ = s.Store.SaveLink(ctx, LinkCard{
-			URL:       fetched.URL,
-			Kind:      LinkKind(fetched.Kind),
-			Title:     fetched.Title,
-			State:     fetched.State,
-			Author:    fetched.Author,
-			FetchedAt: s.Clock.Now(),
+			WorkspaceID: workspaceID,
+			URL:         fetched.URL,
+			Kind:        LinkKind(fetched.Kind),
+			Title:       fetched.Title,
+			State:       fetched.State,
+			Author:      fetched.Author,
+			FetchedAt:   s.Clock.Now(),
 		})
 	}
 }
@@ -137,7 +138,8 @@ func (s *Service) LinkCardsForMessages(ctx context.Context, messages []conversat
 		return nil, nil
 	}
 
-	cards, err := s.Store.GetLinks(ctx, allURLs)
+	// A page of messages is always from one workspace.
+	cards, err := s.Store.GetLinks(ctx, messages[0].WorkspaceID, allURLs)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +261,7 @@ func (s *Service) DeleteMapping(ctx context.Context, by identity.Actor, repo str
 }
 
 // Status returns a single-line summary of a git reference for agents.
-func (s *Service) Status(ctx context.Context, refStr string) (string, error) {
+func (s *Service) Status(ctx context.Context, workspaceID ids.ID, refStr string) (string, error) {
 	if s.Provider == nil {
 		return "Gitea integration is not configured on this server.", nil
 	}
@@ -267,17 +269,18 @@ func (s *Service) Status(ctx context.Context, refStr string) (string, error) {
 	if !ok {
 		return fmt.Sprintf("Unsupported git reference %q; expected URL or owner/repo#12 or owner/repo@sha", refStr), nil
 	}
-	card, err := s.Store.GetLink(ctx, ref.URL)
+	card, err := s.Store.GetLink(ctx, workspaceID, ref.URL)
 	if err != nil || s.Clock.Now().Sub(card.FetchedAt) > 10*time.Minute {
 		fetched, fetchErr := s.Provider.FetchResource(ctx, ref)
 		if fetchErr == nil {
 			card = LinkCard{
-				URL:       fetched.URL,
-				Kind:      LinkKind(fetched.Kind),
-				Title:     fetched.Title,
-				State:     fetched.State,
-				Author:    fetched.Author,
-				FetchedAt: s.Clock.Now(),
+				WorkspaceID: workspaceID,
+				URL:         fetched.URL,
+				Kind:        LinkKind(fetched.Kind),
+				Title:       fetched.Title,
+				State:       fetched.State,
+				Author:      fetched.Author,
+				FetchedAt:   s.Clock.Now(),
 			}
 			_ = s.Store.SaveLink(ctx, card)
 		} else if card.Title == "" {

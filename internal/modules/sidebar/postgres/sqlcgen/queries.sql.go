@@ -115,15 +115,21 @@ WHERE section_id = $1
 ORDER BY position ASC
 `
 
-func (q *Queries) ListItemsBySectionID(ctx context.Context, sectionID uuid.UUID) ([]SidebarItem, error) {
+type ListItemsBySectionIDRow struct {
+	SectionID uuid.UUID
+	ChannelID uuid.UUID
+	Position  int32
+}
+
+func (q *Queries) ListItemsBySectionID(ctx context.Context, sectionID uuid.UUID) ([]ListItemsBySectionIDRow, error) {
 	rows, err := q.db.Query(ctx, listItemsBySectionID, sectionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SidebarItem
+	var items []ListItemsBySectionIDRow
 	for rows.Next() {
-		var i SidebarItem
+		var i ListItemsBySectionIDRow
 		if err := rows.Scan(&i.SectionID, &i.ChannelID, &i.Position); err != nil {
 			return nil, err
 		}
@@ -142,15 +148,21 @@ WHERE section_id = ANY($1::uuid[])
 ORDER BY position ASC
 `
 
-func (q *Queries) ListItemsBySectionIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]SidebarItem, error) {
+type ListItemsBySectionIDsRow struct {
+	SectionID uuid.UUID
+	ChannelID uuid.UUID
+	Position  int32
+}
+
+func (q *Queries) ListItemsBySectionIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]ListItemsBySectionIDsRow, error) {
 	rows, err := q.db.Query(ctx, listItemsBySectionIDs, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SidebarItem
+	var items []ListItemsBySectionIDsRow
 	for rows.Next() {
-		var i SidebarItem
+		var i ListItemsBySectionIDsRow
 		if err := rows.Scan(&i.SectionID, &i.ChannelID, &i.Position); err != nil {
 			return nil, err
 		}

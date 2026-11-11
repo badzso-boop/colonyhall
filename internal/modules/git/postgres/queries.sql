@@ -1,17 +1,17 @@
 -- name: GetGitLink :one
 SELECT url, kind, title, state, author, fetched_at
 FROM git_link
-WHERE url = $1;
+WHERE workspace_id = $1 AND url = $2;
 
 -- name: GetGitLinks :many
 SELECT url, kind, title, state, author, fetched_at
 FROM git_link
-WHERE url = ANY($1::text[]);
+WHERE workspace_id = sqlc.arg(workspace_id) AND url = ANY(sqlc.arg(urls)::text[]);
 
 -- name: UpsertGitLink :exec
-INSERT INTO git_link (url, kind, title, state, author, fetched_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (url) DO UPDATE
+INSERT INTO git_link (workspace_id, url, kind, title, state, author, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (workspace_id, url) DO UPDATE
 SET kind = EXCLUDED.kind,
     title = EXCLUDED.title,
     state = EXCLUDED.state,

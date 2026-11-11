@@ -26,10 +26,11 @@ func Register(s *mcp.Server, svc *git.Service, current CurrentActor) {
 			"Accepts a full URL or shorthand like owner/repo#12 or owner/repo@sha. " +
 			"Returns a compact single-line summary with title, state, and author.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in StatusInput) (*mcp.CallToolResult, any, error) {
-		if _, err := current(ctx); err != nil {
+		a, err := current(ctx)
+		if err != nil {
 			return nil, nil, err
 		}
-		status, err := svc.Status(ctx, in.Ref)
+		status, err := svc.Status(ctx, a.WorkspaceID, in.Ref)
 		if err != nil {
 			return nil, nil, err
 		}

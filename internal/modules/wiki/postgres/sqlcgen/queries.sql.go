@@ -95,9 +95,18 @@ ORDER BY rev DESC
 LIMIT 1
 `
 
-func (q *Queries) LatestRevision(ctx context.Context, pageID uuid.UUID) (WikiRevision, error) {
+type LatestRevisionRow struct {
+	PageID    uuid.UUID
+	Rev       int32
+	Body      string
+	Kind      string
+	AuthorID  uuid.UUID
+	CreatedAt time.Time
+}
+
+func (q *Queries) LatestRevision(ctx context.Context, pageID uuid.UUID) (LatestRevisionRow, error) {
 	row := q.db.QueryRow(ctx, latestRevision, pageID)
-	var i WikiRevision
+	var i LatestRevisionRow
 	err := row.Scan(
 		&i.PageID,
 		&i.Rev,
@@ -180,15 +189,24 @@ WHERE page_id = $1
 ORDER BY rev ASC
 `
 
-func (q *Queries) ListRevisions(ctx context.Context, pageID uuid.UUID) ([]WikiRevision, error) {
+type ListRevisionsRow struct {
+	PageID    uuid.UUID
+	Rev       int32
+	Body      string
+	Kind      string
+	AuthorID  uuid.UUID
+	CreatedAt time.Time
+}
+
+func (q *Queries) ListRevisions(ctx context.Context, pageID uuid.UUID) ([]ListRevisionsRow, error) {
 	rows, err := q.db.Query(ctx, listRevisions, pageID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WikiRevision
+	var items []ListRevisionsRow
 	for rows.Next() {
-		var i WikiRevision
+		var i ListRevisionsRow
 		if err := rows.Scan(
 			&i.PageID,
 			&i.Rev,

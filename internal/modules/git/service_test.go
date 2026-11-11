@@ -30,18 +30,18 @@ func newMockStore() *mockStore {
 	}
 }
 
-func (m *mockStore) GetLink(_ context.Context, url string) (LinkCard, error) {
-	card, ok := m.links[url]
+func (m *mockStore) GetLink(_ context.Context, ws ids.ID, url string) (LinkCard, error) {
+	card, ok := m.links[ws.String()+url]
 	if !ok {
 		return LinkCard{}, ErrLinkNotFound
 	}
 	return card, nil
 }
 
-func (m *mockStore) GetLinks(_ context.Context, urls []string) ([]LinkCard, error) {
+func (m *mockStore) GetLinks(_ context.Context, ws ids.ID, urls []string) ([]LinkCard, error) {
 	var out []LinkCard
 	for _, u := range urls {
-		if c, ok := m.links[u]; ok {
+		if c, ok := m.links[ws.String()+u]; ok {
 			out = append(out, c)
 		}
 	}
@@ -49,7 +49,7 @@ func (m *mockStore) GetLinks(_ context.Context, urls []string) ([]LinkCard, erro
 }
 
 func (m *mockStore) SaveLink(_ context.Context, card LinkCard) error {
-	m.links[card.URL] = card
+	m.links[card.WorkspaceID.String()+card.URL] = card
 	return nil
 }
 
@@ -251,7 +251,7 @@ func TestService_HandleEvent_Unfurl(t *testing.T) {
 		t.Fatalf("fetchCount = %d, want 1", fetchCount)
 	}
 
-	card, err := st.GetLink(ctx, "https://gitea.local/owner/repo/pulls/1")
+	card, err := st.GetLink(ctx, ids.Nil, "https://gitea.local/owner/repo/pulls/1")
 	if err != nil {
 		t.Fatalf("GetLink: %v", err)
 	}

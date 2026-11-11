@@ -18,6 +18,7 @@ import (
 func testChannelEdit(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 
 	other := conversation.Channel{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: conversation.KindPublic,
 		Name: "other", CreatedBy: f.human.ID, CreatedAt: t0}
@@ -146,7 +147,7 @@ func testChannelEdit(t *testing.T, b Backend) {
 // testMyThreads: participation by root, reply and mention; unread counting;
 // paging; a channel the actor left drops out.
 func testMyThreads(t *testing.T, b Backend, f fixture) {
-	ctx := context.Background()
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
 	third := identity.Actor{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: identity.KindHuman, Handle: "anna",
 		DisplayName: "Anna", Role: identity.RoleMember, State: "active", CreatedAt: t0}
 	must(t, b.Identity.CreateActor(ctx, third))

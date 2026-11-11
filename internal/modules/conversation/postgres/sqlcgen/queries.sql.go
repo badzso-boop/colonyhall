@@ -430,15 +430,25 @@ WHERE channel_id = $1 AND left_at IS NULL
 ORDER BY joined_at ASC
 `
 
-func (q *Queries) ListMembers(ctx context.Context, channelID uuid.UUID) ([]ChannelMember, error) {
+type ListMembersRow struct {
+	ChannelID    uuid.UUID
+	ActorID      uuid.UUID
+	CanWrite     bool
+	MsgCount     int64
+	MentionCount int64
+	JoinedAt     time.Time
+	LeftAt       *time.Time
+}
+
+func (q *Queries) ListMembers(ctx context.Context, channelID uuid.UUID) ([]ListMembersRow, error) {
 	rows, err := q.db.Query(ctx, listMembers, channelID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ChannelMember
+	var items []ListMembersRow
 	for rows.Next() {
-		var i ChannelMember
+		var i ListMembersRow
 		if err := rows.Scan(
 			&i.ChannelID,
 			&i.ActorID,
@@ -556,7 +566,7 @@ func (q *Queries) MainStreamMessages(ctx context.Context, channelID uuid.UUID) (
 }
 
 const member = `-- name: Member :one
-SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at FROM channel_member WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL
+SELECT channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at, workspace_id FROM channel_member WHERE channel_id = $1 AND actor_id = $2 AND left_at IS NULL
 `
 
 type MemberParams struct {
@@ -575,6 +585,7 @@ func (q *Queries) Member(ctx context.Context, arg MemberParams) (ChannelMember, 
 		&i.MentionCount,
 		&i.JoinedAt,
 		&i.LeftAt,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
@@ -709,7 +720,7 @@ func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message
 }
 
 const mutes = `-- name: Mutes :many
-SELECT actor_id, channel_id, muted_until, created_at FROM channel_mute WHERE actor_id = $1 ORDER BY channel_id
+SELECT actor_id, channel_id, muted_until, created_at, workspace_id FROM channel_mute WHERE actor_id = $1 ORDER BY channel_id
 `
 
 func (q *Queries) Mutes(ctx context.Context, actorID uuid.UUID) ([]ChannelMute, error) {
@@ -726,6 +737,7 @@ func (q *Queries) Mutes(ctx context.Context, actorID uuid.UUID) ([]ChannelMute, 
 			&i.ChannelID,
 			&i.MutedUntil,
 			&i.CreatedAt,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}

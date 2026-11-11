@@ -171,7 +171,7 @@ func (q *Queries) DeleteEvents(ctx context.Context, calendarID uuid.UUID) error 
 }
 
 const events = `-- name: Events :many
-SELECT calendar_id, owner_id, title, starts_at, ends_at, all_day, location, description FROM planner_calendar_event
+SELECT calendar_id, owner_id, title, starts_at, ends_at, all_day, location, description, workspace_id FROM planner_calendar_event
 WHERE owner_id = $1
   AND ((ends_at > $2 AND starts_at < $3)
        OR (starts_at = ends_at AND starts_at >= $2 AND starts_at < $3))
@@ -202,6 +202,7 @@ func (q *Queries) Events(ctx context.Context, arg EventsParams) ([]PlannerCalend
 			&i.AllDay,
 			&i.Location,
 			&i.Description,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}

@@ -16,6 +16,7 @@ import (
 func testAgentLifecycle(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	id := b.Identity
 
 	// The old agent has a token; archiving revokes it and frees "bot".

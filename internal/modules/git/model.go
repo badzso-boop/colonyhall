@@ -32,12 +32,15 @@ const (
 
 // LinkCard holds unfurled metadata for a git URL.
 type LinkCard struct {
-	URL       string    `json:"url"`
-	Kind      LinkKind  `json:"kind"`
-	Title     string    `json:"title"`
-	State     string    `json:"state"`
-	Author    string    `json:"author,omitempty"`
-	FetchedAt time.Time `json:"fetched_at"`
+	// WorkspaceID: the cache is per workspace (round 45), so a private
+	// repository's title never shows in another customer's workspace.
+	WorkspaceID ids.ID    `json:"-"`
+	URL         string    `json:"url"`
+	Kind        LinkKind  `json:"kind"`
+	Title       string    `json:"title"`
+	State       string    `json:"state"`
+	Author      string    `json:"author,omitempty"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 // RepoChannel maps a Git repository to a chat channel within a workspace.

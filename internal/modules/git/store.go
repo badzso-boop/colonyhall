@@ -9,13 +9,13 @@ import (
 
 // Store defines the storage port for the git module.
 type Store interface {
-	// GetLink returns the cached link card for a URL, or ErrLinkNotFound.
-	GetLink(ctx context.Context, url string) (LinkCard, error)
+	// GetLink returns the workspace's cached link card for a URL, or ErrLinkNotFound.
+	GetLink(ctx context.Context, workspaceID ids.ID, url string) (LinkCard, error)
 
-	// GetLinks returns cached link cards for the specified URLs.
-	GetLinks(ctx context.Context, urls []string) ([]LinkCard, error)
+	// GetLinks returns the workspace's cached link cards for the URLs.
+	GetLinks(ctx context.Context, workspaceID ids.ID, urls []string) ([]LinkCard, error)
 
-	// SaveLink inserts or updates a cached link card.
+	// SaveLink inserts or updates a cached link card (keyed by its workspace and URL).
 	SaveLink(ctx context.Context, card LinkCard) error
 
 	// ListRepoChannels returns all repo-to-channel mappings for a workspace.

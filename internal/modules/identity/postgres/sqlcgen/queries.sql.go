@@ -249,8 +249,8 @@ func (q *Queries) CreateActor(ctx context.Context, arg CreateActorParams) error 
 }
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id FROM actor a WHERE a.id = $2
 `
 
 type CreateSessionParams struct {
@@ -277,8 +277,9 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const createToken = `-- name: CreateToken :exec
-INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at, prefix)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at, prefix, workspace_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, a.workspace_id
+FROM actor a WHERE a.id = $2
 `
 
 type CreateTokenParams struct {
@@ -292,6 +293,8 @@ type CreateTokenParams struct {
 	Prefix    *string
 }
 
+// The workspace comes from the actor (round 45): tokens are also made by
+// the CLI and the seed, which do not run in one workspace's scope.
 func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error {
 	_, err := q.db.Exec(ctx, createToken,
 		arg.ID,
@@ -470,7 +473,7 @@ func (q *Queries) ListAllActors(ctx context.Context, workspaceID uuid.UUID) ([]A
 }
 
 const listTokens = `-- name: ListTokens :many
-SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at FROM api_token WHERE actor_id = $1 ORDER BY created_at, id
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at, workspace_id FROM api_token WHERE actor_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken, error) {
@@ -493,6 +496,7 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 			&i.ExpiresAt,
 			&i.Prefix,
 			&i.LastUsedAt,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -580,7 +584,7 @@ func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error 
 }
 
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
+SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, s.workspace_id, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL
 `
@@ -603,6 +607,7 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 		&i.Session.ExpiresAt,
 		&i.Session.RevokedAt,
 		&i.Session.LastSeenAt,
+		&i.Session.WorkspaceID,
 		&i.Actor.ID,
 		&i.Actor.WorkspaceID,
 		&i.Actor.Kind,
@@ -714,7 +719,8 @@ func (q *Queries) SetActorState(ctx context.Context, arg SetActorStateParams) er
 }
 
 const setCredential = `-- name: SetCredential :exec
-INSERT INTO credential (actor_id, password_hash, updated_at) VALUES ($1, $2, $3)
+INSERT INTO credential (actor_id, password_hash, updated_at, workspace_id)
+SELECT $1, $2, $3, a.workspace_id FROM actor a WHERE a.id = $1
 ON CONFLICT (actor_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at
 `
 
@@ -762,7 +768,7 @@ func (q *Queries) SetWorkspaceSlug(ctx context.Context, arg SetWorkspaceSlugPara
 }
 
 const tokenByID = `-- name: TokenByID :one
-SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at FROM api_token WHERE id = $1
+SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at, workspace_id FROM api_token WHERE id = $1
 `
 
 func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error) {
@@ -779,6 +785,7 @@ func (q *Queries) TokenByID(ctx context.Context, id uuid.UUID) (ApiToken, error)
 		&i.ExpiresAt,
 		&i.Prefix,
 		&i.LastUsedAt,
+		&i.WorkspaceID,
 	)
 	return i, err
 }

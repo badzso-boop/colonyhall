@@ -727,6 +727,7 @@ func (a *App) SeedDev(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
+	ctx = db.WithWorkspace(ctx, owner.WorkspaceID) // the rest happens inside the new workspace
 	if err := a.Identity.ResetPassword(ctx, owner.ID, DevAdminPassword); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}

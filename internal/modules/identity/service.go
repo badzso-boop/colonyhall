@@ -69,7 +69,8 @@ func (s *Service) Bootstrap(ctx context.Context, workspaceName, slug, ownerHandl
 	var owner Actor
 	var secret string
 	var seq int64
-	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+	// Everything here belongs to the new workspace (round 45).
+	err := s.Tx.InTx(db.WithWorkspace(ctx, ws.ID), func(ctx context.Context) error {
 		if err := s.Store.CreateWorkspace(ctx, ws); err != nil {
 			return err
 		}

@@ -108,16 +108,17 @@ type AgentRun struct {
 }
 
 type ApiToken struct {
-	ID         uuid.UUID
-	ActorID    uuid.UUID
-	TokenHash  []byte
-	Label      string
-	CreatedAt  time.Time
-	RevokedAt  *time.Time
-	HostID     *uuid.UUID
-	ExpiresAt  *time.Time
-	Prefix     *string
-	LastUsedAt *time.Time
+	ID          uuid.UUID
+	ActorID     uuid.UUID
+	TokenHash   []byte
+	Label       string
+	CreatedAt   time.Time
+	RevokedAt   *time.Time
+	HostID      *uuid.UUID
+	ExpiresAt   *time.Time
+	Prefix      *string
+	LastUsedAt  *time.Time
+	WorkspaceID uuid.UUID
 }
 
 type ApprovalRequest struct {
@@ -173,13 +174,15 @@ type ChannelMember struct {
 	MentionCount int64
 	JoinedAt     time.Time
 	LeftAt       *time.Time
+	WorkspaceID  uuid.UUID
 }
 
 type ChannelMute struct {
-	ActorID    uuid.UUID
-	ChannelID  uuid.UUID
-	MutedUntil *time.Time
-	CreatedAt  time.Time
+	ActorID     uuid.UUID
+	ChannelID   uuid.UUID
+	MutedUntil  *time.Time
+	CreatedAt   time.Time
+	WorkspaceID uuid.UUID
 }
 
 type Compaction struct {
@@ -224,6 +227,7 @@ type Credential struct {
 	ActorID      uuid.UUID
 	PasswordHash string
 	UpdatedAt    time.Time
+	WorkspaceID  uuid.UUID
 }
 
 type DbSizeSample struct {
@@ -354,12 +358,13 @@ type FolderGrant struct {
 }
 
 type GitLink struct {
-	Url       string
-	Kind      string
-	Title     string
-	State     string
-	Author    string
-	FetchedAt time.Time
+	Url         string
+	Kind        string
+	Title       string
+	State       string
+	Author      string
+	FetchedAt   time.Time
+	WorkspaceID uuid.UUID
 }
 
 type GitRepoChannel struct {
@@ -431,9 +436,10 @@ type Message struct {
 }
 
 type MessageFile struct {
-	MessageID uuid.UUID
-	FileID    uuid.UUID
-	Position  int32
+	MessageID   uuid.UUID
+	FileID      uuid.UUID
+	Position    int32
+	WorkspaceID uuid.UUID
 }
 
 type ModelPrice struct {
@@ -479,6 +485,7 @@ type PlannerCalendarEvent struct {
 	AllDay      bool
 	Location    string
 	Description string
+	WorkspaceID uuid.UUID
 }
 
 type PlannerTask struct {
@@ -539,11 +546,12 @@ type Question struct {
 }
 
 type Reaction struct {
-	MessageID uuid.UUID
-	ActorID   uuid.UUID
-	Emoji     string
-	CreatedAt time.Time
-	RemovedAt *time.Time
+	MessageID   uuid.UUID
+	ActorID     uuid.UUID
+	Emoji       string
+	CreatedAt   time.Time
+	RemovedAt   *time.Time
+	WorkspaceID uuid.UUID
 }
 
 type RunError struct {
@@ -577,21 +585,23 @@ type Schedule struct {
 }
 
 type Session struct {
-	ID         uuid.UUID
-	ActorID    uuid.UUID
-	TokenHash  []byte
-	CsrfToken  string
-	UserAgent  string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	RevokedAt  *time.Time
-	LastSeenAt *time.Time
+	ID          uuid.UUID
+	ActorID     uuid.UUID
+	TokenHash   []byte
+	CsrfToken   string
+	UserAgent   string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	RevokedAt   *time.Time
+	LastSeenAt  *time.Time
+	WorkspaceID uuid.UUID
 }
 
 type SidebarItem struct {
-	SectionID uuid.UUID
-	ChannelID uuid.UUID
-	Position  int32
+	SectionID   uuid.UUID
+	ChannelID   uuid.UUID
+	Position    int32
+	WorkspaceID uuid.UUID
 }
 
 type SidebarSection struct {
@@ -623,6 +633,7 @@ type ThreadRead struct {
 	ActorID      uuid.UUID
 	ThreadRootID uuid.UUID
 	LastReadAt   time.Time
+	WorkspaceID  uuid.UUID
 }
 
 type WikiPage struct {
@@ -637,12 +648,13 @@ type WikiPage struct {
 }
 
 type WikiRevision struct {
-	PageID    uuid.UUID
-	Rev       int32
-	Body      string
-	Kind      string
-	AuthorID  uuid.UUID
-	CreatedAt time.Time
+	PageID      uuid.UUID
+	Rev         int32
+	Body        string
+	Kind        string
+	AuthorID    uuid.UUID
+	CreatedAt   time.Time
+	WorkspaceID uuid.UUID
 }
 
 type Workspace struct {

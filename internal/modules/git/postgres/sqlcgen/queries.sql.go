@@ -30,12 +30,26 @@ func (q *Queries) DeleteGitRepoChannel(ctx context.Context, arg DeleteGitRepoCha
 const getGitLink = `-- name: GetGitLink :one
 SELECT url, kind, title, state, author, fetched_at
 FROM git_link
-WHERE url = $1
+WHERE workspace_id = $1 AND url = $2
 `
 
-func (q *Queries) GetGitLink(ctx context.Context, url string) (GitLink, error) {
-	row := q.db.QueryRow(ctx, getGitLink, url)
-	var i GitLink
+type GetGitLinkParams struct {
+	WorkspaceID uuid.UUID
+	Url         string
+}
+
+type GetGitLinkRow struct {
+	Url       string
+	Kind      string
+	Title     string
+	State     string
+	Author    string
+	FetchedAt time.Time
+}
+
+func (q *Queries) GetGitLink(ctx context.Context, arg GetGitLinkParams) (GetGitLinkRow, error) {
+	row := q.db.QueryRow(ctx, getGitLink, arg.WorkspaceID, arg.Url)
+	var i GetGitLinkRow
 	err := row.Scan(
 		&i.Url,
 		&i.Kind,
@@ -50,18 +64,32 @@ func (q *Queries) GetGitLink(ctx context.Context, url string) (GitLink, error) {
 const getGitLinks = `-- name: GetGitLinks :many
 SELECT url, kind, title, state, author, fetched_at
 FROM git_link
-WHERE url = ANY($1::text[])
+WHERE workspace_id = $1 AND url = ANY($2::text[])
 `
 
-func (q *Queries) GetGitLinks(ctx context.Context, dollar_1 []string) ([]GitLink, error) {
-	rows, err := q.db.Query(ctx, getGitLinks, dollar_1)
+type GetGitLinksParams struct {
+	WorkspaceID uuid.UUID
+	Urls        []string
+}
+
+type GetGitLinksRow struct {
+	Url       string
+	Kind      string
+	Title     string
+	State     string
+	Author    string
+	FetchedAt time.Time
+}
+
+func (q *Queries) GetGitLinks(ctx context.Context, arg GetGitLinksParams) ([]GetGitLinksRow, error) {
+	rows, err := q.db.Query(ctx, getGitLinks, arg.WorkspaceID, arg.Urls)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GitLink
+	var items []GetGitLinksRow
 	for rows.Next() {
-		var i GitLink
+		var i GetGitLinksRow
 		if err := rows.Scan(
 			&i.Url,
 			&i.Kind,
@@ -199,9 +227,9 @@ func (q *Queries) ListGitRepoChannels(ctx context.Context, workspaceID uuid.UUID
 }
 
 const upsertGitLink = `-- name: UpsertGitLink :exec
-INSERT INTO git_link (url, kind, title, state, author, fetched_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (url) DO UPDATE
+INSERT INTO git_link (workspace_id, url, kind, title, state, author, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (workspace_id, url) DO UPDATE
 SET kind = EXCLUDED.kind,
     title = EXCLUDED.title,
     state = EXCLUDED.state,
@@ -210,16 +238,18 @@ SET kind = EXCLUDED.kind,
 `
 
 type UpsertGitLinkParams struct {
-	Url       string
-	Kind      string
-	Title     string
-	State     string
-	Author    string
-	FetchedAt time.Time
+	WorkspaceID uuid.UUID
+	Url         string
+	Kind        string
+	Title       string
+	State       string
+	Author      string
+	FetchedAt   time.Time
 }
 
 func (q *Queries) UpsertGitLink(ctx context.Context, arg UpsertGitLinkParams) error {
 	_, err := q.db.Exec(ctx, upsertGitLink,
+		arg.WorkspaceID,
 		arg.Url,
 		arg.Kind,
 		arg.Title,
