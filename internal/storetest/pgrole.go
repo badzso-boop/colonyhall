@@ -32,7 +32,7 @@ func AppRoleDatabase(t *testing.T, adminURL string) string {
 		     CREATE ROLE ` + AppRole + ` LOGIN PASSWORD '` + AppRole + `' NOSUPERUSER NOBYPASSRLS;
 		   END IF;
 		 END $$`,
-		`ALTER ROLE ` + AppRole + ` NOSUPERUSER NOBYPASSRLS`,
+		`ALTER ROLE ` + AppRole + ` NOSUPERUSER NOBYPASSRLS PASSWORD '` + AppRole + `'`,
 		`DROP SCHEMA IF EXISTS public CASCADE`,
 		`CREATE SCHEMA public AUTHORIZATION ` + AppRole,
 	} {

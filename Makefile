@@ -10,6 +10,8 @@ help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
 dev:             ## Start Postgres + server (http://localhost:8080, dev seed)
+	$(COMPOSE) up -d --wait postgres
+	$(COMPOSE) exec -T postgres psql -q -U colony -d colony < deploy/dev-app-role.sql
 	$(COMPOSE) up --build -d
 	@echo "UI: http://localhost:8080  admin token: col_dev_admin_token_do_not_use_in_production"
 

@@ -130,7 +130,7 @@ volumes:
 
 // envFile is the server's .env.
 func envFile(v map[string]string) string {
-	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "POSTGRES_PASSWORD", "COLONY_DATABASE_URL"}
+	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
 	var b strings.Builder
 	b.WriteString("# Colonyhall server settings and secrets (colony setup). Keep it 0600 and back it up.\n")
 	for _, k := range keys {
@@ -352,12 +352,25 @@ func (e *Env) serverEnv() (map[string]string, bool) {
 	ownDB := a.DatabaseURL == ""
 	if ownDB {
 		pw := old["POSTGRES_PASSWORD"]
+		// An install from before round 45 has a database password but no
+		// application role: it keeps connecting as the superuser (the
+		// server warns). A new install gets the role (docs/23-elkulonites.md).
+		legacy := pw != "" && old["COLONY_APP_DB_PASSWORD"] == ""
 		if pw == "" {
 			pw = randomHex(24)
 		}
 		e.Secret(pw)
 		v["POSTGRES_PASSWORD"] = pw
 		v["COLONY_DATABASE_URL"] = "postgres://colony:" + pw + "@db:5432/colonyhall?sslmode=disable"
+		if !legacy {
+			app := old["COLONY_APP_DB_PASSWORD"]
+			if app == "" {
+				app = randomHex(24)
+			}
+			e.Secret(app)
+			v["COLONY_APP_DB_PASSWORD"] = app
+			v["COLONY_DATABASE_URL"] = "postgres://" + AppRole + ":" + app + "@db:5432/colonyhall?sslmode=disable"
+		}
 	} else {
 		v["COLONY_DATABASE_URL"] = a.DatabaseURL
 	}
@@ -428,6 +441,19 @@ func (e *Env) ServerSteps(upgrade bool) []Step {
 			Apply: func(e *Env) error {
 				if _, err := e.Exec(e.compose("pull")); err != nil {
 					return err
+				}
+				// The application role first (new installs): start the
+				// database alone, create the role, then the server.
+				if app := readEnv(filepath.Join(e.serverDir(), ".env"))["COLONY_APP_DB_PASSWORD"]; app != "" || e.DryRun {
+					if _, err := e.Exec(e.compose("up", "-d", "--wait", "db")); err != nil {
+						return err
+					}
+					_, err := e.Exec(Cmd{Name: e.compose().Name, Sudo: e.compose().Sudo,
+						Args:  append(e.compose().Args, "exec", "-T", "db", "psql", "-q", "-U", "colony", "-d", "colonyhall"),
+						Stdin: appRoleSQL("colonyhall", app)})
+					if err != nil {
+						return err
+					}
 				}
 				_, err := e.Exec(e.compose("up", "-d"))
 				return err
