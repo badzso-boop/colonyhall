@@ -218,3 +218,14 @@ ALTER ROLE colonyhall_app NOSUPERUSER NOBYPASSRLS;
 4. **Gitea ügyfelenként, kapcsolhatóan:** alapból a közös Gitea hookja a csupasz alapdomainre jön, és a szerver osztja szét a munkaterületek között. Egy munkaterület kaphat saját Giteát (cím, token, webhook-titok); ha be van kapcsolva, a hookja az ő aldomainjére jön, csak az ő titkával fogadjuk, és a közös hook őt nem éri el. **Ebben a körben:** tábla, útválasztás, kapcsoló, tesztek és egy parancssori beállító (`colonyhall gitea-set`); a felület és a token titkosított tárolása a titoktárral jön (22. terv, 5. fázis). Addig a token a szerver adatbázisában van, mint a közös Gitea tokenje a környezeti változóban: csak olvasási jogú tokent szabad megadni.
 5. **Másik ügyfél tokenje vagy munkamenete:** kifelé ugyanaz a `401`, mint egy ismeretlen tokennél (nem árulja el, hogy a token valódi). Befelé: `ERROR` szintű `SECURITY: cross-tenant credential use` napló (előtag, a két munkaterület, IP, User-Agent; a titok soha), bejegyzés a token munkaterületének auditjában, és **a token (vagy munkamenet) azonnali visszavonása**, mert kiszivárgott.
 6. **Mechanizmus:** a munkaterület kapcsolatkiadáskor kerül a kapcsolatra (2.2 A).
+
+## 13. A megvalósítás eltérései a tervtől (45. kör)
+
+- **Migrációk:** `00051` slug és állapot, `00052` denormalizált `workspace_id`-k és összetett idegen kulcsok (a `git_link` munkaterületenkénti gyorsítótár lett, a régi sorai törlődtek), `00053` RLS és a belépés előtti függvények, `00054` ügyfelenkénti saját Gitea.
+- **Slug:** a migráció minden munkaterületnek a nevéből képez slugot (érvénytelen, foglalt vagy ütköző névnél `ws-<az id eleje>`); a választott slug a `colonyhall set-slug` paranccsal kerül be, nem a migrációval (minden önálló telepítésen ugyanaz futna le).
+- **A belépés előtti függvények** plpgsql-ek, és maguk kapcsolják a rendszermódot a saját lekérdezésükre (4. pont).
+- **A `consumer_offset`** szabály nélkül maradt (3.2).
+- **A hitelesítő táblák** (`api_token`, `session`, `credential`) új sorai a munkaterületet nem a kapcsolat hatóköréből, hanem az actor sorából kapják: tokent és jelszót a parancssor és a seed is ír, munkamenetet a belépés, egyik sem egy munkaterület hatókörében.
+- **Idegen géptoken:** a gép visszavonása (minden agent-tokenjével), `host.cross_tenant` auditbejegyzés a gép munkaterületében; idegen párosítókód: egyszerűen rossz kód (egyszer használatos, 10 percig él).
+- **MCP:** a go-sdk DNS-rebinding védelme loopback figyelőn minden aldomaines kérést elutasítana (egy ugyanazon a gépen futó fordított proxy mögött is), ezért többbérlős módban ki van kapcsolva; a `Host` fejlécet ott a tenant köztes réteg már szigorúbban ellenőrizte.
+- **Saját Gitea webhookja** csak többbérlős módban, az aldomainen; egytagú módban a közös webhook működik, mint eddig.

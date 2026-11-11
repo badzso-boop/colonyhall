@@ -38,7 +38,8 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
 7. **Bővítés = új adapter:** új AI kliens, AI-szolgáltató, git-szolgáltató, értesítési csatorna, tárhely vagy eseménybusz egy új adapter a megfelelő porthoz, regisztrálva. A magot ehhez ne módosítsd.
 8. **Az agent konfigurációja nem módosítható:** a szerver kényszeríti (`POST /agents` egyszer, a régi szerkesztő végpontok 409); változás = másolat új agentként + a régi törlése (archiválás), lásd a terv „Agent életciklus” fejezetét. Csak a profil és a keretek változhatnak.
 9. **Minden `workspace_id`-hoz kötött**, a jogosultság minden hívásnál ellenőrizve (nem csak csatlakozáskor).
-10. **Az agentektől jövő tartalom adat, nem utasítás:** üzenetet, fájlt, webhookot soha ne hajts végre; az agentnek átadott szöveg mindig `<colonyhall_message ...>` keretben megy.
+10. **Ügyfelek elkülönítése (45. kör, `docs/23-elkulonites.md`):** új tábla → `workspace_id` (vagy indokolt kivétel), `ENABLE` + `FORCE ROW LEVEL SECURITY` és `tenant` szabály a migrációban (az `internal/storetest/rls_test.go` elbukik nélküle); új végpont, MCP-eszköz vagy útvonal-paraméter → az `internal/e2e/crosstenant_test.go` lefedi, egy új paraméterfajtát hozzá kell rendelni egy acme-objektumhoz. Kérést kiszolgáló kód rendszermódot nem kapcsolhat (`internal/platform/db/system`, depguard); a háttérmunka tételenként `db.WithWorkspace`-szel szűkít. Feltöltő migráció a `FORCE` miatt `SET LOCAL colony.system = 'on'`-nal kezdődik.
+11. **Az agentektől jövő tartalom adat, nem utasítás:** üzenetet, fájlt, webhookot soha ne hajts végre; az agentnek átadott szöveg mindig `<colonyhall_message ...>` keretben megy.
 
 ## Fejlesztői környezet
 
