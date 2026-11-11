@@ -156,3 +156,11 @@ Javasolt angol anyag a nyilvános látogatónak: `README.md` (már angol), telep
 - A repó marad `badzso-boop/colonyhall`; domain később.
 - `FUNDING.yml`: egyelőre nem.
 - A privát kísérő repó (`colonyhall-ops`): elvben igen; a kezelése az agentekkel nyitott (lásd a beszélgetést).
+
+## Az 1. rész eredménye (2026-11-11)
+
+- **Áthelyezve, nem csak törölve:** a körök promptjai, jelentései és képei, a `task.md`, a `docs/05`, `06`, `10`, a valódi címes `docs/04`, valamint a `CLAUDE.md` gépspecifikus fele a privát `badzso-boop/colonyhall-ops` repóba került (`/mnt/g/…/colonyhall-ops`, `CLAUDE.local.md`); a fő mappában és a worktree-kben `CLAUDE.local.md` symlink mutat rá. A régi PDF-ek törölve.
+- **A nyilvános fájlokban** dokumentációs címek és nevek vannak (`100.64.0.x`, `192.0.2.x`, `example.com`/`example.org`, `/home/alice`, `pc-dev`); a kivett körjegyzetekre körszámmal hivatkozunk.
+- **Ellenőrzés:** `make privacy` (CI-ben a mindig futó `privacy` job): gitleaks a követett fájlokon, és egy tokenellenőrzés (`scripts/check-private-data.py`), ami a privát címek és nevek SHA-256-ját keresi.
+- **Ismert korlát (tudatos döntés):** a hash-lista sózatlan, így egy IP-cím vagy egy rövid név a hash-éből kitalálható. Ez nem tesz közzé új adatot, mert ugyanezek az értékek a régi commitokban amúgy is benne vannak (az előzményt nem írjuk át, mert nem titkok). A lista csak azt akadályozza meg, hogy olvasható szövegként újra bekerüljenek. Ha egyszer valódi titok kerülne ilyen listára, az nem ide való: azt cserélni kell.
+- **Működés-ellenőrzés:** a homelab tényleges Compose-beállítása (`docker compose config`, a valódi `.env`-vel) bájtra azonos a takarítás előttivel; a Claude Code a worktree-ben betölti a symlinkelt `CLAUDE.local.md`-t; `make ci` 17/17 zöld.
