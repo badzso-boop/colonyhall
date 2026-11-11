@@ -19,6 +19,7 @@ import (
 var noTenantPolicy = map[string]bool{
 	"goose_db_version": true, // the migration tool's own table
 	"consumer_offset":  true, // consumer names and sequence numbers, no customer data
+	"db_size_sample":   true, // the whole database's daily size (round 50), no customer data
 }
 
 // TestPostgresRowLevelSecurity proves the second line of defence (round

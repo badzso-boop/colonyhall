@@ -3154,6 +3154,7 @@ func testPlanner(t *testing.T, b Backend) {
 func testCredentialCleanup(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	hostID := gen.New()
 	must(t, b.Hosts.CreateHost(ctx, hosts.Host{ID: hostID, WorkspaceID: f.ws.ID, Name: "cleanup-host", Color: "blue",
 		TokenHash: hosts.Hash("colh_cleanup"), State: hosts.StateApproved, CreatedBy: f.human.ID, CreatedAt: t0}))

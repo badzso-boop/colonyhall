@@ -72,7 +72,7 @@ Megjegyzések:
 - Az `event` a WebSocket utólagos küldésénél (`catchUp`) munkaterületi hatókörben olvasódik: egy kliens az RLS miatt is csak a saját munkaterülete eseményeit látja (a sorszámokban lyukak lesznek; a kurzor ezt ma is kezeli).
 - Az `audit_log` hash-lánca már munkaterületenként fut (`LastEntry`, `ForwardEntries` a `workspace_id` szerint), tehát munkaterületi hatókörben is ép.
 
-### 3.2 A 15 tábla `workspace_id` nélkül
+### 3.2 A 16 tábla `workspace_id` nélkül
 
 | Tábla | Hogyan kötődik | Döntés | Indoklás |
 | --- | --- | --- | --- |
@@ -89,6 +89,7 @@ Megjegyzések:
 | `wiki_revision` | `page_id → wiki_page` | **D** | Csak írás és előzmény; egységes szabály |
 | `workspace` | — | saját: `id = colony_ws() OR colony_system()` | A slug szerinti keresés belépés előtt függvényen át megy (4. pont) |
 | `consumer_offset` | — (szervertábla) | **nincs szabály** (megvalósításkor módosítva) | Csak fogyasztónevek és sorszámok, ügyféladat nincs; a fogyasztó minden eseményt a saját munkaterülete hatókörében kezel, és ugyanabban a tranzakcióban lépteti az offsetet, ezért rendszermódhoz kötött írás nem működne |
+| `db_size_sample` | — (szervertábla, 50. kör) | **nincs szabály** (beolvasztáskor) | A teljes adatbázis napi mérete, ügyféladat nincs; a Rendszerállapot oldal munkaterület-hatókörben olvassa, a karbantartó ciklus rendszermódban írja. Többbérlős módban a kártya később csak az operátornak jelenjen meg (22. terv) |
 | `git_webhook_delivery` | — (szervertábla) | **S** | Csak a webhook-azonosítók ismétlésszűrése; függvényen át írva (4. pont) |
 | `git_link` | — (URL szerinti gyorsítótár) | **D**, kulcs `(workspace_id, url)` | Ma közös gyorsítótár: egy privát repó címe és állapota átlátszana egy másik ügyfélhez, aki ugyanazt az URL-t írja be. Munkaterületenként külön tárolva a kártya csak ott jön létre, ahol a link elhangzott |
 
@@ -107,7 +108,6 @@ Az `INSERT`-ek nem változnak: a sor a hatókör munkaterületét kapja. Ha a ha
 
 ### 3.3 Nem összeolvasztott ágak
 
-- **50. kör** (`feature/token-cleanup`): `db_size_sample` (a teljes adatbázis mérete) → **S** olvasásra is? A Rendszerállapot oldal olvassa, ami ügyféladmin-oldal; a 22. terv szerint operátori adat. Javaslat: olvasás mindenkinek (nincs benne ügyféladat), írás **S**. A karbantartó ciklus (a tokenek és munkamenetek törlése) rendszermódban fut.
 - **36. kör** (`feature/rag`): `search_chunk_text`, `search_log` (van `workspace_id`) → **W**. A `rag-backfill`, `rag-reembed` és `rag-eval` parancs rendszermódban indul, és munkaterületenként szűkít. Beolvasztáskor egy-egy sor a migrációban és a teszttáblában.
 
 ## 4. Belépés előtti keresések: szűk SQL-függvények
@@ -224,7 +224,7 @@ ALTER ROLE colonyhall_app NOSUPERUSER NOBYPASSRLS;
 - **Migrációk:** `00051` slug és állapot, `00052` denormalizált `workspace_id`-k és összetett idegen kulcsok (a `git_link` munkaterületenkénti gyorsítótár lett, a régi sorai törlődtek), `00053` RLS és a belépés előtti függvények, `00054` ügyfelenkénti saját Gitea.
 - **Slug:** a migráció minden munkaterületnek a nevéből képez slugot (érvénytelen, foglalt vagy ütköző névnél `ws-<az id eleje>`); a választott slug a `colonyhall set-slug` paranccsal kerül be, nem a migrációval (minden önálló telepítésen ugyanaz futna le).
 - **A belépés előtti függvények** plpgsql-ek, és maguk kapcsolják a rendszermódot a saját lekérdezésükre (4. pont).
-- **A `consumer_offset`** szabály nélkül maradt (3.2).
+- **A `consumer_offset`** és az 50. körből jött **`db_size_sample`** szabály nélkül maradt (3.2); a karbantartó ciklus (`App.Maintain`) maga kapcsol rendszermódot.
 - **A hitelesítő táblák** (`api_token`, `session`, `credential`) új sorai a munkaterületet nem a kapcsolat hatóköréből, hanem az actor sorából kapják: tokent és jelszót a parancssor és a seed is ír, munkamenetet a belépés, egyik sem egy munkaterület hatókörében.
 - **Idegen géptoken:** a gép visszavonása (minden agent-tokenjével), `host.cross_tenant` auditbejegyzés a gép munkaterületében; idegen párosítókód: egyszerűen rossz kód (egyszer használatos, 10 percig él).
 - **MCP:** a go-sdk DNS-rebinding védelme loopback figyelőn minden aldomaines kérést elutasítana (egy ugyanazon a gépen futó fordított proxy mögött is), ezért többbérlős módban ki van kapcsolva; a `Host` fejlécet ott a tenant köztes réteg már szigorúbban ellenőrizte.
