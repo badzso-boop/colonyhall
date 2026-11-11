@@ -533,7 +533,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		decmcp.Register(s, dcSvc, current, r)
 		leasesmcp.Register(s, lsSvc, current)
 		hostsmcp.Register(s, hoSvc, idSvc, current)
-	}, rlSvc.InstructionsForActor, opt.Logger)
+	}, rlSvc.InstructionsForActor, opt.Logger, opt.Multitenant)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
 	}

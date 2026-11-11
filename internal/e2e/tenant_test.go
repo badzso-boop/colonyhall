@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/server"
 )
@@ -32,7 +33,7 @@ func mtEnv(t *testing.T, change func(*server.Options)) (acme, beta *env) {
 			change(o)
 		}
 	})
-	ctx := context.Background()
+	ctx := system.Context(context.Background()) // as the set-slug command does
 	if _, err := e.app.Identity.SetWorkspaceSlug(ctx, "colonyhall", "acme"); err != nil {
 		t.Fatal(err)
 	}
