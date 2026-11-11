@@ -30,12 +30,26 @@ func (q *Queries) DeleteGitRepoChannel(ctx context.Context, arg DeleteGitRepoCha
 const getGitLink = `-- name: GetGitLink :one
 SELECT url, kind, title, state, author, fetched_at
 FROM git_link
-WHERE url = $1
+WHERE workspace_id = $1 AND url = $2
 `
 
-func (q *Queries) GetGitLink(ctx context.Context, url string) (GitLink, error) {
-	row := q.db.QueryRow(ctx, getGitLink, url)
-	var i GitLink
+type GetGitLinkParams struct {
+	WorkspaceID uuid.UUID
+	Url         string
+}
+
+type GetGitLinkRow struct {
+	Url       string
+	Kind      string
+	Title     string
+	State     string
+	Author    string
+	FetchedAt time.Time
+}
+
+func (q *Queries) GetGitLink(ctx context.Context, arg GetGitLinkParams) (GetGitLinkRow, error) {
+	row := q.db.QueryRow(ctx, getGitLink, arg.WorkspaceID, arg.Url)
+	var i GetGitLinkRow
 	err := row.Scan(
 		&i.Url,
 		&i.Kind,
@@ -50,18 +64,32 @@ func (q *Queries) GetGitLink(ctx context.Context, url string) (GitLink, error) {
 const getGitLinks = `-- name: GetGitLinks :many
 SELECT url, kind, title, state, author, fetched_at
 FROM git_link
-WHERE url = ANY($1::text[])
+WHERE workspace_id = $1 AND url = ANY($2::text[])
 `
 
-func (q *Queries) GetGitLinks(ctx context.Context, dollar_1 []string) ([]GitLink, error) {
-	rows, err := q.db.Query(ctx, getGitLinks, dollar_1)
+type GetGitLinksParams struct {
+	WorkspaceID uuid.UUID
+	Urls        []string
+}
+
+type GetGitLinksRow struct {
+	Url       string
+	Kind      string
+	Title     string
+	State     string
+	Author    string
+	FetchedAt time.Time
+}
+
+func (q *Queries) GetGitLinks(ctx context.Context, arg GetGitLinksParams) ([]GetGitLinksRow, error) {
+	rows, err := q.db.Query(ctx, getGitLinks, arg.WorkspaceID, arg.Urls)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GitLink
+	var items []GetGitLinksRow
 	for rows.Next() {
-		var i GitLink
+		var i GetGitLinksRow
 		if err := rows.Scan(
 			&i.Url,
 			&i.Kind,
@@ -104,20 +132,27 @@ func (q *Queries) GetGitRepoChannel(ctx context.Context, arg GetGitRepoChannelPa
 }
 
 const getGitRepoChannelsByRepo = `-- name: GetGitRepoChannelsByRepo :many
-SELECT workspace_id, repo, channel_id, created_at
-FROM git_repo_channel
-WHERE repo = $1
+SELECT r.workspace_id::uuid AS workspace_id, r.repo::text AS repo, r.channel_id::uuid AS channel_id, r.created_at::timestamptz AS created_at
+FROM colony_repo_channels($1::text) AS r
 `
 
-func (q *Queries) GetGitRepoChannelsByRepo(ctx context.Context, repo string) ([]GitRepoChannel, error) {
+type GetGitRepoChannelsByRepoRow struct {
+	WorkspaceID uuid.UUID
+	Repo        string
+	ChannelID   uuid.UUID
+	CreatedAt   time.Time
+}
+
+// Every workspace's mapping of the repository (the webhook fans out).
+func (q *Queries) GetGitRepoChannelsByRepo(ctx context.Context, repo string) ([]GetGitRepoChannelsByRepoRow, error) {
 	rows, err := q.db.Query(ctx, getGitRepoChannelsByRepo, repo)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GitRepoChannel
+	var items []GetGitRepoChannelsByRepoRow
 	for rows.Next() {
-		var i GitRepoChannel
+		var i GetGitRepoChannelsByRepoRow
 		if err := rows.Scan(
 			&i.WorkspaceID,
 			&i.Repo,
@@ -147,10 +182,27 @@ func (q *Queries) GetWebhookDelivery(ctx context.Context, deliveryID string) (Gi
 	return i, err
 }
 
-const insertWebhookDelivery = `-- name: InsertWebhookDelivery :execrows
-INSERT INTO git_webhook_delivery (delivery_id, received_at)
-VALUES ($1, $2)
-ON CONFLICT (delivery_id) DO NOTHING
+const getWorkspaceGitea = `-- name: GetWorkspaceGitea :one
+SELECT workspace_id, enabled, url, public_url, token, webhook_secret, updated_at FROM workspace_gitea WHERE workspace_id = $1
+`
+
+func (q *Queries) GetWorkspaceGitea(ctx context.Context, workspaceID uuid.UUID) (WorkspaceGitea, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceGitea, workspaceID)
+	var i WorkspaceGitea
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.Enabled,
+		&i.Url,
+		&i.PublicUrl,
+		&i.Token,
+		&i.WebhookSecret,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertWebhookDelivery = `-- name: InsertWebhookDelivery :one
+SELECT colony_record_webhook_delivery($1::text, $2::timestamptz)::boolean AS recorded
 `
 
 type InsertWebhookDeliveryParams struct {
@@ -158,12 +210,13 @@ type InsertWebhookDeliveryParams struct {
 	ReceivedAt time.Time
 }
 
-func (q *Queries) InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertWebhookDelivery, arg.DeliveryID, arg.ReceivedAt)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+// Round 45: webhooks arrive before any workspace is known; the function
+// (migration 00053) records the id in system mode for this call only.
+func (q *Queries) InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDeliveryParams) (bool, error) {
+	row := q.db.QueryRow(ctx, insertWebhookDelivery, arg.DeliveryID, arg.ReceivedAt)
+	var recorded bool
+	err := row.Scan(&recorded)
+	return recorded, err
 }
 
 const listGitRepoChannels = `-- name: ListGitRepoChannels :many
@@ -198,10 +251,41 @@ func (q *Queries) ListGitRepoChannels(ctx context.Context, workspaceID uuid.UUID
 	return items, nil
 }
 
+const setWorkspaceGitea = `-- name: SetWorkspaceGitea :exec
+INSERT INTO workspace_gitea (workspace_id, enabled, url, public_url, token, webhook_secret, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (workspace_id) DO UPDATE
+SET enabled = EXCLUDED.enabled, url = EXCLUDED.url, public_url = EXCLUDED.public_url,
+    token = EXCLUDED.token, webhook_secret = EXCLUDED.webhook_secret, updated_at = EXCLUDED.updated_at
+`
+
+type SetWorkspaceGiteaParams struct {
+	WorkspaceID   uuid.UUID
+	Enabled       bool
+	Url           string
+	PublicUrl     string
+	Token         string
+	WebhookSecret string
+	UpdatedAt     time.Time
+}
+
+func (q *Queries) SetWorkspaceGitea(ctx context.Context, arg SetWorkspaceGiteaParams) error {
+	_, err := q.db.Exec(ctx, setWorkspaceGitea,
+		arg.WorkspaceID,
+		arg.Enabled,
+		arg.Url,
+		arg.PublicUrl,
+		arg.Token,
+		arg.WebhookSecret,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const upsertGitLink = `-- name: UpsertGitLink :exec
-INSERT INTO git_link (url, kind, title, state, author, fetched_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (url) DO UPDATE
+INSERT INTO git_link (workspace_id, url, kind, title, state, author, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (workspace_id, url) DO UPDATE
 SET kind = EXCLUDED.kind,
     title = EXCLUDED.title,
     state = EXCLUDED.state,
@@ -210,16 +294,18 @@ SET kind = EXCLUDED.kind,
 `
 
 type UpsertGitLinkParams struct {
-	Url       string
-	Kind      string
-	Title     string
-	State     string
-	Author    string
-	FetchedAt time.Time
+	WorkspaceID uuid.UUID
+	Url         string
+	Kind        string
+	Title       string
+	State       string
+	Author      string
+	FetchedAt   time.Time
 }
 
 func (q *Queries) UpsertGitLink(ctx context.Context, arg UpsertGitLinkParams) error {
 	_, err := q.db.Exec(ctx, upsertGitLink,
+		arg.WorkspaceID,
 		arg.Url,
 		arg.Kind,
 		arg.Title,

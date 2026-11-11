@@ -9,6 +9,7 @@ import (
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/tenant"
 )
 
 func init() {
@@ -69,6 +70,26 @@ func Register(mux *http.ServeMux, svc *git.Service, auth identity.RequestAuthent
 	}))
 
 	mux.HandleFunc("POST /api/v1/hooks/gitea", func(w http.ResponseWriter, r *http.Request) {
+		// On a workspace's subdomain (multi-tenant mode, round 45): only
+		// that workspace's own Gitea, checked with its own secret.
+		if t, ok := tenant.From(r.Context()); ok && svc != nil {
+			prov, secret, err := svc.WorkspaceWebhookProvider(r.Context(), t.Workspace)
+			if err != nil {
+				httpx.Error(w, r, git.ErrUnauthorizedWebhook)
+				return
+			}
+			ev, err := prov.ParseWebhook(r, secret)
+			if err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+			if err := svc.HandleWorkspaceWebhook(r.Context(), t.Workspace, ev); err != nil {
+				httpx.Error(w, r, err)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		if svc == nil || svc.Provider == nil {
 			w.WriteHeader(http.StatusOK)
 			return

@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"time"
+
+	"colonyhall/internal/platform/db/system"
 )
 
 // maintenanceInterval is how often the housekeeping runs (also once at start).
@@ -25,8 +27,10 @@ func (a *App) maintenanceLoop(ctx context.Context, interval time.Duration) {
 }
 
 // Maintain deletes ended credentials and samples the database size (round
-// 50). It logs counts only, never token data.
+// 50). It logs counts only, never token data. It runs in system mode: the
+// cleanup covers every workspace (round 45).
 func (a *App) Maintain(ctx context.Context) {
+	ctx = system.Context(ctx)
 	if err := a.DBStats.SampleToday(ctx); err != nil && ctx.Err() == nil {
 		a.logger.Warn("database size sample failed", "err", err)
 	}

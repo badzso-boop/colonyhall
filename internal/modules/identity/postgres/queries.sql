@@ -1,5 +1,5 @@
 -- name: CreateWorkspace :exec
-INSERT INTO workspace (id, name, created_at) VALUES ($1, $2, $3);
+INSERT INTO workspace (id, name, created_at, slug, state) VALUES ($1, $2, $3, $4, $5);
 
 -- name: CreateActor :exec
 INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, owner_id)
@@ -38,8 +38,11 @@ WHERE id = sqlc.arg(id) AND archived_at IS NULL;
 UPDATE api_token SET revoked_at = sqlc.arg(at) WHERE actor_id = sqlc.arg(actor_id) AND revoked_at IS NULL;
 
 -- name: CreateToken :exec
-INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at, prefix)
-VALUES ($1, $2, $3, $4, $5, sqlc.narg(host_id), sqlc.narg(expires_at), sqlc.narg(prefix));
+-- The workspace comes from the actor (round 45): tokens are also made by
+-- the CLI and the seed, which do not run in one workspace's scope.
+INSERT INTO api_token (id, actor_id, token_hash, label, created_at, host_id, expires_at, prefix, workspace_id)
+SELECT $1, $2, $3, $4, $5, sqlc.narg(host_id), sqlc.narg(expires_at), sqlc.narg(prefix), a.workspace_id
+FROM actor a WHERE a.id = $2;
 
 -- name: TouchToken :exec
 UPDATE api_token SET last_used_at = sqlc.arg(at)
@@ -69,12 +72,13 @@ SELECT * FROM workspace WHERE name = $1;
 SELECT password_hash FROM credential WHERE actor_id = $1;
 
 -- name: SetCredential :exec
-INSERT INTO credential (actor_id, password_hash, updated_at) VALUES ($1, $2, $3)
+INSERT INTO credential (actor_id, password_hash, updated_at, workspace_id)
+SELECT $1, $2, $3, a.workspace_id FROM actor a WHERE a.id = $1
 ON CONFLICT (actor_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at;
 
 -- name: CreateSession :exec
-INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id FROM actor a WHERE a.id = $2;
 
 -- name: SessionByTokenHash :one
 SELECT sqlc.embed(s), sqlc.embed(a)
@@ -99,6 +103,9 @@ UPDATE api_token SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;
 
 -- name: SetActorState :exec
 UPDATE actor SET state = $2 WHERE id = $1;
+
+-- name: SetWorkspaceSlug :execrows
+UPDATE workspace SET slug = sqlc.arg(slug) WHERE id = sqlc.arg(id);
 
 -- name: WorkspaceByID :one
 SELECT * FROM workspace WHERE id = $1;
@@ -140,3 +147,25 @@ DELETE FROM session WHERE id IN (
     LIMIT sqlc.arg(batch)::int
     FOR UPDATE SKIP LOCKED
 );
+
+-- Round 45: lookups before the workspace is known (migration 00053).
+
+-- name: WorkspaceOfToken :one
+SELECT ws::uuid AS workspace_id FROM colony_token_workspace(sqlc.arg(hash)::bytea) AS ws WHERE ws IS NOT NULL;
+
+-- name: WorkspaceOfSession :one
+SELECT ws::uuid AS workspace_id FROM colony_session_workspace(sqlc.arg(hash)::bytea) AS ws WHERE ws IS NOT NULL;
+
+-- name: HandleWorkspaces :many
+SELECT h.id::uuid AS id, h.name::text AS name FROM colony_handle_workspaces(sqlc.arg(handle)::text) AS h;
+
+-- name: WorkspaceBySlugAnywhere :one
+SELECT w.id::uuid AS id, w.name::text AS name, w.created_at::timestamptz AS created_at, w.slug::text AS slug, w.state::text AS state
+FROM colony_workspace_by_slug(sqlc.arg(slug)::text) AS w;
+
+-- name: RevokeTokenByHash :one
+UPDATE api_token SET revoked_at = coalesce(revoked_at, sqlc.arg(at)::timestamptz)
+WHERE token_hash = sqlc.arg(token_hash) RETURNING *;
+
+-- name: SetWorkspaceState :execrows
+UPDATE workspace SET state = sqlc.arg(state) WHERE id = sqlc.arg(id);

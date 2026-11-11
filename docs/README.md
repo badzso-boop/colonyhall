@@ -17,6 +17,7 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 | [15-telepites-terv.md](15-telepites-terv.md) / [16-telepites.md](16-telepites.md) | A telepítő terve és használata (`colony setup`, `install.sh`, kiadás) |
 | [17-nyilt-forraskod.md](17-nyilt-forraskod.md) | A nyílt forráskódúvá tétel átvilágítása, licenc (AGPL-3.0-only + CLA), teendők |
 | [19-lokalis-agent-harness-terv.md](19-lokalis-agent-harness-terv.md) / [21-lokalis-agent-forrasok.md](21-lokalis-agent-forrasok.md) | Helyi kódoló agent kis modellekkel: terv és források |
+| [22-tobbberlos-terv.md](22-tobbberlos-terv.md) / [23-elkulonites.md](23-elkulonites.md) | Több ügyfél egy rendszeren: a terv és a 0. fázis (elkülönítés, RLS) leltára és döntései |
 | [09-kezi-tesztlista.md](09-kezi-tesztlista.md) | Kézi tesztlista a PWA-hoz (31–33. kör): azonosított ellenőrzések, minden kiadás után ugyanígy végigmenve, a futások naplójával |
 | [00-kutatas.md](00-kutatas.md) | A tervezés közbeni kutatás jegyzetei forrásokkal (chat platformok, Claude Code channels, előfizetési szabályok, más orchestratorok) |
 | [mockups/colonyhall-mockup.html](mockups/colonyhall-mockup.html) | UI mockupok, 7 képernyő (böngészőben megnyitható, egyetlen fájl) |

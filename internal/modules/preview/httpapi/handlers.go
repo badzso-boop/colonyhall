@@ -10,6 +10,7 @@ import (
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/preview"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -127,6 +128,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 			httpx.Error(w, r, err)
 			return
 		}
+		r = r.WithContext(db.WithWorkspace(r.Context(), h.WorkspaceID))
 		var in apispec.HostPreviewReport
 		if err := httpx.Decode(r, &in); err != nil {
 			httpx.Error(w, r, err)

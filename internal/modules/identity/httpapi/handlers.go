@@ -107,9 +107,10 @@ func meToAPI(a identity.Actor) apispec.Actor {
 func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	auth := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(svc, h) }
 
-	setCookie := func(w http.ResponseWriter, value string, expires time.Time) {
+	// No Domain attribute: the cookie belongs to this host (subdomain) only.
+	setCookie := func(w http.ResponseWriter, r *http.Request, value string, expires time.Time) {
 		http.SetCookie(w, &http.Cookie{
-			Name: httpx.SessionCookie, Value: value, Path: "/", Expires: expires,
+			Name: httpx.SessionCookieName(r), Value: value, Path: "/", Expires: expires,
 			HttpOnly: true, Secure: opt.SecureCookies, SameSite: http.SameSiteLaxMode,
 		})
 	}
@@ -132,7 +133,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 			httpx.Error(w, r, err)
 			return
 		}
-		setCookie(w, secret, sess.ExpiresAt)
+		setCookie(w, r, secret, sess.ExpiresAt)
 		httpx.JSON(w, http.StatusOK, apispec.SessionInfo{Actor: ToAPI(a), CsrfToken: sess.CSRFToken})
 	})
 
@@ -143,7 +144,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 				return
 			}
 		}
-		setCookie(w, "", time.Unix(0, 0))
+		setCookie(w, r, "", time.Unix(0, 0))
 		w.WriteHeader(http.StatusNoContent)
 	}))
 

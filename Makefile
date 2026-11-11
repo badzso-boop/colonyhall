@@ -10,6 +10,8 @@ help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
 dev:             ## Start Postgres + server (http://localhost:8080, dev seed)
+	$(COMPOSE) up -d --wait postgres
+	$(COMPOSE) exec -T postgres psql -q -U colony -d colony < deploy/dev-app-role.sql
 	$(COMPOSE) up --build -d
 	@echo "UI: http://localhost:8080  admin token: col_dev_admin_token_do_not_use_in_production"
 
@@ -60,7 +62,7 @@ VITEST_ARGS ?=
 web-vitest: $(WEB_DEPS) ## PWA Vitest (VITEST_ARGS="--shard=1/3" and the like)
 	npm --prefix web test -- $(VITEST_ARGS)
 
-test-pg:         ## Store contract tests and the Postgres e2e tests (needs `make dev`); one package at a time, they share the database
+test-pg:         ## Store contract, Postgres e2e, row-level security and cross-tenant tests (needs `make dev`); one package at a time, they share the database
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test -p 1 ./internal/storetest/ ./internal/e2e/ -run '^TestPostgres' -v
 
 gen: $(WEB_DEPS) ## Regenerate code from api/openapi.yaml (Go and TypeScript) and SQL queries

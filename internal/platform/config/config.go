@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,13 @@ type Config struct {
 	GiteaWebhookSecret string
 	// CalendarRefresh is how often subscribed calendars are fetched (default 15m).
 	CalendarRefresh time.Duration
+	// Multitenant turns on the subdomain per workspace (round 45). Off by
+	// default: a self-hosted server behaves as before.
+	Multitenant bool
+	// BaseDomain is the domain the workspace subdomains live under, e.g.
+	// "colonyhall.example.com" for acme.colonyhall.example.com; required
+	// with Multitenant.
+	BaseDomain string
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
@@ -69,6 +77,11 @@ func FromEnv() (Config, error) {
 		GiteaToken:         os.Getenv("COLONY_GITEA_TOKEN"),
 		GiteaPublicURL:     os.Getenv("COLONY_GITEA_PUBLIC_URL"),
 		GiteaWebhookSecret: os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
+		Multitenant:        os.Getenv("COLONY_MULTITENANT") == "1",
+		BaseDomain:         strings.ToLower(strings.Trim(os.Getenv("COLONY_BASE_DOMAIN"), ". ")),
+	}
+	if c.Multitenant && c.BaseDomain == "" {
+		return c, fmt.Errorf("config: COLONY_BASE_DOMAIN is required when COLONY_MULTITENANT=1")
 	}
 	if c.Role != "all" {
 		return c, fmt.Errorf("config: COLONY_ROLE=%q is not supported yet; use \"all\"", c.Role)

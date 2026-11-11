@@ -43,7 +43,12 @@ type Postgres struct {
 
 // Open connects to Postgres and verifies the connection.
 func Open(ctx context.Context, url string) (*Postgres, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("db: open: %w", err)
+	}
+	cfg.PrepareConn = applyScope
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("db: open: %w", err)
 	}

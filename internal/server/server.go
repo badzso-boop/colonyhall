@@ -132,6 +132,7 @@ import (
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/migrations"
 )
@@ -173,6 +174,11 @@ type Options struct {
 	// (default 15 minutes); CalendarFetcher replaces the safe fetcher in tests.
 	CalendarRefresh time.Duration
 	CalendarFetcher planner.Fetcher
+
+	// Multitenant picks the workspace from the subdomain <slug>.BaseDomain
+	// (round 45, docs/23-elkulonites.md); off: one team, as before.
+	Multitenant bool
+	BaseDomain  string
 }
 
 // App is a wired-up Colonyhall server.
@@ -288,6 +294,10 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			pg.Pool.Close()
 			return nil, err
 		}
+		if err := checkDatabaseRole(ctx, pg, opt); err != nil {
+			pg.Pool.Close()
+			return nil, err
+		}
 		tx = pg
 		events, idStore, cvStore, dlStore = &evpg.Store{DB: pg}, &idpg.Store{DB: pg}, &convpg.Store{DB: pg}, &delpg.Store{DB: pg}
 		auStore = &audpg.Store{DB: pg}
@@ -332,7 +342,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		fiStore = opt.FilesStore
 	}
 
-	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
 	cvSvc := &conversation.Service{Store: cvStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
 	auSvc := &audit.Service{Store: auStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
@@ -368,8 +378,11 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		gitProv = p
 	}
 	gitSvc := &git.Service{
-		Store:         giStore,
-		Provider:      gitProv,
+		Store:    giStore,
+		Provider: gitProv,
+		NewProvider: func(url, token, publicURL string) (provider.GitProvider, error) {
+			return provider.NewGitea(url, token, publicURL)
+		},
 		Conversation:  cvSvc,
 		Identity:      idSvc,
 		Clock:         opt.Clock,
@@ -520,7 +533,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		decmcp.Register(s, dcSvc, current, r)
 		leasesmcp.Register(s, lsSvc, current)
 		hostsmcp.Register(s, hoSvc, idSvc, current)
-	}, rlSvc.InstructionsForActor, opt.Logger)
+	}, rlSvc.InstructionsForActor, opt.Logger, opt.Multitenant)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
 	}
@@ -585,8 +598,12 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB)})
 
+	handler := httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts)
+	if opt.Multitenant {
+		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler)
+	}
 	return &App{
-		Handler:      httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts),
+		Handler:      handler,
 		Identity:     idSvc,
 		Conversation: cvSvc,
 		Delivery:     dlSvc,
@@ -624,6 +641,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 
 // Run starts the background consumers and blocks until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	// The background work is for every workspace; each loop and consumer
+	// narrows to one workspace per item it handles (round 45).
+	ctx = system.Context(ctx)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -675,6 +695,7 @@ func (a *App) Run(ctx context.Context) error {
 // Drain runs every consumer until it has processed all current events.
 // Tests use it to make the asynchronous parts deterministic.
 func (a *App) Drain(ctx context.Context) error {
+	ctx = system.Context(ctx)
 	for pass := 0; pass < 10; pass++ {
 		var anyProcessed bool
 		for _, c := range a.Consumers {
@@ -708,6 +729,7 @@ const (
 // SeedDev creates a workspace with @norbi (owner), @fake-agent and #general,
 // unless the admin token already works.
 func (a *App) SeedDev(ctx context.Context) error {
+	ctx = system.Context(ctx) // creates the dev workspace and looks it up
 	if owner, err := a.Identity.Authenticate(ctx, DevAdminToken); err == nil {
 		// Already seeded; databases seeded before passwords existed get one now.
 		if _, err := a.Identity.Store.Credential(ctx, owner.ID); errors.Is(err, db.ErrNotFound) {
@@ -717,10 +739,11 @@ func (a *App) SeedDev(ctx context.Context) error {
 	} else if !errors.Is(err, identity.ErrUnauthorized) {
 		return err
 	}
-	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "norbi", "Norbi", DevAdminToken)
+	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "", "norbi", "Norbi", DevAdminToken)
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
+	ctx = db.WithWorkspace(ctx, owner.WorkspaceID) // the rest happens inside the new workspace
 	if err := a.Identity.ResetPassword(ctx, owner.ID, DevAdminPassword); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
@@ -735,4 +758,27 @@ func (a *App) SeedDev(ctx context.Context) error {
 		return fmt.Errorf("seed: %w", err)
 	}
 	return a.Conversation.AddMember(ctx, owner, ch.ID, agent.ID, true)
+}
+
+// checkDatabaseRole makes sure row-level security applies to the server's
+// database role (round 45): a superuser or a BYPASSRLS role skips it even
+// on forced tables. Multi-tenant mode refuses to start with such a role; a
+// single-team server only warns (installs from before round 45 connect as
+// the database superuser; docs/23-elkulonites.md, 6).
+func checkDatabaseRole(ctx context.Context, pg *db.Postgres, opt Options) error {
+	var role string
+	var super, bypass bool
+	err := pg.Pool.QueryRow(ctx, "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user").Scan(&role, &super, &bypass)
+	if err != nil {
+		return fmt.Errorf("db: read the role: %w", err)
+	}
+	if !super && !bypass {
+		return nil
+	}
+	if opt.Multitenant {
+		return fmt.Errorf("db: role %q bypasses row-level security (superuser or BYPASSRLS); multi-tenant mode needs a role without it (docs/23-elkulonites.md)", role)
+	}
+	opt.Logger.Warn("the database role bypasses row-level security; the workspace isolation in the database is off (docs/23-elkulonites.md)",
+		"role", role, "superuser", super, "bypassrls", bypass)
+	return nil
 }

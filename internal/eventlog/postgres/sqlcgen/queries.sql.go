@@ -65,9 +65,11 @@ func (q *Queries) EventsSince(ctx context.Context, arg EventsSinceParams) ([]Eve
 }
 
 const head = `-- name: Head :one
-SELECT COALESCE(MAX(seq), 0)::bigint FROM event
+SELECT colony_event_head()::bigint
 `
 
+// The whole log's head, whatever the scope (a WebSocket hello reads it
+// before authenticating; migration 00053).
 func (q *Queries) Head(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, head)
 	var column_1 int64

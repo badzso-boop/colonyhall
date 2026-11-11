@@ -13,38 +13,45 @@ import (
 // Store is an in-memory implementation of git.Store.
 type Store struct {
 	mu           sync.RWMutex
-	links        map[string]git.LinkCard
+	links        map[linkKey]git.LinkCard
 	repoChannels map[string]git.RepoChannel // key: workspaceID.String() + ":" + repo
 	deliveries   map[string]time.Time
+	giteas       map[ids.ID]git.WorkspaceGitea
 }
 
 // New creates an in-memory git store.
 func New() *Store {
 	return &Store{
-		links:        make(map[string]git.LinkCard),
+		links:        make(map[linkKey]git.LinkCard),
 		repoChannels: make(map[string]git.RepoChannel),
 		deliveries:   make(map[string]time.Time),
+		giteas:       make(map[ids.ID]git.WorkspaceGitea),
 	}
 }
 
 var _ git.Store = (*Store)(nil)
 
-func (s *Store) GetLink(_ context.Context, url string) (git.LinkCard, error) {
+type linkKey struct {
+	ws  ids.ID
+	url string
+}
+
+func (s *Store) GetLink(_ context.Context, workspaceID ids.ID, url string) (git.LinkCard, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	card, ok := s.links[url]
+	card, ok := s.links[linkKey{workspaceID, url}]
 	if !ok {
 		return git.LinkCard{}, git.ErrLinkNotFound
 	}
 	return card, nil
 }
 
-func (s *Store) GetLinks(_ context.Context, urls []string) ([]git.LinkCard, error) {
+func (s *Store) GetLinks(_ context.Context, workspaceID ids.ID, urls []string) ([]git.LinkCard, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]git.LinkCard, 0, len(urls))
 	for _, u := range urls {
-		if card, ok := s.links[u]; ok {
+		if card, ok := s.links[linkKey{workspaceID, u}]; ok {
 			out = append(out, card)
 		}
 	}
@@ -54,7 +61,7 @@ func (s *Store) GetLinks(_ context.Context, urls []string) ([]git.LinkCard, erro
 func (s *Store) SaveLink(_ context.Context, card git.LinkCard) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.links[card.URL] = card
+	s.links[linkKey{card.WorkspaceID, card.URL}] = card
 	return nil
 }
 
@@ -126,4 +133,23 @@ func (s *Store) RecordDelivery(_ context.Context, deliveryID string, now time.Ti
 	}
 	s.deliveries[deliveryID] = now
 	return true, nil
+}
+
+// GetWorkspaceGitea returns the workspace's own Gitea.
+func (s *Store) GetWorkspaceGitea(_ context.Context, workspaceID ids.ID) (git.WorkspaceGitea, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.giteas[workspaceID]
+	if !ok {
+		return git.WorkspaceGitea{}, git.ErrNoOwnGitea
+	}
+	return c, nil
+}
+
+// SetWorkspaceGitea stores the workspace's own Gitea.
+func (s *Store) SetWorkspaceGitea(_ context.Context, c git.WorkspaceGitea) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.giteas[c.WorkspaceID] = c
+	return nil
 }

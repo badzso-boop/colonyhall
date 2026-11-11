@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/platform/palette"
+	"colonyhall/internal/platform/tenant"
 )
 
 // PreviewProvider supplies previews for a host config.
@@ -100,6 +102,15 @@ func (s *Service) Enroll(ctx context.Context, code, name string) (Host, string, 
 	if err != nil {
 		return Host{}, "", err
 	}
+	// Round 45: the code's workspace first; the host is created there.
+	ws, err := s.Store.WorkspaceOfPairingCode(ctx, Hash(NormalizeCode(code)))
+	if t, ok := tenant.From(ctx); errors.Is(err, db.ErrNotFound) || ok && err == nil && t.Workspace != ws {
+		return Host{}, "", ErrBadCode // another subdomain's code is just a wrong code here
+	}
+	if err != nil {
+		return Host{}, "", err
+	}
+	ctx = db.WithWorkspace(ctx, ws)
 	var h Host
 	var seq int64
 	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -140,6 +151,19 @@ func (s *Service) Enroll(ctx context.Context, code, name string) (Host, string, 
 // AuthenticateHost resolves a host token to an approved host.
 func (s *Service) AuthenticateHost(ctx context.Context, secret string) (Host, error) {
 	if !strings.HasPrefix(secret, hostTokenPrefix) {
+		return Host{}, ErrBadHostToken
+	}
+	// Round 45: find the host's workspace first, then read the host there.
+	ws, err := s.Store.WorkspaceOfHostToken(ctx, Hash(secret))
+	if errors.Is(err, db.ErrNotFound) {
+		return Host{}, ErrBadHostToken
+	}
+	if err != nil {
+		return Host{}, err
+	}
+	ctx = db.WithWorkspace(ctx, ws)
+	if t, ok := tenant.From(ctx); ok && t.Workspace != ws {
+		s.crossTenant(ctx, t, Hash(secret))
 		return Host{}, ErrBadHostToken
 	}
 	h, err := s.Store.HostByTokenHash(ctx, Hash(secret))
@@ -877,4 +901,29 @@ func (s *Service) IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error
 		return false, err
 	}
 	return a.Mode == AgentModeDirect && !a.Sandbox, nil
+}
+
+// crossTenant revokes a host whose token was used on another workspace's
+// subdomain (round 45): the token has leaked. ctx is narrowed to the
+// host's workspace; the event lands in its audit log.
+func (s *Service) crossTenant(ctx context.Context, t tenant.Request, hash []byte) {
+	log := slog.Default()
+	h, err := s.Store.HostByTokenHash(ctx, hash)
+	log.Error("SECURITY: cross-tenant credential use; the host is revoked",
+		"credential", "host", "host_id", h.ID, "credential_workspace", h.WorkspaceID,
+		"request_workspace", t.Workspace, "subdomain", t.Slug, "remote_addr", t.RemoteAddr, "user_agent", t.UserAgent)
+	if err != nil {
+		log.Error("cross-tenant: finding the host failed", "err", err)
+		return
+	}
+	err = s.record(ctx, h.WorkspaceID, ids.Nil, EventHostCrossTenant, h.ID, HostEvent{HostID: h.ID.String(), Name: h.Name, State: StateRevoked},
+		func(ctx context.Context) error {
+			if err := s.Store.SetHostState(ctx, h.ID, StateRevoked); err != nil {
+				return err
+			}
+			return s.Tokens.RevokeHostTokens(ctx, h.ID, ids.Nil)
+		})
+	if err != nil {
+		log.Error("cross-tenant: revoking the host failed", "err", err)
+	}
 }

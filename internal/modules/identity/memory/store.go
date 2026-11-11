@@ -42,7 +42,43 @@ func New() *Store {
 func (s *Store) CreateWorkspace(_ context.Context, w identity.Workspace) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	w = identity.WithDefaults(w)
+	for _, other := range s.workspaces {
+		if other.Slug == w.Slug {
+			return db.ErrConflict
+		}
+	}
 	s.workspaces[w.ID] = w
+	return nil
+}
+
+// WorkspaceBySlug loads a workspace by its subdomain name.
+func (s *Store) WorkspaceBySlug(_ context.Context, slug string) (identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, w := range s.workspaces {
+		if w.Slug == slug {
+			return w, nil
+		}
+	}
+	return identity.Workspace{}, db.ErrNotFound
+}
+
+// SetWorkspaceSlug renames a workspace's subdomain.
+func (s *Store) SetWorkspaceSlug(_ context.Context, id ids.ID, slug string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	for _, other := range s.workspaces {
+		if other.ID != id && other.Slug == slug {
+			return db.ErrConflict
+		}
+	}
+	w.Slug = slug
+	s.workspaces[id] = w
 	return nil
 }
 
@@ -505,4 +541,69 @@ func (s *Store) DeleteEndedSessions(_ context.Context, before time.Time) (int64,
 		}
 	}
 	return n, nil
+}
+
+// WorkspaceOfToken finds the workspace of a token.
+func (s *Store) WorkspaceOfToken(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.tokens[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return s.actors[t.ActorID].WorkspaceID, nil
+}
+
+// WorkspaceOfSession finds the workspace of a session.
+func (s *Store) WorkspaceOfSession(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	x, ok := s.sessions[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return s.actors[x.ActorID].WorkspaceID, nil
+}
+
+// HandleWorkspaces lists the workspaces that have the handle, by id.
+func (s *Store) HandleWorkspaces(_ context.Context, handle string) ([]identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []identity.Workspace{}
+	for _, a := range s.actors {
+		if a.Handle == handle && a.ArchivedAt == nil {
+			w := s.workspaces[a.WorkspaceID]
+			out = append(out, identity.Workspace{ID: w.ID, Name: w.Name})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	return out, nil
+}
+
+// RevokeTokenByHash revokes a token by its hash and returns it.
+func (s *Store) RevokeTokenByHash(_ context.Context, hash []byte, at time.Time) (identity.Token, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tokens[string(hash)]
+	if !ok {
+		return identity.Token{}, db.ErrNotFound
+	}
+	if t.RevokedAt == nil {
+		t.RevokedAt = &at
+		s.tokens[string(hash)] = t
+	}
+	return t, nil
+}
+
+// SetWorkspaceState suspends or reactivates a workspace.
+func (s *Store) SetWorkspaceState(_ context.Context, id ids.ID, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	w.State = state
+	s.workspaces[id] = w
+	return nil
 }

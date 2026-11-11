@@ -39,6 +39,11 @@ type Workspace struct {
 	ID        ids.ID
 	Name      string
 	CreatedAt time.Time
+	// Slug names the workspace's subdomain in multi-tenant mode; empty on
+	// create means IDSlug(ID).
+	Slug string
+	// State is WorkspaceActive or WorkspaceSuspended (empty on create: active).
+	State string
 	// EmergencyStopAt is set while the emergency stop is on: every agent is
 	// halted (no writes, no wake-ups) until an admin clears it.
 	EmergencyStopAt *time.Time

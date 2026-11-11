@@ -547,3 +547,27 @@ func (q *Queries) UsePairingCode(ctx context.Context, arg UsePairingCodeParams) 
 	)
 	return i, err
 }
+
+const workspaceOfHostToken = `-- name: WorkspaceOfHostToken :one
+
+SELECT ws::uuid AS workspace_id FROM colony_host_workspace($1::bytea) AS ws WHERE ws IS NOT NULL
+`
+
+// Round 45: lookups before the workspace is known (migration 00053).
+func (q *Queries) WorkspaceOfHostToken(ctx context.Context, hash []byte) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, workspaceOfHostToken, hash)
+	var workspace_id uuid.UUID
+	err := row.Scan(&workspace_id)
+	return workspace_id, err
+}
+
+const workspaceOfPairingCode = `-- name: WorkspaceOfPairingCode :one
+SELECT ws::uuid AS workspace_id FROM colony_pairing_workspace($1::bytea) AS ws WHERE ws IS NOT NULL
+`
+
+func (q *Queries) WorkspaceOfPairingCode(ctx context.Context, hash []byte) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, workspaceOfPairingCode, hash)
+	var workspace_id uuid.UUID
+	err := row.Scan(&workspace_id)
+	return workspace_id, err
+}

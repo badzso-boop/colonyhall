@@ -1,6 +1,8 @@
 # Több ügyfél egy rendszeren (többbérlős működés): terv
 
-> Állapot: **terv, 2026-11-11**, Norbi döntéseivel (lent). A 45. kör valódi promptja ebből készül. A homelab csak **tesztkörnyezet**; piacra vitelnél bérelt, erősebb szerver jön.
+> Állapot: **terv, 2026-11-11**, Norbi döntéseivel (lent). A homelab csak **tesztkörnyezet**; piacra vitelnél bérelt, erősebb szerver jön.
+>
+> **A 0. fázis (elkülönítés) kész (45. kör, 2026-11-11):** a leltár, a döntések és az eltérések a `23-elkulonites.md`-ben; a működés a `02-muszaki-specifikacio.md` „Többbérlős működés” fejezetében.
 
 ## 0. Döntések (Norbi, 2026-11-11)
 
@@ -152,7 +154,7 @@
 
 | Fázis | Tartalom | Kész, ha |
 |---|---|---|
-| **0. Elkülönítés** | `slug`, aldomain szerinti munkaterület, RLS minden táblán, ügyfélszétválasztási tesztek, `COLONY_MULTITENANT` kapcsoló | A tesztkészlet zöld; az önálló telepítés változatlan |
+| **0. Elkülönítés** ✅ (45. kör) | `slug`, aldomain szerinti munkaterület, RLS minden táblán, ügyfélszétválasztási tesztek, `COLONY_MULTITENANT` kapcsoló; plusz: kapcsolható saját Gitea ügyfelenként, külön adatbázis-szerepkör az új telepítéseknél | A tesztkészlet zöld; az önálló telepítés változatlan |
 | **1. Operátor** | Operátori fiók 2FA-val, `admin.<domain>`, ügyfél létrehozása és felfüggesztése, meghívólink, fejlesztői mód kiírással, vészhozzáférés | Egy új ügyfél a meghívóval be tud lépni; a vészhozzáférés látszik az ügyfél auditjában |
 | **2. Több példány** | NOTIFY-busz, fogyasztók és ütemező advisory lockkal, őr-kapcsolatok táblája és célzott jelzések, közös korlátozó, objektumtár | A 13. pont próbái a homelabon |
 | **3. Korlátok és csomagok** | `plan`, `workspace_usage`, kikényszerítés, használati oldal | Túllépéskor elutasítás és esemény |

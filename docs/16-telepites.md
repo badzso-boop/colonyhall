@@ -23,8 +23,18 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
   - **Linuxon** rendszerszintű systemd-időzítő rootként fut (mert a Docker `sudo`-val fut), ezért minden, amit használ, root tulajdonú: a szkript `/usr/local/lib/colonyhall/backup.sh`, a mentések helye `/var/backups/colonyhall/` (`0700`). A felhasználó által írható szkriptet vagy mappát a root nem futtathat és nem írhat, különben a felhasználó (vagy bármi, ami a nevében fut, pl. egy agent) rootot kapna. A szkript a felhasználó `compose.yaml`-jét és `.env`-jét sem olvassa: az adatbázis-konténert a compose címkéi alapján találja meg.
   - **macOS-en** launchd ügynök a felhasználó nevében, a mentések a `~/colonyhall-backups/`-ba.
   - Visszaállítás: `sudo docker compose … exec -T db pg_restore -U colony -d colonyhall --clean < colonyhall-ÉÉÉÉHHNN-ÓÓPP.dump`, a fájlok: `sudo docker run --rm -v colonyhall_files:/data -v /var/backups/colonyhall:/backup busybox tar xzf /backup/files-….tar.gz -C /data` (macOS-en `~/colonyhall-backups` és `sudo` nélkül).
+- Adatbázis-szerepkör (45. kör): a saját Postgresszel készülő **új** telepítésnél a szerver egy külön `colony_app` szerepkörrel csatlakozik (nem superuser, `NOBYPASSRLS`, így a sorszintű védelem rá is vonatkozik); a jelszava az `.env`-ben (`COLONY_APP_DB_PASSWORD`), a telepítő stdin-en adja át a `psql`-nek. A korábbi telepítések frissítéskor megtartják a superuser-kapcsolatukat; a szerver ilyenkor figyelmeztet a naplóban.
 - Frissítés: `colony setup --server --upgrade` (az új képcímke az `.env`-be, `pull`, `up -d`; a migrációk induláskor futnak). Előbb a szerver, utána az őrök.
 - Eltávolítás: `colony uninstall --server` (az adat marad), `--purge`-dzsel az adat is törlődik.
+
+### Több ügyfél egy szerveren (többbérlős mód)
+
+Alapból kikapcsolva. Bekapcsolva minden munkaterület a saját aldomainjén érhető el (`<slug>.<alapdomain>`); részletek: `docs/02-muszaki-specifikacio.md`, „Többbérlős működés”, és `docs/23-elkulonites.md`.
+
+- `.env`: `COLONY_MULTITENANT=1`, `COLONY_BASE_DOMAIN=colonyhall.example.com`; az aldomainekhez wildcard DNS (`*.colonyhall.example.com`) és HTTPS-en wildcard tanúsítvány kell. A szerver adatbázis-szerepköre nem lehet superuser és nem lehet `BYPASSRLS` (különben nem indul).
+- Munkaterület slugja: `colonyhall bootstrap -slug acme …`, utólag `colonyhall set-slug -workspace <név> -slug acme`.
+- Saját Gitea egy ügyfélnek: `printf '%s\n%s\n' "$TOKEN" "$SECRET" | colonyhall gitea-set -workspace <név> -url https://git.acme.example` (csak olvasási token); a Gitea webhookja ilyenkor `https://acme.<alapdomain>/api/v1/hooks/gitea`. Kikapcsolás: `colonyhall gitea-set -workspace <név> -off`.
+- **Helyi kipróbálás domain nélkül:** a böngészők a `*.localhost` címeket a gépre irányítják. `COLONY_MULTITENANT=1 COLONY_BASE_DOMAIN=localhost`, két munkaterület (`acme`, `beta` slugokkal), és a böngészőben `http://acme.localhost:8080/app/` és `http://beta.localhost:8080/app/`. Parancssorból: `curl -H 'Host: acme.localhost' http://127.0.0.1:8080/api/v1/me`.
 
 ### HTTPS (útmutató, nincs beépítve)
 

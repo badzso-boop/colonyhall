@@ -70,11 +70,14 @@ func TestMemory(t *testing.T) {
 
 // TestPostgres runs the suite against a real database. It needs
 // COLONY_TEST_DATABASE_URL (see `make test-pg`) and wipes that database.
+// It connects as a role without BYPASSRLS that owns the tables, like the
+// server, so every store call that forgets its workspace scope fails.
 func TestPostgres(t *testing.T) {
 	url := os.Getenv("COLONY_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("COLONY_TEST_DATABASE_URL not set")
 	}
+	url = AppRoleDatabase(t, url)
 	ctx := context.Background()
 	pg, err := db.Open(ctx, url)
 	if err != nil {
@@ -85,7 +88,7 @@ func TestPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	Run(t, func(t *testing.T) Backend {
-		_, err := pg.Pool.Exec(ctx, `TRUNCATE db_size_sample, model_price, workspace_currency, agent_instructions, planner_calendar_event, planner_calendar, planner_access, planner_task, terminal_event, delegation, compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
+		_, err := pg.Pool.Exec(ctx, `TRUNCATE db_size_sample, workspace_gitea, model_price, workspace_currency, agent_instructions, planner_calendar_event, planner_calendar, planner_access, planner_task, terminal_event, delegation, compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
 			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)

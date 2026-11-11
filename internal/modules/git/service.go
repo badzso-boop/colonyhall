@@ -14,6 +14,7 @@ import (
 	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -55,8 +56,13 @@ type conversationService interface {
 
 // Service provides Git integration features: unfurling links, handling webhooks, and managing mappings.
 type Service struct {
-	Store         Store
-	Provider      provider.GitProvider
+	Store Store
+	// Provider is the server's shared Gitea (nil: none). A workspace with
+	// its own enabled Gitea uses that instead (round 45, providerFor).
+	Provider provider.GitProvider
+	// NewProvider builds a provider for a workspace's own Gitea (the gitea
+	// adapter in production); nil: own Giteas are not supported.
+	NewProvider   func(url, token, publicURL string) (provider.GitProvider, error)
 	Conversation  conversationService
 	Identity      identityService
 	Clock         clock.Clock
@@ -65,9 +71,6 @@ type Service struct {
 
 // HandleEvent processes message.created events to asynchronously unfurl Git links.
 func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
-	if s.Provider == nil {
-		return nil
-	}
 	if e.Type != conversation.EventMessageCreated {
 		return nil
 	}
@@ -75,39 +78,48 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 	if err := json.Unmarshal(e.Payload, &p); err != nil {
 		return fmt.Errorf("git: unmarshal message created: %w", err)
 	}
-	s.unfurlBody(ctx, p.Body)
+	s.unfurlBody(ctx, e.WorkspaceID, p.Body)
 	return nil
 }
 
-func (s *Service) unfurlBody(ctx context.Context, body string) {
+func (s *Service) unfurlBody(ctx context.Context, workspaceID ids.ID, body string) {
+	prov := s.providerFor(ctx, workspaceID)
+	if prov == nil {
+		return
+	}
 	urls := ExtractURLs(body)
 	for _, u := range urls {
-		ref, ok := s.Provider.ParseURL(u)
+		ref, ok := prov.ParseURL(u)
 		if !ok {
 			continue
 		}
-		card, err := s.Store.GetLink(ctx, ref.URL)
+		card, err := s.Store.GetLink(ctx, workspaceID, ref.URL)
 		if err == nil && s.Clock.Now().Sub(card.FetchedAt) < 10*time.Minute {
 			continue
 		}
-		fetched, err := s.Provider.FetchResource(ctx, ref)
+		fetched, err := prov.FetchResource(ctx, ref)
 		if err != nil {
 			continue
 		}
 		_ = s.Store.SaveLink(ctx, LinkCard{
-			URL:       fetched.URL,
-			Kind:      LinkKind(fetched.Kind),
-			Title:     fetched.Title,
-			State:     fetched.State,
-			Author:    fetched.Author,
-			FetchedAt: s.Clock.Now(),
+			WorkspaceID: workspaceID,
+			URL:         fetched.URL,
+			Kind:        LinkKind(fetched.Kind),
+			Title:       fetched.Title,
+			State:       fetched.State,
+			Author:      fetched.Author,
+			FetchedAt:   s.Clock.Now(),
 		})
 	}
 }
 
 // LinkCardsForMessages satisfies conversation.LinkCardProvider.
 func (s *Service) LinkCardsForMessages(ctx context.Context, messages []conversation.Message) (map[ids.ID][]conversation.LinkCard, error) {
-	if s.Provider == nil || len(messages) == 0 {
+	if len(messages) == 0 {
+		return nil, nil
+	}
+	prov := s.providerFor(ctx, messages[0].WorkspaceID) // a page is from one workspace
+	if prov == nil {
 		return nil, nil
 	}
 	var allURLs []string
@@ -118,7 +130,7 @@ func (s *Service) LinkCardsForMessages(ctx context.Context, messages []conversat
 		urls := ExtractURLs(m.Body)
 		var matched []string
 		for _, u := range urls {
-			ref, ok := s.Provider.ParseURL(u)
+			ref, ok := prov.ParseURL(u)
 			if !ok {
 				continue
 			}
@@ -137,7 +149,8 @@ func (s *Service) LinkCardsForMessages(ctx context.Context, messages []conversat
 		return nil, nil
 	}
 
-	cards, err := s.Store.GetLinks(ctx, allURLs)
+	// A page of messages is always from one workspace.
+	cards, err := s.Store.GetLinks(ctx, messages[0].WorkspaceID, allURLs)
 	if err != nil {
 		return nil, err
 	}
@@ -193,22 +206,31 @@ func (s *Service) HandleWebhookEvent(ctx context.Context, ev provider.WebhookEve
 	}
 
 	for _, m := range mappings {
-		bot, err := s.Identity.EnsureSystemActor(ctx, m.WorkspaceID, "gitea", "Gitea")
-		if err != nil {
-			return err
+		ctx := db.WithWorkspace(ctx, m.WorkspaceID) // each mapping in its own workspace (round 45)
+		if own, err := s.Store.GetWorkspaceGitea(ctx, m.WorkspaceID); err == nil && own.Enabled {
+			continue // its webhook comes from its own Gitea, to its own subdomain
 		}
-		if err := s.Conversation.EnsureMember(ctx, m.ChannelID, bot.ID); err != nil {
-			return err
-		}
-		_, err = s.Conversation.SendMessage(ctx, bot, conversation.SendInput{
-			ChannelID: m.ChannelID,
-			Body:      defuseMentions(ev.Summary),
-		})
-		if err != nil {
+		if err := s.post(ctx, m, ev); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// post writes a webhook's summary into a mapped channel as the Gitea bot.
+func (s *Service) post(ctx context.Context, m RepoChannel, ev provider.WebhookEvent) error {
+	bot, err := s.Identity.EnsureSystemActor(ctx, m.WorkspaceID, "gitea", "Gitea")
+	if err != nil {
+		return err
+	}
+	if err := s.Conversation.EnsureMember(ctx, m.ChannelID, bot.ID); err != nil {
+		return err
+	}
+	_, err = s.Conversation.SendMessage(ctx, bot, conversation.SendInput{
+		ChannelID: m.ChannelID,
+		Body:      defuseMentions(ev.Summary),
+	})
+	return err
 }
 
 // defuseMentions breaks every @mention in webhook text (PR titles, Gitea
@@ -259,25 +281,27 @@ func (s *Service) DeleteMapping(ctx context.Context, by identity.Actor, repo str
 }
 
 // Status returns a single-line summary of a git reference for agents.
-func (s *Service) Status(ctx context.Context, refStr string) (string, error) {
-	if s.Provider == nil {
+func (s *Service) Status(ctx context.Context, workspaceID ids.ID, refStr string) (string, error) {
+	prov := s.providerFor(ctx, workspaceID)
+	if prov == nil {
 		return "Gitea integration is not configured on this server.", nil
 	}
-	ref, ok := s.Provider.ParseRef(refStr)
+	ref, ok := prov.ParseRef(refStr)
 	if !ok {
 		return fmt.Sprintf("Unsupported git reference %q; expected URL or owner/repo#12 or owner/repo@sha", refStr), nil
 	}
-	card, err := s.Store.GetLink(ctx, ref.URL)
+	card, err := s.Store.GetLink(ctx, workspaceID, ref.URL)
 	if err != nil || s.Clock.Now().Sub(card.FetchedAt) > 10*time.Minute {
-		fetched, fetchErr := s.Provider.FetchResource(ctx, ref)
+		fetched, fetchErr := prov.FetchResource(ctx, ref)
 		if fetchErr == nil {
 			card = LinkCard{
-				URL:       fetched.URL,
-				Kind:      LinkKind(fetched.Kind),
-				Title:     fetched.Title,
-				State:     fetched.State,
-				Author:    fetched.Author,
-				FetchedAt: s.Clock.Now(),
+				WorkspaceID: workspaceID,
+				URL:         fetched.URL,
+				Kind:        LinkKind(fetched.Kind),
+				Title:       fetched.Title,
+				State:       fetched.State,
+				Author:      fetched.Author,
+				FetchedAt:   s.Clock.Now(),
 			}
 			_ = s.Store.SaveLink(ctx, card)
 		} else if card.Title == "" {
@@ -290,4 +314,70 @@ func (s *Service) Status(ctx context.Context, refStr string) (string, error) {
 		return fmt.Sprintf("%s [%s] by @%s", card.Title, card.State, card.Author), nil
 	}
 	return fmt.Sprintf("%s [%s]", card.Title, card.State), nil
+}
+
+// providerFor is the Gitea a workspace uses: its own while enabled, else
+// the shared one (nil: none).
+func (s *Service) providerFor(ctx context.Context, workspaceID ids.ID) provider.GitProvider {
+	own, err := s.Store.GetWorkspaceGitea(ctx, workspaceID)
+	if err != nil || !own.Enabled || s.NewProvider == nil {
+		return s.Provider
+	}
+	p, err := s.NewProvider(own.URL, own.Token, own.PublicURL)
+	if err != nil {
+		return nil // a broken own configuration never falls back to the shared Gitea
+	}
+	return p
+}
+
+// WorkspaceWebhookProvider returns the provider and secret that check a
+// webhook arriving on a workspace's own subdomain: only a workspace with
+// its own enabled Gitea accepts one there (ErrNoOwnGitea otherwise).
+func (s *Service) WorkspaceWebhookProvider(ctx context.Context, workspaceID ids.ID) (provider.GitProvider, string, error) {
+	own, err := s.Store.GetWorkspaceGitea(ctx, workspaceID)
+	if err != nil || !own.Enabled || s.NewProvider == nil {
+		return nil, "", ErrNoOwnGitea
+	}
+	p, err := s.NewProvider(own.URL, own.Token, own.PublicURL)
+	if err != nil {
+		return nil, "", err
+	}
+	return p, own.WebhookSecret, nil
+}
+
+// HandleWorkspaceWebhook posts a webhook from a workspace's own Gitea into
+// that workspace's mapped channels only. Delivery ids are kept per
+// workspace: two Gitea instances may repeat each other's ids.
+func (s *Service) HandleWorkspaceWebhook(ctx context.Context, workspaceID ids.ID, ev provider.WebhookEvent) error {
+	isNew, err := s.Store.RecordDelivery(ctx, workspaceID.String()+":"+ev.DeliveryID, s.Clock.Now())
+	if err != nil || !isNew {
+		return err
+	}
+	m, err := s.Store.GetRepoChannel(ctx, workspaceID, ev.Repo)
+	if errors.Is(err, ErrMappingNotFound) || errors.Is(err, db.ErrNotFound) {
+		return nil // unknown repositories are ignored
+	}
+	if err != nil {
+		return err
+	}
+	return s.post(ctx, m, ev)
+}
+
+// SetWorkspaceGitea gives a workspace its own Gitea, or switches it off
+// (the colonyhall gitea-set command; no actor, it runs on the server). The
+// address is checked by building the provider.
+func (s *Service) SetWorkspaceGitea(ctx context.Context, cfg WorkspaceGitea) error {
+	if cfg.Enabled {
+		if s.NewProvider == nil {
+			return ErrDisabled
+		}
+		if _, err := s.NewProvider(cfg.URL, cfg.Token, cfg.PublicURL); err != nil {
+			return err
+		}
+		if cfg.WebhookSecret == "" {
+			return fmt.Errorf("git: an own Gitea needs a webhook secret")
+		}
+	}
+	cfg.UpdatedAt = s.Clock.Now()
+	return s.Store.SetWorkspaceGitea(db.WithWorkspace(ctx, cfg.WorkspaceID), cfg)
 }

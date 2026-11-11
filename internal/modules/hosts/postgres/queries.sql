@@ -73,3 +73,11 @@ SELECT * FROM folder_grant WHERE host_id = $1 AND agent_id = $2 AND revoked_at I
 
 -- name: RevokeGrantsForAgent :exec
 UPDATE folder_grant SET revoked_at = $2 WHERE agent_id = $1 AND revoked_at IS NULL;
+
+-- Round 45: lookups before the workspace is known (migration 00053).
+
+-- name: WorkspaceOfHostToken :one
+SELECT ws::uuid AS workspace_id FROM colony_host_workspace(sqlc.arg(hash)::bytea) AS ws WHERE ws IS NOT NULL;
+
+-- name: WorkspaceOfPairingCode :one
+SELECT ws::uuid AS workspace_id FROM colony_pairing_workspace(sqlc.arg(hash)::bytea) AS ws WHERE ws IS NOT NULL;

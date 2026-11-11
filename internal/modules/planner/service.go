@@ -553,7 +553,7 @@ func (s *Service) RefreshDue(ctx context.Context, every time.Duration) {
 		if ctx.Err() != nil {
 			return
 		}
-		s.refresh(ctx, c)
+		s.refresh(db.WithWorkspace(ctx, c.WorkspaceID), c) // the loop runs for every workspace
 	}
 }
 
