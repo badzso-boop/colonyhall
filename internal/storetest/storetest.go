@@ -19,6 +19,7 @@ import (
 	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/compaction"
 	"colonyhall/internal/modules/conversation"
+	"colonyhall/internal/modules/dbstats"
 	"colonyhall/internal/modules/decision"
 	"colonyhall/internal/modules/delegation"
 	"colonyhall/internal/modules/delivery"
@@ -65,6 +66,7 @@ type Backend struct {
 	Sidebar      sidebar.Store
 	Compaction   compaction.Store
 	Delegation   delegation.Store
+	DBStats      dbstats.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -72,6 +74,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("eventlog", func(t *testing.T) { testEventlog(t, newBackend(t)) })
 	t.Run("identity", func(t *testing.T) { testIdentity(t, newBackend(t)) })
 	t.Run("credential cleanup", func(t *testing.T) { testCredentialCleanup(t, newBackend(t)) })
+	t.Run("dbstats", func(t *testing.T) { testDBStats(t, newBackend(t)) })
 	t.Run("conversation", func(t *testing.T) { testConversation(t, newBackend(t)) })
 	t.Run("delivery", func(t *testing.T) { testDelivery(t, newBackend(t)) })
 	t.Run("audit", func(t *testing.T) { testAudit(t, newBackend(t)) })
@@ -3161,5 +3164,53 @@ func testCredentialCleanup(t *testing.T, b Backend) {
 	}
 	if n, err := b.Identity.DeleteEndedSessions(ctx, cut); err != nil || n != 0 {
 		t.Fatalf("second session run deleted %d: %v", n, err)
+	}
+}
+
+// testDBStats: one sample a day (the first wins), oldest first, pruned by
+// day; sizes only where there is a database.
+func testDBStats(t *testing.T, b Backend) {
+	ctx := context.Background()
+	st := b.DBStats
+	day := dbstats.Day(t0)
+	must(t, st.RecordSample(ctx, dbstats.Sample{Day: day, SizeBytes: 100}))
+	must(t, st.RecordSample(ctx, dbstats.Sample{Day: day.Add(5 * time.Hour), SizeBytes: 999})) // same day: ignored
+	must(t, st.RecordSample(ctx, dbstats.Sample{Day: day.AddDate(0, 0, -2), SizeBytes: 80}))
+	must(t, st.RecordSample(ctx, dbstats.Sample{Day: day.AddDate(0, 0, -500), SizeBytes: 10}))
+	got, err := st.Samples(ctx, day.AddDate(0, 0, -400))
+	must(t, err)
+	if len(got) != 2 || got[0].SizeBytes != 80 || got[1].SizeBytes != 100 || !got[1].Day.Equal(day) {
+		t.Fatalf("samples: %+v", got)
+	}
+	if n, err := st.PruneSamples(ctx, day.AddDate(0, 0, -400)); err != nil || n != 1 {
+		t.Fatalf("prune: %d %v", n, err)
+	}
+	if all, err := st.Samples(ctx, day.AddDate(0, 0, -1000)); err != nil || len(all) != 2 {
+		t.Fatalf("after prune: %+v %v", all, err)
+	}
+	if n, err := st.PruneSamples(ctx, day.AddDate(0, 0, -400)); err != nil || n != 0 {
+		t.Fatalf("second prune: %d %v", n, err)
+	}
+
+	size, err := st.Size(ctx)
+	if errors.Is(err, dbstats.ErrNoDatabase) {
+		if _, err := st.LargestTables(ctx, 10); !errors.Is(err, dbstats.ErrNoDatabase) {
+			t.Fatalf("tables without a database: %v", err)
+		}
+		return
+	}
+	must(t, err)
+	if size <= 0 {
+		t.Fatalf("size: %d", size)
+	}
+	tables, err := st.LargestTables(ctx, 3)
+	must(t, err)
+	if len(tables) != 3 {
+		t.Fatalf("tables: %+v", tables)
+	}
+	for i, x := range tables {
+		if x.Name == "" || x.TotalBytes <= 0 || x.RowsEstimate < 0 || (i > 0 && x.TotalBytes > tables[i-1].TotalBytes) {
+			t.Fatalf("tables not sorted or empty: %+v", tables)
+		}
 	}
 }

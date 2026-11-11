@@ -365,6 +365,19 @@
     "running": "Fut",
     "integrations": "Integrációk",
     "backups": "Mentések",
-    "backupsBody": "A mentés az üzemeltető feladata (az adatbázis és a fájlok kötete), a szerver nem ellenőrzi."
+    "backupsBody": "A mentés az üzemeltető feladata (az adatbázis és a fájlok kötete), a szerver nem ellenőrzi.",
+    "size": {
+      "title": "Adatbázis mérete",
+      "noDatabase": "Memória-tár: nincs adatbázis.",
+      "total": "Teljes méret",
+      "growth": "Az elmúlt 30 napban",
+      "growthText_one": "{{delta}} {{count}} nap alatt",
+      "growthText_other": "{{delta}} {{count}} nap alatt",
+      "noGrowth": "még nincs elég minta",
+      "tables": "A 10 legnagyobb tábla",
+      "table": "Tábla",
+      "tableSize": "Méret",
+      "rows": "Sorok (becslés)"
+    }
   }
 }

@@ -228,6 +228,38 @@ export function statusFindings(st: AdminStatus): StatusFinding[] {
   ];
 }
 
+const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
+
+/** A byte count the way pg_size_pretty shows it (1 kB = 1024 B): "21.4 MB". */
+export function formatBytes(bytes: number, locale: string): string {
+  const sign = bytes < 0 ? "-" : "";
+  let n = Math.abs(bytes);
+  let unit = 0;
+  while (n >= 1024 && unit < BYTE_UNITS.length - 1) {
+    n /= 1024;
+    unit++;
+  }
+  return `${sign}${n.toLocaleString(locale, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${BYTE_UNITS[unit]}`;
+}
+
+export type SizeSample = Schemas["StatusSizeSample"];
+export const GROWTH_DAYS = 30;
+
+/**
+ * How much the database grew over the last GROWTH_DAYS days of samples: the
+ * newest sample against the oldest one in the window. Null with fewer than
+ * two samples there; days is the span the samples really cover.
+ */
+export function sizeGrowth(samples: SizeSample[], window = GROWTH_DAYS): { delta: number; days: number; recent: SizeSample[] } | null {
+  const last = samples[samples.length - 1];
+  if (!last) return null;
+  const from = addDays(last.date, -window);
+  const recent = samples.filter((x) => x.date >= from);
+  const first = recent[0];
+  if (!first || recent.length < 2) return null;
+  return { delta: last.size_bytes - first.size_bytes, days: daysBetween(first.date, last.date), recent };
+}
+
 export function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86_400);
   const h = Math.floor((seconds % 86_400) / 3600);
@@ -242,7 +274,7 @@ export function statusText(st: AdminStatus, at: Date): string {
   const lines = [
     `Colonyhall ${s.version}, ${at.toISOString()}`,
     `uptime: ${formatUptime(s.uptime_seconds)}`,
-    `database: ${s.database.ok ? "ok" : "ERROR"} (${s.database.latency_ms.toFixed(1)} ms)`,
+    `database: ${s.database.ok ? "ok" : "ERROR"} (${s.database.latency_ms.toFixed(1)} ms)${s.database.size_bytes !== undefined ? `, size ${s.database.size_bytes} bytes` : ""}`,
     `event head: ${s.event_head}`,
     ...s.consumers.map((c) => `consumer ${c.name}: offset ${c.offset}, lag ${c.lag} (${c.lag_seconds} s)`),
     `connections: human ${s.connections.human}, agent ${s.connections.agent}, host ${s.connections.host}`,

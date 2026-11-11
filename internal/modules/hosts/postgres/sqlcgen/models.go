@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Actor struct {
@@ -223,6 +224,11 @@ type Credential struct {
 	ActorID      uuid.UUID
 	PasswordHash string
 	UpdatedAt    time.Time
+}
+
+type DbSizeSample struct {
+	SampledOn pgtype.Date
+	SizeBytes int64
 }
 
 type Decision struct {

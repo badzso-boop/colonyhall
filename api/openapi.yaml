@@ -2719,6 +2719,19 @@ components:
         last_seen_at: { type: string, format: date-time }
         guard_version: { type: string }
         online: { type: boolean, description: Seen in the last 90 seconds. }
+    StatusTableSize:
+      type: object
+      required: [name, total_bytes, rows_estimate]
+      properties:
+        name: { type: string }
+        total_bytes: { type: integer, format: int64, description: With indexes and TOAST. }
+        rows_estimate: { type: integer, format: int64, description: "The planner's estimate (pg_class.reltuples), not count(*)." }
+    StatusSizeSample:
+      type: object
+      required: [date, size_bytes]
+      properties:
+        date: { type: string, format: date }
+        size_bytes: { type: integer, format: int64 }
     SystemStatus:
       type: object
       required: [version, uptime_seconds, database, event_head, consumers, connections, guards, scheduler, compaction, gitea_configured, gitea_webhook_configured, max_upload_mb]
@@ -2731,6 +2744,15 @@ components:
           properties:
             ok: { type: boolean }
             latency_ms: { type: number, format: double }
+            size_bytes: { type: integer, format: int64, description: "The whole database (pg_database_size); absent on the memory store." }
+            tables:
+              type: array
+              description: The 10 largest tables, biggest first; absent on the memory store.
+              items: { $ref: "#/components/schemas/StatusTableSize" }
+            growth:
+              type: array
+              description: One sample of size_bytes a day (UTC) for the last 90 days, oldest first; absent on the memory store.
+              items: { $ref: "#/components/schemas/StatusSizeSample" }
         event_head: { type: integer, format: int64 }
         consumers:
           type: array

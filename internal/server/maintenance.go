@@ -24,9 +24,12 @@ func (a *App) maintenanceLoop(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// Maintain deletes ended credentials (round 50). It logs counts only, never
-// token data.
+// Maintain deletes ended credentials and samples the database size (round
+// 50). It logs counts only, never token data.
 func (a *App) Maintain(ctx context.Context) {
+	if err := a.DBStats.SampleToday(ctx); err != nil && ctx.Err() == nil {
+		a.logger.Warn("database size sample failed", "err", err)
+	}
 	res, err := a.Identity.CleanupCredentials(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
