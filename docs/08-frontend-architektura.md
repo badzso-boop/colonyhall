@@ -7,7 +7,7 @@ Kapcsolódó dokumentumok:
 - `docs/07-design-system.md`: hogyan néz ki (színek, betűk, komponensek, modálok). A 31. kör írja meg.
 - `docs/02-muszaki-specifikacio.md` „Felület”: a stack.
 - `ui/ui-mockup/`: a kinézet mintái (sima HTML + CSS).
-- `docs/handoff/31…35-*-prompt.md`: a PWA körei.
+- A 31–35. kör: a PWA körei (a promptok a privát jegyzetekben).
 
 Ha ez a dokumentum és egy handoff prompt ellentmond egymásnak, **ez a dokumentum az irányadó**. Az ellentmondást a kör jelentésében jelezni kell.
 

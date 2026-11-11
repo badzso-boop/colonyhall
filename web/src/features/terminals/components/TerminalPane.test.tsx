@@ -18,7 +18,7 @@ function setup(name: string, relay: (body: { op: string; name?: string }) => unk
     vi.fn(async (req: Request) => {
       const path = new URL(req.url).pathname;
       const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
-      if (path.endsWith("/overview")) return json({ actor: agent, state: "active", assignment: { host_name: "pc-wsl" }, common_channels: [{ id: "c1", name: "general", kind: "public" }] });
+      if (path.endsWith("/overview")) return json({ actor: agent, state: "active", assignment: { host_name: "pc-dev" }, common_channels: [{ id: "c1", name: "general", kind: "public" }] });
       if (path.endsWith("/fs")) {
         const body = await req.json();
         ops.push(body);

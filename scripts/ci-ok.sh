@@ -13,6 +13,7 @@ set -eu
 # job:filter key. A key of "-" means the job always runs (no filter).
 jobs="
 changes:-
+privacy:-
 go-test:go
 go-e2e:go
 go-race:race

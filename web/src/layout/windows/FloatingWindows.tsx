@@ -227,7 +227,7 @@ function Bubble({ kind }: { kind: WindowKind }) {
 }
 
 /**
- * The floating windows and the minimised circles (docs/handoff/32, part 1).
+ * The floating windows and the minimised circles (round 32, part 1).
  * Phones have no floating windows: an open one shows as a bottom Sheet.
  */
 export function FloatingWindows() {

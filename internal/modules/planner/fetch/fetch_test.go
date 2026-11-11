@@ -29,7 +29,7 @@ func TestSafeRefusesPrivateAddresses(t *testing.T) {
 	if msg := planner.FetchError(err); strings.Contains(msg, "secret-token") {
 		t.Fatalf("fetch error leaks the URL: %q", msg)
 	}
-	for _, ip := range []string{"127.0.0.1", "10.1.2.3", "192.168.0.45", "100.85.111.88", "169.254.169.254", "::1", "fe80::1", "0.0.0.0",
+	for _, ip := range []string{"127.0.0.1", "10.1.2.3", "192.168.0.45", "100.64.0.10", "169.254.169.254", "::1", "fe80::1", "0.0.0.0",
 		"::ffff:127.0.0.1", "64:ff9b::7f00:1", "2002:7f00:1::1", "2001:0:4136:e378::1", "198.18.0.1", "240.0.0.1", "fd00::1", "192.0.0.8"} {
 		if planner.PublicIP(net.ParseIP(ip)) {
 			t.Errorf("%s counted as public", ip)

@@ -101,7 +101,7 @@ function BoardView({ groups, onOpen }: { groups: Record<Status, Task[]>; onOpen:
   );
 }
 
-/** Feladatok (docs/handoff/32, part 3). */
+/** Feladatok (round 32, part 3). */
 export default function TasksPage() {
   const { t } = useTranslation("planner");
   const tasks = useTasks();

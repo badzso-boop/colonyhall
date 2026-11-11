@@ -1,7 +1,7 @@
 import type { Schemas } from "@/shared/api";
 import type { Actor, Host, HostAgent } from "./directory";
 
-// The "Új agent" dialog's model (docs/handoff/33, part 4). An agent is
+// The "Új agent" dialog's model (round 33, part 4). An agent is
 // configured once: everything here goes to POST /agents in one call.
 
 export const steps = ["profile", "machine", "access", "instructions", "limits", "summary"] as const;

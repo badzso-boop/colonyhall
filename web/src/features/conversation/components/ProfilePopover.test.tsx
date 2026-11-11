@@ -25,7 +25,7 @@ function setup(actorId: string) {
       const req = input instanceof Request ? input : new Request(new URL(input, "http://localhost"), init);
       const path = new URL(req.url).pathname.replace("/api/v1", "");
       if (path === "/agents/a1/overview")
-        return Response.json({ actor: bot, state: "active", assignment: { host_id: "h", host_name: "pc-wsl", client: "claude", model: "opus" } } as unknown as Schemas["AgentOverview"]);
+        return Response.json({ actor: bot, state: "active", assignment: { host_id: "h", host_name: "pc-dev", client: "claude", model: "opus" } } as unknown as Schemas["AgentOverview"]);
       if (path === "/dms") {
         posts.push(await req.json());
         return Response.json({ id: "dm9", kind: "dm", name: "dm", is_member: true, unread: 0, mentions: 0 });
@@ -75,7 +75,7 @@ test("a person's profile: status, description, local time, and DM opens the conv
 test("an agent's profile shows state, machine and client; Áttekintés opens the overview pane", async () => {
   setup("a1");
   fireEvent.click(screen.getByRole("button", { name: "Trader profilja" }));
-  expect(await screen.findByText("pc-wsl")).toBeTruthy();
+  expect(await screen.findByText("pc-dev")).toBeTruthy();
   expect(screen.getByText("claude · opus")).toBeTruthy();
   expect(screen.getByText("tétlen")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Áttekintés" }));

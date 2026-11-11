@@ -46,7 +46,7 @@ test("grants grouped by folder, sorted", () => {
 });
 
 test("the enroll command quotes what the shell would split", () => {
-  expect(enrollCommand("http://100.85.111.88:8280", "ABCD-1234", "laptop")).toBe("colony guard enroll -server http://100.85.111.88:8280 -code ABCD-1234 -name laptop");
+  expect(enrollCommand("http://100.64.0.10:8280", "ABCD-1234", "laptop")).toBe("colony guard enroll -server http://100.64.0.10:8280 -code ABCD-1234 -name laptop");
   expect(enrollCommand("http://x", "C", "Norbi gépe")).toBe("colony guard enroll -server http://x -code C -name 'Norbi gépe'");
 });
 

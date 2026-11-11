@@ -119,18 +119,18 @@ func TestManualWebReadCheck(t *testing.T) {
 	t.Logf("Antigravity output:\n%s", outAgy)
 
 	t.Log("=== 3. Checking Claude Code reading private addresses ===")
-	outPrivate1 := runWebReadCheck("claude-code", "Use the web_read tool to read http://100.85.111.88:3002 and tell me the result.")
+	outPrivate1 := runWebReadCheck("claude-code", "Use the web_read tool to read http://100.64.0.10:3002 and tell me the result.")
 	t.Logf("Private 1 output:\n%s", outPrivate1)
 
 	outPrivate2 := runWebReadCheck("claude-code", "Use the web_read tool to read http://127.0.0.1:8080 and tell me the result.")
 	t.Logf("Private 2 output:\n%s", outPrivate2)
 
 	// Direct fetch test for private IPs to be 100% sure guard rejects them
-	_, err := Fetch(ctx, "http://100.85.111.88:3002", FetchOptions{})
+	_, err := Fetch(ctx, "http://100.64.0.10:3002", FetchOptions{})
 	if err == nil {
-		t.Errorf("expected 100.85.111.88:3002 to be refused by Fetch")
+		t.Errorf("expected 100.64.0.10:3002 to be refused by Fetch")
 	} else {
-		t.Logf("Fetch 100.85.111.88:3002 correctly refused: %v", err)
+		t.Logf("Fetch 100.64.0.10:3002 correctly refused: %v", err)
 	}
 
 	_, err = Fetch(ctx, "http://127.0.0.1:8080", FetchOptions{})

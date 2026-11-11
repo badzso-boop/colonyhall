@@ -11,7 +11,7 @@ export function bumpInbox(o: Overview, at: string): Overview {
 }
 
 /**
- * Live updates of the open overviews (docs/handoff/33, part 3): state and
+ * Live updates of the open overviews (round 33, part 3): state and
  * inbox are patched in the cache; a finished run, a lease or a grant change
  * refetches only what it touches. Activity and progress live in activity.ts.
  */

@@ -103,7 +103,7 @@ export function ColorSwatches({ value, onChange, inherit }: { value: string; onC
 }
 
 /**
- * "Új agent" (docs/handoff/33, part 4): every setting of an agent, in six
+ * "Új agent" (round 33, part 4): every setting of an agent, in six
  * steps, because none of the configuration can change afterwards.
  */
 export function CreateAgentDialog({ initial, onClose }: { initial?: Draft; onClose: () => void }) {

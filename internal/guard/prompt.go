@@ -191,7 +191,7 @@ func WorkPromptWithTools(handle, branch string, allowWebRead, allowPlanner bool,
 	}
 	if len(grants) > 0 {
 		// Named so the agent reports its real folders, not the sandbox's
-		// internal directory (task.md, 2026-10-21).
+		// internal directory (decision of 2026-10-21).
 		parts := make([]string, 0, len(grants))
 		for _, g := range grants {
 			mode := "read-only"

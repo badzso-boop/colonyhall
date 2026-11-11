@@ -18,7 +18,7 @@ function ThreadTitle({ rootId }: { rootId: string }) {
   return <>{root.data?.body.split("\n")[0] || t("untitled")}</>;
 }
 
-/** Jegyzetek (docs/handoff/32, part 5): the agents' thread notebooks, read-only for humans. */
+/** Jegyzetek (round 32, part 5): the agents' thread notebooks, read-only for humans. */
 export default function NotesPage() {
   const { t, i18n } = useTranslation("notes");
   const locale = localeOf(i18n.language);

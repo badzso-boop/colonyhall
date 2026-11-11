@@ -21,7 +21,7 @@ import { useDocumentTitle } from "./useDocumentTitle";
 import { FloatingWindows } from "./windows/FloatingWindows";
 
 /**
- * The app frame (docs/handoff/31, parts 4–5): header, sidebar, main column
+ * The app frame (round 31, parts 4–5): header, sidebar, main column
  * and the two pane slots placed by shared/panes (place()).
  *  wide (≥ 1280): left slot = sidebar or the work pane, right slot = thread or work;
  *  medium: one right slot with a switcher; the sidebar is a column from 1024, a drawer below;

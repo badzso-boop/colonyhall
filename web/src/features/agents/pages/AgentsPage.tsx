@@ -29,7 +29,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-/** Ügynökök (docs/handoff/33, part 4): search, filters, grouping; a card opens the overview. */
+/** Ügynökök (round 33, part 4): search, filters, grouping; a card opens the overview. */
 export default function AgentsPage() {
   const { t } = useTranslation("agents");
   const [search, setSearch] = useSearchParams();

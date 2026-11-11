@@ -10,7 +10,7 @@ import { displayState } from "../model";
 const stateTone = { working: "accent", idle: "neutral", offline: "neutral", paused: "warning", stopped: "danger", archived: "neutral" } as const;
 
 /**
- * An agent's part of the profile popover (docs/handoff/34, part 7): its
+ * An agent's part of the profile popover (round 34, part 7): its
  * state, machine and client, and "Áttekintés", which opens the overview pane.
  */
 export function AgentProfileDetails({ agentId, onOpenOverview }: { agentId: string; onOpenOverview?: () => void }) {

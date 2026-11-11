@@ -10,7 +10,7 @@ const me = { id: "h", kind: "human", handle: "norbi", display_name: "Norbi", rol
 const agent = (id: string, handle: string, extra = {}) => ({ id, kind: "agent", handle, display_name: handle, role: "member", state: "active", created_at: "", ...extra });
 const config = { agent_id: "a1", handle: "backend", host_id: "pc", client: "claude-code", model: "sonnet", work_model: "sonnet", allow_work: true, permission_mode: "auto", mode: "direct",
   root_dir: "/home/n/projects/colonyhall", worktree_repo: "", sandbox: false, approvals: "none", max_session_tokens: 150000, daily_token_limit: 0, grants: [{ id: "g1", path: "/home/n/data", mode: "read" }] };
-const hosts = [{ id: "pc", name: "pc-wsl", color: "teal", state: "approved", created_at: "", last_seen_at: new Date().toISOString(),
+const hosts = [{ id: "pc", name: "pc-dev", color: "teal", state: "approved", created_at: "", last_seen_at: new Date().toISOString(),
   report: { roots: ["/home/n"], clients: [{ name: "claude-code", version: "2.1" }], rejected: [] }, agents: [config] }];
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
@@ -133,7 +133,7 @@ test("the directory: fuzzy search with highlights, filters in the URL, archived 
   await waitFor(() => expect(document.querySelector("mark")?.textContent).toBe("szerver"));
   fireEvent.click(screen.getByRole("button", { name: "archivált" }));
   await waitFor(() => expect(screen.getByRole("status", { name: "location" }).textContent).toContain("archived=1"));
-  fireEvent.click(screen.getByRole("button", { name: /pc-wsl/ }));
+  fireEvent.click(screen.getByRole("button", { name: /pc-dev/ }));
   expect(screen.getByRole("status", { name: "location" }).textContent).toContain("host=pc");
 });
 

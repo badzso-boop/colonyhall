@@ -83,7 +83,7 @@ func (a *Agent) ScopeRoots() []ScopeRoot {
 	} else if a.RootDir != "" {
 		// A full-access agent's browser starts where the agent works: its
 		// root folder, not every root of the machine (which would show only
-		// the project folders, e.g. /mnt/g/Projects).
+		// the project folders, e.g. /home/alice/projects).
 		add(filepath.Base(a.RootDir), a.RootDir, "write")
 	} else {
 		for _, r := range a.activeRoots() {

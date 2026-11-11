@@ -27,7 +27,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 type Profile = { description: string; avatarEmoji: string; color: string; statusText: string; timezone: string };
 
 /**
- * An agent's settings (docs/handoff/33, part 4): the profile and limits may
+ * An agent's settings (round 33, part 4): the profile and limits may
  * change; the configuration and instructions are read-only, with "Másolat
  * új agentként" as the way to change them.
  */

@@ -468,7 +468,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	audhttp.Register(mux, auSvc, idSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
 	// Host-level folder listing: the guard's own WebSocket (host token)
-	// carries host.fs.request frames; see docs/handoff/33-host-fs-relay-notes.md.
+	// carries host.fs.request frames; see round 33.
 	hostGw := &gateway.HostGateway{Auth: hoSvc, Logger: opt.Logger}
 	hostFs := &hosts.FsRelay{Hosts: hoSvc, Pusher: hostGw}
 	hosthttp.RegisterFs(mux, hoSvc, hostFs, idSvc)

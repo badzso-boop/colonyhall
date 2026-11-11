@@ -1,5 +1,5 @@
 /**
- * The pane manager (docs/handoff/31, part 5): pure state and rules, no React.
+ * The pane manager (round 31, part 5): pure state and rules, no React.
  *
  * Beside the main column there are two slots, right and left (where the
  * sidebar normally is). A thread is the conversation pane; terminals, the

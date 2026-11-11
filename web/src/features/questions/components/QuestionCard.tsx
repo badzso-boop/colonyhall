@@ -11,7 +11,7 @@ import { useAnswerQuestion } from "../api";
 import { countdown, type Question } from "../model";
 
 /**
- * One question (docs/handoff/34, part 3): number, the asking agent, the
+ * One question (round 34, part 3): number, the asking agent, the
  * text, a link to its thread, the deadline countdown and default option;
  * the options as buttons and a free-text answer. The question text is the
  * agent's: shown as text, never interpreted.

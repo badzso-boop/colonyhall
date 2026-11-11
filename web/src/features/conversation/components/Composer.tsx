@@ -52,7 +52,7 @@ function Tray({ tray }: { tray: AttachmentTray }) {
   );
 }
 
-/** The message composer (docs/handoff/31, part 5). */
+/** The message composer (round 31, part 5). */
 export function Composer({ channelId, threadRootId, placeholder, memberIds, tray, readOnly, onOpenFiles, onOpenTerminals }: Props) {
   const { t } = useTranslation("conversation");
   const width = useWidth();

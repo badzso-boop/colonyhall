@@ -1,0 +1,25 @@
+# gitleaks configuration (make privacy, CI job `privacy`): the default rules,
+# minus the known test fixtures and third-party code. A new finding fails CI;
+# if it is a deliberate fake (a test of the secret scanner, a documented dev
+# token), add the file here with a comment, never the secret itself.
+title = "colonyhall"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, placeholders and vendored code"
+paths = [
+  # Vendored Monaco editor: minified third-party code, licence header URLs.
+  '''internal/httpserver/web/vendor/''',
+  # Tests of the secret scanner and of secret masking: fake tokens on purpose.
+  '''internal/platform/secretscan/secretscan_test\.go''',
+  '''internal/guard/step_test\.go''',
+  '''internal/e2e/git_test\.go''',
+  '''internal/e2e/search_test\.go''',
+  # Local build and dependency folders (not tracked; present on dev machines).
+  '''(^|/)node_modules/''',
+  '''^web/dist/''',
+  '''^dist/''',
+  '''^bin/''',
+]

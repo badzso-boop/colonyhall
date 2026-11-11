@@ -95,7 +95,7 @@ func TestNormalizeCalendarURL(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"http://example.com/a.ics", "file:///etc/passwd", "https://127.0.0.1/a.ics", "https://10.0.0.5/a.ics",
-		"https://100.85.111.88/a.ics", "https://[::1]/a.ics", "https://user:pw@example.com/a.ics", "ftp://example.com/a.ics", ""} {
+		"https://100.64.0.10/a.ics", "https://[::1]/a.ics", "https://user:pw@example.com/a.ics", "ftp://example.com/a.ics", ""} {
 		if _, err := NormalizeCalendarURL(bad); !errors.Is(err, ErrCalendarURL) {
 			t.Errorf("%s should be refused, got %v", bad, err)
 		}

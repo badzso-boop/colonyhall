@@ -18,7 +18,7 @@ expect() {
   done
 }
 
-expect pr "docs/06-allapot-es-uzemeltetes.md README.md task.md" \
+expect pr "docs/02-muszaki-specifikacio.md README.md CONTRIBUTING.md" \
   "go=false web=false gen=false build=false docker=false race=false vuln=false shell=false actions=false"
 expect pr "web/src/app/App.tsx" "web=true go=false gen=true build=true docker=true race=false vuln=false"
 expect pr "web/package-lock.json" "web=true vuln=true"
@@ -56,7 +56,7 @@ needs() { # results-for-filtered-jobs outputs-value [jq-overrides]
     ([ "go-test","go-e2e","go-race","go-pg","go-lint","gen-check","web-typecheck","web-lint",
        "web-test","devpage-test","shellcheck","actionlint","vuln","build","install-test",
        "docker-image" ] | map({key: ., value: {result: $r}}) | from_entries) +
-    {"e2e-browser": {result: "skipped"}}' | jq -c "${3:-.}"
+    {"e2e-browser": {result: "skipped"}, privacy: {result: "success"}}' | jq -c "${3:-.}"
 }
 
 gate "$(needs success true)" 0 "everything ran and passed"
@@ -65,6 +65,8 @@ gate "$(needs success true '."go-e2e".result = "failure"')" 1 "a failed job"
 gate "$(needs success true '."web-test".result = "cancelled"')" 1 "a cancelled job"
 gate "$(needs success true '."go-pg".result = "skipped"')" 1 "a job skipped although its filter said run"
 gate "$(needs skipped false '.changes.result = "failure"')" 1 "the changes job failed"
+gate "$(needs skipped false '.privacy.result = "failure"')" 1 "the privacy check failed on a docs-only change"
+gate "$(needs success true '.privacy.result = "skipped"')" 1 "the privacy check skipped (it always runs)"
 gate "$(needs success true 'del(."vuln")')" 1 "a job missing from needs"
 gate "$(needs success true '. + {"new-job": {result: "success"}}')" 1 "a job not known to ci-ok.sh"
 gate "$(needs success true '.changes.outputs.browser = "true"')" 1 "browser tests switched on but skipped"

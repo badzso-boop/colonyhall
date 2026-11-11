@@ -1,7 +1,7 @@
 import type { Section } from "./model";
 
 /**
- * Sidebar sections (docs/handoff/34, part 2): pure moves over the viewer's
+ * Sidebar sections (round 34, part 2): pure moves over the viewer's
  * sections, used for the optimistic update and to compute what the server
  * is told. Positions are renumbered 0..n-1 after every move.
  */

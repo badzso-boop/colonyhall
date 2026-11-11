@@ -101,7 +101,7 @@ function AccessDialog({ kind, onClose }: { kind: AccessKind; onClose: () => void
 }
 
 /**
- * "Hozzáférés" on the Feladatok and Naptár pages (docs/handoff/34, part 8):
+ * "Hozzáférés" on the Feladatok and Naptár pages (round 34, part 8):
  * which agents may read the owner's tasks or calendar. Every human owns
  * their own planner; agents do not get the button.
  */

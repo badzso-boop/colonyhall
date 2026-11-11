@@ -19,7 +19,7 @@ function CopyDialog({ handle, onClose }: { handle: string; onClose: () => void }
 }
 
 /**
- * The agent dialogs, addressable in the URL from anywhere (docs/handoff/33,
+ * The agent dialogs, addressable in the URL from anywhere (round 33,
  * part 4): ?agent=<handle>&settings=<tab>, ?new=1[&host=<id>], ?new=1&copy=<handle>.
  */
 export function AgentDialogs() {

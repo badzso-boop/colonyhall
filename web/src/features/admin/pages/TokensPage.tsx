@@ -183,7 +183,7 @@ function OthersTokens({ meId }: { meId: string | undefined }) {
 
 const WIZARD_KEY = "colony.ownerKeyWizard";
 
-/** The guided rotation (docs/handoff/35, part 5). Only ids and ticks are remembered, never the secret. */
+/** The guided rotation (round 35, part 5). Only ids and ticks are remembered, never the secret. */
 function OwnerKeyWizard({ actorId }: { actorId: string | undefined }) {
   const { t } = useTranslation("admin");
   const [state, setState] = useLocalStorage<WizardState>(WIZARD_KEY, wizardStart);

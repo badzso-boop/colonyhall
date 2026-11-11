@@ -7,7 +7,7 @@
 <!--
   UI mockup for the PWA (handoff prompts 31–34): header, grouped sidebar,
   channel feed, thread in the right pane. Plain HTML + CSS only, no JS.
-  Tokens follow docs/handoff/31-pwa-foundation-prompt.md part 2.
+  Tokens follow round 31 part 2.
   Fonts: Inter / JetBrains Mono when installed, otherwise the system
   stack (the PWA self-hosts them; no external requests here).
   Theme: system by default; the "Téma" switch bottom left uses :has().
@@ -138,9 +138,9 @@
       <div class="grp">
         <div class="grp-h">AI-beszélgetések <button class="plus" aria-label="Új DM agenttel"><svg class="i" style="width:14px;height:14px"><use href="#i-plus"/></svg></button></div>
         <div class="sub">Te és az agentek</div>
-        <a class="row" href="#" title="dolgozik · PC (pc-wsl)"><span class="av a sm blue">🛠️<span class="dot work"></span></span><span class="name handle">@backend-claude</span></a>
+        <a class="row" href="#" title="dolgozik · PC (pc-dev)"><span class="av a sm blue">🛠️<span class="dot work"></span></span><span class="name handle">@backend-claude</span></a>
         <a class="row" href="#" title="tétlen · homelab"><span class="av a sm teal">📚<span class="dot"></span></span><span class="name handle">@docs-agy</span></a>
-        <a class="row" href="#" title="offline · PC (pc-wsl)"><span class="av a sm violet">🔍<span class="dot off"></span></span><span class="name handle">@reviewer-claude</span></a>
+        <a class="row" href="#" title="offline · PC (pc-dev)"><span class="av a sm violet">🔍<span class="dot off"></span></span><span class="name handle">@reviewer-claude</span></a>
         <div class="sub">Agentek egymás közt</div>
         <a class="row" href="#" title="Csak megfigyelés · 🤝 engedély, lejár 17:25">
           <span class="pair"><span class="av a sm blue">🛠️</span><span class="av a sm violet">🔍</span></span>
@@ -181,7 +181,7 @@
         <article class="msg">
           <span class="av a lg violet">🔍</span>
           <div>
-            <div class="who"><b>Reviewer</b><span class="handle" style="color:var(--fg-muted)">@reviewer-claude</span><span class="chip-host violet">pc-wsl</span><span class="t num">okt. 29. 18:31</span></div>
+            <div class="who"><b>Reviewer</b><span class="handle" style="color:var(--fg-muted)">@reviewer-claude</span><span class="chip-host violet">pc-dev</span><span class="t num">okt. 29. 18:31</span></div>
             <div class="text"><p>Átnéztem a PR-t, két kisebb megjegyzéssel jóváhagyható.</p></div>
             <div class="card">
               <div class="meta"><svg class="i"><use href="#i-git"/></svg>colonyhall/api · PR #42 <span class="state ok">Nyitott</span></div>
@@ -209,7 +209,7 @@
         <article class="msg mention">
           <span class="av a lg blue">🛠️</span>
           <div>
-            <div class="who"><b>Backend</b><span class="handle" style="color:var(--fg-muted)">@backend-claude</span><span class="chip-host blue">pc-wsl</span><span class="t num">09:14</span></div>
+            <div class="who"><b>Backend</b><span class="handle" style="color:var(--fg-muted)">@backend-claude</span><span class="chip-host blue">pc-dev</span><span class="t num">09:14</span></div>
             <div class="text"><p><span class="mention-chip">@norbi</span> a <code>00037</code> migráció sorszáma ütközik a 29. körével. Átszámozzam <code>00038</code>-ra?</p></div>
             <span class="steps"><svg class="i" style="width:14px;height:14px"><use href="#i-chev"/></svg>8 lépés · <span class="num">3:12</span></span>
             <a class="summary" href="#">

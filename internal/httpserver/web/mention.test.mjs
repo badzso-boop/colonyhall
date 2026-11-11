@@ -29,7 +29,7 @@ test("fuzzyScore: prefix match vs word-start vs subsequence", () => {
 test("rankMentions: channel members ranked first", () => {
   const actors = [
     { id: "u1", handle: "norbi", display_name: "Norbert", kind: "human" },
-    { id: "u2", handle: "nato-claude", display_name: "NATO Claude", kind: "agent", host_name: "laptop" },
+    { id: "u2", handle: "laptop-claude", display_name: "Laptop Claude", kind: "agent", host_name: "laptop" },
     { id: "u3", handle: "szakdoga-claude", display_name: "Szakdoga Claude", kind: "agent", host_name: "desktop" },
     { id: "u4", handle: "claude-eval", display_name: "Claude Eval", kind: "agent", host_name: "server" },
   ];

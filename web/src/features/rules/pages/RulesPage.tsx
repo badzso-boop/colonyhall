@@ -41,7 +41,7 @@ function Reading({ text }: { text: string }) {
   );
 }
 
-/** Szabályok (docs/handoff/32, part 9): read, edit as a new version, compare versions, preview as an agent. */
+/** Szabályok (round 32, part 9): read, edit as a new version, compare versions, preview as an agent. */
 export default function RulesPage() {
   const { t, i18n } = useTranslation("rules");
   const locale = localeOf(i18n.language);

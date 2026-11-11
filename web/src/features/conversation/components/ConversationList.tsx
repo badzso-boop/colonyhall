@@ -16,7 +16,7 @@ import { DeleteSectionDialog, SectionNameDialog } from "./SectionDialogs";
 import { buildSidebar, dmPeers, unreadTotals, type Actor, type Section, type SidebarGroup, type SidebarRow } from "../model";
 import { dropIndex, itemOrder, sectionOf, sectionOrder } from "../sections";
 
-/* ---------- Drag and drop (docs/handoff/34, part 2) ---------- */
+/* ---------- Drag and drop (round 34, part 2) ---------- */
 
 type Drag = { type: "section"; id: string } | { type: "row"; id: string; from: string | null };
 
@@ -314,7 +314,7 @@ function Group({ group, actors, meId, sections, human }: GroupProps) {
   );
 }
 
-/** The conversation groups of the sidebar (docs/handoff/31, part 4; sections: 34, part 2). */
+/** The conversation groups of the sidebar (round 31, part 4; sections: 34, part 2). */
 export function ConversationList() {
   const { t } = useTranslation("conversation");
   const channels = useChannels();

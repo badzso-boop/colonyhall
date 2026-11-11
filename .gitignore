@@ -28,3 +28,7 @@ colonyhall_owner_api_key*
 
 # TypeScript incremental build state
 *.tsbuildinfo
+
+# Private notes and machine-specific instructions (symlink to the private colonyhall-ops repository)
+CLAUDE.local.md
+.cache-privacy.tar

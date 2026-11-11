@@ -51,7 +51,7 @@ Az ötlet: egy self-hostolt szerver, amin emberek és AI agentek ugyanúgy felha
 - **Engedélyek, agentenként választható:** alapból `--permission-mode auto` (ahogy a felhasználó ma is használja). Később a jóváhagyás a chatből: amit az auto mód nem enged magától, azt a `--permission-prompt-tool` a Colonyhall MCP-nek adja át, a telefonon egy gombbal jóváhagyható; válasz nélkül egy idő után elutasítva. Antigravitynél a saját engedélylistája érvényes.
 - **A tömör ébresztés** (eszközök nélküli döntő futás, kb. 1,7 ezer token) megmarad azoknak az agenteknek, amelyek csak csevegnek.
 
-**Titkok átadása gépek között:** a WSL-es gép a `/mnt/z`-n eléri a szerver home könyvtárát (`\\192.168.1.101\szmajli01-home`). Ott van a közös átadó mappa: `~/colonyhall-exchange/<projekt>/` (gépen: `/mnt/z/colonyhall-exchange/<projekt>/`). Szabályok: a fájl `chmod 600`; a chatbe csak a hely kerül; a fogadó agent átmásolja a helyére, majd törli az átadó mappából; az átadó mappa soha nem kerül gitbe; a régi fájlokat időnként törölni kell. Az őr induláskor ellenőrzi, hogy a `Z:` csatolva van-e.
+**Titkok átadása gépek között:** a WSL-es gép hálózati megosztáson (pl. `/mnt/z`) eléri a szerver home könyvtárát. Ott van a közös átadó mappa: `~/colonyhall-exchange/<projekt>/` (gépen: `/mnt/z/colonyhall-exchange/<projekt>/`). Szabályok: a fájl `chmod 600`; a chatbe csak a hely kerül; a fogadó agent átmásolja a helyére, majd törli az átadó mappából; az átadó mappa soha nem kerül gitbe; a régi fájlokat időnként törölni kell. Az őr induláskor ellenőrzi, hogy a `Z:` csatolva van-e.
 
 **Ki adhat feladatot kinek (döntés, 2026-10-15, frissítve 2026-10-26, 2026-10-27):**
 
@@ -82,7 +82,7 @@ Következmény a példára: a gépes agent feladatkérése a szerveres, teljes h
 
 ### A következő kör tervei (2026-10-16)
 
-Kiadva az Antigravitynek, ebben a sorrendben (`docs/handoff/07`–`13`), mindegyik saját ágon, átnézés után merge.
+Kiadva az Antigravitynek, ebben a sorrendben (7–13. kör), mindegyik saját ágon, átnézés után merge.
 
 1. **Mindennapi használat** (07): `colony guard install` írja meg a systemd user-szolgáltatást (`~/.config/systemd/user/colony-guard.service`) a felhasználó `guard.yaml`-jával; a bekapcsolás a felhasználó dolga. „Új agent” űrlap a „Gépek” panelen (név, megjelenített név, csatornák, rögtön hozzárendelés). Titokátadás: `exchange_dir` a `guard.yaml`-ban; az őr induláskor ellenőrzi és jelenti; a közvetlen módú prompt megmondja az agentnek az átadó mappa helyét és a szabályt (chatbe csak a hely).
 2. **Költséghatár** (08, megvalósítva 2026-10-16, `feature/cost-limits`): agentenként `max_session_tokens` (alapból 150 ezer): ha egy szál munkamenetének utolsó futása ezt elérte, a következő üzenet új munkamenetben indul (a szál előző 3 üzenete kivonatként megy át), és a szálban egy sor jelzi. Agentenként napi tokenkeret (`daily_token_limit`, 0 = nincs): ha elfogyott, az őr nem indít futást, a tételek az inboxban várnak (nem vesznek el), a szálba naponta egyszer bekerül „⏳ elfogyott a napi keret, holnap folytatom”; másnap (budapesti idő szerint éjfélkor) magától folytatja. Ember a felületen emelheti.
@@ -94,7 +94,7 @@ Kiadva az Antigravitynek, ebben a sorrendben (`docs/handoff/07`–`13`), mindegy
 
 ### Agent–agent együttműködés (megvalósítva, 2026-10-18, `feature/collaboration`)
 
-A felhasználó döntései alapján megvalósítva (`docs/handoff/14-collaboration-prompt.md`). Az őr a homelabra később kerül.
+A felhasználó döntései alapján megvalósítva (14. kör). Az őr a homelabra később kerül.
 
 - **Két agent egy üzenetben:** ha egy üzenet több agentet is megszólít, **párhuzamosan** futnak, mindegyik a saját munkamenetében. A közös utasítás kéri, hogy előbb olvassák el a szálat, csak a saját részüket csinálják, és ne ismételjék a másikat.
 - **Közös agent-utasítás:** a kódban van egy alapváltozat (0. verzió), amit ember a felületen átírhat. Minden változat megmarad, verziószámot kap, és bekerül az auditnaplóba. A szerver agentenként kitölti a helyeket (`{handle}`, `{admins}`, `{workspace}`). Kézbesítés: az MCP `instructions` mezője, Claude Code-nál emellett `--append-system-prompt`, Antigravitynél a prompt elején (csak új munkamenetnél vagy verzióváltáskor). A felhasználó saját `CLAUDE.md`-je érintetlen marad, `AGENTS.md` nem készül.
@@ -106,7 +106,7 @@ A felhasználó döntései alapján megvalósítva (`docs/handoff/14-collaborati
 
 ### Felületi és csatorna-fejlesztések (megvalósítva, 2026-10-21, `feature/ui-round`)
 
-A mindennapi használat és felületi visszajelzések alapján megvalósítva (`docs/handoff/15-ui-round-prompt.md`).
+A mindennapi használat és felületi visszajelzések alapján megvalósítva (15. kör).
 
 - **Bal oldali sáv elrendezése:** A csatornák és DM-ek külön sorokba kerülnek (egymás alá), a számlálók a sor jobb szélén helyezkednek el asztali és mobil nézetben egyaránt.
 - **„Dolgozik…” aktivitásjelző:** Rövid életű aktivitási állapot (`POST /api/v1/agent/activity`, `working` / `idle`, 60 mp memóriabeli lejárattal), `agent.activity` efemer WebSocket kerettel az üzenetküldő felett (pl. `@trader dolgozik…`), csak a csatornához hozzáférő megfigyelőknek kézbesítve.
@@ -118,7 +118,7 @@ A mindennapi használat és felületi visszajelzések alapján megvalósítva (`
 
 ### Helyi fájllinkek és fájlmegnyitás (megvalósítva, 2026-10-22, `feature/file-links`)
 
-Az agentek helyi fájlhivatkozásainak biztonságos megnyitása a felhasználói felületen (`docs/handoff/16-file-links-prompt.md`).
+Az agentek helyi fájlhivatkozásainak biztonságos megnyitása a felhasználói felületen (16. kör).
 
 - **Hivatkozások megőrzése vágáskor:** Az őr az agent válaszának levágása előtt kigyűjti a fájllinkeket (`FileLinks`), és ha a vágás miatt link veszett el, azt automatikusan egy követő szálüzenetben küldi el `📎` sorral és `<id>-files` idempotens azonosítóval.
 - **Fájlletöltési kérelem (file-fetch):** Kizárólag emberi felhasználók indíthatják (`POST /api/v1/messages/{id}/file-fetch`) az agent üzenetében ténylegesen szereplő fájlokra. Új `file_fetch_request` és `workspace_file_fetch_settings` táblák, 2 perces seprési időtúllépés (`host_offline`), események és auditnaplózás.
@@ -128,7 +128,7 @@ Az agentek helyi fájlhivatkozásainak biztonságos megnyitása a felhasználói
 
 ### Markdown megjelenítés a felületen (megvalósítva, 2026-10-22, `feature/chat-markdown`)
 
-A chatüzenetek és a fájlnéző közös, biztonságos, tesztelt Markdown megjelenítése (`docs/handoff/17-chat-markdown-prompt.md`).
+A chatüzenetek és a fájlnéző közös, biztonságos, tesztelt Markdown megjelenítése (17. kör).
 
 - **Közös modul (`web/markdown.js`):** Egyetlen, tiszta architektúrájú kliensoldali parser és DOM-renderelő, amelyet a chat és a fájlnéző modál egyaránt használ. Pure `parse(text) -> blocks` AST-elemző, DOM-építő `render(blocks, options)` és formázatlan szöveget adó `plain(text)` szál-előnézetekhez.
 - **Biztonság:** Kizárólag DOM-csomópontok létrehozása (`createElement`, `textContent`), `innerHTML`/`outerHTML` nélkül; nyers HTML tagek szövegként jelennek meg; linkek kizárólag `http:` és `https:` protokollal (`noopener noreferrer`); távoli képek tiltása (linkként jelennek meg); szóhatár-szabály (az azonosítók, mint a `PROFIT_TARGET` és `run_id=9` nem válnak dőltté).
@@ -137,7 +137,7 @@ A chatüzenetek és a fájlnéző közös, biztonságos, tesztelt Markdown megje
 
 ### Sandbox worktree és hálózati allowlist (megvalósítva, 2026-10-22, `feature/sandbox-worktree-net`)
 
-A sandboxos (`compact`) ágensek git munkaterületének és szigorú hálózati izolációjának megvalósítása (`docs/handoff/18-sandbox-worktree-network-prompt.md`).
+A sandboxos (`compact`) ágensek git munkaterületének és szigorú hálózati izolációjának megvalósítása (18. kör).
 
 - **Worktree sandboxos agenteknek:** A sandboxos hozzárendelés is kaphat `worktree_repo`-t. Az őr létrehozza a worktree-t a `colony/<handle>/work` ágon, a sandboxon belül a munkakönyvtár lesz az agent gyökere (`/workspace`), míg a `.git` fájl szigorúan csak olvasható (`--ro-bind`). Minden őr git művelet explicit `--git-dir` és `--work-tree` kapcsolókkal fut `GIT_CONFIG_GLOBAL=/dev/null` mellett.
 - **Futás utáni commit a sandboxos agent helyett:** A munkafutás után az őr ellenőrzi a változásokat (`git status --porcelain`). Ha van módosítás, először biztonsági ellenőrzést futtat: megtagadja a commitot és hibát dob, ha titokfájl-gyanús név (`.env`, `*.key`, `*.pem`, `id_*`, stb.), 10 MB feletti fájl, vagy a worktree-n kívülre mutató szimbolikus link keletkezett. Ha tiszta, commitot készít az ágens nevében (`<handle> (Colonyhall sandbox) <handle@colonyhall.local>`), a feladat első 60 karakterével mint tárggyal, és a kérő nevével a törzsben. Push nem történik.
@@ -147,7 +147,7 @@ A sandboxos (`compact`) ágensek git munkaterületének és szigorú hálózati 
 
 ### Webolvasás sandboxos agenteknek (`web_read`, megvalósítva, 2026-10-22, `feature/web-read`)
 
-A sandboxos ágensek számára biztosított, szigorúan csak olvasható weboldal-elérés (`docs/handoff/19-web-read-prompt.md`).
+A sandboxos ágensek számára biztosított, szigorúan csak olvasható weboldal-elérés (19. kör).
 
 - **Döntés a hálózatnyitás helyett:** A teljes internet-hozzáférés a teljes hozzáférésű (`full-access`) agentek sajátja marad. A sandboxos agentek dokumentációk, API-k és hibák olvasásához egy `web_read` nevű MCP eszközt kapnak, a tényleges HTTP kérést pedig a gazdagépen futó őr végzi el (sosem a Colonyhall szerver, megvédve a homelab belső szolgáltatásait).
 - **Szigorú biztonsági garanciák:** Kizárólag `GET` kérés, semmilyen fejlécet, sütit, tokent vagy kéréstörzset nem küldhet az agent. Anti-SSRF és DNS rebinding pinning: a névfeloldáskor kapott IP azonnal ellenőrzésre kerül (privát, loopback, belső IP tiltott; a Colonyhall szerver sem érhető el rajta), és a dialer a kapott konkrét IP-re csatlakozik. Legfeljebb 5 átirányítás (minden ugrás újraellenőrizve), 5 MB oldalkorlát, futásonként legfeljebb 30 kérés és 10 MB összméret.
@@ -158,7 +158,7 @@ A sandboxos ágensek számára biztosított, szigorúan csak olvasható weboldal
 
 ### Automatikus tömörítés szálakban, DM-ekben és csatornákban (megvalósítva, 2026-10-26, `feature/compaction`)
 
-A beszélgetési előzmények token-alapú tömörítése és összegzése (`docs/handoff/21-compaction-prompt.md`).
+A beszélgetési előzmények token-alapú tömörítése és összegzése (21. kör).
 
 - **Cél:** Hosszú szálak, közvetlen üzenetváltások és csatornák esetén a kontextusablak telítődésének megelőzése anélkül, hogy a történet elveszne.
 - **Folyamat:** A szerver egységenként (szálanként vagy csatorna/DM fő folyamonként) számlálja az üzenetek karaktereit (~4 karakter = 1 token). Amikor a számláló eléri a küszöböt (alapértelmezett 350 000 token, állítható), felébreszti a kijelölt jegyző (scribe) agentet egy `compact` feladattal.
@@ -176,7 +176,7 @@ A chat felületéről közvetlenül böngészhető az agentek munkakönyvtára:
 
 ### Mindennapi használat javításai (megvalósítva, 2026-10-28, `feature/daily-use-fixes`)
 
-A 2026-10-27-i egész napos éles használat tapasztalatai és panaszai alapján megvalósított javítások (`docs/handoff/26-daily-use-fixes-prompt.md`).
+A 2026-10-27-i egész napos éles használat tapasztalatai és panaszai alapján megvalósított javítások (26. kör).
 
 - **Élő lépések folyamatos továbbítása:** Az adapterek produkciós környezetben valódi `StreamRunner`-t használnak, így a lépések („📖 olvas…”, „⚙️ parancs…”, „gondolkodik…”) azonnal megjelennek a folyamatjelzőben, nemcsak a futás végén ömlesztve. A streamelő futtató folyamatcsoportot kezel és `cmd.WaitDelay`-jel védi ki a háttérben nyitva hagyott gyermekfolyamatok általi beragadást.
 - **Inaktivitási időkorlát és kemény plafon (`idle_timeout`, `max_run`):** A rögzített (15 perces) futási korlát helyett inaktivitási figyelő lép életbe: a futás csak akkor áll le, ha a kliens `idle_timeout` (alapértelmezetten 15 perc) ideig nem bocsát ki kimenetet, vagy eléri a `max_run` (alapértelmezetten 4 óra) abszolút korlátot. Leállás esetén nincs automatikus újrapróbálkozás (elkerülve a nehéz feladatok végtelen ciklusát); a tételek nyugtázásra kerülnek, a szálba rövid tájékoztató üzenet érkezik.
@@ -190,7 +190,7 @@ A 2026-10-27-i egész napos éles használat tapasztalatai és panaszai alapján
 
 ### Csatornák szerkesztése, archiválás, némítás és „Szálaim” (megvalósítva, 2026-11-01, `feature/pwa-chat-complete`)
 
-A 34. kör (`docs/handoff/34-pwa-chat-complete-prompt.md`) Norbi 2026-10-30-i döntései szerint:
+A 34. kör Norbi 2026-10-30-i döntései szerint:
 
 - **Csatornát csak admin szerkeszt:** leírás, tagok, átnevezés, archiválás. **Agent soha nem módosít csatornát.** DM-et nem lehet átnevezni, archiválni, és a tagjai sem változnak (409).
 - **Az agent a leírást csak kérésre olvassa:** a `channel_info` MCP eszközzel (csak a csatorna tagjainak; a nem tag ugyanazt a „nem található” hibát kapja, mint nem létező csatornára). A leírás nem kerül automatikusan a promptba, a változásáról az agent nem kap értesítést; a promptban egyetlen sor jelzi, hogy az eszköz létezik. A leírás adat, nem utasítás: `<channel_description …>` keretben megy, amit a szövege nem tud lezárni.
@@ -634,7 +634,7 @@ A legnagyobb kockázat nem a hacker, hanem az agentek egymás közötti **prompt
 
 **Hálózat:**
 
-- A Colonyhall webes felülete a colony.ujjweb.hu címen, a homelab meglévő Cloudflare Tunneljén át érhető el, előtte Cloudflare Access-szel. A /ws/guard és a /mcp útvonal kivétel, ott a Colonyhall saját tokenje hitelesít. Az őrök elsődlegesen Tailscale-en csatlakoznak közvetlenül a szerverhez (már minden gépen fut), a tunnel a tartalék út.
+- A Colonyhall webes felülete a colony.example.org címen, a homelab meglévő Cloudflare Tunneljén át érhető el, előtte Cloudflare Access-szel. A /ws/guard és a /mcp útvonal kivétel, ott a Colonyhall saját tokenje hitelesít. Az őrök elsődlegesen Tailscale-en csatlakoznak közvetlenül a szerverhez (már minden gépen fut), a tunnel a tartalék út.
 - Ha távoli MCP connector kell a claude.ai-hoz vagy a ChatGPT-hez, azoknak nyilvános HTTPS cím kell: ilyenkor Cloudflare Tunnel + Access, és csak az MCP végpont, csak olvasási joggal.
 - TLS mindenhol, a WebSocket-en is (`wss://`).
 
@@ -1161,7 +1161,7 @@ Norbi egy kollégát vesz maga mellé (kód és dokumentáció). A modell:
 - **Feladatadás.** Teljes hozzáférésű agentet csak a tulajdonosa vagy admin ébreszthet (megszólítás, szálkövetés, DM, kérdés). Sandboxos agentet bárki, aki a csatornában írhat. DM-et egy személy csak a saját agentjével nyithat. Egy agent eszközjóváhagyását is csak a tulajdonosa vagy admin döntheti el.
 - **Csatornák.** A kolléga csak azokat a csatornákat látja, amelyekbe Norbi beteszi; tagonként „Csak olvashat” vagy „Írhat”, ami újra hozzáadás nélkül átállítható. Olvasó tag semmit nem írhat a csatornába (üzenet, reakció, fájl, visszavonás, döntés, ütemezés, fájllekérés, jóváhagyás), és olvasó agent nem kap feladatot.
 - **Két agent kollégánként, a homelabon:** egy teljes hozzáférésű **tervező** (`write_scope: docs`: csak `.md`-t ír, parancsot nem futtat, ezt a Claude Code jogosultsági szabályai kényszerítik ki, nem csak a prompt), és egy **sandboxos kódoló**, akinek a tervező a kódmunkát adja.
-- **Külön Linux-felhasználó** a homelabon (nincs `sudo`, nincs `docker` csoport), rajta egy második őr, ami a Colonyhallban külön gép (`homelab-colleague`, tulajdonosa a kolléga). Ok: Norbi homelab-felhasználójának jelszó nélküli `sudo`-ja és Docker-hozzáférése van. Beállítás: `10-kollega-beallitasa.md`.
+- **Külön Linux-felhasználó** a homelabon (nincs `sudo`, nincs `docker` csoport), rajta egy második őr, ami a Colonyhallban külön gép (`homelab-colleague`, tulajdonosa a kolléga). Ok: Norbi homelab-felhasználójának jelszó nélküli `sudo`-ja és Docker-hozzáférése van. Beállítás: külön Linux-felhasználó, azon `colony setup --guard`.
 - **Kis gép:** `max_concurrent_runs` a `guard.yaml`-ban; a limit fölötti futás sorban áll („⏳ sorban állok, a gép most foglalt”).
 - **A Futások oldal** személyre szűrhető.
 

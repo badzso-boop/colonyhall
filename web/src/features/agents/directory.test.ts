@@ -17,18 +17,18 @@ const actors = [
   { ...actor("h", "norbi"), kind: "human" } as Actor,
 ];
 const hosts = [
-  host("pc", "pc-wsl", "2026-10-31T09:59:30Z", [cfg("a", "claude-code", false), cfg("e", "claude-code", true)]),
+  host("pc", "pc-dev", "2026-10-31T09:59:30Z", [cfg("a", "claude-code", false), cfg("e", "claude-code", true)]),
   host("hl", "homelab", "2026-10-31T09:00:00Z", [cfg("b", "antigravity", true, "gemini")]),
 ];
 const rows = buildRows(actors, hosts, new Set(["a"]), now);
 
 test("rows: agents only, with their machine, access and state", () => {
   expect(rows.map((r) => [r.actor.handle, r.state, r.access ?? "-", r.host?.name ?? "-"])).toEqual([
-    ["backend-claude", "working", "full", "pc-wsl"],
+    ["backend-claude", "working", "full", "pc-dev"],
     ["frontend-ag", "offline", "sandbox", "homelab"],
     ["old-bot", "archived", "-", "-"],
     ["api-bot", "idle", "-", "-"],
-    ["paused-bot", "paused", "sandbox", "pc-wsl"],
+    ["paused-bot", "paused", "sandbox", "pc-dev"],
   ]);
 });
 
@@ -51,7 +51,7 @@ test("filters combine, archived ones only on request, and round-trip through the
 });
 
 test("grouping by machine (API-key agents last) or state", () => {
-  expect(groupRows(rows, "host").map((g) => [g.host?.name ?? "-", g.rows.length])).toEqual([["homelab", 1], ["pc-wsl", 2], ["-", 2]]);
+  expect(groupRows(rows, "host").map((g) => [g.host?.name ?? "-", g.rows.length])).toEqual([["homelab", 1], ["pc-dev", 2], ["-", 2]]);
   expect(groupRows(rows, "state").map((g) => g.key)).toEqual(["working", "idle", "paused", "offline", "archived"]);
 });
 

@@ -11,7 +11,7 @@ import { MessageItem, type MessageHandlers, type Viewer } from "./MessageItem";
 const NEAR_BOTTOM = 80;
 
 /**
- * A conversation's feed (docs/handoff/31, part 5): day separators, the
+ * A conversation's feed (round 31, part 5): day separators, the
  * "Új üzenetek" divider at the first unread message, older pages when
  * scrolling up (keeping the position), a "↓ N új üzenet" pill while
  * scrolled up, and read marking while the end is in view.
