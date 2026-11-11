@@ -71,6 +71,16 @@ Options:
 
 Propose one; note that the agents' working instructions (`CLAUDE.md`) are read by Claude Code in every round, so moving them changes the workflow.
 
+**Binding rule (Norbi, 2026-11-11): the real values move, they are never just replaced.** Norbi, Claude Code and the agents keep working from the real addresses, host names, paths and deploy commands after the merge. Only the public files get examples. The target layout (refine it at the gate, do not drop any part):
+- **`CLAUDE.md`** stays public with the general part (architecture rules, language, commands, tests). Everything about Norbi's machines (the homelab server and its address, the guards, deploy and guard-restart commands, Gitea addresses and accounts, `/mnt/g/...` paths) moves to **`CLAUDE.local.md`**, which is gitignored and which Claude Code loads next to `CLAUDE.md`.
+  - Worktrees do not get untracked files. Say how every new worktree gets it (e.g. a symlink step in the handoff prompts' first code block, or an `@`-import of a file outside the repo), and check it on a real worktree.
+  - Check that Claude Code really loads it: in a fresh session in the main checkout and in a worktree, ask for the deploy command and get the real one.
+- **Homelab and colleague documents** (`docs/05-homelab-telepites.md`, `docs/10-kollega-beallitasa.md`, the operations part of `docs/06-allapot-es-uzemeltetes.md`, and whatever 0.2 decides about `docs/handoff/*` and `task.md`) move to a **private companion repository** (proposed name `colonyhall-ops`) with the real values unchanged. The public repository keeps the general install guide (`docs/16-telepites.md`) and an English operations overview with examples.
+  - You cannot create GitHub repositories: prepare its content in a folder outside this repository (e.g. `/mnt/g/Projects/colonyhall-ops`, a local `git init` is fine), and give Norbi the steps to create and push it.
+- **`deploy/`:** the real values stay in the gitignored `.env`; the `*.example` files get example addresses. Whatever is homelab-specific in `deploy/compose.yaml` and cannot be generalised moves to a gitignored `compose.override.yaml` (or to `colonyhall-ops`), and the deploy command still works unchanged on the homelab.
+- **Tests and test fixtures:** use the documentation ranges and names (`192.0.2.0/24`, `198.51.100.0/24`, `100.64.0.0/10` examples, `example.test`); they do not need the real values.
+- **Memory and agent configuration** outside the repository (`~/.claude/...`, the guards' `guard.yaml`, `~/.config/colonyhall/`) are untouched.
+
 ### 0.3 License (decided: AGPL-3.0 + CLA; check that it works)
 
 - **Dependency licences:** run `go-licenses` (Go) and `license-checker` (npm, `web/`), list everything that is not MIT/BSD/Apache/ISC, and check the vendored Monaco editor's licence and notices. Confirm each one is compatible with AGPL-3.0 **and** with a commercial licence of the same code (a dependency that only allows GPL-family use would block the dual licence: flag it).
@@ -127,7 +137,12 @@ A numbered checklist for Norbi, from the last rotation of secrets to switching t
 
 ## 1. Clean-up (after the gate)
 
-- Remove or generalise the class (a) and (b) findings in the working tree, as approved: config examples with placeholder addresses, documents moved or generalised.
+- **Move first, then remove.** For every class (a) and (b) finding, as approved: first write the real value to its new place (`CLAUDE.local.md`, `colonyhall-ops`, `deploy/.env`, `compose.override.yaml`), then replace it in the public file with an example or a pointer ("see `CLAUDE.local.md`").
+- Keep a **move table** in the report: value kind (never the value itself), old file and line, new place. Nothing may be in the "removed" column without a "new place".
+- **Check that nothing broke**, before you report:
+  - a fresh Claude Code session in the main checkout and in a new worktree gives the real deploy and guard-restart commands;
+  - the homelab deploy works from the cleaned tree: `docker compose -f deploy/compose.yaml config` on the homelab with the real `.env` (and the override, if any) gives the same effective configuration as before, compared with a `config` dump taken before the clean-up (compare and report, do not deploy);
+  - `guard.example.yaml` and the installer still produce a working config with the example values.
 - Add `.gitleaks.toml` and a CI job that runs gitleaks on every PR.
 - **Tests:** a test or CI check that fails if one of Norbi's addresses or host names appears again in a tracked file outside the private parts.
 
@@ -189,4 +204,5 @@ As in 0.5.
 - the decisions Norbi made at the gates;
 - the publishing-day checklist (final);
 - what is still open for the site;
-- what the reviewer should look at first (the history scan and its coverage, the licence compatibility table, the list of code authors for the CLA, the leftover personal data check).
+- the move table (from part 1) and the checks that the real values still work;
+- what the reviewer should look at first (the history scan and its coverage, the licence compatibility table, the list of code authors for the CLA, the move table, the leftover personal data check).
