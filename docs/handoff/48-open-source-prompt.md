@@ -35,12 +35,18 @@ Two goals:
 - The server image on GHCR is public; the installer (round 41, `feature/installer`, `docs/15-telepites-terv.md`, `docs/16-telepites.md`, the new `README.md`) is the way people install it.
 - Patterns were taken from AGPL projects (Mattermost, Dendrite, Synapse, Stoat) **but no code was copied** (`CLAUDE.md`, "Licenc"). The audit must confirm this.
 - Round 40 (`docs/handoff/40-security-prompt.md`) covers security. Link to its results; do not redo them.
+- **The licence is decided (Norbi, 2026-11-11): `AGPL-3.0-only` with a CLA, i.e. dual licensing** (the Element/Synapse model). Do not re-open the choice; part 0.3 only checks that it works.
+  - Everyone may use, self-host and modify Colonyhall under the AGPL. Whoever offers a modified version as a network service must publish its source (AGPL section 13), or buy a commercial licence from Norbi.
+  - Contributors sign a CLA so that their code can also be offered under the commercial licence. Base it on the Apache Individual CLA (as Element does), and add Element's commitment: every contribution also stays available under an OSI-approved licence (the AGPL).
+  - Paid features may later live in a separate `ee/` directory under a commercial licence (the Cal.com model). Do not create it in this round; only make sure nothing in the layout or the licence files rules it out.
 
 ## 0. Audit and checklist (design gate)
 
 Write `docs/17-nyilt-forraskod.md` (Hungarian). For every item give: what was found (with file paths and line numbers, **never the secret itself**), what you propose, and what Norbi must decide. Then **stop**.
 
 ### 0.1 Secrets and private data, in the working tree **and in the whole git history**
+
+**Pre-scan (2026-11-11, before this round; repeat it, the history has grown):** gitleaks 8.28 and trufflehog 3.90 over all 459 commits of every branch found **no real secret** and no verified one. Every finding was a test fixture (`secretscan_test.go`, `step_test.go`, `git_test.go`, `search_test.go`, `setup_test.go`, `webread_test.go`), a placeholder in `deploy/.env*.example`, or a false positive in the vendored Monaco editor (102 "Github" hits). No `.env`, key or token file was ever committed. Every commit has the same author e-mail (the public contact above). So the history question below is expected to end with "keep the history"; the remaining work is class (b): Norbi's Tailscale and LAN addresses, host and user names and `/mnt/g/` paths in about 25 tracked files (docs, `CLAUDE.md`, `deploy/.env.prod.example`, a few tests).
 
 - Run `gitleaks` and `trufflehog` (in Docker; scan `git log --all`, not just HEAD), and grep for:
   - tokens (`col_`, `colh_`, `sk-ant-`, `ghp_`, `github_pat_`), passwords, `.env` files ever committed, private keys;
@@ -65,12 +71,16 @@ Options:
 
 Propose one; note that the agents' working instructions (`CLAUDE.md`) are read by Claude Code in every round, so moving them changes the workflow.
 
-### 0.3 License
+### 0.3 License (decided: AGPL-3.0 + CLA; check that it works)
 
-- Compare **AGPL-3.0**, **Apache-2.0**, **MIT** and **source-available** licences (e.g. FSL, BSL) for a project that may be sold as a subscription later (an open-core model, a hosted offer). Say what each allows a competitor to do (host it as a service, fork it, sell it).
-- **Dependency licences:** run `go-licenses` (Go) and `license-checker` (npm, `web/`), list everything that is not MIT/BSD/Apache/ISC, and check the vendored Monaco editor's licence and notices. Check that the chosen licence is compatible.
-- **Contributions:** DCO (sign-off) or a CLA. A CLA keeps the option of selling a commercial licence later; say what that costs contributors.
-- Copyright holder and year; the `LICENSE` file; whether to add headers to source files (propose: no headers, one `LICENSE` + `NOTICE`).
+- **Dependency licences:** run `go-licenses` (Go) and `license-checker` (npm, `web/`), list everything that is not MIT/BSD/Apache/ISC, and check the vendored Monaco editor's licence and notices. Confirm each one is compatible with AGPL-3.0 **and** with a commercial licence of the same code (a dependency that only allows GPL-family use would block the dual licence: flag it).
+- **No borrowed AGPL code:** confirm that nothing was copied from Mattermost, Dendrite, Synapse or Stoat (`CLAUDE.md`, "Licenc"). With dual licensing this matters even more: Norbi can only sell a commercial licence for code he owns.
+- **Ownership of the existing code:** today every commit is Norbi's (two author names, both his; agent work is committed under his name). Confirm this with `git log --all`, and list any other author that appears (e.g. Norbi's colleague after round 38) with whose permission or CLA Norbi needs before the commercial licence covers their commits.
+- **SPDX identifier: `AGPL-3.0-only`** (decided, 2026-11-11; as Synapse). Use it in `LICENSE`, `README.md`, `package.json` files and the GHCR image labels.
+- **AGPL section 13 (network users must be offered the source):** propose how the server shows a "Source code" link (e.g. in the PWA's About or Settings page and in `/api/v1/version`), configurable so a modified deployment points to its own source.
+- **The CLA mechanism:** propose the CLA text (Apache ICLA-based, with the commitment above, plus a corporate variant only if cheap) and how it is signed on GitHub (CLA Assistant or the `contributor-assistant` GitHub Action; no secrets needed for forks). Say what it costs contributors.
+- Copyright holder: **Ujj Norbert** (decided, 2026-11-11), with the year; the `LICENSE` file; source-file headers (propose: no headers, one `LICENSE` + `NOTICE`).
+- How a buyer gets the commercial licence: one paragraph for the README. The only contact is **norbert.ujj@gmail.com** (decided, 2026-11-11); use it in the README, `SECURITY.md`, the CLA and the Code of Conduct, and nowhere else. The commercial terms themselves are out of scope.
 
 ### 0.4 The name and the brand
 
@@ -123,7 +133,9 @@ A numbered checklist for Norbi, from the last rotation of secrets to switching t
 
 ## 2. License and notices
 
-`LICENSE`, `NOTICE` (third-party notices, including the vendored Monaco editor), the licence line in `README.md`, the chosen DCO or CLA setup (a GitHub check, or a CLA assistant config for Norbi to enable).
+- `LICENSE` (the AGPL-3.0 text, unmodified), `NOTICE` (third-party notices, including the vendored Monaco editor), the licence section in `README.md` (AGPL-3.0, the commercial licence option, the CLA).
+- `CLA.md` and the signing check (CLA Assistant config or the `contributor-assistant` workflow), **written but not enabled**: Norbi enables it.
+- The "Source code" link required by AGPL section 13, as approved at the gate, with a test.
 
 ## 3. Community files and templates
 
@@ -177,4 +189,4 @@ As in 0.5.
 - the decisions Norbi made at the gates;
 - the publishing-day checklist (final);
 - what is still open for the site;
-- what the reviewer should look at first (the history scan and its coverage, the licence compatibility table, the leftover personal data check).
+- what the reviewer should look at first (the history scan and its coverage, the licence compatibility table, the list of code authors for the CLA, the leftover personal data check).
