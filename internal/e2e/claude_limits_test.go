@@ -456,17 +456,15 @@ func TestGuard_ClaudeLimiterPause_E2E(t *testing.T) {
 		return runCalls == 2
 	})
 
-	// Verify reply appears in thread
-	var thFinal apispec.Thread
-	e.do("GET", fmt.Sprintf("/api/v1/messages/%s/thread", threadID), server.DevAdminToken, nil, &thFinal)
-	foundReply := false
-	for _, rep := range thFinal.Replies {
-		if strings.Contains(rep.Body, "Second run done after reset") {
-			foundReply = true
-			break
+	// The reply is posted after the run returns: wait for it.
+	eventually(t, "second run reply in thread", func() bool {
+		var th apispec.Thread
+		e.do("GET", fmt.Sprintf("/api/v1/messages/%s/thread", threadID), server.DevAdminToken, nil, &th)
+		for _, rep := range th.Replies {
+			if strings.Contains(rep.Body, "Second run done after reset") {
+				return true
+			}
 		}
-	}
-	if !foundReply {
-		t.Fatal("expected second run reply in thread, not found")
-	}
+		return false
+	})
 }
