@@ -37,7 +37,7 @@ func requireHost(svc *hosts.Service, next http.HandlerFunc) http.Handler {
 			httpx.Error(w, r, err)
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), hostKey{}, h)))
+		next(w, r.WithContext(context.WithValue(db.WithWorkspace(r.Context(), h.WorkspaceID), hostKey{}, h)))
 	})
 }
 

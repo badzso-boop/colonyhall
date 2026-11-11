@@ -11,6 +11,7 @@ import (
 
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/config"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/server"
 )
 
@@ -45,7 +46,7 @@ func bootstrapCmd(args []string, stdin io.Reader) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := system.Context(context.Background()) // a server command, for any workspace
 	app, err := server.New(ctx, server.Options{
 		Store:       cfg.Store,
 		DatabaseURL: cfg.DatabaseURL,

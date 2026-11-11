@@ -39,6 +39,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -517,6 +518,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "unauthorized")
 		return
 	}
+	ctx = db.WithWorkspace(ctx, actor.WorkspaceID)
 
 	signals, unsubscribe := g.Bus.Subscribe()
 	defer unsubscribe()

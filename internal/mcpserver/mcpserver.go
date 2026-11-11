@@ -12,6 +12,7 @@ import (
 
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/db"
 )
 
 // Instructions is sent to every MCP client on connect.
@@ -52,10 +53,13 @@ func Handler(auth identity.Authenticator, version string, register RegisterTools
 	}, nil)
 	// Reject unauthenticated requests with 401 before the MCP layer sees them.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := auth.Authenticate(r.Context(), httpx.BearerToken(r)); err != nil {
+		actor, err := auth.Authenticate(r.Context(), httpx.BearerToken(r))
+		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		h.ServeHTTP(w, r)
+		// The go-sdk keeps the values of a session's first request for its
+		// tool calls, so the narrowed scope reaches every tool.
+		h.ServeHTTP(w, r.WithContext(db.WithWorkspace(r.Context(), actor.WorkspaceID)))
 	})
 }

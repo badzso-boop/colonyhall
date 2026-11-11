@@ -32,8 +32,10 @@ func Session(r *http.Request) (identity.Session, bool) {
 }
 
 // WithActor stores the authenticated actor in ctx.
+// It also narrows the database scope to the actor's workspace (round 45):
+// every store call the handler makes sees that workspace's rows only.
 func WithActor(ctx context.Context, a identity.Actor) context.Context {
-	return context.WithValue(ctx, actorKey{}, a)
+	return context.WithValue(db.WithWorkspace(ctx, a.WorkspaceID), actorKey{}, a)
 }
 
 // Actor returns the authenticated actor. Handlers behind RequireAuth can rely on it.

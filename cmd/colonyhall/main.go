@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"colonyhall/internal/platform/config"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/server"
 )
 
@@ -76,7 +77,7 @@ func setPassword(args []string) error {
 		return err
 	}
 	pw = strings.TrimRight(pw, "\r\n")
-	ctx := context.Background()
+	ctx := system.Context(context.Background()) // a server command, for any workspace
 	app, err := server.New(ctx, server.Options{
 		Store:       cfg.Store,
 		DatabaseURL: cfg.DatabaseURL,
@@ -112,7 +113,7 @@ func setSlug(args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := system.Context(context.Background()) // a server command, for any workspace
 	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, FilesDir: cfg.FilesDir, MaxUploadMB: cfg.MaxUploadMB})
 	if err != nil {
 		return err

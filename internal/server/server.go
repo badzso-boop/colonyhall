@@ -132,6 +132,7 @@ import (
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/migrations"
 )
@@ -624,6 +625,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 
 // Run starts the background consumers and blocks until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	// The background work is for every workspace; each loop and consumer
+	// narrows to one workspace per item it handles (round 45).
+	ctx = system.Context(ctx)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -675,6 +679,7 @@ func (a *App) Run(ctx context.Context) error {
 // Drain runs every consumer until it has processed all current events.
 // Tests use it to make the asynchronous parts deterministic.
 func (a *App) Drain(ctx context.Context) error {
+	ctx = system.Context(ctx)
 	for pass := 0; pass < 10; pass++ {
 		var anyProcessed bool
 		for _, c := range a.Consumers {
@@ -708,6 +713,7 @@ const (
 // SeedDev creates a workspace with @norbi (owner), @fake-agent and #general,
 // unless the admin token already works.
 func (a *App) SeedDev(ctx context.Context) error {
+	ctx = system.Context(ctx) // creates the dev workspace and looks it up
 	if owner, err := a.Identity.Authenticate(ctx, DevAdminToken); err == nil {
 		// Already seeded; databases seeded before passwords existed get one now.
 		if _, err := a.Identity.Store.Credential(ctx, owner.ID); errors.Is(err, db.ErrNotFound) {

@@ -191,7 +191,7 @@ func (s *Service) RunDue(ctx context.Context) (int, error) {
 	}
 	posted := 0
 	for _, sc := range due {
-		ok, err := s.fire(ctx, sc, now)
+		ok, err := s.fire(db.WithWorkspace(ctx, sc.WorkspaceID), sc, now) // the loop runs for every workspace
 		if err != nil {
 			return posted, err
 		}
