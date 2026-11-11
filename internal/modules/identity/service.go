@@ -26,6 +26,8 @@ type Service struct {
 	// Logger receives the security log (round 45); nil: slog.Default.
 	Logger *slog.Logger
 
+	wsCache workspaceCache
+
 	// HostColors maps assigned agents to their machine's colour, for
 	// Actor.EffectiveColor (wired to the hosts module; nil: none).
 	HostColors func(ctx context.Context, workspaceID ids.ID) (map[ids.ID]string, error)
@@ -360,12 +362,15 @@ const (
 // workspace's audit log and logged as an error, and the caller gets the
 // same answer as for an unknown credential.
 func (s *Service) credentialScope(ctx context.Context, kind string, find func(context.Context, []byte) (ids.ID, error), hash []byte) (context.Context, error) {
-	ws, err := find(ctx, hash)
-	if errors.Is(err, db.ErrNotFound) {
-		return ctx, ErrUnauthorized
-	}
-	if err != nil {
-		return ctx, err
+	ws, cached := s.wsCache.get(kind, hash)
+	if !cached {
+		var err error
+		if ws, err = find(ctx, hash); errors.Is(err, db.ErrNotFound) {
+			return ctx, ErrUnauthorized
+		} else if err != nil {
+			return ctx, err
+		}
+		s.wsCache.put(kind, hash, ws)
 	}
 	if t, ok := tenant.From(ctx); ok && t.Workspace != ws {
 		s.crossTenant(db.WithWorkspace(ctx, ws), ws, t, kind, hash)
