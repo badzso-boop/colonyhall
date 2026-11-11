@@ -3569,6 +3569,23 @@ type StatusGuard struct {
 	Online bool `json:"online"`
 }
 
+// StatusSizeSample defines model for StatusSizeSample.
+type StatusSizeSample struct {
+	Date      openapi_types.Date `json:"date"`
+	SizeBytes int64              `json:"size_bytes"`
+}
+
+// StatusTableSize defines model for StatusTableSize.
+type StatusTableSize struct {
+	Name string `json:"name"`
+
+	// RowsEstimate The planner's estimate (pg_class.reltuples), not count(*).
+	RowsEstimate int64 `json:"rows_estimate"`
+
+	// TotalBytes With indexes and TOAST.
+	TotalBytes int64 `json:"total_bytes"`
+}
+
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
 	Compaction struct {
@@ -3582,8 +3599,16 @@ type SystemStatus struct {
 	} `json:"connections"`
 	Consumers []StatusConsumer `json:"consumers"`
 	Database  struct {
-		LatencyMs float64 `json:"latency_ms"`
-		Ok        bool    `json:"ok"`
+		// Growth One sample of size_bytes a day (UTC) for the last 90 days, oldest first; absent on the memory store.
+		Growth    *[]StatusSizeSample `json:"growth,omitempty"`
+		LatencyMs float64             `json:"latency_ms"`
+		Ok        bool                `json:"ok"`
+
+		// SizeBytes The whole database (pg_database_size); absent on the memory store.
+		SizeBytes *int64 `json:"size_bytes,omitempty"`
+
+		// Tables The 10 largest tables, biggest first; absent on the memory store.
+		Tables *[]StatusTableSize `json:"tables,omitempty"`
 	} `json:"database"`
 	EventHead              int64         `json:"event_head"`
 	GiteaConfigured        bool          `json:"gitea_configured"`

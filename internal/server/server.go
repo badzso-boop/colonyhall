@@ -48,6 +48,9 @@ import (
 	convmcp "colonyhall/internal/modules/conversation/mcptools"
 	convmem "colonyhall/internal/modules/conversation/memory"
 	convpg "colonyhall/internal/modules/conversation/postgres"
+	"colonyhall/internal/modules/dbstats"
+	dbstatsmem "colonyhall/internal/modules/dbstats/memory"
+	dbstatspg "colonyhall/internal/modules/dbstats/postgres"
 	"colonyhall/internal/modules/decision"
 	dechttp "colonyhall/internal/modules/decision/httpapi"
 	decmcp "colonyhall/internal/modules/decision/mcptools"
@@ -195,6 +198,7 @@ type App struct {
 	Sidebar      *sidebar.Service
 	Compaction   *compaction.Service
 	Delegation   *delegation.Service
+	DBStats      *dbstats.Service
 	Runs         *runs.Service
 	Gateway      *gateway.Gateway
 	HostGateway  *gateway.HostGateway
@@ -249,6 +253,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		sbStore        sidebar.Store
 		cmStore        compaction.Store
 		dgStore        delegation.Store
+		dsStore        dbstats.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -273,6 +278,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		sbStore = sidebarmem.New()
 		cmStore = compmem.NewStore()
 		dgStore = delegationmem.New()
+		dsStore = dbstatsmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -312,6 +318,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		sbStore = &sidebarpg.Store{DB: pg}
 		cmStore = &comppg.Store{DB: pg}
 		dgStore = &delegationpg.Store{DB: pg}
+		dsStore = &dbstatspg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -573,7 +580,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	})))
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, dlSvc, gw, opt.Clock)
 	registerAgents(mux, idSvc, agSvc)
-	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, Events: events,
+	dsSvc := &dbstats.Service{Store: dsStore, Clock: opt.Clock}
+	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, DBStats: dsSvc, Events: events,
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB)})
 
@@ -600,6 +608,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Sidebar:      sbSvc,
 		Compaction:   cmSvc,
 		Delegation:   dgSvc,
+		DBStats:      dsSvc,
 		Runs:         ruSvc,
 		Gateway:      gw,
 		HostGateway:  hostGw,
@@ -646,6 +655,11 @@ func (a *App) Run(ctx context.Context) error {
 				}
 			}
 		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.maintenanceLoop(ctx, maintenanceInterval)
 	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)

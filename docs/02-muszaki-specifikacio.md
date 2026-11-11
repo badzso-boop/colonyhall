@@ -398,6 +398,10 @@ A felhasználó beállításai, `CLAUDE.md`-je, memóriája és MCP-szerverei be
 | `folder_grant` | id, agent_id, host_id, path, mode (`read`, `write`), created_by, created_at, revoked_at | Visszavonás jelöléssel; minden változás audit esemény |
 | `api_token` (bővítés) | host_id, expires_at | Az őr által kért agent-token: rövid lejáratú (1 óra), a géphez kötött |
 
+**Lejárt hitelesítők takarítása (50. kör):** a szerver induláskor, majd óránként törli azokat a rövid lejáratú, géphez kötött agent-tokeneket (`host_id` kitöltve), amelyek több mint 7 napja lejártak vagy vissza lettek vonva, és a több mint 30 napja lejárt vagy visszavont munkameneteket (1000 soros adagokban, `FOR UPDATE SKIP LOCKED`-dal, így több szerverpéldány is futtathatja egyszerre). A kézzel létrehozott tokenek (`host_id` nélkül) visszavonva is megmaradnak. A token és a munkamenet hitelesítő, nem append-only adat (4. szabály): a törlése nem visz el információt, mert hogy ki mit használt, az a futásnaplóban és az audit naplóban marad.
+
+**Adatbázisméret (50. kör, `internal/modules/dbstats`):** a `GET /admin/status` `system.database` része a teljes méretet (`size_bytes`, `pg_database_size`), a 10 legnagyobb táblát (`tables`: név, méret indexekkel és TOAST-tal, becsült sorszám a `pg_class.reltuples`-ből) és az elmúlt 90 nap napi mintáit (`growth`) is adja; memóriatárral ezek hiányoznak. A mintát ugyanaz a karbantartó ciklus írja naponta egyszer (`db_size_sample`, `ON CONFLICT DO NOTHING`, 400 napig marad). Csak emberi admin látja, mint a `system` többi részét.
+
 **API:**
 
 | Végpont | Ki hívja | Mit csinál |

@@ -365,6 +365,19 @@
     "running": "Running",
     "integrations": "Integrations",
     "backups": "Backups",
-    "backupsBody": "Backups are the operator's job (the database and the files volume); the server does not check them."
+    "backupsBody": "Backups are the operator's job (the database and the files volume); the server does not check them.",
+    "size": {
+      "title": "Database size",
+      "noDatabase": "Memory store: no database.",
+      "total": "Total size",
+      "growth": "Last 30 days",
+      "growthText_one": "{{delta}} in {{count}} day",
+      "growthText_other": "{{delta}} in {{count}} days",
+      "noGrowth": "not enough samples yet",
+      "tables": "The 10 largest tables",
+      "table": "Table",
+      "tableSize": "Size",
+      "rows": "Rows (estimate)"
+    }
   }
 }

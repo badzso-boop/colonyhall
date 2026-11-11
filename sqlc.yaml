@@ -111,7 +111,7 @@ sql:
     schema: migrations
     queries: internal/modules/delegation/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/delegation/postgres/sqlcgen } }
-
-
-
-
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/dbstats/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/dbstats/postgres/sqlcgen } }

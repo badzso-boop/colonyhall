@@ -110,6 +110,8 @@
 | Ügyfél | `member`, `observer` | Mint ma |
 | Platform | operátor | Ügyfél létrehozása, felfüggesztése, törlése; csomag és korlátok; használat; rendszerállapot; vészhozzáférés |
 
+- A Rendszerállapot oldal adatbázis-kártyája (teljes méret, legnagyobb táblák, napi minták; 50. kör) az egész telepítésről szól, ezért itt **csak az operátoré** lesz; az ügyfél adminja nem látja.
+
 - **Fejlesztői mód** (`COLONY_OPERATOR_DEV_ACCESS=1`):
   - az operátor minden munkaterület tartalmát látja, külön lépés nélkül;
   - a felület **minden oldalon kiírja**: „Fejlesztői mód: az operátor minden adatot lát”;

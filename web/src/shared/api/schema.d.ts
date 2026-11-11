@@ -2884,6 +2884,25 @@ export interface components {
             /** @description Seen in the last 90 seconds. */
             online: boolean;
         };
+        StatusTableSize: {
+            name: string;
+            /**
+             * Format: int64
+             * @description With indexes and TOAST.
+             */
+            total_bytes: number;
+            /**
+             * Format: int64
+             * @description The planner's estimate (pg_class.reltuples), not count(*).
+             */
+            rows_estimate: number;
+        };
+        StatusSizeSample: {
+            /** Format: date */
+            date: string;
+            /** Format: int64 */
+            size_bytes: number;
+        };
         SystemStatus: {
             version: string;
             /** Format: int64 */
@@ -2892,6 +2911,15 @@ export interface components {
                 ok: boolean;
                 /** Format: double */
                 latency_ms: number;
+                /**
+                 * Format: int64
+                 * @description The whole database (pg_database_size); absent on the memory store.
+                 */
+                size_bytes?: number;
+                /** @description The 10 largest tables, biggest first; absent on the memory store. */
+                tables?: components["schemas"]["StatusTableSize"][];
+                /** @description One sample of size_bytes a day (UTC) for the last 90 days, oldest first; absent on the memory store. */
+                growth?: components["schemas"]["StatusSizeSample"][];
             };
             /** Format: int64 */
             event_head: number;

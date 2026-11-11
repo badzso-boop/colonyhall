@@ -98,15 +98,21 @@ export function StackedBars({ days, series, label, format }: { days: StackDay[];
   );
 }
 
-/** One agent's tokens per day: one series, no legend, the row names it. */
-export function Sparkline({ values, label }: { values: number[]; label: string }) {
+/**
+ * One series per day, no legend, the row names it: an agent's tokens, or the
+ * database size. fromMin scales between the smallest and largest value, so a
+ * slowly growing total still shows its shape.
+ */
+export function Sparkline({ values, label, format, fromMin = false }: { values: number[]; label: string; format?: (n: number) => string; fromMin?: boolean }) {
   const { i18n } = useTranslation();
-  const max = Math.max(1, ...values);
   const locale = localeOf(i18n.language);
+  const show = format ?? ((n: number) => shortTokens(n, locale));
+  const base = fromMin ? Math.min(...values) : 0;
+  const span = Math.max(1, Math.max(...values) - base);
   return (
-    <span role="img" aria-label={`${label}: ${values.map((v) => shortTokens(v, locale)).join(", ")}`} className="flex h-6 w-24 items-end gap-px">
+    <span role="img" aria-label={`${label}: ${values.map(show).join(", ")}`} className="flex h-6 w-24 items-end gap-px">
       {values.map((v, i) => (
-        <span key={i} className="min-w-0 flex-1 rounded-t-[1px] bg-info" style={{ height: `${v > 0 ? Math.max(8, (v / max) * 100) : 0}%` }} />
+        <span key={i} className="min-w-0 flex-1 rounded-t-[1px] bg-info" style={{ height: `${v > 0 ? Math.max(8, ((v - base) / span) * 100) : 0}%` }} />
       ))}
     </span>
   );

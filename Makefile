@@ -60,8 +60,8 @@ VITEST_ARGS ?=
 web-vitest: $(WEB_DEPS) ## PWA Vitest (VITEST_ARGS="--shard=1/3" and the like)
 	npm --prefix web test -- $(VITEST_ARGS)
 
-test-pg:         ## Store contract tests against Postgres (needs `make dev`)
-	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
+test-pg:         ## Store contract tests and the Postgres e2e tests (needs `make dev`); one package at a time, they share the database
+	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test -p 1 ./internal/storetest/ ./internal/e2e/ -run '^TestPostgres' -v
 
 gen: $(WEB_DEPS) ## Regenerate code from api/openapi.yaml (Go and TypeScript) and SQL queries
 	$(GO) tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml

@@ -121,3 +121,22 @@ UPDATE actor SET role = $2 WHERE id = $1;
 
 -- name: SetActorOwner :exec
 UPDATE actor SET owner_id = sqlc.narg(owner_id) WHERE id = sqlc.arg(id);
+
+-- name: DeleteExpiredHostTokens :execrows
+-- One batch of short-lived guard tokens that expired or were revoked before
+-- the cut-off. SKIP LOCKED lets several servers sweep at once without waiting.
+DELETE FROM api_token WHERE id IN (
+    SELECT t.id FROM api_token t
+    WHERE t.host_id IS NOT NULL
+      AND (t.expires_at < sqlc.arg(before)::timestamptz OR t.revoked_at < sqlc.arg(before)::timestamptz)
+    LIMIT sqlc.arg(batch)::int
+    FOR UPDATE SKIP LOCKED
+);
+
+-- name: DeleteEndedSessions :execrows
+DELETE FROM session WHERE id IN (
+    SELECT s.id FROM session s
+    WHERE s.expires_at < sqlc.arg(before)::timestamptz OR s.revoked_at < sqlc.arg(before)::timestamptz
+    LIMIT sqlc.arg(batch)::int
+    FOR UPDATE SKIP LOCKED
+);
