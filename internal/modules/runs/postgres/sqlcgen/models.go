@@ -651,6 +651,8 @@ type Workspace struct {
 	CreatedAt       time.Time
 	EmergencyStopAt *time.Time
 	EmergencyStopBy *uuid.UUID
+	Slug            string
+	State           string
 }
 
 type WorkspaceCompactionSetting struct {

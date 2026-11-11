@@ -717,7 +717,7 @@ func (a *App) SeedDev(ctx context.Context) error {
 	} else if !errors.Is(err, identity.ErrUnauthorized) {
 		return err
 	}
-	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "norbi", "Norbi", DevAdminToken)
+	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "", "norbi", "Norbi", DevAdminToken)
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}

@@ -42,7 +42,43 @@ func New() *Store {
 func (s *Store) CreateWorkspace(_ context.Context, w identity.Workspace) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	w = identity.WithDefaults(w)
+	for _, other := range s.workspaces {
+		if other.Slug == w.Slug {
+			return db.ErrConflict
+		}
+	}
 	s.workspaces[w.ID] = w
+	return nil
+}
+
+// WorkspaceBySlug loads a workspace by its subdomain name.
+func (s *Store) WorkspaceBySlug(_ context.Context, slug string) (identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, w := range s.workspaces {
+		if w.Slug == slug {
+			return w, nil
+		}
+	}
+	return identity.Workspace{}, db.ErrNotFound
+}
+
+// SetWorkspaceSlug renames a workspace's subdomain.
+func (s *Store) SetWorkspaceSlug(_ context.Context, id ids.ID, slug string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	for _, other := range s.workspaces {
+		if other.ID != id && other.Slug == slug {
+			return db.ErrConflict
+		}
+	}
+	w.Slug = slug
+	s.workspaces[id] = w
 	return nil
 }
 

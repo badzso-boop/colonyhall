@@ -1,5 +1,5 @@
 -- name: CreateWorkspace :exec
-INSERT INTO workspace (id, name, created_at) VALUES ($1, $2, $3);
+INSERT INTO workspace (id, name, created_at, slug, state) VALUES ($1, $2, $3, $4, $5);
 
 -- name: CreateActor :exec
 INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, owner_id)
@@ -99,6 +99,12 @@ UPDATE api_token SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL;
 
 -- name: SetActorState :exec
 UPDATE actor SET state = $2 WHERE id = $1;
+
+-- name: WorkspaceBySlug :one
+SELECT * FROM workspace WHERE slug = $1;
+
+-- name: SetWorkspaceSlug :execrows
+UPDATE workspace SET slug = sqlc.arg(slug) WHERE id = sqlc.arg(id);
 
 -- name: WorkspaceByID :one
 SELECT * FROM workspace WHERE id = $1;

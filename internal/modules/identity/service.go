@@ -56,8 +56,16 @@ type NewActorInput struct {
 }
 
 // Bootstrap creates a workspace and its owner. It returns the owner's token.
-func (s *Service) Bootstrap(ctx context.Context, workspaceName, ownerHandle, ownerName, ownerSecret string) (Workspace, Actor, string, error) {
-	ws := Workspace{ID: s.IDs.New(), Name: workspaceName, CreatedAt: s.Clock.Now()}
+func (s *Service) Bootstrap(ctx context.Context, workspaceName, slug, ownerHandle, ownerName, ownerSecret string) (Workspace, Actor, string, error) {
+	ws := Workspace{ID: s.IDs.New(), Name: workspaceName, CreatedAt: s.Clock.Now(), State: WorkspaceActive}
+	switch {
+	case slug == "":
+		ws.Slug = SlugFromName(workspaceName, ws.ID)
+	case !ValidSlug(slug):
+		return Workspace{}, Actor{}, "", ErrInvalidSlug
+	default:
+		ws.Slug = slug
+	}
 	var owner Actor
 	var secret string
 	var seq int64
@@ -310,4 +318,21 @@ func (s *Service) Admins(ctx context.Context, workspaceID ids.ID) ([]Actor, erro
 // WorkspaceByID implements Directory.
 func (s *Service) WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error) {
 	return s.Store.WorkspaceByID(ctx, id)
+}
+
+// SetWorkspaceSlug gives the named workspace a new subdomain name (the
+// set-slug command; no actor, it runs on the server).
+func (s *Service) SetWorkspaceSlug(ctx context.Context, workspaceName, slug string) (Workspace, error) {
+	if !ValidSlug(slug) {
+		return Workspace{}, ErrInvalidSlug
+	}
+	ws, err := s.Store.WorkspaceByName(ctx, workspaceName)
+	if err != nil {
+		return Workspace{}, err
+	}
+	if err := s.Store.SetWorkspaceSlug(ctx, ws.ID, slug); err != nil {
+		return Workspace{}, err
+	}
+	ws.Slug = slug
+	return ws, nil
 }

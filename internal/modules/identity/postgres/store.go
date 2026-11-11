@@ -22,7 +22,12 @@ func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.D
 
 // CreateWorkspace inserts a workspace.
 func (s *Store) CreateWorkspace(ctx context.Context, w identity.Workspace) error {
-	return s.q(ctx).CreateWorkspace(ctx, sqlcgen.CreateWorkspaceParams{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt})
+	w = identity.WithDefaults(w)
+	err := s.q(ctx).CreateWorkspace(ctx, sqlcgen.CreateWorkspaceParams{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State})
+	if db.IsUniqueViolation(err) {
+		return db.ErrConflict
+	}
+	return err
 }
 
 // CreateActor inserts an actor.
@@ -248,7 +253,7 @@ func (s *Store) RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID
 }
 
 func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
-	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, EmergencyStopAt: w.EmergencyStopAt}
+	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State, EmergencyStopAt: w.EmergencyStopAt}
 	if w.EmergencyStopBy != nil {
 		out.EmergencyStopBy = *w.EmergencyStopBy
 	}
@@ -395,4 +400,27 @@ func deleteInBatches(step func() (int64, error)) (int64, error) {
 			return total, err
 		}
 	}
+}
+
+// WorkspaceBySlug loads a workspace by its subdomain name.
+func (s *Store) WorkspaceBySlug(ctx context.Context, slug string) (identity.Workspace, error) {
+	w, err := s.q(ctx).WorkspaceBySlug(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Workspace{}, db.ErrNotFound
+	}
+	return toWorkspace(w), err
+}
+
+// SetWorkspaceSlug renames a workspace's subdomain.
+func (s *Store) SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error {
+	n, err := s.q(ctx).SetWorkspaceSlug(ctx, sqlcgen.SetWorkspaceSlugParams{ID: id, Slug: slug})
+	switch {
+	case db.IsUniqueViolation(err):
+		return db.ErrConflict
+	case err != nil:
+		return err
+	case n == 0:
+		return db.ErrNotFound
+	}
+	return nil
 }

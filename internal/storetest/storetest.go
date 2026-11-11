@@ -241,6 +241,28 @@ func testIdentity(t *testing.T, b Backend) {
 	if len(byHandle) != 1 || byHandle[0].ID != f.human.ID {
 		t.Fatalf("ActorsByHandle: %+v", byHandle)
 	}
+	// Slugs (round 45): a default from the id, unique, renamable.
+	if w, err := b.Identity.WorkspaceByID(ctx, f.ws.ID); err != nil || w.Slug != identity.IDSlug(f.ws.ID) || w.State != identity.WorkspaceActive {
+		t.Fatalf("default slug and state: %+v %v", w, err)
+	}
+	other := identity.Workspace{ID: gen.New(), Name: "other", CreatedAt: t0, Slug: "acme"}
+	must(t, b.Identity.CreateWorkspace(ctx, other))
+	if err := b.Identity.CreateWorkspace(ctx, identity.Workspace{ID: gen.New(), Name: "dup", CreatedAt: t0, Slug: "acme"}); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("duplicate slug: %v", err)
+	}
+	if err := b.Identity.SetWorkspaceSlug(ctx, f.ws.ID, "acme"); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("taken slug: %v", err)
+	}
+	must(t, b.Identity.SetWorkspaceSlug(ctx, f.ws.ID, "beta"))
+	if w, err := b.Identity.WorkspaceBySlug(ctx, "beta"); err != nil || w.ID != f.ws.ID {
+		t.Fatalf("by slug: %+v %v", w, err)
+	}
+	if _, err := b.Identity.WorkspaceBySlug(ctx, "nope"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("unknown slug: %v", err)
+	}
+	if err := b.Identity.SetWorkspaceSlug(ctx, gen.New(), "gamma"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("missing workspace: %v", err)
+	}
 	if w, err := b.Identity.WorkspaceByName(ctx, "test"); err != nil || w.ID != f.ws.ID {
 		t.Fatalf("WorkspaceByName: %+v %v", w, err)
 	}

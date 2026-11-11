@@ -307,17 +307,25 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) error 
 }
 
 const createWorkspace = `-- name: CreateWorkspace :exec
-INSERT INTO workspace (id, name, created_at) VALUES ($1, $2, $3)
+INSERT INTO workspace (id, name, created_at, slug, state) VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateWorkspaceParams struct {
 	ID        uuid.UUID
 	Name      string
 	CreatedAt time.Time
+	Slug      string
+	State     string
 }
 
 func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error {
-	_, err := q.db.Exec(ctx, createWorkspace, arg.ID, arg.Name, arg.CreatedAt)
+	_, err := q.db.Exec(ctx, createWorkspace,
+		arg.ID,
+		arg.Name,
+		arg.CreatedAt,
+		arg.Slug,
+		arg.State,
+	)
 	return err
 }
 
@@ -736,6 +744,23 @@ func (q *Queries) SetEmergencyStop(ctx context.Context, arg SetEmergencyStopPara
 	return err
 }
 
+const setWorkspaceSlug = `-- name: SetWorkspaceSlug :execrows
+UPDATE workspace SET slug = $1 WHERE id = $2
+`
+
+type SetWorkspaceSlugParams struct {
+	Slug string
+	ID   uuid.UUID
+}
+
+func (q *Queries) SetWorkspaceSlug(ctx context.Context, arg SetWorkspaceSlugParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setWorkspaceSlug, arg.Slug, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const tokenByID = `-- name: TokenByID :one
 SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at FROM api_token WHERE id = $1
 `
@@ -825,7 +850,7 @@ func (q *Queries) UpdateActorProfile(ctx context.Context, arg UpdateActorProfile
 }
 
 const workspaceByID = `-- name: WorkspaceByID :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by FROM workspace WHERE id = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE id = $1
 `
 
 func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error) {
@@ -837,12 +862,14 @@ func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, e
 		&i.CreatedAt,
 		&i.EmergencyStopAt,
 		&i.EmergencyStopBy,
+		&i.Slug,
+		&i.State,
 	)
 	return i, err
 }
 
 const workspaceByName = `-- name: WorkspaceByName :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by FROM workspace WHERE name = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE name = $1
 `
 
 func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, error) {
@@ -854,6 +881,27 @@ func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, 
 		&i.CreatedAt,
 		&i.EmergencyStopAt,
 		&i.EmergencyStopBy,
+		&i.Slug,
+		&i.State,
+	)
+	return i, err
+}
+
+const workspaceBySlug = `-- name: WorkspaceBySlug :one
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE slug = $1
+`
+
+func (q *Queries) WorkspaceBySlug(ctx context.Context, slug string) (Workspace, error) {
+	row := q.db.QueryRow(ctx, workspaceBySlug, slug)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.EmergencyStopAt,
+		&i.EmergencyStopBy,
+		&i.Slug,
+		&i.State,
 	)
 	return i, err
 }

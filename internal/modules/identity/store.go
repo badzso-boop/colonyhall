@@ -48,6 +48,11 @@ type Store interface {
 	// ActorsByHandle finds the handle in every workspace (for login).
 	ActorsByHandle(ctx context.Context, handle string) ([]Actor, error)
 	WorkspaceByName(ctx context.Context, name string) (Workspace, error)
+	// WorkspaceBySlug finds a workspace by its subdomain name.
+	WorkspaceBySlug(ctx context.Context, slug string) (Workspace, error)
+	// SetWorkspaceSlug renames a workspace's subdomain; db.ErrConflict when
+	// another workspace has it, db.ErrNotFound when the workspace is gone.
+	SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error
 
 	// Credential returns the actor's password hash.
 	Credential(ctx context.Context, actorID ids.ID) (string, error)

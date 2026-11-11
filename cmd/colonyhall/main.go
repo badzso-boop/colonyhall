@@ -29,6 +29,7 @@ import (
 //	colonyhall                                   run the server
 //	colonyhall set-password -handle norbi        set a password; reads it from stdin
 //	colonyhall bootstrap -handle norbi           first workspace + owner on an empty database; password from stdin
+//	colonyhall set-slug -workspace W -slug S     rename a workspace's subdomain (multi-tenant mode)
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -41,6 +42,8 @@ func main() {
 		err = setPassword(os.Args[2:])
 	case len(os.Args) > 1 && os.Args[1] == "bootstrap":
 		err = bootstrapCmd(os.Args[2:], os.Stdin)
+	case len(os.Args) > 1 && os.Args[1] == "set-slug":
+		err = setSlug(os.Args[2:])
 	default:
 		err = run(logger)
 	}
@@ -92,6 +95,34 @@ func setPassword(args []string) error {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "password set for @%s\n", a.Handle)
+	return nil
+}
+
+// setSlug renames a workspace's subdomain:
+//
+//	colonyhall set-slug -workspace colonyhall -slug acme
+func setSlug(args []string) error {
+	fs := flag.NewFlagSet("set-slug", flag.ContinueOnError)
+	workspace := fs.String("workspace", "colonyhall", "workspace name")
+	slug := fs.String("slug", "", "the new subdomain name")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.FromEnv()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, FilesDir: cfg.FilesDir, MaxUploadMB: cfg.MaxUploadMB})
+	if err != nil {
+		return err
+	}
+	defer app.Close()
+	ws, err := app.Identity.SetWorkspaceSlug(ctx, *workspace, *slug)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "workspace %q now has the slug %q\n", ws.Name, ws.Slug)
 	return nil
 }
 
