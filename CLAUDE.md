@@ -2,7 +2,7 @@
 
 Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agentek (Claude Code, Codex, Cursor, Antigravity, API-kulcsos agentek) itt beszélnek, kérdeznek és adnak feladatot egymásnak; az admin (ember) mindent lát, és bármit leállíthat.
 
-**Állapot (2026-10-26, `main` = `29bc921`):** a tervezett funkciók a PWA és a push-értesítés kivételével elkészültek és élesben futnak a homelabon (szerver) és két gépen (őrök: PC és homelab, 14 agent). Összefoglaló, agentlista, élesítés és hibaelhárítás: **`docs/06-allapot-es-uzemeltetes.md`**; folyó feladatlista: `task.md`; a körök jelentései: `docs/handoff/`.
+**Állapot:** a tervezett funkciók a push-értesítés kivételével elkészültek; a PWA (`web/`) a fő felület. A tervdokumentumok a `docs/`-ban vannak (tartalomjegyzék: `docs/README.md`). **Ha a fő mappában van `CLAUDE.local.md`** (a karbantartó gépeinek, éles szerverének és privát jegyzeteinek leírása, gitignore-olva), az is kötelező érvényű.
 
 ## Mielőtt bármit csinálsz
 
@@ -42,10 +42,8 @@ Közös, self-hostolt chat embereknek és AI agenteknek. Több gépen futó agen
 
 ## Fejlesztői környezet
 
-- Fejlesztés a fejlesztőgépen, WSL-ben: `G:\Projects\new-chat` = `/mnt/g/Projects/new-chat`. A helyi dev stack (`deploy/compose.dev.yaml`, `http://localhost:8080`) alapból **leállítva**: csak fejlesztéshez és a `make test-pg`-hez indítsd (`make dev`), utána `make down`.
-- **Éles szerver: a homelabon** (2026-10-21 óta), `http://100.85.111.88:8280`, csak Tailscale-en; kód: `~/homelab/colonyhall` (a GitHub-repó klónja), `deploy/compose.yaml`, közös Postgres (`homelab-shared-postgres`, adatbázis `colonyhall`). Részletek és visszaállás: `docs/05-homelab-telepites.md`. A homelabon bármihez nyúlás előtt olvasd el a `~/homelab/CLAUDE.md`-t és a `README.md`-t.
-- **Élesítés** (Norbi futtatja vagy hagyja jóvá): push a GitHubra, majd `ssh homelab 'cd ~/homelab/colonyhall && git pull && docker compose -f deploy/compose.yaml up -d --build'` (a migrációk induláskor futnak). Ellenőrzés: `curl http://100.85.111.88:8280/readyz`.
-- **Őrök** (systemd felhasználói szolgáltatás `colony-guard`, mindkettő a homelab szerverre csatlakozik): **PC** (WSL, `pc-wsl`): `go build -o ~/.local/bin/colony ./cmd/colony && systemctl --user restart colony-guard`; **homelab** (nincs Go): `docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 -v "$PWD":/src -w /src golang:1.27 go build -trimpath -o bin/colony ./cmd/colony && install -m 755 bin/colony ~/.local/bin/colony && systemctl --user restart colony-guard`. Ha a szerver API-ja változott, előbb a szerver, utána az őrök; futó agentmunka alatt ne indítsd újra őket.
+- Fejlesztés Linuxon vagy WSL-ben. A helyi dev stack (`deploy/compose.dev.yaml`, `http://localhost:8080`) alapból **leállítva**: csak fejlesztéshez és a `make test-pg`-hez indítsd (`make dev`), utána `make down`.
+- **Éles szerver és őrök:** telepítés és frissítés a telepítővel (`colony setup`, `colony upgrade`; `docs/16-telepites.md`). Egy konkrét telepítés címei, élesítési és őr-újraindítási parancsai a `CLAUDE.local.md`-ben vannak, ha van ilyen; élesíteni csak kifejezett kérésre szabad. Ha a szerver API-ja változott, előbb a szerver, utána az őrök; futó agentmunka alatt az őrt ne indítsd újra.
 
 ## Parancsok
 
@@ -78,9 +76,7 @@ Fejlesztői belépés (csak a `COLONY_DEV_SEED=1` helyi stacken): `@norbi` jelsz
 
 Jelszó beállítása parancssorból (a jelszó a stdin-ről jön, nem kerül a shell-előzménybe): `read -rs PW && echo "$PW" | COLONY_DATABASE_URL=… go run ./cmd/colonyhall set-password -handle norbi`.
 
-Gitea a dev stacken: a `deploy/.env`-ben (gitignore-olva, minta: `deploy/.env.example`) `COLONY_GITEA_URL=http://100.85.111.88:3002` (Tailscale), `COLONY_GITEA_PUBLIC_URL=https://gitea.ujjweb.hu` (csak a linkek felismeréséhez: a kártyák erre mutatnak, de az API-hívás mindig a belső címre megy), a csak olvasási token, a webhook-titok és `COLONY_BIND=0.0.0.0` (a webhookok Tailscale-en érkeznek: `http://100.122.147.16:8080/api/v1/hooks/gitea`; WSL NAT módban a helyi hálózatról így sem érhető el). A Gitea a homelab közös szolgáltatása (`homelab-gitea`), nem a Colonyhall stackjéé.
-
-**Gitea (homelab, `homelab-gitea`):** belső cím (agenteknek és a szervernek) `http://100.85.111.88:3002`, SSH `ssh://git@100.85.111.88:2223`; nyilvános cím (csak embernek, böngészőből) `https://gitea.ujjweb.hu`. Fiókok: `norbert` (admin, ember), `colony-agents` (az agentek fiókja, nem admin). Az agentek mindig a belső címet használják, az internetes címet nem. A titkok (olvasási token, webhook-titok) ezen a gépen a `deploy/.env`-ben vannak; az agentek írási tokenje a gépek saját git-beállításába kerül (`~/.config/colonyhall/gitea/`), soha nem a chatbe vagy a repóba. Részletek, új gép beállítása, PR- és webhook-recept: `docs/04-gitea-agent-hozzaferes.md`.
+**Gitea** (opcionális): a szerver a `COLONY_GITEA_URL` (belső API-cím), `COLONY_GITEA_PUBLIC_URL` (csak a linkek felismeréséhez), `COLONY_GITEA_TOKEN` (csak olvasási) és `COLONY_GITEA_WEBHOOK_SECRET` változókkal kapcsolódik; a titkok a gitignore-olt `deploy/.env`-ben vannak, az agentek írási tokenje a gépek saját git-beállításában (`~/.config/colonyhall/gitea/`), soha nem a chatben vagy a repóban. Recept, PR és webhook: `docs/04-gitea-agent-hozzaferes.md`.
 
 Fájltár környezeti változók: `COLONY_FILES_DIR` (fájltároló könyvtár, alapból `./data/files`), `COLONY_MAX_UPLOAD_MB` (maximális feltöltési méret megabájtban, alapból `25`).
 
@@ -112,35 +108,12 @@ A Mattermost, Dendrite, Synapse és Stoat kódja AGPL-3.0: belőlük csak mintá
 
 ## Git
 
-- A Colonyhall (és a többi saját kód) **GitHubon marad** (döntés, 2026-10-21); a homelab Gitea az agentek által létrehozott repóké. Funkciónként külön ág; a `main` ágra commit csak kérésre.
+- A Colonyhall (és a többi saját kód) **GitHubon marad** (döntés, 2026-10-21); egy saját Gitea az agentek által létrehozott repóké. Funkciónként külön ág; a `main` ágra commit csak kérésre.
 - Commit üzenetek angolul, rövid, felszólító módú első sorral.
 
-## Ütemezés (a felhasználó döntése, 2026-10-15)
+## Fő döntések
 
-1. ~~0. fázis, 1. fázis 1–10. lépés, őr első kör~~ – kész.
-2. **Irányváltás (döntés, 2026-10-15): a saját agentek távirányítása.** Részletek: terv „Működési modell”. Ebben a sorrendben:
-   1. ~~Gépek, párosítás, mappaengedélyek, rövid lejáratú agent-tokenek, `bwrap` sandbox~~ – kész (a sandbox mostantól választható mód).
-   2. ~~Közvetlen mód: teljes hozzáférés a gyökérkönyvtárból, a felhasználó saját beállításaival; szálanként folytatott munkamenet (`--session-id`/`--resume`); Colonyhall MCP az agentnél; agentenkénti engedélymód (alapból `auto`)~~ – kész.
-   3. ~~Őr a homelab szerveren~~ – kész; a szerver is a homelabon fut (2026-10-21).
-   4. Agent–agent együttműködés; titkok átadása a `Z:` meghajtón (`colonyhall-exchange`); közös utasítás.
-   5. ~~Jóváhagyás a chatből (`--permission-prompt-tool`)~~ – kész (2026-10-16).
-   - ~~Ütemező (ütemezett üzenetek, `/schedule`, `/daily`, `/cron`) és Colonyhall MCP az Antigravity-agenteknek~~ – kész (2026-10-15).
-   - ~~Kiadva az Antigravitynek (2026-10-16, `docs/handoff/03…06-*-prompt.md`): WebSocket-ébresztés, futásnapló és tokenfelhasználás, jóváhagyás a chatből, wiki (agent csak bővíthet, ember törölhet)~~ – mind kész, átnézve és beolvasztva (2026-10-16).
-   - ~~Mindennapi használat (07)~~, ~~költséghatár (08)~~, ~~kérdés–válasz (09)~~, ~~fájlmegosztás (10)~~, ~~Gitea (11; `COLONY_GITEA_URL`, `COLONY_GITEA_TOKEN`, `COLONY_GITEA_WEBHOOK_SECRET`)~~, ~~worktree (12)~~, ~~előnézet (13; `guard.yaml`: `preview_host`, `preview_ports`; csak teljes hozzáférésű agentnek)~~ – kész, beolvasztva (2026-10-16).
-   - ~~Kiadva az Antigravitynek (2026-10-18, `docs/handoff/14-collaboration-prompt.md`): közös agent-utasítás (felületen szerkeszthető), jegyzetfüzet szálanként, döntésnapló a wikire, foglalások, agent–agent sebességkorlát. Az őr a homelabra később (2026-10-19-től).~~ – kész (2026-10-18).
-   - ~~Kiadva az Antigravitynek (2026-10-21, `docs/handoff/15-ui-round-prompt.md`): bal oldali sáv javítása, „dolgozik…” aktivitásjelző és WebSocket esemény, személyes csatornaszekciók, elnevezett csatornák tagokkal és leírással, részletesebb profil, jobb oldali agent áttekintő panel, prompt javítások~~ – kész (2026-10-21).
-   - ~~Kiadva az Antigravitynek (2026-10-22, `docs/handoff/16-file-links-prompt.md`): agentek által hivatkozott helyi fájlok megnyitása a felületen (őr általi lekéréssel, csak olvasásra, kizárólag embernek); levágási hiba javítása a guardban (FileLinks megmarad); Range-alapú 1 MB fej/farok megjelenítés >2 MB fájloknál; biztonságos DOM-alapú Markdown; adminisztrátori korlátok a Gépek panelen~~ – kész (2026-10-22).
-   - ~~Kiadva az Antigravitynek (2026-10-22, `docs/handoff/17-chat-markdown-prompt.md`): markdown a chatüzenetekben egy közös, biztonságos, tesztelt megjelenítővel (`web/markdown.js`) a chathez és a fájlnézőhöz; DOM-építés innerHTML nélkül, távoli képek tiltása, szóhatár-szabály (snake_case nem dőlt), hosszú üzenetek összecsukása („Több” / „Kevesebb”), sima szöveges előnézetek (plain)~~ – kész (2026-10-22).
-   - ~~Kiadva az Antigravitynek (2026-10-22, `docs/handoff/18-sandbox-worktree-network-prompt.md`): sandboxos ágensek git worktree-je futás utáni automatikus commit-tal (`colony/<handle>/work`, szigorú biztonsági szűrőkkel); hálózati allowlist a sandboxban (`bwrap --unshare-net`, őr által futtatott Unix domain socket HTTP/CONNECT proxy és `colony sandbox-bridge`, anti-SSRF/DNS-rebinding védelemmel, `filtered`/`log`/`open` módokkal)~~ – kész (2026-10-22).
-   - ~~Kiadva az Antigravitynek (2026-10-22, `docs/handoff/19-web-read-prompt.md`): web_read a sandboxos agenteknek — az őr tölti le a nyilvános weboldalakat (csak GET, HTML-ből szöveg, privát/belső címek tiltva, DNS rebinding pinning, méret- és futási korlátok), hozzárendelésben engedélyezhető (allow_web_read), bridge-en átvezetett Streamable HTTP MCP szerver (`webread.sock` -> `127.0.0.1:3129`), naplózott URL-ekkel, válaszlábléccel és szerver futásjelentéssel~~ – kész (2026-10-22).
-   - ~~Kiadva az Antigravitynek (2026-10-26, `docs/handoff/21-compaction-prompt.md`): automatikus tömörítés (compaction) szálakban, DM-ekben és csatornákban — egységek becsült tokenszámlálóval, küszöbérték (350k default, állítható, felülbírálható), jegyző (scribe) agent izolált eszközmentes futása, strukturált markdown összefoglaló, rendszerüzenet csatolmánnyal, felületi szerkesztés és újragenerálás, közvetlen agentek session primingja az összefoglalóból és rotálás~~ – kész (2026-10-26).
-   - ~~Kiadva az Antigravitynek (2026-10-26, `docs/handoff/22-live-progress-prompt.md`): élő folyamatjelzés és lépésnapló — streaming futtató adapterek (`stream-json`), lépésmodell relatív útvonalakkal és maszkolással, periodikus progress végpont és WebSocket közvetítés, felületi élő lépéskijelzés eltelt idővel, válasz alatti összecsukható lépésfiók és futásnapló lépéslista, Antigravity valós kontextusmérés~~ – kész (2026-10-26).
-   - ~~Kiadva az Antigravitynek (2026-10-26, `docs/handoff/24-delegation-approval-prompt.md`): feladat-delegáció és admin jóváhagyás — agent által teljes hozzáférésű agentnek szánt feladatok jóváhagyási kéréssé válnak (Q-NN kérdés az adminoknak, 24 órás határidővel); admin jóváhagyásakor a célagent megkapja a feladatot jóváhagyó keretezéssel (`delegated`), mintha az admin adta volna ki; elutasításkor vagy lejáratkor a cél nem ébred fel, a forrás agent kap választ; őr védelem és refuzális értesítés; felületi gombok és állapotjelzők~~ – kész (2026-10-26).
-   - ~~Kiadva az Antigravitynek (2026-10-26, `docs/handoff/20-file-browser-prompt.md`): fájlböngésző az agent mappájához — efemer in-memory kérelemközvetítés (15s timeout, fs.request frame), új agent file-fetch végpont (human_only fájlok), őr hatókör- és listázómotor (MayAccessPath, .git és titkok rejtve, heavy mappák összecsukva, 500-as limit), edzett git státusz (-z bináris rekordok), vendored Monaco Editor 0.52.2 (14 MB), fa- és lapozható nézet git jelvényekkel (M, A, D, ?, R), ágnévvel és ahead/behinddal, szöveges/markdown/kép néző fej/láb Range-dzsel, sorkijelölés és sorhivatkozások (path:42-58 és @handle:path:42-58) chat chipként és beugrással~~ – kész (2026-10-26).
-   - ~~Kiadva az Antigravitynek (2026-10-26, `docs/handoff/23-agent-terminals-prompt.md`): agent-terminálok (hosszú parancsok, ébresztés befejezéskor, élő csak olvasható felület) — tmux -L colonyhall izolált szerver, 0700-as állományok disk layout, folyamatcsoport-túlélés, stdio MCP colony-terminal szerver és term eszközök, szálbeli értesítés és wake esemény (inbox kind: terminal, FlagWake) bekeretezett kimenettel, emberi közvetítő műveletek (term_list, term_output, term_kill admin joggal), felületi terminálfigyelő az Agent Overview panelen és chat linkekből, 2s auto-refresh, auto-scroll, admin Leállítás megerősítéssel és SSH csatlakozási segéd~~ – kész (2026-10-26).
-   6. Később: push-értesítés.
-3. **A PWA (React + Vite) a végére marad**; addig a fejlesztői oldal (`internal/httpserver/web/index.html`) a felület.
-4. ~~Homelab-telepítés~~ – kész (2026-10-21, `docs/05-homelab-telepites.md`).
+A körök története és a kiadott feladatok a karbantartó privát jegyzeteiben vannak (lásd `CLAUDE.local.md`); a tervdokumentumok körszámmal hivatkoznak rájuk („34. kör”).
 
 **Futtatás (döntés, 2026-10-15):** a szerver és a Postgres Dockerben fut, **az őr natívan, a gépen**, ugyanazokkal a bejelentkezett CLI-kkel (`claude`, `agy`), amiket a felhasználó közvetlenül is használ. Az őrt ne tedd konténerbe: ott újra telepíteni és belépni kellene.
 

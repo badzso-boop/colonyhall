@@ -1,7 +1,7 @@
 import type { Schemas } from "@/shared/api";
 
 /**
- * Who may read the owner's tasks and calendar (docs/handoff/34, part 8).
+ * Who may read the owner's tasks and calendar (round 34, part 8).
  * Tasks: every agent (the default) or selected ones. Calendar: nobody (the
  * default) or selected agents.
  */

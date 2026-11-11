@@ -16,7 +16,7 @@ type TabId = (typeof tabs)[number];
 // A machine's owner who is not an admin (round 38): folders and settings are admin-only.
 const memberTabs: readonly TabId[] = ["overview", "agents", "worktrees"];
 
-/** One machine: a header and five tabs (docs/handoff/33, part 5). */
+/** One machine: a header and five tabs (round 33, part 5). */
 export function HostDetail({ host, now, admin = true }: { host: Host; now: Date; admin?: boolean }) {
   const { t } = useTranslation("hosts");
   const shown = admin ? tabs : memberTabs;

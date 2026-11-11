@@ -120,7 +120,7 @@ var messages = map[string][2]string{
 	"grdWSLRestart":   {"systemd is enabled. Now run `wsl --shutdown` in Windows (PowerShell or cmd), open this terminal again and run `colony setup` again.", "A systemd be van kapcsolva. Most Windowsban (PowerShell vagy cmd) futtasd: `wsl --shutdown`, nyisd újra ezt a terminált, és futtasd újra a `colony setup`-ot."},
 	"grdKeepalive":    {"Keep this WSL distribution running after you log in to Windows (a Windows logon task)? Without it the guard runs only while a WSL terminal is open.", "Fusson ez a WSL-disztribúció a Windows-bejelentkezés után is (Windows-feladat bejelentkezéskor)? Nélküle az őr csak addig fut, amíg egy WSL-terminál nyitva van."},
 	"grdNoKeepalive":  {"The guard runs only while a WSL terminal is open.", "Az őr csak addig fut, amíg egy WSL-terminál nyitva van."},
-	"grdColleague":    {"A colleague on this machine with their own agents and subscription: create a separate Linux user for them and run `colony setup --guard` as that user (see docs/10-kollega-beallitasa.md).", "Kolléga ezen a gépen saját agentekkel és előfizetéssel: hozz létre neki külön Linux-felhasználót, és azzal futtasd a `colony setup --guard`-ot (lásd docs/10-kollega-beallitasa.md)."},
+	"grdColleague":    {"A colleague on this machine with their own agents and subscription: create a separate Linux user for them and run `colony setup --guard` as that user.", "Kolléga ezen a gépen saját agentekkel és előfizetéssel: hozz létre neki külön Linux-felhasználót, és azzal futtasd a `colony setup --guard`-ot."},
 	"grdNextAgent":    {"Next: in the web app open Agents → New agent, choose this machine and a folder.", "Következő lépés: a webes felületen Agentek → Új agent, válaszd ezt a gépet és egy mappát."},
 
 	// AI clients

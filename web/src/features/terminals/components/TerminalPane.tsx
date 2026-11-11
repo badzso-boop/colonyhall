@@ -182,7 +182,7 @@ function TerminalOutput({ agentId, channelId, name }: { agentId: string; channel
 }
 
 /**
- * The terminal work pane (docs/handoff/31, part 6): the agent's terminals,
+ * The terminal work pane (round 31, part 6): the agent's terminals,
  * or one terminal's output, read-only.
  */
 export function TerminalPane({ agentId, name }: { agentId: string; name: string }) {

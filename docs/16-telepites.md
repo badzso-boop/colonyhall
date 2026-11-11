@@ -1,6 +1,6 @@
 # Telepítési útmutató
 
-Állapot: 2026-11-05, 41. kör. A terv és a döntések: `15-telepites-terv.md`. Angol rövid változat: a repó `README.md`-je. Norbi homelabjának egyedi beállításai továbbra is a `05-homelab-telepites.md`-ben és a `CLAUDE.md`-ben vannak.
+Állapot: 2026-11-05, 41. kör. A terv és a döntések: `15-telepites-terv.md`. Angol rövid változat: a repó `README.md`-je.
 
 ## Röviden
 
@@ -48,7 +48,7 @@ Utána a `.env`-ben `COLONY_SECURE_COOKIES=1`, és `colony setup --server` (vagy
   - WSL keepalive (opció): egy Windows-feladat bejelentkezéskor (`conhost.exe --headless wsl.exe -d <disztró> -- sleep infinity`). Nélküle az őr csak addig fut, amíg egy WSL-terminál nyitva van.
   - macOS: LaunchAgent (`~/Library/LaunchAgents/hu.colonyhall.guard.plist`), naplók: `~/Library/Logs/colonyhall/`. macOS-en nincs sandbox: csak teljes hozzáférésű agent futhat, a szerver a sandboxosat elutasítja.
 - AI-kliensek: a telepítő a választott kliens hivatalos telepítőjét letölti, kiírja a címét, méretét és SHA-256-ját, kérésre megmutatja, és csak megerősítés után futtatja. **Belépni a felhasználónak kell** (`claude`, `agy`), vagy a Claude-tokent a webes felületen megadni (Gépek → Claude-belépés). Az Antigravity telepítési módja még nincs a telepítőben (helyőrző).
-- Kolléga külön Linux-felhasználóval: `10-kollega-beallitasa.md` (az első körben csak útmutató).
+- Kolléga ugyanazon a gépen: külön Linux-felhasználó, azon `colony setup --guard` (saját őr, saját előfizetés).
 - Frissítés: `colony upgrade` (letöltés, ellenőrzés, csere, az előző `colony.prev`, újraindítás, doctor). Eltávolítás: `colony uninstall` (a konfig marad), `--purge`.
 
 ## Felügyelet nélküli telepítés

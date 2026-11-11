@@ -1,7 +1,7 @@
 import { Activity, Bot, CalendarDays, Clock, FileClock, Gauge, Gavel, KeyRound, KeySquare, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Server, Settings, Users } from "lucide-react";
 import type { WindowKind } from "@/shared/windows";
 
-/** The workspace pages of the sidebar and the command palette (docs/handoff/32, part 2). */
+/** The workspace pages of the sidebar and the command palette (round 32, part 2). */
 export type PageEntry = { id: string; route: string; icon: typeof ListChecks; window?: WindowKind; adminOnly?: boolean; ownerOnly?: boolean };
 
 export const pages: PageEntry[] = [
@@ -19,7 +19,7 @@ export const pages: PageEntry[] = [
   { id: "design", route: "/design", icon: Palette },
 ];
 
-/** The "Adminisztráció" group (docs/handoff/35, part 1). */
+/** The "Adminisztráció" group (round 35, part 1). */
 export const adminPages: PageEntry[] = [
   { id: "adminRuns", route: "/admin/runs", icon: Activity, adminOnly: true },
   { id: "adminSettings", route: "/admin/settings", icon: Settings, adminOnly: true },

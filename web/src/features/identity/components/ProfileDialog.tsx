@@ -15,7 +15,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 /**
- * "Profilom" (docs/handoff/34, part 7).
+ * "Profilom" (round 34, part 7).
  */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("identity");

@@ -365,6 +365,6 @@
     "running": "Fut",
     "integrations": "Integrációk",
     "backups": "Mentések",
-    "backupsBody": "A mentéseket a homelab kezeli (docs/05-homelab-telepites.md), a szerver nem ellenőrzi őket."
+    "backupsBody": "A mentés az üzemeltető feladata (az adatbázis és a fájlok kötete), a szerver nem ellenőrzi."
   }
 }

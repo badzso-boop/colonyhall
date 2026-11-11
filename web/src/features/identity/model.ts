@@ -9,7 +9,7 @@ export function safeNext(next: string | null): string {
   return next;
 }
 
-/* ---------- Profiles (docs/handoff/34, part 7) ---------- */
+/* ---------- Profiles (round 34, part 7) ---------- */
 
 type Actor = Schemas["Actor"];
 export type ProfileUpdate = Schemas["UpdateActorProfileRequest"];

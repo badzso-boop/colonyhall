@@ -21,7 +21,7 @@ import { Section } from "./Section";
 import { SessionsSection } from "./SessionsSection";
 import { UsageSection } from "./UsageSection";
 
-/** A human's overview: the profile and the channels in common (docs/handoff/33, part 3). */
+/** A human's overview: the profile and the channels in common (round 33, part 3). */
 function HumanOverview({ overview }: { overview: AgentOverview }) {
   const { t } = useTranslation("agents");
   const { actor } = overview;
@@ -113,7 +113,7 @@ function AgentView({ overview, terminals }: { overview: AgentOverview; terminals
 }
 
 /**
- * The agent overview work pane (docs/handoff/33, part 3): header, then the
+ * The agent overview work pane (round 33, part 3): header, then the
  * collapsible sections. Humans get the small version. The terminal list
  * belongs to the terminals feature, which itself uses this one, so the layout
  * passes it in (`terminals`) instead of this feature importing it.

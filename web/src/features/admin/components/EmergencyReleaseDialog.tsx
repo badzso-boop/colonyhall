@@ -29,7 +29,7 @@ export function EmergencyReleaseDialog({ open, onOpenChange }: { open: boolean; 
   };
   return (
     <Dialog open={open} onOpenChange={close} title={t("emergency.title")} description={t("emergency.body")} closeLabel={t("close")}>
-      {/* A passkey option comes here later (docs/handoff/35, decision 1). */}
+      {/* A passkey option comes here later (round 35, decision 1). */}
       <form onSubmit={submit} className="flex flex-col gap-3">
         {clear.error ? <Notice tone="danger">{clear.error instanceof ApiError && clear.error.status === 401 ? t("emergency.wrong") : clear.error.message}</Notice> : null}
         <label className="flex flex-col gap-1 text-ui">

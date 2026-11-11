@@ -7,7 +7,7 @@ export type DayUsage = Schemas["DayUsage"];
 export type DelegationGrant = Schemas["DelegationGrant"];
 export type Host = Schemas["Host"];
 
-/** The overview header's state chip (docs/handoff/33, part 3). */
+/** The overview header's state chip (round 33, part 3). */
 export type DisplayState = "working" | "idle" | "offline" | "paused" | "stopped" | "archived";
 
 /** The settings dialog's tabs, as they appear in the URL (?agent=<handle>&settings=<tab>). */

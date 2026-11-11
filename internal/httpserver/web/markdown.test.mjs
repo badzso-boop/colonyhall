@@ -95,13 +95,13 @@ test("link security: only http and https allowed, dangerous protocols stay plain
   }
 
   // Safe links
-  const safe = md.parse("[ok1](http://example.com) and [ok2](https://ujjweb.hu/test)");
+  const safe = md.parse("[ok1](http://example.com) and [ok2](https://example.org/test)");
   const p = safe[0];
   const links = p.children.filter((c) => c.type === "link");
   assert.equal(links.length, 2);
   assert.equal(links[0].href, "http://example.com");
   assert.equal(links[0].text, "ok1");
-  assert.equal(links[1].href, "https://ujjweb.hu/test");
+  assert.equal(links[1].href, "https://example.org/test");
   assert.equal(links[1].text, "ok2");
 });
 
@@ -128,14 +128,14 @@ test("raw HTML tags stay text nodes", () => {
 });
 
 test("file links: file:// and local paths become filelink nodes, but https urls do not", () => {
-  const input = `Check file:///home/szmajli01/app.log and /var/log/syslog and ~/notes.txt, also [scheduler](file:///srv/scheduler.log).
+  const input = `Check file:///home/alice/app.log and /var/log/syslog and ~/notes.txt, also [scheduler](file:///srv/scheduler.log).
 Do not match https://example.com/home/user/test.`;
   const blocks = md.parse(input);
   const p = blocks[0];
   const filelinks = p.children.filter((c) => c.type === "filelink");
   assert.equal(filelinks.length, 4);
 
-  assert.equal(filelinks[0].path, "/home/szmajli01/app.log");
+  assert.equal(filelinks[0].path, "/home/alice/app.log");
   assert.equal(filelinks[0].name, "app.log");
 
   assert.equal(filelinks[1].path, "/var/log/syslog");
@@ -156,8 +156,8 @@ Do not match https://example.com/home/user/test.`;
 test("real agent answer with run_id=9 and file links", () => {
   const answer = `A futás (run_id=9) befejeződött. Az eredmények:
 - PROFIT_TARGET elérve: **IGEN**
-- Részletek: [scheduler.log](file:///home/szmajli01/homelab/trader/logs/scheduler.log)
-- Statisztika: /home/szmajli01/homelab/trader/data/report.md`;
+- Részletek: [scheduler.log](file:///home/alice/homelab/trader/logs/scheduler.log)
+- Statisztika: /home/alice/homelab/trader/data/report.md`;
 
   const blocks = md.parse(answer);
   assert.equal(blocks.length, 2); // paragraph, then list
@@ -182,14 +182,14 @@ test("real agent answer with run_id=9 and file links", () => {
   const item2 = blocks[1].items[1];
   const file1 = item2.children.find((c) => c.type === "filelink");
   assert.ok(file1);
-  assert.equal(file1.path, "/home/szmajli01/homelab/trader/logs/scheduler.log");
+  assert.equal(file1.path, "/home/alice/homelab/trader/logs/scheduler.log");
   assert.equal(file1.name, "scheduler.log");
 
   // Item 3: report.md filelink
   const item3 = blocks[1].items[2];
   const file2 = item3.children.find((c) => c.type === "filelink");
   assert.ok(file2);
-  assert.equal(file2.path, "/home/szmajli01/homelab/trader/data/report.md");
+  assert.equal(file2.path, "/home/alice/homelab/trader/data/report.md");
   assert.equal(file2.name, "report.md");
 });
 
@@ -295,7 +295,7 @@ test("input over 20,000 characters is rendered as plain text", () => {
 test("ColonyMarkdown.plain strips markdown formatting cleanly", () => {
   const formatted = `# Főcím
 Ez egy **vastag** és *dőlt* szöveg \`kóddal\`.
-Itt egy [link](https://ujjweb.hu) és ![kép](https://ujjweb.hu/pic.png).
+Itt egy [link](https://example.org) és ![kép](https://example.org/pic.png).
 - lista 1
 - [x] kész feladat
 | A | B |

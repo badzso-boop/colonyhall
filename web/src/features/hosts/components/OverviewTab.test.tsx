@@ -10,7 +10,7 @@ type Host = Schemas["Host"];
 const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
 
 function show(report: Partial<Host["report"]>) {
-  const h: Host = { id: "h1", name: "pc-wsl", color: "blue", state: "approved", created_at: "", report: { roots: [], clients: [], rejected: [], ...report }, agents: [] };
+  const h: Host = { id: "h1", name: "pc-dev", color: "blue", state: "approved", created_at: "", report: { roots: [], clients: [], rejected: [], ...report }, agents: [] };
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => json({ actor: { id: "norbi", kind: "human", handle: "norbi", display_name: "norbi", role: "owner", state: "active", created_at: "" }, csrf_token: "x" })),
@@ -34,14 +34,14 @@ test("CodeGraph: version and repositories with their state", () => {
     codegraph: {
       version: "1.6.2",
       repos: [
-        { path: "/mnt/g/Projects/new-chat", status: "indexed", files: 807, indexed_at: "2026-11-08T10:00:00Z" },
-        { path: "/mnt/g/Projects/huge", status: "skipped", files: 90000, detail: "90000 files, more than codegraph.max_files (20000)" },
+        { path: "/home/alice/projects/colonyhall", status: "indexed", files: 807, indexed_at: "2026-11-08T10:00:00Z" },
+        { path: "/home/alice/projects/huge", status: "skipped", files: 90000, detail: "90000 files, more than codegraph.max_files (20000)" },
       ],
     },
   });
   expect(screen.getByText("CodeGraph")).toBeTruthy();
   expect(screen.getByText("1.6.2 verzió")).toBeTruthy();
-  expect(screen.getByText("/mnt/g/Projects/new-chat")).toBeTruthy();
+  expect(screen.getByText("/home/alice/projects/colonyhall")).toBeTruthy();
   expect(screen.getByText("indexelve")).toBeTruthy();
   expect(screen.getByText("807 fájl")).toBeTruthy();
   expect(screen.getByText("kihagyva")).toBeTruthy();

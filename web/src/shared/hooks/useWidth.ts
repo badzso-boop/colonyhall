@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { Width } from "@/shared/panes";
 
-// The width classes of the pane rules (docs/handoff/31, part 4–5).
+// The width classes of the pane rules (round 31, part 4–5).
 const WIDE = "(min-width: 1280px)";
 const MEDIUM = "(min-width: 768px)";
 

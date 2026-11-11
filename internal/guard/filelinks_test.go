@@ -23,13 +23,13 @@ func TestFileLinks(t *testing.T) {
 		},
 		{
 			name: "hungarian text with trailing comma and dot",
-			text: "A logfájl elkészült: /home/szmajli01/logs/scheduler.log, nézd meg! További részletek: /var/log/app.log.",
-			want: []string{"/home/szmajli01/logs/scheduler.log", "/var/log/app.log"},
+			text: "A logfájl elkészült: /home/alice/logs/scheduler.log, nézd meg! További részletek: /var/log/app.log.",
+			want: []string{"/home/alice/logs/scheduler.log", "/var/log/app.log"},
 		},
 		{
 			name: "markdown file URL and bare path",
-			text: "Lásd az eredményt [itt](file:///home/szmajli01/report.md) vagy [itt](/mnt/data/stats.csv).",
-			want: []string{"/home/szmajli01/report.md", "/mnt/data/stats.csv"},
+			text: "Lásd az eredményt [itt](file:///home/alice/report.md) vagy [itt](/mnt/data/stats.csv).",
+			want: []string{"/home/alice/report.md", "/mnt/data/stats.csv"},
 		},
 		{
 			name: "code spans with backticks",
@@ -53,8 +53,8 @@ func TestFileLinks(t *testing.T) {
 		},
 		{
 			name: "URL escapes in file URLs",
-			text: "Elérési út: file:///home/szmajli01/my%20documents/project%20report.md",
-			want: []string{"/home/szmajli01/my documents/project report.md"},
+			text: "Elérési út: file:///home/alice/my%20documents/project%20report.md",
+			want: []string{"/home/alice/my documents/project report.md"},
 		},
 		{
 			name: "duplicates and order preservation",
@@ -78,8 +78,8 @@ func TestFileLinks(t *testing.T) {
 		},
 		{
 			name: "file links with line and range suffixes",
-			text: "Nézd meg: /home/szmajli01/logs/scheduler.log:42-58, /var/log/app.log:12 és file:///tmp/test.go:10-20.",
-			want: []string{"/home/szmajli01/logs/scheduler.log", "/var/log/app.log", "/tmp/test.go"},
+			text: "Nézd meg: /home/alice/logs/scheduler.log:42-58, /var/log/app.log:12 és file:///tmp/test.go:10-20.",
+			want: []string{"/home/alice/logs/scheduler.log", "/var/log/app.log", "/tmp/test.go"},
 		},
 	}
 
@@ -192,7 +192,7 @@ func TestReplyLostLinks(t *testing.T) {
 	// 3. A path cut in half by clip counts as lost
 	sent = nil
 	// MaxReplyLen is 600. Put 585 runes of padding, then a 30 rune path.
-	cutPath := "/home/szmajli01/logs/scheduler.log"
+	cutPath := "/home/alice/logs/scheduler.log"
 	cutText := strings.Repeat("x", 585) + " " + cutPath
 	if err := agent.reply(ctx, item, cutText, "client-3"); err != nil {
 		t.Fatalf("reply failed: %v", err)

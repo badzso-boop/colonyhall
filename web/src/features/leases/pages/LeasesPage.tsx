@@ -13,7 +13,7 @@ import { Soon, countdown, filterLeases, leaseState, remaining, sortLeases, type 
 const tone = { active: "success", expired: "danger", released: "neutral" } as const;
 const columns: (SortKey | "left" | "action")[] = ["resource", "holder", "note", "acquired", "expires", "left", "state", "action"];
 
-/** Foglalások (docs/handoff/32, part 8): a live, sortable table; cards on a phone. */
+/** Foglalások (round 32, part 8): a live, sortable table; cards on a phone. */
 export default function LeasesPage() {
   const { t, i18n } = useTranslation("leases");
   const locale = localeOf(i18n.language);

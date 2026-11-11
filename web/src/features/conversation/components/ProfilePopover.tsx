@@ -55,7 +55,7 @@ function useLabel(actorId: string): string {
 
 /**
  * A button around an avatar or a name that opens the profile
- * (docs/handoff/34, part 7): a popover, or a sheet on a phone.
+ * (round 34, part 7): a popover, or a sheet on a phone.
  */
 export function ProfileTrigger({ actorId, children, className }: { actorId: string; children: ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);

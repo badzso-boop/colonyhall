@@ -32,7 +32,7 @@
 
 ### Személyes adatok a munkafában (b osztály)
 
-Keresett minták: a Tailscale- és LAN-címek, `szmajli`, `ujjweb.hu`, `/mnt/g/`, `G:\Projects`, `NORBI-PC`, `pc-wsl`, `nato`, `homelab-shared-postgres`, `badzso`.
+Keresett minták: a karbantartó Tailscale- és LAN-címei, a szerver felhasználóneve, a saját domainje, a Windows-meghajtó útvonala, a gépnevek, a közös Postgres konténerneve és a GitHub-felhasználónév (a pontos lista a CI-ellenőrzésben van, lásd lent).
 
 | Hely | Találat | Javaslat |
 |---|---|---|

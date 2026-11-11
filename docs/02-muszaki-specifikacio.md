@@ -920,7 +920,7 @@ Az agentek a válaszaikban gyakran hivatkoznak a gépükön lévő helyi fájlok
 
 - `POST /api/v1/hosts/{hostId}/fs` `{op: "list_dirs", path?}`: csak emberi admin; üres `path` = a `guard.yaml` gyökerei. Audit: `host.fs_requested` `{host_id, op}`, útvonal nélkül. 15 mp → 504; nincs élő gépkapcsolat vagy visszavont gép → 409 `detail: "host_offline"`.
 - Szállítás: az őr saját, géptokennel hitelesített WebSocketje (`/ws/host`: `hello {token}` → `welcome {host_id}`; a szerver csak `host.fs.request {request_id}` keretet küld rajta). Az őr `GET /api/v1/host/fs/{id}`, majd `POST /api/v1/host/fs/{id}/result` (géptoken; más gép kérése 404, késői válasz 410).
-- Őr (`internal/guard/hostfs.go`): csak a gyökereken belül, csak mappák, kifelé mutató symlink nem követve, max. 500 elem (`truncated`), elemenként `is_git_repo`, `has_children`, `hidden`, `heavy`, a titkos mappák `denied: true` jelöléssel. Részletek és indoklás: `docs/handoff/33-host-fs-relay-notes.md`.
+- Őr (`internal/guard/hostfs.go`): csak a gyökereken belül, csak mappák, kifelé mutató symlink nem követve, max. 500 elem (`truncated`), elemenként `is_git_repo`, `has_children`, `hidden`, `heavy`, a titkos mappák `denied: true` jelöléssel. Részletek és indoklás: 33. kör.
 
 ### Ágens terminálok (23. kör, `feature/agent-terminals`)
 
@@ -1043,7 +1043,7 @@ Elsőként a Gitea adapter készült el (`provider/gitea.go`). Későbbi fejlesz
 
 ## Agent–agent együttműködés (megvalósítva, 2026-10-18)
 
-A több ágens közötti feladatmegosztást, közös szabályrendszert, memóriát, döntésnaplózást és erőforrás-koordinációt biztosító modulok összessége (`feature/collaboration`, `docs/handoff/14-collaboration-prompt.md`).
+A több ágens közötti feladatmegosztást, közös szabályrendszert, memóriát, döntésnaplózást és erőforrás-koordinációt biztosító modulok összessége (`feature/collaboration`, 14. kör).
 
 ### 1. Közös agent szabályok (`internal/modules/agentrules`)
 
@@ -1100,7 +1100,7 @@ A több ágens közötti feladatmegosztást, közös szabályrendszert, memóri�
 
 ## Felületi fejlesztések, profilok és agent panel (megvalósítva, 2026-10-21)
 
-A 15. fejlesztési kör (`docs/handoff/15-ui-round-prompt.md`) felületi és aggregációs bővítései:
+A 15. fejlesztési kör felületi és aggregációs bővítései:
 
 ### 1. Bal oldali sáv elrendezésének javítása
 - **Hiba oka:** A `nav div { display:flex; justify-content:space-between; … }` globális szabály a lista tárolójára (`#channels`) is ráilleszkedett, ami miatt a csatornák és DM-ek egymás mellé rendeződtek egy sorba.

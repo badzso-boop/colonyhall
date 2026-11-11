@@ -1,6 +1,6 @@
 # Telepítő: terv (41. kör, tervezési kapu)
 
-Állapot: **jóváhagyva** (Norbi, 2026-11-05; a döntések a dokumentum végén). A kötelező döntések a `docs/handoff/41-installer-prompt.md`-ben; ez a dokumentum a megvalósítás terve és a nyitott kérdések. Angol összefoglaló a későbbi nyilvános README-hez: `15-telepites-terv.en.md`.
+Állapot: **jóváhagyva** (Norbi, 2026-11-05; a döntések a dokumentum végén). A kötelező döntések a 41. kör promptjában; ez a dokumentum a megvalósítás terve és a nyitott kérdések. Angol összefoglaló a későbbi nyilvános README-hez: `15-telepites-terv.en.md`.
 
 Cél: valaki, aki még sosem látta a projektet, néhány paranccsal telepíti a szervert és a gépeire az őrt, és működő rendszert kap, Norbi homelabjára jellemző beállítás nélkül.
 
@@ -89,7 +89,7 @@ Kihagyható: **csak őr** egy meglévő szerverhez (a legtöbb gép, és a koll�
   - *Linux és WSL:* systemd user unit (a mai `colony guard install` kódja), `loginctl enable-linger` (sudo kell; megerősítés után), indítás és ellenőrzés;
   - *WSL systemd nélkül:* megerősítés után `[boot] systemd=true` az `/etc/wsl.conf`-ba (sudo), és kiírja, hogy ezután Windows-ból `wsl --shutdown`, majd a terminál újranyitása kell, és a telepítő újrafuttatása folytatja;
   - *macOS:* `launchd` LaunchAgent (`~/Library/LaunchAgents/hu.colonyhall.guard.plist`, `RunAtLoad`, `KeepAlive`, naplók a `~/Library/Logs/colonyhall/`-ba), `launchctl bootstrap gui/$UID`.
-- **WSL keepalive** (opció): a telepítő a WSL-interopon át (`powershell.exe`) létrehoz egy Windows-feladatot a felhasználó bejelentkezésére: `conhost.exe --headless wsl.exe -d <distro> -- sleep infinity` (ahogy Norbinál a `nato`-n). Előtte megmutatja a pontos parancsot. Ha nem kéri: kiírja, hogy az őr csak addig fut, amíg egy WSL-terminál nyitva van.
+- **WSL keepalive** (opció): a telepítő a WSL-interopon át (`powershell.exe`) létrehoz egy Windows-feladatot a felhasználó bejelentkezésére: `conhost.exe --headless wsl.exe -d <distro> -- sleep infinity` (ahogy egy fejlesztői WSL-disztrón). Előtte megmutatja a pontos parancsot. Ha nem kéri: kiírja, hogy az őr csak addig fut, amíg egy WSL-terminál nyitva van.
 - **Külön Linux-felhasználó (kolléga-mód, 38. kör):** az első körben **csak útmutató** (a telepítő a végén rámutat a `docs/10`-re és a `colony setup --guard`-ra, amit a kolléga felhasználójaként kell futtatni). Indok: felhasználó létrehozása root-művelet, és jogosultsági döntéseket igényel (ki olvashat mit), amit jobb tudatosan, kézzel csinálni.
 
 ## 6. Függőségek platformonként

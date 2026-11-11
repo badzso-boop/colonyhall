@@ -29,14 +29,14 @@ func TestGenerateUnit(t *testing.T) {
 	})
 
 	t.Run("paths with spaces quoted correctly", func(t *testing.T) {
-		unit, err := GenerateUnit("/opt/my tools/colony", "/mnt/g/My Projects/colony/guard.yaml")
+		unit, err := GenerateUnit("/opt/my tools/colony", "/srv/My Projects/colony/guard.yaml")
 		if err != nil {
 			t.Fatalf("GenerateUnit failed: %v", err)
 		}
-		if !strings.Contains(unit, `WorkingDirectory="/mnt/g/My Projects/colony"`+"\n") {
+		if !strings.Contains(unit, `WorkingDirectory="/srv/My Projects/colony"`+"\n") {
 			t.Errorf("expected quoted WorkingDirectory, got:\n%s", unit)
 		}
-		if !strings.Contains(unit, `ExecStart="/opt/my tools/colony" guard -config "/mnt/g/My Projects/colony/guard.yaml"`+"\n") {
+		if !strings.Contains(unit, `ExecStart="/opt/my tools/colony" guard -config "/srv/My Projects/colony/guard.yaml"`+"\n") {
 			t.Errorf("expected quoted ExecStart, got:\n%s", unit)
 		}
 	})

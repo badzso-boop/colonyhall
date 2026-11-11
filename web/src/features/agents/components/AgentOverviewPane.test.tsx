@@ -19,7 +19,7 @@ const agentOverview: Schemas["AgentOverview"] = {
   state: "active",
   activity: { working: false },
   assignment: {
-    host_id: "h1", host_name: "pc-wsl", client: "claude", model: "opus", mode: "direct", sandbox: false, root_dir: "/home/n", worktree_repo: "",
+    host_id: "h1", host_name: "pc-dev", client: "claude", model: "opus", mode: "direct", sandbox: false, root_dir: "/home/n", worktree_repo: "",
     permission_mode: "auto", approvals: "chat", max_session_tokens: 100_000, daily_token_limit: 1_000_000, allow_web_read: true,
     grants: [{ id: "g1", path: "/srv/data", mode: "write", created_at: "" }],
   },
@@ -46,7 +46,7 @@ function setup(opts: { me?: Schemas["Actor"]; overview?: Schemas["AgentOverview"
       if (u.pathname.endsWith("/overview") && opts.notFound)
         return new Response(JSON.stringify({ type: "about:blank", title: "Not Found", status: 404, detail: "not found" }), { status: 404, headers: { "Content-Type": "application/problem+json" } });
       if (u.pathname.endsWith("/overview")) return json(opts.overview ?? agentOverview);
-      if (u.pathname.endsWith("/hosts")) return json({ hosts: [{ id: "h1", name: "pc-wsl", color: "blue", state: "approved", created_at: "", last_seen_at: now.toISOString(), report: {}, agents: [] }] });
+      if (u.pathname.endsWith("/hosts")) return json({ hosts: [{ id: "h1", name: "pc-dev", color: "blue", state: "approved", created_at: "", last_seen_at: now.toISOString(), report: {}, agents: [] }] });
       if (u.pathname.endsWith("/runs")) return json({ runs: [] });
       if (u.pathname.endsWith("/usage")) return json({ usage: [] });
       if (u.pathname.endsWith("/delegation-grants")) return json({ grants: [] });
@@ -80,7 +80,7 @@ test("the header shows the state, machine, client and access chips, and the acti
   expect(await screen.findByText("Backend")).toBeTruthy();
   expect(screen.getByText("@backend-claude")).toBeTruthy();
   expect(screen.getByText("dolgozik")).toBeTruthy();
-  expect(screen.getByText("pc-wsl")).toBeTruthy();
+  expect(screen.getByText("pc-dev")).toBeTruthy();
   expect(screen.getByText("claude · opus")).toBeTruthy();
   expect(screen.getAllByText("Teljes hozzáférés").length).toBe(2); // the chip and the configuration row
   const actions = within(screen.getByRole("group", { name: "Műveletek" }));

@@ -54,8 +54,8 @@ func TestHostAndAgentColors(t *testing.T) {
 		t.Fatalf("hex colour: %d", s)
 	}
 	var updated struct{ Name, Color string }
-	if s := e.do("PATCH", "/api/v1/hosts/"+first, server.DevAdminToken, map[string]any{"color": "teal", "name": "pc-wsl"}, &updated); s != http.StatusOK ||
-		updated.Color != "teal" || updated.Name != "pc-wsl" {
+	if s := e.do("PATCH", "/api/v1/hosts/"+first, server.DevAdminToken, map[string]any{"color": "teal", "name": "pc-dev"}, &updated); s != http.StatusOK ||
+		updated.Color != "teal" || updated.Name != "pc-dev" {
 		t.Fatalf("recolour: %d %+v", s, updated)
 	}
 

@@ -10,7 +10,7 @@ import { useDecisions } from "../api";
 
 const Page = 50;
 
-/** Döntések: the decision log, newest first, read-only (docs/handoff/32, navigation). */
+/** Döntések: the decision log, newest first, read-only (round 32, navigation). */
 export default function DecisionsPage() {
   const { t, i18n } = useTranslation("decisions");
   const locale = localeOf(i18n.language);

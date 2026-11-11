@@ -365,6 +365,6 @@
     "running": "Running",
     "integrations": "Integrations",
     "backups": "Backups",
-    "backupsBody": "The homelab handles backups (docs/05-homelab-telepites.md); the server does not check them."
+    "backupsBody": "Backups are the operator's job (the database and the files volume); the server does not check them."
   }
 }

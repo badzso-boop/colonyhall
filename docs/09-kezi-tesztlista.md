@@ -20,7 +20,7 @@ Fix lista a PWA (`/app/`) kézi végigpróbálásához (31–33. kör és a 2026
 
 | Mi | Fejlesztői stacken | Élesben |
 | --- | --- | --- |
-| Szerver | `make dev` → `http://localhost:8080/app/` (belépés: `norbi` / `colonyhall-dev-password`) | `http://100.85.111.88:8280/app/` |
+| Szerver | `make dev` → `http://localhost:8080/app/` (belépés: `norbi` / `colonyhall-dev-password`) | `http://100.64.0.10:8280/app/` |
 | Tag fiók | „Gépek” helyett: `POST /api/v1/actors` `{"kind":"human","handle":"teszt-tag","role":"member"}`, jelszó `set-password` paranccsal | egyszer létrehozva, újrahasznosítva |
 | Teszt-agent | `@fake-agent` (seed) | `/app/agents` → „Új agent”: `teszt-sandbox` (sandbox, a homelabon) és `teszt-full` (teljes hozzáférés, a PC-n, egy teszt-mappában) |
 | Csatornák | `#general` | `#teszt` (te + a teszt-agentek) |

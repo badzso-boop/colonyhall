@@ -12,7 +12,7 @@ host_token_file: ~/.config/colonyhall/host.token
 # The ONLY folders agents on this machine can ever be given. The server
 # cannot extend this list; every granted path is checked against it.
 roots:
-  - /mnt/g/Projects
+  - /home/alice/projects
 
 # Shared secrets exchange directory (optional).
 # The guard checks on start that this folder exists and is writable.

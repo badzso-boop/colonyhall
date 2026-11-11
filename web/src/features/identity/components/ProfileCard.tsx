@@ -9,7 +9,7 @@ import type { Actor } from "../api";
 import { localTime } from "../model";
 
 /**
- * A person's or an agent's profile (docs/handoff/34, part 7): avatar, names,
+ * A person's or an agent's profile (round 34, part 7): avatar, names,
  * description, status text and local time. Other features add their part
  * through `extra` (an agent's state and machine) and `actions` (DM).
  */

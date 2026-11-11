@@ -209,7 +209,7 @@ export const LAG_SECONDS = 60;
 
 export type StatusFinding = { id: string; tone: Tone };
 
-/** The thresholds of the status cards (docs/handoff/35, part 8). */
+/** The thresholds of the status cards (round 35, part 8). */
 export function statusFindings(st: AdminStatus): StatusFinding[] {
   const s = st.system;
   if (!s) return [];

@@ -6,7 +6,7 @@ export type Actor = Schemas["Actor"];
 export type Section = Schemas["SidebarSection"];
 
 /**
- * Which sidebar group a conversation belongs to (docs/handoff/31, part 4):
+ * Which sidebar group a conversation belongs to (round 31, part 4):
  * channel (public or private), a DM with humans only, a DM with at least
  * one agent, an agent–agent DM (the viewer is not in it: admins see these),
  * or a note to self.

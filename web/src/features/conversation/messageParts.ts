@@ -1,5 +1,5 @@
 // Pure rules for the parts of a message the dev page showed and the PWA
-// ports (docs/handoff/34, part 6). The texts they read are written by the
+// ports (round 34, part 6). The texts they read are written by the
 // server or the guard, so the patterns follow those (Hungarian) bodies.
 import type { Schemas } from "@/shared/api";
 

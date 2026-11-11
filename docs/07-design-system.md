@@ -207,7 +207,7 @@ Ikonok: **Lucide** (`lucide-react`), sűrű helyen 16 px, máshol 20 px. A logó
 - **Telefonon** nincs lebegő ablak: a legfelső nyitott ablak tartalma alsó Sheetben jelenik meg.
 - **Egy tartalom-komponens funkciónként:** az ablak és az oldal ugyanazt használja, az ablak tömör változatban (pl. a naptár mini-hónap + napirend).
 
-Képek: `docs/handoff/32-screens/windows-*.png`.
+Képek: a 32. kör képernyőképei (privát jegyzetek).
 
 ### Oldalfejléc (`shared/ui/PageHeader`)
 

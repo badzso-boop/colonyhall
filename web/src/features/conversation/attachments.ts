@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { uploadFile, ApiError } from "@/shared/api";
 
-// The composer's attachment tray (docs/handoff/31, part 5): uploads start at
+// The composer's attachment tray (round 31, part 5): uploads start at
 // once, sending waits for running uploads, failures can be retried.
 
 export type Attachment = {

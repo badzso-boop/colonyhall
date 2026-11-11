@@ -4,7 +4,7 @@ import { api, unwrap, type Schemas } from "@/shared/api";
 export type Note = Schemas["AgentNote"];
 
 // No event announces a new note: refetch every 30 s while visible, on focus
-// and when the thread changes (docs/handoff/32, part 5).
+// and when the thread changes (round 32, part 5).
 const Refetch = 30_000;
 
 export const notesKeys = {
