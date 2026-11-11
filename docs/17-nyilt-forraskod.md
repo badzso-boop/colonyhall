@@ -146,3 +146,13 @@ Javasolt angol anyag a nyilvános látogatónak: `README.md` (már angol), telep
 5. **CLA:** a `contributor-assistant` GitHub Action, céges változat nélkül?
 6. **Domain** (melyik, mikor) és **GitHub-szervezet** (marad a `badzso-boop` alatt vagy `colonyhall` szervezet)?
 7. **`FUNDING.yml`** és **Discussions**: kell?
+
+## Döntések a kapun (Norbi, 2026-11-11)
+
+- A régi PDF-ek (`docs/01–03-*.pdf`) törölhetők.
+- A fejlesztői seed szigorítása később (nem ebben a körben).
+- A „Forráskód” link a javasolt formában (`COLONY_SOURCE_URL`, `GET /api/v1/version`, Névjegy és lábléc).
+- CLA: a `contributor-assistant` GitHub Action, céges változat nélkül.
+- A repó marad `badzso-boop/colonyhall`; domain később.
+- `FUNDING.yml`: egyelőre nem.
+- A privát kísérő repó (`colonyhall-ops`): elvben igen; a kezelése az agentekkel nyitott (lásd a beszélgetést).
