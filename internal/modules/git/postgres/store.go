@@ -150,3 +150,22 @@ func (s *Store) RecordDelivery(ctx context.Context, deliveryID string, now time.
 		ReceivedAt: now,
 	})
 }
+
+// GetWorkspaceGitea returns the workspace's own Gitea.
+func (s *Store) GetWorkspaceGitea(ctx context.Context, workspaceID ids.ID) (git.WorkspaceGitea, error) {
+	r, err := s.q(ctx).GetWorkspaceGitea(ctx, workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return git.WorkspaceGitea{}, git.ErrNoOwnGitea
+	}
+	if err != nil {
+		return git.WorkspaceGitea{}, err
+	}
+	return git.WorkspaceGitea{WorkspaceID: r.WorkspaceID, Enabled: r.Enabled, URL: r.Url, PublicURL: r.PublicUrl,
+		Token: r.Token, WebhookSecret: r.WebhookSecret, UpdatedAt: r.UpdatedAt}, nil
+}
+
+// SetWorkspaceGitea stores the workspace's own Gitea.
+func (s *Store) SetWorkspaceGitea(ctx context.Context, c git.WorkspaceGitea) error {
+	return s.q(ctx).SetWorkspaceGitea(ctx, sqlcgen.SetWorkspaceGiteaParams{WorkspaceID: c.WorkspaceID, Enabled: c.Enabled,
+		Url: c.URL, PublicUrl: c.PublicURL, Token: c.Token, WebhookSecret: c.WebhookSecret, UpdatedAt: c.UpdatedAt})
+}

@@ -182,6 +182,25 @@ func (q *Queries) GetWebhookDelivery(ctx context.Context, deliveryID string) (Gi
 	return i, err
 }
 
+const getWorkspaceGitea = `-- name: GetWorkspaceGitea :one
+SELECT workspace_id, enabled, url, public_url, token, webhook_secret, updated_at FROM workspace_gitea WHERE workspace_id = $1
+`
+
+func (q *Queries) GetWorkspaceGitea(ctx context.Context, workspaceID uuid.UUID) (WorkspaceGitea, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceGitea, workspaceID)
+	var i WorkspaceGitea
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.Enabled,
+		&i.Url,
+		&i.PublicUrl,
+		&i.Token,
+		&i.WebhookSecret,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertWebhookDelivery = `-- name: InsertWebhookDelivery :one
 SELECT colony_record_webhook_delivery($1::text, $2::timestamptz)::boolean AS recorded
 `
@@ -230,6 +249,37 @@ func (q *Queries) ListGitRepoChannels(ctx context.Context, workspaceID uuid.UUID
 		return nil, err
 	}
 	return items, nil
+}
+
+const setWorkspaceGitea = `-- name: SetWorkspaceGitea :exec
+INSERT INTO workspace_gitea (workspace_id, enabled, url, public_url, token, webhook_secret, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (workspace_id) DO UPDATE
+SET enabled = EXCLUDED.enabled, url = EXCLUDED.url, public_url = EXCLUDED.public_url,
+    token = EXCLUDED.token, webhook_secret = EXCLUDED.webhook_secret, updated_at = EXCLUDED.updated_at
+`
+
+type SetWorkspaceGiteaParams struct {
+	WorkspaceID   uuid.UUID
+	Enabled       bool
+	Url           string
+	PublicUrl     string
+	Token         string
+	WebhookSecret string
+	UpdatedAt     time.Time
+}
+
+func (q *Queries) SetWorkspaceGitea(ctx context.Context, arg SetWorkspaceGiteaParams) error {
+	_, err := q.db.Exec(ctx, setWorkspaceGitea,
+		arg.WorkspaceID,
+		arg.Enabled,
+		arg.Url,
+		arg.PublicUrl,
+		arg.Token,
+		arg.WebhookSecret,
+		arg.UpdatedAt,
+	)
+	return err
 }
 
 const upsertGitLink = `-- name: UpsertGitLink :exec

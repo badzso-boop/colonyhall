@@ -33,6 +33,11 @@ type Store interface {
 	// DeleteRepoChannel removes a mapping.
 	DeleteRepoChannel(ctx context.Context, workspaceID ids.ID, repo string) error
 
+	// GetWorkspaceGitea returns the workspace's own Gitea, or ErrNoOwnGitea.
+	GetWorkspaceGitea(ctx context.Context, workspaceID ids.ID) (WorkspaceGitea, error)
+	// SetWorkspaceGitea stores (or replaces) the workspace's own Gitea.
+	SetWorkspaceGitea(ctx context.Context, cfg WorkspaceGitea) error
+
 	// RecordDelivery records a webhook delivery ID. Returns true if newly recorded, false if already seen.
 	RecordDelivery(ctx context.Context, deliveryID string, now time.Time) (bool, error)
 }

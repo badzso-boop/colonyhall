@@ -687,3 +687,13 @@ type WorkspaceFileFetchSetting struct {
 	MaxFileMb   int32
 	UpdatedAt   time.Time
 }
+
+type WorkspaceGitea struct {
+	WorkspaceID   uuid.UUID
+	Enabled       bool
+	Url           string
+	PublicUrl     string
+	Token         string
+	WebhookSecret string
+	UpdatedAt     time.Time
+}

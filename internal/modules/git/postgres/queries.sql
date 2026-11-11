@@ -55,3 +55,13 @@ WHERE delivery_id = $1;
 SELECT r.workspace_id::uuid AS workspace_id, r.repo::text AS repo, r.channel_id::uuid AS channel_id, r.created_at::timestamptz AS created_at
 FROM colony_repo_channels(sqlc.arg(repo)::text) AS r;
 
+
+-- name: GetWorkspaceGitea :one
+SELECT * FROM workspace_gitea WHERE workspace_id = $1;
+
+-- name: SetWorkspaceGitea :exec
+INSERT INTO workspace_gitea (workspace_id, enabled, url, public_url, token, webhook_secret, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (workspace_id) DO UPDATE
+SET enabled = EXCLUDED.enabled, url = EXCLUDED.url, public_url = EXCLUDED.public_url,
+    token = EXCLUDED.token, webhook_secret = EXCLUDED.webhook_secret, updated_at = EXCLUDED.updated_at;

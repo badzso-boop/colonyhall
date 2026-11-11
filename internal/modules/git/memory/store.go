@@ -16,6 +16,7 @@ type Store struct {
 	links        map[linkKey]git.LinkCard
 	repoChannels map[string]git.RepoChannel // key: workspaceID.String() + ":" + repo
 	deliveries   map[string]time.Time
+	giteas       map[ids.ID]git.WorkspaceGitea
 }
 
 // New creates an in-memory git store.
@@ -24,6 +25,7 @@ func New() *Store {
 		links:        make(map[linkKey]git.LinkCard),
 		repoChannels: make(map[string]git.RepoChannel),
 		deliveries:   make(map[string]time.Time),
+		giteas:       make(map[ids.ID]git.WorkspaceGitea),
 	}
 }
 
@@ -131,4 +133,23 @@ func (s *Store) RecordDelivery(_ context.Context, deliveryID string, now time.Ti
 	}
 	s.deliveries[deliveryID] = now
 	return true, nil
+}
+
+// GetWorkspaceGitea returns the workspace's own Gitea.
+func (s *Store) GetWorkspaceGitea(_ context.Context, workspaceID ids.ID) (git.WorkspaceGitea, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.giteas[workspaceID]
+	if !ok {
+		return git.WorkspaceGitea{}, git.ErrNoOwnGitea
+	}
+	return c, nil
+}
+
+// SetWorkspaceGitea stores the workspace's own Gitea.
+func (s *Store) SetWorkspaceGitea(_ context.Context, c git.WorkspaceGitea) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.giteas[c.WorkspaceID] = c
+	return nil
 }

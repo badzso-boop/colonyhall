@@ -18,6 +18,8 @@ var (
 	ErrUnauthorizedWebhook = provider.ErrUnauthorizedWebhook
 	ErrDisabled            = errors.New("git integration is not configured")
 	ErrLinkNotFound        = errors.New("git link not found")
+	// ErrNoOwnGitea: the workspace has no Gitea of its own (it uses the shared one).
+	ErrNoOwnGitea = errors.New("the workspace has no own Gitea")
 )
 
 // LinkKind indicates the type of Git resource.
@@ -65,4 +67,17 @@ func ValidateRepo(repo string) error {
 		return fmt.Errorf("%w: contains invalid characters", ErrInvalidRepo)
 	}
 	return nil
+}
+
+// WorkspaceGitea is a workspace's own Gitea (round 45), used instead of the
+// server's shared one while Enabled. Token and WebhookSecret are secrets:
+// never in an API response, a log or an event.
+type WorkspaceGitea struct {
+	WorkspaceID   ids.ID
+	Enabled       bool
+	URL           string // the API address the server calls
+	PublicURL     string // the address people use in links, when different
+	Token         string // read-only API token
+	WebhookSecret string
+	UpdatedAt     time.Time
 }

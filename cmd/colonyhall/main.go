@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"colonyhall/internal/modules/git"
 	"colonyhall/internal/platform/config"
 	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/server"
@@ -31,6 +32,7 @@ import (
 //	colonyhall set-password -handle norbi        set a password; reads it from stdin
 //	colonyhall bootstrap -handle norbi           first workspace + owner on an empty database; password from stdin
 //	colonyhall set-slug -workspace W -slug S     rename a workspace's subdomain (multi-tenant mode)
+//	colonyhall gitea-set -workspace W -url U     a workspace's own Gitea; token and webhook secret from stdin
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -45,6 +47,8 @@ func main() {
 		err = bootstrapCmd(os.Args[2:], os.Stdin)
 	case len(os.Args) > 1 && os.Args[1] == "set-slug":
 		err = setSlug(os.Args[2:])
+	case len(os.Args) > 1 && os.Args[1] == "gitea-set":
+		err = giteaSet(os.Args[2:], os.Stdin)
 	default:
 		err = run(logger)
 	}
@@ -124,6 +128,66 @@ func setSlug(args []string) error {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "workspace %q now has the slug %q\n", ws.Name, ws.Slug)
+	return nil
+}
+
+// giteaSet gives a workspace its own Gitea instead of the shared one, or
+// switches it off (round 45). The read-only token and the webhook secret
+// come from stdin, one per line, so they never reach shell history:
+//
+//	printf '%s\n%s\n' "$TOKEN" "$SECRET" | colonyhall gitea-set -workspace acme -url https://git.acme.example
+//	colonyhall gitea-set -workspace acme -off
+func giteaSet(args []string, stdin io.Reader) error {
+	fs := flag.NewFlagSet("gitea-set", flag.ContinueOnError)
+	workspace := fs.String("workspace", "", "workspace name")
+	url := fs.String("url", "", "the Gitea API address the server calls")
+	publicURL := fs.String("public-url", "", "the address people use in links, if different")
+	off := fs.Bool("off", false, "switch the own Gitea off (back to the shared one)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *workspace == "" || (!*off && *url == "") {
+		return errors.New("gitea-set: -workspace and -url (or -off) are required")
+	}
+	cfg, err := config.FromEnv()
+	if err != nil {
+		return err
+	}
+	in := git.WorkspaceGitea{Enabled: !*off, URL: *url, PublicURL: *publicURL}
+	if !*off {
+		r := bufio.NewReader(stdin)
+		tok, _ := r.ReadString('\n')
+		sec, _ := r.ReadString('\n')
+		in.Token, in.WebhookSecret = strings.TrimSpace(tok), strings.TrimSpace(sec)
+		if in.Token == "" || in.WebhookSecret == "" {
+			return errors.New("gitea-set: give the token and the webhook secret on stdin, one per line")
+		}
+	}
+	ctx := system.Context(context.Background()) // a server command, for any workspace
+	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, FilesDir: cfg.FilesDir, MaxUploadMB: cfg.MaxUploadMB})
+	if err != nil {
+		return err
+	}
+	defer app.Close()
+	ws, err := app.Identity.Store.WorkspaceByName(ctx, *workspace)
+	if err != nil {
+		return err
+	}
+	in.WorkspaceID = ws.ID
+	if *off {
+		// Keep the stored address for a later switch back on.
+		if old, err := app.Git.Store.GetWorkspaceGitea(ctx, ws.ID); err == nil {
+			in.URL, in.PublicURL, in.Token, in.WebhookSecret = old.URL, old.PublicURL, old.Token, old.WebhookSecret
+		}
+	}
+	if err := app.Git.SetWorkspaceGitea(ctx, in); err != nil {
+		return err
+	}
+	state := "on"
+	if *off {
+		state = "off"
+	}
+	fmt.Fprintf(os.Stderr, "own Gitea for %q: %s\n", ws.Name, state)
 	return nil
 }
 

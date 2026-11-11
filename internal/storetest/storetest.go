@@ -2082,6 +2082,22 @@ func testGit(t *testing.T, b Backend) {
 		t.Fatalf("GetLink updated = %+v", gotUpdated)
 	}
 
+	// Own Gitea per workspace (round 45).
+	if _, err := st.GetWorkspaceGitea(ctx, f.ws.ID); !errors.Is(err, git.ErrNoOwnGitea) {
+		t.Fatalf("no own Gitea yet: %v", err)
+	}
+	own := git.WorkspaceGitea{WorkspaceID: f.ws.ID, Enabled: true, URL: "http://git.local", PublicURL: "https://git.example",
+		Token: "read-token", WebhookSecret: "hook-secret", UpdatedAt: t0}
+	must(t, st.SetWorkspaceGitea(ctx, own))
+	if got, err := st.GetWorkspaceGitea(ctx, f.ws.ID); err != nil || got.URL != own.URL || got.Token != own.Token || !got.Enabled || got.WebhookSecret != own.WebhookSecret {
+		t.Fatalf("own Gitea: %+v %v", got, err)
+	}
+	own.Enabled = false
+	must(t, st.SetWorkspaceGitea(ctx, own))
+	if got, err := st.GetWorkspaceGitea(ctx, f.ws.ID); err != nil || got.Enabled {
+		t.Fatalf("own Gitea switched off: %+v %v", got, err)
+	}
+
 	// 2. Repo-Channel mappings
 	chID := f.channel.ID
 	m1 := git.RepoChannel{

@@ -378,8 +378,11 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		gitProv = p
 	}
 	gitSvc := &git.Service{
-		Store:         giStore,
-		Provider:      gitProv,
+		Store:    giStore,
+		Provider: gitProv,
+		NewProvider: func(url, token, publicURL string) (provider.GitProvider, error) {
+			return provider.NewGitea(url, token, publicURL)
+		},
 		Conversation:  cvSvc,
 		Identity:      idSvc,
 		Clock:         opt.Clock,

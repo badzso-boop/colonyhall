@@ -20,6 +20,7 @@ type mockStore struct {
 	links        map[string]LinkCard
 	repoChannels map[string]RepoChannel
 	deliveries   map[string]time.Time
+	giteas       map[ids.ID]WorkspaceGitea
 }
 
 func newMockStore() *mockStore {
@@ -27,6 +28,7 @@ func newMockStore() *mockStore {
 		links:        make(map[string]LinkCard),
 		repoChannels: make(map[string]RepoChannel),
 		deliveries:   make(map[string]time.Time),
+		giteas:       make(map[ids.ID]WorkspaceGitea),
 	}
 }
 
@@ -88,6 +90,22 @@ func (m *mockStore) SetRepoChannel(_ context.Context, mapping RepoChannel) error
 
 func (m *mockStore) DeleteRepoChannel(_ context.Context, workspaceID ids.ID, repo string) error {
 	delete(m.repoChannels, workspaceID.String()+":"+repo)
+	return nil
+}
+
+func (m *mockStore) GetWorkspaceGitea(_ context.Context, ws ids.ID) (WorkspaceGitea, error) {
+	c, ok := m.giteas[ws]
+	if !ok {
+		return WorkspaceGitea{}, ErrNoOwnGitea
+	}
+	return c, nil
+}
+
+func (m *mockStore) SetWorkspaceGitea(_ context.Context, c WorkspaceGitea) error {
+	if m.giteas == nil {
+		m.giteas = map[ids.ID]WorkspaceGitea{}
+	}
+	m.giteas[c.WorkspaceID] = c
 	return nil
 }
 

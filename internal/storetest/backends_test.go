@@ -88,7 +88,7 @@ func TestPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	Run(t, func(t *testing.T) Backend {
-		_, err := pg.Pool.Exec(ctx, `TRUNCATE db_size_sample, model_price, workspace_currency, agent_instructions, planner_calendar_event, planner_calendar, planner_access, planner_task, terminal_event, delegation, compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
+		_, err := pg.Pool.Exec(ctx, `TRUNCATE db_size_sample, workspace_gitea, model_price, workspace_currency, agent_instructions, planner_calendar_event, planner_calendar, planner_access, planner_task, terminal_event, delegation, compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
 			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)
