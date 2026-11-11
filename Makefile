@@ -4,7 +4,7 @@ TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
 .PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
-        test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest
+        test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest privacy
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -101,6 +101,13 @@ test-install:    ## install.sh tests in Debian, Ubuntu and Fedora containers (ne
 
 actionlint:      ## actionlint on every GitHub workflow (Docker image)
 	$(ACTIONLINT) -color
+
+privacy:         ## No secrets (gitleaks) and no private infrastructure details in the tracked files
+	python3 -I scripts/check-private-data.py
+	git ls-files -z | tar --null --ignore-failed-read -T - -cf .cache-privacy.tar 2>/dev/null; \
+	  docker run --rm -i -v "$(CURDIR)/.gitleaks.toml":/cfg.toml:ro --entrypoint sh zricethezav/gitleaks:v8.28.0 \
+	    -c 'mkdir -p /tmp/scan && tar -xf - -C /tmp/scan && gitleaks dir /tmp/scan --config /cfg.toml --redact --no-banner' < .cache-privacy.tar; \
+	  rc=$$?; rm -f .cache-privacy.tar; exit $$rc
 
 vuln:            ## Known vulnerabilities: govulncheck and npm audit (needs network)
 	$(GOVULNCHECK) ./...

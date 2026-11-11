@@ -83,6 +83,7 @@ cmd[shellcheck]="mk shellcheck"
 cmd[actionlint]="mk actionlint ci-selftest"
 cmd[vuln]="mk vuln"
 cmd[install-test]="mk test-install"
+cmd[privacy]="mk privacy"
 # These write into the tree (generated code, web/dist): their own snapshot,
 # one after the other, as in CI where the image build needs the build job.
 cmd[gen-check]="mk gen-check"
@@ -90,12 +91,12 @@ cmd[build]="mk web build"
 cmd[docker-image]="mk docker-image"
 
 if [ "$quick" = 1 ]; then
-  jobs=(go-test go-lint web-typecheck web-lint web-test)
+  jobs=(go-test go-lint web-typecheck web-lint web-test privacy)
   # The snapshot is checked out at the stash commit: compare with the real HEAD.
   cmd[web-test]="mk web-vitest VITEST_ARGS='--changed $(git -C "$repo" rev-parse HEAD)'"
 else
   jobs=(go-test go-e2e go-race go-pg go-lint web-typecheck web-lint web-test devpage-test
-    shellcheck actionlint vuln install-test gen-check build docker-image)
+    shellcheck actionlint vuln install-test privacy gen-check build docker-image)
 fi
 
 selected=()

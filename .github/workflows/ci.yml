@@ -266,7 +266,7 @@ jobs:
   # Vitest. One shard today: on a runner the whole suite takes about 40 s
   # with 2 workers, less than a shard job's own set-up costs. Raise `shard`
   # and SHARDS together when it grows past a few minutes
-  # (docs/handoff/42-ci-report.md has the measurements).
+  # (round 42 has the measurements).
   web-test:
     needs: changes
     if: needs.changes.outputs.web == 'true'
@@ -322,6 +322,19 @@ jobs:
         with:
           persist-credentials: false
       - run: make shellcheck
+
+  # No secrets and no private infrastructure details (addresses, host and
+  # user names) in the tracked files: on every run, docs-only changes too.
+  privacy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: make privacy
 
   # The workflows themselves, and the tests of the CI's own scripts.
   actionlint:
@@ -444,6 +457,7 @@ jobs:
   ci-ok:
     needs:
       - changes
+      - privacy
       - go-test
       - go-e2e
       - go-race
