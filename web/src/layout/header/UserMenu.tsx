@@ -5,7 +5,7 @@ import { Check, Keyboard, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-r
 import { languages, setLanguage } from "@/shared/i18n";
 import { applyTheme, readTheme, type Theme } from "@/shared/theme";
 import { Avatar, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/shared/ui";
-import { ProfileDialog, useLogout, useSession } from "@/features/identity";
+import { ProfileDialog, SourceLink, useLogout, useSession } from "@/features/identity";
 import { openOverlay } from "../overlays";
 
 const themeIcons = { system: Monitor, light: Sun, dark: Moon } as const;
@@ -69,6 +69,8 @@ export function UserMenu() {
         >
           {t("logout")}
         </MenuItem>
+        <MenuSeparator />
+        <SourceLink className="px-2 py-1.5" />
       </MenuContent>
       {profile ? <ProfileDialog onClose={() => setProfile(false)} /> : null}
     </Menu>

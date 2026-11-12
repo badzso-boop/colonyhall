@@ -2,7 +2,7 @@
 
 - **Version:** `0.52.2`
 - **Source:** npm package `monaco-editor@0.52.2` (extracted from `min/vs`)
-- **License:** MIT (see `LICENSE`)
+- **License:** MIT (see `LICENSE`); the bundled third-party code is listed in `ThirdPartyNotices.txt` (from the same npm package)
 - **Source maps:** Removed (`*.map` excluded)
 
 ## How to update

@@ -6,6 +6,7 @@ export type Session = Schemas["SessionInfo"];
 
 export const identityKeys = {
   session: ["identity", "session"] as const,
+  version: ["identity", "version"] as const,
   actors: ["identity", "actors"] as const,
 };
 
@@ -19,6 +20,15 @@ export function useSession() {
       return s;
     },
     retry: false,
+    staleTime: Infinity,
+  });
+}
+
+/** The server's version, licence and source link (AGPL section 13); public. */
+export function useVersion() {
+  return useQuery({
+    queryKey: identityKeys.version,
+    queryFn: async () => unwrap(await api.GET("/version")),
     staleTime: Infinity,
   });
 }

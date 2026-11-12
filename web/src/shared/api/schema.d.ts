@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public. The server's version, licence and where its source code can be downloaded (AGPL section 13: COLONY_SOURCE_URL). The web app shows the link on the sign-in page and under About. */
+        get: operations["getVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/actors/{actorId}/tokens": {
         parameters: {
             query?: never;
@@ -2831,6 +2848,20 @@ export interface components {
             /** @description Only needed when the handle exists in several workspaces */
             workspace?: string;
         };
+        VersionInfo: {
+            /** @description The build's version, "dev" for a development build */
+            version: string;
+            /**
+             * @description SPDX identifier
+             * @example AGPL-3.0-only
+             */
+            license: string;
+            /**
+             * Format: uri
+             * @description Where the source code of this server can be downloaded
+             */
+            source_url: string;
+        };
         SessionInfo: {
             actor: components["schemas"]["Actor"];
             /** @description Empty for bearer-token callers */
@@ -5308,6 +5339,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
                 };
             };
             default: components["responses"]["Problem"];

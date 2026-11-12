@@ -49,6 +49,16 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInfo" } } } }
 
+  /version:
+    get:
+      operationId: getVersion
+      tags: [identity]
+      security: []
+      description: "Public. The server's version, licence and where its source code can be downloaded (AGPL section 13: COLONY_SOURCE_URL). The web app shows the link on the sign-in page and under About."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/VersionInfo" } } } }
+
   /actors/{actorId}/tokens:
     parameters:
       - { name: actorId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -2668,6 +2678,13 @@ components:
         handle: { type: string }
         password: { type: string }
         workspace: { type: string, description: Only needed when the handle exists in several workspaces }
+    VersionInfo:
+      type: object
+      required: [version, license, source_url]
+      properties:
+        version: { type: string, description: "The build's version, \"dev\" for a development build" }
+        license: { type: string, description: SPDX identifier, example: AGPL-3.0-only }
+        source_url: { type: string, format: uri, description: Where the source code of this server can be downloaded }
     SessionInfo:
       type: object
       required: [actor, csrf_token]

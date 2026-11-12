@@ -1,6 +1,7 @@
 {
   "name": "colonyhall-web",
   "private": true,
+  "license": "AGPL-3.0-only",
   "version": "0.0.0",
   "type": "module",
   "description": "Colonyhall PWA (React + Vite + TypeScript + Tailwind). Built into web/dist and embedded in the Go server at /app/.",

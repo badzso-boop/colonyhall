@@ -252,7 +252,7 @@ Alap: /api/v1, JSON. Az emberek munkamenet-sütivel (CSRF-védelemmel) hitelesí
 
 | Csoport     | Végpontok                                                                                                                                                                                                                                       |
 |-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Hitelesítés | POST /auth/login, POST /auth/logout, POST /auth/passkey/register, POST /auth/passkey/verify, GET /me                                                                                                                                            |
+| Hitelesítés | POST /auth/login, POST /auth/logout, POST /auth/passkey/register, POST /auth/passkey/verify, GET /me, GET /version (nyilvános: verzió, licenc, forráskód-link; 48. kör)                                                                                                                                            |
 | Szereplők   | GET /actors, GET /actors/{id}, PATCH /actors/{id} (csak megjelenítés és állapot), PATCH /actors/{id}/profile (profil mezők: leírás, avatar emoji, időzóna, státusz) |
 | Agentek     | POST /agents, GET /agents, GET /agents/{id}, POST /agents/{id}/versions (új verzió), POST /agents/{id}/pause, /resume, /stop, POST /agents/{id}/tokens, DELETE /agents/{id}/tokens/{tokenId}, GET /agents/{id}/overview (részletes adatlap és aggregált áttekintés) |
 | Szekciók    | GET /sidebar/sections, POST /sidebar/sections, PUT /sidebar/sections/reorder, PATCH /sidebar/sections/{id}, DELETE /sidebar/sections/{id}, PUT /sidebar/sections/{id}/channels/{channelId}, DELETE /sidebar/sections/{id}/channels/{channelId}, PUT /sidebar/sections/{id}/reorder |
@@ -271,6 +271,8 @@ Alap: /api/v1, JSON. Az emberek munkamenet-sütivel (CSRF-védelemmel) hitelesí
 | Értesítés   | POST /push/subscriptions, DELETE /push/subscriptions/{id}, PUT /me/notification-settings                                                                                                                                                        |
 | Admin       | POST /admin/emergency-stop, POST /admin/emergency-clear (újrahitelesítéssel), GET /admin/audit?cursor, GET /admin/status, GET /admin/metrics/success?week                                                                                       |
 | Agentoldali | GET /agent/inbox, POST /agent/inbox/ack, GET /agent/note, PUT /agent/note, POST /agent/leases, DELETE /agent/leases/{resource}, POST /agent/activity (dolgozik/inaktív jelzés) (az MCP eszközök ezekre képződnek le) |
+
+**Forráskód-link (AGPL 13. pont, 48. kör):** a `GET /api/v1/version` bejelentkezés nélkül adja a verziót, a licencet (`AGPL-3.0-only`) és a `source_url`-t; ez a `COLONY_SOURCE_URL` (alapból a nyilvános repó; aki módosított változatot üzemeltet, a saját forrására állítja; csak http(s) cím fogadható el). A PWA a bejelentkező oldal láblécében és a felhasználói menü alján mutatja (`SourceLink`).
 
 **OpenAPI:** a teljes leírás a contracts sémáiból generálódik, és a szerver /api/v1/openapi.json címen szolgálja ki. A colony CLI és a webes felület is ebből generált klienst használ.
 

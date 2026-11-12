@@ -61,6 +61,10 @@ Unattended: `colony setup --guard --yes --server-url URL --pair-code CODE --name
 
 There is no built-in HTTPS: keep the server on localhost, a home network or Tailscale, or put it behind a reverse proxy with TLS (`docs/16-telepites.md`).
 
+## Privacy
+
+Colonyhall has no telemetry, no update check and no error reporting. The server only connects to what you configure: your Gitea, the calendars you subscribe to, and the AI providers and model servers you set up. A guard talks to its own server and runs the AI clients you logged in to (they talk to their own providers); it fetches a public web page only when an agent you allowed asks for one (`web_read`). `install.sh` and `colony upgrade` download releases from GitHub when you run them. The web app loads no external scripts, fonts or images.
+
 ## Development
 
 ```sh
@@ -72,3 +76,11 @@ make release-local VERSION=v0.0.0-dev   # the release artifacts into dist/
 ```
 
 Design documents (Hungarian) are in [docs/](docs/README.md); the install design is `docs/15-telepites-terv.md` (English summary: `docs/15-telepites-terv.en.md`).
+
+## Licence
+
+Colonyhall is free software under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you run a modified version for others over a network, the AGPL asks you to offer them its source: set `COLONY_SOURCE_URL` to it, and the web app links there (About and the sign-in page) and `GET /api/v1/version` returns it.
+
+If the AGPL does not fit your use, a commercial licence is available: write to norbert.ujj@gmail.com. Contributions are welcome under the [Contributor License Agreement](CLA.md), which keeps both options possible; the maintainer commits to keep every version that includes them available under an open source licence. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Copyright (C) 2026 Ujj Norbert. Third-party components and their licences: [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

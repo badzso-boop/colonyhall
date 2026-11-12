@@ -138,6 +138,7 @@ import (
 	wikipg "colonyhall/internal/modules/wiki/postgres"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/config"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
@@ -195,6 +196,9 @@ type Options struct {
 	// Embedder and Reranker override the URLs (tests).
 	Embedder search.Embedder
 	Reranker search.Reranker
+	// SourceURL is where this server's source can be downloaded (AGPL
+	// section 13, COLONY_SOURCE_URL); empty: the upstream repository.
+	SourceURL string
 	// Multitenant picks the workspace from the subdomain <slug>.BaseDomain
 	// (round 45, docs/23-elkulonites.md); off: one team, as before.
 	Multitenant bool
@@ -658,6 +662,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, dlSvc, gw, opt.Clock)
 	registerAgents(mux, idSvc, agSvc)
 	dsSvc := &dbstats.Service{Store: dsStore, Clock: opt.Clock}
+	registerVersion(mux, cmp.Or(opt.SourceURL, config.DefaultSourceURL))
 	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, DBStats: dsSvc, Events: events,
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB), Search: seSvc})

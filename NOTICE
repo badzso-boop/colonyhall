@@ -1,0 +1,33 @@
+Colonyhall
+Copyright (C) 2026 Ujj Norbert
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3 only (SPDX: AGPL-3.0-only). See
+LICENSE for the full text.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
+General Public License for more details.
+
+Commercial licence: if the AGPL does not fit your use, a commercial
+licence is available from the copyright holder (contact:
+norbert.ujj@gmail.com). Contributions are accepted under the Colonyhall
+Contributor License Agreement (CLA.md), which makes this possible.
+
+Source code for network users (AGPL section 13): a running Colonyhall
+server links to its source in the web app (About, and the sign-in page
+footer) and at GET /api/v1/version. If you run a modified version, set
+COLONY_SOURCE_URL to where your modified source can be downloaded.
+
+Third-party software: the binaries, the container image and the web app
+include third-party components under their own licences (MIT, BSD,
+Apache-2.0, ISC, MIT-0, 0BSD and the SIL Open Font License 1.1 for the
+Inter and JetBrains Mono fonts). Their notices and licence texts are in
+THIRD_PARTY_NOTICES.md. The vendored Monaco editor
+(internal/httpserver/web/vendor/monaco) is MIT-licensed; the code it
+bundles is listed in its ThirdPartyNotices.txt.
+
+Colonyhall takes ideas, never code, from Mattermost, Dendrite, Synapse
+and Stoat; comments name the pattern where one was followed.
