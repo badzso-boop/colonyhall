@@ -228,7 +228,11 @@ func (x *Indexer) IndexDecision(ctx context.Context, d decision.Decision) error 
 		return nil
 	}
 	header := fmt.Sprintf("Döntés %s", d.FormattedNumber())
-	if ch, err := x.Conv.ChannelByID(ctx, d.ChannelID); err == nil {
+	// A decision is visible to the whole workspace (as in the decision log),
+	// but the channel it was made in may not be: only a public channel's
+	// name goes into the header, never a private channel's name or a DM's
+	// participants.
+	if ch, err := x.Conv.ChannelByID(ctx, d.ChannelID); err == nil && ch.Kind == conversation.KindPublic {
 		header += " · " + x.place(ctx, ch)
 	}
 	header += " · " + x.handle(ctx, d.AuthorID) + " · " + date(d.CreatedAt)
