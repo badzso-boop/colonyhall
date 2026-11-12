@@ -5,9 +5,12 @@
   "version": "0.0.0",
   "description": "Colonyhall's public website (GitHub Pages). Separate from the app in web/.",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node build.mjs",
-    "check": "node build.mjs --check-only"
+    "check": "node build.mjs --check-only",
+    "counters": "node scripts/counters.mjs"
   }
 }

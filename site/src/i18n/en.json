@@ -174,7 +174,7 @@
     },
     "counters": {
       "label": "The colony so far",
-      "rounds": "rounds",
+      "rounds": "rounds shipped",
       "commits": "commits",
       "migrations": "migrations",
       "tests": "tests"
