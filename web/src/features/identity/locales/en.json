@@ -22,5 +22,10 @@
     "failed": "Could not save the profile.",
     "localTime": "Local time: {{time}} ({{zone}})",
     "label": "Profile of {{name}}"
+  },
+  "about": {
+    "line": "Colonyhall {{version}} · {{license}}",
+    "source": "Source code",
+    "sourceHint": "This server's source code (AGPL-3.0, section 13)"
   }
 }

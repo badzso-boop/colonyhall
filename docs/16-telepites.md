@@ -25,6 +25,7 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
   - Visszaállítás: `sudo docker compose … exec -T db pg_restore -U colony -d colonyhall --clean < colonyhall-ÉÉÉÉHHNN-ÓÓPP.dump`, a fájlok: `sudo docker run --rm -v colonyhall_files:/data -v /var/backups/colonyhall:/backup busybox tar xzf /backup/files-….tar.gz -C /data` (macOS-en `~/colonyhall-backups` és `sudo` nélkül).
 - Adatbázis-szerepkör (45. kör): a saját Postgresszel készülő **új** telepítésnél a szerver egy külön `colony_app` szerepkörrel csatlakozik (nem superuser, `NOBYPASSRLS`, így a sorszintű védelem rá is vonatkozik); a jelszava az `.env`-ben (`COLONY_APP_DB_PASSWORD`), a telepítő stdin-en adja át a `psql`-nek. A korábbi telepítések frissítéskor megtartják a superuser-kapcsolatukat; a szerver ilyenkor figyelmeztet a naplóban.
 - Frissítés: `colony setup --server --upgrade` (az új képcímke az `.env`-be, `pull`, `up -d`; a migrációk induláskor futnak). Előbb a szerver, utána az őrök.
+- Forráskód-link (AGPL 13. pont): ha módosított változatot üzemeltetsz, a `.env`-ben `COLONY_SOURCE_URL=<a módosított forrás címe>`; a felület és a `GET /api/v1/version` erre mutat. Üresen a nyilvános repó.
 - Eltávolítás: `colony uninstall --server` (az adat marad), `--purge`-dzsel az adat is törlődik.
 
 ### Több ügyfél egy szerveren (többbérlős mód)

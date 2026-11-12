@@ -22,5 +22,10 @@
     "failed": "A profilt nem sikerült menteni.",
     "localTime": "Helyi idő: {{time}} ({{zone}})",
     "label": "{{name}} profilja"
+  },
+  "about": {
+    "line": "Colonyhall {{version}} · {{license}}",
+    "source": "Forráskód",
+    "sourceHint": "A szerver forráskódja (AGPL-3.0, 13. pont)"
   }
 }

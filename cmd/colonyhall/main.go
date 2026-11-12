@@ -221,6 +221,7 @@ func run(logger *slog.Logger) error {
 		GiteaURL:           cfg.GiteaURL,
 		GiteaToken:         cfg.GiteaToken,
 		GiteaPublicURL:     cfg.GiteaPublicURL,
+		SourceURL:          cfg.SourceURL,
 		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
 		EmbedURL:           cfg.EmbedURL,
 		RerankURL:          cfg.RerankURL,

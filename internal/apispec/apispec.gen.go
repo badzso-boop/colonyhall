@@ -3986,6 +3986,20 @@ type UserRow struct {
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 }
 
+// VersionInfo defines model for VersionInfo.
+type VersionInfo struct {
+	// License SPDX identifier
+	//
+	// Example: AGPL-3.0-only
+	License string `json:"license"`
+
+	// SourceUrl Where the source code of this server can be downloaded
+	SourceUrl string `json:"source_url"`
+
+	// Version The build's version, "dev" for a development build
+	Version string `json:"version"`
+}
+
 // WikiPage defines model for WikiPage.
 type WikiPage struct {
 	Body      string             `json:"body"`

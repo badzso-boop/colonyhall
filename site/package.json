@@ -1,0 +1,13 @@
+{
+  "name": "colonyhall-site",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "version": "0.0.0",
+  "description": "Colonyhall's public website (GitHub Pages). Separate from the app in web/.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check-only"
+  }
+}

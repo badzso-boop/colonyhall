@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -33,6 +34,10 @@ type Config struct {
 	GiteaURL string
 	// GiteaToken is a read-only API token for fetching git metadata.
 	GiteaToken string
+	// SourceURL is where this server's source code can be downloaded (AGPL
+	// section 13): the web app links there and GET /api/v1/version returns
+	// it. Someone running a modified version points it at their own source.
+	SourceURL string
 	// GiteaPublicURL is the address people use in links, when it differs from
 	// GiteaURL (e.g. GiteaURL on Tailscale, the public name for links).
 	GiteaPublicURL string
@@ -105,12 +110,16 @@ func FromEnv() (Config, error) {
 		GiteaURL:           os.Getenv("COLONY_GITEA_URL"),
 		GiteaToken:         os.Getenv("COLONY_GITEA_TOKEN"),
 		GiteaPublicURL:     os.Getenv("COLONY_GITEA_PUBLIC_URL"),
+		SourceURL:          getenv("COLONY_SOURCE_URL", DefaultSourceURL),
 		GiteaWebhookSecret: os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
 		Multitenant:        os.Getenv("COLONY_MULTITENANT") == "1",
 		BaseDomain:         strings.ToLower(strings.Trim(os.Getenv("COLONY_BASE_DOMAIN"), ". ")),
 	}
 	if c.Multitenant && c.BaseDomain == "" {
 		return c, fmt.Errorf("config: COLONY_BASE_DOMAIN is required when COLONY_MULTITENANT=1")
+	}
+	if u, err := url.Parse(c.SourceURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return c, fmt.Errorf("config: COLONY_SOURCE_URL must be an http(s) address, got %q", c.SourceURL)
 	}
 	if c.Role != "all" {
 		return c, fmt.Errorf("config: COLONY_ROLE=%q is not supported yet; use \"all\"", c.Role)
@@ -126,6 +135,10 @@ func FromEnv() (Config, error) {
 	}
 	return c, nil
 }
+
+// DefaultSourceURL is the upstream repository, the source of an unmodified
+// build.
+const DefaultSourceURL = "https://github.com/badzso-boop/colonyhall"
 
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
