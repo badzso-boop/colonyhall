@@ -10,6 +10,7 @@ END $$;
 ALTER ROLE colony_app NOSUPERUSER NOBYPASSRLS PASSWORD 'colony_app';
 ALTER DATABASE colony OWNER TO colony_app;
 ALTER SCHEMA public OWNER TO colony_app;
+CREATE EXTENSION IF NOT EXISTS vector;
 DO $$ DECLARE r record; BEGIN
   FOR r IN SELECT c.relname, c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
            WHERE n.nspname = 'public' AND pg_get_userbyid(c.relowner) <> 'colony_app'
@@ -19,7 +20,8 @@ DO $$ DECLARE r record; BEGIN
     EXECUTE format('ALTER %s %I OWNER TO colony_app', CASE r.relkind WHEN 'v' THEN 'VIEW' WHEN 'S' THEN 'SEQUENCE' ELSE 'TABLE' END, r.relname);
   END LOOP;
   FOR r IN SELECT p.oid::regprocedure AS fn FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-           WHERE n.nspname = 'public' AND pg_get_userbyid(p.proowner) <> 'colony_app' LOOP
+           WHERE n.nspname = 'public' AND pg_get_userbyid(p.proowner) <> 'colony_app'
+             AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e') LOOP
     EXECUTE format('ALTER FUNCTION %s OWNER TO colony_app', r.fn);
   END LOOP;
 END $$;

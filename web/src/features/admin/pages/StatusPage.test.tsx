@@ -49,7 +49,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 test("the search card appears only when the status has a search part", async () => {
   show();
-  await screen.findByRole("heading", { name: /Adatbázis/ });
+  await screen.findByRole("heading", { name: /^Adatbázis(?! mérete)/ });
   expect(screen.queryByRole("heading", { name: /^Keresés/ })).toBeNull();
 });
 
