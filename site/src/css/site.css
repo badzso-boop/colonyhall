@@ -324,6 +324,11 @@ main { padding: 0; }
 .map-part:focus-visible rect { stroke: var(--accent-text); stroke-width: 3; }
 .map-part.is-active rect, .map-tunnel.is-active { stroke: var(--accent-text); }
 .map__hint { font-size: 0.875rem; margin: 12px 0 0; }
+.js .map .map-tunnel { stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1400ms var(--ease-out); }
+.js .map.is-dug .map-tunnel { stroke-dashoffset: 0; }
+.js .map.is-dug .map-tunnel:nth-child(2) { transition-delay: 250ms; }
+.js .map.is-dug .map-tunnel:nth-child(3) { transition-delay: 500ms; }
+.reduced .map .map-tunnel { stroke-dashoffset: 0; }
 .map__legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 20px 0 0; }
 .map__legend > div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--bg); transition: border-color 150ms; }
 .map__legend > div.is-active { border-color: var(--accent-text); }
