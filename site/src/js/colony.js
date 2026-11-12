@@ -58,9 +58,12 @@ export function spawn(opts) {
   const { scale } = limits();
   const ant = new Ant({ scale, ...opts, agent: opts.agent || nextAgent() });
   ant.still = !!opts.still;
+  ant.untagged = !!opts.untagged;
   const tag = document.createElement("div");
   tag.className = "ant-tag";
-  tag.textContent = t(`agents.${ant.agent}`); // i18n-prefix: agents
+  // a hatchling has no name yet: no tag
+  if (opts.untagged) tag.style.display = "none";
+  else tag.textContent = t(`agents.${ant.agent}`); // i18n-prefix: agents
   tags.appendChild(tag);
   ant.tag = tag;
   ants.add(ant);
@@ -154,6 +157,7 @@ function draw(time, dt = 0) {
     a.tag.style.visibility = vis ? "visible" : "hidden";
     if (!vis) continue;
     a.draw(ctx, pal, motion.still || motion.stopped ? 0 : time, sy);
+    if (a.untagged) continue;
     const w = a.tag.offsetWidth, h = a.tag.offsetHeight;
     a.tag.style.transform = `translate(${Math.round(a.x - w / 2)}px, ${Math.round(a.y - sy - 30 * a.scale - h - 4)}px)`;
   }

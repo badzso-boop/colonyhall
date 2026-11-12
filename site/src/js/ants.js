@@ -173,6 +173,13 @@ export class Ant {
   }
 
   update(dt, ctx) {
+    if (this.grow) {
+      // hatching: the ant grows to its size
+      this.grow.t = Math.min(1, this.grow.t + dt / this.grow.dur);
+      const e = 1 - (1 - this.grow.t) ** 3;
+      this.scale = this.grow.from + (this.grow.to - this.grow.from) * e;
+      if (this.grow.t >= 1) this.grow = null;
+    }
     if (this.wave > 0) { this.wave -= dt; return; }
     if (this.pauseLeft > 0) { this.pauseLeft -= dt; return; }
     let move = this.speed * dt * (1 + Math.sin(ctx.time * 9 + this.seed) * this.p.jitter);
