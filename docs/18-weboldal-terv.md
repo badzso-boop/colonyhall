@@ -2,7 +2,7 @@
 
 A 48. kör 5. része (`site/`, GitHub Pages). Ez a dokumentum az 5.1-es pont: Norbi víziója és a rá épülő terv. A műszaki alap (az 5.2-es pont) már kész: a `site/build.mjs` ellenőrzi a kötelező szabályokat, a `.github/workflows/pages.yml` csak kézi indításra fut.
 
-**Állapot:** a terv elfogadva (2026-11-12), a megvalósítás a hangyavázlatokkal indul (11. szakasz, 0. lépés).
+**Állapot:** a terv elfogadva (2026-11-12); a hangyavázlatok kapuja lezárult (12. szakasz), a megvalósítás az 1. lépéstől folyik.
 
 ## 1. Norbi döntései (2026-11-12)
 
@@ -199,9 +199,12 @@ Javaslat a sorrendre, egy körben, de lépésenként commitolva:
 
 Minden lépés után: `npm --prefix site run build` és a Lighthouse-mérés helyben; a Pages-workflow továbbra is csak kézi indításra fut.
 
-## 12. Nyitott kérdés
+## 12. A hangyák kinézete (döntés)
 
-- **A hangyák végleges kinézete:** a 11. szakasz 0. lépésének kapuján dől el.
+- **Norbi választása (2026-11-12): a „C” vázlat („Mark”).** A vázlatoldal (`site/sketches/`) öt karaktert mutatott (A–E); Norbi a C-t választotta keverés nélkül.
+- **A karakter:** felülnézetes hangya, a `BrandMark` arányaival (kerek fej, kis tor, hosszú potroh), nagy fehér szemekkel, pislogással és tapogató csápokkal. **Az egész hangya piros**, mint a logó; a cipelt csomag fehér, piros kerettel, hogy ne olvadjon bele a fejbe.
+- **Következmény a piros használatára:** a hangyák maguk a logó, ezért a piros rajtuk a márkajel szerepét tölti be, nem „harsány” kiemelésként számít. A feromon-nyomok (4.3) továbbra is a piros egyetlen kiemelő használata a kamrákban; a többi felület (szöveg, kártyák, keretek) a tokenek szerint visszafogott marad. A hangyák száma (legfeljebb ~12, mobilon ~5) és ritkasága tartja meg a piros súlyát.
+- **Felülnézet:** a hangya bármilyen irányba fordulhat, így ugyanaz a rajz mászik a monitoron, a járatokban és a térképen.
 
 ## A. függelék: a rétegek (Strata) szövege
 
