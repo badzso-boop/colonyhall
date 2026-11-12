@@ -40,12 +40,17 @@ function resize() {
   draw(performance.now() / 1000);
 }
 
-const onScreen = (y, margin = 80) => y > scrollY - margin && y < scrollY + innerHeight + margin;
-const anyVisible = () => [...ants].some((a) => onScreen(a.y));
+export const onScreen = (y, margin = 80) => y > scrollY - margin && y < scrollY + innerHeight + margin;
+const anyVisible = () => [...ants].some((a) => !a.hidden && onScreen(a.y));
 
+/** The next agent that has no ant on the page (a name is one ant), or null. */
 export function nextAgent() {
-  agentTurn = (agentTurn + 1) % AGENTS.length;
-  return AGENTS[agentTurn];
+  const present = new Set([...ants].map((a) => a.agent));
+  for (let i = 0; i < AGENTS.length; i++) {
+    agentTurn = (agentTurn + 1) % AGENTS.length;
+    if (!present.has(AGENTS[agentTurn])) return AGENTS[agentTurn];
+  }
+  return null;
 }
 
 /** Puts an ant on the page. opts: { agent, path, carry, speed, scale, onDone, still } */
@@ -89,7 +94,7 @@ function frame(now) {
   if (motion.still || motion.stopped || document.hidden) { running = false; draw(time); return; }
   const c = { time, cursor };
   for (const a of [...ants]) {
-    if (a.still) continue;
+    if (a.still || a.hidden) continue;
     a.update(dt, c);
     if (a.done) { remove(a); continue; }
     if (onScreen(a.y)) a.lastSeen = now;
@@ -116,7 +121,7 @@ function draw(time, dt = 0) {
     ctx.restore();
   }
   for (const a of ants) {
-    const vis = onScreen(a.y, 40);
+    const vis = !a.hidden && onScreen(a.y, 40);
     a.tag.style.visibility = vis ? "visible" : "hidden";
     if (!vis) continue;
     a.draw(ctx, pal, motion.still || motion.stopped ? 0 : time, sy);
@@ -210,9 +215,11 @@ function ambient() {
   let path = null;
   for (const p of order) { path = p(); if (path) break; }
   if (!path) return;
+  const agent = nextAgent();
+  if (!agent) return;
   lastSpawn = now;
   nextGap = rand(2500, 6500);
-  spawn({ path });
+  spawn({ path, agent });
 }
 
 // --- cursor and clicks -------------------------------------------------------
@@ -247,7 +254,7 @@ document.addEventListener("mouseleave", () => { cursor = null; });
 /** Where a crumb is taken: the nearest tunnel opening, or off the nearest edge. */
 function burrow(x, y) {
   let best = null, bd = innerHeight * 0.9;
-  for (const el of document.querySelectorAll(".tunnel, .ground-line .hole")) {
+  for (const el of document.querySelectorAll(".tunnel, .monitor__burrow")) {
     const r = el.getBoundingClientRect();
     const cx = r.left + r.width / 2, cy = r.top + scrollY + Math.min(r.height / 2, 30);
     const d = Math.hypot(cx - x, cy - y);
@@ -264,9 +271,9 @@ document.addEventListener("click", (e) => {
   crumbs.add(crumb);
   let a = nearest(crumb.x, crumb.y, innerWidth, (x) => !x.carry);
   if (!a) {
-    if (ants.size >= limits().max) { crumbs.delete(crumb); return; }
-    const fromLeft = crumb.x > innerWidth / 2 ? false : true;
-    a = spawn({ path: crossRoute(crumb.y, fromLeft, 0) });
+    const agent = nextAgent();
+    if (ants.size >= limits().max || !agent) { crumbs.delete(crumb); return; }
+    a = spawn({ agent, path: crossRoute(crumb.y, crumb.x <= innerWidth / 2, 0) });
   }
   a.goTo(crumb.x, crumb.y, (ant) => {
     crumbs.delete(crumb);

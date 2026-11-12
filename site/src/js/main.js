@@ -3,6 +3,8 @@
 import { t } from "./i18n.js";
 import { motion } from "./motion.js";
 import * as colony from "./colony.js";
+import * as monitor from "./monitor.js";
+import { onVisibility } from "./motion.js";
 
 for (const el of document.querySelectorAll("[data-js-only]")) el.hidden = false;
 
@@ -40,4 +42,19 @@ pause.addEventListener("click", () => {
   live.textContent = motion.paused ? t("motion.paused") : t("motion.playing");
 });
 
+// CSS animations follow the same switch: paused, stopped or reduced.
+const root = document.documentElement;
+const syncRoot = () => {
+  root.classList.toggle("motion-off", motion.still || motion.stopped);
+  root.classList.toggle("colony-stopped", motion.stopped);
+  root.classList.toggle("reduced", motion.reduced);
+};
+motion.subscribe(syncRoot);
+syncRoot();
+
+// The hall's pheromone trail runs only while the thread is on screen.
+const thread = document.getElementById("hall-thread");
+if (thread) onVisibility(thread, (v) => thread.classList.toggle("is-live", v));
+
 colony.start();
+monitor.start();

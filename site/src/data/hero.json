@@ -1,0 +1,57 @@
+{
+ "_comment": "The hero monitor's script (docs/18, 4.2). Message and step texts are in the page (i18n: monitor.*); this file only orders them.",
+ "loop": [
+  {
+   "do": "type",
+   "msg": "m1"
+  },
+  {
+   "do": "work",
+   "agent": "assistant",
+   "steps": [
+    "s1",
+    "s2"
+   ]
+  },
+  {
+   "do": "carry",
+   "agent": "assistant",
+   "msg": "m2",
+   "handoff": "reviewer"
+  },
+  {
+   "do": "work",
+   "agent": "reviewer",
+   "steps": [
+    "s3",
+    "s4"
+   ]
+  },
+  {
+   "do": "carry",
+   "agent": "reviewer",
+   "msg": "m3"
+  },
+  {
+   "do": "work",
+   "agent": "assistant",
+   "steps": [
+    "s5"
+   ]
+  },
+  {
+   "do": "carry",
+   "agent": "assistant",
+   "msg": "m4"
+  },
+  {
+   "do": "carry",
+   "agent": "homelab",
+   "msg": "m5"
+  },
+  {
+   "do": "rest",
+   "ms": 6000
+  }
+ ]
+}

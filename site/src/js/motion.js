@@ -20,13 +20,16 @@ export const motion = {
 
 media.addEventListener("change", () => motion.set({ reduced: media.matches }));
 
-/** Resolves after ms of running time: the clock waits while paused or stopped. */
-export function wait(ms) {
+/**
+ * Resolves after ms of running time: the clock waits while paused, stopped,
+ * hidden, or while held() is true (e.g. the monitor is scrolled away).
+ */
+export function wait(ms, held = () => false) {
   return new Promise((resolve) => {
     let left = ms, last = performance.now();
     const tick = () => {
       const now = performance.now();
-      if (!motion.paused && !motion.stopped && !document.hidden) left -= now - last;
+      if (!motion.paused && !motion.stopped && !document.hidden && !held()) left -= now - last;
       last = now;
       if (left <= 0) resolve();
       else setTimeout(tick, Math.min(left, 100));
