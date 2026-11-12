@@ -26,14 +26,7 @@ function docRect(el) {
   return { left: r.left, right: r.right, top: r.top + scrollY, bottom: r.bottom + scrollY, width: r.width, height: r.height };
 }
 
-/** Waits for an ant to finish its path; the promise holds while it is frozen. */
-function walk(ant, path) {
-  return new Promise((resolve) => {
-    ant.path = path; ant.d = 0; ant.done = false; ant.resume = null;
-    ant.onDone = (a) => { a.done = false; a.onDone = null; resolve(); };
-    colony.wake();
-  });
-}
+const walk = colony.walk;
 
 function burrowPoint() {
   const b = docRect(burrow);
@@ -50,18 +43,8 @@ function edgePoint(fromLeft, y) {
  */
 function goToWork(agent) {
   const b = burrowPoint();
-  // a name is one ant: if this agent's ant is already wandering about, it is called in
-  let ant = colony.all().find((a) => a.agent === agent && !a.keep && !a.still && colony.onScreen(a.y));
-  let start;
-  if (ant) {
-    start = { x: ant.x, y: ant.y };
-    ant.target = null;
-  } else {
-    for (const a of colony.all()) if (a.agent === agent && !a.keep) colony.remove(a);
-    start = edgePoint(Math.random() < 0.5, b.y - 6);
-    ant = colony.spawn({ agent, path: smooth([start, b]) });
-  }
-  ant.keep = true;
+  const ant = colony.recruit(agent, edgePoint(Math.random() < 0.5, b.y - 6));
+  const start = { x: ant.x, y: ant.y };
   ant.speedMul = 1.8;
   ant.path = smooth([start, { x: (start.x + b.x) / 2, y: b.y - 14 }, b]);
   const arrived = walk(ant, ant.path).then(() => { ant.hidden = true; return ant; });

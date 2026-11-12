@@ -210,6 +210,9 @@ export class Ant {
       }
     }
 
+    // a kept ant (in a scene) waits at the end of its path until given a new one
+    if (this.keep && !this.onDone && this.d >= this.path.length) return;
+
     // random stops: sniffing or looking
     if (Math.random() < this.p.pauseRate * dt) {
       this.pauseLeft = rand(...this.p.pauseFor) / 1000;

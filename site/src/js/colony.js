@@ -68,6 +68,35 @@ export function spawn(opts) {
   return ant;
 }
 
+/**
+ * Calls in an agent's ant for a scene (the monitor, the gate). A name is one
+ * ant: if it is already wandering on screen it comes from where it is;
+ * otherwise a new one starts at `start`. The ant is kept (not dropped when
+ * off screen) until the scene removes it.
+ */
+export function recruit(agent, start) {
+  let ant = [...ants].find((a) => a.agent === agent && !a.keep && !a.still && onScreen(a.y));
+  if (ant) {
+    ant.target = null;
+    ant.resume = null;
+  } else {
+    for (const a of [...ants]) if (a.agent === agent && !a.keep) remove(a);
+    ant = spawn({ agent, path: new Path([start, { x: start.x + 1, y: start.y }]) });
+    ant.x = start.x; ant.y = start.y;
+  }
+  ant.keep = true;
+  return ant;
+}
+
+/** Walks an ant along a new path; resolves at its end (holding while frozen). */
+export function walk(ant, path) {
+  return new Promise((resolve) => {
+    ant.path = path; ant.d = 0; ant.done = false; ant.resume = null;
+    ant.onDone = (a) => { a.done = false; a.onDone = null; resolve(); };
+    wake();
+  });
+}
+
 export function remove(ant) {
   ants.delete(ant);
   ant.tag?.remove();

@@ -44,6 +44,13 @@
     </div>
   </header>
 
+  <!-- Shown while the colony is stopped at the gate. -->
+  <div class="halt" id="halt" hidden>
+    <p class="halt__title">{{t:gate.stoppedTitle}}</p>
+    <p class="halt__motto">{{t:gate.motto}}</p>
+    <button type="button" class="btn btn--primary" id="halt-resume">{{t:gate.resume}}</button>
+  </div>
+
   <!-- The ants: one canvas for the whole page (decoration; described below). -->
   <canvas id="ants" aria-hidden="true"></canvas>
   <div id="ant-tags" aria-hidden="true"></div>

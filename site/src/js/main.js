@@ -4,6 +4,7 @@ import { t } from "./i18n.js";
 import { motion } from "./motion.js";
 import * as colony from "./colony.js";
 import * as monitor from "./monitor.js";
+import * as gate from "./gate.js";
 import { onVisibility } from "./motion.js";
 
 for (const el of document.querySelectorAll("[data-js-only]")) el.hidden = false;
@@ -58,3 +59,4 @@ if (thread) onVisibility(thread, (v) => thread.classList.toggle("is-live", v));
 
 colony.start();
 monitor.start();
+gate.start();

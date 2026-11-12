@@ -292,6 +292,21 @@ main { padding: 0; }
 .card__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .card__done { color: var(--success) !important; font-weight: 600; margin: 0 !important; }
 
+/* the colony stopped: a banner wherever you are on the page */
+.halt {
+  position: fixed; left: 50%; bottom: 16px; z-index: 40; width: min(560px, calc(100% - 32px)); transform: translateX(-50%);
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center;
+  background: var(--surface-raised); border: 1px solid var(--danger); border-radius: 12px; padding: 14px 16px;
+  box-shadow: var(--shadow-overlay, 0 18px 48px #00000040);
+}
+.halt p { margin: 0; }
+.halt__title { font-weight: 650; color: var(--danger); }
+.halt__motto { grid-column: 1; color: var(--fg); font-style: italic; }
+.halt .btn { grid-column: 2; grid-row: 1 / span 2; }
+@media (max-width: 480px) { .halt { grid-template-columns: 1fr; } .halt .btn { grid-column: 1; grid-row: auto; margin-top: 8px; } }
+.js .gate.has-live-ant .gate-ant { opacity: 0; }
+.colony-stopped .gate-frame rect, .colony-stopped .gate-bars { filter: saturate(0.4); }
+
 /* 3. the tunnel map */
 .map { position: relative; }
 .map__svg { width: 100%; height: auto; overflow: visible; }
