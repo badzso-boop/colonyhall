@@ -11,6 +11,7 @@
   "scripts": {
     "build": "node build.mjs",
     "check": "node build.mjs --check-only",
-    "counters": "node scripts/counters.mjs"
+    "counters": "node scripts/counters.mjs",
+    "social": "node scripts/social.mjs"
   }
 }

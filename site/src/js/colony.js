@@ -61,6 +61,7 @@ export function spawn(opts) {
   ant.untagged = !!opts.untagged;
   const tag = document.createElement("div");
   tag.className = "ant-tag";
+  tag.style.visibility = "hidden"; // until its first frame places it
   // a hatchling has no name yet: no tag
   if (opts.untagged) tag.style.display = "none";
   else tag.textContent = t(`agents.${ant.agent}`); // i18n-prefix: agents

@@ -107,6 +107,8 @@ function wireHighlights() {
     const part = el.dataset.part;
     el.addEventListener("pointerenter", () => highlight(part, true));
     el.addEventListener("pointerleave", () => highlight(part, false));
+    // only the map's parts take the focus; the tunnels and the legend are not controls
+    if (!el.classList.contains("map-part")) continue;
     el.addEventListener("focus", () => highlight(part, true));
     el.addEventListener("blur", () => highlight(part, false));
   }
