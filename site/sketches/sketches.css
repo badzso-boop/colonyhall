@@ -1,0 +1,70 @@
+/* Sketch page only (not part of the build). Colours are the PWA tokens
+   (web/src/shared/styles/tokens.css), copied by hand for the sketch. */
+:root {
+  --page: #0b0a0a;
+  --page-fg: #f2eeee;
+  --page-muted: #a39a9a;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dark {
+  --bg: #0b0a0a;
+  --surface-raised: #1c1919;
+  --border: #2a2525;
+  --fg: #f2eeee;
+  --fg-muted: #a39a9a;
+  --ground: #2a2525;
+}
+.light {
+  --bg: #faf8f7;
+  --surface-raised: #ffffff;
+  --border: #e6e0de;
+  --fg: #141111;
+  --fg-muted: #6b6262;
+  --ground: #e6e0de;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--page-fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.top, main { max-width: 1180px; margin: 0 auto; padding: 24px 16px; }
+h1 { font-size: 24px; margin: 0 0 8px; }
+h2 { font-size: 18px; margin: 0 0 4px; }
+.letter { color: #ff6b6e; font-family: var(--mono); }
+p { color: var(--page-muted); margin: 0 0 12px; max-width: 80ch; }
+code { font-family: var(--mono); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; }
+button {
+  font: inherit; font-size: 13px;
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid #6f6464; background: #1c1919; color: #f2eeee; cursor: pointer;
+}
+button[aria-pressed="true"] { background: #d42a2e; border-color: #d42a2e; color: #fff; }
+button:focus-visible { outline: 2px solid #ff6b6e99; outline-offset: 2px; }
+.char { padding: 24px 0 32px; border-top: 1px solid #2a2525; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.stage {
+  position: relative; overflow: hidden;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+}
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.closeup { height: 260px; }
+.strip { height: 120px; }
+.phones { grid-template-columns: repeat(2, 360px); justify-content: start; }
+.phone { width: 360px; }
+.cap { display: block; font-size: 12px; color: var(--page-muted); margin-bottom: 4px; }
+.tag {
+  position: absolute; left: 0; top: 0;
+  font: 500 12px/1 var(--mono);
+  color: var(--fg); background: var(--surface-raised);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 3px 6px; white-space: nowrap;
+  pointer-events: none; will-change: transform;
+}
+.closeup .tag { font-size: 14px; }
+@media (max-width: 760px) {
+  .row, .phones { grid-template-columns: 1fr; }
+  .phone { width: 100%; max-width: 360px; }
+}

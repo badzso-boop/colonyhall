@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colonyhall site: ant sketches</title>
+<meta name="description" content="Design gate for the Colonyhall website (docs/18, section 11, step 0): ant characters to choose from. Not part of the build.">
+<link rel="stylesheet" href="sketches.css">
+</head>
+<body>
+<header class="top">
+  <h1>Ant sketches</h1>
+  <p>Design gate for the site (<code>docs/18</code>, section 11, step 0). Five characters, each drawn in Canvas 2D from code, walking with the procedural alternating-tripod gait the site will use (the feet do not slide: watch them against the ground marks in the close-ups). Names are DOM text. Pick one, or ask for a mix (e.g. “B's head on A's body”).</p>
+  <div class="controls">
+    <button type="button" id="pause" aria-pressed="false">Pause</button>
+    <button type="button" id="carry" aria-pressed="false">Carry a parcel</button>
+    <button type="button" id="speed" data-speed="1">Speed: normal</button>
+  </div>
+</header>
+<main id="chars"></main>
+<template id="char-tpl">
+  <section class="char">
+    <h2><span class="letter"></span> <span class="name"></span></h2>
+    <p class="desc"></p>
+    <div class="row">
+      <div class="stage closeup dark" data-mode="treadmill" data-scale="3.2"><canvas aria-hidden="true"></canvas></div>
+      <div class="stage closeup light" data-mode="treadmill" data-scale="3.2"><canvas aria-hidden="true"></canvas></div>
+    </div>
+    <div class="row">
+      <div class="stage strip dark" data-mode="cross" data-scale="1.25"><canvas aria-hidden="true"></canvas></div>
+      <div class="stage strip light" data-mode="cross" data-scale="1.25"><canvas aria-hidden="true"></canvas></div>
+    </div>
+    <div class="row phones">
+      <div class="phone"><span class="cap">phone, 360 px</span><div class="stage strip dark" data-mode="cross" data-scale="0.85"><canvas aria-hidden="true"></canvas></div></div>
+      <div class="phone"><span class="cap">phone, 360 px</span><div class="stage strip light" data-mode="cross" data-scale="0.85"><canvas aria-hidden="true"></canvas></div></div>
+    </div>
+  </section>
+</template>
+<script src="ants.js"></script>
+</body>
+</html>
