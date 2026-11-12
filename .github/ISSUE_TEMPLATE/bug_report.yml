@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go to SECURITY.md, not here. Please remove tokens, passwords, real addresses and private chat content from anything you paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The server's version (sign-in page footer, or `curl …/api/v1/version`) and the guard's (`colony --version`).
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part?
+      options: [Server, Web app, Guard, Installer (install.sh / colony setup), Other]
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: "e.g. Ubuntu 24.04, WSL2 on Windows 11, macOS 15; Docker 27; Claude Code 2.x"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`colony doctor` output, `journalctl --user -u colony-guard`, the server log around the error (an `[error:<id>]` in the chat has its details in the server log)."
+      render: text
