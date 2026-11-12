@@ -5,7 +5,7 @@ name: colonyhall-dev
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     # Comes back with Docker (e.g. after a WSL restart); `make down` stops it for good.
     restart: unless-stopped
     environment:
@@ -44,6 +44,8 @@ services:
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
       COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}
+      COLONY_EMBED_URL: ${COLONY_EMBED_URL:-}
+      COLONY_RERANK_URL: ${COLONY_RERANK_URL:-}
     volumes:
       - filesdata:/data/files
     ports:

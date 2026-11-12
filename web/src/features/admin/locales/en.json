@@ -366,6 +366,20 @@
     "integrations": "Integrations",
     "backups": "Backups",
     "backupsBody": "Backups are the operator's job (the database and the files volume); the server does not check them.",
+    "search": {
+      "title": "Search",
+      "chunks": "Indexed chunks",
+      "pending": "Waiting for embedding",
+      "lastEmbed": "Last embedding",
+      "models": "Stored models",
+      "embedder": "Embedding server",
+      "reranker": "Reranker",
+      "configured": "Configured",
+      "model": "Model",
+      "lastOk": "Last successful call",
+      "lastError": "Last error",
+      "mismatch": "Model mismatch: the embedding server serves another model than the stored vectors were made with, so meaning search is unreliable. Details: {{detail}}"
+    },
     "size": {
       "title": "Database size",
       "noDatabase": "Memory store: no database.",

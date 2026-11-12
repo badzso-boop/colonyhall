@@ -40,6 +40,15 @@ type Config struct {
 	GiteaWebhookSecret string
 	// CalendarRefresh is how often subscribed calendars are fetched (default 15m).
 	CalendarRefresh time.Duration
+	// EmbedURL is the search's embedding server (the Raspberry Pi); empty:
+	// keyword search only.
+	EmbedURL string
+	// RerankURL is the search's reranker (the homelab); empty: no rerank.
+	RerankURL string
+	// RerankTop is how many candidates go to the reranker (default 10).
+	RerankTop int
+	// RerankTimeout bounds one rerank call (default 5 s).
+	RerankTimeout time.Duration
 	// Multitenant turns on the subdomain per workspace (round 45). Off by
 	// default: a self-hosted server behaves as before.
 	Multitenant bool
@@ -63,7 +72,27 @@ func FromEnv() (Config, error) {
 			calRefresh = d
 		}
 	}
+	rerankTop := 0
+	if v := os.Getenv("COLONY_RERANK_TOP"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 2 || n > 100 {
+			return Config{}, fmt.Errorf("config: COLONY_RERANK_TOP must be 2–100, got %q", v)
+		}
+		rerankTop = n
+	}
+	var rerankTimeout time.Duration
+	if v := os.Getenv("COLONY_RERANK_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 100*time.Millisecond || d > time.Minute {
+			return Config{}, fmt.Errorf("config: COLONY_RERANK_TIMEOUT must be a duration of 100ms–1m, got %q", v)
+		}
+		rerankTimeout = d
+	}
 	c := Config{
+		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
+		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
+		RerankTop:          rerankTop,
+		RerankTimeout:      rerankTimeout,
 		CalendarRefresh:    calRefresh,
 		Role:               getenv("COLONY_ROLE", "all"),
 		HTTPAddr:           getenv("COLONY_HTTP_ADDR", ":8080"),

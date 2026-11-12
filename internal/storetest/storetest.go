@@ -34,6 +34,7 @@ import (
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/modules/schedule"
+	"colonyhall/internal/modules/search"
 	"colonyhall/internal/modules/sidebar"
 	"colonyhall/internal/modules/wiki"
 	"colonyhall/internal/platform/db"
@@ -66,6 +67,7 @@ type Backend struct {
 	Sidebar      sidebar.Store
 	Compaction   compaction.Store
 	Delegation   delegation.Store
+	Search       search.Store
 	DBStats      dbstats.Store
 }
 
@@ -81,6 +83,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("hosts", func(t *testing.T) { testHosts(t, newBackend(t)) })
 	t.Run("runs", func(t *testing.T) { testRuns(t, newBackend(t)) })
 	t.Run("schedule", func(t *testing.T) { testSchedule(t, newBackend(t)) })
+	t.Run("search", func(t *testing.T) { testSearch(t, newBackend(t)) })
 	t.Run("approval", func(t *testing.T) { testApproval(t, newBackend(t)) })
 	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
 	t.Run("question", func(t *testing.T) { testQuestion(t, newBackend(t)) })

@@ -141,6 +141,12 @@ linters:
             - pkg: colonyhall/internal/modules/delegation/postgres
             - pkg: colonyhall/internal/modules/delegation/memory
             - pkg: colonyhall/internal/modules/delegation/httpapi
+            - pkg: colonyhall/internal/modules/search/postgres
+            - pkg: colonyhall/internal/modules/search/memory
+            - pkg: colonyhall/internal/modules/search/httpapi
+            - pkg: colonyhall/internal/modules/search/mcptools
+            - pkg: colonyhall/internal/modules/search/embedhttp
+            - pkg: colonyhall/internal/modules/search/fakeembed
             - pkg: colonyhall/internal/modules/dbstats/postgres
             - pkg: colonyhall/internal/modules/dbstats/memory
             - pkg: colonyhall/internal/server

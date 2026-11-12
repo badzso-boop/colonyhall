@@ -35,6 +35,9 @@ func AppRoleDatabase(t *testing.T, adminURL string) string {
 		`ALTER ROLE ` + AppRole + ` NOSUPERUSER NOBYPASSRLS PASSWORD '` + AppRole + `'`,
 		`DROP SCHEMA IF EXISTS public CASCADE`,
 		`CREATE SCHEMA public AUTHORIZATION ` + AppRole,
+		// The search's vector extension is not trusted: a superuser creates
+		// it, as the installer does (internal/setup/approle.go).
+		`CREATE EXTENSION IF NOT EXISTS vector SCHEMA public`,
 	} {
 		if _, err := conn.Exec(ctx, q); err != nil {
 			t.Fatalf("prepare %s: %v", AppRole, err)

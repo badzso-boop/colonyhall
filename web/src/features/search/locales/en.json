@@ -1,0 +1,32 @@
+{
+  "title": "Search",
+  "field": "Search messages, the wiki, decisions and summaries…",
+  "submit": "Search",
+  "mode": {
+    "label": "Search mode",
+    "keyword": "Keyword",
+    "semantic": "Meaning",
+    "hybrid": "Hybrid"
+  },
+  "hint": "Type what you are looking for and press Enter. Keyword finds the exact words, Meaning finds text with a similar sense, Hybrid does both.",
+  "loading": "Searching…",
+  "empty": "No results for “{{q}}”.",
+  "emptyBody": "Try other words or another search mode.",
+  "failed": "The search failed: {{message}}",
+  "kinds": {
+    "message": "Messages",
+    "wiki": "Wiki",
+    "decision": "Decisions",
+    "summary": "Summaries"
+  },
+  "count_one": "{{count}} result",
+  "count_other": "{{count}} results",
+  "open": "Open",
+  "scores": {
+    "label": "Scores",
+    "keyword": "keyword",
+    "semantic": "meaning",
+    "fused": "RRF",
+    "rerank": "rerank"
+  }
+}

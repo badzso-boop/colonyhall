@@ -31,6 +31,9 @@ import (
 //	colonyhall                                   run the server
 //	colonyhall set-password -handle norbi        set a password; reads it from stdin
 //	colonyhall bootstrap -handle norbi           first workspace + owner on an empty database; password from stdin
+//	colonyhall rag-backfill [-dry-run]           (re)build the search index from the event log
+//	colonyhall rag-reembed                       re-embed after an embedding model change
+//	colonyhall rag-eval -set FILE [-as HANDLE]   search quality: recall@k, MRR, nDCG, latency
 //	colonyhall set-slug -workspace W -slug S     rename a workspace's subdomain (multi-tenant mode)
 //	colonyhall gitea-set -workspace W -url U     a workspace's own Gitea; token and webhook secret from stdin
 func main() {
@@ -45,6 +48,12 @@ func main() {
 		err = setPassword(os.Args[2:])
 	case len(os.Args) > 1 && os.Args[1] == "bootstrap":
 		err = bootstrapCmd(os.Args[2:], os.Stdin)
+	case len(os.Args) > 1 && os.Args[1] == "rag-backfill":
+		err = ragBackfill(os.Args[2:], os.Stdout)
+	case len(os.Args) > 1 && os.Args[1] == "rag-reembed":
+		err = ragReembed(os.Args[2:], os.Stdout)
+	case len(os.Args) > 1 && os.Args[1] == "rag-eval":
+		err = ragEval(os.Args[2:], os.Stdout)
 	case len(os.Args) > 1 && os.Args[1] == "set-slug":
 		err = setSlug(os.Args[2:])
 	case len(os.Args) > 1 && os.Args[1] == "gitea-set":
@@ -213,6 +222,10 @@ func run(logger *slog.Logger) error {
 		GiteaToken:         cfg.GiteaToken,
 		GiteaPublicURL:     cfg.GiteaPublicURL,
 		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
+		EmbedURL:           cfg.EmbedURL,
+		RerankURL:          cfg.RerankURL,
+		RerankTop:          cfg.RerankTop,
+		RerankTimeout:      cfg.RerankTimeout,
 	})
 	if err != nil {
 		return err

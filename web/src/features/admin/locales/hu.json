@@ -366,6 +366,20 @@
     "integrations": "Integrációk",
     "backups": "Mentések",
     "backupsBody": "A mentés az üzemeltető feladata (az adatbázis és a fájlok kötete), a szerver nem ellenőrzi.",
+    "search": {
+      "title": "Keresés",
+      "chunks": "Indexelt darabok",
+      "pending": "Beágyazásra vár",
+      "lastEmbed": "Utolsó beágyazás",
+      "models": "Tárolt modellek",
+      "embedder": "Beágyazó szerver (embedding)",
+      "reranker": "Újrarangsoroló (reranker)",
+      "configured": "Beállítva",
+      "model": "Modell",
+      "lastOk": "Utolsó sikeres hívás",
+      "lastError": "Utolsó hiba",
+      "mismatch": "Modelleltérés: a beágyazó szerver más modellt szolgál ki, mint amivel a tárolt vektorok készültek, ezért a jelentés szerinti keresés megbízhatatlan. Részletek: {{detail}}"
+    },
     "size": {
       "title": "Adatbázis mérete",
       "noDatabase": "Memória-tár: nincs adatbázis.",

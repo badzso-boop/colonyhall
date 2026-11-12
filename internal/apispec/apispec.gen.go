@@ -1263,6 +1263,69 @@ func (e ScheduleState) Valid() bool {
 	}
 }
 
+// Defines values for SearchResponseDegraded.
+const (
+	NoEmbedder SearchResponseDegraded = "no_embedder"
+	NoReranker SearchResponseDegraded = "no_reranker"
+)
+
+// Valid indicates whether the value is a known member of the SearchResponseDegraded enum.
+func (e SearchResponseDegraded) Valid() bool {
+	switch e {
+	case NoEmbedder:
+		return true
+	case NoReranker:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchResponseMode.
+const (
+	SearchResponseModeHybrid   SearchResponseMode = "hybrid"
+	SearchResponseModeKeyword  SearchResponseMode = "keyword"
+	SearchResponseModeSemantic SearchResponseMode = "semantic"
+)
+
+// Valid indicates whether the value is a known member of the SearchResponseMode enum.
+func (e SearchResponseMode) Valid() bool {
+	switch e {
+	case SearchResponseModeHybrid:
+		return true
+	case SearchResponseModeKeyword:
+		return true
+	case SearchResponseModeSemantic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchSourceKind.
+const (
+	SearchSourceKindDecision SearchSourceKind = "decision"
+	SearchSourceKindMessage  SearchSourceKind = "message"
+	SearchSourceKindSummary  SearchSourceKind = "summary"
+	SearchSourceKindWiki     SearchSourceKind = "wiki"
+)
+
+// Valid indicates whether the value is a known member of the SearchSourceKind enum.
+func (e SearchSourceKind) Valid() bool {
+	switch e {
+	case SearchSourceKindDecision:
+		return true
+	case SearchSourceKindMessage:
+		return true
+	case SearchSourceKindSummary:
+		return true
+	case SearchSourceKindWiki:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SetHostStateRequestState.
 const (
 	SetHostStateRequestStateApproved SetHostStateRequestState = "approved"
@@ -1413,6 +1476,27 @@ func (e ListRunsParamsStatus) Valid() bool {
 	case ListRunsParamsStatusOk:
 		return true
 	case ListRunsParamsStatusStopped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchParamsMode.
+const (
+	SearchParamsModeHybrid   SearchParamsMode = "hybrid"
+	SearchParamsModeKeyword  SearchParamsMode = "keyword"
+	SearchParamsModeSemantic SearchParamsMode = "semantic"
+)
+
+// Valid indicates whether the value is a known member of the SearchParamsMode enum.
+func (e SearchParamsMode) Valid() bool {
+	switch e {
+	case SearchParamsModeHybrid:
+		return true
+	case SearchParamsModeKeyword:
+		return true
+	case SearchParamsModeSemantic:
 		return true
 	default:
 		return false
@@ -3439,6 +3523,88 @@ type ScribeCompactionTask struct {
 	ThreadRootId    *openapi_types.UUID     `json:"thread_root_id,omitempty"`
 }
 
+// SearchBackend defines model for SearchBackend.
+type SearchBackend struct {
+	Configured bool       `json:"configured"`
+	LastError  *string    `json:"last_error,omitempty"`
+	LastOkAt   *time.Time `json:"last_ok_at,omitempty"`
+	Model      *string    `json:"model,omitempty"`
+
+	// Reachable The last call succeeded.
+	Reachable bool `json:"reachable"`
+}
+
+// SearchHit defines model for SearchHit.
+type SearchHit struct {
+	At        time.Time           `json:"at"`
+	AuthorId  *openapi_types.UUID `json:"author_id,omitempty"`
+	ChannelId *openapi_types.UUID `json:"channel_id,omitempty"`
+
+	// Header The chunk's context: channel, thread, author, date.
+	Header string           `json:"header"`
+	Kind   SearchSourceKind `json:"kind"`
+
+	// Part Which chunk of the source.
+	Part int `json:"part"`
+
+	// Ref The wiki page's slug, or the decision's number (D-12).
+	Ref *string `json:"ref,omitempty"`
+
+	// Scores Each stage's score; a stage that did not see the hit has none. Admins only.
+	Scores *SearchScores `json:"scores,omitempty"`
+
+	// Snippet Plain text; keyword matches between « and ».
+	Snippet string `json:"snippet"`
+
+	// SourceId The message, wiki page, decision or compaction.
+	SourceId     openapi_types.UUID  `json:"source_id"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// SearchResponse defines model for SearchResponse.
+type SearchResponse struct {
+	// Degraded What the search had to do without.
+	Degraded []SearchResponseDegraded `json:"degraded"`
+	Hits     []SearchHit              `json:"hits"`
+	Mode     SearchResponseMode       `json:"mode"`
+
+	// Notice A short line when a configured backend did not answer.
+	Notice *string `json:"notice,omitempty"`
+}
+
+// SearchResponseDegraded defines model for SearchResponse.Degraded.
+type SearchResponseDegraded string
+
+// SearchResponseMode defines model for SearchResponse.Mode.
+type SearchResponseMode string
+
+// SearchScores Each stage's score; a stage that did not see the hit has none. Admins only.
+type SearchScores struct {
+	// Fused Reciprocal Rank Fusion.
+	Fused    float64  `json:"fused"`
+	Keyword  *float64 `json:"keyword,omitempty"`
+	Rerank   *float64 `json:"rerank,omitempty"`
+	Semantic *float64 `json:"semantic,omitempty"`
+}
+
+// SearchSourceKind defines model for SearchSourceKind.
+type SearchSourceKind string
+
+// SearchStatus defines model for SearchStatus.
+type SearchStatus struct {
+	Chunks      int           `json:"chunks"`
+	Embedder    SearchBackend `json:"embedder"`
+	LastEmbedAt *time.Time    `json:"last_embed_at,omitempty"`
+
+	// ModelMismatch Set when the embedding server serves another model than the stored vectors.
+	ModelMismatch *string  `json:"model_mismatch,omitempty"`
+	Models        []string `json:"models"`
+
+	// Pending Chunks waiting for an embedding.
+	Pending  int           `json:"pending"`
+	Reranker SearchBackend `json:"reranker"`
+}
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	// AnswersMessageId Agents (guard): the message this answer replies to, in another channel the agent can read
@@ -3619,8 +3785,9 @@ type SystemStatus struct {
 		Failed24h int        `json:"failed_24h"`
 		NextRunAt *time.Time `json:"next_run_at,omitempty"`
 	} `json:"scheduler"`
-	UptimeSeconds int64  `json:"uptime_seconds"`
-	Version       string `json:"version"`
+	Search        *SearchStatus `json:"search,omitempty"`
+	UptimeSeconds int64         `json:"uptime_seconds"`
+	Version       string        `json:"version"`
 }
 
 // TerminalStartRequest defines model for TerminalStartRequest.
@@ -4036,6 +4203,21 @@ type ListRunsParams struct {
 
 // ListRunsParamsStatus defines parameters for ListRuns.
 type ListRunsParamsStatus string
+
+// SearchParams defines parameters for Search.
+type SearchParams struct {
+	Q         string              `form:"q" json:"q"`
+	Mode      *SearchParamsMode   `form:"mode,omitempty" json:"mode,omitempty"`
+	Kind      *[]SearchSourceKind `form:"kind,omitempty" json:"kind,omitempty"`
+	ChannelId *openapi_types.UUID `form:"channel_id,omitempty" json:"channel_id,omitempty"`
+	AuthorId  *openapi_types.UUID `form:"author_id,omitempty" json:"author_id,omitempty"`
+	Since     *time.Time          `form:"since,omitempty" json:"since,omitempty"`
+	Until     *time.Time          `form:"until,omitempty" json:"until,omitempty"`
+	Limit     *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SearchParamsMode defines parameters for Search.
+type SearchParamsMode string
 
 // GetUsageParams defines parameters for GetUsage.
 type GetUsageParams struct {

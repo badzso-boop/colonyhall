@@ -7,9 +7,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/wiki"
+	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
@@ -38,7 +40,14 @@ type Service struct {
 	tx    db.TxRunner
 	clock clock.Clock
 	ids   ids.Generator
+
+	// Events and Bus, when set, carry decision.recorded (round 36).
+	Events eventlog.Store
+	Bus    bus.Bus
 }
+
+// WikiSlug is the wiki page every decision is appended to.
+const WikiSlug = "dontesek"
 
 // NewService creates a new decision Service.
 func NewService(store Store, w WikiAppender, conv ConversationReader, tx db.TxRunner, clk clock.Clock, gen ids.Generator) *Service {
@@ -148,6 +157,7 @@ func (s *Service) AddDecision(ctx context.Context, actor identity.Actor, in AddD
 	}
 
 	var d Decision
+	var seq int64
 	err = s.tx.InTx(ctx, func(txCtx context.Context) error {
 		nextNum, err := s.store.NextNumber(txCtx, actor.WorkspaceID)
 		if err != nil {
@@ -185,10 +195,9 @@ func (s *Service) AddDecision(ctx context.Context, actor identity.Actor, in AddD
 		}
 		sectionText := b.String()
 
-		const wikiSlug = "dontesek"
 		const wikiTitle = "Döntések"
 
-		_, err = s.wiki.Append(txCtx, actor, wikiSlug, sectionText)
+		_, err = s.wiki.Append(txCtx, actor, WikiSlug, sectionText)
 		if err != nil {
 			if errors.Is(err, wiki.ErrNotFound) || errors.Is(err, db.ErrNotFound) {
 				_, err = s.wiki.Create(txCtx, actor, wiki.CreateInput{
@@ -203,10 +212,29 @@ func (s *Service) AddDecision(ctx context.Context, actor identity.Actor, in AddD
 			}
 		}
 
+		if s.Events == nil {
+			return nil
+		}
+		p := Recorded{DecisionID: d.ID.String(), Number: d.Number, ChannelID: d.ChannelID.String(), AuthorID: d.AuthorID.String(),
+			Text: d.Text, Rationale: d.Rationale, Supersedes: d.Supersedes, WikiSlug: WikiSlug}
+		if d.ThreadRootID != nil {
+			p.ThreadRootID = d.ThreadRootID.String()
+		}
+		ev, err := eventlog.NewEvent(s.ids.New(), d.WorkspaceID, EventRecorded, actor.ID, d.ChannelID, "decision", d.ID, p, d.CreatedAt)
+		if err != nil {
+			return err
+		}
+		if err := s.Events.Append(txCtx, &ev); err != nil {
+			return err
+		}
+		seq = ev.Seq
 		return nil
 	})
 	if err != nil {
 		return Decision{}, err
+	}
+	if seq != 0 && s.Bus != nil {
+		s.Bus.Notify(seq)
 	}
 
 	return d, nil
@@ -218,4 +246,10 @@ func (s *Service) ListDecisions(ctx context.Context, actor identity.Actor, limit
 		return nil, identity.ErrHalted
 	}
 	return s.store.List(ctx, actor.WorkspaceID, limit, query, validOnly)
+}
+
+// AllForIndex returns every decision of a workspace, superseded ones too
+// (the search backfill; no actor: the caller is the server itself).
+func (s *Service) AllForIndex(ctx context.Context, workspaceID ids.ID) ([]Decision, error) {
+	return s.store.List(ctx, workspaceID, 100000, "", false)
 }

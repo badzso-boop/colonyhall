@@ -4,6 +4,7 @@
   "toggleSidebar": "Show or hide the sidebar",
   "workspace": "Workspace",
   "pages": {
+    "search": "Search",
     "tasks": "Tasks",
     "calendar": "Calendar",
     "notes": "Notes",
@@ -74,7 +75,9 @@
   },
   "palette": {
     "title": "Command palette",
-    "placeholder": "Jump to a conversation, agent or page…",
+    "placeholder": "Jump to a conversation, agent or page, or search…",
+    "searchFor": "Search: {{q}}",
+    "search": "Search",
     "conversations": "Conversations",
     "agents": "Agents",
     "pages": "Pages",

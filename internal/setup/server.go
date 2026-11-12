@@ -77,7 +77,7 @@ services:
 `)
 	if ownDB {
 		b.WriteString(`  db:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
       POSTGRES_USER: colony

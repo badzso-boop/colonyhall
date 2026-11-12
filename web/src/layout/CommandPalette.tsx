@@ -1,18 +1,23 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { Bot, Hash, MessageSquare } from "lucide-react";
+import { Bot, Hash, MessageSquare, Search } from "lucide-react";
 import { cn, fuzzyScore } from "@/shared/lib";
 import { usePanes } from "@/shared/panes";
 import { Dialog, Input } from "@/shared/ui";
 import { useConversationOrder } from "@/features/conversation";
 import { useActors, useSession } from "@/features/identity";
+import { searchPath } from "@/features/search";
 import { openOverlay, useAppOverlay } from "./overlays";
 import { adminPages, pages } from "./sidebar/pages";
 
-type Item = { id: string; group: "conversations" | "agents" | "pages"; label: string; icon: typeof Hash; run: () => void };
+type Item = { id: string; group: "conversations" | "agents" | "pages" | "search"; label: string; icon: typeof Hash; run: () => void };
 
-/** Ctrl K: jump to a conversation, an agent (its overview) or a page. Message search comes later. */
+/**
+ * Ctrl K: jump to a conversation, an agent (its overview) or a page. With text typed,
+ * the last item ("Keresés: …") opens the search page with it; Enter picks it when
+ * nothing else matches, and Ctrl+Enter always searches.
+ */
 export function CommandPalette() {
   const { t } = useTranslation("layout");
   const open = useAppOverlay((s) => s.open === "palette");
@@ -41,12 +46,16 @@ export function CommandPalette() {
     ];
     const query = q.trim();
     if (!query) return all.slice(0, 30);
-    return all
-      .map((i) => ({ i, s: fuzzyScore(i.label.replace(/^[#@]/, ""), query) }))
-      .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s)
-      .slice(0, 30)
-      .map((x) => x.i);
+    const search: Item = { id: "search", group: "search", label: t("palette.searchFor", { q: query }), icon: Search, run: () => navigate(searchPath(query)) };
+    return [
+      ...all
+        .map((i) => ({ i, s: fuzzyScore(i.label.replace(/^[#@]/, ""), query) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 30)
+        .map((x) => x.i),
+      search,
+    ];
   }, [conversations, actors.data, q, navigate, dispatch, t, role]);
 
   const close = () => {
@@ -81,7 +90,7 @@ export function CommandPalette() {
           }
           if (e.key === "Enter") {
             e.preventDefault();
-            run(items[pick]);
+            run(e.ctrlKey || e.metaKey ? items.find((i) => i.group === "search") : items[pick]);
           }
         }}
       />

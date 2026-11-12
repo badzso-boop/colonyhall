@@ -106,9 +106,9 @@ Az `INSERT`-ek nem változnak: a sor a hatókör munkaterületét kapja. Ha a ha
 
 **Kereszthivatkozás ellen (javaslat):** a szülőkön `UNIQUE (id, workspace_id)`, a gyerekeken összetett idegen kulcs (`(message_id, workspace_id) → message (id, workspace_id)`). Az idegen kulcs ellenőrzése megkerüli az RLS-t, ezért enélkül egy programhiba A ügyfél üzenetére tehetne reakciót B hatókörében. A költsége egy-egy új egyedi index a szülőkön (`actor`, `channel`, `message`, `sidebar_section`, `planner_calendar`, `wiki_page`); a `message`-en ez a legnagyobb. (12/2: igen)
 
-### 3.3 Nem összeolvasztott ágak
+### 3.3 Később beolvasztott ágak
 
-- **36. kör** (`feature/rag`): `search_chunk_text`, `search_log` (van `workspace_id`) → **W**. A `rag-backfill`, `rag-reembed` és `rag-eval` parancs rendszermódban indul, és munkaterületenként szűkít. Beolvasztáskor egy-egy sor a migrációban és a teszttáblában.
+- **36. kör (RAG, `00055_search.sql`):** a `search_chunk_text` és a `search_log` saját `workspace_id`-vel, `tenant` szabállyal és összetett idegen kulccsal (`channel`, `actor`) jött létre. Az indexelő eseményfogyasztó eseményenként a munkaterületére szűkít; a beágyazó és a naplótakarító háttérciklus rendszermódban fut (minden munkaterület darabjain); a keresés a kérés hatókörében fut, így az RLS a második védvonal a csatornajogosultság-szűrő mögött. A `rag-backfill`, `rag-reembed` és `rag-eval` parancs rendszermódban indul; a `rag-eval -as` a megadott ember munkaterületére szűkít.
 
 ## 4. Belépés előtti keresések: szűk SQL-függvények
 
@@ -197,7 +197,7 @@ ALTER ROLE colonyhall_app NOSUPERUSER NOBYPASSRLS;
 4. **Superuserrel futó telepítések** (6. pont): ott az RLS csendben nem hat. Az indítási ellenőrzés figyelmeztet.
 5. **Teljesítmény:** kapcsolatkiadásonként +1 körút, és a szabályok kifejezése minden lekérdezésben. A jelentés méri; ha zavaró, a `PrepareConn` gyorsítótárazhat (ha a kapcsolat beállítása már ugyanaz, nem küld semmit).
 6. **Nem összeolvasztott ágak** (RAG, 50. kör): az új tábláiknak szabály és tesztsor kell; a `CLAUDE.md` új szabálya ezt mindenkinek előírja.
-7. **Migrációs sorszám:** az `00048` a RAG-é, az `00049`–`00050` az 50. köré; ez a kör `00051`-től számoz.
+7. **Migrációs sorszám:** az `00049`–`00050` az 50. köré, ez a kör `00051`–`00054`; a RAG (36. kör) migrációja a beolvasztáskor `00048`-ról `00055`-re került, mert a goose a sorrenden kívüli migrációt elutasítja.
 
 ## 11. A commitok sorrendje
 

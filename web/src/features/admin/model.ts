@@ -3,6 +3,7 @@ import type { Schemas } from "@/shared/api";
 export type UsageGroup = Schemas["UsageGroup"];
 export type SystemStatus = Schemas["SystemStatus"];
 export type AdminStatus = Schemas["AdminStatus"];
+export type SearchStatus = Schemas["SearchStatus"];
 
 // ---- Period
 
@@ -225,7 +226,19 @@ export function statusFindings(st: AdminStatus): StatusFinding[] {
     { id: "compaction", tone: s.compaction.failed_24h > 0 ? "warning" : "ok" },
     { id: "emergency", tone: st.emergency_stop.active ? "error" : "ok" },
     { id: "integrations", tone: "ok" },
+    ...(s.search ? [{ id: "search", tone: searchTone(s.search) }] : []),
   ];
+}
+
+/**
+ * The search card's tone: stored vectors from another model than the embedding
+ * server serves is an error (meaning search compares unlike vectors); a
+ * configured backend that does not answer is a warning (the search degrades).
+ */
+export function searchTone(s: SearchStatus): Tone {
+  if (s.model_mismatch) return "error";
+  const down = (b: SearchStatus["embedder"]) => b.configured && !b.reachable;
+  return down(s.embedder) || down(s.reranker) ? "warning" : "ok";
 }
 
 const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
@@ -284,8 +297,20 @@ export function statusText(st: AdminStatus, at: Date): string {
     `emergency stop: ${st.emergency_stop.active ? `ACTIVE since ${st.emergency_stop.since ?? "?"}` : "off"}`,
     `gitea configured: ${s.gitea_configured ? "yes" : "no"}, webhook secret: ${s.gitea_webhook_configured ? "yes" : "no"}`,
     `max upload: ${s.max_upload_mb} MB`,
+    ...(s.search ? searchText(s.search) : []),
   ];
   return lines.join("\n");
+}
+
+function searchText(s: SearchStatus): string[] {
+  const backend = (name: string, b: SearchStatus["embedder"]) =>
+    `${name}: ${b.configured ? (b.reachable ? "reachable" : "UNREACHABLE") : "not configured"}${b.model ? `, model ${b.model}` : ""}${b.last_error ? `, last error: ${b.last_error}` : ""}`;
+  return [
+    `search: ${s.chunks} chunks, ${s.pending} waiting for embedding, last embedding ${s.last_embed_at ?? "never"}, models: ${s.models.join(", ") || "none"}`,
+    backend("embedder", s.embedder),
+    backend("reranker", s.reranker),
+    ...(s.model_mismatch ? [`MODEL MISMATCH: ${s.model_mismatch}`] : []),
+  ];
 }
 
 // ---- Users

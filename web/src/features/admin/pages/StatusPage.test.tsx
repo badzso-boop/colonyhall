@@ -1,46 +1,60 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
-import type { SystemStatus } from "../model";
-import { DatabaseSizeCard } from "./StatusPage";
+import { MemoryRouter } from "react-router";
+import type { Schemas } from "@/shared/api";
+import { TooltipProvider } from "@/shared/ui";
+import StatusPage from "./StatusPage";
 
-type Database = SystemStatus["database"];
-const MB = 1024 * 1024;
+const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
 
-// Round 50: the database card on the System status page.
-test("the database card shows the total, the largest tables and the growth", () => {
-  const db: Database = {
-    ok: true,
-    latency_ms: 0.4,
-    size_bytes: 21.4 * MB,
-    tables: [
-      { name: "message", total_bytes: 8 * MB, rows_estimate: 12345 },
-      { name: "api_token", total_bytes: 1536, rows_estimate: 20 },
-    ],
-    growth: [
-      { date: "2026-09-01", size_bytes: 10 * MB }, // older than 30 days: left out
-      { date: "2026-10-12", size_bytes: 18.2 * MB },
-      { date: "2026-10-30", size_bytes: 20 * MB },
-      { date: "2026-11-11", size_bytes: 21.4 * MB },
-    ],
-  };
-  render(<DatabaseSizeCard database={db} />);
-  screen.getByText("Adatbázis mérete");
-  expect(screen.getAllByText("21,4 MB").length).toBeGreaterThan(0);
-  screen.getByText("message");
-  screen.getByText("8 MB");
-  screen.getByText("1,5 kB");
-  screen.getByText(/12.345/);
-  screen.getByText("+3,2 MB 30 nap alatt");
-  screen.getByRole("img", { name: /^Az elmúlt 30 napban: 18,2 MB, 20 MB, 21,4 MB$/ });
+const system: NonNullable<Schemas["AdminStatus"]["system"]> = {
+  version: "v1",
+  uptime_seconds: 3700,
+  database: { ok: true, latency_ms: 1.2 },
+  event_head: 10,
+  consumers: [],
+  connections: { human: 1, agent: 0, host: 0 },
+  guards: [],
+  scheduler: { failed_24h: 0 },
+  compaction: { running: 0, failed_24h: 0 },
+  gitea_configured: false,
+  gitea_webhook_configured: false,
+  max_upload_mb: 25,
+};
+
+function show(search?: Schemas["SearchStatus"]) {
+  const status: Schemas["AdminStatus"] = { emergency_stop: { active: false }, system: { ...system, ...(search ? { search } : {}) } };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (req: Request) => {
+      const path = new URL(req.url).pathname;
+      if (path.endsWith("/auth/session")) return json({ actor: { id: "me", kind: "human", handle: "me", display_name: "Me", role: "owner", state: "active", created_at: "2026-11-01T00:00:00Z" } });
+      if (path.endsWith("/admin/status")) return json(status);
+      if (path.endsWith("/actors")) return json({ actors: [] });
+      return json({});
+    }),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <TooltipProvider>
+        <MemoryRouter>
+          <StatusPage />
+        </MemoryRouter>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+test("the search card appears only when the status has a search part", async () => {
+  show();
+  await screen.findByRole("heading", { name: /^Adatbázis(?! mérete)/ });
+  expect(screen.queryByRole("heading", { name: /^Keresés/ })).toBeNull();
 });
 
-test("the database card says when there are too few samples", () => {
-  render(<DatabaseSizeCard database={{ ok: true, latency_ms: 1, size_bytes: 2048, tables: [], growth: [{ date: "2026-11-11", size_bytes: 2048 }] }} />);
-  screen.getByText("2 kB");
-  screen.getByText("még nincs elég minta");
-});
-
-test("the memory store has no database", () => {
-  render(<DatabaseSizeCard database={{ ok: true, latency_ms: 0 }} />);
-  screen.getByText("Memória-tár: nincs adatbázis.");
-  expect(screen.queryByText("Teljes méret")).toBeNull();
+test("the search card shows the index and the backends", async () => {
+  show({ chunks: 42, pending: 0, models: ["bge-m3"], embedder: { configured: true, reachable: true, model: "bge-m3" }, reranker: { configured: false, reachable: false } });
+  const heading = await screen.findByRole("heading", { name: /^Keresés/ });
+  expect(heading.parentElement!.textContent).toContain("Indexelt darabok42");
 });

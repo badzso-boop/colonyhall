@@ -10,6 +10,7 @@ import { LeasesPage } from "@/features/leases";
 import { NotesPage } from "@/features/notes";
 import { RulesPage } from "@/features/rules";
 import { SchedulesPage } from "@/features/schedules";
+import { SearchPage } from "@/features/search";
 import { WikiIndexPage, WikiTopicPage } from "@/features/wiki";
 import { CalendarPage, TasksPage } from "@/features/planner";
 import { Shell } from "@/layout";
@@ -43,6 +44,7 @@ export function AppRoutes() {
         <Route path="leases" element={<LeasesPage />} />
         <Route path="rules" element={<RulesPage />} />
         <Route path="decisions" element={<DecisionsPage />} />
+        <Route path="search" element={<SearchPage />} />
         <Route path="hosts" element={<HostsPage />} />
         <Route path="hosts/:hostId" element={<HostsPage />} />
         <Route path="admin/runs" element={<RunsPage />} />

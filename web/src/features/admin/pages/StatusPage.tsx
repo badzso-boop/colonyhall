@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CircleAlert, CircleCheck, Copy, Gauge, TriangleAlert } from "lucide-react";
+import { Copy, Gauge } from "lucide-react";
 import { useActors } from "@/features/identity";
 import { localeOf } from "@/shared/i18n";
 import { cn, fullTime } from "@/shared/lib";
@@ -9,34 +9,9 @@ import { useSystemStatus } from "../api";
 import { AdminPage } from "../components/AdminPage";
 import { Sparkline } from "../components/charts";
 import { EmergencyReleaseDialog } from "../components/EmergencyReleaseDialog";
+import { SearchStatusCard } from "../components/SearchStatusCard";
+import { StatusCard, StatusRow as Row } from "../components/StatusCard";
 import { formatBytes, formatUptime, LAG_EVENTS, LAG_SECONDS, sizeGrowth, statusFindings, statusText, type SystemStatus, type Tone } from "../model";
-
-const toneIcon = { ok: CircleCheck, warning: TriangleAlert, error: CircleAlert };
-const toneClass = { ok: "text-success", warning: "text-warning", error: "text-danger" };
-
-function StatusCard({ title, tone, children }: { title: string; tone: Tone; children: ReactNode }) {
-  const { t } = useTranslation("admin");
-  const Icon = toneIcon[tone];
-  return (
-    <section className={cn("flex min-w-0 flex-col gap-2 rounded-lg border bg-surface p-3", tone === "ok" ? "border-border" : tone === "warning" ? "border-warning" : "border-danger")}>
-      <h2 className="flex items-center gap-2 font-semibold">
-        <Icon aria-hidden className={cn("size-4 shrink-0", toneClass[tone])} />
-        <span className="min-w-0 flex-1 truncate">{title}</span>
-        <span className={cn("text-meta font-medium", toneClass[tone])}>{t(`status.tone.${tone}`)}</span>
-      </h2>
-      <div className="flex flex-col gap-1 text-ui text-fg-muted">{children}</div>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <p className="flex flex-wrap justify-between gap-x-3">
-      <span>{label}</span>
-      <span className="tabular min-w-0 font-medium break-all text-fg">{value}</span>
-    </p>
-  );
-}
 
 /** Rendszerállapot (/admin/status): the first place to look; re-read every 10 s while the tab is visible. */
 export default function StatusPage() {
@@ -144,6 +119,7 @@ function StatusBody() {
           <Row label="Gitea" value={yes(s.gitea_configured)} />
           <Row label={t("settings.gitea.webhook")} value={yes(s.gitea_webhook_configured)} />
         </StatusCard>
+        {s.search ? <SearchStatusCard search={s.search} /> : null}
         <section className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-surface p-3">
           <h2 className="font-semibold">{t("status.backups")}</h2>
           <p className="text-ui text-fg-muted">{t("status.backupsBody")}</p>

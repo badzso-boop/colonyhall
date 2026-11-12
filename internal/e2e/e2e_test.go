@@ -64,10 +64,7 @@ func specRouter(t *testing.T, baseURL string) routers.Router {
 	return r
 }
 
-func newEnv(t *testing.T) *env {
-	t.Helper()
-	return newEnvWith(t, nil)
-}
+func newEnv(t *testing.T) *env { return newEnvWith(t, nil) }
 
 // newEnvWith is newEnv with changed server options.
 func newEnvWith(t *testing.T, change func(*server.Options)) *env {
