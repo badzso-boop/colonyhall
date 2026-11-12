@@ -8,6 +8,7 @@ import (
 
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/search"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -25,6 +26,7 @@ func unitVec(i int, tilt float32) []float32 {
 func testSearch(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 	s := b.Search
 
 	// A private channel and a DM the agent is not a member of.
