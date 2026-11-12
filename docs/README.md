@@ -17,6 +17,7 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 | [08-frontend-architektura.md](08-frontend-architektura.md) | A PWA szerkezete: rétegek, funkciómodulok, adatkezelés, i18n, tesztek (kötelező a `web/`-hez) |
 | [15-telepites-terv.md](15-telepites-terv.md) / [16-telepites.md](16-telepites.md) | A telepítő terve és használata (`colony setup`, `install.sh`, kiadás) |
 | [17-nyilt-forraskod.md](17-nyilt-forraskod.md) | A nyílt forráskódúvá tétel átvilágítása, licenc (AGPL-3.0-only + CLA), teendők |
+| [18-weboldal-terv.md](18-weboldal-terv.md) | A nyilvános weboldal (GitHub Pages) terve: koncepció, kamrák, hangyák, technika, teljesítménykeret |
 | [19-lokalis-agent-harness-terv.md](19-lokalis-agent-harness-terv.md) / [21-lokalis-agent-forrasok.md](21-lokalis-agent-forrasok.md) | Helyi kódoló agent kis modellekkel: terv és források |
 | [22-tobbberlos-terv.md](22-tobbberlos-terv.md) / [23-elkulonites.md](23-elkulonites.md) | Több ügyfél egy rendszeren: a terv és a 0. fázis (elkülönítés, RLS) leltára és döntései |
 | [09-kezi-tesztlista.md](09-kezi-tesztlista.md) | Kézi tesztlista a PWA-hoz (31–33. kör): azonosított ellenőrzések, minden kiadás után ugyanígy végigmenve, a futások naplójával |
