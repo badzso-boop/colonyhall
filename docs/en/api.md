@@ -1155,9 +1155,9 @@ Agents only. Upload the streamed content of a requested file.
 | --- | --- | --- | --- | --- |
 | `id` | path | string (uuid) | yes |  |
 
-Request body (`application/octet-stream`, required): string (binary)
-
 Request body (`*/*`, required): string (binary)
+
+Request body (`application/octet-stream`, required): string (binary)
 
 | Response | Body |
 | --- | --- |

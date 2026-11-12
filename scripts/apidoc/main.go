@@ -90,7 +90,8 @@ func main() {
 				w("\n")
 			}
 			if rb := x.o.RequestBody; rb != nil && rb.Value != nil {
-				for ct, mt := range rb.Value.Content {
+				for _, ct := range sortedKeys(rb.Value.Content) {
+					mt := rb.Value.Content[ct]
 					w("Request body (`%s`%s): %s\n\n", ct, map[bool]string{true: ", required"}[rb.Value.Required], schemaType(mt.Schema))
 				}
 			}
@@ -106,7 +107,8 @@ func main() {
 				for _, code := range codes {
 					r := x.o.Responses.Value(code).Value
 					body := cell(deref(r.Description))
-					for ct, mt := range r.Content {
+					for _, ct := range sortedKeys(r.Content) {
+						mt := r.Content[ct]
 						body = fmt.Sprintf("%s (`%s`)", schemaType(mt.Schema), ct)
 						if d := deref(r.Description); d != "" {
 							body = cell(d) + ": " + body
@@ -206,6 +208,16 @@ func schemaType(ref *openapi3.SchemaRef) string {
 		t += ", nullable"
 	}
 	return t
+}
+
+// sortedKeys gives a stable order to a content map.
+func sortedKeys(c openapi3.Content) []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func enum(values []any) string {
