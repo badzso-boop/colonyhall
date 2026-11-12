@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="{{lang}}" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{{t:meta.title}}</title>
+  <meta name="description" content="{{t:meta.description}}">
+  <link rel="canonical" href="{{cfg:siteUrl}}{{lang}}/">
+  {{alternates}}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{t:meta.title}}">
+  <meta property="og:description" content="{{t:meta.description}}">
+  <meta property="og:url" content="{{cfg:siteUrl}}{{lang}}/">
+  <meta property="og:image" content="{{cfg:siteUrl}}img/social.png">
+  <meta property="og:image:alt" content="{{t:meta.ogAlt}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/site.css">
+  <script>document.documentElement.classList.replace("no-js", "js");</script>
+  <script type="module" src="../js/main.js"></script>
+</head>
+<body>
+  <a class="skip" href="#content">{{t:nav.skip}}</a>
+  <svg width="0" height="0" class="defs" aria-hidden="true" focusable="false">{{svg:ant-symbol}}</svg>
+
+  <header class="bar">
+    <a class="bar__brand" href="#top" aria-label="{{t:nav.home}}">{{svg:mark}}<span>Colonyhall</span></a>
+    <nav class="bar__nav" aria-label="{{t:nav.label}}">
+      <a href="{{link:docs}}">{{t:nav.docs}}</a>
+      <a href="{{link:repo}}">{{t:nav.github}}</a>
+    </nav>
+    <div class="bar__controls">
+      <button type="button" class="ctl" id="theme-toggle" hidden aria-label="{{t:theme.system}}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 7v10"/></svg>
+      </button>
+      <button type="button" class="ctl" id="motion-toggle" hidden aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="ico-pause"><path d="M9 6v12M15 6v12"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="ico-play"><path d="M8 5l11 7-11 7z"/></svg>
+        <span class="ctl__label">{{t:motion.pause}}</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- The ants: one canvas for the whole page (decoration; described below). -->
+  <canvas id="ants" aria-hidden="true"></canvas>
+  <div id="ant-tags" aria-hidden="true"></div>
+
+  <main id="content">
+    <p class="sr-only" id="motion-desc">{{t:motion.description}}</p>
+    <p class="sr-only" aria-live="polite" id="live"></p>
+    <!-- 0. The surface -->
+    <section class="surface" id="top" aria-labelledby="hero-title">
+      <div class="sky" aria-hidden="true">{{svg:sky}}</div>
+      <div class="surface__inner">
+        <div class="hero">
+          <h1 id="hero-title" class="hero__title">{{t:hero.title}}</h1>
+          <p class="hero__subtitle">{{t:hero.subtitle}}</p>
+          <p class="hero__body">{{t:hero.body}}</p>
+          <div class="hero__actions">
+            <a class="btn btn--primary" href="#nursery">{{t:hero.install}}</a>
+            <a class="btn" href="{{link:repo}}">{{svg:github}}{{t:hero.github}}</a>
+          </div>
+          <div class="cmd" data-copy-root>
+            <span class="sr-only">{{t:hero.commandLabel}}</span>
+            <code class="cmd__text" data-copy-text tabindex="0">curl -fsSLO {{link:installScript}}</code>
+            <button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button>
+          </div>
+        </div>
+
+        <figure class="monitor" aria-label="{{t:monitor.label}}" id="monitor">
+          <div class="monitor__screen">
+            <div class="app">
+              <aside class="app__side">
+                <div class="app__ws">{{svg:mark}}<span>{{t:monitor.workspace}}</span></div>
+                <p class="app__group">{{t:monitor.channels}}</p>
+                <p class="app__chan is-active"><span aria-hidden="true">#</span>{{t:monitor.general}}</p>
+                <p class="app__chan"><span aria-hidden="true">#</span>{{t:monitor.release}}</p>
+                <p class="app__group">{{t:monitor.people}}</p>
+                <p class="app__chan"><span class="av av--human av--xs" aria-hidden="true">D</span>{{t:monitor.dori}}</p>
+                <p class="app__chan"><span class="av av--agent av--xs" aria-hidden="true">h</span>{{t:agents.homelab}}</p>
+              </aside>
+              <div class="app__main">
+                <div class="app__head"><span aria-hidden="true">#</span> {{t:monitor.general}}</div>
+                <ol class="app__msgs" id="monitor-msgs">
+                  <li class="msg" data-msg="m1"><span class="av av--human" aria-hidden="true">D</span><div><p class="msg__who">{{t:monitor.dori}}</p><p class="msg__text">{{t:monitor.m1}}</p></div></li>
+                  <li class="msg" data-msg="m2"><span class="av av--agent" aria-hidden="true">a</span><div><p class="msg__who">{{t:agents.assistant}}</p><p class="msg__text">{{t:monitor.m2}}</p></div></li>
+                  <li class="msg" data-msg="m3"><span class="av av--agent" aria-hidden="true">r</span><div><p class="msg__who">{{t:agents.reviewer}}</p><p class="msg__text">{{t:monitor.m3}}</p></div></li>
+                  <li class="msg" data-msg="m4"><span class="av av--agent" aria-hidden="true">a</span><div><p class="msg__who">{{t:agents.assistant}}</p><p class="msg__text">{{t:monitor.m4}}</p></div></li>
+                  <li class="msg" data-msg="m5"><span class="av av--agent" aria-hidden="true">h</span><div><p class="msg__who">{{t:agents.homelab}}</p><p class="msg__text">{{t:monitor.m5}}</p></div></li>
+                </ol>
+                <div class="app__composer" aria-hidden="true">{{t:monitor.composer}}</div>
+              </div>
+              <aside class="app__steps">
+                <p class="app__group">{{t:monitor.steps}}</p>
+                <ol class="steps" id="monitor-steps">
+                  <li data-step="s1"><span class="steps__who">{{t:agents.assistant}}</span> {{t:monitor.s1}}</li>
+                  <li data-step="s2"><span class="steps__who">{{t:agents.assistant}}</span> {{t:monitor.s2}}</li>
+                  <li data-step="s3"><span class="steps__who">{{t:agents.reviewer}}</span> {{t:monitor.s3}}</li>
+                  <li data-step="s4"><span class="steps__who">{{t:agents.reviewer}}</span> {{t:monitor.s4}}</li>
+                  <li data-step="s5"><span class="steps__who">{{t:agents.assistant}}</span> {{t:monitor.s5}}</li>
+                </ol>
+              </aside>
+            </div>
+          </div>
+          <div class="monitor__stand" aria-hidden="true"></div>
+        </figure>
+      </div>
+      <div class="ground-line" aria-hidden="true">{{svg:surface}}</div>
+    </section>
+
+    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 1. The hall -->
+    <section class="chamber" id="hall" aria-labelledby="hall-title">
+      <div class="chamber__text">
+        <p class="kicker">01 · {{t:hall.kicker}}</p>
+        <h2 id="hall-title">{{t:hall.title}}</h2>
+        <p>{{t:hall.body}}</p>
+      </div>
+      <div class="chamber__art">
+        <div class="thread" id="hall-thread">
+          <p class="thread__head">{{t:hall.thread}}</p>
+          <div class="msg"><span class="av av--human" aria-hidden="true">D</span><div><p class="msg__who">{{t:monitor.dori}}</p><p class="msg__text">{{t:monitor.m1}}</p></div></div>
+          <div class="msg" data-trail-from><span class="av av--agent" aria-hidden="true">a</span><div><p class="msg__who">{{t:agents.assistant}}</p><p class="msg__text">{{t:monitor.m2}}</p></div></div>
+          <svg class="trail" viewBox="0 0 40 60" aria-hidden="true"><path d="M20 0 C 4 20, 36 40, 20 60" pathLength="1"/></svg>
+          <div class="msg" data-trail-to><span class="av av--agent" aria-hidden="true">r</span><div><p class="msg__who">{{t:agents.reviewer}}</p><p class="msg__text">{{t:monitor.m3}}</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 2. The gate -->
+    <section class="chamber chamber--flip" id="gate" aria-labelledby="gate-title">
+      <div class="chamber__text">
+        <p class="kicker">02 · {{t:gate.kicker}}</p>
+        <h2 id="gate-title">{{t:gate.title}}</h2>
+        <p>{{t:gate.body}}</p>
+        <p class="motto">{{t:gate.motto}}</p>
+      </div>
+      <div class="chamber__art">
+        <div class="gate" id="gate-stage">
+          <div class="gate__scene" aria-hidden="true">{{svg:gate}}</div>
+          <div class="card" id="gate-card">
+            <p class="card__title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>{{t:gate.cardTitle}}</p>
+            <p class="card__text">{{md:gate.cardText}}</p>
+            <p class="card__hint" data-js-only hidden>{{t:gate.tryIt}}</p>
+            <div class="card__actions" data-js-only hidden>
+              <button type="button" class="btn btn--primary btn--sm" id="gate-approve">{{t:gate.approve}}</button>
+              <button type="button" class="btn btn--danger btn--sm" id="gate-stop">{{t:gate.stop}}</button>
+            </div>
+            <p class="card__done" id="gate-approved" hidden>{{t:gate.approved}}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 3. The tunnels -->
+    <section class="chamber chamber--wide" id="tunnels" aria-labelledby="tunnels-title">
+      <div class="chamber__text">
+        <p class="kicker">03 · {{t:tunnels.kicker}}</p>
+        <h2 id="tunnels-title">{{t:tunnels.title}}</h2>
+        <p>{{t:tunnels.body}}</p>
+      </div>
+      <div class="chamber__art">
+        <div class="map" id="map">
+          {{svg:map}}
+          {{svg:map-tall}}
+        </div>
+        <p class="map__hint" data-js-only hidden>{{t:tunnels.hint}}</p>
+        <dl class="map__legend" id="map-legend">
+          <div data-part="server"><dt>{{t:tunnels.server}}</dt><dd>{{t:tunnels.serverDesc}}</dd></div>
+          <div data-part="guard"><dt>{{t:tunnels.guard}}</dt><dd>{{t:tunnels.guardDesc}}</dd></div>
+          <div data-part="tunnel"><dt><span class="legend-line" aria-hidden="true"></span>API</dt><dd>{{t:tunnels.tunnelDesc}}</dd></div>
+          <div data-part="sandbox"><dt>{{t:tunnels.sandbox}}</dt><dd>{{t:tunnels.sandboxDesc}}</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 4. Workrooms -->
+    <section class="chamber chamber--wide" id="workrooms" aria-labelledby="workrooms-title">
+      <div class="chamber__text">
+        <p class="kicker">04 · {{t:workrooms.kicker}}</p>
+        <h2 id="workrooms-title">{{t:workrooms.title}}</h2>
+      </div>
+      <ul class="rooms" id="rooms">
+        <li class="room" data-room="steps">{{svg:room-steps}}<p>{{t:workrooms.steps}}</p></li>
+        <li class="room" data-room="terminals">{{svg:room-terminals}}<p>{{t:workrooms.terminals}}</p></li>
+        <li class="room" data-room="files">{{svg:room-files}}<p>{{t:workrooms.files}}</p></li>
+        <li class="room" data-room="planner">{{svg:room-planner}}<p>{{t:workrooms.planner}}</p></li>
+        <li class="room" data-room="search">{{svg:room-search}}<p>{{t:workrooms.search}}</p></li>
+        <li class="room" data-room="pwa">{{svg:room-pwa}}<p>{{t:workrooms.pwa}}</p></li>
+      </ul>
+    </section>
+
+    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 5. Your ground -->
+    <section class="chamber" id="ground" aria-labelledby="ground-title">
+      <div class="chamber__text">
+        <p class="kicker">05 · {{t:ground.kicker}}</p>
+        <h2 id="ground-title">{{t:ground.title}}</h2>
+        <p>{{t:ground.body}}</p>
+      </div>
+      <div class="chamber__art">{{svg:ground}}</div>
+    </section>
+
+    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 6. The nursery -->
+    <section class="chamber chamber--flip" id="nursery" aria-labelledby="nursery-title">
+      <div class="chamber__text">
+        <p class="kicker">06 · {{t:nursery.kicker}}</p>
+        <h2 id="nursery-title">{{t:nursery.title}}</h2>
+        <p>{{md:nursery.body}}</p>
+        <ol class="install">
+          <li data-copy-root><span class="install__step">{{t:nursery.step1}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">curl -fsSLO {{link:installScript}}</code><button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button></span></li>
+          <li data-copy-root><span class="install__step">{{t:nursery.step2}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">less install.sh</code><button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button></span></li>
+          <li data-copy-root><span class="install__step">{{t:nursery.step3}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">sh install.sh</code><button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button></span></li>
+        </ol>
+        <p class="platforms">{{t:nursery.platforms}} · <a href="{{link:install}}">{{t:nursery.guide}}</a></p>
+      </div>
+      <div class="chamber__art">
+        <figure class="term" id="terminal" aria-label="{{t:nursery.terminalLabel}}">
+          <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span>{{t:terminal.title}}</span></div>
+          <pre class="term__body" id="terminal-body"><span class="p">$</span> curl -fsSLO …/install.sh
+<span class="p">$</span> sh install.sh
+<span class="ok">✓</span> {{t:terminal.verified}}
+<span class="q">?</span> {{t:terminal.qMode}} <span class="a">{{t:terminal.aMode}}</span>
+<span class="q">?</span> {{t:terminal.qBind}} <span class="a">{{t:terminal.aBind}}</span>
+<span class="q">?</span> {{t:terminal.qBackups}} <span class="a">{{t:terminal.aYes}}</span>
+<span class="q">?</span> {{t:terminal.qClients}} <span class="a">{{t:terminal.aClients}}</span>
+<span class="q">?</span> {{t:terminal.qService}} <span class="a">{{t:terminal.aYes}}</span>
+<span class="ok">✓</span> {{t:terminal.doneServer}}
+<span class="ok">✓</span> {{t:terminal.doneGuard}}
+<span class="p">$</span> colony doctor
+<span class="ok">✓</span> {{t:terminal.doctor}}</pre>
+        </figure>
+      </div>
+    </section>
+
+    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 7. Strata -->
+    <section class="chamber chamber--wide strata" id="strata" aria-labelledby="strata-title">
+      <div class="chamber__text">
+        <p class="kicker">07 · {{t:strata.kicker}}</p>
+        <h2 id="strata-title">{{t:strata.title}}</h2>
+        <p>{{t:strata.intro}}</p>
+      </div>
+      {{partial:strata}}
+      {{partial:counters}}
+      <div class="status">
+        <div>
+          <h3>{{t:strata.statusTitle}}</h3>
+          <p>{{md:strata.status}}</p>
+        </div>
+        <div>
+          <h3>{{t:strata.visionTitle}}</h3>
+          <p>{{t:strata.vision}}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Open colony -->
+    <section class="chamber" id="open" aria-labelledby="open-title">
+      <div class="chamber__text">
+        <p class="kicker">08 · {{t:open.kicker}}</p>
+        <h2 id="open-title">{{t:open.title}}</h2>
+        <p>{{md:open.body}}</p>
+        <p class="links">
+          <a href="{{link:license}}">{{t:open.license}}</a>
+          <a href="{{link:contributing}}">{{t:open.contributing}}</a>
+          <a href="{{link:cla}}">{{t:open.cla}}</a>
+          <a href="{{link:security}}">{{t:open.security}}</a>
+        </p>
+      </div>
+      <div class="chamber__art">{{svg:open}}</div>
+    </section>
+  </main>
+
+  <!-- 9. Footer -->
+  <footer class="foot">
+    <div class="sleepers" id="sleepers" title="{{t:footer.sleeping}}">{{svg:sleepers}}</div>
+    <nav class="foot__links" aria-label="{{t:footer.label}}">
+      <a href="{{link:docs}}">{{t:footer.docs}}</a>
+      <a href="{{link:api}}">{{t:footer.api}}</a>
+      <a href="{{link:repo}}">{{t:footer.github}}</a>
+      <a href="{{link:issues}}">{{t:footer.issues}}</a>
+      <a href="{{link:repo}}">{{t:footer.source}}</a>
+      <a href="{{link:license}}">{{t:footer.license}}</a>
+    </nav>
+    <p class="foot__note">{{t:footer.privacy}}</p>
+  </footer>
+
+  <script type="application/json" id="site-data">{{data}}</script>
+</body>
+</html>

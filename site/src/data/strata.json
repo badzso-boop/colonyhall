@@ -1,0 +1,209 @@
+{
+ "_comment": "One entry per round (docs/18, appendix A). Names and sentences: strata.rounds.r<n> in the i18n files. When a round's state changes, update this file and the appendix.",
+ "rounds": [
+  {
+   "n": 0,
+   "state": "shipped"
+  },
+  {
+   "n": 1,
+   "state": "shipped"
+  },
+  {
+   "n": 2,
+   "state": "shipped"
+  },
+  {
+   "n": 3,
+   "state": "shipped"
+  },
+  {
+   "n": 4,
+   "state": "shipped"
+  },
+  {
+   "n": 5,
+   "state": "shipped"
+  },
+  {
+   "n": 6,
+   "state": "shipped"
+  },
+  {
+   "n": 7,
+   "state": "shipped"
+  },
+  {
+   "n": 8,
+   "state": "shipped"
+  },
+  {
+   "n": 9,
+   "state": "shipped"
+  },
+  {
+   "n": 10,
+   "state": "shipped"
+  },
+  {
+   "n": 11,
+   "state": "shipped"
+  },
+  {
+   "n": 12,
+   "state": "shipped"
+  },
+  {
+   "n": 13,
+   "state": "shipped"
+  },
+  {
+   "n": 14,
+   "state": "shipped"
+  },
+  {
+   "n": 15,
+   "state": "shipped"
+  },
+  {
+   "n": 16,
+   "state": "shipped"
+  },
+  {
+   "n": 17,
+   "state": "shipped"
+  },
+  {
+   "n": 18,
+   "state": "shipped"
+  },
+  {
+   "n": 19,
+   "state": "shipped"
+  },
+  {
+   "n": 20,
+   "state": "shipped"
+  },
+  {
+   "n": 21,
+   "state": "shipped"
+  },
+  {
+   "n": 22,
+   "state": "shipped"
+  },
+  {
+   "n": 23,
+   "state": "shipped"
+  },
+  {
+   "n": 24,
+   "state": "shipped"
+  },
+  {
+   "n": 25,
+   "state": "shipped"
+  },
+  {
+   "n": 26,
+   "state": "shipped"
+  },
+  {
+   "n": 27,
+   "state": "shipped"
+  },
+  {
+   "n": 28,
+   "state": "shipped"
+  },
+  {
+   "n": 29,
+   "state": "shipped"
+  },
+  {
+   "n": 30,
+   "state": "shipped"
+  },
+  {
+   "n": 31,
+   "state": "shipped"
+  },
+  {
+   "n": 32,
+   "state": "shipped"
+  },
+  {
+   "n": 33,
+   "state": "shipped"
+  },
+  {
+   "n": 34,
+   "state": "shipped"
+  },
+  {
+   "n": 35,
+   "state": "shipped"
+  },
+  {
+   "n": 36,
+   "state": "shipped"
+  },
+  {
+   "n": 37,
+   "state": "shipped"
+  },
+  {
+   "n": 38,
+   "state": "shipped"
+  },
+  {
+   "n": 39,
+   "state": "shipped"
+  },
+  {
+   "n": 40,
+   "state": "planned"
+  },
+  {
+   "n": 41,
+   "state": "shipped"
+  },
+  {
+   "n": 42,
+   "state": "shipped"
+  },
+  {
+   "n": 43,
+   "state": "planned"
+  },
+  {
+   "n": 44,
+   "state": "planned"
+  },
+  {
+   "n": 45,
+   "state": "shipped"
+  },
+  {
+   "n": 46,
+   "state": "planned"
+  },
+  {
+   "n": 47,
+   "state": "planned"
+  },
+  {
+   "n": 48,
+   "state": "digging"
+  },
+  {
+   "n": 49,
+   "state": "planned"
+  },
+  {
+   "n": 50,
+   "state": "shipped"
+  }
+ ]
+}
