@@ -56,6 +56,10 @@ type Config struct {
 	// 0 (default) means no limit.
 	MaxConcurrentRuns int `yaml:"max_concurrent_runs"`
 
+	// CodeGraph (round 39): the guard indexes the agents' git repositories
+	// and gives every run the CodeGraph MCP server.
+	CodeGraph CodeGraphConfig `yaml:"codegraph"`
+
 	RateLimitReserve int `yaml:"rate_limit_reserve"` // default 90 (%)
 	RateLimitWarn    int `yaml:"rate_limit_warn"`    // default 80 (%)
 }
@@ -128,6 +132,9 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxConcurrentRuns < 0 {
 		return fmt.Errorf("guard: max_concurrent_runs must be 0 (no limit) or more")
+	}
+	if c.CodeGraph.MaxFiles < 0 {
+		return fmt.Errorf("guard: codegraph.max_files must be 0 (default %d) or more", defaultCodeGraphMaxFiles)
 	}
 	if c.TmuxSocket == "" {
 		c.TmuxSocket = DefaultTmuxSocket

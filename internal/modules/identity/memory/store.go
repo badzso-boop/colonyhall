@@ -22,7 +22,7 @@ type Store struct {
 	tokenByID  map[ids.ID]string         // token id → hash key
 	creds      map[ids.ID]string
 	sessions   map[string]identity.Session // key: string(token hash)
-	revoked    map[ids.ID]bool
+	revoked    map[ids.ID]time.Time        // session id → when it was revoked
 }
 
 // New returns an empty store.
@@ -34,7 +34,7 @@ func New() *Store {
 		tokenByID:  map[ids.ID]string{},
 		creds:      map[ids.ID]string{},
 		sessions:   map[string]identity.Session{},
-		revoked:    map[ids.ID]bool{},
+		revoked:    map[ids.ID]time.Time{},
 	}
 }
 
@@ -42,7 +42,43 @@ func New() *Store {
 func (s *Store) CreateWorkspace(_ context.Context, w identity.Workspace) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	w = identity.WithDefaults(w)
+	for _, other := range s.workspaces {
+		if other.Slug == w.Slug {
+			return db.ErrConflict
+		}
+	}
 	s.workspaces[w.ID] = w
+	return nil
+}
+
+// WorkspaceBySlug loads a workspace by its subdomain name.
+func (s *Store) WorkspaceBySlug(_ context.Context, slug string) (identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, w := range s.workspaces {
+		if w.Slug == slug {
+			return w, nil
+		}
+	}
+	return identity.Workspace{}, db.ErrNotFound
+}
+
+// SetWorkspaceSlug renames a workspace's subdomain.
+func (s *Store) SetWorkspaceSlug(_ context.Context, id ids.ID, slug string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	for _, other := range s.workspaces {
+		if other.ID != id && other.Slug == slug {
+			return db.ErrConflict
+		}
+	}
+	w.Slug = slug
+	s.workspaces[id] = w
 	return nil
 }
 
@@ -262,7 +298,7 @@ func (s *Store) SessionByTokenHash(_ context.Context, hash []byte) (identity.Ses
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	x, ok := s.sessions[string(hash)]
-	if !ok || s.revoked[x.ID] {
+	if _, gone := s.revoked[x.ID]; !ok || gone {
 		return identity.Session{}, identity.Actor{}, db.ErrNotFound
 	}
 	a, ok := s.actors[x.ActorID]
@@ -273,20 +309,27 @@ func (s *Store) SessionByTokenHash(_ context.Context, hash []byte) (identity.Ses
 }
 
 // RevokeSession ends a session.
-func (s *Store) RevokeSession(_ context.Context, id ids.ID, _ time.Time) error {
+func (s *Store) RevokeSession(_ context.Context, id ids.ID, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.revoked[id] = true
+	s.revokeSession(id, at)
 	return nil
 }
 
+// revokeSession records the first revocation only, like revoked_at IS NULL.
+func (s *Store) revokeSession(id ids.ID, at time.Time) {
+	if _, done := s.revoked[id]; !done {
+		s.revoked[id] = at
+	}
+}
+
 // RevokeSessionsForActor revokes every session of the actor except keep.
-func (s *Store) RevokeSessionsForActor(_ context.Context, actorID, keep ids.ID, _ time.Time) error {
+func (s *Store) RevokeSessionsForActor(_ context.Context, actorID, keep ids.ID, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, x := range s.sessions {
 		if x.ActorID == actorID && x.ID != keep {
-			s.revoked[x.ID] = true
+			s.revokeSession(x.ID, at)
 		}
 	}
 	return nil
@@ -421,7 +464,7 @@ func (s *Store) SessionStats(_ context.Context, workspaceID ids.ID, now time.Tim
 			continue
 		}
 		st := out[x.ActorID]
-		if !s.revoked[x.ID] && x.ExpiresAt.After(now) {
+		if _, gone := s.revoked[x.ID]; !gone && x.ExpiresAt.After(now) {
 			st.Active++
 		}
 		if st.LastLogin == nil || x.CreatedAt.After(*st.LastLogin) {
@@ -463,5 +506,104 @@ func (s *Store) SetActorOwner(_ context.Context, id, ownerID ids.ID) error {
 	}
 	a.OwnerID = ownerID
 	s.actors[id] = a
+	return nil
+}
+
+// DeleteExpiredHostTokens deletes ended guard tokens.
+func (s *Store) DeleteExpiredHostTokens(_ context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	for k, t := range s.tokens {
+		if t.HostID == ids.Nil {
+			continue
+		}
+		if (t.ExpiresAt != nil && t.ExpiresAt.Before(before)) || (t.RevokedAt != nil && t.RevokedAt.Before(before)) {
+			delete(s.tokens, k)
+			delete(s.tokenByID, t.ID)
+			n++
+		}
+	}
+	return n, nil
+}
+
+// DeleteEndedSessions deletes sessions that expired or were revoked before the cut-off.
+func (s *Store) DeleteEndedSessions(_ context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	for k, x := range s.sessions {
+		at, revoked := s.revoked[x.ID]
+		if x.ExpiresAt.Before(before) || (revoked && at.Before(before)) {
+			delete(s.sessions, k)
+			delete(s.revoked, x.ID)
+			n++
+		}
+	}
+	return n, nil
+}
+
+// WorkspaceOfToken finds the workspace of a token.
+func (s *Store) WorkspaceOfToken(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.tokens[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return s.actors[t.ActorID].WorkspaceID, nil
+}
+
+// WorkspaceOfSession finds the workspace of a session.
+func (s *Store) WorkspaceOfSession(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	x, ok := s.sessions[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return s.actors[x.ActorID].WorkspaceID, nil
+}
+
+// HandleWorkspaces lists the workspaces that have the handle, by id.
+func (s *Store) HandleWorkspaces(_ context.Context, handle string) ([]identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []identity.Workspace{}
+	for _, a := range s.actors {
+		if a.Handle == handle && a.ArchivedAt == nil {
+			w := s.workspaces[a.WorkspaceID]
+			out = append(out, identity.Workspace{ID: w.ID, Name: w.Name})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	return out, nil
+}
+
+// RevokeTokenByHash revokes a token by its hash and returns it.
+func (s *Store) RevokeTokenByHash(_ context.Context, hash []byte, at time.Time) (identity.Token, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tokens[string(hash)]
+	if !ok {
+		return identity.Token{}, db.ErrNotFound
+	}
+	if t.RevokedAt == nil {
+		t.RevokedAt = &at
+		s.tokens[string(hash)] = t
+	}
+	return t, nil
+}
+
+// SetWorkspaceState suspends or reactivates a workspace.
+func (s *Store) SetWorkspaceState(_ context.Context, id ids.ID, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.workspaces[id]
+	if !ok {
+		return db.ErrNotFound
+	}
+	w.State = state
+	s.workspaces[id] = w
 	return nil
 }

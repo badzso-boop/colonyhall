@@ -143,7 +143,7 @@ function EditDialog({ page, open, onOpenChange }: { page: WikiPage; open: boolea
   );
 }
 
-/** A wiki page as a forum topic (docs/handoff/32, part 7). */
+/** A wiki page as a forum topic (round 32, part 7). */
 export default function WikiTopicPage() {
   const { slug = "" } = useParams();
   const { t } = useTranslation("wiki");

@@ -16,6 +16,7 @@ import (
 func testDelegation(t *testing.T, b Backend) {
 	ctx := context.Background()
 	f := setup(t, b)
+	ctx = db.WithWorkspace(ctx, f.ws.ID) // round 45: every store call is scoped
 
 	agent2 := identity.Actor{
 		ID:          gen.New(),

@@ -557,6 +557,7 @@ func (s *Service) RunDue(ctx context.Context) (int, error) {
 
 	processed := 0
 	for _, q := range due {
+		ctx := db.WithWorkspace(ctx, q.WorkspaceID) // the loop runs for every workspace
 		// Check deadline first
 		if q.Deadline != nil && !now.Before(*q.Deadline) {
 			if q.DefaultOption != nil && *q.DefaultOption != "" {

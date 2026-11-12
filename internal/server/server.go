@@ -49,6 +49,9 @@ import (
 	convmcp "colonyhall/internal/modules/conversation/mcptools"
 	convmem "colonyhall/internal/modules/conversation/memory"
 	convpg "colonyhall/internal/modules/conversation/postgres"
+	"colonyhall/internal/modules/dbstats"
+	dbstatsmem "colonyhall/internal/modules/dbstats/memory"
+	dbstatspg "colonyhall/internal/modules/dbstats/postgres"
 	"colonyhall/internal/modules/decision"
 	dechttp "colonyhall/internal/modules/decision/httpapi"
 	decmcp "colonyhall/internal/modules/decision/mcptools"
@@ -77,6 +80,7 @@ import (
 	"colonyhall/internal/modules/git/provider"
 	"colonyhall/internal/modules/hosts"
 	hosthttp "colonyhall/internal/modules/hosts/httpapi"
+	hostsmcp "colonyhall/internal/modules/hosts/mcptools"
 	hostmem "colonyhall/internal/modules/hosts/memory"
 	hostpg "colonyhall/internal/modules/hosts/postgres"
 	"colonyhall/internal/modules/identity"
@@ -135,6 +139,7 @@ import (
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/migrations"
 )
@@ -190,6 +195,10 @@ type Options struct {
 	// Embedder and Reranker override the URLs (tests).
 	Embedder search.Embedder
 	Reranker search.Reranker
+	// Multitenant picks the workspace from the subdomain <slug>.BaseDomain
+	// (round 45, docs/23-elkulonites.md); off: one team, as before.
+	Multitenant bool
+	BaseDomain  string
 }
 
 // App is a wired-up Colonyhall server.
@@ -215,6 +224,7 @@ type App struct {
 	Sidebar      *sidebar.Service
 	Compaction   *compaction.Service
 	Delegation   *delegation.Service
+	DBStats      *dbstats.Service
 	Runs         *runs.Service
 	Search       *search.Service
 	Indexer      *search.Indexer
@@ -272,6 +282,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		cmStore        compaction.Store
 		dgStore        delegation.Store
 		seStore        search.Store
+		dsStore        dbstats.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -297,12 +308,17 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		cmStore = compmem.NewStore()
 		dgStore = delegationmem.New()
 		seStore = searchmem.New()
+		dsStore = dbstatsmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
 			return nil, err
 		}
 		if err := migrations.Up(ctx, pg.Pool); err != nil {
+			pg.Pool.Close()
+			return nil, err
+		}
+		if err := checkDatabaseRole(ctx, pg, opt); err != nil {
 			pg.Pool.Close()
 			return nil, err
 		}
@@ -337,6 +353,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		cmStore = &comppg.Store{DB: pg}
 		dgStore = &delegationpg.Store{DB: pg}
 		seStore = &searchpg.Store{DB: pg}
+		dsStore = &dbstatspg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -350,7 +367,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		fiStore = opt.FilesStore
 	}
 
-	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
 	cvSvc := &conversation.Service{Store: cvStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
 	auSvc := &audit.Service{Store: auStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
@@ -386,8 +403,11 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		gitProv = p
 	}
 	gitSvc := &git.Service{
-		Store:         giStore,
-		Provider:      gitProv,
+		Store:    giStore,
+		Provider: gitProv,
+		NewProvider: func(url, token, publicURL string) (provider.GitProvider, error) {
+			return provider.NewGitea(url, token, publicURL)
+		},
 		Conversation:  cvSvc,
 		Identity:      idSvc,
 		Clock:         opt.Clock,
@@ -524,7 +544,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	audhttp.Register(mux, auSvc, idSvc, idSvc)
 	hosthttp.Register(mux, hoSvc, idSvc)
 	// Host-level folder listing: the guard's own WebSocket (host token)
-	// carries host.fs.request frames; see docs/handoff/33-host-fs-relay-notes.md.
+	// carries host.fs.request frames; see round 33.
 	hostGw := &gateway.HostGateway{Auth: hoSvc, Logger: opt.Logger}
 	hostFs := &hosts.FsRelay{Hosts: hoSvc, Pusher: hostGw}
 	hosthttp.RegisterFs(mux, hoSvc, hostFs, idSvc)
@@ -570,13 +590,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		decmcp.Register(s, dcSvc, current, r)
 		leasesmcp.Register(s, lsSvc, current)
 		searchmcp.Register(s, seSvc, current)
+		hostsmcp.Register(s, hoSvc, idSvc, current)
 	}, func(ctx context.Context, actor identity.Actor) (string, error) {
 		text, err := rlSvc.InstructionsForActor(ctx, actor)
 		if err != nil || actor.Kind != identity.KindAgent {
 			return text, err
 		}
 		return text + searchmcp.Hint, nil
-	}, opt.Logger)
+	}, opt.Logger, opt.Multitenant)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		mux.Handle(method+" /mcp", mcpHandler)
 	}
@@ -636,12 +657,17 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	})))
 	registerOverview(mux, idSvc, cvSvc, hoSvc, ruSvc, ntSvc, lsSvc, qSvc, dlSvc, gw, opt.Clock)
 	registerAgents(mux, idSvc, agSvc)
-	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, Events: events,
+	dsSvc := &dbstats.Service{Store: dsStore, Clock: opt.Clock}
+	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, DBStats: dsSvc, Events: events,
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB), Search: seSvc})
 
+	handler := httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts)
+	if opt.Multitenant {
+		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler)
+	}
 	return &App{
-		Handler:      httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts),
+		Handler:      handler,
 		Identity:     idSvc,
 		Conversation: cvSvc,
 		Delivery:     dlSvc,
@@ -663,6 +689,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Sidebar:      sbSvc,
 		Compaction:   cmSvc,
 		Delegation:   dgSvc,
+		DBStats:      dsSvc,
 		Runs:         ruSvc,
 		Search:       seSvc,
 		Indexer:      seIdx,
@@ -680,6 +707,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 
 // Run starts the background consumers and blocks until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	// The background work is for every workspace; each loop and consumer
+	// narrows to one workspace per item it handles (round 45).
+	ctx = system.Context(ctx)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -736,6 +766,11 @@ func (a *App) Run(ctx context.Context) error {
 			}
 		}
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.maintenanceLoop(ctx, maintenanceInterval)
+	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)
 		go func() {
@@ -750,6 +785,7 @@ func (a *App) Run(ctx context.Context) error {
 // Drain runs every consumer until it has processed all current events.
 // Tests use it to make the asynchronous parts deterministic.
 func (a *App) Drain(ctx context.Context) error {
+	ctx = system.Context(ctx)
 	for pass := 0; pass < 10; pass++ {
 		var anyProcessed bool
 		for _, c := range a.Consumers {
@@ -783,6 +819,7 @@ const (
 // SeedDev creates a workspace with @norbi (owner), @fake-agent and #general,
 // unless the admin token already works.
 func (a *App) SeedDev(ctx context.Context) error {
+	ctx = system.Context(ctx) // creates the dev workspace and looks it up
 	if owner, err := a.Identity.Authenticate(ctx, DevAdminToken); err == nil {
 		// Already seeded; databases seeded before passwords existed get one now.
 		if _, err := a.Identity.Store.Credential(ctx, owner.ID); errors.Is(err, db.ErrNotFound) {
@@ -792,10 +829,11 @@ func (a *App) SeedDev(ctx context.Context) error {
 	} else if !errors.Is(err, identity.ErrUnauthorized) {
 		return err
 	}
-	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "norbi", "Norbi", DevAdminToken)
+	_, owner, _, err := a.Identity.Bootstrap(ctx, "colonyhall", "", "norbi", "Norbi", DevAdminToken)
 	if err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
+	ctx = db.WithWorkspace(ctx, owner.WorkspaceID) // the rest happens inside the new workspace
 	if err := a.Identity.ResetPassword(ctx, owner.ID, DevAdminPassword); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
@@ -810,4 +848,27 @@ func (a *App) SeedDev(ctx context.Context) error {
 		return fmt.Errorf("seed: %w", err)
 	}
 	return a.Conversation.AddMember(ctx, owner, ch.ID, agent.ID, true)
+}
+
+// checkDatabaseRole makes sure row-level security applies to the server's
+// database role (round 45): a superuser or a BYPASSRLS role skips it even
+// on forced tables. Multi-tenant mode refuses to start with such a role; a
+// single-team server only warns (installs from before round 45 connect as
+// the database superuser; docs/23-elkulonites.md, 6).
+func checkDatabaseRole(ctx context.Context, pg *db.Postgres, opt Options) error {
+	var role string
+	var super, bypass bool
+	err := pg.Pool.QueryRow(ctx, "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user").Scan(&role, &super, &bypass)
+	if err != nil {
+		return fmt.Errorf("db: read the role: %w", err)
+	}
+	if !super && !bypass {
+		return nil
+	}
+	if opt.Multitenant {
+		return fmt.Errorf("db: role %q bypasses row-level security (superuser or BYPASSRLS); multi-tenant mode needs a role without it (docs/23-elkulonites.md)", role)
+	}
+	opt.Logger.Warn("the database role bypasses row-level security; the workspace isolation in the database is off (docs/23-elkulonites.md)",
+		"role", role, "superuser", super, "bypassrls", bypass)
+	return nil
 }

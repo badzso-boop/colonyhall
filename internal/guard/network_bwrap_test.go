@@ -27,9 +27,13 @@ func TestSandboxNetwork_RealBwrap(t *testing.T) {
 		t.Skip("bwrap with --unshare-net is not available or working; skipping real bwrap network test")
 	}
 
-	// 1. Compile colony binary for the sandbox bridge
+	// 1. Compile colony binary for the sandbox bridge. The build gets its own
+	// deadline: with a cold build cache (new Go version, -race job) it alone
+	// can take longer than the sandbox checks below.
 	colonyBin := filepath.Join(t.TempDir(), "colony")
-	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", colonyBin, "colonyhall/cmd/colony")
+	buildCtx, buildCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer buildCancel()
+	buildCmd := exec.CommandContext(buildCtx, "go", "build", "-o", colonyBin, "colonyhall/cmd/colony")
 	if out, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build colony binary: %v\n%s", err, string(out))
 	}

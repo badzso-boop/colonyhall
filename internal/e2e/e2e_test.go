@@ -33,6 +33,16 @@ type env struct {
 	srv    *httptest.Server
 	router routers.Router
 	clock  *clock.Manual
+	// host is the Host header (multi-tenant tests, round 45); empty: the
+	// test server's own address.
+	host string
+}
+
+// on returns the env speaking to host (e.g. "acme.colonyhall.test").
+func (e *env) on(host string) *env {
+	c := *e
+	c.host = host
+	return &c
 }
 
 // specRouter loads api/openapi.yaml so every response in these tests is
@@ -56,8 +66,8 @@ func specRouter(t *testing.T, baseURL string) routers.Router {
 
 func newEnv(t *testing.T) *env { return newEnvWith(t, nil) }
 
-// newEnvWith lets a test adjust the server options (e.g. a fake embedder).
-func newEnvWith(t *testing.T, adjust func(*server.Options)) *env {
+// newEnvWith is newEnv with changed server options.
+func newEnvWith(t *testing.T, change func(*server.Options)) *env {
 	t.Helper()
 	ctx := context.Background()
 	clk := clock.NewManual(time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC))
@@ -66,8 +76,8 @@ func newEnvWith(t *testing.T, adjust func(*server.Options)) *env {
 		Clock: clk,
 		IDs:   &ids.Sequential{},
 	}
-	if adjust != nil {
-		adjust(&opt)
+	if change != nil {
+		change(&opt)
 	}
 	app, err := server.New(ctx, opt)
 	if err != nil {
@@ -88,6 +98,9 @@ func (e *env) do(method, path, token string, body any, out any) int {
 		_ = json.NewEncoder(&buf).Encode(body)
 	}
 	req, _ := http.NewRequest(method, e.srv.URL+path, &buf)
+	if e.host != "" {
+		req.Host = e.host
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := http.DefaultClient.Do(req)
@@ -298,7 +311,7 @@ func TestWorkspaceIsolation(t *testing.T) {
 	e := newEnv(t)
 	general := e.generalID()
 	const otherAdmin = "col_other_workspace_admin_token"
-	if _, _, _, err := e.app.Identity.Bootstrap(context.Background(), "other", "eve", "Eve", otherAdmin); err != nil {
+	if _, _, _, err := e.app.Identity.Bootstrap(context.Background(), "other", "", "eve", "Eve", otherAdmin); err != nil {
 		t.Fatal(err)
 	}
 	if s := e.do("GET", "/api/v1/channels/"+general+"/messages", otherAdmin, nil, nil); s != http.StatusForbidden {

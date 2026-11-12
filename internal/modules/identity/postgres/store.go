@@ -22,7 +22,12 @@ func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.D
 
 // CreateWorkspace inserts a workspace.
 func (s *Store) CreateWorkspace(ctx context.Context, w identity.Workspace) error {
-	return s.q(ctx).CreateWorkspace(ctx, sqlcgen.CreateWorkspaceParams{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt})
+	w = identity.WithDefaults(w)
+	err := s.q(ctx).CreateWorkspace(ctx, sqlcgen.CreateWorkspaceParams{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State})
+	if db.IsUniqueViolation(err) {
+		return db.ErrConflict
+	}
+	return err
 }
 
 // CreateActor inserts an actor.
@@ -248,7 +253,7 @@ func (s *Store) RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID
 }
 
 func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
-	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, EmergencyStopAt: w.EmergencyStopAt}
+	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State, EmergencyStopAt: w.EmergencyStopAt}
 	if w.EmergencyStopBy != nil {
 		out.EmergencyStopBy = *w.EmergencyStopBy
 	}
@@ -366,4 +371,104 @@ func (s *Store) SetActorRole(ctx context.Context, id ids.ID, role identity.Role)
 // SetActorOwner sets or clears an agent's owner.
 func (s *Store) SetActorOwner(ctx context.Context, id, ownerID ids.ID) error {
 	return s.q(ctx).SetActorOwner(ctx, sqlcgen.SetActorOwnerParams{ID: id, OwnerID: nullID(ownerID)})
+}
+
+// deleteBatch is how many rows one cleanup statement removes, so a first
+// sweep over thousands of rows never holds its locks for long.
+const deleteBatch = 1000
+
+// DeleteExpiredHostTokens deletes ended guard tokens, one batch per statement.
+func (s *Store) DeleteExpiredHostTokens(ctx context.Context, before time.Time) (int64, error) {
+	return deleteInBatches(func() (int64, error) {
+		return s.q(ctx).DeleteExpiredHostTokens(ctx, sqlcgen.DeleteExpiredHostTokensParams{Before: before, Batch: deleteBatch})
+	})
+}
+
+// DeleteEndedSessions deletes ended sessions, one batch per statement.
+func (s *Store) DeleteEndedSessions(ctx context.Context, before time.Time) (int64, error) {
+	return deleteInBatches(func() (int64, error) {
+		return s.q(ctx).DeleteEndedSessions(ctx, sqlcgen.DeleteEndedSessionsParams{Before: before, Batch: deleteBatch})
+	})
+}
+
+func deleteInBatches(step func() (int64, error)) (int64, error) {
+	var total int64
+	for {
+		n, err := step()
+		total += n
+		if err != nil || n < deleteBatch {
+			return total, err
+		}
+	}
+}
+
+// WorkspaceBySlug loads a workspace by its subdomain name.
+func (s *Store) WorkspaceBySlug(ctx context.Context, slug string) (identity.Workspace, error) {
+	w, err := s.q(ctx).WorkspaceBySlugAnywhere(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Workspace{}, db.ErrNotFound
+	}
+	return identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State}, err
+}
+
+// WorkspaceOfToken finds the workspace of a token, in any scope.
+func (s *Store) WorkspaceOfToken(ctx context.Context, hash []byte) (ids.ID, error) {
+	return lookup(s.q(ctx).WorkspaceOfToken(ctx, hash))
+}
+
+// WorkspaceOfSession finds the workspace of a session, in any scope.
+func (s *Store) WorkspaceOfSession(ctx context.Context, hash []byte) (ids.ID, error) {
+	return lookup(s.q(ctx).WorkspaceOfSession(ctx, hash))
+}
+
+// HandleWorkspaces lists the workspaces that have the handle, in any scope.
+func (s *Store) HandleWorkspaces(ctx context.Context, handle string) ([]identity.Workspace, error) {
+	rows, err := s.q(ctx).HandleWorkspaces(ctx, handle)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]identity.Workspace, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, identity.Workspace{ID: r.ID, Name: r.Name})
+	}
+	return out, nil
+}
+
+func lookup(id ids.ID, err error) (ids.ID, error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ids.Nil, db.ErrNotFound
+	}
+	return id, err
+}
+
+// SetWorkspaceSlug renames a workspace's subdomain.
+func (s *Store) SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error {
+	n, err := s.q(ctx).SetWorkspaceSlug(ctx, sqlcgen.SetWorkspaceSlugParams{ID: id, Slug: slug})
+	switch {
+	case db.IsUniqueViolation(err):
+		return db.ErrConflict
+	case err != nil:
+		return err
+	case n == 0:
+		return db.ErrNotFound
+	}
+	return nil
+}
+
+// RevokeTokenByHash revokes a token by its hash and returns it.
+func (s *Store) RevokeTokenByHash(ctx context.Context, hash []byte, at time.Time) (identity.Token, error) {
+	t, err := s.q(ctx).RevokeTokenByHash(ctx, sqlcgen.RevokeTokenByHashParams{At: at, TokenHash: hash})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Token{}, db.ErrNotFound
+	}
+	return toToken(t), err
+}
+
+// SetWorkspaceState suspends or reactivates a workspace.
+func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state string) error {
+	n, err := s.q(ctx).SetWorkspaceState(ctx, sqlcgen.SetWorkspaceStateParams{ID: id, State: state})
+	if err == nil && n == 0 {
+		return db.ErrNotFound
+	}
+	return err
 }

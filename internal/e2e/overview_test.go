@@ -37,7 +37,7 @@ func TestOverviewE2E(t *testing.T) {
 
 	// 3. Another workspace's agent returns 404
 	const otherAdmin = "col_other_workspace_admin_token"
-	if _, _, _, err := e.app.Identity.Bootstrap(context.Background(), "other", "eve", "Eve", otherAdmin); err != nil {
+	if _, _, _, err := e.app.Identity.Bootstrap(context.Background(), "other", "", "eve", "Eve", otherAdmin); err != nil {
 		t.Fatal(err)
 	}
 	var meEve struct{ Id openapi_types.UUID }

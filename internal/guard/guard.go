@@ -96,6 +96,12 @@ type Agent struct {
 	FileFetchLimiter chan struct{}
 
 	Terminals *TerminalManager
+	// CodeGraph is the machine's CodeGraph (round 39); nil when it is not
+	// installed or switched off.
+	CodeGraph *CodeGraph
+	// CodeGraphIndexWrap is the indexer's sandbox for this agent's
+	// repositories when the agent is sandboxed.
+	CodeGraphIndexWrap IndexWrap
 
 	ClaudeLimiter         *ClaudeLimiter
 	notedRateLimitThreads map[string]bool
@@ -640,6 +646,13 @@ type WorkPolicy struct {
 	AgentDir     string
 	AllowWebRead bool
 	AllowPlanner bool
+	// CodeGraph: the run gets the CodeGraph MCP server (round 39; a
+	// sandboxed run through Wrap's own client config). IndexRepos are the
+	// folders to index or sync (only git repository roots are), with
+	// IndexWrap as the indexer's sandbox for a sandboxed agent.
+	CodeGraph  bool
+	IndexRepos []string
+	IndexWrap  IndexWrap
 }
 
 func (a *Agent) policy() WorkPolicy {
@@ -777,8 +790,8 @@ type activityEntry struct {
 }
 
 func (a *Agent) activityTarget(it Item) (string, string) {
-	if it.ReplyOrigin != nil && it.ReplyOrigin.ChannelID != "" {
-		return it.ReplyOrigin.ChannelID, it.ReplyOrigin.ThreadRootID
+	if r := it.Route(); r != nil && r.ChannelID != "" {
+		return r.ChannelID, r.ThreadRootID
 	}
 	chID := it.ChannelID
 	thID := it.ThreadRootID
@@ -926,9 +939,30 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				defer func() { _ = plannerSrv.Close() }()
 			}
 		}
-		if (p.AllowWebRead || allowPlanner) && p.AgentDir != "" {
+		codeGraph := p.CodeGraph && a.CodeGraph != nil
+		if codeGraph && p.Wrap == nil && a.Cfg.Client != "claude-code" {
+			codeGraph = false // agy has no MCP config flag; an unsandboxed run uses the user's own
+		}
+		if codeGraph {
+			for _, r := range p.IndexRepos {
+				a.CodeGraph.Ensure(r, p.IndexWrap)
+			}
+		}
+		if (p.AllowWebRead || allowPlanner || (codeGraph && p.Wrap != nil)) && p.AgentDir != "" {
 			mcpConfigPath = filepath.Join(p.AgentDir+".config", "claude", "mcp.json")
 		}
+		if codeGraph && p.Wrap == nil {
+			// An unsandboxed work run: a config of its own with CodeGraph only.
+			path, cleanup, err := writeServersConfig(a.StateDir, map[string]mcpServerDoc{"codegraph": a.CodeGraph.ClaudeServer()})
+			if err != nil {
+				a.Log.Warn("guard: codegraph mcp config", "agent", a.logName(), "err", err)
+				codeGraph = false
+			} else {
+				mcpConfigPath = path
+				defer cleanup()
+			}
+		}
+		rulesText = WithCodeGraphHint(rulesText, codeGraph)
 		runKey := uuid.New().String()
 		pr := newProgressReporter(a.Client, it.ChannelID, it.ThreadRootID, runKey, a.Log)
 		origOnStep := pr.OnStep
@@ -949,6 +983,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			NoExec:         p.NoExec,
 			AllowWebRead:   p.AllowWebRead,
 			AllowPlanner:   allowPlanner,
+			CodeGraph:      codeGraph,
 			MCPConfigPath:  mcpConfigPath,
 			Rules:          rulesText,
 			RulesVersion:   rulesVer,
@@ -1513,9 +1548,9 @@ func (a *Agent) postNotesOnce(ctx context.Context, items []Item, noted map[strin
 	for _, it := range items {
 		targetChannelID := it.ChannelID
 		targetThreadID := it.ThreadRootID
-		if it.ReplyOrigin != nil {
-			targetChannelID = it.ReplyOrigin.ChannelID
-			targetThreadID = it.ReplyOrigin.ThreadRootID
+		if r := it.Route(); r != nil {
+			targetChannelID = r.ChannelID
+			targetThreadID = r.ThreadRootID
 		} else if targetThreadID == "" && !it.DM {
 			targetThreadID = it.ItemID
 			if targetThreadID == "" {

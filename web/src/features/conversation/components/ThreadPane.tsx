@@ -16,7 +16,7 @@ import { Composer } from "./Composer";
 import { DropZone } from "./DropZone";
 import { MessageItem } from "./MessageItem";
 
-/** The thread pane (docs/handoff/31, part 5): the root, its replies, a composer of its own. */
+/** The thread pane (round 31, part 5): the root, its replies, a composer of its own. */
 export function ThreadPane({ rootId }: { rootId: string }) {
   const { t, i18n } = useTranslation("conversation");
   const locale = localeOf(i18n.language);

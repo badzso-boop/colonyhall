@@ -20,6 +20,7 @@ type mockStore struct {
 	links        map[string]LinkCard
 	repoChannels map[string]RepoChannel
 	deliveries   map[string]time.Time
+	giteas       map[ids.ID]WorkspaceGitea
 }
 
 func newMockStore() *mockStore {
@@ -27,21 +28,22 @@ func newMockStore() *mockStore {
 		links:        make(map[string]LinkCard),
 		repoChannels: make(map[string]RepoChannel),
 		deliveries:   make(map[string]time.Time),
+		giteas:       make(map[ids.ID]WorkspaceGitea),
 	}
 }
 
-func (m *mockStore) GetLink(_ context.Context, url string) (LinkCard, error) {
-	card, ok := m.links[url]
+func (m *mockStore) GetLink(_ context.Context, ws ids.ID, url string) (LinkCard, error) {
+	card, ok := m.links[ws.String()+url]
 	if !ok {
 		return LinkCard{}, ErrLinkNotFound
 	}
 	return card, nil
 }
 
-func (m *mockStore) GetLinks(_ context.Context, urls []string) ([]LinkCard, error) {
+func (m *mockStore) GetLinks(_ context.Context, ws ids.ID, urls []string) ([]LinkCard, error) {
 	var out []LinkCard
 	for _, u := range urls {
-		if c, ok := m.links[u]; ok {
+		if c, ok := m.links[ws.String()+u]; ok {
 			out = append(out, c)
 		}
 	}
@@ -49,7 +51,7 @@ func (m *mockStore) GetLinks(_ context.Context, urls []string) ([]LinkCard, erro
 }
 
 func (m *mockStore) SaveLink(_ context.Context, card LinkCard) error {
-	m.links[card.URL] = card
+	m.links[card.WorkspaceID.String()+card.URL] = card
 	return nil
 }
 
@@ -88,6 +90,22 @@ func (m *mockStore) SetRepoChannel(_ context.Context, mapping RepoChannel) error
 
 func (m *mockStore) DeleteRepoChannel(_ context.Context, workspaceID ids.ID, repo string) error {
 	delete(m.repoChannels, workspaceID.String()+":"+repo)
+	return nil
+}
+
+func (m *mockStore) GetWorkspaceGitea(_ context.Context, ws ids.ID) (WorkspaceGitea, error) {
+	c, ok := m.giteas[ws]
+	if !ok {
+		return WorkspaceGitea{}, ErrNoOwnGitea
+	}
+	return c, nil
+}
+
+func (m *mockStore) SetWorkspaceGitea(_ context.Context, c WorkspaceGitea) error {
+	if m.giteas == nil {
+		m.giteas = map[ids.ID]WorkspaceGitea{}
+	}
+	m.giteas[c.WorkspaceID] = c
 	return nil
 }
 
@@ -251,7 +269,7 @@ func TestService_HandleEvent_Unfurl(t *testing.T) {
 		t.Fatalf("fetchCount = %d, want 1", fetchCount)
 	}
 
-	card, err := st.GetLink(ctx, "https://gitea.local/owner/repo/pulls/1")
+	card, err := st.GetLink(ctx, ids.Nil, "https://gitea.local/owner/repo/pulls/1")
 	if err != nil {
 		t.Fatalf("GetLink: %v", err)
 	}

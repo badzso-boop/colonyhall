@@ -199,7 +199,7 @@ func (a *Agent) checkAndCommitWorktree(ctx context.Context, it PromptItem, task,
 			filePath = filePath[idx+4:]
 		}
 		filePath = strings.Trim(filePath, "\"")
-		if filePath != "" {
+		if filePath != "" && !isCodeGraphPath(filePath) {
 			changedFiles = append(changedFiles, filePath)
 		}
 	}
@@ -266,7 +266,7 @@ func (a *Agent) checkAndCommitWorktree(ctx context.Context, it PromptItem, task,
 	}
 
 	// 3. git add -A
-	if _, err := SandboxedGitExec(ctx, a.WorktreeRepo, worktreeDir, handle, "add", "-A"); err != nil {
+	if _, err := SandboxedGitExec(ctx, a.WorktreeRepo, worktreeDir, handle, append([]string{"add", "-A", "--"}, commitPathspec...)...); err != nil {
 		a.Log.Warn("guard: git add failed", "agent", a.logName(), "err", err)
 		return "⚠️ Commit failed: git add failed; changes left uncommitted in the worktree."
 	}
@@ -302,6 +302,23 @@ func (a *Agent) checkAndCommitWorktree(ctx context.Context, it PromptItem, task,
 		branch = "colony/" + handle + "/work"
 	}
 	return fmt.Sprintf("🌿 commit %s on %s (%d files)", sha, branch, len(changedFiles))
+}
+
+// commitPathspec is what the guard commits after a sandboxed run: the whole
+// worktree except CodeGraph's index folders (round 39). Their own .gitignore
+// and the repository's exclude rule keep them out already; this holds even
+// if the agent rewrote that .gitignore, so a 50 MB index is never committed.
+var commitPathspec = []string{".", ":(exclude,glob)**/.codegraph*/**", ":(exclude,glob)**/.codegraph*"}
+
+// isCodeGraphPath reports whether a worktree-relative path is in (or is) a
+// CodeGraph index folder.
+func isCodeGraphPath(rel string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		if strings.HasPrefix(part, codeGraphIndexDir) {
+			return true
+		}
+	}
+	return false
 }
 
 // clipSubject shortens s to at most maxRunes, flattening newlines and whitespace.

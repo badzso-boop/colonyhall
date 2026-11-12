@@ -10,6 +10,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"colonyhall/internal/modules/hosts"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -79,6 +80,7 @@ func (g *HostGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "unauthorized")
 		return
 	}
+	ctx = db.WithWorkspace(ctx, host.WorkspaceID)
 	conn := &hostConn{ws: c, hostID: host.ID}
 	if err := conn.write(ctx, map[string]any{"type": "welcome", "protocol": Protocol, "host_id": host.ID.String()}); err != nil {
 		return

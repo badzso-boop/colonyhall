@@ -68,7 +68,7 @@ function RetractConfirm({ messageId, onDone }: { messageId: string; onDone: () =
   );
 }
 
-/** One message (docs/handoff/31, part 5; the elements of round 34, part 6). */
+/** One message (round 31, part 5; the elements of round 34, part 6). */
 export const MessageItem = memo(function MessageItem({ message: m, actors, handles, viewer, locale, summary, onOpenThread, onMention, onFileClick, onOpenTerminal }: Props) {
   const { t } = useTranslation("conversation");
   const [expanded, setExpanded] = useState(false);

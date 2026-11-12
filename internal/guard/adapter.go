@@ -47,11 +47,14 @@ type WorkRequest struct {
 	// write their granted folders but not run commands.
 	NoExec bool
 	// Wrap, when set, wraps the client command (the bwrap sandbox).
-	Wrap          Wrapper
-	Rules         string
-	RulesVersion  int
-	AllowWebRead  bool
-	AllowPlanner  bool
+	Wrap         Wrapper
+	Rules        string
+	RulesVersion int
+	AllowWebRead bool
+	AllowPlanner bool
+	// CodeGraph: the MCP config names the codegraph server (round 39);
+	// its tools are allowed.
+	CodeGraph     bool
 	MCPConfigPath string
 	OnStep        func(Step)
 	OnActivity    func()
@@ -74,7 +77,10 @@ type DirectRequest struct {
 	// permission rules that leave it no command tool and allow writes only
 	// to Markdown in Dir; PermissionMode and PermissionPromptTool are
 	// ignored (see ClaudeCode.docsOnlyArgs).
-	DocsOnly     bool
+	DocsOnly bool
+	// CodeGraph: the MCP config names the codegraph server (round 39);
+	// its tools are allowed, the docs-only planner's too.
+	CodeGraph    bool
 	Env          []string
 	AddDirs      []string
 	Rules        string

@@ -2907,6 +2907,25 @@ export interface components {
             /** @description Seen in the last 90 seconds. */
             online: boolean;
         };
+        StatusTableSize: {
+            name: string;
+            /**
+             * Format: int64
+             * @description With indexes and TOAST.
+             */
+            total_bytes: number;
+            /**
+             * Format: int64
+             * @description The planner's estimate (pg_class.reltuples), not count(*).
+             */
+            rows_estimate: number;
+        };
+        StatusSizeSample: {
+            /** Format: date */
+            date: string;
+            /** Format: int64 */
+            size_bytes: number;
+        };
         SystemStatus: {
             version: string;
             /** Format: int64 */
@@ -2915,6 +2934,15 @@ export interface components {
                 ok: boolean;
                 /** Format: double */
                 latency_ms: number;
+                /**
+                 * Format: int64
+                 * @description The whole database (pg_database_size); absent on the memory store.
+                 */
+                size_bytes?: number;
+                /** @description The 10 largest tables, biggest first; absent on the memory store. */
+                tables?: components["schemas"]["StatusTableSize"][];
+                /** @description One sample of size_bytes a day (UTC) for the last 90 days, oldest first; absent on the memory store. */
+                growth?: components["schemas"]["StatusSizeSample"][];
             };
             /** Format: int64 */
             event_head: number;
@@ -3302,6 +3330,8 @@ export interface components {
             /** @description Whether this delegated item was delivered via an active delegation grant */
             via_grant?: boolean;
             reply_origin?: components["schemas"]["ReplyOrigin"];
+            /** @description A request another agent sent from a thread the recipient may write in (request_message_id is the request itself): the guard handles it in that thread's session and answers there. */
+            request_origin?: components["schemas"]["ReplyOrigin"];
         };
         ReplyOrigin: {
             /** Format: uuid */
@@ -3599,6 +3629,7 @@ export interface components {
             doctor?: components["schemas"]["DoctorCheck"][];
             /** Format: date-time */
             doctor_checked_at?: string;
+            codegraph?: components["schemas"]["CodegraphReport"];
             /** @description Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA */
             claude_login_configured?: boolean;
             /**
@@ -4555,6 +4586,26 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
+            detail?: string;
+        };
+        /** @description Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml. */
+        CodegraphReport: {
+            version: string;
+            /** @description The indexed (or tried) repositories, most recent first. */
+            repos: components["schemas"]["CodegraphRepo"][];
+        };
+        CodegraphRepo: {
+            path: string;
+            /** @enum {string} */
+            status: "indexed" | "failed" | "skipped";
+            /** @description Files in the repository (git ls-files), counted before indexing */
+            files?: number;
+            /**
+             * Format: date-time
+             * @description The last successful index or sync
+             */
+            indexed_at?: string;
+            /** @description Why it failed or was skipped */
             detail?: string;
         };
         SetClaudeLoginRequest: {

@@ -15,7 +15,7 @@ import { ProfileTrigger } from "./ProfilePopover";
 type Props = { channel: Channel; actors: Map<string, Actor>; admin: boolean; tab: ChannelTab; onTab: (t: ChannelTab) => void; onClose: () => void };
 
 /**
- * A channel's settings (docs/handoff/34, 1.3), the large Dialog of round 33.
+ * A channel's settings (round 34, 1.3), the large Dialog of round 33.
  * Admins edit; everyone else gets the read-only "Csatorna adatai".
  */
 export function ChannelSettingsDialog({ channel, actors, admin, tab, onTab, onClose }: Props) {

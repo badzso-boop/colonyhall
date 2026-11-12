@@ -10,7 +10,7 @@ func TestFlags(t *testing.T) {
 		"aws":         "key AKIAIOSFODNN7EXAMPLE here",
 		"private key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk=",
 		"jwt":         "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
-		"url":         "postgres://colonyhall_app:Xy7Pq2Lm9Rt4@100.85.111.88:5432/colonyhall",
+		"url":         "postgres://colonyhall_app:Xy7Pq2Lm9Rt4@100.64.0.20:5432/colonyhall",
 		"assigned":    "COLONY_GITEA_WEBHOOK_SECRET=9f86d081884c7d659a2feaa0c55ad015",
 		"password":    `"password": "Tr0ub4dor3xyzQ"`,
 	} {
@@ -30,7 +30,7 @@ func TestDoesNotFlagOrdinaryText(t *testing.T) {
 		"func parseAgyReset(s string) (time.Time, error)",
 		"max_concurrent_runs: 2",
 		"sk-learn is a library",
-		"https://gitea.ujjweb.hu/norbert/colonyhall/pulls/12",
+		"https://gitea.example.com/alice/colonyhall/pulls/12",
 	} {
 		if r := Find(s); r != "" {
 			t.Errorf("flagged by %s: %q", r, s)

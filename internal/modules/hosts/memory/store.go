@@ -258,3 +258,26 @@ func (s *Store) RevokeGrantsForAgent(_ context.Context, agentID ids.ID, at time.
 	}
 	return nil
 }
+
+// WorkspaceOfHostToken finds the workspace of a host token.
+func (s *Store) WorkspaceOfHostToken(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, h := range s.hosts {
+		if bytes.Equal(h.TokenHash, hash) {
+			return h.WorkspaceID, nil
+		}
+	}
+	return ids.Nil, db.ErrNotFound
+}
+
+// WorkspaceOfPairingCode finds the workspace of a pairing code.
+func (s *Store) WorkspaceOfPairingCode(_ context.Context, hash []byte) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.codes[string(hash)]
+	if !ok {
+		return ids.Nil, db.ErrNotFound
+	}
+	return c.WorkspaceID, nil
+}

@@ -1,7 +1,7 @@
 import type { Schemas } from "@/shared/api";
 import { fuzzyScore } from "@/shared/lib";
 
-// The agent directory (docs/handoff/33, part 4): one row per agent with its
+// The agent directory (round 33, part 4): one row per agent with its
 // machine configuration, searched, filtered and grouped on the client.
 
 export type Actor = Schemas["Actor"];

@@ -65,7 +65,7 @@ WantedBy=multi-user.target
 sudo apt install -y ufw
 sudo ufw default deny incoming
 sudo ufw allow from 192.168.1.0/24 to any port 22 proto tcp
-sudo ufw allow from 192.168.1.101 to any port 8090 proto tcp   # homelab (szmajli)
+sudo ufw allow from 192.0.2.10 to any port 8090 proto tcp   # homelab
 sudo ufw enable
 ```
 

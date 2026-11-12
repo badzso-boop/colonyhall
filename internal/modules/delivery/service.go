@@ -478,6 +478,9 @@ func (s *Service) Inbox(ctx context.Context, by identity.Actor, limit int) ([]In
 
 			if by.Kind == identity.KindAgent && (d.ItemKind == ItemMessage || d.ItemKind == ItemDelegated) {
 				item.ReplyOrigin = s.replyOrigin(ctx, by, d, m, getChannel)
+				if item.ReplyOrigin == nil {
+					item.RequestOrigin = s.requestOrigin(ctx, by, m, getChannel)
+				}
 			}
 		}
 		if d.FromActorID != ids.Nil {
@@ -615,6 +618,38 @@ func (s *Service) CreateTerminalEvent(ctx context.Context, by identity.Actor, na
 	}
 	_, err := s.Store.Insert(ctx, d)
 	return err
+}
+
+// requestOrigin is the thread another agent's request m was sent from, when
+// both by and the requester may write there: by then answers in that thread, where the people who
+// asked see it, and its session there knows about the request. A thread by
+// cannot write in (or an archived or locked channel) keeps the request a
+// plain DM item, and reveals nothing about that thread.
+func (s *Service) requestOrigin(ctx context.Context, by identity.Actor, m conversation.Message, getChannel func(ids.ID) (conversation.Channel, error)) *ReplyOrigin {
+	if m.AuthorID == by.ID || m.OriginChannelID == ids.Nil || m.OriginThreadID == ids.Nil || m.DeletedAt != nil {
+		return nil
+	}
+	if ok, err := s.Conversation.CanWrite(ctx, by, m.OriginChannelID); err != nil || !ok {
+		return nil
+	}
+	// The requester must be able to write there too: otherwise a read-only
+	// member could get its words answered into a channel it cannot post in.
+	author, err := s.Directory.ActorByID(ctx, m.AuthorID)
+	if err != nil {
+		return nil
+	}
+	if ok, err := s.Conversation.CanWrite(ctx, author, m.OriginChannelID); err != nil || !ok {
+		return nil
+	}
+	root, err := s.Conversation.MessageByID(ctx, m.OriginThreadID)
+	if err != nil || root.DeletedAt != nil || root.ChannelID != m.OriginChannelID {
+		return nil
+	}
+	ch, err := getChannel(m.OriginChannelID)
+	if err != nil || ch.Archived() || ch.AgentLocked() {
+		return nil
+	}
+	return &ReplyOrigin{ChannelID: m.OriginChannelID, Channel: ch.Name, ThreadRootID: m.OriginThreadID, RequestMessageID: m.ID}
 }
 
 // ReplyOriginWindow bounds how long a top-level DM message still counts as

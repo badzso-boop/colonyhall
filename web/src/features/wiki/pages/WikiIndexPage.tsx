@@ -21,7 +21,7 @@ function sortTopics(list: WikiIndex[], by: Sort): WikiIndex[] {
   return out.sort((a, b) => b[key].localeCompare(a[key]));
 }
 
-/** Wiki index as a forum (docs/handoff/32, part 7): tags as categories, topic rows, sort, search. */
+/** Wiki index as a forum (round 32, part 7): tags as categories, topic rows, sort, search. */
 export default function WikiIndexPage() {
   const { t, i18n } = useTranslation("wiki");
   const locale = localeOf(i18n.language);

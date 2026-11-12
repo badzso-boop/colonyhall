@@ -39,6 +39,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 )
 
@@ -480,7 +481,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// request (the origin check below blocks cross-site use of it); agents
 	// and scripts send a token in the hello frame instead.
 	var cookie string
-	if c, err := r.Cookie(httpx.SessionCookie); err == nil {
+	if c, err := r.Cookie(httpx.SessionCookieName(r)); err == nil {
 		cookie = c.Value
 	}
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: g.OriginPatterns})
@@ -517,6 +518,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, "unauthorized")
 		return
 	}
+	ctx = db.WithWorkspace(ctx, actor.WorkspaceID)
 
 	signals, unsubscribe := g.Bus.Subscribe()
 	defer unsubscribe()

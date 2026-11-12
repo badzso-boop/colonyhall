@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"colonyhall/internal/eventlog"
@@ -11,6 +12,7 @@ import (
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/tenant"
 )
 
 // Service holds the identity use cases.
@@ -21,6 +23,10 @@ type Service struct {
 	Tx     db.TxRunner
 	IDs    ids.Generator
 	Clock  clock.Clock
+	// Logger receives the security log (round 45); nil: slog.Default.
+	Logger *slog.Logger
+
+	wsCache workspaceCache
 
 	// HostColors maps assigned agents to their machine's colour, for
 	// Actor.EffectiveColor (wired to the hosts module; nil: none).
@@ -56,12 +62,21 @@ type NewActorInput struct {
 }
 
 // Bootstrap creates a workspace and its owner. It returns the owner's token.
-func (s *Service) Bootstrap(ctx context.Context, workspaceName, ownerHandle, ownerName, ownerSecret string) (Workspace, Actor, string, error) {
-	ws := Workspace{ID: s.IDs.New(), Name: workspaceName, CreatedAt: s.Clock.Now()}
+func (s *Service) Bootstrap(ctx context.Context, workspaceName, slug, ownerHandle, ownerName, ownerSecret string) (Workspace, Actor, string, error) {
+	ws := Workspace{ID: s.IDs.New(), Name: workspaceName, CreatedAt: s.Clock.Now(), State: WorkspaceActive}
+	switch {
+	case slug == "":
+		ws.Slug = SlugFromName(workspaceName, ws.ID)
+	case !ValidSlug(slug):
+		return Workspace{}, Actor{}, "", ErrInvalidSlug
+	default:
+		ws.Slug = slug
+	}
 	var owner Actor
 	var secret string
 	var seq int64
-	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+	// Everything here belongs to the new workspace (round 45).
+	err := s.Tx.InTx(db.WithWorkspace(ctx, ws.ID), func(ctx context.Context) error {
 		if err := s.Store.CreateWorkspace(ctx, ws); err != nil {
 			return err
 		}
@@ -232,6 +247,10 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if secret == "" {
 		return Actor{}, ErrUnauthorized
 	}
+	ctx, err := s.credentialScope(ctx, credToken, s.Store.WorkspaceOfToken, HashSecret(secret))
+	if err != nil {
+		return Actor{}, err
+	}
 	a, err := s.Store.ActorByTokenHash(ctx, HashSecret(secret), s.Clock.Now())
 	if errors.Is(err, db.ErrNotFound) {
 		return Actor{}, ErrUnauthorized
@@ -310,4 +329,93 @@ func (s *Service) Admins(ctx context.Context, workspaceID ids.ID) ([]Actor, erro
 // WorkspaceByID implements Directory.
 func (s *Service) WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error) {
 	return s.Store.WorkspaceByID(ctx, id)
+}
+
+// SetWorkspaceSlug gives the named workspace a new subdomain name (the
+// set-slug command; no actor, it runs on the server).
+func (s *Service) SetWorkspaceSlug(ctx context.Context, workspaceName, slug string) (Workspace, error) {
+	if !ValidSlug(slug) {
+		return Workspace{}, ErrInvalidSlug
+	}
+	ws, err := s.Store.WorkspaceByName(ctx, workspaceName)
+	if err != nil {
+		return Workspace{}, err
+	}
+	if err := s.Store.SetWorkspaceSlug(ctx, ws.ID, slug); err != nil {
+		return Workspace{}, err
+	}
+	ws.Slug = slug
+	return ws, nil
+}
+
+// Credential kinds for credentialScope and EventCrossTenant.
+const (
+	credToken   = "token"
+	credSession = "session"
+)
+
+// credentialScope finds the workspace a token or session belongs to and
+// narrows ctx to it, before anything else is read (round 45): with
+// row-level security, the credential's own rows are only visible there.
+// In multi-tenant mode a credential of another workspace than the
+// subdomain's is a leaked secret: it is revoked, recorded in its own
+// workspace's audit log and logged as an error, and the caller gets the
+// same answer as for an unknown credential.
+func (s *Service) credentialScope(ctx context.Context, kind string, find func(context.Context, []byte) (ids.ID, error), hash []byte) (context.Context, error) {
+	ws, cached := s.wsCache.get(kind, hash)
+	if !cached {
+		var err error
+		if ws, err = find(ctx, hash); errors.Is(err, db.ErrNotFound) {
+			return ctx, ErrUnauthorized
+		} else if err != nil {
+			return ctx, err
+		}
+		s.wsCache.put(kind, hash, ws)
+	}
+	if t, ok := tenant.From(ctx); ok && t.Workspace != ws {
+		s.crossTenant(db.WithWorkspace(ctx, ws), ws, t, kind, hash)
+		return ctx, ErrUnauthorized
+	}
+	return db.WithWorkspace(ctx, ws), nil
+}
+
+// crossTenant revokes a credential used on another workspace's subdomain
+// and records it; ctx is narrowed to the credential's workspace. Failures
+// are logged: the request is refused either way.
+func (s *Service) crossTenant(ctx context.Context, ws ids.ID, t tenant.Request, kind string, hash []byte) {
+	now := s.Clock.Now()
+	use := CrossTenantUse{Credential: kind, UsedOn: t.Slug, RemoteAddr: t.RemoteAddr}
+	var actorID ids.ID
+	var err error
+	switch kind {
+	case credToken:
+		var tok Token
+		if tok, err = s.Store.RevokeTokenByHash(ctx, hash, now); err == nil {
+			actorID, use.Prefix = tok.ActorID, tok.Prefix
+		}
+	case credSession:
+		var sess Session
+		if sess, _, err = s.Store.SessionByTokenHash(ctx, hash); err == nil {
+			actorID = sess.ActorID
+			err = s.Store.RevokeSession(ctx, sess.ID, now)
+		}
+	}
+	use.ActorID = actorID.String()
+	s.logger().Error("SECURITY: cross-tenant credential use; the credential is revoked",
+		"credential", kind, "prefix", use.Prefix, "actor_id", actorID, "credential_workspace", ws,
+		"request_workspace", t.Workspace, "subdomain", t.Slug, "remote_addr", t.RemoteAddr, "user_agent", t.UserAgent)
+	if err != nil {
+		s.logger().Error("cross-tenant: revoking the credential failed", "credential", kind, "err", err)
+	}
+	by := Actor{ID: actorID, WorkspaceID: ws}
+	if err := s.record(ctx, by, EventCrossTenant, "actor", actorID, use, func(context.Context) error { return nil }); err != nil {
+		s.logger().Error("cross-tenant: recording the audit event failed", "err", err)
+	}
+}
+
+func (s *Service) logger() *slog.Logger {
+	if s.Logger != nil {
+		return s.Logger
+	}
+	return slog.Default()
 }

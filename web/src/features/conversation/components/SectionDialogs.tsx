@@ -83,7 +83,7 @@ const DEFAULT = "__default__";
 
 /**
  * "Áthelyezés…": the keyboard and phone alternative of dragging a row
- * (docs/handoff/34, part 2). A section, the default group, or a new section.
+ * (round 34, part 2). A section, the default group, or a new section.
  */
 export function MoveDialog({ channelId, title, sections, from, onClose }: { channelId: string; title: string; sections: Section[]; from: string | null; onClose: () => void }) {
   const { t } = useTranslation("conversation");

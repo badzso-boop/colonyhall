@@ -79,6 +79,8 @@ type Report struct {
 	// was set. Never the token.
 	ClaudeLoginConfigured bool       `json:"claude_login_configured,omitempty"`
 	ClaudeLoginSetAt      *time.Time `json:"claude_login_set_at,omitempty"`
+	// Round 39: CodeGraph's version and the repositories the guard indexed.
+	Codegraph *apispec.CodegraphReport `json:"codegraph,omitempty"`
 	// Round 41: the guard's doctor checks.
 	Doctor          []apispec.DoctorCheck   `json:"doctor,omitempty"`
 	DoctorCheckedAt *time.Time              `json:"doctor_checked_at,omitempty"`

@@ -5,7 +5,21 @@ const (
 	EventActorCreated        = "actor.created"
 	EventActorProfileUpdated = "actor.profile_updated"
 	EventActorArchived       = "actor.archived"
+	// EventCrossTenant: a credential was used on another workspace's
+	// subdomain and has been revoked (round 45). Recorded in the
+	// credential's own workspace, so its admins see it in the audit log.
+	EventCrossTenant = "auth.cross_tenant"
 )
+
+// CrossTenantUse is the payload of EventCrossTenant. No secret: only the
+// credential's kind and visible prefix and where it was used.
+type CrossTenantUse struct {
+	Credential string `json:"credential"` // "token", "session" or "host"
+	Prefix     string `json:"prefix,omitempty"`
+	ActorID    string `json:"actor_id,omitempty"`
+	UsedOn     string `json:"used_on"` // the other workspace's subdomain
+	RemoteAddr string `json:"remote_addr,omitempty"`
+}
 
 // ActorArchived is the payload of EventActorArchived.
 type ActorArchived struct {

@@ -22,7 +22,7 @@ func newApp(t *testing.T) *server.App {
 func TestBootstrapFreshDatabase(t *testing.T) {
 	ctx := context.Background()
 	app := newApp(t)
-	token, err := bootstrap(ctx, app, "colonyhall", "norbi", "Norbi", "a-long-enough-password")
+	token, err := bootstrap(ctx, app, "colonyhall", "", "norbi", "Norbi", "a-long-enough-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestBootstrapFreshDatabase(t *testing.T) {
 	}
 
 	// A second run must not create a second workspace.
-	if _, err := bootstrap(ctx, app, "other", "eve", "", "another-long-password"); !errors.Is(err, errNotEmpty) {
+	if _, err := bootstrap(ctx, app, "other", "", "eve", "", "another-long-password"); !errors.Is(err, errNotEmpty) {
 		t.Fatalf("second bootstrap: %v, want errNotEmpty", err)
 	}
 }
@@ -49,13 +49,38 @@ func TestBootstrapFreshDatabase(t *testing.T) {
 func TestBootstrapRefusesUsedDatabaseAndWeakPassword(t *testing.T) {
 	ctx := context.Background()
 	app := newApp(t)
-	if _, err := bootstrap(ctx, app, "colonyhall", "norbi", "", "short"); !errors.Is(err, identity.ErrWeakPassword) {
+	if _, err := bootstrap(ctx, app, "colonyhall", "", "norbi", "", "short"); !errors.Is(err, identity.ErrWeakPassword) {
 		t.Fatalf("weak password: %v", err)
 	}
 	if err := app.SeedDev(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bootstrap(ctx, app, "colonyhall", "norbi", "", "a-long-enough-password"); !errors.Is(err, errNotEmpty) {
+	if _, err := bootstrap(ctx, app, "colonyhall", "", "norbi", "", "a-long-enough-password"); !errors.Is(err, errNotEmpty) {
 		t.Fatalf("after the dev seed: %v, want errNotEmpty", err)
+	}
+}
+
+// Round 45: the bootstrap takes a slug (or derives one), and set-slug renames it.
+func TestBootstrapSlugAndSetSlug(t *testing.T) {
+	ctx := context.Background()
+	app := newApp(t)
+	if _, err := bootstrap(ctx, app, "colonyhall", "Bad_Slug", "norbi", "", "a-long-enough-password"); !errors.Is(err, identity.ErrInvalidSlug) {
+		t.Fatalf("invalid slug: %v", err)
+	}
+	if _, err := bootstrap(ctx, app, "colonyhall", "", "norbi", "", "a-long-enough-password"); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := app.Identity.Store.WorkspaceByName(ctx, "colonyhall")
+	if err != nil || ws.Slug != "colonyhall" || ws.State != identity.WorkspaceActive {
+		t.Fatalf("derived slug: %+v %v", ws, err)
+	}
+	if _, err := app.Identity.SetWorkspaceSlug(ctx, "colonyhall", "admin"); !errors.Is(err, identity.ErrInvalidSlug) {
+		t.Fatalf("reserved slug: %v", err)
+	}
+	if _, err := app.Identity.SetWorkspaceSlug(ctx, "colonyhall", "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := app.Identity.Store.WorkspaceBySlug(ctx, "acme"); err != nil || got.ID != ws.ID {
+		t.Fatalf("by slug: %+v %v", got, err)
 	}
 }

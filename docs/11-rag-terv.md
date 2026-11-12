@@ -9,8 +9,8 @@
 | Gép | Ami számít | Következmény |
 | --- | --- | --- |
 | **Raspberry Pi 3B** | még nincs beállítva (sehol nem szerepel a doksikban); 4× Cortex-A53 1,2 GHz, 1 GB RAM | minden Pi-szám **becslés** a PC-n mért egyszálas számokból |
-| **Homelab** (`szmajli`) | Intel i5-2500S, 4 mag, **csak AVX (nincs AVX2/FMA)**, 7,4 GB RAM, ebből ~3,8 GB szabad; 103 GB szabad lemez | a reranker CPU-n fut, régi utasításkészlettel: a modell méretét ez szabja meg |
-| **PC** (`pc-wsl`) | Ryzen 9 5950X; a GPU **ma még GTX 1050 (2 GB)**, az RTX 3060 nincs beszerelve; a 49. kör (GPU-futtatókörnyezet, relé, ütemező) még csak prompt | a 36b mérése és megvalósítása a 3060 és a 49. kör után |
+| **Homelab** (`homelab`) | Intel i5-2500S, 4 mag, **csak AVX (nincs AVX2/FMA)**, 7,4 GB RAM, ebből ~3,8 GB szabad; 103 GB szabad lemez | a reranker CPU-n fut, régi utasításkészlettel: a modell méretét ez szabja meg |
+| **PC** (`pc-dev`) | Ryzen 9 5950X; a GPU **ma még GTX 1050 (2 GB)**, az RTX 3060 nincs beszerelve; a 49. kör (GPU-futtatókörnyezet, relé, ütemező) még csak prompt | a 36b mérése és megvalósítása a 3060 és a 49. kör után |
 
 **Adatbázis (éles, `colonyhall`, PostgreSQL 16.14, `pgvector/pgvector:pg16`, csak olvasva):**
 
@@ -87,8 +87,8 @@ A 3060 még nincs a gépben, és a 49. kör (futtatókörnyezet, relé, VRAM-üt
 **Elérés:** **a PC őrének meglévő kapcsolatán át** (49. kör GPU-reléje: `embed` és `rerank` kérés), új port nincs. A szerver a reléhez egy `CodeEmbedder` és `CodeReranker` portot kap.
 
 **Rövid hiba:** a szerver a hívás előtt megnézi, él-e a PC őrének kapcsolata és jelentett-e egészséges GPU-szolgáltatást az utolsó 90 mp-ben; ha nem, **azonnal** (hálózati várakozás nélkül) ezt adja:
-`code semantic search unavailable: the GPU machine (pc-wsl) is offline; keyword code search and CodeGraph still work`.
-Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU machine (pc-wsl) did not answer in 3 s; ...`.
+`code semantic search unavailable: the GPU machine (pc-dev) is offline; keyword code search and CodeGraph still work`.
+Ha a kapcsolat él, de a válasz 3 mp-en belül nem jön meg: `...: the GPU machine (pc-dev) did not answer in 3 s; ...`.
 
 ## 3. Szöveges reranker a homelabon
 
@@ -263,11 +263,11 @@ A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem p
 | PC (36b) | ~1–1,8 GB VRAM | ~1 GB modellek | kód beágyazó, kód reranker |
 
 - **Sor:** egyetlen beágyazó munkás a szerveren (kötegenként 8, egyszerre egy köteg a Pi-n; a Pi egyszerre egy kérést szolgál ki).
-- **Ha a keresés lassú, üres, vagy azt mondja, a GPU-gép offline:** `06-allapot-es-uzemeltetes.md`, „Keresés (36. kör)”.
+- **Ha a keresés lassú, üres, vagy azt mondja, a GPU-gép offline:** a Rendszerállapot oldal Keresés kártyája (beágyazó, reranker, várakozó darabok) és a szervernapló `search:` sorai.
 
 ## Telepítési sorrend (a megvalósítás után)
 
-1. Norbi: `CREATE EXTENSION vector` a `colonyhall` adatbázisban (`05-homelab-telepites.md`).
+1. `CREATE EXTENSION vector` a `colonyhall` adatbázisban superuserként, ha a Colonyhall felhasználója nem superuser (`16-telepites.md`).
 2. A Pi beállítása (`12-rag-pi-beallitasa.md`), egészség-ellenőrzés a homelabról.
 3. A homelab reranker (`13-rag-reranker-beallitasa.md`).
 4. A szerver (migráció; `COLONY_EMBED_URL`, `COLONY_RERANK_URL` a `deploy/.env`-ben). Induláskor az indexelő magától végigolvassa az előzményt.

@@ -13,6 +13,8 @@ import (
 	"colonyhall/internal/modules/search"
 	"colonyhall/internal/modules/search/fakeembed"
 	"colonyhall/internal/platform/config"
+	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/server"
 )
 
@@ -30,8 +32,10 @@ func openApp(ctx context.Context, embedURL string) (*server.App, error) {
 		MaxUploadMB: cfg.MaxUploadMB, EmbedURL: cfg.EmbedURL, RerankURL: cfg.RerankURL, RerankTop: cfg.RerankTop, RerankTimeout: cfg.RerankTimeout})
 }
 
+// signalContext is the commands' context: cancelled on Ctrl-C, and in
+// system mode, since a server command works for every workspace (round 45).
 func signalContext() (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	return signal.NotifyContext(system.Context(context.Background()), os.Interrupt, syscall.SIGTERM)
 }
 
 // ragBackfill (re)builds the search index from the event log:
@@ -147,7 +151,8 @@ func EvalSet(ctx context.Context, set search.EvalSet, as, embedURL, rerankURL, s
 		if err != nil {
 			return nil, err
 		}
-		return app.RunEval(ctx, set, actor, nil)
+		// The searches run as that person would: in their workspace only.
+		return app.RunEval(db.WithWorkspace(ctx, actor.WorkspaceID), set, actor, nil)
 	}
 	opt := server.Options{Store: "memory", EmbedURL: embedURL, RerankURL: rerankURL}
 	if seedDB != "" {
@@ -179,5 +184,5 @@ func EvalSet(ctx context.Context, set search.EvalSet, as, embedURL, rerankURL, s
 	if err != nil {
 		return nil, err
 	}
-	return app.RunEval(ctx, set, actor, refs)
+	return app.RunEval(db.WithWorkspace(ctx, actor.WorkspaceID), set, actor, refs)
 }

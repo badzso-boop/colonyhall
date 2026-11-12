@@ -12,6 +12,7 @@ import (
 
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/db"
 )
 
 // Instructions is sent to every MCP client on connect.
@@ -33,7 +34,13 @@ type RegisterTools func(s *mcp.Server, actor identity.Actor, r *http.Request)
 type InstructionsFunc func(ctx context.Context, actor identity.Actor) (string, error)
 
 // Handler returns the HTTP handler for the MCP endpoint.
-func Handler(auth identity.Authenticator, version string, register RegisterTools, instructions InstructionsFunc, logger *slog.Logger) http.Handler {
+//
+// hostChecked: the server's multi-tenant middleware has already accepted
+// the Host header (only an active workspace's subdomain of the base domain
+// passes, a stricter check than the go-sdk's DNS rebinding protection,
+// which would refuse every subdomain behind a reverse proxy on the same
+// machine); the go-sdk's own check is then switched off.
+func Handler(auth identity.Authenticator, version string, register RegisterTools, instructions InstructionsFunc, logger *slog.Logger, hostChecked bool) http.Handler {
 	h := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		actor, err := auth.Authenticate(r.Context(), httpx.BearerToken(r))
 		if err != nil {
@@ -49,13 +56,16 @@ func Handler(auth identity.Authenticator, version string, register RegisterTools
 			&mcp.ServerOptions{Instructions: instr, Logger: logger})
 		register(s, actor, r)
 		return s
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{DisableLocalhostProtection: hostChecked})
 	// Reject unauthenticated requests with 401 before the MCP layer sees them.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := auth.Authenticate(r.Context(), httpx.BearerToken(r)); err != nil {
+		actor, err := auth.Authenticate(r.Context(), httpx.BearerToken(r))
+		if err != nil {
 			httpx.Error(w, r, err)
 			return
 		}
-		h.ServeHTTP(w, r)
+		// The go-sdk keeps the values of a session's first request for its
+		// tool calls, so the narrowed scope reaches every tool.
+		h.ServeHTTP(w, r.WithContext(db.WithWorkspace(r.Context(), actor.WorkspaceID)))
 	})
 }

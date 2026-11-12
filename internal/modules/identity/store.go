@@ -29,6 +29,9 @@ type Store interface {
 	ListTokens(ctx context.Context, actorID ids.ID) ([]Token, error)
 	TokenByID(ctx context.Context, id ids.ID) (Token, error)
 	RevokeToken(ctx context.Context, id ids.ID, at time.Time) error
+	// RevokeTokenByHash revokes the token with the hash (if not yet) and
+	// returns it; db.ErrNotFound when there is none.
+	RevokeTokenByHash(ctx context.Context, hash []byte, at time.Time) (Token, error)
 	SetActorState(ctx context.Context, actorID ids.ID, state string) error
 	UpdateActorProfile(ctx context.Context, actorID ids.ID, displayName, desc, avatarEmoji, tz, statusText, color string) error
 	WorkspaceByID(ctx context.Context, id ids.ID) (Workspace, error)
@@ -48,6 +51,22 @@ type Store interface {
 	// ActorsByHandle finds the handle in every workspace (for login).
 	ActorsByHandle(ctx context.Context, handle string) ([]Actor, error)
 	WorkspaceByName(ctx context.Context, name string) (Workspace, error)
+	// Lookups before the workspace is known (round 45). They see every
+	// workspace but answer only "which workspace"; the caller then narrows
+	// with db.WithWorkspace and runs the real query. db.ErrNotFound when
+	// nothing matches.
+	WorkspaceOfToken(ctx context.Context, hash []byte) (ids.ID, error)
+	WorkspaceOfSession(ctx context.Context, hash []byte) (ids.ID, error)
+	// HandleWorkspaces lists the workspaces (id and name) where the handle
+	// belongs to an actor that is not archived.
+	HandleWorkspaces(ctx context.Context, handle string) ([]Workspace, error)
+	// WorkspaceBySlug finds a workspace by its subdomain name, in any scope.
+	WorkspaceBySlug(ctx context.Context, slug string) (Workspace, error)
+	// SetWorkspaceSlug renames a workspace's subdomain; db.ErrConflict when
+	// another workspace has it, db.ErrNotFound when the workspace is gone.
+	SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error
+	// SetWorkspaceState suspends or reactivates a workspace.
+	SetWorkspaceState(ctx context.Context, id ids.ID, state string) error
 
 	// Credential returns the actor's password hash.
 	Credential(ctx context.Context, actorID ids.ID) (string, error)
@@ -67,4 +86,12 @@ type Store interface {
 	SetActorRole(ctx context.Context, id ids.ID, role Role) error
 	// SetActorOwner sets (or, with ids.Nil, clears) an agent's owner.
 	SetActorOwner(ctx context.Context, id, ownerID ids.ID) error
+
+	// DeleteExpiredHostTokens deletes short-lived guard tokens (host_id set)
+	// that expired or were revoked before the cut-off, in batches, and
+	// returns how many went. Tokens without a host are never deleted.
+	DeleteExpiredHostTokens(ctx context.Context, before time.Time) (int64, error)
+	// DeleteEndedSessions deletes sessions that expired or were revoked
+	// before the cut-off and returns how many went.
+	DeleteEndedSessions(ctx context.Context, before time.Time) (int64, error)
 }

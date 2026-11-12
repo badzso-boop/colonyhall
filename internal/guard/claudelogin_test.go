@@ -115,7 +115,7 @@ func TestSandboxUsesTheLoginTokenInsteadOfTheLoginFile(t *testing.T) {
 	if err := os.MkdirAll(agentDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	_, env, err := s.clientMounts("claude-code", agentDir, false, false)
+	_, env, err := s.clientMounts("claude-code", agentDir, false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestSandboxUsesTheLoginTokenInsteadOfTheLoginFile(t *testing.T) {
 		t.Fatalf("without a token the user's login is copied: %v", err)
 	}
 	tok = testLoginToken
-	_, env, err = s.clientMounts("claude-code", agentDir, false, false)
+	_, env, err = s.clientMounts("claude-code", agentDir, false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -108,7 +108,7 @@ function Browser({ agentId, channelId, initial }: { agentId: string; channelId: 
   );
 }
 
-/** The file browser work pane (docs/handoff/31, part 7), read-only. */
+/** The file browser work pane (round 31, part 7), read-only. */
 export function FileBrowserPane({ agentId, path }: { agentId: string; path: string }) {
   const { t } = useTranslation("files");
   const { channelId, pending } = useAgentChannel(agentId);

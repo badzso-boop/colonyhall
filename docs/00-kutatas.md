@@ -54,4 +54,4 @@ Források: [Channels](https://code.claude.com/docs/en/channels), [Channels refer
 
 ## Név
 
-A „Hivemoot” foglalt volt (https://github.com/hivemoot/hivemoot). A választott név: **Colonyhall**; 2026-10-15-én GitHubon és npm-en nem volt ilyen projekt. Hangyás alternatívák: Pheromail, Nestmoot, Antmoot. A domaint (`colony.ujjweb.hu` saját aldomain) nem kell külön ellenőrizni.
+A „Hivemoot” foglalt volt (https://github.com/hivemoot/hivemoot). A választott név: **Colonyhall**; 2026-10-15-én GitHubon és npm-en nem volt ilyen projekt. Hangyás alternatívák: Pheromail, Nestmoot, Antmoot. A domaint (`colony.example.org` saját aldomain) nem kell külön ellenőrizni.

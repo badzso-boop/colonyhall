@@ -25,12 +25,12 @@ const hostAgent = (id: string, handle: string, hostId: string, grants: [string, 
 function hosts(): Host[] {
   return [
     {
-      id: "h1", name: "pc-wsl", color: "blue", state: "approved", created_at: ago(9999), last_seen_at: ago(10),
+      id: "h1", name: "pc-dev", color: "blue", state: "approved", created_at: ago(9999), last_seen_at: ago(10),
       report: {
-        os: "linux", guard_version: "0.33.0", roots: ["/mnt/g/Projects"], clients: [{ name: "claude", version: "2.1.0" }], rejected: [],
+        os: "linux", guard_version: "0.33.0", roots: ["/home/alice/projects"], clients: [{ name: "claude", version: "2.1.0" }], rejected: [],
         sandbox: "bwrap 0.9.0", exchange_dir: "/mnt/z", exchange_ok: true,
         doctor: [{ id: "claude", status: "warn", detail: "not logged in" }, { id: "tmux", status: "ok" }], doctor_checked_at: ago(60),
-        worktrees: [{ agent_id: "a1", path: "/mnt/g/Projects/x-wt", branch: "colony/backend/work" }],
+        worktrees: [{ agent_id: "a1", path: "/home/alice/projects/x-wt", branch: "colony/backend/work" }],
         claude_limits: { five_hour: { utilization: 0.42, status: "allowed" } },
         agy_usage: [{ name: "Gemini Models", models: "Gemini Flash, Gemini Pro", five_hour: { remaining: 0.75, resets_at: new Date(Date.now() + 3_600_000).toISOString() }, weekly: { remaining: 0.5 } }],
         agy_limits: [
@@ -38,7 +38,7 @@ function hosts(): Host[] {
           { model: "default", paused_until: new Date(Date.now() + 1_800_000).toISOString(), reset_known: false },
         ],
       },
-      agents: [hostAgent("a1", "backend", "h1", [["/mnt/g/Projects/x", "write"]]), hostAgent("a2", "docs", "h1", [["/mnt/g/Projects/x", "read"]])],
+      agents: [hostAgent("a1", "backend", "h1", [["/home/alice/projects/x", "write"]]), hostAgent("a2", "docs", "h1", [["/home/alice/projects/x", "read"]])],
     },
     {
       id: "h2", name: "homelab", color: "green", state: "approved", created_at: ago(9999), last_seen_at: ago(12 * 60),

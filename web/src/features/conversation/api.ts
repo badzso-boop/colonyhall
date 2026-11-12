@@ -33,7 +33,7 @@ type Section = Schemas["SidebarSection"];
 
 /**
  * A change to the viewer's sections, applied to the cache at once and rolled
- * back when the server refuses it (docs/handoff/34, part 2). `send` gets the
+ * back when the server refuses it (round 34, part 2). `send` gets the
  * sections as they are after the change. The caller shows the toast; the
  * list is refetched afterwards either way.
  */

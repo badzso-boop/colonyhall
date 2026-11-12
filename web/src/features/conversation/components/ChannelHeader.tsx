@@ -53,7 +53,7 @@ export function MuteMenuItems({ channel }: { channel: Channel }) {
 }
 
 /**
- * The conversation header (docs/handoff/34, 1.3): the name, the description
+ * The conversation header (round 34, 1.3): the name, the description
  * on one line ("több" expands it), the member stack that opens the members,
  * the mute state and ⚙ for admins.
  */

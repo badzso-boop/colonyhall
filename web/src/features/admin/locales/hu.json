@@ -365,7 +365,7 @@
     "running": "Fut",
     "integrations": "Integrációk",
     "backups": "Mentések",
-    "backupsBody": "A mentéseket a homelab kezeli (docs/05-homelab-telepites.md), a szerver nem ellenőrzi őket.",
+    "backupsBody": "A mentés az üzemeltető feladata (az adatbázis és a fájlok kötete), a szerver nem ellenőrzi.",
     "search": {
       "title": "Keresés",
       "chunks": "Indexelt darabok",
@@ -379,6 +379,19 @@
       "lastOk": "Utolsó sikeres hívás",
       "lastError": "Utolsó hiba",
       "mismatch": "Modelleltérés: a beágyazó szerver más modellt szolgál ki, mint amivel a tárolt vektorok készültek, ezért a jelentés szerinti keresés megbízhatatlan. Részletek: {{detail}}"
+    },
+    "size": {
+      "title": "Adatbázis mérete",
+      "noDatabase": "Memória-tár: nincs adatbázis.",
+      "total": "Teljes méret",
+      "growth": "Az elmúlt 30 napban",
+      "growthText_one": "{{delta}} {{count}} nap alatt",
+      "growthText_other": "{{delta}} {{count}} nap alatt",
+      "noGrowth": "még nincs elég minta",
+      "tables": "A 10 legnagyobb tábla",
+      "table": "Tábla",
+      "tableSize": "Méret",
+      "rows": "Sorok (becslés)"
     }
   }
 }

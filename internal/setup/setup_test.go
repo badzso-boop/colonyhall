@@ -200,6 +200,8 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	want := []string{
 		"docker compose version",
 		compose + " pull",
+		compose + " up -d --wait db",
+		compose + " exec -T db psql -q -U colony -d colonyhall",
 		compose + " up -d",
 		compose + " run --rm -T server bootstrap -handle anna -name Anna",
 	}
@@ -220,13 +222,23 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	if env["COLONY_IMAGE"] != "ghcr.io/badzso-boop/colonyhall:v1.2.3" || env["COLONY_BIND"] != host || len(env["POSTGRES_PASSWORD"]) != 48 {
 		t.Fatalf(".env: %v", env)
 	}
+	// Round 45: a new install's server connects as the application role,
+	// whose password goes to psql on stdin only.
+	app := env["COLONY_APP_DB_PASSWORD"]
+	if len(app) != 48 || !strings.HasPrefix(env["COLONY_DATABASE_URL"], "postgres://"+AppRole+":"+app+"@db:5432/") {
+		t.Fatalf("application role: %v", env)
+	}
+	psql := fr.Cmds[3]
+	if !strings.Contains(psql.Stdin, "PASSWORD '"+app+"'") || strings.Contains(psql.String(), app) {
+		t.Fatalf("the role's password must go on stdin only: %+v", psql)
+	}
 	compYAML, _ := os.ReadFile(filepath.Join(dir, "compose.yaml"))
 	if !strings.Contains(string(compYAML), "pgvector/pgvector:pg17") || strings.Contains(string(compYAML), env["POSTGRES_PASSWORD"]) {
 		t.Fatal("compose.yaml: its own Postgres, and no secret in it")
 	}
 	// Secrets never reach the log.
 	logRaw, _ := os.ReadFile(e.LogPath)
-	for _, s := range []string{env["POSTGRES_PASSWORD"], "correct-horse-battery"} {
+	for _, s := range []string{env["POSTGRES_PASSWORD"], app, "correct-horse-battery"} {
 		if strings.Contains(string(logRaw), s) || strings.Contains(out.String(), s) {
 			t.Fatalf("a secret is in the log or the output")
 		}
@@ -244,8 +256,8 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	if err := e2.Do(e2.ServerSteps(false)); err != nil {
 		t.Fatal(err)
 	}
-	if readEnv(envPath)["POSTGRES_PASSWORD"] != pw {
-		t.Fatal("a re-run changed the database password")
+	if again := readEnv(envPath); again["POSTGRES_PASSWORD"] != pw || again["COLONY_APP_DB_PASSWORD"] != app {
+		t.Fatal("a re-run changed a database password")
 	}
 	for _, l := range fr2.Lines() {
 		if strings.Contains(l, "bootstrap") {
@@ -618,5 +630,39 @@ func TestRootBackupUsesOnlyRootOwnedPaths(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.serverDir(), "backup.sh")); err == nil {
 		t.Error("a backup.sh in the user's home on Linux")
+	}
+}
+
+// An install from before round 45 (a database password, no application
+// role) keeps its superuser connection on upgrade: the role is not created
+// under a running database, and the server only warns.
+func TestServerUpgradeKeepsTheOldDatabaseRole(t *testing.T) {
+	e, fr, out := testEnv(t, linux, "", true)
+	fr.Have["docker"] = true
+	host, port := readyServer(t)
+	no := false
+	e.Answers = Answers{Mode: "server", Server: ServerAnswers{Bind: host, Port: port, AdminHandle: "anna", AdminName: "Anna", AdminPassword: "correct-horse-battery", Backups: &no}}
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(e.serverDir(), ".env")
+	old := strings.Repeat("ab", 24)
+	if err := os.MkdirAll(e.serverDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(envPath, []byte("POSTGRES_PASSWORD="+old+"\nCOLONY_DATABASE_URL=postgres://colony:"+old+"@db:5432/colonyhall?sslmode=disable\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Do(e.ServerSteps(true)); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	env := readEnv(envPath)
+	if env["COLONY_APP_DB_PASSWORD"] != "" || env["COLONY_DATABASE_URL"] != "postgres://colony:"+old+"@db:5432/colonyhall?sslmode=disable" {
+		t.Fatalf("an old install must keep its connection: %v", env)
+	}
+	for _, l := range fr.Lines() {
+		if strings.Contains(l, "psql") || strings.Contains(l, "--wait db") {
+			t.Fatalf("no role change on an old install: %s", l)
+		}
 	}
 }

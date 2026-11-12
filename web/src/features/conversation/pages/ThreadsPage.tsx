@@ -68,7 +68,7 @@ function ThreadCard({ thread, actors, viewer, onOpen }: { thread: MyThread; acto
   );
 }
 
-/** "Szálaim" (docs/handoff/34, 2b): the threads the viewer wrote, replied in or was mentioned in. */
+/** "Szálaim" (round 34, 2b): the threads the viewer wrote, replied in or was mentioned in. */
 export default function ThreadsPage() {
   const { t } = useTranslation("conversation");
   const [unreadOnly, setUnreadOnly] = useState(false);

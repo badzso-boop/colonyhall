@@ -363,6 +363,27 @@ func (e ChannelKind) Valid() bool {
 	}
 }
 
+// Defines values for CodegraphRepoStatus.
+const (
+	CodegraphRepoStatusFailed  CodegraphRepoStatus = "failed"
+	CodegraphRepoStatusIndexed CodegraphRepoStatus = "indexed"
+	CodegraphRepoStatusSkipped CodegraphRepoStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the CodegraphRepoStatus enum.
+func (e CodegraphRepoStatus) Valid() bool {
+	switch e {
+	case CodegraphRepoStatusFailed:
+		return true
+	case CodegraphRepoStatusIndexed:
+		return true
+	case CodegraphRepoStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompactionState.
 const (
 	CompactionStateDone    CompactionState = "done"
@@ -2048,6 +2069,30 @@ type ClaudeRateLimitWindow struct {
 	Utilization float32 `json:"utilization"`
 }
 
+// CodegraphRepo defines model for CodegraphRepo.
+type CodegraphRepo struct {
+	// Detail Why it failed or was skipped
+	Detail *string `json:"detail,omitempty"`
+
+	// Files Files in the repository (git ls-files), counted before indexing
+	Files *int `json:"files,omitempty"`
+
+	// IndexedAt The last successful index or sync
+	IndexedAt *time.Time          `json:"indexed_at,omitempty"`
+	Path      string              `json:"path"`
+	Status    CodegraphRepoStatus `json:"status"`
+}
+
+// CodegraphRepoStatus defines model for CodegraphRepo.Status.
+type CodegraphRepoStatus string
+
+// CodegraphReport Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml.
+type CodegraphReport struct {
+	// Repos The indexed (or tried) repositories, most recent first.
+	Repos   []CodegraphRepo `json:"repos"`
+	Version string          `json:"version"`
+}
+
 // Compaction defines model for Compaction.
 type Compaction struct {
 	ChannelId            openapi_types.UUID  `json:"channel_id"`
@@ -2784,6 +2829,9 @@ type HostReport struct {
 		Version *string `json:"version,omitempty"`
 	} `json:"clients"`
 
+	// Codegraph Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml.
+	Codegraph *CodegraphReport `json:"codegraph,omitempty"`
+
 	// Doctor Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes
 	Doctor          *[]DoctorCheck `json:"doctor,omitempty"`
 	DoctorCheckedAt *time.Time     `json:"doctor_checked_at,omitempty"`
@@ -2835,14 +2883,17 @@ type InboxItem struct {
 	ChannelId  openapi_types.UUID  `json:"channel_id"`
 
 	// DelegatedBy Handle of the approving admin for kind=delegated
-	DelegatedBy  *string             `json:"delegated_by,omitempty"`
-	Dm           bool                `json:"dm"`
-	Id           openapi_types.UUID  `json:"id"`
-	ItemId       openapi_types.UUID  `json:"item_id"`
-	Kind         string              `json:"kind"`
-	Mentioned    bool                `json:"mentioned"`
-	ReplyOrigin  *ReplyOrigin        `json:"reply_origin,omitempty"`
-	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	DelegatedBy *string            `json:"delegated_by,omitempty"`
+	Dm          bool               `json:"dm"`
+	Id          openapi_types.UUID `json:"id"`
+	ItemId      openapi_types.UUID `json:"item_id"`
+	Kind        string             `json:"kind"`
+	Mentioned   bool               `json:"mentioned"`
+	ReplyOrigin *ReplyOrigin       `json:"reply_origin,omitempty"`
+
+	// RequestOrigin A request another agent sent from a thread the recipient may write in (request_message_id is the request itself): the guard handles it in that thread's session and answers there.
+	RequestOrigin *ReplyOrigin        `json:"request_origin,omitempty"`
+	ThreadRootId  *openapi_types.UUID `json:"thread_root_id,omitempty"`
 
 	// ViaGrant Whether this delegated item was delivered via an active delegation grant
 	ViaGrant *bool `json:"via_grant,omitempty"`
@@ -3684,6 +3735,23 @@ type StatusGuard struct {
 	Online bool `json:"online"`
 }
 
+// StatusSizeSample defines model for StatusSizeSample.
+type StatusSizeSample struct {
+	Date      openapi_types.Date `json:"date"`
+	SizeBytes int64              `json:"size_bytes"`
+}
+
+// StatusTableSize defines model for StatusTableSize.
+type StatusTableSize struct {
+	Name string `json:"name"`
+
+	// RowsEstimate The planner's estimate (pg_class.reltuples), not count(*).
+	RowsEstimate int64 `json:"rows_estimate"`
+
+	// TotalBytes With indexes and TOAST.
+	TotalBytes int64 `json:"total_bytes"`
+}
+
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
 	Compaction struct {
@@ -3697,8 +3765,16 @@ type SystemStatus struct {
 	} `json:"connections"`
 	Consumers []StatusConsumer `json:"consumers"`
 	Database  struct {
-		LatencyMs float64 `json:"latency_ms"`
-		Ok        bool    `json:"ok"`
+		// Growth One sample of size_bytes a day (UTC) for the last 90 days, oldest first; absent on the memory store.
+		Growth    *[]StatusSizeSample `json:"growth,omitempty"`
+		LatencyMs float64             `json:"latency_ms"`
+		Ok        bool                `json:"ok"`
+
+		// SizeBytes The whole database (pg_database_size); absent on the memory store.
+		SizeBytes *int64 `json:"size_bytes,omitempty"`
+
+		// Tables The 10 largest tables, biggest first; absent on the memory store.
+		Tables *[]StatusTableSize `json:"tables,omitempty"`
 	} `json:"database"`
 	EventHead              int64         `json:"event_head"`
 	GiteaConfigured        bool          `json:"gitea_configured"`

@@ -15,7 +15,7 @@ import { MonthView, TimeGrid } from "../components/CalendarViews";
 
 type Saved = "month" | "week" | "day";
 
-/** Naptár (docs/handoff/32, part 4): month, week and day over the subscribed calendars; read-only. */
+/** Naptár (round 32, part 4): month, week and day over the subscribed calendars; read-only. */
 export default function CalendarPage() {
   const { t, i18n } = useTranslation("planner");
   const locale = localeOf(i18n.language);

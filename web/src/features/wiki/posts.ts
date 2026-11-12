@@ -2,7 +2,7 @@ import type { Schemas } from "@/shared/api";
 
 export { lineDiff, type DiffLine } from "@/shared/lib";
 
-// A wiki page read as a forum topic (docs/handoff/32, part 7): the first
+// A wiki page read as a forum topic (round 32, part 7): the first
 // revision is the opening post and every append a reply. The server only adds
 // to the end on append, so a reply is the revision's body minus the previous.
 

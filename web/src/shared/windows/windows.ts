@@ -1,5 +1,5 @@
 /**
- * Floating windows (docs/handoff/32, part 1): pure state and rules, no React.
+ * Floating windows (round 32, part 1): pure state and rules, no React.
  *
  * Tasks, calendar and notes can float inside the page: one window of each
  * kind, several kinds at once. A window can be moved anywhere (its title bar

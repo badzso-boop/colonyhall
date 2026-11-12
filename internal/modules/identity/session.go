@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/tenant"
 )
 
 // Session is a logged-in browser. Only the hash of the cookie value is stored.
@@ -68,7 +70,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 		s.limiter().fail(in.Handle, s.Clock.Now())
 		return Actor{}, Session{}, "", ErrBadCredentials
 	}
-	a, err := s.findLoginActor(ctx, in)
+	ctx, a, err := s.findLoginActor(ctx, in)
 	if errors.Is(err, ErrWorkspaceRequired) {
 		return Actor{}, Session{}, "", err
 	}
@@ -119,36 +121,36 @@ func (s *Service) recordLogin(ctx context.Context, a Actor, typ, userAgent strin
 		func(context.Context) error { return nil })
 }
 
-func (s *Service) findLoginActor(ctx context.Context, in LoginInput) (Actor, error) {
-	matches, err := s.Store.ActorsByHandle(ctx, in.Handle)
+// findLoginActor finds the person logging in and returns ctx narrowed to
+// their workspace (round 45: the handle is looked up across workspaces
+// first, then read inside the one it belongs to).
+func (s *Service) findLoginActor(ctx context.Context, in LoginInput) (context.Context, Actor, error) {
+	wss, err := s.Store.HandleWorkspaces(ctx, in.Handle)
 	if err != nil {
-		return Actor{}, err
+		return ctx, Actor{}, err
 	}
-	if in.Workspace != "" {
-		ws, err := s.Store.WorkspaceByName(ctx, in.Workspace)
-		if err != nil {
-			return Actor{}, err
-		}
-		for _, a := range matches {
-			if a.WorkspaceID == ws.ID {
-				return a, nil
-			}
-		}
-		return Actor{}, db.ErrNotFound
+	if t, ok := tenant.From(ctx); ok {
+		// Multi-tenant mode: only the subdomain's workspace; a handle that
+		// exists elsewhere is simply not found here.
+		wss = slices.DeleteFunc(wss, func(w Workspace) bool { return w.ID != t.Workspace })
+	} else if in.Workspace != "" {
+		wss = slices.DeleteFunc(wss, func(w Workspace) bool { return w.Name != in.Workspace })
 	}
-	switch len(matches) {
+	switch len(wss) {
 	case 0:
-		return Actor{}, db.ErrNotFound
+		return ctx, Actor{}, db.ErrNotFound
 	case 1:
-		return matches[0], nil
 	default:
-		return Actor{}, ErrWorkspaceRequired
+		return ctx, Actor{}, ErrWorkspaceRequired
 	}
+	ctx = db.WithWorkspace(ctx, wss[0].ID)
+	a, err := s.Store.ActorByHandle(ctx, wss[0].ID, in.Handle)
+	return ctx, a, err
 }
 
 // FindHuman finds a person by handle (and workspace name when ambiguous).
 func (s *Service) FindHuman(ctx context.Context, handle, workspace string) (Actor, error) {
-	a, err := s.findLoginActor(ctx, LoginInput{Handle: handle, Workspace: workspace})
+	_, a, err := s.findLoginActor(ctx, LoginInput{Handle: handle, Workspace: workspace})
 	if err != nil {
 		return Actor{}, err
 	}
@@ -162,6 +164,10 @@ func (s *Service) FindHuman(ctx context.Context, handle, workspace string) (Acto
 func (s *Service) AuthenticateSession(ctx context.Context, secret string) (Actor, Session, error) {
 	if secret == "" {
 		return Actor{}, Session{}, ErrUnauthorized
+	}
+	ctx, err := s.credentialScope(ctx, credSession, s.Store.WorkspaceOfSession, HashSecret(secret))
+	if err != nil {
+		return Actor{}, Session{}, err
 	}
 	sess, a, err := s.Store.SessionByTokenHash(ctx, HashSecret(secret))
 	if errors.Is(err, db.ErrNotFound) {

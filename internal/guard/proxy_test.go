@@ -173,7 +173,7 @@ func TestProxy_AllowlistRulesAndRefusals(t *testing.T) {
 		},
 	}
 
-	serverIP := "100.85.111.88"
+	serverIP := "100.64.0.10"
 	serverPort := 8280
 	pr, err := StartSandboxProxy(ProxyConfig{
 		Mode: "filtered",
@@ -325,7 +325,7 @@ func TestProxy_LogMode(t *testing.T) {
 	res := &mockResolver{mapping: map[string][]net.IP{
 		"api.example.com":   {net.ParseIP("93.184.216.34")},
 		"homelab-db.lan":    {net.ParseIP("192.168.0.45")},
-		"tailnet-gitea.lan": {net.ParseIP("100.85.111.88")},
+		"tailnet-gitea.lan": {net.ParseIP("100.64.0.10")},
 	}}
 	pr, err := StartSandboxProxy(ProxyConfig{
 		Mode:     "log",

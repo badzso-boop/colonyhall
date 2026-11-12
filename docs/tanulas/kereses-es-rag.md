@@ -28,7 +28,7 @@ SELECT websearch_to_tsquery('hungarian', 'szerverre költözés');
 
 A „szerverre” és a „szerver” ugyanarra a tőre jut, a „homelabon” és a „Dockerben” is a tövére (`homelab`, `docker`): **ezért talál a magyar keresés ragozott alakot is.** A szótövező (Snowball) nem tökéletes: a „fut” tőre `fu` lesz, a „make” `mak`, a „bukott” `bukot`. Ez nem baj, amíg a dokumentum és a kérdés ugyanúgy torzul.
 
-**Két konfiguráció egyszerre** (`migrations/00048_search.sql`): a `tsv_hu` a szótövezett (`hungarian`), a `tsv_simple` a változatlan szavakat (`simple`) tárolja. A `simple` kell az azonosítókhoz és a pontos szavakhoz (`max_concurrent_runs`, `parseAgyReset`), amiket a magyar szótövező szétszedne vagy elrontana. A lekérdezés mindkettőt nézi, a pontszámokat összeadja.
+**Két konfiguráció egyszerre** (`migrations/00055_search.sql`): a `tsv_hu` a szótövezett (`hungarian`), a `tsv_simple` a változatlan szavakat (`simple`) tárolja. A `simple` kell az azonosítókhoz és a pontos szavakhoz (`max_concurrent_runs`, `parseAgyReset`), amiket a magyar szótövező szétszedne vagy elrontana. A lekérdezés mindkettőt nézi, a pontszámokat összeadja.
 
 **ÉS vagy VAGY?** A `websearch_to_tsquery` alapból ÉS-sel köti a szavakat: minden szónak benne kell lennie. Egy kérdés („miért bukott el a markdown teszt”) viszont ritkán tartalmazza a válasz minden szavát. A Colonyhall ezért a `&`-et `|`-re cseréli (`postgres/queries.sql`, `KeywordSearch`), és a rangsorolóra bízza, hogy a több egyezés előre kerüljön. A cserénél figyelni kell: a `::tsquery` cast **nem** tövez újra, a `to_tsquery` igen (a `bukot` → `bu` lenne).
 

@@ -12,7 +12,7 @@ host_token_file: ~/.config/colonyhall/host.token
 # The ONLY folders agents on this machine can ever be given. The server
 # cannot extend this list; every granted path is checked against it.
 roots:
-  - /mnt/g/Projects
+  - /home/alice/projects
 
 # Shared secrets exchange directory (optional).
 # The guard checks on start that this folder exists and is writable.
@@ -87,6 +87,19 @@ roots:
 # agent starts as soon as a run ends. The usage check (/usage) and agent
 # terminals do not count. Default 0: no limit.
 # max_concurrent_runs: 2
+
+# CodeGraph (round 39): a local index of a repository's symbols and calls,
+# one MCP call (codegraph_explore) instead of many greps. When the launcher
+# exists (default ~/.local/bin/codegraph, from CodeGraph's reviewed
+# install.sh), the guard indexes the agents' git repositories itself (one at
+# a time, at low priority; never `codegraph install`) and gives every work
+# and direct run the MCP server. Telemetry, the update check and the
+# background daemon are always off for the processes the guard starts.
+# Repositories with more files than max_files are skipped.
+# codegraph:
+#   bin: ~/.local/bin/codegraph
+#   enabled: true
+#   max_files: 20000
 
 # commands: { claude-code: claude, antigravity: agy }
 # Inactivity and duration caps for direct and work runs:

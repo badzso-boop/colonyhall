@@ -58,7 +58,7 @@ function AccessToggle({ value, onChange, label }: { value: Access; onChange: (a:
 }
 
 /**
- * The folder picker (docs/handoff/33, part 7): the machine's guard.yaml
+ * The folder picker (round 33, part 7): the machine's guard.yaml
  * roots on the left, a folder list on the right, asked of the guard live.
  * Folders are never typed, except by an admin as a fallback.
  */

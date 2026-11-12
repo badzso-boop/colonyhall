@@ -1,7 +1,7 @@
 import type { Schemas } from "@/shared/api";
 import { dayKey } from "@/shared/lib";
 
-// The calendar's date arithmetic (docs/handoff/32, part 4). Everything is in
+// The calendar's date arithmetic (round 32, part 4). Everything is in
 // the viewer's local time; weeks start on Monday.
 
 export type CalEvent = Schemas["PlannerEvent"];

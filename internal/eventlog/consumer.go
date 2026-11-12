@@ -70,7 +70,9 @@ func (c *Consumer) Drain(ctx context.Context) error {
 			return nil
 		}
 		for _, e := range events {
-			err := c.Tx.InTx(ctx, func(ctx context.Context) error {
+			// The log is read for every workspace; each event is handled in
+			// its own workspace's scope (round 45).
+			err := c.Tx.InTx(db.WithWorkspace(ctx, e.WorkspaceID), func(ctx context.Context) error {
 				if err := c.Handle(ctx, e); err != nil {
 					return err
 				}

@@ -14,6 +14,8 @@ import {
   stackDays,
   searchTone,
   statusFindings,
+  formatBytes,
+  sizeGrowth,
   statusText,
   toHuf,
   validRepo,
@@ -211,4 +213,26 @@ test("the payload stays text", () => {
 
 test("the export query repeats the actions", () => {
   expect(auditExportQuery({ action: ["a.b", "c.d"], target_type: "actor" })).toBe("action=a.b&action=c.d&target_type=actor");
+});
+
+test("byte counts read like pg_size_pretty", () => {
+  expect(formatBytes(0, "en")).toBe("0 B");
+  expect(formatBytes(1023, "en")).toBe("1,023 B");
+  expect(formatBytes(1536, "hu")).toBe("1,5 kB");
+  expect(formatBytes(21.44 * 1024 * 1024, "en")).toBe("21.4 MB");
+  expect(formatBytes(3 * 1024 ** 3, "en")).toBe("3 GB");
+  expect(formatBytes(-2048, "en")).toBe("-2 kB");
+});
+
+test("the growth compares the newest sample with the oldest of the last 30 days", () => {
+  const s = (date: string, size_bytes: number) => ({ date, size_bytes });
+  expect(sizeGrowth([])).toBeNull();
+  expect(sizeGrowth([s("2026-11-11", 5)])).toBeNull();
+  expect(sizeGrowth([s("2026-09-01", 1), s("2026-11-11", 5)])).toBeNull(); // only one inside the window
+  expect(sizeGrowth([s("2026-09-01", 1), s("2026-10-12", 3), s("2026-11-01", 4), s("2026-11-11", 9)])).toEqual({
+    delta: 6,
+    days: 30,
+    recent: [s("2026-10-12", 3), s("2026-11-01", 4), s("2026-11-11", 9)],
+  });
+  expect(sizeGrowth([s("2026-11-09", 9), s("2026-11-11", 7)])?.delta).toBe(-2);
 });

@@ -53,7 +53,7 @@ function ClaudeMeter({ enabled }: { enabled: boolean }) {
   );
 }
 
-/** The 48 px header on every page (docs/handoff/31, part 4). */
+/** The 48 px header on every page (round 31, part 4). */
 export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { t } = useTranslation("layout");
   const session = useSession();

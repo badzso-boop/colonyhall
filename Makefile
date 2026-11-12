@@ -4,12 +4,14 @@ TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
 .PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
-        test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest
+        test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest privacy
 
 help:            ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
 dev:             ## Start Postgres + server (http://localhost:8080, dev seed)
+	$(COMPOSE) up -d --wait postgres
+	$(COMPOSE) exec -T postgres psql -q -U colony -d colony < deploy/dev-app-role.sql
 	$(COMPOSE) up --build -d
 	@echo "UI: http://localhost:8080  admin token: col_dev_admin_token_do_not_use_in_production"
 
@@ -60,8 +62,8 @@ VITEST_ARGS ?=
 web-vitest: $(WEB_DEPS) ## PWA Vitest (VITEST_ARGS="--shard=1/3" and the like)
 	npm --prefix web test -- $(VITEST_ARGS)
 
-test-pg:         ## Store contract tests against Postgres (needs `make dev`)
-	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test ./internal/storetest/ -run TestPostgres -v
+test-pg:         ## Store contract, Postgres e2e, row-level security and cross-tenant tests (needs `make dev`); one package at a time, they share the database
+	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test -p 1 ./internal/storetest/ ./internal/e2e/ -run '^TestPostgres' -v
 
 gen: $(WEB_DEPS) ## Regenerate code from api/openapi.yaml (Go and TypeScript) and SQL queries
 	$(GO) tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
@@ -101,6 +103,13 @@ test-install:    ## install.sh tests in Debian, Ubuntu and Fedora containers (ne
 
 actionlint:      ## actionlint on every GitHub workflow (Docker image)
 	$(ACTIONLINT) -color
+
+privacy:         ## No secrets (gitleaks) and no private infrastructure details in the tracked files
+	python3 -I scripts/check-private-data.py
+	git ls-files -z | tar --null --ignore-failed-read -T - -cf .cache-privacy.tar 2>/dev/null; \
+	  docker run --rm -i -v "$(CURDIR)/.gitleaks.toml":/cfg.toml:ro --entrypoint sh zricethezav/gitleaks:v8.28.0 \
+	    -c 'mkdir -p /tmp/scan && tar -xf - -C /tmp/scan && gitleaks dir /tmp/scan --config /cfg.toml --redact --no-banner' < .cache-privacy.tar; \
+	  rc=$$?; rm -f .cache-privacy.tar; exit $$rc
 
 vuln:            ## Known vulnerabilities: govulncheck and npm audit (needs network)
 	$(GOVULNCHECK) ./...

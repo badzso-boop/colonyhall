@@ -1,6 +1,6 @@
 import type { Channel, Actor } from "./model";
 
-/** The channel settings tabs (docs/handoff/34, 1.3), the URL's ?channel-settings=<tab>. */
+/** The channel settings tabs (round 34, 1.3), the URL's ?channel-settings=<tab>. */
 export const channelTabs = ["altalanos", "tagok", "tomorites", "archivalas"] as const;
 export type ChannelTab = (typeof channelTabs)[number];
 

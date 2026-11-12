@@ -12,7 +12,7 @@ import { MoveDialog } from "./SectionDialogs";
 type Item = { key: string; label: string; icon: ReactNode; onSelect: () => void; danger?: boolean };
 
 /**
- * The "…" menu of a sidebar conversation row (docs/handoff/34, part 2). Every
+ * The "…" menu of a sidebar conversation row (round 34, part 2). Every
  * item is listed in `items` below; muting comes from the channel header's
  * items. Dialogs an item opens are kept in `dialog`.
  */

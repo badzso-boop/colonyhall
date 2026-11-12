@@ -74,7 +74,7 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 }
 
 /**
- * The schedule builder (docs/handoff/32, part 6): what, where, when (no cron
+ * The schedule builder (round 32, part 6): what, where, when (no cron
  * typing unless Haladó), time zone and catch-up; the summary and the next
  * runs come from the server's preview, so the two never disagree.
  */

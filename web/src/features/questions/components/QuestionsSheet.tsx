@@ -21,7 +21,7 @@ function useAnyQuestion(ref: string | null) {
 }
 
 /**
- * "Válaszra vár" (docs/handoff/34, part 3): a Sheet with Nyitott (to humans
+ * "Válaszra vár" (round 34, part 3): a Sheet with Nyitott (to humans
  * and escalated) and Megválaszolt (last 7 days). A Q-12 chip opens it with
  * that question on top. A question answered here stays visible (answered)
  * until the Sheet closes, so the answer shows in place.

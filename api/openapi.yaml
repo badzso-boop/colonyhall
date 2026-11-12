@@ -2743,6 +2743,19 @@ components:
         last_seen_at: { type: string, format: date-time }
         guard_version: { type: string }
         online: { type: boolean, description: Seen in the last 90 seconds. }
+    StatusTableSize:
+      type: object
+      required: [name, total_bytes, rows_estimate]
+      properties:
+        name: { type: string }
+        total_bytes: { type: integer, format: int64, description: With indexes and TOAST. }
+        rows_estimate: { type: integer, format: int64, description: "The planner's estimate (pg_class.reltuples), not count(*)." }
+    StatusSizeSample:
+      type: object
+      required: [date, size_bytes]
+      properties:
+        date: { type: string, format: date }
+        size_bytes: { type: integer, format: int64 }
     SystemStatus:
       type: object
       required: [version, uptime_seconds, database, event_head, consumers, connections, guards, scheduler, compaction, gitea_configured, gitea_webhook_configured, max_upload_mb]
@@ -2755,6 +2768,15 @@ components:
           properties:
             ok: { type: boolean }
             latency_ms: { type: number, format: double }
+            size_bytes: { type: integer, format: int64, description: "The whole database (pg_database_size); absent on the memory store." }
+            tables:
+              type: array
+              description: The 10 largest tables, biggest first; absent on the memory store.
+              items: { $ref: "#/components/schemas/StatusTableSize" }
+            growth:
+              type: array
+              description: One sample of size_bytes a day (UTC) for the last 90 days, oldest first; absent on the memory store.
+              items: { $ref: "#/components/schemas/StatusSizeSample" }
         event_head: { type: integer, format: int64 }
         consumers:
           type: array
@@ -3145,6 +3167,9 @@ components:
         delegated_by: { type: string, description: "Handle of the approving admin for kind=delegated" }
         via_grant: { type: boolean, description: "Whether this delegated item was delivered via an active delegation grant" }
         reply_origin: { $ref: "#/components/schemas/ReplyOrigin" }
+        request_origin:
+          description: "A request another agent sent from a thread the recipient may write in (request_message_id is the request itself): the guard handles it in that thread's session and answers there."
+          allOf: [{ $ref: "#/components/schemas/ReplyOrigin" }]
     ReplyOrigin:
       type: object
       required: [channel_id, channel, thread_root_id, request_message_id]
@@ -3447,6 +3472,7 @@ components:
           description: "Round 41: the guard's `colony doctor` checks, refreshed every usage check; run `colony doctor` on the machine for the fixes"
           items: { $ref: "#/components/schemas/DoctorCheck" }
         doctor_checked_at: { type: string, format: date-time }
+        codegraph: { $ref: "#/components/schemas/CodegraphReport" }
         claude_login_configured: { type: boolean, description: "Round 38: guard.yaml names a claude_token_file, so the Claude login can be set from the PWA" }
         claude_login_set_at: { type: string, format: date-time, description: "Round 38: when the Claude login token (claude setup-token) was set; absent when there is none. The token itself never leaves the machine." }
         rejected:
@@ -4266,6 +4292,26 @@ components:
         id: { type: string, maxLength: 40, description: "config, server, token, claude, agy, sandbox, tmux, git, service, disk" }
         status: { type: string, enum: [ok, warn, fail] }
         detail: { type: string, maxLength: 200 }
+    CodegraphReport:
+      type: object
+      description: "Round 39: CodeGraph on the machine. The guard indexes the agents' git repositories and gives every run the CodeGraph MCP server; absent when CodeGraph is not installed or is switched off in guard.yaml."
+      required: [version, repos]
+      properties:
+        version: { type: string, maxLength: 40 }
+        repos:
+          type: array
+          maxItems: 50
+          description: The indexed (or tried) repositories, most recent first.
+          items: { $ref: "#/components/schemas/CodegraphRepo" }
+    CodegraphRepo:
+      type: object
+      required: [path, status]
+      properties:
+        path: { type: string, maxLength: 1024 }
+        status: { type: string, enum: [indexed, failed, skipped] }
+        files: { type: integer, description: "Files in the repository (git ls-files), counted before indexing" }
+        indexed_at: { type: string, format: date-time, description: "The last successful index or sync" }
+        detail: { type: string, maxLength: 200, description: "Why it failed or was skipped" }
     SetClaudeLoginRequest:
       type: object
       required: [token]

@@ -111,6 +111,17 @@
     "doctorChecked": "ellenőrizve: {{when}}",
     "doctorHint": "A javításokért futtasd a gépen: colony doctor",
     "doctorNone": "még nincs (régi őr, vagy még nem futott)",
+    "codegraph": "CodeGraph",
+    "codegraphVersion": "{{version}} verzió",
+    "codegraphNone": "nincs (nincs telepítve, vagy a guard.yaml kikapcsolja)",
+    "codegraphNoRepos": "még nincs indexelt repó",
+    "codegraphFiles": "{{count}} fájl",
+    "codegraphIndexed": "indexelve: {{when}}",
+    "codegraphStatus": {
+      "indexed": "indexelve",
+      "failed": "hiba",
+      "skipped": "kihagyva"
+    },
     "checks": {
       "config": "guard.yaml",
       "server": "szerver",

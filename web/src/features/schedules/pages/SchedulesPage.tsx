@@ -14,7 +14,7 @@ import { describeRule, parseCron } from "../rule";
 type Filter = "active" | "done" | "canceled";
 const tone = { active: "success", done: "neutral", canceled: "danger" } as const;
 
-/** Ütemezések (docs/handoff/32, part 6): the table, filters, cancel and copy-into-new. */
+/** Ütemezések (round 32, part 6): the table, filters, cancel and copy-into-new. */
 export default function SchedulesPage() {
   const { t, i18n } = useTranslation("schedules");
   const locale = localeOf(i18n.language);

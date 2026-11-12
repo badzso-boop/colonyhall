@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"time"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/compaction"
+	"colonyhall/internal/modules/dbstats"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	idhttp "colonyhall/internal/modules/identity/httpapi"
@@ -28,6 +31,7 @@ type statusDeps struct {
 	Hosts       *hosts.Service
 	Schedules   schedule.Store
 	Compactions compaction.Store
+	DBStats     *dbstats.Service
 	Events      eventlog.Store
 	Consumers   []*eventlog.Consumer
 	Gateway     *gateway.Gateway
@@ -72,6 +76,9 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 	begin := time.Now()
 	out.Database.Ok = d.Ready(ctx) == nil
 	out.Database.LatencyMs = float64(time.Since(begin).Microseconds()) / 1000
+	if err := d.databaseSize(ctx, &out); err != nil {
+		return out, err
+	}
 
 	head, err := d.Events.Head(ctx)
 	if err != nil {
@@ -137,4 +144,25 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 		out.Search = &ss
 	}
 	return out, nil
+}
+
+// databaseSize fills the size, the largest tables and the daily samples
+// (round 50); the memory store has no database and leaves them out.
+func (d statusDeps) databaseSize(ctx context.Context, out *apispec.SystemStatus) error {
+	rep, ok, err := d.DBStats.Report(ctx)
+	if err != nil || !ok {
+		return err
+	}
+	tables := make([]apispec.StatusTableSize, 0, len(rep.Tables))
+	for _, t := range rep.Tables {
+		tables = append(tables, apispec.StatusTableSize{Name: t.Name, TotalBytes: t.TotalBytes, RowsEstimate: t.RowsEstimate})
+	}
+	growth := make([]apispec.StatusSizeSample, 0, len(rep.Growth))
+	for _, g := range rep.Growth {
+		growth = append(growth, apispec.StatusSizeSample{Date: openapi_types.Date{Time: g.Day}, SizeBytes: g.SizeBytes})
+	}
+	out.Database.SizeBytes = &rep.SizeBytes
+	out.Database.Tables = &tables
+	out.Database.Growth = &growth
+	return nil
 }
