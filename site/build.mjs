@@ -114,7 +114,15 @@ const JS_DIR = join(SRC, "js");
 const jsFiles = existsSync(JS_DIR) ? files(JS_DIR).filter((f) => f.endsWith(".js")) : [];
 const jsKeys = new Set();
 for (const f of jsFiles) {
-  for (const [, k] of readFileSync(f, "utf8").matchAll(/\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]/g)) jsKeys.add(k);
+  const src = readFileSync(f, "utf8");
+  for (const [, k] of src.matchAll(/\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]/g)) jsKeys.add(k);
+  // Keys built at runtime (t(`agents.${name}`)) are declared with a comment:
+  //   // i18n-prefix: agents
+  for (const [, prefix] of src.matchAll(/i18n-prefix:\s*([a-zA-Z0-9_.-]+)/g)) {
+    const keys = Object.keys(base).filter((k) => k.startsWith(`${prefix}.`));
+    if (!keys.length) problems.push(`${relative(SRC, f)}: i18n-prefix "${prefix}" matches no key in ${config.defaultLanguage}.json`);
+    keys.forEach((k) => jsKeys.add(k));
+  }
 }
 // Data files (scripts of the monitor, the gate, the terminal; the strata)
 // reference i18n keys as "@key" strings.

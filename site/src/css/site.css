@@ -100,6 +100,7 @@ p { margin: 0 0 1rem; }
 .ctl svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ctl:hover { background: var(--surface-sunken); }
 #motion-toggle .ico-play { display: none; }
+#motion-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-text); }
 #motion-toggle[aria-pressed="true"] .ico-play { display: block; }
 #motion-toggle[aria-pressed="true"] .ico-pause { display: none; }
 #theme-toggle svg circle { fill: none; }
@@ -406,7 +407,7 @@ main { padding: 0; }
   body { font-size: 1rem; }
   .bar__nav { display: none; }
   .bar__controls { margin-left: auto; }
-  .ctl__label { display: none; }
+  .ctl__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .app { grid-template-columns: 1fr; height: 300px; }
   .app__steps { display: none; }
   .map__svg--wide { display: none; }

@@ -14,7 +14,6 @@
   },
   "motion": {
     "pause": "Pause motion",
-    "play": "Play motion",
     "description": "Animated ants, each one an agent, carry messages across the page.",
     "paused": "Motion paused.",
     "playing": "Motion playing."

@@ -1,6 +1,8 @@
 // Entry point (an ES module, so deferred). The page is complete without it;
-// this adds the copy buttons and, in later steps, the colony.
+// this adds the copy buttons, the pause control and the colony.
 import { t } from "./i18n.js";
+import { motion } from "./motion.js";
+import * as colony from "./colony.js";
 
 for (const el of document.querySelectorAll("[data-js-only]")) el.hidden = false;
 
@@ -22,3 +24,20 @@ for (const btn of document.querySelectorAll("[data-copy]")) {
     setTimeout(() => { btn.textContent = t("copy.button"); }, 1800);
   });
 }
+
+// The permanent pause control (WCAG 2.2.2): stops every moving part.
+const pause = document.getElementById("motion-toggle");
+const live = document.getElementById("live");
+// One label ("Pause motion") with aria-pressed: pressed means paused.
+function syncPause() {
+  pause.setAttribute("aria-pressed", String(motion.paused));
+}
+pause.hidden = false;
+syncPause();
+pause.addEventListener("click", () => {
+  motion.set({ paused: !motion.paused });
+  syncPause();
+  live.textContent = motion.paused ? t("motion.paused") : t("motion.playing");
+});
+
+colony.start();
