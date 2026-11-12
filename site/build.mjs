@@ -1,53 +1,272 @@
 // Builds the site into site/dist and checks the rules every version of the
-// site keeps, whatever its design (round 48, part 5.2):
+// site keeps, whatever its design (round 48, part 5.2; docs/18):
 //   - nothing loaded from another origin at runtime: no external scripts,
 //     stylesheets, fonts, images or frames (self-host everything; no
 //     tracking, no cookies);
 //   - a size budget for the whole site;
-//   - every page has a language, a title and a description.
-// No dependencies: plain Node. `npm run check` only checks src/.
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+//   - every page has a language, a title and a description;
+//   - every i18n key the template and the scripts use exists in en.json.
+//
+// One prefilled HTML page per language (src/i18n/<lang>.json) from
+// src/page.html; `/` points to the default language. The colour tokens are
+// copied from the PWA (web/src/shared/styles/tokens.css) so they change in
+// one place. The repository address lives in site.config.json alone.
+//
+// No dependencies: plain Node. `npm run check` builds into a temporary
+// directory, checks it and throws it away.
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { extname, join, relative } from "node:path";
 
-const SRC = new URL("./src/", import.meta.url).pathname;
-const DIST = new URL("./dist/", import.meta.url).pathname;
+const HERE = new URL(".", import.meta.url).pathname;
+const SRC = join(HERE, "src");
+const TOKENS = join(HERE, "..", "web", "src", "shared", "styles", "tokens.css");
 const BUDGET_BYTES = 500 * 1024; // the whole site, before compression
+const CHECK_ONLY = process.argv.includes("--check-only");
+const DIST = CHECK_ONLY ? mkdtempSync(join(tmpdir(), "colonyhall-site-")) : join(HERE, "dist");
 
+const problems = [];
 const files = (dir) =>
   readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
     return statSync(p).isDirectory() ? files(p) : [p];
   });
+const readJSON = (p) => JSON.parse(readFileSync(p, "utf8"));
 
-// Loads a resource: src= on anything, href= on <link>, url() in CSS,
-// @import. Plain links to other sites (<a href>) are fine.
-const external = /(?:\ssrc\s*=\s*["']?\s*(?:https?:)?\/\/)|(?:<link\b[^>]*\bhref\s*=\s*["']?\s*(?:https?:)?\/\/)|(?:url\(\s*["']?\s*(?:https?:)?\/\/)|(?:@import\s+(?:url\()?\s*["']?\s*(?:https?:)?\/\/)/i;
+// --- configuration: every address the site links to, derived in one place
+const config = readJSON(join(HERE, "site.config.json"));
+const repo = config.repository.replace(/\/$/, "");
+const links = {
+  repo,
+  issues: `${repo}/issues/new/choose`,
+  docs: `${repo}/tree/main/docs/en`,
+  api: `${repo}/blob/main/docs/en/api.md`,
+  install: `${repo}/blob/main/docs/en/install.md`,
+  license: `${repo}/blob/main/LICENSE`,
+  security: `${repo}/blob/main/SECURITY.md`,
+  contributing: `${repo}/blob/main/CONTRIBUTING.md`,
+  cla: `${repo}/blob/main/CLA.md`,
+  releases: `${repo}/releases`,
+  installScript: `${repo}/releases/latest/download/install.sh`,
+};
 
-const problems = [];
+// --- i18n: nested JSON, flattened to dotted keys
+const flatten = (obj, prefix = "", out = {}) => {
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, key, out);
+    else out[key] = v;
+  }
+  return out;
+};
+const I18N = join(SRC, "i18n");
+const languages = readdirSync(I18N).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
+const base = flatten(readJSON(join(I18N, `${config.defaultLanguage}.json`)));
+const dict = Object.fromEntries(languages.map((l) => [l, flatten(readJSON(join(I18N, `${l}.json`)))]));
+for (const l of languages) {
+  for (const k of Object.keys(dict[l])) if (!(k in base)) problems.push(`i18n/${l}.json: "${k}" is not in ${config.defaultLanguage}.json`);
+}
+
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// A tiny inline markup for copy: `code`, **strong**, *em*, [text](link:name).
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/\[([^\]]+)\]\(link:([a-zA-Z]+)\)/g, (m, text, name) => {
+      if (!(name in links)) { problems.push(`unknown link "${name}" in copy`); return text; }
+      return `<a href="${esc(links[name])}">${text}</a>`;
+    });
+}
+
+// --- colour tokens from the PWA
+function tokensCSS() {
+  const css = readFileSync(TOKENS, "utf8");
+  const block = (re) => {
+    const m = css.match(re);
+    if (!m) throw new Error(`tokens.css: block ${re} not found`);
+    return [...m[1].matchAll(/--color-([a-z0-9-]+):\s*([^;]+);/g)].map(([, n, v]) => `  --${n}: ${v.trim()};`).join("\n");
+  };
+  const light = block(/@theme static \{([\s\S]*?)\n\}/);
+  const dark = block(/\.dark \{([\s\S]*?)\n {2}\}/);
+  return `/* Generated by site/build.mjs from web/src/shared/styles/tokens.css. Do not edit. */
+:root {
+  color-scheme: light;
+${light}
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+${dark.replace(/^ {2}/gm, "    ")}
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+${dark}
+}
+`;
+}
+
+// --- the scripts read their strings from a JSON block in the page
+const JS_DIR = join(SRC, "js");
+const jsFiles = existsSync(JS_DIR) ? files(JS_DIR).filter((f) => f.endsWith(".js")) : [];
+const jsKeys = new Set();
+for (const f of jsFiles) {
+  const src = readFileSync(f, "utf8");
+  for (const [, k] of src.matchAll(/\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]/g)) jsKeys.add(k);
+  // Keys built at runtime (t(`agents.${name}`)) are declared with a comment:
+  //   // i18n-prefix: agents
+  for (const [, prefix] of src.matchAll(/i18n-prefix:\s*([a-zA-Z0-9_.-]+)/g)) {
+    const keys = Object.keys(base).filter((k) => k.startsWith(`${prefix}.`));
+    if (!keys.length) problems.push(`${relative(SRC, f)}: i18n-prefix "${prefix}" matches no key in ${config.defaultLanguage}.json`);
+    keys.forEach((k) => jsKeys.add(k));
+  }
+}
+// Data files (scripts of the monitor, the gate, the terminal; the strata)
+// reference i18n keys as "@key" strings.
+const DATA_DIR = join(SRC, "data");
+const data = {};
+if (existsSync(DATA_DIR)) {
+  for (const f of readdirSync(DATA_DIR).filter((n) => n.endsWith(".json"))) {
+    const d = readJSON(join(DATA_DIR, f));
+    data[f.slice(0, -5)] = d;
+    JSON.stringify(d, (k, v) => { if (typeof v === "string" && v.startsWith("@")) jsKeys.add(v.slice(1)); return v; });
+  }
+}
+for (const k of jsKeys) if (!(k in base)) problems.push(`js or data: i18n key "${k}" is not in ${config.defaultLanguage}.json`);
+
+// --- rendering
+const template = readFileSync(join(SRC, "page.html"), "utf8");
+const svg = (name) => {
+  const p = join(SRC, "svg", `${name}.svg`);
+  if (!existsSync(p)) { problems.push(`page.html: svg "${name}" not found`); return ""; }
+  return readFileSync(p, "utf8").trim();
+};
+const partials = {}; // filled by builders below (e.g. the strata)
+
+function render(lang) {
+  const tr = (k) => {
+    if (!(k in base)) { problems.push(`page.html: i18n key "${k}" is not in ${config.defaultLanguage}.json`); return k; }
+    return dict[lang][k] ?? base[k];
+  };
+  const blob = {
+    lang,
+    t: Object.fromEntries([...jsKeys].sort().map((k) => [k, dict[lang][k] ?? base[k]])),
+    data,
+  };
+  const alternates = languages.map((l) => `<link rel="alternate" hreflang="${l}" href="${esc(config.siteUrl)}${l}/">`).join("\n  ");
+  // SVG files are included first, so their own placeholders render too.
+  const expanded = template.replace(/\{\{\s*svg:([^}\s]+)\s*\}\}/g, (m, name) => svg(name));
+  const out = expanded.replace(/\{\{\s*([a-z]+)(?::([^}\s]+))?\s*\}\}/g, (m, kind, arg) => {
+    switch (kind) {
+      case "t": return esc(tr(arg));
+      case "md": return inline(tr(arg));
+      case "link": if (!(arg in links)) { problems.push(`page.html: unknown link "${arg}"`); return "#"; } return esc(links[arg]);
+      case "cfg": return esc(config[arg]);
+      case "lang": return lang;
+      case "alternates": return alternates;
+      case "partial": return partials[arg] ? partials[arg](tr, lang) : (problems.push(`page.html: unknown partial "${arg}"`), "");
+      case "data": return JSON.stringify(blob).replace(/</g, "\\u003c");
+      default: problems.push(`page.html: unknown placeholder ${m}`); return m;
+    }
+  });
+  return out;
+}
+
+// The strata (appendix A of docs/18): rounds from data/strata.json, their
+// names and sentences from the i18n file, counters from data/counters.json.
+partials.strata = (tr) => {
+  const rounds = data.strata?.rounds ?? [];
+  const order = { shipped: 0, digging: 1, planned: 2 };
+  // planned at the bottom (deepest on the page = oldest; see docs/18 4.7):
+  // the page reads downwards, so the newest, still-digging layers come
+  // first and the foundation sits at the very bottom, with the planned
+  // layers drawn faintly below the dug ones.
+  const dug = rounds.filter((r) => r.state !== "planned").sort((a, b) => order[b.state] - order[a.state] || b.n - a.n);
+  const planned = rounds.filter((r) => r.state === "planned").sort((a, b) => a.n - b.n);
+  const li = (r, i, all) => `<li class="layer layer--${r.state}" data-n="${r.n}" style="--depth:${r.state === "planned" ? 0 : Math.round((i / Math.max(1, all.length - 1)) * 45)}">
+          <span class="layer__n">${r.n}</span>
+          <span class="layer__name">${esc(tr(`strata.rounds.r${r.n}.name`))}</span>
+          <span class="layer__line">${inline(tr(`strata.rounds.r${r.n}.line`))}</span>
+          <span class="layer__state">${esc(tr(`strata.state.${r.state}`))}</span>
+        </li>`;
+  return `<ol class="layers" reversed>
+        ${dug.map(li).join("\n        ")}
+      </ol>
+      <h3 class="layers__planned-title">${esc(tr("strata.plannedTitle"))}</h3>
+      <ul class="layers layers--planned">
+        ${planned.map(li).join("\n        ")}
+      </ul>`;
+};
+partials.counters = (tr) => {
+  const c = data.counters;
+  if (!c) return "";
+  return `<dl class="counters" aria-label="${esc(tr("strata.counters.label"))}">
+        ` + ["rounds", "commits", "migrations", "tests"]
+    .map((k) => `<div class="counter"><dt>${esc(tr(`strata.counters.${k}`))}</dt><dd class="tabular" data-count="${Number(c[k] ?? 0)}">${Number(c[k] ?? 0).toLocaleString("en-US")}</dd></div>`)
+    .join("\n        ") + "\n      </dl>";
+};
+
+// --- write
+rmSync(DIST, { recursive: true, force: true });
+mkdirSync(DIST, { recursive: true });
+for (const dir of ["css", "js", "fonts", "img"]) if (existsSync(join(SRC, dir))) cpSync(join(SRC, dir), join(DIST, dir), { recursive: true });
+for (const f of ["favicon.svg", "robots.txt"]) if (existsSync(join(SRC, f))) cpSync(join(SRC, f), join(DIST, f));
+writeFileSync(join(DIST, "css", "tokens.css"), tokensCSS());
+for (const lang of languages) {
+  mkdirSync(join(DIST, lang), { recursive: true });
+  writeFileSync(join(DIST, lang, "index.html"), render(lang));
+}
+const def = base;
+writeFileSync(join(DIST, "index.html"), `<!doctype html>
+<html lang="${config.defaultLanguage}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(def["meta.title"])}</title>
+<meta name="description" content="${esc(def["meta.description"])}">
+<meta http-equiv="refresh" content="0; url=${config.defaultLanguage}/">
+<link rel="canonical" href="${esc(config.siteUrl)}${config.defaultLanguage}/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<p><a href="${config.defaultLanguage}/">${esc(def["meta.continue"])}</a></p>
+</body>
+</html>
+`);
+
+// --- checks on the output
+const external = /(?:\ssrc\s*=\s*["']?\s*(?:https?:)?\/\/)|(?:<link\b(?![^>]*\brel=["']?(?:alternate|canonical)\b)[^>]*\bhref\s*=\s*["']?\s*(?:https?:)?\/\/)|(?:url\(\s*["']?\s*(?:https?:)?\/\/)|(?:@import\s+(?:url\()?\s*["']?\s*(?:https?:)?\/\/)|(?:\bimport\s*\(?\s*["'](?:https?:)?\/\/)|(?:\bfetch\s*\(\s*["'](?:https?:)?\/\/)/i;
 let total = 0;
-for (const f of files(SRC)) {
-  const rel = relative(SRC, f);
-  total += statSync(f).size;
+const sizes = {};
+const out = files(DIST);
+for (const f of out) {
+  const rel = relative(DIST, f);
+  const size = statSync(f).size;
+  total += size;
+  const ext = extname(f) || "(none)";
+  sizes[ext] = (sizes[ext] ?? 0) + size;
   if (![".html", ".css", ".js", ".mjs", ".svg"].includes(extname(f))) continue;
   const text = readFileSync(f, "utf8");
   if (external.test(text)) problems.push(`${rel}: loads something from another origin; self-host it`);
-  if (/document\.cookie|localStorage\s*\.\s*setItem\(\s*["'](?:_ga|_gid)/i.test(text)) problems.push(`${rel}: cookies or tracking`);
+  if (/document\.cookie|localStorage|sessionStorage|indexedDB|navigator\.sendBeacon/i.test(text)) problems.push(`${rel}: cookies, storage or beacons (the site keeps nothing)`);
   if (extname(f) === ".html") {
     if (!/<html[^>]*\blang=/i.test(text)) problems.push(`${rel}: <html> needs a lang attribute`);
     if (!/<title>[^<]+<\/title>/i.test(text)) problems.push(`${rel}: needs a <title>`);
     if (!/<meta\s+name=["']description["']/i.test(text)) problems.push(`${rel}: needs a meta description`);
+    if (/\{\{[^}]*\}\}/.test(text)) problems.push(`${rel}: an unrendered placeholder is left`);
   }
 }
 if (total > BUDGET_BYTES) problems.push(`the site is ${total} bytes, over the ${BUDGET_BYTES} byte budget`);
 
+if (CHECK_ONLY) rmSync(DIST, { recursive: true, force: true });
 if (problems.length) {
-  console.error(problems.join("\n"));
+  console.error([...new Set(problems)].join("\n"));
   process.exit(1);
 }
-console.log(`site: ${files(SRC).length} files, ${total} bytes (budget ${BUDGET_BYTES}); checks passed`);
-if (!process.argv.includes("--check-only")) {
-  rmSync(DIST, { recursive: true, force: true });
-  mkdirSync(DIST, { recursive: true });
-  cpSync(SRC, DIST, { recursive: true });
-  console.log(`site: built into ${relative(process.cwd(), DIST) || "dist"}/`);
-}
+const kb = (n) => `${(n / 1024).toFixed(1)} kB`;
+console.log(`site: ${languages.join(", ")}; ${out.length} files, ${kb(total)} of ${kb(BUDGET_BYTES)}`);
+console.log("  " + Object.entries(sizes).sort((a, b) => b[1] - a[1]).map(([e, n]) => `${e} ${kb(n)}`).join(", "));
+console.log(CHECK_ONLY ? "site: checks passed" : `site: checks passed, built into ${relative(process.cwd(), DIST) || "dist"}/`);

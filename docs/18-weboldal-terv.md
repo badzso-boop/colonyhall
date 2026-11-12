@@ -2,7 +2,7 @@
 
 A 48. kör 5. része (`site/`, GitHub Pages). Ez a dokumentum az 5.1-es pont: Norbi víziója és a rá épülő terv. A műszaki alap (az 5.2-es pont) már kész: a `site/build.mjs` ellenőrzi a kötelező szabályokat, a `.github/workflows/pages.yml` csak kézi indításra fut.
 
-**Állapot:** a terv elfogadva (2026-11-12), a megvalósítás a hangyavázlatokkal indul (11. szakasz, 0. lépés).
+**Állapot:** a terv elfogadva (2026-11-12); a hangyavázlatok kapuja lezárult (12. szakasz); a 0–8. lépés megvalósítva (52. kör, `feature/site`). A Pages továbbra is csak kézi indításra fut.
 
 ## 1. Norbi döntései (2026-11-12)
 
@@ -199,9 +199,26 @@ Javaslat a sorrendre, egy körben, de lépésenként commitolva:
 
 Minden lépés után: `npm --prefix site run build` és a Lighthouse-mérés helyben; a Pages-workflow továbbra is csak kézi indításra fut.
 
-## 12. Nyitott kérdés
+## 12. A hangyák kinézete (döntés)
 
-- **A hangyák végleges kinézete:** a 11. szakasz 0. lépésének kapuján dől el.
+- **Norbi választása (2026-11-12): a „C” vázlat („Mark”).** A vázlatoldal (`site/sketches/`) öt karaktert mutatott (A–E); Norbi a C-t választotta keverés nélkül.
+- **A karakter:** felülnézetes hangya, a `BrandMark` arányaival (kerek fej, kis tor, hosszú potroh), nagy fehér szemekkel, pislogással és tapogató csápokkal. **Az egész hangya piros**, mint a logó; a cipelt csomag fehér, piros kerettel, hogy ne olvadjon bele a fejbe.
+- **Következmény a piros használatára:** a hangyák maguk a logó, ezért a piros rajtuk a márkajel szerepét tölti be, nem „harsány” kiemelésként számít. A feromon-nyomok (4.3) továbbra is a piros egyetlen kiemelő használata a kamrákban; a többi felület (szöveg, kártyák, keretek) a tokenek szerint visszafogott marad. A hangyák száma (legfeljebb ~12, mobilon ~5) és ritkasága tartja meg a piros súlyát.
+- **Felülnézet:** a hangya bármilyen irányba fordulhat, így ugyanaz a rajz mászik a monitoron, a járatokban és a térképen.
+
+## 13. Karbantartás (az 52. kör után)
+
+**Felépítés.** `site/src/page.html` a sablon (`{{t:kulcs}}` szöveg, `{{md:kulcs}}` szöveg kis jelöléssel: `` `kód` ``, `**erős**`, `*dőlt*`, `[szöveg](link:név)`; `{{link:név}}` cím; `{{svg:név}}` a `src/svg/` fájljai). A címek egy helyen vannak: `site/site.config.json` (`repository`, `siteUrl`), a belőle képzett linkek (`issues`, `docs`, `api`, `license`, …) a `site/build.mjs` elején. A színeket a build a PWA `tokens.css`-éből másolja (`dist/css/tokens.css`). A scriptek (`src/js/`) ES-modulok, külső könyvtár nélkül; a szövegeiket a build a lapba ágyazza (`<script id="site-data">`), így nincs külön letöltés.
+
+**Új nyelv.** Egy új fájl: `site/src/i18n/<nyelv>.json`, az `en.json` szerkezetével (a hiányzó kulcsok angolul jelennek meg; a build hibát ad, ha egy kulcs nincs az `en.json`-ban). A build magától elkészíti a `/<nyelv>/` oldalt és a `hreflang` hivatkozásokat. Más teendő nincs.
+
+**A Strata frissítése, ha egy kör állapota változik.** Három hely: ennek a dokumentumnak az A. függeléke, a `site/src/data/strata.json` (`state`: `shipped`, `digging` vagy `planned`), és új kör esetén az `en.json` `strata.rounds.r<szám>` kulcsa (`name`, `line`). A sorrendet és a megjelenést a build adja (a folyamatban lévő kör felül, a kész körök alatta, a tervezettek szaggatottan a legalján).
+
+**Számlálók.** `npm --prefix site run counters` (a `main` ágon, a kör beolvasztása után): a `git` előzményből és a repóból számol (kész körök, commitok, migrációk, Go-tesztfüggvények + Vitest/Node-tesztesetek), és a `site/src/data/counters.json`-t írja. A kimenet be van commitolva, a build hálózat és teljes előzmény nélkül fut.
+
+**Közösségi előnézeti kép.** `npm --prefix site install --no-save playwright@1.56.1`, egyszer `npx --prefix site playwright install chromium`, majd `npm --prefix site run build && npm --prefix site run social && npm --prefix site run build`. A kép (`site/src/img/social.jpg`, 1200×630) a hero-ról készül, miután a monitoron megtörtént az átadás. A GitHub social preview-ba ugyanezt a képet kell feltölteni (Settings → General).
+
+**Ellenőrzés.** `npm --prefix site run build` (szabályok, kulcsok, méretkeret), a Pages-workflow Lighthouse CI-ja (mobil profil, a 8. szakasz küszöbeivel).
 
 ## A. függelék: a rétegek (Strata) szövege
 

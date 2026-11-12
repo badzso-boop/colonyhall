@@ -6,10 +6,10 @@ name: pages
 on:
   workflow_dispatch:
 
+# Only the deploy job may write to Pages; the build job runs third-party
+# npm code (Lighthouse CI) and gets read access alone.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -18,12 +18,26 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read # configure-pages reads the Pages settings
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - run: npm --prefix site run build
+      # Lighthouse, mobile profile (docs/18, section 8): the job fails below
+      # Performance 90, Accessibility 100, Best Practices 95, SEO 95, or over
+      # LCP 2.5 s, CLS 0.05, TBT 200 ms. Reports stay in the job (no upload
+      # to a third party).
+      - name: Lighthouse
+        run: npx --yes @lhci/cli@0.16.1 autorun --config=site/lighthouserc.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: lighthouse
+          path: site/.lighthouseci
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -31,6 +45,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
