@@ -17,8 +17,8 @@ norbert.ujj@gmail.com). Contributions are accepted under the Colonyhall
 Contributor License Agreement (CLA.md), which makes this possible.
 
 Source code for network users (AGPL section 13): a running Colonyhall
-server links to its source in the web app (About, and the sign-in page
-footer) and at GET /api/v1/version. If you run a modified version, set
+server links to its source in the web app (the sign-in page and the user
+menu) and at GET /api/v1/version. If you run a modified version, set
 COLONY_SOURCE_URL to where your modified source can be downloaded.
 
 Third-party software: the binaries, the container image and the web app

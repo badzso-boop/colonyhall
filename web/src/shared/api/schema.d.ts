@@ -61,7 +61,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Public. The server's version, licence and where its source code can be downloaded (AGPL section 13: COLONY_SOURCE_URL). The web app shows the link on the sign-in page and under About. */
+        /** @description Public. The server's version, licence and where its source code can be downloaded (AGPL section 13: COLONY_SOURCE_URL). The web app shows the link on the sign-in page and at the bottom of the user menu. */
         get: operations["getVersion"];
         put?: never;
         post?: never;

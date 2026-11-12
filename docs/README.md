@@ -8,9 +8,10 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 
 | Fájl | Mi van benne |
 | --- | --- |
+| [en/](en/README.md) | Angol nyelvű anyag a nyilvános látogatónak (48. kör): telepítési útmutató, architektúra-áttekintés, a REST API generált referenciája (`make gen`) |
 | [01-terv.md](01-terv.md) | A teljes terv: cél, architektúra, agent-csatlakozás, ébresztés, csatolt terminál, context-optimalizálás, jogosultságok, keretek, feladatok, kérdés–válasz protokoll, közös agent-utasítás, worktree, tudás és döntésnapló, ütemező, értesítések és vészleállító, mentés, üzemeltetés, tesztelés, ütemterv |
 | [02-muszaki-specifikacio.md](02-muszaki-specifikacio.md) | Rétegek és SOLID, futtatási szerepkörök, kódszerkezet, adatmodell, WebSocket protokoll, MCP eszközök, REST API, verziózás, teljesítmény |
-| [03-tanulsagok-mas-chat-szerverekbol.md](03-tanulsagok-mas-chat-szerverekbol.md) | Mattermost, Dendrite, Synapse, Zulip és Stoat forráskódjának elemzése; ebből a modulonkénti szerkezet, a `delivery` tábla, az egyírós eseménynapló és a többi átvett minta (PDF: [03-…pdf](03-tanulsagok-mas-chat-szerverekbol.pdf)) |
+| [03-tanulsagok-mas-chat-szerverekbol.md](03-tanulsagok-mas-chat-szerverekbol.md) | Mattermost, Dendrite, Synapse, Zulip és Stoat forráskódjának elemzése; ebből a modulonkénti szerkezet, a `delivery` tábla, az egyírós eseménynapló és a többi átvett minta |
 | [04-gitea-agent-hozzaferes.md](04-gitea-agent-hozzaferes.md) | Saját Gitea és az agentek git-hozzáférése (példacímekkel): fiókok, tokenek, a Colonyhall szerver beállítása, új gép beállítása lépésről lépésre, PR- és webhook-recept, ismert gondok |
 | [07-design-system.md](07-design-system.md) | A PWA kinézete: tokenek, komponensek, témák |
 | [08-frontend-architektura.md](08-frontend-architektura.md) | A PWA szerkezete: rétegek, funkciómodulok, adatkezelés, i18n, tesztek (kötelező a `web/`-hez) |

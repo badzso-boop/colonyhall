@@ -65,15 +65,16 @@ web-vitest: $(WEB_DEPS) ## PWA Vitest (VITEST_ARGS="--shard=1/3" and the like)
 test-pg:         ## Store contract, Postgres e2e, row-level security and cross-tenant tests (needs `make dev`); one package at a time, they share the database
 	COLONY_TEST_DATABASE_URL='$(TEST_DB)' $(GO) test -p 1 ./internal/storetest/ ./internal/e2e/ -run '^TestPostgres' -v
 
-gen: $(WEB_DEPS) ## Regenerate code from api/openapi.yaml (Go and TypeScript) and SQL queries, and THIRD_PARTY_NOTICES.md
+gen: $(WEB_DEPS) ## Regenerate code from api/openapi.yaml (Go, TypeScript, docs/en/api.md) and SQL queries, and THIRD_PARTY_NOTICES.md
 	$(GO) tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
 	npm --prefix web run gen:api
 	$(SQLC) generate
 	python3 -I scripts/third-party-notices.py
+	$(GO) run ./scripts/apidoc
 
 gen-check:       ## Fail if generated code is out of date
 	$(MAKE) gen
-	git diff --exit-code -- internal/apispec web/src/shared/api/schema.d.ts THIRD_PARTY_NOTICES.md $$(find internal -type d -name sqlcgen)
+	git diff --exit-code -- internal/apispec web/src/shared/api/schema.d.ts THIRD_PARTY_NOTICES.md docs/en/api.md $$(find internal -type d -name sqlcgen)
 
 lint:            ## golangci-lint with the depguard layer rules
 	golangci-lint run ./...

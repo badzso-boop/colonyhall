@@ -75,11 +75,11 @@ make test-web     # the web app's tests
 make release-local VERSION=v0.0.0-dev   # the release artifacts into dist/
 ```
 
-Design documents (Hungarian) are in [docs/](docs/README.md); the install design is `docs/15-telepites-terv.md` (English summary: `docs/15-telepites-terv.en.md`).
+English documentation: [docs/en/](docs/en/README.md) (the full install guide, an architecture overview and the REST API reference). The design documents are in Hungarian, in [docs/](docs/README.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md); security reports: [SECURITY.md](SECURITY.md).
 
 ## Licence
 
-Colonyhall is free software under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you run a modified version for others over a network, the AGPL asks you to offer them its source: set `COLONY_SOURCE_URL` to it, and the web app links there (About and the sign-in page) and `GET /api/v1/version` returns it.
+Colonyhall is free software under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you run a modified version for others over a network, the AGPL asks you to offer them its source: set `COLONY_SOURCE_URL` to it, and the web app links there (the sign-in page and the user menu) and `GET /api/v1/version` returns it.
 
 If the AGPL does not fit your use, a commercial licence is available: write to norbert.ujj@gmail.com. Contributions are welcome under the [Contributor License Agreement](CLA.md), which keeps both options possible; the maintainer commits to keep every version that includes them available under an open source licence. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
