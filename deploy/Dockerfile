@@ -1,5 +1,7 @@
 # Build: docker build -f deploy/Dockerfile .
-FROM node:22-alpine AS web
+# Base images are pinned by digest (round 40); Dependabot moves the digest
+# and the tag together.
+FROM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 COPY web/scripts ./scripts
@@ -7,7 +9,7 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.27-alpine AS build
+FROM golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -22,7 +24,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
 # named volume, which would otherwise be root-owned and unwritable.
 RUN mkdir -p /out/data/files
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/colonyhall /colonyhall
 COPY --from=build --chown=65532:65532 /out/data /data
 EXPOSE 8080

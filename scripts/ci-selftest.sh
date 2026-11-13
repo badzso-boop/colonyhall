@@ -93,6 +93,16 @@ if [ "$n" -ne 5 ]; then
   fails=$((fails + 1))
 fi
 
+# Every Dockerfile base image is pinned by digest (round 40); Dependabot
+# keeps the digests current.
+for f in $(git -C "$here/.." ls-files -- '*Dockerfile*'); do
+  bad=$(grep -E '^FROM[[:space:]]' "$here/../$f" | grep -v '@sha256:' || true)
+  if [ -n "$bad" ]; then
+    echo "FAIL $f: base image not pinned by digest: $bad"
+    fails=$((fails + 1))
+  fi
+done
+
 if [ "$fails" -gt 0 ]; then
   echo "$fails failure(s)"
   exit 1

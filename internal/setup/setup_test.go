@@ -610,6 +610,10 @@ func TestRootBackupUsesOnlyRootOwnedPaths(t *testing.T) {
 	if err := e.installBackups(); err != nil {
 		t.Fatal(err)
 	}
+	// Round 40: root runs it nightly; the image is pinned by digest.
+	if !strings.Contains(e.backupScript(), " busybox:1.37@sha256:") || strings.Contains(e.backupScript(), " busybox tar") {
+		t.Errorf("the backup image is not pinned by digest:\n%s", e.backupScript())
+	}
 	if strings.Contains(e.backupScript(), e.Home) {
 		t.Errorf("the root backup script refers to the user's home:\n%s", e.backupScript())
 	}

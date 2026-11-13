@@ -571,11 +571,16 @@ db=$(docker ps -q --filter label=com.docker.compose.project=colonyhall --filter 
 if [ -n "$db" ]; then
   docker exec "$db" pg_dump -U colony -d colonyhall -Fc > "$out/colonyhall-$stamp.dump"
 fi
-docker run --rm -v colonyhall_files:/data:ro -v "$out":/backup busybox tar czf "/backup/files-$stamp.tar.gz" -C /data .
+docker run --rm -v colonyhall_files:/data:ro -v "$out":/backup %s tar czf "/backup/files-$stamp.tar.gz" -C /data .
 find "$out" -name 'colonyhall-*.dump' -mtime +14 -delete
 find "$out" -name 'files-*.tar.gz' -mtime +14 -delete
-`, e.backupDir())
+`, e.backupDir(), backupImage)
 }
+
+// backupImage archives the files volume. Root runs the backup every night,
+// so the image is pinned by digest (round 40), not taken from whatever
+// "busybox" (latest) the registry serves that day.
+const backupImage = "busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
 
 // installBackups writes the script and schedules it nightly: a root
 // systemd timer on Linux (Docker runs with sudo there), a launchd agent on
