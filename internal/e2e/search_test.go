@@ -342,3 +342,29 @@ func TestSearchMCPTool(t *testing.T) {
 		t.Fatalf("frame attributes:\n%s", text)
 	}
 }
+
+// Round 40: a decision is visible to the whole workspace, but the private
+// channel it was made in is not: the hit carries no channel or thread for a
+// reader outside it.
+func TestSearchDecisionHidesAPrivatePlace(t *testing.T) {
+	s := newSearchEnv(t)
+	priv, err := s.app.Conversation.CreateChannel(s.ctx, s.admin, "vezetoseg", "", conversation.KindPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.app.Decisions.AddDecision(s.ctx, s.admin, decision.AddDecisionInput{
+		Text: "A zebracsíkos projektet leállítjuk", Rationale: "Nincs rá keret", ChannelID: &priv.ID}); err != nil {
+		t.Fatal(err)
+	}
+	s.index()
+	r := s.search(server.DevAgentToken, "zebracsíkos", url.Values{"mode": {"keyword"}})
+	if len(r.Hits) != 1 {
+		t.Fatalf("the decision itself is workspace-wide: %s", snippets(r))
+	}
+	if r.Hits[0].ChannelId != nil || r.Hits[0].ThreadRootId != nil {
+		t.Fatalf("a private channel's id reached a reader outside it: %+v", r.Hits[0])
+	}
+	if r := s.search(server.DevAdminToken, "zebracsíkos", url.Values{"mode": {"keyword"}}); len(r.Hits) != 1 || r.Hits[0].ChannelId == nil {
+		t.Fatalf("a member of the channel still gets it: %+v", r.Hits)
+	}
+}
