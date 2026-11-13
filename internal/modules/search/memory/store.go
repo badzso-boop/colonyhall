@@ -192,8 +192,21 @@ func allowed(r *row, acc search.Access, f search.Filters) bool {
 }
 
 func words(s string) []string {
-	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	return strings.FieldsFunc(fold(strings.ToLower(s)), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
+
+// accents maps accented lower-case letters to their base letter, like the
+// Postgres adapter's unaccent vector (round 53): "konyv" matches "könyv".
+var accents = strings.NewReplacer(
+	"á", "a", "à", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
+	"é", "e", "è", "e", "ê", "e", "ë", "e",
+	"í", "i", "ì", "i", "î", "i", "ï", "i",
+	"ó", "o", "ò", "o", "ô", "o", "ö", "o", "ő", "o", "õ", "o",
+	"ú", "u", "ù", "u", "û", "u", "ü", "u", "ű", "u",
+	"ç", "c", "ñ", "n", "ý", "y", "ž", "z", "š", "s", "č", "c", "ř", "r",
+)
+
+func fold(s string) string { return accents.Replace(s) }
 
 func termMatches(term string, ws []string) bool {
 	for _, w := range ws {

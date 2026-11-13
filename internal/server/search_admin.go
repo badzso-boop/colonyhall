@@ -267,7 +267,7 @@ func (a *App) RunEval(ctx context.Context, set search.EvalSet, actor identity.Ac
 			for i, h := range res.Hits {
 				ranked[i] = search.HitRef(h.Chunk)
 			}
-			run.Add(ranked, relevant, time.Since(start))
+			run.Add(q.ID, ranked, relevant, time.Since(start))
 		}
 		out = append(out, run.Metrics())
 	}

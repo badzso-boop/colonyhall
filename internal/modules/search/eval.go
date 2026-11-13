@@ -110,18 +110,23 @@ type EvalMetrics struct {
 	NDCG10   float64
 	P50      time.Duration
 	P95      time.Duration
+	// Missed lists the questions with no relevant source in the top 10.
+	Missed []string
 }
 
 // EvalRun collects one configuration's per-question results.
 type EvalRun struct {
 	Config    string
+	ids       []string
 	rankings  [][]string
 	relevant  [][]string
 	latencies []time.Duration
 }
 
-// Add records one question: the ranked hit references and the latency.
-func (r *EvalRun) Add(ranked, relevant []string, latency time.Duration) {
+// Add records one question: its ID, the ranked hit references and the
+// latency.
+func (r *EvalRun) Add(id string, ranked, relevant []string, latency time.Duration) {
+	r.ids = append(r.ids, id)
 	r.rankings = append(r.rankings, ranked)
 	r.relevant = append(r.relevant, relevant)
 	r.latencies = append(r.latencies, latency)
@@ -162,6 +167,9 @@ func (r *EvalRun) Metrics() EvalMetrics {
 		for pos := 0; pos < min(len(rel), 10); pos++ {
 			idcg += 1 / math.Log2(float64(pos+2))
 		}
+		if found10 == 0 {
+			m.Missed = append(m.Missed, r.ids[i])
+		}
 		m.Recall5 += float64(found5) / float64(len(rel))
 		m.Recall10 += float64(found10) / float64(len(rel))
 		if idcg > 0 {
@@ -197,6 +205,17 @@ func FormatMetrics(name string, ms []EvalMetrics) string {
 	for _, m := range ms {
 		fmt.Fprintf(&b, "%-16s %9.3f %9.3f %8.3f %8.3f %9s %9s\n", m.Config, m.Recall5, m.Recall10, m.MRR10, m.NDCG10,
 			m.P50.Round(100*time.Microsecond), m.P95.Round(100*time.Microsecond))
+	}
+	header := false
+	for _, m := range ms {
+		if len(m.Missed) == 0 {
+			continue
+		}
+		if !header {
+			fmt.Fprintf(&b, "\nnot in the top 10:\n")
+			header = true
+		}
+		fmt.Fprintf(&b, "%-16s %s\n", m.Config, strings.Join(m.Missed, " "))
 	}
 	return b.String()
 }

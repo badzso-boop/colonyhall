@@ -55,7 +55,7 @@ Optional (`COLONY_MULTITENANT=1`). Each workspace has its own subdomain. Every t
 
 ## Search
 
-Hybrid search over chat, the wiki, decisions and conversation summaries: PostgreSQL full-text search (Hungarian stemming and exact words) and `pgvector` semantic search, fused with reciprocal rank fusion, optionally reranked. The embedding and reranking models run on separate small HTTP services; without them search falls back to keywords. Every result passes the caller's channel permissions. Details: `docs/11-rag-terv.md`.
+Hybrid search over chat, the wiki, decisions and conversation summaries: PostgreSQL full-text search (Hungarian stemming, exact words, and the same words without accents) and `pgvector` semantic search, fused with reciprocal rank fusion, optionally reranked. Before the reranker, one source may take at most two and one thread at most three of the candidate places, so a long thread cannot crowd out a decision or a wiki page. The embedding and reranking models run on separate small HTTP services; without them search falls back to keywords. Every result passes the caller's channel permissions. Details: `docs/11-rag-terv.md`.
 
 ## Testing
 
