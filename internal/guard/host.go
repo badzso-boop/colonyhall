@@ -403,15 +403,24 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		s.report(ctx)
 	}
 	halted := make(map[string]bool)
+	// Previews only for the agents this machine accepted (round 40): the
+	// server's list also holds agents refused above (an unsandboxed agent
+	// with allow_unsandboxed off, a root on the deny list).
+	var accepted []HostAgent
 	s.mu.Lock()
 	for id, m := range s.agents {
 		if m.agent != nil && m.agent.IsHalted() {
 			halted[id] = true
 		}
 	}
+	for _, ha := range cfg.Agents {
+		if _, ok := s.agents[ha.AgentID]; ok {
+			accepted = append(accepted, ha)
+		}
+	}
 	s.mu.Unlock()
 	if s.previews != nil {
-		s.previews.Reconcile(ctx, cfg.Previews, cfg.Agents, halted)
+		s.previews.Reconcile(ctx, cfg.Previews, accepted, halted)
 	}
 	if s.terminals != nil {
 		s.terminals.CheckHalted(halted)
