@@ -117,9 +117,11 @@ func (t *RunWebReadTracker) VisitedURLs() []string {
 }
 
 // matchHostPattern matches host against a pattern (exact or leading *.).
+// A trailing dot (the fully qualified form, "evil.com.") is the same host
+// and must not slip past a deny pattern (round 40).
 func matchHostPattern(pattern, host string) bool {
-	pattern = strings.ToLower(pattern)
-	host = strings.ToLower(host)
+	pattern = strings.TrimSuffix(strings.ToLower(pattern), ".")
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	if strings.HasPrefix(pattern, "*.") {
 		suffix := pattern[1:] // e.g. ".go.dev"
 		return strings.HasSuffix(host, suffix) && len(host) > len(suffix)
@@ -160,6 +162,10 @@ func (st *safeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid host %q: %w", rawHost, err)
 	}
+	asciiHost = strings.TrimSuffix(asciiHost, ".")
+	if asciiHost == "" || strings.Contains(asciiHost, "..") {
+		return nil, fmt.Errorf("invalid host %q", rawHost)
+	}
 
 	// 2. Check deny and allow lists
 	for _, d := range st.opts.Deny {
@@ -192,7 +198,9 @@ func (st *safeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	for _, addr := range addrs {
 		if isBlockedIP(addr.IP) {
-			return nil, fmt.Errorf("host %q resolved to blocked address %s", asciiHost, addr.IP)
+			// The address itself stays out of the agent's answer: it would
+			// tell internal DNS answers (round 40).
+			return nil, fmt.Errorf("host %q resolves to a private or reserved address", asciiHost)
 		}
 	}
 
