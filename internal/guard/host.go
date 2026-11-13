@@ -126,6 +126,7 @@ func (s *Supervisor) start(ctx context.Context) error {
 	s.sandbox = DetectSandbox(ctx, s.home, s.Cfg.SandboxDir)
 	if s.sandbox != nil {
 		s.sandbox.NetworkMode = s.Cfg.SandboxNetwork
+		s.sandbox.Hide = []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile}
 	}
 	if s.login, err = LoadClaudeLogin(s.Cfg.ClaudeTokenFile); err != nil {
 		return err
