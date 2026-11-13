@@ -2247,7 +2247,7 @@ type CreateAgentRequest struct {
 	OwnerId *openapi_types.UUID `json:"owner_id,omitempty"`
 }
 
-// CreateChannelRequest defines model for CreateChannelRequest.
+// CreateChannelRequest kind is public (the default) or private; dm is refused with 400, DMs come from POST /dms (round 40).
 type CreateChannelRequest struct {
 	Description *string      `json:"description,omitempty"`
 	Kind        *ChannelKind `json:"kind,omitempty"`

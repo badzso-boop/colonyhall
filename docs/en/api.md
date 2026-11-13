@@ -3337,6 +3337,8 @@ Round 39: CodeGraph on the machine. The guard indexes the agents' git repositori
 
 ### CreateChannelRequest
 
+kind is public (the default) or private; dm is refused with 400, DMs come from POST /dms (round 40).
+
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `description` | string |  |  |

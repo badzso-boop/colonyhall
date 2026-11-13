@@ -3249,9 +3249,9 @@ export interface components {
         ChannelMemberList: {
             members: components["schemas"]["ChannelMember"][];
         };
+        /** @description kind is public (the default) or private; dm is refused with 400, DMs come from POST /dms (round 40). */
         CreateChannelRequest: {
             name: string;
-            /** @description public (default) or private; dm is refused (400), DMs come from POST /dms (round 40) */
             kind?: components["schemas"]["ChannelKind"];
             description?: string;
             /** @description Admins: initial members besides the creator */

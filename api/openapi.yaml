@@ -3095,10 +3095,11 @@ components:
           items: { $ref: "#/components/schemas/ChannelMember" }
     CreateChannelRequest:
       type: object
+      description: "kind is public (the default) or private; dm is refused with 400, DMs come from POST /dms (round 40)."
       required: [name]
       properties:
         name: { type: string }
-        kind: { $ref: "#/components/schemas/ChannelKind", description: "public (default) or private; dm is refused (400), DMs come from POST /dms (round 40)" }
+        kind: { $ref: "#/components/schemas/ChannelKind" }
         description: { type: string, maxLength: 250 }
         member_ids: { type: array, maxItems: 100, items: { type: string, format: uuid }, description: "Admins: initial members besides the creator" }
     AddMemberRequest:
