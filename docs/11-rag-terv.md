@@ -2,6 +2,8 @@
 
 Állapot: **a 36a megvalósítva a `feature/rag` ágon; a mérés a célgépeken hátravan** (Norbi, 2026-11-10: „most nem kell mérni, csak a kód”). A Pi- és a homelab-számok a gépek beállításakor kerülnek ide; a kód a modelltől független (HTTP-port, a modell neve a válaszból jön). A megvalósítás jelentése: `handoff/36-search-rag-report.md`. A kötelező döntések a `docs/handoff/36-search-rag-prompt.md`-ben; ez a dokumentum a megvalósítás terve, a mérések, és a végén a **Norbi döntésére váró kérdések**. Ahol egy szám nem a célgépen mért, ott a szöveg kimondja: „becslés”.
 
+> **Változás (Norbi, 2026-11-13): a szöveg-beágyazó a homelabon fut, nem a Pi-n.** Ugyanaz a szerver és modell (`deploy/embed/`, `multilingual-e5-small` int8), konténerben, külön compose-projektben (`deploy/embed/compose.yaml`, `shared-db-net`, `http://embed:8090`); 430–560 MB memória, a 766 darab ~3 perc alatt beágyazva. A reranker is fut, de a `jina-reranker-v2` helyett az `mmarco-mMiniLMv2` (`--batch 1`): a mérés és az ok a `13-rag-reranker-beallitasa.md`-ben. A lenti Pi-számok és a `12-rag-pi-beallitasa.md` a Pi-s változatra érvényesek, ami alternatíva marad.
+
 ## Mai állapot (amire építünk)
 
 **Gépek (2026-11-10, csak olvasva ellenőrizve):**

@@ -124,6 +124,14 @@ services:
       # addresses never locked out by the login limits (IPs or CIDRs).
       COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
       COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
+      # Search (docs/11-rag-terv.md): the embedding server and the reranker; empty: keyword search only / no rerank.
+      COLONY_EMBED_URL: ${COLONY_EMBED_URL:-}
+      COLONY_RERANK_URL: ${COLONY_RERANK_URL:-}
+      COLONY_RERANK_TOP: ${COLONY_RERANK_TOP:-}
+      COLONY_RERANK_TIMEOUT: ${COLONY_RERANK_TIMEOUT:-}
+      # Several customers on one server, one subdomain each (docs/23-elkulonites.md); off by default.
+      COLONY_MULTITENANT: ${COLONY_MULTITENANT:-0}
+      COLONY_BASE_DOMAIN: ${COLONY_BASE_DOMAIN:-}
     volumes:
       - files:/data/files
     ports:

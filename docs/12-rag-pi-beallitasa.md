@@ -1,5 +1,7 @@
 # A szöveg-beágyazó a Raspberry Pi 3B-n (36. kör)
 
+> **2026-11-13 óta a beágyazó a homelabon fut konténerben** (`deploy/embed/compose.yaml`, receptje a fájl elején; a modell letöltése: `deploy/embed/MODEL.md`), a Colonyhall `deploy/.env`-jében `COLONY_EMBED_URL=http://embed:8090`. Ez a leírás a Pi-s változat, ha egyszer újra külön gépre kerülne.
+
 Állapot: **terv, jóváhagyásra vár** (a `11-rag-terv.md` része). Norbi futtatja, vagy Claude Code az ő jóváhagyásával, lépésenként. A beágyazó szerver kódja (`deploy/embed/`) a 36a első részében készül; addig ez a lépéssor a gép előkészítése.
 
 Mit ad: egy mindig futó, kicsi HTTP-szolgáltatást a LAN-on, ami magyar (és bármilyen) szövegből 384 dimenziós vektort számol a `multilingual-e5-small` modellel. Csak a homelab (a Colonyhall szerver) hívja.
@@ -44,6 +46,7 @@ Wants=network-online.target
 [Service]
 User=embed
 WorkingDirectory=/opt/colony-embed
+Environment=ORT_DISABLE_TELEMETRY=1
 ExecStart=/opt/colony-embed/venv/bin/python -I server.py --mode embed --model model --name multilingual-e5-small-int8 --host 0.0.0.0 --port 8090 --threads 4 --batch 4
 Restart=always
 RestartSec=5

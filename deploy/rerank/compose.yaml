@@ -7,8 +7,11 @@ name: colonyhall-rerank
 services:
   rerank:
     build: ../colonyhall/deploy/embed
+    # --batch 1: one candidate at a time. Batched candidates are padded to the
+    # longest one, and real chunks vary a lot in length: 20 candidates took
+    # 7.5 s with --batch 10 and 2.9 s with --batch 1 (homelab, 2026-11-13).
     command: ["--mode", "rerank", "--model", "/model", "--name", "${RERANK_MODEL_NAME:-reranker}",
-              "--host", "0.0.0.0", "--port", "8091", "--threads", "2", "--batch", "10"]
+              "--host", "0.0.0.0", "--port", "8091", "--threads", "2", "--batch", "1"]
     volumes:
       - ./model:/model:ro
     networks:
@@ -18,6 +21,7 @@ services:
     cpus: 2
     read_only: true
     tmpfs: [/tmp]
+    cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
     healthcheck:
