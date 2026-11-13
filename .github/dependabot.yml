@@ -1,0 +1,47 @@
+# Dependency updates (round 40). Weekly, grouped so each ecosystem comes as
+# one pull request (security updates still arrive on their own). The pull
+# requests run the normal CI; nothing merges automatically.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directories: [/web, /site]
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      web-runtime:
+        dependency-type: production
+        patterns: ["*"]
+      web-dev:
+        dependency-type: development
+        patterns: ["*"]
+
+  # The workflows pin every action by commit SHA; Dependabot moves the SHA
+  # and the version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories: [/deploy, /deploy/embed]
+    schedule: { interval: weekly, day: monday }
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directories: [/deploy, /deploy/rerank]
+    schedule: { interval: weekly, day: monday }
+    groups:
+      compose-images:
+        patterns: ["*"]
