@@ -23,7 +23,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"colonyhall/internal/fakeagent"
+	"colonyhall/internal/modules/approval"
+	"colonyhall/internal/modules/compaction"
+	"colonyhall/internal/modules/delegation"
+	"colonyhall/internal/modules/files"
+	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/planner"
+	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/server"
@@ -174,12 +181,14 @@ func (s *ctSuite) seed() {
 	}
 	s.obj["lease"], s.obj["question"] = leases.Leases[0].ID, qs.Questions[0].ID
 
+	acmeWS := acmeWorkspace(t, a)
+	s.seedShortLived(acmeWS)
+
 	for _, id := range s.obj {
 		if _, err := ids.Parse(id); err == nil {
 			s.acmeIDs = append(s.acmeIDs, id)
 		}
 	}
-	acmeWS := acmeWorkspace(t, a)
 	s.acmeIDs = append(s.acmeIDs, acmeWS.String())
 
 	// beta: its owner, an agent and a machine of its own.
@@ -198,6 +207,62 @@ func (s *ctSuite) seed() {
 	must(b.do("POST", "/api/v1/hosts/enroll", "", map[string]any{"code": pc.Code, "name": "beta-pc"}, &enrolled), http.StatusCreated, "beta host")
 	s.betaHost = enrolled.Token
 	b.reportReady(s.betaHost)
+}
+
+// seedShortLived adds the acme objects that take a long flow to make (an
+// approval waiting for a person, a delegation grant, a calendar, a
+// compaction, a file fetch, a folder grant, a preview) straight through
+// their stores (round 40): before, the suite tried these routes only with
+// ids that exist nowhere.
+func (s *ctSuite) seedShortLived(ws ids.ID) {
+	t, a := s.t, s.acme
+	ctx := db.WithWorkspace(context.Background(), ws)
+	gen, now := ids.V7{}, a.clock.Now()
+	ch, msg, agent, host := mustID(s.obj["channel"]), mustID(s.obj["message"]), mustID(s.obj["agent"]), mustID(s.obj["host"])
+	owner, err := a.app.Identity.Authenticate(context.Background(), server.DevAdminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	put := func(kind string, id ids.ID, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("seed %s: %v", kind, err)
+		}
+		s.obj[kind] = id.String()
+	}
+	id := gen.New()
+	put("approval", id, a.app.Approval.Store.Create(ctx, approval.ApprovalRequest{ID: id, WorkspaceID: ws, AgentID: agent, ChannelID: ch,
+		ToolName: "Bash", Input: acmeData + " command", State: approval.StatePending, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}))
+	delID := gen.New()
+	if err := a.app.Delegation.Store.Insert(ctx, delegation.Delegation{ID: delID, WorkspaceID: ws, MessageID: msg, ChannelID: ch,
+		FromAgentID: agent, ToAgentID: mustID(s.obj["actor"]), QuestionID: mustID(s.obj["question"]), State: delegation.StateApproved,
+		DecidedBy: &owner.ID, DecidedAt: &now, CreatedAt: now}); err != nil {
+		t.Fatalf("seed delegation: %v", err)
+	}
+	id = gen.New()
+	other := mustID(s.obj["actor"])
+	ga, gb := agent, other
+	if gb.String() < ga.String() {
+		ga, gb = gb, ga
+	}
+	put("delegationGrant", id, a.app.Delegation.Store.InsertGrant(ctx, delegation.Grant{ID: id, WorkspaceID: ws, ChannelID: ch, AgentAID: ga, AgentBID: gb,
+		DelegationID: delID, ApprovedBy: owner.ID, ApprovedAt: now, LastUsedAt: now, ExpiresAt: now.Add(time.Hour)}))
+	id = gen.New()
+	put("calendar", id, a.app.Planner.Store.InsertCalendar(ctx, planner.Calendar{ID: id, WorkspaceID: ws, OwnerID: owner.ID, Name: acmeData + " calendar",
+		URL: "https://calendar.example.com/" + acmeRef + ".ics", Colour: "blue", CreatedAt: now}))
+	id = gen.New()
+	put("compaction", id, a.app.Compaction.Store.InsertCompaction(ctx, compaction.Compaction{ID: id, WorkspaceID: ws, ChannelID: ch,
+		Trigger: compaction.TriggerManual, RequestedBy: owner.ID, CompactorAgentID: agent, State: compaction.StatePending, CreatedAt: now}))
+	id = gen.New()
+	put("fileFetch", id, a.app.Files.Store.InsertFileFetchRequest(ctx, files.FileFetchRequest{ID: id, WorkspaceID: ws, MessageID: msg, ChannelID: ch,
+		AgentID: agent, RequestedBy: owner.ID, Path: "/home/alice/" + acmeRef + ".txt", State: files.FileFetchPending, CreatedAt: now}))
+	id = gen.New()
+	put("grant", id, a.app.Hosts.Store.AddGrant(ctx, hosts.Grant{ID: id, WorkspaceID: ws, AgentID: agent, HostID: host,
+		Path: "/home/alice/" + acmeRef, Mode: hosts.ModeRead, CreatedBy: owner.ID, CreatedAt: now}))
+	id = gen.New()
+	put("preview", id, a.app.Preview.Store.Create(ctx, preview.Preview{ID: id, WorkspaceID: ws, AgentID: agent, HostID: host, ChannelID: ch,
+		Name: acmeRef + "-preview", ComposePath: "docker-compose.yaml", State: preview.StateRunning, URL: "http://192.0.2.1:41000",
+		ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}))
 }
 
 func (s *ctSuite) upload(e *env, token, channel, content string) string {
@@ -282,11 +347,26 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 			return s.obj["agent"], true
 		case strings.HasPrefix(path, "/leases/"):
 			return s.obj["lease"], true
+		case strings.HasPrefix(path, "/file-fetch/"), strings.HasPrefix(path, "/agent/file-fetch/"):
+			return s.obj["fileFetch"], true
+		case strings.HasPrefix(path, "/compactions/"), strings.HasPrefix(path, "/agent/compactions/"):
+			return s.obj["compaction"], true
+		case strings.HasPrefix(path, "/delegation-grants/"):
+			return s.obj["delegationGrant"], true
+		case strings.HasPrefix(path, "/planner/calendars/"):
+			return s.obj["calendar"], true
 		}
-		return ids.V7{}.New().String(), false
-	case "requestId", "previewId", "approvalId", "grantId":
-		// Short-lived relay requests, previews, approvals, grants: acme has
-		// none; an id that exists nowhere still has to be refused cleanly.
+		s.t.Fatalf("cross-tenant suite: no acme object for {id} in %s; map it in pathParam", path)
+		return "", false
+	case "approvalId":
+		return s.obj["approval"], true
+	case "grantId":
+		return s.obj["grant"], true
+	case "previewId":
+		return s.obj["preview"], true
+	case "requestId":
+		// Relay requests live in memory for seconds: acme has none; an id
+		// that exists nowhere still has to be refused cleanly.
 		return ids.V7{}.New().String(), false
 	}
 	s.t.Fatalf("cross-tenant suite: no acme object for path parameter %q (%s); map it in pathParam", name, path)
