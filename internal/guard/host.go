@@ -301,8 +301,13 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		s.mu.Lock()
 		m := s.agents[ha.AgentID]
 		s.mu.Unlock()
-		if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
+		// A direct-mode run is never wrapped in the sandbox, whatever the
+		// sandbox flag says (round 40): it counts as unsandboxed here.
+		if (!ha.Sandbox || ha.Mode == "direct") && !s.Cfg.AllowUnsandboxed {
 			reason := "unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)"
+			if ha.Sandbox {
+				reason = "direct mode runs without the sandbox; not allowed on this machine (guard.yaml allow_unsandboxed)"
+			}
 			rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
 			s.Log.Warn("guard: unsandboxed agent refused", "agent", "@"+ha.Handle, "reason", reason)
 			if m != nil {
