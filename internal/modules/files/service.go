@@ -148,8 +148,8 @@ func (s *Service) upload(ctx context.Context, by identity.Actor, channelID ids.I
 		mimeType = s.DetectMime(headBuf[:headN])
 	}
 
+	// The head is hashed with the rest below: combined starts with it.
 	hasher := sha256.New()
-	hasher.Write(headBuf[:headN])
 
 	// Buffer or stream to temp in StorageBackend
 	// We combine the head with the rest of the stream

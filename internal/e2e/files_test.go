@@ -3,8 +3,10 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -78,6 +80,11 @@ func TestFilesUploadDownloadAndAttach(t *testing.T) {
 	}
 	if file.Size != int64(len(textContent)) {
 		t.Errorf("expected size %d, got %d", len(textContent), file.Size)
+	}
+	// The stored hash is the content's sha256 (the sniffed head was once
+	// hashed twice; found while deploying round 40, 2026-11-13).
+	if want := fmt.Sprintf("%x", sha256.Sum256(textContent)); file.Sha256 != want {
+		t.Errorf("sha256 = %s, want %s", file.Sha256, want)
 	}
 
 	// 2. Upload PNG file and verify MIME sniffing
