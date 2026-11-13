@@ -228,3 +228,16 @@ func nextMessageFrame(t *testing.T, ctx context.Context, ws *websocket.Conn) map
 		}
 	}
 }
+
+// Round 40: only public and private channels are created by name.
+func TestCreateChannelRefusesOtherKinds(t *testing.T) {
+	e := newEnv(t)
+	for _, kind := range []string{"dm", "foo"} {
+		if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": "fake-" + kind, "kind": kind}, nil); s != http.StatusBadRequest {
+			t.Fatalf("kind %s: %d, want 400", kind, s)
+		}
+	}
+	if s := e.do("POST", "/api/v1/channels", server.DevAdminToken, map[string]any{"name": "secret", "kind": "private"}, nil); s != http.StatusCreated {
+		t.Fatalf("private: %d", s)
+	}
+}

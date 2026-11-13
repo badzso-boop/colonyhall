@@ -184,8 +184,11 @@ const (
 
 // Errors returned by the conversation service.
 var (
-	ErrForbidden          = errors.New("not allowed in this channel")
-	ErrInvalidName        = errors.New("channel name must be 2-32 characters: lowercase letters, digits and '-'")
+	ErrForbidden   = errors.New("not allowed in this channel")
+	ErrInvalidName = errors.New("channel name must be 2-32 characters: lowercase letters, digits and '-'")
+	// ErrBadChannelKind: only public and private channels are created by
+	// name; DMs come from the DM endpoint (round 40).
+	ErrBadChannelKind     = errors.New("kind must be public or private")
 	ErrInvalidDescription = errors.New("channel description must be at most 250 characters")
 	ErrLastAdmin          = errors.New("cannot remove the last human admin of a private channel")
 	ErrMemberNotFound     = errors.New("member not found")
