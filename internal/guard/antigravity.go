@@ -339,14 +339,14 @@ func mapAgyTool(sl agyStreamLine, baseDirs []string) Step {
 	switch name {
 	case "read_file":
 		p := getString("Path", "path", "file_path")
-		return Step{Kind: StepKindRead, Label: RelPath(p, baseDirs...), Path: p, State: state, StartedAt: now, Duration: d, DurationMs: dms}
+		return Step{Kind: StepKindRead, Label: stepLabel(RelPath(p, baseDirs...)), Path: p, State: state, StartedAt: now, Duration: d, DurationMs: dms}
 	case "write_file", "replace", "edit_file", "edit":
 		p := getString("Path", "path", "file_path")
 		kind := StepKindWrite
 		if strings.Contains(name, "edit") || name == "replace" {
 			kind = StepKindEdit
 		}
-		return Step{Kind: kind, Label: RelPath(p, baseDirs...), Path: p, State: state, StartedAt: now, Duration: d, DurationMs: dms}
+		return Step{Kind: kind, Label: stepLabel(RelPath(p, baseDirs...)), Path: p, State: state, StartedAt: now, Duration: d, DurationMs: dms}
 	case "run_command", "shell":
 		cmd := getString("CommandLine", "command", "cmd")
 		return Step{Kind: StepKindCommand, Label: Redact(cmd), State: state, StartedAt: now, Duration: d, DurationMs: dms}

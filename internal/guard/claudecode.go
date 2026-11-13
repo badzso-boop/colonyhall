@@ -478,13 +478,13 @@ func mapClaudeTool(block claudeStreamBlock, baseDirs []string) Step {
 	switch name {
 	case "Read":
 		p := getString("file_path")
-		return Step{Kind: StepKindRead, Label: RelPath(p, baseDirs...), Path: p, State: StepStateActive, StartedAt: now}
+		return Step{Kind: StepKindRead, Label: stepLabel(RelPath(p, baseDirs...)), Path: p, State: StepStateActive, StartedAt: now}
 	case "Write":
 		p := getString("file_path")
-		return Step{Kind: StepKindWrite, Label: RelPath(p, baseDirs...), Path: p, State: StepStateActive, StartedAt: now}
+		return Step{Kind: StepKindWrite, Label: stepLabel(RelPath(p, baseDirs...)), Path: p, State: StepStateActive, StartedAt: now}
 	case "Edit":
 		p := getString("file_path")
-		return Step{Kind: StepKindEdit, Label: RelPath(p, baseDirs...), Path: p, State: StepStateActive, StartedAt: now}
+		return Step{Kind: StepKindEdit, Label: stepLabel(RelPath(p, baseDirs...)), Path: p, State: StepStateActive, StartedAt: now}
 	case "Bash":
 		cmd := getString("command")
 		return Step{Kind: StepKindCommand, Label: Redact(cmd), State: StepStateActive, StartedAt: now}
@@ -508,7 +508,7 @@ func mapClaudeTool(block claudeStreamBlock, baseDirs []string) Step {
 			if len(parts) >= 3 {
 				tool = parts[1] + "." + parts[2]
 			}
-			return Step{Kind: StepKindMCP, Label: tool, State: StepStateActive, StartedAt: now}
+			return Step{Kind: StepKindMCP, Label: stepLabel(tool), State: StepStateActive, StartedAt: now}
 		}
 		return Step{Kind: StepKindOther, Label: Redact(name), State: StepStateActive, StartedAt: now}
 	}
