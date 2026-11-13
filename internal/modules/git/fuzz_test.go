@@ -9,7 +9,7 @@ import (
 // FuzzDefuseMentions: webhook text (PR titles, Gitea user names) mentions
 // nobody after defusing, whatever it held (round 40).
 func FuzzDefuseMentions(f *testing.F) {
-	for _, s := range []string{"@claude fix it", "user @bob-1", "a@b", "@@x", "@​x"} {
+	for _, s := range []string{"@claude fix it", "user @bob-1", "a@b", "@@x", "@\u200bx"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {

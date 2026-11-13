@@ -8,7 +8,7 @@ import (
 // FuzzMentionedHandles: every handle found is a valid handle, written in
 // the body after an @, and listed once (round 40).
 func FuzzMentionedHandles(f *testing.F) {
-	for _, s := range []string{"@bob hi", "mail@bob.hu", "@a", "@" + strings.Repeat("x", 40), "x @bob-1 @bob-1 @Bob", "@​bob", "(@ab)"} {
+	for _, s := range []string{"@bob hi", "mail@bob.hu", "@a", "@" + strings.Repeat("x", 40), "x @bob-1 @bob-1 @Bob", "@\u200bbob", "(@ab)"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, body string) {
