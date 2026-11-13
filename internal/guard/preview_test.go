@@ -788,3 +788,20 @@ func TestPreviewsOnlyForAcceptedAgents(t *testing.T) {
 		t.Fatalf("a refused agent's preview ran: %v", fake.UpCalls)
 	}
 }
+
+// Round 40: a recovered preview's override never comes from the shared
+// /tmp/colony-previews, which any local user can write.
+func TestRecoveredOverrideIgnoresSharedTmp(t *testing.T) {
+	ps := &PreviewSupervisor{Dir: t.TempDir()}
+	shared := filepath.Join(os.TempDir(), "colony-previews", "p-legacy-test")
+	if err := os.MkdirAll(shared, 0o755); err != nil {
+		t.Skipf("cannot create the shared folder: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(shared) }()
+	if err := os.WriteFile(filepath.Join(shared, "docker-compose.override.yaml"), []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ps.recoveredOverride("p-legacy-test"); !strings.HasPrefix(got, ps.Dir) {
+		t.Fatalf("the override came from %s", got)
+	}
+}
