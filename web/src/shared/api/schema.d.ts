@@ -83,7 +83,7 @@ export interface paths {
         /** @description Your own tokens, or those of an actor you manage. */
         get: operations["listTokens"];
         put?: never;
-        /** @description Human admins, for actors of lower rank. The secret is shown once. */
+        /** @description Your own token, or, for human admins, a lower-ranked agent's; another person's only by the owner (round 40: a token lets its holder act as that person). The secret is shown once. */
         post: operations["issueToken"];
         delete?: never;
         options?: never;

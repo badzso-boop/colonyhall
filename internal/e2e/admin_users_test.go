@@ -371,3 +371,22 @@ func TestLogoutClosesTheSocketSoon(t *testing.T) {
 		t.Fatal("the socket stayed open after the logout")
 	}
 }
+
+// Round 40: an admin cannot mint a token for another person (it would let
+// them act as that person); the owner can, as the owner alone resets
+// another person's password. Agents' tokens stay with the admins.
+func TestOnlyTheOwnerIssuesTokensForOtherPeople(t *testing.T) {
+	e := newEnv(t)
+	_, adminTok := e.createActor("human", "ada", "admin")
+	memberID, _ := e.createActor("human", "mia", "member")
+	agentID, _ := e.createActor("agent", "helper-bot", "member")
+	if st := e.do("POST", "/api/v1/actors/"+memberID+"/tokens", adminTok, map[string]any{"label": "impersonate"}, nil); st != http.StatusForbidden {
+		t.Fatalf("an admin minted a token for a member: %d", st)
+	}
+	if st := e.do("POST", "/api/v1/actors/"+agentID+"/tokens", adminTok, map[string]any{"label": "bot"}, nil); st != http.StatusCreated {
+		t.Fatalf("an admin issues an agent's token: %d", st)
+	}
+	if st := e.do("POST", "/api/v1/actors/"+memberID+"/tokens", server.DevAdminToken, map[string]any{"label": "by owner"}, nil); st != http.StatusCreated {
+		t.Fatalf("the owner issues a person's token: %d", st)
+	}
+}

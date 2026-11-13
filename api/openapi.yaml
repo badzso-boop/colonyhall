@@ -72,7 +72,7 @@ paths:
     post:
       operationId: issueToken
       tags: [identity]
-      description: Human admins, for actors of lower rank. The secret is shown once.
+      description: "Your own token, or, for human admins, a lower-ranked agent's; another person's only by the owner (round 40: a token lets its holder act as that person). The secret is shown once."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/IssueTokenRequest" } } }

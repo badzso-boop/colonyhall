@@ -119,6 +119,12 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, actorID ids.ID, labe
 	if err != nil {
 		return Token{}, "", err
 	}
+	// A token for another person lets its holder act as them. Only the
+	// owner may do that, as only the owner resets another person's
+	// password (round 40); admins issue tokens for agents.
+	if target.Kind == KindHuman && target.ID != by.ID && by.Role != RoleOwner {
+		return Token{}, "", ErrForbidden
+	}
 	secret, err := NewSecret()
 	if err != nil {
 		return Token{}, "", err
