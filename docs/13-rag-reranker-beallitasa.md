@@ -1,10 +1,13 @@
 # A szöveges reranker a homelabon (36. kör)
 
-Állapot: **terv** (a `11-rag-terv.md` része). Norbi futtatja, vagy Claude Code az ő jóváhagyásával. A homelabhoz nyúlás előtt: `~/homelab/CLAUDE.md` és `README.md`.
+Állapot: **fut a homelabon 2026-11-13 óta** (a `11-rag-terv.md` része). Norbi futtatja, vagy Claude Code az ő jóváhagyásával. A homelabhoz nyúlás előtt: `~/homelab/CLAUDE.md` és `README.md`.
 
 Mit ad: a keresés első 30 találatát egy kis többnyelvű cross-encoder újrarendezi (a kérdést és a darabot együtt olvassa, ezért pontosabb, mint a vektoros hasonlóság). Ha nem fut, a keresés rerank nélkül válaszol, és ezt kiírja.
 
-> **⏳ Mérés hátravan:** a modell végleges választása (lásd `11-rag-terv.md`, 3.) és a `COLONY_RERANK_TOP` az első futtatáskor mért idő alapján. A homelab processzora (i5-2500S) csak AVX-et tud.
+> **Mérés (2026-11-13, homelab, i5-2500S, csak AVX, 2 szál):**
+> - `jina-reranker-v2` int8: 20 jelölt **17 mp** (az int8 gyors útja AVX2-t vagy VNNI-t kér), és a licence nem kereskedelmi (CC BY-NC 4.0) → **nem ezt használjuk**.
+> - `mmarco-mMiniLMv2-L12-H384-v1` (fp32, Apache-2.0): 20 valódi darab `--batch 10`-zel 7,5 mp, **`--batch 1`-gyel 2,9 mp** (a csomagban minden darab a leghosszabbig töltődik, a valódi darabok hossza pedig nagyon szór); 4 szálon kb. 25%-kal gyorsabb, de elvenné a gépet a többi szolgáltatás elől.
+> - A keresés rerankkel így 2,8–4,9 mp. Beállítás: `COLONY_RERANK_TOP=20`, `COLONY_RERANK_TIMEOUT=8s`.
 
 ## 1. Külön compose-projekt
 
@@ -23,7 +26,7 @@ A `compose.yaml` a repóban: `deploy/rerank/compose.yaml` (a kép a `deploy/embe
 
 ## 2. A modell
 
-A választott modell ONNX int8 fájlja és tokenizere a `deploy/embed/MODEL.md`-ben rögzített Hugging Face-commitról, sha256-tal ellenőrizve, a `model/` mappába (a letöltés receptje ott van). A modellnév a válaszokban `<név>@<sha256 első 12 jele>`, pl. `jina-reranker-v2-int8@c5220cf8fe02`. **Mérés hátravan:** az első indítás után mérd meg, mennyi ideig tart egy keresés reranke (az állapotlap `rerank` ideje, vagy a `colonyhall rag-eval` `hybrid+rerank` sora); a PC-n ~0,6 mp volt ~20 jelöltre, a homelab lassabb.
+A modell (`mmarco-mMiniLMv2-L12-H384-v1`) ONNX fájlja és tokenizere a `deploy/embed/MODEL.md`-ben rögzített Hugging Face-commitról, sha256-tal ellenőrizve, a `model/` mappába (a letöltés receptje ott van). A `.env`-ben `RERANK_MODEL_NAME=mmarco-mminilmv2-l12`; a válaszokban a név `mmarco-mminilmv2-l12@3e9a03ed1e96`.
 
 ## 3. Indítás és ellenőrzés
 
@@ -37,10 +40,11 @@ docker run --rm --network shared-db-net curlimages/curl -s http://rerank:8091/v1
 
 Elvárt: két pontszám, az első dokumentumé a nagyobb.
 
-A Colonyhall `deploy/.env`-jében: `COLONY_RERANK_URL=http://rerank:8091`, és ha kell, `COLONY_RERANK_TOP` (alap 10) és `COLONY_RERANK_TIMEOUT` (alap 5 mp; a PC CPU-ján 10 jelölt 2,8 mp, p95 3,6 mp). Utána a szerver újraindítása (`docker compose -f deploy/compose.yaml up -d`).
+A Colonyhall `deploy/.env`-jében: `COLONY_RERANK_URL=http://rerank:8091`, `COLONY_RERANK_TOP=20` (alap 10) és `COLONY_RERANK_TIMEOUT=8s` (alap 5 mp, ami a homelabon 20 jelöltnél túl szűk). Utána a szerver újraindítása (`docker compose -f deploy/compose.yaml up -d`).
 
 ## 4. Ha baj van
 
 - **Lassú a keresés:** a Colonyhall állapotlapján a rerank ideje; ha a rerank rendszeresen kiesik („not reranked”), kisebb `COLONY_RERANK_TOP`, nagyobb `COLONY_RERANK_TIMEOUT`, kisebb modell, vagy később a GPU.
-- **Memória:** `docker stats colonyhall-rerank-rerank-1`; a korlát 1,5 GB.
+- **Memória:** `docker stats colonyhall-rerank-rerank-1`; a korlát 1,5 GB, a mért használat kb. 825 MB.
+- **`--batch`:** maradjon 1 (lásd fent a mérést); nagyobb csomag csak egyforma hosszú szövegeknél gyorsít.
 - **Leállítás:** `docker compose down` – a keresés rerank nélkül megy tovább.

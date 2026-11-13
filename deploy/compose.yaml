@@ -33,6 +33,7 @@ services:
       COLONY_EMBED_URL: ${COLONY_EMBED_URL:-}
       COLONY_RERANK_URL: ${COLONY_RERANK_URL:-}
       COLONY_RERANK_TOP: ${COLONY_RERANK_TOP:-}
+      COLONY_RERANK_TIMEOUT: ${COLONY_RERANK_TIMEOUT:-}
       # Several customers on one server, one subdomain each (docs/23-elkulonites.md); off by default.
       COLONY_MULTITENANT: ${COLONY_MULTITENANT:-0}
       COLONY_BASE_DOMAIN: ${COLONY_BASE_DOMAIN:-}

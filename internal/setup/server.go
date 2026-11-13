@@ -116,6 +116,14 @@ services:
       COLONY_SOURCE_URL: ${COLONY_SOURCE_URL:-}
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}
+      # Search (docs/11-rag-terv.md): the embedding server and the reranker; empty: keyword search only / no rerank.
+      COLONY_EMBED_URL: ${COLONY_EMBED_URL:-}
+      COLONY_RERANK_URL: ${COLONY_RERANK_URL:-}
+      COLONY_RERANK_TOP: ${COLONY_RERANK_TOP:-}
+      COLONY_RERANK_TIMEOUT: ${COLONY_RERANK_TIMEOUT:-}
+      # Several customers on one server, one subdomain each (docs/23-elkulonites.md); off by default.
+      COLONY_MULTITENANT: ${COLONY_MULTITENANT:-0}
+      COLONY_BASE_DOMAIN: ${COLONY_BASE_DOMAIN:-}
     volumes:
       - files:/data/files
     ports:

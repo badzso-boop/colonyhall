@@ -176,6 +176,10 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--batch", type=int, default=8, help="inputs computed together (memory)")
     args = ap.parse_args()
+    # No usage telemetry: Colonyhall promises none (docs/17, 0.8). ONNX
+    # Runtime has a switch for its own; older versions do not.
+    if hasattr(ort, "disable_telemetry_events"):
+        ort.disable_telemetry_events()
     model = Model(args.mode, args.model, args.name, args.threads, args.max_tokens, args.batch)
     srv = ThreadingHTTPServer((args.host, args.port), make_handler(model))
     sys.stderr.write(f"colony-embed: {args.mode} {model.name} on {args.host}:{args.port}\n")

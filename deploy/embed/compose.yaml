@@ -1,0 +1,38 @@
+# The search's text embedding as a container (round 36): its own compose
+# project next to the server, e.g. ~/homelab/colonyhall-embed/, like the
+# reranker (deploy/rerank/compose.yaml). Only the Colonyhall server reaches
+# it, on shared-db-net, as http://embed:8090 (COLONY_EMBED_URL). The model
+# (deploy/embed/MODEL.md) is mounted read-only from ./model.
+#
+#   mkdir -p ~/homelab/colonyhall-embed && cd ~/homelab/colonyhall-embed
+#   cp ~/homelab/colonyhall/deploy/embed/compose.yaml .
+#   # download the model into ./model (MODEL.md), then:
+#   docker compose up -d --build
+name: colonyhall-embed
+
+services:
+  embed:
+    build: ../colonyhall/deploy/embed
+    command: ["--mode", "embed", "--model", "/model", "--name", "multilingual-e5-small-int8",
+              "--host", "0.0.0.0", "--port", "8090", "--threads", "2", "--batch", "8"]
+    volumes:
+      - ./model:/model:ro
+    networks:
+      shared-db-net:
+        aliases: [embed]
+    # Measured on the homelab (2026-11-13): 430–560 MB while embedding.
+    mem_limit: 1g
+    cpus: 2
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+
+networks:
+  shared-db-net:
+    external: true
