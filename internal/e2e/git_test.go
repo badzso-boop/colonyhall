@@ -401,10 +401,11 @@ func TestGit_WebhookVerificationAndIdempotency(t *testing.T) {
 		t.Errorf("unexpected message body: %s", msgList.Messages[0].Body)
 	}
 
-	// 4. Replay same delivery -> 200 OK, but no duplicate message
+	// 4. Replay the same signed body, even under a new (unsigned) delivery
+	// id (round 40) -> 200 OK, but no duplicate message
 	req, _ = http.NewRequest(http.MethodPost, ge.srv.URL+"/api/v1/hooks/gitea", bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gitea-Delivery", "del-001")
+	req.Header.Set("X-Gitea-Delivery", "replayed-with-a-new-id")
 	req.Header.Set("X-Gitea-Event", "pull_request")
 	req.Header.Set("X-Gitea-Signature", sig)
 	resp, err = http.DefaultClient.Do(req)
