@@ -9,7 +9,9 @@ import (
 	"colonyhall/internal/server"
 )
 
-func (e *env) mcpPost(token, session, body string) (*http.Response, string) {
+// mcpPost sends one JSON-RPC message and returns the status, the session
+// header and the body.
+func (e *env) mcpPost(token, session, body string) (int, string, string) {
 	e.t.Helper()
 	req, _ := http.NewRequest("POST", e.srv.URL+"/mcp", bytes.NewBufferString(body))
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -25,26 +27,25 @@ func (e *env) mcpPost(token, session, body string) (*http.Response, string) {
 	}
 	defer func() { _ = res.Body.Close() }()
 	raw, _ := io.ReadAll(res.Body)
-	return res, string(raw)
+	return res.StatusCode, res.Header.Get("Mcp-Session-Id"), string(raw)
 }
 
 // Round 40: an MCP session belongs to the actor that opened it. Another
 // valid token with a leaked Mcp-Session-Id is refused.
 func TestMCPSessionIsBoundToItsActor(t *testing.T) {
 	e := newEnv(t)
-	res, body := e.mcpPost(server.DevAgentToken, "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`)
-	session := res.Header.Get("Mcp-Session-Id")
-	if res.StatusCode != http.StatusOK || session == "" {
-		t.Fatalf("initialize: %d %s", res.StatusCode, body)
+	st, session, body := e.mcpPost(server.DevAgentToken, "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`)
+	if st != http.StatusOK || session == "" {
+		t.Fatalf("initialize: %d %s", st, body)
 	}
-	if res, body := e.mcpPost(server.DevAgentToken, session, `{"jsonrpc":"2.0","method":"notifications/initialized"}`); res.StatusCode >= 300 {
-		t.Fatalf("initialized: %d %s", res.StatusCode, body)
+	if st, _, body := e.mcpPost(server.DevAgentToken, session, `{"jsonrpc":"2.0","method":"notifications/initialized"}`); st >= 300 {
+		t.Fatalf("initialized: %d %s", st, body)
 	}
 	list := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
-	if res, body := e.mcpPost(server.DevAgentToken, session, list); res.StatusCode != http.StatusOK {
-		t.Fatalf("the owner's own session: %d %s", res.StatusCode, body)
+	if st, _, body := e.mcpPost(server.DevAgentToken, session, list); st != http.StatusOK {
+		t.Fatalf("the owner's own session: %d %s", st, body)
 	}
-	if res, body := e.mcpPost(server.DevAdminToken, session, list); res.StatusCode != http.StatusForbidden {
-		t.Fatalf("another actor's token on the session must be refused: %d %s", res.StatusCode, body)
+	if st, _, body := e.mcpPost(server.DevAdminToken, session, list); st != http.StatusForbidden {
+		t.Fatalf("another actor's token on the session must be refused: %d %s", st, body)
 	}
 }
