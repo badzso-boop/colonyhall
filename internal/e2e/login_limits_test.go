@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -141,5 +142,29 @@ func TestSecurityCardIsPerWorkspace(t *testing.T) {
 	}
 	if c := securityCard(t, acme, server.DevAdminToken); c.Lockouts24h != 0 || len(c.Lockouts) != 0 {
 		t.Fatalf("acme sees beta's lockouts: %+v", c)
+	}
+}
+
+// The hourly maintenance prunes failure rows after a week (round 40).
+func TestMaintenancePrunesOldLoginFailures(t *testing.T) {
+	e := newEnv(t)
+	for range 3 {
+		_, _ = e.loginFrom("norbi", "wrong password!!", "")
+	}
+	count := func() int {
+		times, err := e.app.Identity.Store.AuthFailures(context.Background(), "login", "norbi", "", e.clock.Now().Add(-30*24*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(times.ByHandle)
+	}
+	e.app.Maintain(context.Background())
+	if n := count(); n != 3 {
+		t.Fatalf("recent failures must stay: %d", n)
+	}
+	e.clock.Advance(8 * 24 * time.Hour)
+	e.app.Maintain(context.Background())
+	if n := count(); n != 0 {
+		t.Fatalf("week-old failures must go: %d", n)
 	}
 }

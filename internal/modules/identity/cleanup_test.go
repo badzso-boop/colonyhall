@@ -46,3 +46,25 @@ func TestCleanupCredentialsCutoffsFollowTheClock(t *testing.T) {
 		}
 	}
 }
+
+type failureCutoffStore struct {
+	Store
+	before []time.Time
+}
+
+func (s *failureCutoffStore) DeleteAuthFailures(_ context.Context, before time.Time) (int64, error) {
+	s.before = append(s.before, before)
+	return 2, nil
+}
+
+func TestCleanupAuthFailuresKeepsAWeek(t *testing.T) {
+	t0 := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	st := &failureCutoffStore{}
+	svc := &Service{Store: st, Clock: clock.NewManual(t0)}
+	if n, err := svc.CleanupAuthFailures(context.Background()); err != nil || n != 2 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if len(st.before) != 1 || !st.before[0].Equal(t0.Add(-7*24*time.Hour)) {
+		t.Fatalf("cut-off %v", st.before)
+	}
+}
