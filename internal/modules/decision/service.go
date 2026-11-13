@@ -245,8 +245,15 @@ func (s *Service) ListDecisions(ctx context.Context, actor identity.Actor, limit
 	if actor.Halted {
 		return nil, identity.ErrHalted
 	}
-	return s.store.List(ctx, actor.WorkspaceID, limit, query, validOnly)
+	// The limit comes from an agent's tool call (round 40): a huge value
+	// listed everything, and one past int32 turned negative in SQL.
+	return s.store.List(ctx, actor.WorkspaceID, clampLimit(limit), query, validOnly)
 }
+
+func clampLimit(limit int) int { return min(max(limit, 1), MaxListLimit) }
+
+// MaxListLimit bounds one decision list.
+const MaxListLimit = 100
 
 // AllForIndex returns every decision of a workspace, superseded ones too
 // (the search backfill; no actor: the caller is the server itself).

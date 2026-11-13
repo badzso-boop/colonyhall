@@ -111,7 +111,9 @@ func (s *Service) Ask(ctx context.Context, by identity.Actor, in AskInput) (Ques
 
 	var deadline *time.Time
 	if in.DeadlineMinutes != nil && *in.DeadlineMinutes > 0 {
-		dl := s.Clock.Now().Add(time.Duration(*in.DeadlineMinutes) * time.Minute)
+		// At most MaxDeadline (round 40): minutes past ~292 years overflow
+		// a time.Duration into the past.
+		dl := s.Clock.Now().Add(min(time.Duration(min(*in.DeadlineMinutes, int(MaxDeadline/time.Minute)))*time.Minute, MaxDeadline))
 		deadline = &dl
 	}
 
