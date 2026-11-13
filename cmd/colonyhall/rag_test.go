@@ -12,7 +12,7 @@ import (
 // TestSyntheticEvalSet runs the synthetic evaluation set (CI): the
 // tooling works end to end and the keyword leg finds what it must. The
 // fake embedder is lexical, so the semantic numbers mean nothing here;
-// the real Hungarian set is measured with the Pi's model (merge blocker).
+// the real Hungarian set is measured with the real models (private set).
 func TestSyntheticEvalSet(t *testing.T) {
 	f, err := os.Open("../../testdata/rag-eval/synthetic.json")
 	if err != nil {
@@ -37,6 +37,23 @@ func TestSyntheticEvalSet(t *testing.T) {
 	}
 	if by["keyword"].Recall10 < 0.8 || by["hybrid"].Recall10 < 0.8 {
 		t.Fatalf("keyword and hybrid must find the seeded answers: %+v", ms)
+	}
+	// Round 53. Accents: the keyword leg finds every question, accented or
+	// not (q19-q22; "kozos mentese" for "közös mentése"). Crowding: a
+	// 12-reply thread must not push the decision that answers q23 out of
+	// the rerank pool and the page. q19 may still miss in the hybrid
+	// configurations: the fake embedder is not accent-aware and gives every
+	// text some similarity, so its 50 semantic candidates outrank a
+	// keyword-only hit (KeywordWeight 0.2); the real model does not.
+	if m := by["keyword"].Missed; len(m) != 0 {
+		t.Fatalf("keyword missed %v", m)
+	}
+	for _, cfg := range []string{"hybrid", "hybrid+rerank"} {
+		for _, id := range by[cfg].Missed {
+			if id != "q19" {
+				t.Fatalf("%s missed %s (all missed: %v)", cfg, id, by[cfg].Missed)
+			}
+		}
 	}
 	if !strings.Contains(search.FormatMetrics("x", ms), "hybrid+rerank") {
 		t.Fatal("report misses a configuration")

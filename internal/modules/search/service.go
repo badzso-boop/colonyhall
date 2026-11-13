@@ -241,6 +241,10 @@ func (s *Service) Search(ctx context.Context, by identity.Actor, q Query) (Resul
 	}
 
 	hits := fuse(kw, sem)
+	// One source or one thread may not fill the rerank pool or the page
+	// (round 53): the pool is RerankTop, the page Limit.
+	pool := max(q.Limit, s.rerankTop())
+	hits = diversify(hits, pool)
 	// NoRerank: the evaluation's configurations without a reranker.
 	if s.Reranker != nil && len(hits) > 1 && !q.NoRerank {
 		t := s.Clock.Now()
@@ -366,6 +370,61 @@ func fuse(kw, sem []Candidate) []Hit {
 	return out
 }
 
+// rerankTop is how many fused hits the reranker sees.
+func (s *Service) rerankTop() int {
+	if s.RerankTop > 0 {
+		return s.RerankTop
+	}
+	return DefaultRerankTop
+}
+
+// Caps on the rerank pool and the page (round 53, docs/11-rag-terv.md):
+// every reply chunk of a thread carries the thread's opening message in its
+// header, so one long thread used to fill the pool with near-identical
+// chunks and push out the right decision or wiki page, which the reranker
+// would have put first.
+const (
+	PoolPerSource = 2
+	PoolPerThread = 3
+)
+
+// diversify moves hits so that the first n keep at most PoolPerSource
+// chunks of one source and PoolPerThread of one thread. Hits over a cap are
+// not dropped: they follow in their fused order, and fill the first n when
+// there are not enough other sources.
+func diversify(hits []Hit, n int) []Hit {
+	if len(hits) <= 1 || n <= 0 {
+		return hits
+	}
+	type key struct {
+		kind SourceKind
+		id   ids.ID
+	}
+	perSource := map[key]int{}
+	perThread := map[ids.ID]int{}
+	head := make([]Hit, 0, min(n, len(hits)))
+	var rest []Hit
+	for _, h := range hits {
+		sk := key{h.Chunk.SourceKind, h.Chunk.SourceID}
+		th := h.Chunk.ThreadRootID
+		if len(head) < n && perSource[sk] < PoolPerSource && (th == ids.Nil || perThread[th] < PoolPerThread) {
+			perSource[sk]++
+			if th != ids.Nil {
+				perThread[th]++
+			}
+			head = append(head, h)
+			continue
+		}
+		rest = append(rest, h)
+	}
+	// Not enough distinct sources: fill the first n from the rest, in order.
+	for len(head) < n && len(rest) > 0 {
+		head = append(head, rest[0])
+		rest = rest[1:]
+	}
+	return append(head, rest...)
+}
+
 func clip(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s
@@ -380,11 +439,7 @@ func (s *Service) rerankHits(ctx context.Context, query string, hits []Hit) bool
 	if s.rerank.skip(now) {
 		return false
 	}
-	top := s.RerankTop
-	if top <= 0 {
-		top = DefaultRerankTop
-	}
-	n := min(top, len(hits))
+	n := min(s.rerankTop(), len(hits))
 	docs := make([]string, n)
 	for i := range n {
 		docs[i] = hits[i].Chunk.Header + "\n" + hits[i].Chunk.Body
