@@ -360,17 +360,15 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 	if target.WorkspaceID != by.WorkspaceID {
 		return Actor{}, db.ErrNotFound
 	}
-	if target.ID != by.ID && !by.IsAdmin() {
+	// Someone else's profile needs the rank check for every field, not
+	// only the name (round 40): an admin must not change the owner's (or
+	// another admin's) description, status, timezone or avatar either.
+	if target.ID != by.ID && (!by.IsAdmin() || !by.CanManage(target)) {
 		return Actor{}, ErrForbidden
 	}
 
 	newName := target.DisplayName
 	if in.DisplayName != nil {
-		// Someone else's name needs the rank check too: an admin must not
-		// rename the owner.
-		if target.ID != by.ID && !by.CanManage(target) {
-			return Actor{}, ErrForbidden
-		}
 		n := strings.TrimSpace(*in.DisplayName)
 		if !validDisplayName(n) {
 			return Actor{}, ErrInvalidDisplayName
