@@ -290,9 +290,19 @@ func TestServerWithAnExistingDatabase(t *testing.T) {
 
 func TestUnattendedNeverOpensTheServerToEveryNetwork(t *testing.T) {
 	e, _, _ := testEnv(t, linux, "", true)
-	e.Answers.Server = ServerAnswers{Bind: "0.0.0.0", Port: 8080, AdminHandle: "a", AdminName: "A"}
-	if err := e.askServer(); err == nil {
-		t.Fatal("--yes accepted 0.0.0.0 without allow_all_interfaces")
+	// Round 40: every spelling of "all interfaces", and no non-address.
+	for _, bind := range []string{"0.0.0.0", "::", "0:0:0:0:0:0:0:0", "localhost\nCOLONY_PORT=80", "my-server"} {
+		e.Answers.Server = ServerAnswers{Bind: bind, Port: 8080, AdminHandle: "a", AdminName: "A"}
+		if err := e.askServer(); err == nil {
+			t.Fatalf("--yes accepted bind %q without allow_all_interfaces", bind)
+		}
+	}
+}
+
+func TestEnvFileDropsValuesWithLineBreaks(t *testing.T) {
+	got := envFile(map[string]string{"COLONY_IMAGE": "img:1\nCOLONY_DEV_SEED=1", "COLONY_BIND": "127.0.0.1"})
+	if strings.Contains(got, "COLONY_DEV_SEED") || !strings.Contains(got, "COLONY_BIND=127.0.0.1\n") {
+		t.Fatalf("a line break added a variable:\n%s", got)
 	}
 }
 

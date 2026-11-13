@@ -152,13 +152,16 @@ const serverHardening = `    read_only: true
     pids_limit: ${COLONY_PIDS_LIMIT:-256}
 `
 
-// envFile is the server's .env.
+// envFile is the server's .env. A value with a line break would add lines
+// of its own (another variable), so such a value is dropped (round 40); the
+// installer's own values never have one, and the answers file's are
+// checked before they get here.
 func envFile(v map[string]string) string {
 	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
 	var b strings.Builder
 	b.WriteString("# Colonyhall server settings and secrets (colony setup). Keep it 0600 and back it up.\n")
 	for _, k := range keys {
-		if val, ok := v[k]; ok {
+		if val, ok := v[k]; ok && !strings.ContainsAny(val, "\r\n") {
 			_, _ = fmt.Fprintf(&b, "%s=%s\n", k, val)
 		}
 	}
@@ -226,7 +229,14 @@ func (e *Env) askServer() error {
 		}
 		a.Bind = b
 	}
-	if a.Bind == "0.0.0.0" && !a.AllowAll {
+	// The answers file can name any address (round 40): it must be an IP
+	// address, and every "all interfaces" spelling (0.0.0.0, ::, 0) needs
+	// the explicit allow_all_interfaces, not only the literal 0.0.0.0.
+	ip := net.ParseIP(a.Bind)
+	if ip == nil {
+		return fmt.Errorf("bind %q is not an IP address", a.Bind)
+	}
+	if ip.IsUnspecified() && !a.AllowAll {
 		ok, err := e.UI.Confirm("srvBindAllWarn", false)
 		if err != nil {
 			return err
