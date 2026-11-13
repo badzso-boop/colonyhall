@@ -94,4 +94,23 @@ type Store interface {
 	// DeleteEndedSessions deletes sessions that expired or were revoked
 	// before the cut-off and returns how many went.
 	DeleteEndedSessions(ctx context.Context, before time.Time) (int64, error)
+
+	// Login and release limits (round 40). RecordAuthFailure,
+	// AuthFailures and ClearAuthFailures run before anyone is
+	// authenticated: they work in any scope (narrow functions in Postgres).
+	RecordAuthFailure(ctx context.Context, f AuthFailure) error
+	// AuthFailures returns the counted attempts after since, oldest first:
+	// the handle's (not cleared by a success) and the address's (an empty
+	// handle or address matches nothing).
+	AuthFailures(ctx context.Context, scope, handle, ip string, since time.Time) (AuthFailureTimes, error)
+	// ClearAuthFailures marks the handle's attempts in scope as cleared.
+	ClearAuthFailures(ctx context.Context, scope, handle string, at time.Time) error
+	// WorkspaceLockouts lists the workspace's lockouts after since, newest
+	// first, at most 100.
+	WorkspaceLockouts(ctx context.Context, workspaceID ids.ID, since time.Time) ([]Lockout, error)
+	// UnattributedLockouts lists the lockouts of no workspace (unknown
+	// handles), in any scope; single-tenant mode only.
+	UnattributedLockouts(ctx context.Context, since time.Time) ([]Lockout, error)
+	// DeleteAuthFailures deletes attempts before a time (system mode).
+	DeleteAuthFailures(ctx context.Context, before time.Time) (int64, error)
 }

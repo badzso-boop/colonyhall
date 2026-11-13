@@ -42,7 +42,7 @@ func (s *Service) Placements(ctx context.Context, by identity.Actor) ([]Placemen
 		online := h.LastSeenAt != nil && now.Sub(*h.LastSeenAt) <= OnlineWindow
 		for _, a := range as {
 			out = append(out, Placement{AgentID: a.AgentID, Machine: h.Name, MachineOnline: online, Client: a.Client,
-				Sandbox: a.Sandbox, AllowWork: a.AllowWork, DocsOnly: a.WriteScope == WriteScopeDocs})
+				Sandbox: a.Sandboxed(), AllowWork: a.AllowWork, DocsOnly: a.WriteScope == WriteScopeDocs})
 		}
 	}
 	return out, nil

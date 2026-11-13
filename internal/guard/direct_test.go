@@ -579,6 +579,19 @@ func TestSupervisorReconcileAllowUnsandboxed(t *testing.T) {
 		},
 	}
 
+	// 0. Round 40: a "sandboxed" direct agent runs without the sandbox,
+	// so it is refused too.
+	cfg.Agents[0].Sandbox = true
+	sup.reconcile(context.Background(), cfg)
+	sup.mu.Lock()
+	if len(sup.agents) != 0 || len(sup.rejected) != 1 || !strings.Contains(sup.rejected[0].Reason, "direct mode runs without the sandbox") {
+		sup.mu.Unlock()
+		t.Fatalf("a sandbox-flagged direct agent must be refused: %d agents, %+v", len(sup.agents), sup.rejected)
+	}
+	sup.mu.Unlock()
+	cfg.Agents[0].Sandbox = false
+	cfg.Version = "v0"
+
 	// 1. With AllowUnsandboxed: false, agent is refused and added to rejected
 	sup.reconcile(context.Background(), cfg)
 	sup.mu.Lock()

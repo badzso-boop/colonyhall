@@ -1,3 +1,16 @@
 # The web stage of deploy/Dockerfile installs and builds the PWA itself.
 web/node_modules
 web/dist
+# Never in the build context (round 40): it is copied into a cached build
+# stage on the host. Secrets, private notes, the git history, local output.
+.git
+**/.env
+**/.env.*
+!**/.env*.example
+*.secret
+colonyhall_owner_api_key*
+CLAUDE.local.md
+*.local
+guard.yaml
+/bin
+/dist

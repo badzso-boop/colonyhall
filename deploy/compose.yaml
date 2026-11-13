@@ -15,6 +15,17 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
+    # Round 40: container hardening. Limits what code execution inside the
+    # server could do; the files volume stays writable, everything else is
+    # read-only. Large temporary files go to the volume (TMPDIR), not to the
+    # in-memory /tmp. The limits come from a load measurement (docs/02).
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${COLONY_MEM_LIMIT:-1g}
+    pids_limit: ${COLONY_PIDS_LIMIT:-256}
     environment:
       COLONY_STORE: postgres
       COLONY_DATABASE_URL: ${COLONY_DATABASE_URL:?set COLONY_DATABASE_URL in deploy/.env}
@@ -23,6 +34,9 @@ services:
       # HTTPS-only; set it to 1 if the server ever sits behind HTTPS.
       COLONY_SECURE_COOKIES: ${COLONY_SECURE_COOKIES:-0}
       COLONY_FILES_DIR: /data/files
+      TMPDIR: /data/files/.tmp
+      # The Go runtime collects before the container limit (mem_limit) is reached.
+      GOMEMLIMIT: ${COLONY_GOMEMLIMIT:-768MiB}
       COLONY_MAX_UPLOAD_MB: ${COLONY_MAX_UPLOAD_MB:-25}
       COLONY_GITEA_URL: ${COLONY_GITEA_URL:-}
       COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
@@ -37,6 +51,10 @@ services:
       # Several customers on one server, one subdomain each (docs/23-elkulonites.md); off by default.
       COLONY_MULTITENANT: ${COLONY_MULTITENANT:-0}
       COLONY_BASE_DOMAIN: ${COLONY_BASE_DOMAIN:-}
+      # Round 40: reverse proxies whose X-Forwarded-For is believed, and the
+      # addresses never locked out by the login limits (IPs or CIDRs, comma-separated).
+      COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
+      COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
     volumes:
       - files:/data/files
     ports:

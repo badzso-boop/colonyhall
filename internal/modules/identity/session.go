@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"slices"
-	"sync"
 	"time"
 
 	"colonyhall/internal/platform/db"
@@ -63,16 +62,22 @@ type LoginInput struct {
 // Login checks a password and opens a session. It returns the actor, the
 // session and the cookie secret (shown once).
 func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, string, error) {
-	if !s.limiter().allow(in.Handle, s.Clock.Now()) {
-		return Actor{}, Session{}, "", ErrTooManyAttempts
-	}
-	fail := func() (Actor, Session, string, error) {
-		s.limiter().fail(in.Handle, s.Clock.Now())
-		return Actor{}, Session{}, "", ErrBadCredentials
+	if err := s.CheckLimit(ctx, LimitLogin, in.Handle); err != nil {
+		return Actor{}, Session{}, "", err
 	}
 	ctx, a, err := s.findLoginActor(ctx, in)
 	if errors.Is(err, ErrWorkspaceRequired) {
 		return Actor{}, Session{}, "", err
+	}
+	// The failure belongs to the handle's workspace when there is one, or
+	// to the subdomain's (multi-tenant mode).
+	failWS := a.WorkspaceID
+	if t, ok := tenant.From(ctx); ok && failWS == ids.Nil {
+		failWS = t.Workspace
+	}
+	fail := func() (Actor, Session, string, error) {
+		s.LimitFailed(ctx, LimitLogin, in.Handle, failWS)
+		return Actor{}, Session{}, "", ErrBadCredentials
 	}
 	if err != nil || a.Kind != KindHuman || a.State != StateActive {
 		_, _ = VerifyPassword(in.Password, dummyHash) // equalise timing
@@ -94,7 +99,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 		s.recordLogin(ctx, a, EventLoginFailed, in.UserAgent)
 		return fail()
 	}
-	s.limiter().reset(in.Handle)
+	s.LimitSucceeded(ctx, LimitLogin, in.Handle)
 
 	secret, err := NewSecret()
 	if err != nil {
@@ -210,6 +215,11 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 	}
 	switch {
 	case by.ID == target.ID:
+		// Limited apart from the login (round 40): a stolen session must
+		// not be able to guess the current password without bound.
+		if err := s.CheckLimit(ctx, LimitPassword, by.Handle); err != nil {
+			return err
+		}
 		hash, err := s.Store.Credential(ctx, target.ID)
 		if err == nil {
 			ok, verr := VerifyPassword(current, hash)
@@ -217,8 +227,10 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 				return verr
 			}
 			if !ok {
+				s.LimitFailed(ctx, LimitPassword, by.Handle, by.WorkspaceID)
 				return ErrBadCredentials
 			}
+			s.LimitSucceeded(ctx, LimitPassword, by.Handle)
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return err
 		}
@@ -258,52 +270,6 @@ func (s *Service) ResetPassword(ctx context.Context, actorID ids.ID, password st
 		return err
 	}
 	return s.Store.SetCredential(ctx, actorID, hash, s.Clock.Now())
-}
-
-// loginLimiter blocks a handle after repeated failures. It is per process;
-// a shared limiter arrives with the rate_limit_event table.
-type loginLimiter struct {
-	mu       sync.Mutex
-	failures map[string][]time.Time
-}
-
-const (
-	maxLoginFailures = 5
-	loginWindow      = 15 * time.Minute
-)
-
-func (s *Service) limiter() *loginLimiter {
-	s.limiterOnce.Do(func() { s.loginLimiter = &loginLimiter{failures: map[string][]time.Time{}} })
-	return s.loginLimiter
-}
-
-func (l *loginLimiter) recent(handle string, now time.Time) []time.Time {
-	var keep []time.Time
-	for _, t := range l.failures[handle] {
-		if now.Sub(t) < loginWindow {
-			keep = append(keep, t)
-		}
-	}
-	l.failures[handle] = keep
-	return keep
-}
-
-func (l *loginLimiter) allow(handle string, now time.Time) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return len(l.recent(handle, now)) < maxLoginFailures
-}
-
-func (l *loginLimiter) fail(handle string, now time.Time) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.failures[handle] = append(l.recent(handle, now), now)
-}
-
-func (l *loginLimiter) reset(handle string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	delete(l.failures, handle)
 }
 
 func truncate(s string, n int) string {

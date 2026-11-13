@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"colonyhall/internal/httpx"
@@ -57,6 +58,18 @@ func Handler(auth identity.Authenticator, version string, register RegisterTools
 		register(s, actor, r)
 		return s
 	}, &mcp.StreamableHTTPOptions{DisableLocalhostProtection: hostChecked})
+	// Round 40: the session is bound to the actor that opened it. The
+	// go-sdk compares the TokenInfo's UserID of every later request with
+	// the session's, and answers 403 on a mismatch; without it, any valid
+	// token (even another workspace's) together with a leaked
+	// Mcp-Session-Id acted as the session's agent.
+	bound := mcpauth.RequireBearerToken(func(ctx context.Context, _ string, _ *http.Request) (*mcpauth.TokenInfo, error) {
+		actor, ok := ctx.Value(actorKey{}).(identity.Actor)
+		if !ok {
+			return nil, mcpauth.ErrInvalidToken
+		}
+		return &mcpauth.TokenInfo{UserID: actor.ID.String()}, nil
+	}, &mcpauth.RequireBearerTokenOptions{AllowMissingExpiration: true})(h)
 	// Reject unauthenticated requests with 401 before the MCP layer sees them.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor, err := auth.Authenticate(r.Context(), httpx.BearerToken(r))
@@ -66,6 +79,9 @@ func Handler(auth identity.Authenticator, version string, register RegisterTools
 		}
 		// The go-sdk keeps the values of a session's first request for its
 		// tool calls, so the narrowed scope reaches every tool.
-		h.ServeHTTP(w, r.WithContext(db.WithWorkspace(r.Context(), actor.WorkspaceID)))
+		ctx := context.WithValue(db.WithWorkspace(r.Context(), actor.WorkspaceID), actorKey{}, actor)
+		bound.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+type actorKey struct{}

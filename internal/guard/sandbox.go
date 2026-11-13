@@ -30,6 +30,10 @@ type Sandbox struct {
 	HasUnshareNet bool
 	NetworkMode   string // "filtered", "log", "open"
 	ColonyBin     string
+	// Hide are further files the sandbox never shows, whatever is granted:
+	// the guard's token files when guard.yaml moves them out of
+	// ~/.config/colonyhall (round 40).
+	Hide []string
 }
 
 // DetectSandbox finds a working bwrap, or returns nil.
@@ -166,9 +170,15 @@ func (s *Sandbox) CommandWithOptions(client, agentDir, workDir string, grants []
 			a = append(a, hide(d)...)
 		}
 	}
-	for _, f := range clientConfig {
-		if p := filepath.Join(s.Home, f); exists(p) {
-			a = append(a, hide(p)...)
+	for _, f := range s.Hide {
+		if f == "" {
+			continue
+		}
+		if real, err := filepath.EvalSymlinks(f); err == nil {
+			f = real
+		}
+		if exists(f) {
+			a = append(a, hide(f)...)
 		}
 	}
 	if exists(s.Root) {

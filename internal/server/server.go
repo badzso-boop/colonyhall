@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -137,6 +138,7 @@ import (
 	wikimem "colonyhall/internal/modules/wiki/memory"
 	wikipg "colonyhall/internal/modules/wiki/postgres"
 	"colonyhall/internal/platform/bus"
+	"colonyhall/internal/platform/clientip"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/config"
 	"colonyhall/internal/platform/db"
@@ -203,6 +205,10 @@ type Options struct {
 	// (round 45, docs/23-elkulonites.md); off: one team, as before.
 	Multitenant bool
 	BaseDomain  string
+	// TrustedProxies and LoginAllowlist: round 40 (COLONY_TRUSTED_PROXIES,
+	// COLONY_LOGIN_ALLOWLIST); both empty by default.
+	TrustedProxies []netip.Prefix
+	LoginAllowlist []netip.Prefix
 }
 
 // App is a wired-up Colonyhall server.
@@ -371,7 +377,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		fiStore = opt.FilesStore
 	}
 
-	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
+	idSvc := &identity.Service{Store: idStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger,
+		LoginAllowlist: opt.LoginAllowlist}
 	cvSvc := &conversation.Service{Store: cvStore, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	dlSvc := &delivery.Service{Store: dlStore, Conversation: cvSvc, Directory: idSvc, IDs: opt.IDs, Clock: opt.Clock}
 	auSvc := &audit.Service{Store: auStore, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
@@ -552,7 +559,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	hostGw := &gateway.HostGateway{Auth: hoSvc, Logger: opt.Logger}
 	hostFs := &hosts.FsRelay{Hosts: hoSvc, Pusher: hostGw}
 	hosthttp.RegisterFs(mux, hoSvc, hostFs, idSvc)
-	hostLogin := &hosts.LoginRelay{Hosts: hoSvc, Pusher: hostGw}
+	hostLogin := &hosts.LoginRelay{Hosts: hoSvc, Pusher: hostGw, Limits: idSvc}
 	hosthttp.RegisterLogin(mux, hoSvc, hostLogin, idSvc)
 	mux.Handle("GET /ws/host", hostGw)
 	wikihttp.Register(mux, wiSvc, idSvc)
@@ -665,12 +672,16 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	registerVersion(mux, cmp.Or(opt.SourceURL, config.DefaultSourceURL))
 	registerStatus(mux, statusDeps{Identity: idSvc, Hosts: hoSvc, Schedules: scStore, Compactions: cmStore, DBStats: dsSvc, Events: events,
 		Consumers: consumers, Gateway: gw, HostGateway: hostGw, Ready: ready, Clock: opt.Clock, StartedAt: opt.Clock.Now(), GiteaOn: gitProv != nil,
-		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB), Search: seSvc})
+		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB), Search: seSvc,
+		Multitenant: opt.Multitenant, LoginAllowlist: opt.LoginAllowlist, TrustedProxies: len(opt.TrustedProxies) > 0})
 
 	handler := httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts)
 	if opt.Multitenant {
 		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler)
 	}
+	// Outermost: everything after it (the tenant layer, the limits, the
+	// logs) sees the same client address (round 40).
+	handler = clientip.Resolver{Trusted: opt.TrustedProxies}.Handler(handler)
 	return &App{
 		Handler:      handler,
 		Identity:     idSvc,

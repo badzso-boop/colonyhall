@@ -23,17 +23,21 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/colonyhall
 
 jobs:
+  # Round 40: the build runs third-party code (npm install scripts, Go
+  # module builds), so it gets no write permission, no signing token and no
+  # persisted checkout credentials. Signing and publishing happen in a
+  # separate job that runs nothing from the dependencies.
   binaries:
     runs-on: ubuntu-24.04
     permissions:
-      contents: write      # create the release
-      id-token: write      # sign the attestations
-      attestations: write
+      contents: read
     outputs:
       version: ${{ steps.v.outputs.version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - id: v
         # The tag or the input reaches the shell only through the environment,
         # and only after it is checked (no workflow-expression injection).
@@ -59,25 +63,44 @@ jobs:
         env:
           VERSION: ${{ steps.v.outputs.version }}
         run: scripts/release.sh "$VERSION" dist
-      - name: Attest
-        if: github.event_name == 'push'
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: "dist/*.tar.gz, dist/install.sh"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dist
           path: dist/
-      - name: Publish the release
-        if: github.event_name == 'push'
+
+  publish:
+    runs-on: ubuntu-24.04
+    needs: binaries
+    if: github.event_name == 'push'
+    permissions:
+      actions: read        # download the build's artifact
+      contents: write      # create the release
+      id-token: write      # sign the attestations
+      attestations: write
+    steps:
+      # No checkout and no dependency code: only the built files, the
+      # attestation action and the gh CLI run here.
+      - name: Download the build
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.v.outputs.version }}
-          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+          REPO: ${{ github.repository }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$REPO" --name dist --dir dist
+      - name: Check the checksums
+        run: cd dist && sha256sum -c SHA256SUMS
+      - name: Attest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: "dist/*.tar.gz, dist/install.sh, dist/SHA256SUMS"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.binaries.outputs.version }}
+          PRERELEASE: ${{ needs.binaries.outputs.prerelease }}
         run: |
           flags=""
           [ "$PRERELEASE" = true ] && flags="--prerelease"
-          gh release create "$VERSION" dist/* --title "Colonyhall $VERSION" --generate-notes --verify-tag $flags
+          gh release create "$VERSION" dist/* --repo "$REPO" --title "Colonyhall $VERSION" --generate-notes --verify-tag $flags
 
   image:
     runs-on: ubuntu-24.04
@@ -89,6 +112,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3

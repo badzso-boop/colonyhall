@@ -103,12 +103,16 @@ services:
         condition: service_healthy
 `)
 	}
+	b.WriteString(serverHardening)
 	b.WriteString(`    environment:
       COLONY_STORE: postgres
       COLONY_DATABASE_URL: ${COLONY_DATABASE_URL:?missing in .env}
       COLONY_HTTP_ADDR: ":8080"
       COLONY_SECURE_COOKIES: ${COLONY_SECURE_COOKIES:-0}
       COLONY_FILES_DIR: /data/files
+      TMPDIR: /data/files/.tmp
+      # The Go runtime collects before the container limit (mem_limit) is reached.
+      GOMEMLIMIT: ${COLONY_GOMEMLIMIT:-768MiB}
       COLONY_MAX_UPLOAD_MB: ${COLONY_MAX_UPLOAD_MB:-25}
       COLONY_GITEA_URL: ${COLONY_GITEA_URL:-}
       COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
@@ -116,6 +120,10 @@ services:
       COLONY_SOURCE_URL: ${COLONY_SOURCE_URL:-}
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}
+      # Round 40: reverse proxies whose X-Forwarded-For is believed, and the
+      # addresses never locked out by the login limits (IPs or CIDRs).
+      COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
+      COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
       # Search (docs/11-rag-terv.md): the embedding server and the reranker; empty: keyword search only / no rerank.
       COLONY_EMBED_URL: ${COLONY_EMBED_URL:-}
       COLONY_RERANK_URL: ${COLONY_RERANK_URL:-}
@@ -138,13 +146,30 @@ volumes:
 	return b.String()
 }
 
-// envFile is the server's .env.
+// serverHardening is the server service's container hardening (round 40):
+// a read-only root with a small /tmp in memory (large temporary files go
+// to the files volume through TMPDIR), no capabilities, no privilege gain,
+// and memory and process limits measured on the dev stack (docs/02).
+// Postgres is left alone.
+const serverHardening = `    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${COLONY_MEM_LIMIT:-1g}
+    pids_limit: ${COLONY_PIDS_LIMIT:-256}
+`
+
+// envFile is the server's .env. A value with a line break would add lines
+// of its own (another variable), so such a value is dropped (round 40); the
+// installer's own values never have one, and the answers file's are
+// checked before they get here.
 func envFile(v map[string]string) string {
 	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
 	var b strings.Builder
 	b.WriteString("# Colonyhall server settings and secrets (colony setup). Keep it 0600 and back it up.\n")
 	for _, k := range keys {
-		if val, ok := v[k]; ok {
+		if val, ok := v[k]; ok && !strings.ContainsAny(val, "\r\n") {
 			_, _ = fmt.Fprintf(&b, "%s=%s\n", k, val)
 		}
 	}
@@ -212,7 +237,14 @@ func (e *Env) askServer() error {
 		}
 		a.Bind = b
 	}
-	if a.Bind == "0.0.0.0" && !a.AllowAll {
+	// The answers file can name any address (round 40): it must be an IP
+	// address, and every "all interfaces" spelling (0.0.0.0, ::, 0) needs
+	// the explicit allow_all_interfaces, not only the literal 0.0.0.0.
+	ip := net.ParseIP(a.Bind)
+	if ip == nil {
+		return fmt.Errorf("bind %q is not an IP address", a.Bind)
+	}
+	if ip.IsUnspecified() && !a.AllowAll {
 		ok, err := e.UI.Confirm("srvBindAllWarn", false)
 		if err != nil {
 			return err
@@ -557,11 +589,16 @@ db=$(docker ps -q --filter label=com.docker.compose.project=colonyhall --filter 
 if [ -n "$db" ]; then
   docker exec "$db" pg_dump -U colony -d colonyhall -Fc > "$out/colonyhall-$stamp.dump"
 fi
-docker run --rm -v colonyhall_files:/data:ro -v "$out":/backup busybox tar czf "/backup/files-$stamp.tar.gz" -C /data .
+docker run --rm -v colonyhall_files:/data:ro -v "$out":/backup %s tar czf "/backup/files-$stamp.tar.gz" -C /data .
 find "$out" -name 'colonyhall-*.dump' -mtime +14 -delete
 find "$out" -name 'files-*.tar.gz' -mtime +14 -delete
-`, e.backupDir())
+`, e.backupDir(), backupImage)
 }
+
+// backupImage archives the files volume. Root runs the backup every night,
+// so the image is pinned by digest (round 40), not taken from whatever
+// "busybox" (latest) the registry serves that day.
+const backupImage = "busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
 
 // installBackups writes the script and schedules it nightly: a root
 // systemd timer on Linux (Docker runs with sudo there), a launchd agent on

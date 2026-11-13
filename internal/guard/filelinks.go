@@ -94,6 +94,11 @@ func FileLinks(text string) []string {
 	seen := make(map[string]bool, len(rawFound))
 	var result []string
 	for _, l := range rawFound {
+		// A control character (a raw NUL, or a decoded %00 or %0A) is no
+		// path to fetch or show (round 40, found by FuzzFileLinks).
+		if strings.IndexFunc(l, unicode.IsControl) >= 0 {
+			continue
+		}
 		if !seen[l] {
 			seen[l] = true
 			result = append(result, l)

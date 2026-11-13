@@ -16,8 +16,13 @@ type Grant struct {
 
 // deniedHome lists folders under the user's home that no agent may see,
 // whatever the server grants: keys, cloud credentials, other CLIs' logins.
+// Round 40 added the guard's own folder (the host token, the Claude login
+// token, the agents' Gitea tokens) and the AI clients' login files: they
+// were hidden inside the sandbox only, so a grant of ~/.config or a file
+// fetch on a full-access agent could still read them.
 var deniedHome = []string{".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".config/gh", ".config/gcloud",
-	".netrc", ".git-credentials", ".password-store", ".local/share/keyrings", ".colonyhall"}
+	".netrc", ".git-credentials", ".password-store", ".local/share/keyrings", ".colonyhall",
+	".config/colonyhall", ".codex", ".pgpass", ".npmrc", ".pypirc"}
 
 // ResolveRoots cleans the machine owner's root folders and resolves
 // symlinks; a root that does not exist is an error (a typo must not
@@ -74,8 +79,8 @@ func deniedPaths(home string) []string {
 	if home == "" {
 		return nil
 	}
-	out := make([]string, 0, len(deniedHome))
-	for _, d := range deniedHome {
+	out := make([]string, 0, len(deniedHome)+len(clientConfig))
+	for _, d := range append(append([]string{}, deniedHome...), clientConfig...) {
 		p := filepath.Join(home, d)
 		if real, err := filepath.EvalSymlinks(p); err == nil {
 			p = real

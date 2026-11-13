@@ -151,6 +151,13 @@ type Assignment struct {
 	PartnerID  ids.ID
 }
 
+// Sandboxed reports whether the agent's runs are confined. A direct-mode
+// run is never wrapped in the sandbox by the guard, whatever the sandbox
+// flag says, so a direct agent is full-access for every rule that depends
+// on it (round 40, Norbi's decision: keep the combination, treat it as
+// full-access).
+func (a Assignment) Sandboxed() bool { return a.Sandbox && a.Mode != AgentModeDirect }
+
 // HostPreview is what a guard needs to know about an active/requested preview.
 type HostPreview struct {
 	ID          ids.ID    `json:"id"`

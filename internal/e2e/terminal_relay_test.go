@@ -52,6 +52,18 @@ func TestTerminalRelayE2E(t *testing.T) {
 		t.Fatalf("agent token POST /fs term_list: got %d, want 403", code)
 	}
 
+	// Round 40: a terminal name that could leave the agent's folder never
+	// leaves the server.
+	for _, op := range []string{"term_output", "term_kill"} {
+		for _, name := range []string{"../other-agent/build", "a/b", "..", "Build", ""} {
+			if code := e.do("POST", "/api/v1/agents/"+agent.ID.String()+"/fs", adminToken, map[string]any{
+				"channel_id": general, "op": op, "name": name,
+			}, nil); code != http.StatusBadRequest {
+				t.Fatalf("%s with name %q: got %d, want 400", op, name, code)
+			}
+		}
+	}
+
 	// 2. Create regular user (role member)
 	admin, _ := e.app.Identity.Authenticate(ctx, adminToken)
 	userActor, userToken, err := e.app.Identity.CreateActor(ctx, admin, identity.NewActorInput{

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -157,24 +158,33 @@ func (s *Service) upload(ctx context.Context, by identity.Actor, channelID ids.I
 	// We wrap in a LimitedReader that allows 1 extra byte beyond maxBytes to detect overflow
 	lr := &io.LimitedReader{R: combined, N: maxBytes + 1}
 
-	// We tee reader to hasher while streaming to storage
-	// But Storage.Put needs sha256Hex upfront!
-	// So we buffer into memory or temp file.
-	// Since max upload is typically 25MB, reading into bytes or a temp pipe:
-	var buf bytes.Buffer
-	tr := io.TeeReader(lr, hasher)
-	n, err := buf.ReadFrom(tr)
+	// Storage.Put needs the hash up front, so the upload is staged in a
+	// temporary file ($TMPDIR; the hardened container points it at the
+	// files volume), never in memory: parallel uploads must fit the
+	// container's memory limit (round 40).
+	tmp, err := os.CreateTemp("", "colonyhall-upload-*")
+	if err != nil {
+		return File{}, fmt.Errorf("create temp file: %w", err)
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+	n, err := io.Copy(tmp, io.TeeReader(lr, hasher))
 	if err != nil {
 		return File{}, err
 	}
 	if n > maxBytes {
 		return File{}, ErrFileTooLarge
 	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return File{}, err
+	}
 
 	sha256Hex := hex.EncodeToString(hasher.Sum(nil))
 
 	// Put into storage backend
-	_, err = s.Storage.Put(ctx, sha256Hex, bytes.NewReader(buf.Bytes()))
+	_, err = s.Storage.Put(ctx, sha256Hex, tmp)
 	if err != nil {
 		return File{}, fmt.Errorf("storage put: %w", err)
 	}
@@ -579,6 +589,9 @@ func (s *Service) fsRelay() *FsRelay {
 	return s.FsRelay
 }
 
+// terminalName is a terminal's name as the guard creates it.
+var terminalName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+
 // RequestAgentFs relays an ephemeral filesystem request to the agent's guard and waits up to 15s.
 func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID ids.ID, channelID ids.ID, op, root, path, query, name string, lines int) (any, error) {
 	if by.Kind != identity.KindHuman {
@@ -591,6 +604,11 @@ func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID
 	}
 	if op == "term_kill" && !by.IsAdmin() {
 		return nil, ErrForbidden
+	}
+	// The guard checks it too; a name like "../other-agent/build" must not
+	// even leave the server (round 40).
+	if (op == "term_output" || op == "term_kill") && !terminalName.MatchString(name) {
+		return nil, &httpx.BadRequest{Detail: "invalid terminal name"}
 	}
 	if s.Actors == nil {
 		return nil, ErrNotFound

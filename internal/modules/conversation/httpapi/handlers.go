@@ -28,7 +28,7 @@ func init() {
 	httpx.RegisterStatus(http.StatusConflict, conversation.ErrLastAdmin, conversation.ErrDMUnchangeable)
 	httpx.RegisterProblemType(http.StatusConflict, "channel_locked", conversation.ErrChannelLocked)
 	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
-	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil)
+	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil, conversation.ErrBadChannelKind)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
 }
 

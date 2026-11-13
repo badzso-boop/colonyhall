@@ -9,17 +9,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-)
-
-var (
-	_, cgnatCIDR, _ = net.ParseCIDR("100.64.0.0/10")
-	_, ulaCIDR, _   = net.ParseCIDR("fc00::/7")
 )
 
 // Default allowed endpoints per AI client.
@@ -90,18 +86,36 @@ type SandboxProxy struct {
 	seenHosts    map[string]bool
 }
 
-// isBlockedIP reports whether ip is in private, loopback, link-local, multicast,
-// unspecified, CGNAT (100.64.0.0/10), or ULA (fc00::/7) ranges.
+// blockedPrefixes are ranges no fetch may reach besides the ones the net
+// package names (round 40): "this network", benchmarking, IETF protocol
+// assignments, reserved and broadcast, CGNAT (Tailscale), ULA, and the IPv6
+// forms that carry an IPv4 address inside (NAT64, 6to4, Teredo), which
+// could otherwise reach a private IPv4 address through a translator.
+var blockedPrefixes = func() []netip.Prefix {
+	var out []netip.Prefix
+	for _, p := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4",
+		"fc00::/7", "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16", "2001::/32"} {
+		out = append(out, netip.MustParsePrefix(p))
+	}
+	return out
+}()
+
+// isBlockedIP reports whether ip is anything but a public unicast address:
+// private, loopback, link-local, multicast, unspecified, or one of
+// blockedPrefixes. An IPv4-mapped IPv6 address is checked as IPv4.
 func isBlockedIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsPrivate() || ip.IsMulticast() || ip.IsUnspecified() {
+	a, ok := netip.AddrFromSlice(ip)
+	if !ok {
 		return true
 	}
-	if cgnatCIDR != nil && cgnatCIDR.Contains(ip) {
+	a = a.Unmap()
+	if !a.IsGlobalUnicast() || a.IsPrivate() || a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsMulticast() || a.IsUnspecified() {
 		return true
 	}
-	if ulaCIDR != nil && ulaCIDR.Contains(ip) {
-		return true
+	for _, p := range blockedPrefixes {
+		if p.Contains(a) {
+			return true
+		}
 	}
 	return false
 }

@@ -91,3 +91,6 @@ var (
 	ErrInvalidOption       = errors.New("default option must be one of the choices")
 	ErrBadDeadline         = errors.New("deadline must be in the future")
 )
+
+// MaxDeadline is the longest a question may wait for its deadline.
+const MaxDeadline = 30 * 24 * time.Hour

@@ -82,11 +82,21 @@ type LoginRelay struct {
 	Hosts   *Service
 	Pusher  HostLoginPusher
 	Timeout time.Duration // LoginTimeout when zero
+	// Limits counts the attempts durably, per person and per client IP
+	// (round 40: identity.LimitClaudeLogin). Nil (unit tests): an
+	// in-process count of LoginAttempts per LoginWindow.
+	Limits Limiter
 
 	mu       sync.Mutex
 	pending  map[string]*loginPending
 	expired  map[string]time.Time
 	attempts map[ids.ID][]time.Time
+}
+
+// Limiter is the identity module's durable attempt limit.
+type Limiter interface {
+	CheckLimit(ctx context.Context, scope, handle string) error
+	LimitFailed(ctx context.Context, scope, handle string, workspaceID ids.ID)
 }
 
 // mayLogin: the machine's owner or an admin, a person who is not halted.
@@ -130,8 +140,8 @@ func (r *LoginRelay) relay(ctx context.Context, by identity.Actor, hostID ids.ID
 		}
 		return LoginResult{}, err
 	}
-	if !r.allow(by.ID) {
-		return LoginResult{}, ErrLoginTooMany
+	if err := r.limit(ctx, by); err != nil {
+		return LoginResult{}, err
 	}
 	if h.State != StateApproved {
 		return LoginResult{}, ErrHostOffline
@@ -183,6 +193,26 @@ func (r *LoginRelay) relay(ctx context.Context, by identity.Actor, hostID ids.ID
 }
 
 // allow counts an attempt of the person; false when over the limit.
+// limit counts every relayed attempt (the guard, not the server, checks
+// the token, so a success is not known here).
+func (r *LoginRelay) limit(ctx context.Context, by identity.Actor) error {
+	if r.Limits == nil {
+		if !r.allow(by.ID) {
+			return ErrLoginTooMany
+		}
+		return nil
+	}
+	if err := r.Limits.CheckLimit(ctx, identity.LimitClaudeLogin, by.Handle); err != nil {
+		var locked *identity.LockedOutError
+		if errors.As(err, &locked) {
+			return &identity.LockedOutError{Until: locked.Until, After: locked.After, Err: ErrLoginTooMany}
+		}
+		return err
+	}
+	r.Limits.LimitFailed(ctx, identity.LimitClaudeLogin, by.Handle, by.WorkspaceID)
+	return nil
+}
+
 func (r *LoginRelay) allow(actorID ids.ID) bool {
 	now := r.Hosts.Clock.Now()
 	r.mu.Lock()

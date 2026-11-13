@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -253,6 +254,7 @@ func (s *Service) Search(ctx context.Context, by identity.Actor, q Query) (Resul
 	if len(hits) > q.Limit {
 		hits = hits[:q.Limit]
 	}
+	hideUnreadablePlaces(hits, acc)
 	res.Hits = hits
 	res.Notice = notice(res.Degraded, s.Embedder != nil, s.Reranker != nil)
 	lap("total", start)
@@ -260,6 +262,20 @@ func (s *Service) Search(ctx context.Context, by identity.Actor, q Query) (Resul
 		s.writeLog(ctx, by, q, res)
 	}
 	return res, nil
+}
+
+// hideUnreadablePlaces drops the channel and thread of a workspace-wide
+// hit (a decision made in a DM or a private channel) that the reader may
+// not see: the header already hides the name, and the IDs must not tell
+// it either (round 40).
+func hideUnreadablePlaces(hits []Hit, acc Access) {
+	for i := range hits {
+		c := &hits[i].Chunk
+		if c.ChannelID == ids.Nil || slices.Contains(acc.ChannelIDs, c.ChannelID) {
+			continue
+		}
+		c.ChannelID, c.ThreadRootID = ids.Nil, ids.Nil
+	}
 }
 
 // notice is the short line a degraded answer starts with. A backend that

@@ -10,6 +10,7 @@ import { AdminPage } from "../components/AdminPage";
 import { Sparkline } from "../components/charts";
 import { EmergencyReleaseDialog } from "../components/EmergencyReleaseDialog";
 import { SearchStatusCard } from "../components/SearchStatusCard";
+import { SecurityStatusCard } from "../components/SecurityStatusCard";
 import { StatusCard, StatusRow as Row } from "../components/StatusCard";
 import { formatBytes, formatUptime, LAG_EVENTS, LAG_SECONDS, sizeGrowth, statusFindings, statusText, type SystemStatus, type Tone } from "../model";
 
@@ -120,6 +121,7 @@ function StatusBody() {
           <Row label={t("settings.gitea.webhook")} value={yes(s.gitea_webhook_configured)} />
         </StatusCard>
         {s.search ? <SearchStatusCard search={s.search} /> : null}
+        <SecurityStatusCard security={s.security} />
         <section className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-surface p-3">
           <h2 className="font-semibold">{t("status.backups")}</h2>
           <p className="text-ui text-fg-muted">{t("status.backupsBody")}</p>

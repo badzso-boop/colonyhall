@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/modules/conversation"
@@ -66,6 +67,10 @@ func (s *Service) CreateRequest(ctx context.Context, by identity.Actor, in Creat
 		}
 		return ApprovalRequest{}, err
 	}
+	shown := Redact(in.Input)
+	if utf8.RuneCountInString(shown) > MaxInput {
+		return ApprovalRequest{}, ErrInputTooLong
+	}
 	timeout := in.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -78,7 +83,7 @@ func (s *Service) CreateRequest(ctx context.Context, by identity.Actor, in Creat
 		ChannelID:    in.ChannelID,
 		ThreadRootID: in.ThreadRootID,
 		ToolName:     toolName,
-		Input:        clip(Redact(in.Input), MaxInput),
+		Input:        shown,
 		State:        StatePending,
 		CreatedAt:    now,
 		ExpiresAt:    now.Add(timeout),

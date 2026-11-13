@@ -854,7 +854,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### BSD-3-Clause: golang.org/x/crypto v0.58.0, golang.org/x/net v0.62.0, golang.org/x/oauth2 v0.35.0, golang.org/x/sync v0.24.0, golang.org/x/sys v0.49.0, golang.org/x/text v0.43.0, golang.org/x/time v0.15.0
+### BSD-3-Clause: golang.org/x/crypto v0.59.0, golang.org/x/net v0.62.0, golang.org/x/oauth2 v0.35.0, golang.org/x/sync v0.25.0, golang.org/x/sys v0.50.0, golang.org/x/text v0.44.0, golang.org/x/time v0.15.0
 
 ```text
 Copyright 2009 The Go Authors.

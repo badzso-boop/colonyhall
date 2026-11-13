@@ -170,8 +170,18 @@ func TestGiteaProvider_ParseWebhook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseWebhook: %v", err)
 	}
-	if ev.DeliveryID != "delivery-uuid-1" || ev.Repo != "org/repo" || ev.Action != "opened" {
+	sum := sha256.Sum256(payload)
+	if ev.DeliveryID != "sha256:"+hex.EncodeToString(sum[:]) || ev.Repo != "org/repo" || ev.Action != "opened" {
 		t.Errorf("unexpected event: %+v", ev)
+	}
+	// Round 40: the replay key is the signed body, so a new (unsigned)
+	// delivery header does not make a captured webhook new.
+	again := httptest.NewRequest(http.MethodPost, "/hooks/gitea", bytes.NewReader(payload))
+	again.Header.Set("X-Gitea-Event", "pull_request")
+	again.Header.Set("X-Gitea-Delivery", "forged-new-id")
+	again.Header.Set("X-Gitea-Signature", sig)
+	if ev2, err := p.ParseWebhook(again, secret); err != nil || ev2.DeliveryID != ev.DeliveryID {
+		t.Errorf("a replay with a new delivery header got another key: %+v %v", ev2, err)
 	}
 
 	// Bad signature

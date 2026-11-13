@@ -65,6 +65,10 @@ func securityHeaders(appPolicy string, next http.Handler) http.Handler {
 			h.Set("Content-Security-Policy", appPolicy)
 		case strings.HasPrefix(p, "/api/"), p == "/mcp", strings.HasPrefix(p, "/ws/"):
 			h.Set("Content-Security-Policy", apiCSP)
+			// API answers carry CSRF tokens, token secrets shown once,
+			// private files and exports: no browser or proxy keeps them
+			// (round 40). A handler may still set its own policy.
+			h.Set("Cache-Control", "no-store")
 		default:
 			h.Set("Content-Security-Policy", devPageCSP)
 		}
@@ -84,10 +88,16 @@ const (
 	defaultWriteTimeout = 10 * time.Minute
 )
 
-// longLived are connections that stay open by design: WebSockets and the MCP
-// stream. Everything else gets the deadlines.
+// webSocketPaths are the routes that upgrade to a WebSocket.
+var webSocketPaths = map[string]bool{"/ws/ui": true, "/ws/host": true}
+
+// longLived are connections that stay open by design: the WebSocket
+// upgrades and the MCP stream. Everything else gets the deadlines. The
+// Upgrade header alone is not enough (round 40): any client can send it,
+// and a request body trickled one byte a minute would then hold a
+// connection for ever, before any authentication.
 func longLived(r *http.Request) bool {
-	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+	if r.Method == http.MethodGet && webSocketPaths[r.URL.Path] && strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		return true
 	}
 	return r.URL.Path == "/mcp"

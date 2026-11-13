@@ -1540,3 +1540,14 @@ A rendszer szűk keresztmetszete nem a CPU, hanem az AI-keret és a context. Ez�
 **Erőforrás-megosztás:** a worker példányokon a párhuzamos API-agent futások száma poolonként korlátozott. A nehéz munkák (link-előnézet, digest, API-agentek) a worker szerepkörben futnak, így nem lassítják a chatet.
 
 **Célérték, amit a terhelési teszt ellenőriz:** az MVP-szerver egy 2 vCPU-s, 4 GB memóriás gépen, minden szerepkört egy folyamatban futtatva, 20 agentet és 5 embert szolgáljon ki, 200 ms alatti üzenetkézbesítéssel. Ez tervezett cél, nem mért eredmény.
+
+## Biztonsági keretek (40. kör, 2026-11-13)
+
+Az ellenőrzés táblázata és a nyitott pontok: `14-biztonsagi-ellenorzes.md`.
+
+- **Bejelentkezési korlát:** a hibás jelszavak az `auth_failure` táblába kerülnek (tartós, újraindítás után is él), handle-ként (5) és kliens-IP-ként (20) számolva csúszó ablakban (15 perc; a Claude-belépés közvetítésénél 10 perc, ott minden próba számít). Külön számlálója van a belépésnek, a vészleállítás feloldásának és a saját jelszó cseréjének. Elutasításkor `429` + `Retry-After`; a korlátot elérő próba `auth.locked_out` auditbejegyzés (handle, IP, meddig; jelszó soha). A sorokat az óránkénti karbantartás 7 nap után törli. A tábla `workspace_id`-ja szándékosan lehet üres: a hiba a hitelesítés előtt történik, és a kitalált handle egyik munkaterülethez sem tartozhat.
+- **Kliens-IP:** a TCP-partner címe. Az `X-Forwarded-For` csak a `COLONY_TRUSTED_PROXIES` címeiről számít, és csak az első nem megbízható ugrásig.
+- **Engedélylista:** a `COLONY_LOGIN_ALLOWLIST` címei soha nem kerülnek kizárásra; a hibáik így is számítanak és naplózódnak. Alapból üres.
+- **Állapotlap:** „Biztonság” kártya: kizárások az utolsó 24 órában, az engedélylista, és hogy van-e megbízható proxy.
+- **A szerver konténere:** csak olvasható gyökér, 16 MB-os memóriabeli `/tmp`, a nagy ideiglenes fájlok a fájlkötetre mennek (`TMPDIR`), `cap_drop: ALL`, `no-new-privileges`, memória- és PID-korlát (mérve: 2000 WebSocket-kliens, 32 párhuzamos 25 MB-os feltöltés és 32 keresés mellett legfeljebb 186 MB és 81 folyamat; alap 1 GB, `GOMEMLIMIT` 768 MB, 256 PID).
+- **Fuzz-tesztek** a külső bemenetet olvasó elemzőkre (az őr stream- és `/usage`-olvasói, fájllinkek, prompt-keret, kliens-IP, CSV, említések, handle, token-előtag); a `go test` a mintákat futtatja, hosszú futás a `14-biztonsagi-ellenorzes.md` szerint.

@@ -206,6 +206,63 @@ func (q *Queries) ArchiveActor(ctx context.Context, arg ArchiveActorParams) erro
 	return err
 }
 
+const authFailures = `-- name: AuthFailures :many
+SELECT f.by_ip::boolean AS by_ip, f.failed_at::timestamptz AS failed_at
+FROM colony_auth_failures($1::text, $2::text, $3::text, $4::timestamptz) AS f
+`
+
+type AuthFailuresParams struct {
+	Scope  string
+	Handle string
+	Ip     string
+	Since  time.Time
+}
+
+type AuthFailuresRow struct {
+	ByIp     bool
+	FailedAt time.Time
+}
+
+func (q *Queries) AuthFailures(ctx context.Context, arg AuthFailuresParams) ([]AuthFailuresRow, error) {
+	rows, err := q.db.Query(ctx, authFailures,
+		arg.Scope,
+		arg.Handle,
+		arg.Ip,
+		arg.Since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuthFailuresRow
+	for rows.Next() {
+		var i AuthFailuresRow
+		if err := rows.Scan(&i.ByIp, &i.FailedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const clearAuthFailures = `-- name: ClearAuthFailures :exec
+SELECT colony_clear_auth_failures($1::text, $2::text, $3::timestamptz)
+`
+
+type ClearAuthFailuresParams struct {
+	Scope  string
+	Handle string
+	At     time.Time
+}
+
+func (q *Queries) ClearAuthFailures(ctx context.Context, arg ClearAuthFailuresParams) error {
+	_, err := q.db.Exec(ctx, clearAuthFailures, arg.Scope, arg.Handle, arg.At)
+	return err
+}
+
 const createActor = `-- name: CreateActor :exec
 INSERT INTO actor (id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, owner_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -341,6 +398,27 @@ func (q *Queries) Credential(ctx context.Context, actorID uuid.UUID) (string, er
 	var password_hash string
 	err := row.Scan(&password_hash)
 	return password_hash, err
+}
+
+const deleteAuthFailures = `-- name: DeleteAuthFailures :execrows
+DELETE FROM auth_failure WHERE id IN (
+    SELECT f.id FROM auth_failure f WHERE f.failed_at < $1::timestamptz
+    LIMIT $2::int
+    FOR UPDATE SKIP LOCKED
+)
+`
+
+type DeleteAuthFailuresParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) DeleteAuthFailures(ctx context.Context, arg DeleteAuthFailuresParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAuthFailures, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteEndedSessions = `-- name: DeleteEndedSessions :execrows
@@ -535,6 +613,38 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordAuthFailure = `-- name: RecordAuthFailure :exec
+
+SELECT colony_record_auth_failure($1::uuid, $2::uuid, $3::text,
+    $4::text, $5::text, $6::timestamptz, $7::timestamptz)
+`
+
+type RecordAuthFailureParams struct {
+	ID          uuid.UUID
+	WorkspaceID *uuid.UUID
+	Scope       string
+	Handle      string
+	Ip          string
+	FailedAt    time.Time
+	LockedUntil *time.Time
+}
+
+// Round 40: durable login and release limits (migration 00056). The pre-auth
+// paths go through the narrow functions; the lockout list runs in the
+// caller's workspace scope.
+func (q *Queries) RecordAuthFailure(ctx context.Context, arg RecordAuthFailureParams) error {
+	_, err := q.db.Exec(ctx, recordAuthFailure,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Scope,
+		arg.Handle,
+		arg.Ip,
+		arg.FailedAt,
+		arg.LockedUntil,
+	)
+	return err
 }
 
 const revokeActorTokens = `-- name: RevokeActorTokens :exec
@@ -897,6 +1007,46 @@ func (q *Queries) TouchToken(ctx context.Context, arg TouchTokenParams) error {
 	return err
 }
 
+const unattributedLockouts = `-- name: UnattributedLockouts :many
+SELECT l.scope::text AS scope, l.handle::text AS handle, l.ip::text AS ip, l.failed_at::timestamptz AS failed_at,
+    l.locked_until::timestamptz AS locked_until
+FROM colony_unattributed_lockouts($1::timestamptz) AS l
+`
+
+type UnattributedLockoutsRow struct {
+	Scope       string
+	Handle      string
+	Ip          string
+	FailedAt    time.Time
+	LockedUntil time.Time
+}
+
+func (q *Queries) UnattributedLockouts(ctx context.Context, since time.Time) ([]UnattributedLockoutsRow, error) {
+	rows, err := q.db.Query(ctx, unattributedLockouts, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UnattributedLockoutsRow
+	for rows.Next() {
+		var i UnattributedLockoutsRow
+		if err := rows.Scan(
+			&i.Scope,
+			&i.Handle,
+			&i.Ip,
+			&i.FailedAt,
+			&i.LockedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateActorProfile = `-- name: UpdateActorProfile :exec
 UPDATE actor
 SET description = $2,
@@ -993,6 +1143,51 @@ func (q *Queries) WorkspaceBySlugAnywhere(ctx context.Context, slug string) (Wor
 		&i.State,
 	)
 	return i, err
+}
+
+const workspaceLockouts = `-- name: WorkspaceLockouts :many
+SELECT scope, handle, ip, failed_at, locked_until::timestamptz AS locked_until FROM auth_failure
+WHERE workspace_id = $1::uuid AND locked_until IS NOT NULL AND failed_at > $2::timestamptz
+ORDER BY failed_at DESC LIMIT 100
+`
+
+type WorkspaceLockoutsParams struct {
+	WorkspaceID uuid.UUID
+	Since       time.Time
+}
+
+type WorkspaceLockoutsRow struct {
+	Scope       string
+	Handle      string
+	Ip          string
+	FailedAt    time.Time
+	LockedUntil time.Time
+}
+
+func (q *Queries) WorkspaceLockouts(ctx context.Context, arg WorkspaceLockoutsParams) ([]WorkspaceLockoutsRow, error) {
+	rows, err := q.db.Query(ctx, workspaceLockouts, arg.WorkspaceID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkspaceLockoutsRow
+	for rows.Next() {
+		var i WorkspaceLockoutsRow
+		if err := rows.Scan(
+			&i.Scope,
+			&i.Handle,
+			&i.Ip,
+			&i.FailedAt,
+			&i.LockedUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const workspaceOfSession = `-- name: WorkspaceOfSession :one

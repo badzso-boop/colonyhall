@@ -717,17 +717,11 @@ func (s *PreviewSupervisor) dir() string {
 }
 
 // recoveredOverride is the override file of a preview started before a
-// guard restart; previews started by an older guard kept it in
-// /tmp/colony-previews.
+// guard restart. The shared /tmp/colony-previews of older guards is no
+// longer read (round 40): any local user can create files there, and the
+// guard would hand them to docker compose.
 func (s *PreviewSupervisor) recoveredOverride(id string) string {
-	p := filepath.Join(s.dir(), id, "docker-compose.override.yaml")
-	if _, err := os.Stat(p); err != nil {
-		legacy := filepath.Join(os.TempDir(), "colony-previews", id, "docker-compose.override.yaml")
-		if _, err := os.Stat(legacy); err == nil {
-			return legacy
-		}
-	}
-	return p
+	return filepath.Join(s.dir(), id, "docker-compose.override.yaml")
 }
 
 // Reconcile handles requested and running previews from the host config.

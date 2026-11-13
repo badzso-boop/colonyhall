@@ -73,3 +73,21 @@ func TestPasswordResetEndsOtherSessions(t *testing.T) {
 		t.Fatalf("other session must be logged out: status %d", s)
 	}
 }
+
+// Round 40: an admin cannot change any field of the owner's profile (only
+// the name was rank-checked before).
+func TestAdminCannotEditOwnersProfile(t *testing.T) {
+	e := newEnv(t)
+	_, adminTok := e.createActor("human", "ada", "admin")
+	var me struct{ Id string }
+	e.do("GET", "/api/v1/me", server.DevAdminToken, nil, &me)
+	for _, body := range []map[string]any{{"description": "fired"}, {"status_text": "away for good"}, {"timezone": "UTC"}, {"avatar_emoji": "🤡"}} {
+		if s := e.do("PATCH", "/api/v1/actors/"+me.Id+"/profile", adminTok, body, nil); s != http.StatusForbidden {
+			t.Fatalf("an admin changed the owner's %v: %d", body, s)
+		}
+	}
+	memberID, _ := e.createActor("human", "mia", "member")
+	if s := e.do("PATCH", "/api/v1/actors/"+memberID+"/profile", adminTok, map[string]any{"description": "QA"}, nil); s != http.StatusOK {
+		t.Fatalf("an admin edits a member's profile: %d", s)
+	}
+}

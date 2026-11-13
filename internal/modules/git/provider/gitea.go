@@ -457,14 +457,13 @@ func (g *GiteaProvider) ParseWebhook(r *http.Request, secret string) (WebhookEve
 		}
 	}
 
-	deliveryID := r.Header.Get("X-Gitea-Delivery")
-	if deliveryID == "" {
-		deliveryID = r.Header.Get("X-GitHub-Delivery")
-	}
-	if deliveryID == "" {
-		h := sha256.Sum256(body)
-		deliveryID = hex.EncodeToString(h[:16])
-	}
+	// The replay key is the hash of the signed body, not the delivery
+	// header (round 40): the header is not signed, so a captured webhook
+	// replayed with new X-Gitea-Delivery values passed as new events and
+	// posted (and woke agents) again. Gitea's own redelivery of an event
+	// sends the same body and is dropped the same way.
+	h := sha256.Sum256(body)
+	deliveryID := "sha256:" + hex.EncodeToString(h[:])
 
 	eventType := r.Header.Get("X-Gitea-Event")
 	if eventType == "" {

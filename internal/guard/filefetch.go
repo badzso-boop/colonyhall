@@ -13,11 +13,16 @@ import (
 	"time"
 )
 
+// secretPatterns are file names never fetched, in any folder. Matched
+// case-insensitively: roots on Windows drives (/mnt/c) do not care about
+// case, so ".ENV" is the same file as ".env" there (round 40).
 var secretPatterns = []string{
-	".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.p12", "credentials*", "*.token", "*.secret", ".netrc", ".git-credentials",
+	".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "id_ecdsa*", "id_dsa*", "*.p12", "*.pfx", "*.kdbx",
+	"credentials*", ".credentials*", "*.token", "*.secret", ".netrc", ".git-credentials", ".pgpass", ".npmrc", ".pypirc",
 }
 
 func isSecretName(base string) bool {
+	base = strings.ToLower(base)
 	for _, pat := range secretPatterns {
 		if matched, _ := filepath.Match(pat, base); matched {
 			return true

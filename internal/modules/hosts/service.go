@@ -560,7 +560,7 @@ func (s *Service) validateWriteScope(ctx context.Context, by identity.Actor, in 
 	if err != nil {
 		return "", err
 	}
-	if pa.WorkspaceID != by.WorkspaceID || !pa.Sandbox {
+	if pa.WorkspaceID != by.WorkspaceID || !pa.Sandboxed() {
 		return "", ErrBadPartner
 	}
 	return scope, nil
@@ -891,7 +891,9 @@ func (s *Service) ActiveGrants(ctx context.Context, hostID, agentID ids.ID) ([]G
 	return s.Store.ActiveGrants(ctx, hostID, agentID)
 }
 
-// IsFullAccess reports whether the agent is assigned in direct mode without sandbox.
+// IsFullAccess reports whether the agent is assigned in direct mode. The
+// sandbox flag does not change it: the guard runs direct mode without the
+// sandbox (round 40).
 func (s *Service) IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error) {
 	a, err := s.Store.AssignmentByAgent(ctx, agentID)
 	if err != nil {
@@ -900,7 +902,7 @@ func (s *Service) IsFullAccess(ctx context.Context, agentID ids.ID) (bool, error
 		}
 		return false, err
 	}
-	return a.Mode == AgentModeDirect && !a.Sandbox, nil
+	return a.Mode == AgentModeDirect, nil
 }
 
 // crossTenant revokes a host whose token was used on another workspace's

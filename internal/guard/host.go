@@ -40,7 +40,32 @@ func Enroll(ctx context.Context, server, code, name, tokenFile string) error {
 	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(tokenFile, []byte(token+"\n"), 0o600)
+	return writePrivate(tokenFile, []byte(token+"\n"))
+}
+
+// writePrivate writes a secret atomically with mode 0600. os.WriteFile
+// would keep the mode of an existing file (an old 0644 token stayed
+// readable) and follow a symlink at the path (round 40); a new temporary
+// file in the same folder is created 0600 and renamed over the path.
+func writePrivate(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // Supervisor runs a machine in host mode: it reports the machine, follows
@@ -126,6 +151,7 @@ func (s *Supervisor) start(ctx context.Context) error {
 	s.sandbox = DetectSandbox(ctx, s.home, s.Cfg.SandboxDir)
 	if s.sandbox != nil {
 		s.sandbox.NetworkMode = s.Cfg.SandboxNetwork
+		s.sandbox.Hide = []string{s.Cfg.HostTokenFile, s.Cfg.ClaudeTokenFile}
 	}
 	if s.login, err = LoadClaudeLogin(s.Cfg.ClaudeTokenFile); err != nil {
 		return err
@@ -301,8 +327,13 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		s.mu.Lock()
 		m := s.agents[ha.AgentID]
 		s.mu.Unlock()
-		if !ha.Sandbox && !s.Cfg.AllowUnsandboxed {
+		// A direct-mode run is never wrapped in the sandbox, whatever the
+		// sandbox flag says (round 40): it counts as unsandboxed here.
+		if (!ha.Sandbox || ha.Mode == "direct") && !s.Cfg.AllowUnsandboxed {
 			reason := "unsandboxed agents are not allowed on this machine (guard.yaml allow_unsandboxed)"
+			if ha.Sandbox {
+				reason = "direct mode runs without the sandbox; not allowed on this machine (guard.yaml allow_unsandboxed)"
+			}
 			rejected = append(rejected, Rejected{AgentID: ha.AgentID, Path: ha.RootDir, Reason: reason})
 			s.Log.Warn("guard: unsandboxed agent refused", "agent", "@"+ha.Handle, "reason", reason)
 			if m != nil {
@@ -397,15 +428,24 @@ func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
 		s.report(ctx)
 	}
 	halted := make(map[string]bool)
+	// Previews only for the agents this machine accepted (round 40): the
+	// server's list also holds agents refused above (an unsandboxed agent
+	// with allow_unsandboxed off, a root on the deny list).
+	var accepted []HostAgent
 	s.mu.Lock()
 	for id, m := range s.agents {
 		if m.agent != nil && m.agent.IsHalted() {
 			halted[id] = true
 		}
 	}
+	for _, ha := range cfg.Agents {
+		if _, ok := s.agents[ha.AgentID]; ok {
+			accepted = append(accepted, ha)
+		}
+	}
 	s.mu.Unlock()
 	if s.previews != nil {
-		s.previews.Reconcile(ctx, cfg.Previews, cfg.Agents, halted)
+		s.previews.Reconcile(ctx, cfg.Previews, accepted, halted)
 	}
 	if s.terminals != nil {
 		s.terminals.CheckHalted(halted)

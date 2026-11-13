@@ -199,6 +199,22 @@ func cleanHandle(h string) string {
 	return strings.TrimPrefix(strings.TrimSpace(h), "@")
 }
 
+// termHandleRe is a handle as it may appear in a terminal's folder name.
+var termHandleRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
+
+// ErrBadTerminalRef: a terminal name or handle that is not one the guard
+// could have created. The name comes from the server (the PWA's terminal
+// panel); a name like "../other-agent/build" would otherwise reach another
+// agent's folder (round 40).
+var ErrBadTerminalRef = errors.New("invalid terminal name")
+
+func checkTerminalRef(handle, name string) error {
+	if !termHandleRe.MatchString(handle) || !termNameRe.MatchString(name) {
+		return ErrBadTerminalRef
+	}
+	return nil
+}
+
 func (tm *TerminalManager) terminalsDir() string {
 	base := filepath.Clean(tm.stateDir)
 	if filepath.Base(base) == "terminals" {
@@ -362,6 +378,9 @@ func (tm *TerminalManager) loadMeta(handle, name string) (*TerminalMeta, error) 
 // Get returns the metadata for a specific terminal.
 func (tm *TerminalManager) Get(handle, name string) (*TerminalMeta, error) {
 	handle = cleanHandle(handle)
+	if err := checkTerminalRef(handle, name); err != nil {
+		return nil, err
+	}
 	tm.mu.Lock()
 	key := handle + "/" + name
 	if m, ok := tm.running[key]; ok {
@@ -425,6 +444,9 @@ func (tm *TerminalManager) List(handle string) ([]*TerminalMeta, error) {
 // Output reads up to lines (default 100, max 1000) from output.log, filtered.
 func (tm *TerminalManager) Output(handle, name string, lines int) (string, error) {
 	handle = cleanHandle(handle)
+	if err := checkTerminalRef(handle, name); err != nil {
+		return "", err
+	}
 	logPath := filepath.Join(tm.terminalDir(handle, name), "output.log")
 	raw, err := readLastLines(logPath, lines)
 	if err != nil {
@@ -436,6 +458,9 @@ func (tm *TerminalManager) Output(handle, name string, lines int) (string, error
 // Send types text into the running terminal followed by an Enter key.
 func (tm *TerminalManager) Send(handle, name, text string) error {
 	handle = cleanHandle(handle)
+	if err := checkTerminalRef(handle, name); err != nil {
+		return err
+	}
 	session := tm.sessionName(handle, name)
 	if !tm.hasSession(session) {
 		return fmt.Errorf("terminal %q is not running", name)
@@ -461,6 +486,9 @@ func (tm *TerminalManager) Send(handle, name, text string) error {
 // Kill terminates a running terminal and records killed_by.
 func (tm *TerminalManager) Kill(handle, name, killedBy string) error {
 	handle = cleanHandle(handle)
+	if err := checkTerminalRef(handle, name); err != nil {
+		return err
+	}
 	session := tm.sessionName(handle, name)
 	_ = tm.killSession(session)
 

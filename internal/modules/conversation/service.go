@@ -69,6 +69,11 @@ func (s *Service) CreateChannel(ctx context.Context, by identity.Actor, name, de
 	if kind == "" {
 		kind = KindPublic
 	}
+	// A "dm" made here would be a channel nobody can rename, archive or
+	// manage, and an unknown kind failed in the database (round 40).
+	if kind != KindPublic && kind != KindPrivate {
+		return Channel{}, ErrBadChannelKind
+	}
 	now := s.Clock.Now()
 	c := Channel{
 		ID:          s.IDs.New(),

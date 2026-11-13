@@ -290,9 +290,19 @@ func TestServerWithAnExistingDatabase(t *testing.T) {
 
 func TestUnattendedNeverOpensTheServerToEveryNetwork(t *testing.T) {
 	e, _, _ := testEnv(t, linux, "", true)
-	e.Answers.Server = ServerAnswers{Bind: "0.0.0.0", Port: 8080, AdminHandle: "a", AdminName: "A"}
-	if err := e.askServer(); err == nil {
-		t.Fatal("--yes accepted 0.0.0.0 without allow_all_interfaces")
+	// Round 40: every spelling of "all interfaces", and no non-address.
+	for _, bind := range []string{"0.0.0.0", "::", "0:0:0:0:0:0:0:0", "localhost\nCOLONY_PORT=80", "my-server"} {
+		e.Answers.Server = ServerAnswers{Bind: bind, Port: 8080, AdminHandle: "a", AdminName: "A"}
+		if err := e.askServer(); err == nil {
+			t.Fatalf("--yes accepted bind %q without allow_all_interfaces", bind)
+		}
+	}
+}
+
+func TestEnvFileDropsValuesWithLineBreaks(t *testing.T) {
+	got := envFile(map[string]string{"COLONY_IMAGE": "img:1\nCOLONY_DEV_SEED=1", "COLONY_BIND": "127.0.0.1"})
+	if strings.Contains(got, "COLONY_DEV_SEED") || !strings.Contains(got, "COLONY_BIND=127.0.0.1\n") {
+		t.Fatalf("a line break added a variable:\n%s", got)
 	}
 }
 
@@ -610,6 +620,10 @@ func TestRootBackupUsesOnlyRootOwnedPaths(t *testing.T) {
 	if err := e.installBackups(); err != nil {
 		t.Fatal(err)
 	}
+	// Round 40: root runs it nightly; the image is pinned by digest.
+	if !strings.Contains(e.backupScript(), " busybox:1.37@sha256:") || strings.Contains(e.backupScript(), " busybox tar") {
+		t.Errorf("the backup image is not pinned by digest:\n%s", e.backupScript())
+	}
 	if strings.Contains(e.backupScript(), e.Home) {
 		t.Errorf("the root backup script refers to the user's home:\n%s", e.backupScript())
 	}
@@ -664,5 +678,70 @@ func TestServerUpgradeKeepsTheOldDatabaseRole(t *testing.T) {
 		if strings.Contains(l, "psql") || strings.Contains(l, "--wait db") {
 			t.Fatalf("no role change on an old install: %s", l)
 		}
+	}
+}
+
+// Round 40: an existing installation gets the server's container hardening
+// on `colony setup --server --upgrade` (the compose file is rewritten);
+// the database service stays as it was.
+func TestServerUpgradeAddsContainerHardening(t *testing.T) {
+	e, fr, out := testEnv(t, linux, "", true)
+	fr.Have["docker"] = true
+	host, port := readyServer(t)
+	no := false
+	e.Answers = Answers{Mode: "server", Server: ServerAnswers{Bind: host, Port: port, AdminHandle: "anna", AdminName: "Anna", AdminPassword: "correct-horse-battery", Backups: &no}}
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	composePath := filepath.Join(e.serverDir(), "compose.yaml")
+	if err := os.MkdirAll(e.serverDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A compose file from before round 40.
+	if err := os.WriteFile(composePath, []byte("services:\n  server:\n    image: ${COLONY_IMAGE}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Do(e.ServerSteps(true)); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	raw, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := string(raw)
+	others, server, _ := strings.Cut(c, "  server:\n")
+	for _, want := range []string{"read_only: true", "- /tmp:size=16m,mode=1777", "cap_drop: [ALL]", `security_opt: ["no-new-privileges:true"]`,
+		"mem_limit: ${COLONY_MEM_LIMIT:-1g}", "pids_limit: ${COLONY_PIDS_LIMIT:-256}", "TMPDIR: /data/files/.tmp", "GOMEMLIMIT: ${COLONY_GOMEMLIMIT:-768MiB}",
+		"COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}", "COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}"} {
+		if !strings.Contains(server, want) {
+			t.Errorf("the upgraded server service lacks %q", want)
+		}
+	}
+	if !strings.Contains(others, "  db:\n") || strings.Contains(others, "read_only") || strings.Contains(others, "cap_drop") {
+		t.Errorf("the database service must be there and not hardened by this round:\n%s", others)
+	}
+}
+
+// Round 40: a secret is written into a new 0600 temporary file; a stale
+// "<file>.new" with a loose mode or a symlink there plays no part.
+func TestWriteFileIgnoresStaleNewFile(t *testing.T) {
+	e, _, _ := testEnv(t, linux, "", true)
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := filepath.Join(dir, ".env")
+	if err := os.Symlink(victim, env+".new"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.WriteFile(env, []byte("POSTGRES_PASSWORD=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(victim); string(raw) != "keep" {
+		t.Fatal("the secret went through a symlink")
+	}
+	if fi, _ := os.Stat(env); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
 	}
 }

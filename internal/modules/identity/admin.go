@@ -119,6 +119,12 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, actorID ids.ID, labe
 	if err != nil {
 		return Token{}, "", err
 	}
+	// A token for another person lets its holder act as them. Only the
+	// owner may do that, as only the owner resets another person's
+	// password (round 40); admins issue tokens for agents.
+	if target.Kind == KindHuman && target.ID != by.ID && by.Role != RoleOwner {
+		return Token{}, "", ErrForbidden
+	}
 	secret, err := NewSecret()
 	if err != nil {
 		return Token{}, "", err
@@ -354,17 +360,15 @@ func (s *Service) UpdateProfile(ctx context.Context, by Actor, actorID ids.ID, i
 	if target.WorkspaceID != by.WorkspaceID {
 		return Actor{}, db.ErrNotFound
 	}
-	if target.ID != by.ID && !by.IsAdmin() {
+	// Someone else's profile needs the rank check for every field, not
+	// only the name (round 40): an admin must not change the owner's (or
+	// another admin's) description, status, timezone or avatar either.
+	if target.ID != by.ID && (!by.IsAdmin() || !by.CanManage(target)) {
 		return Actor{}, ErrForbidden
 	}
 
 	newName := target.DisplayName
 	if in.DisplayName != nil {
-		// Someone else's name needs the rank check too: an admin must not
-		// rename the owner.
-		if target.ID != by.ID && !by.CanManage(target) {
-			return Actor{}, ErrForbidden
-		}
 		n := strings.TrimSpace(*in.DisplayName)
 		if !validDisplayName(n) {
 			return Actor{}, ErrInvalidDisplayName
@@ -476,9 +480,8 @@ func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string)
 		return ErrForbidden
 	}
 	// Limited apart from the login: a lockout there must not block the release.
-	key, now := "emergency-clear:"+by.Handle, s.Clock.Now()
-	if !s.limiter().allow(key, now) {
-		return ErrTooManyAttempts
+	if err := s.CheckLimit(ctx, LimitEmergencyClear, by.Handle); err != nil {
+		return err
 	}
 	hash, err := s.Store.Credential(ctx, by.ID)
 	if errors.Is(err, db.ErrNotFound) {
@@ -492,10 +495,10 @@ func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string)
 		return err
 	}
 	if !ok {
-		s.limiter().fail(key, now)
+		s.LimitFailed(ctx, LimitEmergencyClear, by.Handle, by.WorkspaceID)
 		return ErrBadCredentials
 	}
-	s.limiter().reset(key)
+	s.LimitSucceeded(ctx, LimitEmergencyClear, by.Handle)
 	return s.record(ctx, by, EventEmergencyCleared, "workspace", by.WorkspaceID, EmergencyEvent{By: by.ID.String()},
 		func(ctx context.Context) error { return s.Store.SetEmergencyStop(ctx, by.WorkspaceID, nil, ids.Nil) })
 }

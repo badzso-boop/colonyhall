@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
+	"net/netip"
 
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/platform/bus"
@@ -32,8 +32,10 @@ type Service struct {
 	// Actor.EffectiveColor (wired to the hosts module; nil: none).
 	HostColors func(ctx context.Context, workspaceID ids.ID) (map[ids.ID]string, error)
 
-	limiterOnce  sync.Once
-	loginLimiter *loginLimiter
+	// LoginAllowlist are the addresses that are never locked out
+	// (COLONY_LOGIN_ALLOWLIST, round 40); their attempts still count and
+	// are audited.
+	LoginAllowlist []netip.Prefix
 }
 
 // NewActorInput describes an actor to create.

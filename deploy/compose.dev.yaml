@@ -28,6 +28,17 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+    # Round 40: container hardening. Limits what code execution inside the
+    # server could do; the files volume stays writable, everything else is
+    # read-only. Large temporary files go to the volume (TMPDIR), not to the
+    # in-memory /tmp. The limits come from a load measurement (docs/02).
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${COLONY_MEM_LIMIT:-1g}
+    pids_limit: ${COLONY_PIDS_LIMIT:-256}
     environment:
       COLONY_STORE: postgres
       # colony_app: a role row-level security applies to; `make dev` creates it
@@ -37,6 +48,9 @@ services:
       COLONY_DEV_SEED: "1"
       COLONY_SECURE_COOKIES: "0"   # plain HTTP on localhost
       COLONY_FILES_DIR: /data/files
+      TMPDIR: /data/files/.tmp
+      # The Go runtime collects before the container limit (mem_limit) is reached.
+      GOMEMLIMIT: ${COLONY_GOMEMLIMIT:-768MiB}
       COLONY_MAX_UPLOAD_MB: "25"
       # Gitea integration (optional): set in deploy/.env (gitignored), see
       # deploy/.env.example. Empty URL = the git module stays off.
@@ -48,6 +62,10 @@ services:
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}
       COLONY_EMBED_URL: ${COLONY_EMBED_URL:-}
       COLONY_RERANK_URL: ${COLONY_RERANK_URL:-}
+      # Round 40: reverse proxies whose X-Forwarded-For is believed, and the
+      # addresses never locked out by the login limits (IPs or CIDRs, comma-separated).
+      COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
+      COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
     volumes:
       - filesdata:/data/files
     ports:

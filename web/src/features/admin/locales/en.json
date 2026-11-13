@@ -392,6 +392,21 @@
       "table": "Table",
       "tableSize": "Size",
       "rows": "Rows (estimate)"
+    },
+    "security": {
+      "title": "Security",
+      "lockouts": "Lockouts (24 hours)",
+      "until": "{{at}}, locked until {{until}}",
+      "noIp": "unknown address",
+      "allowlist": "Allowlist",
+      "none": "none",
+      "trustedProxies": "Trusted proxies",
+      "scope": {
+        "login": "login",
+        "emergency_clear": "emergency release",
+        "password": "password change",
+        "claude_login": "Claude login"
+      }
     }
   }
 }

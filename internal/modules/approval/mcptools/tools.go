@@ -87,6 +87,12 @@ func Register(s *mcp.Server, svc *approval.Service, current CurrentActor, fallba
 			ToolName:     in.ToolName,
 			Input:        rawInput,
 		})
+		if errors.Is(err, approval.ErrInputTooLong) {
+			// Denied without asking: approving a clipped input would run
+			// what the person did not see (round 40).
+			respData, _ := json.Marshal(DenyResponse{Behavior: "deny", Message: err.Error()})
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(respData)}}}, nil, nil
+		}
 		if err != nil {
 			return nil, nil, err
 		}

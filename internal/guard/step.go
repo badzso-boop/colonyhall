@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -51,6 +52,27 @@ var (
 	reJWT        = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`)
 	reLongHexB64 = regexp.MustCompile(`\b[0-9a-fA-F]{32,}\b|\b[A-Za-z0-9+/=_-]{32,}\b`)
 )
+
+// maxStepLabel bounds a step label that is not run through Redact (a file
+// path, an MCP tool name).
+const maxStepLabel = 200
+
+// stepLabel cleans a label that comes from the agent's output before it
+// goes to the server and the PWA (round 40): no escape sequences or other
+// control characters, at most maxStepLabel runes.
+func stepLabel(s string) string {
+	s = reAnsi.ReplaceAllString(s, " ")
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == utf8.RuneError {
+			return ' '
+		}
+		return r
+	}, s)
+	if utf8.RuneCountInString(s) > maxStepLabel {
+		s = string([]rune(s)[:maxStepLabel]) + "…"
+	}
+	return s
+}
 
 // Redact replaces sensitive tokens, passwords, keys, and long hashes in commands
 // and labels with "***", strips control characters, and caps the result at 80 characters.

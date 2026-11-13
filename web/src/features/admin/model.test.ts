@@ -117,6 +117,7 @@ const status = (over: Partial<NonNullable<AdminStatus["system"]>> = {}): AdminSt
     gitea_configured: true,
     gitea_webhook_configured: false,
     max_upload_mb: 25,
+    security: { lockouts_24h: 0, lockouts: [], allowlist: [], trusted_proxies: false },
     ...over,
   },
 });
@@ -125,6 +126,9 @@ const tone = (st: AdminStatus, id: string) => statusFindings(st).find((f) => f.i
 describe("status thresholds", () => {
   test("a healthy system is all ok", () => {
     expect(statusFindings(status()).every((f) => f.tone === "ok")).toBe(true);
+  });
+  test("a lockout in the last 24 hours warns (round 40)", () => {
+    expect(tone(status({ security: { lockouts_24h: 1, lockouts: [], allowlist: [], trusted_proxies: false } }), "security")).toBe("warning");
   });
   test("consumer lag warns above 100 events or 60 s, not at them", () => {
     const lag = (l: number, s: number) => tone(status({ consumers: [{ name: "a", offset: 0, lag: l, lag_seconds: s }] }), "events");

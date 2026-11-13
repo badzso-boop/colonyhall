@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"colonyhall/internal/modules/conversation"
 	convpg "colonyhall/internal/modules/conversation/postgres"
@@ -143,4 +144,32 @@ func TestPostgresRowLevelSecurity(t *testing.T) {
 		}
 		return nil
 	}))
+	// Round 40: the limit functions work before authentication and leave
+	// no system mode behind either.
+	must(t, pg.InTx(inA, func(ctx context.Context) error {
+		if err := ids.RecordAuthFailure(ctx, identity.AuthFailure{ID: gen.New(), Scope: identity.LimitLogin, Handle: "ghost", IP: "192.0.2.1", At: t0}); err != nil {
+			return err
+		}
+		if _, err := ids.AuthFailures(ctx, identity.LimitLogin, "ghost", "192.0.2.1", t0.Add(-time.Hour)); err != nil {
+			return err
+		}
+		if err := ids.ClearAuthFailures(ctx, identity.LimitLogin, "ghost", t0); err != nil {
+			return err
+		}
+		if _, err := ids.UnattributedLockouts(ctx, t0.Add(-time.Hour)); err != nil {
+			return err
+		}
+		if _, err := ids.ActorByID(ctx, bob.ID); !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("system mode leaked out of a limit function: %v", err)
+		}
+		return nil
+	}))
+	// A row without a workspace is invisible to every workspace scope.
+	var n int
+	must(t, pg.InTx(inA, func(ctx context.Context) error {
+		return pg.Q(ctx).QueryRow(ctx, "SELECT count(*) FROM auth_failure").Scan(&n)
+	}))
+	if n != 0 {
+		t.Fatalf("a workspace scope sees %d unattributed failure rows", n)
+	}
 }

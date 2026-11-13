@@ -3,6 +3,8 @@ package guard
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -744,5 +746,62 @@ func TestPreviewSupervisor_RefusesSandboxedAndOutsideRoots(t *testing.T) {
 	defer mu.Unlock()
 	if len(reasons) != 2 || !strings.Contains(reasons[0], "full-access") || !strings.Contains(reasons[1], "outside the root folders") {
 		t.Fatalf("reasons: %v", reasons)
+	}
+}
+
+// Round 40: a preview runs only for an agent this machine accepted. The
+// server's list also holds agents the guard refused (here: full-access
+// with allow_unsandboxed off); their previews must not start.
+func TestPreviewsOnlyForAcceptedAgents(t *testing.T) {
+	tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
+	root := filepath.Join(tmpDir, "roots", "app")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(root, "docker-compose.yaml"), []byte("services:\n  app:\n    image: nginx\n"), 0o644)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	fake := &FakeDockerRunner{}
+	ps, err := NewPreviewSupervisor(&Client{BaseURL: srv.URL, HTTP: srv.Client()}, fake, []string{filepath.Join(tmpDir, "roots")}, "127.0.0.1", "41100-41199", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sup := &Supervisor{
+		Cfg:      Config{Server: srv.URL, Roots: []string{filepath.Join(tmpDir, "roots")}, SandboxDir: filepath.Join(tmpDir, "sb"), AllowUnsandboxed: false},
+		host:     &Client{BaseURL: srv.URL, Token: "host-tok", HTTP: srv.Client()},
+		roots:    []string{filepath.Join(tmpDir, "roots")},
+		home:     tmpDir,
+		agents:   map[string]*managed{},
+		previews: ps,
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NewAdapter: func(AgentConfig) Adapter {
+			return &ClaudeCode{}
+		},
+	}
+	sup.reconcile(context.Background(), HostConfig{
+		Version: "v1",
+		Agents:  []HostAgent{{AgentID: "a1", Handle: "full", Client: "claude-code", Mode: "direct", RootDir: root, AllowPreview: true, PermissionMode: "auto"}},
+		Previews: []HostPreview{{ID: "p1", AgentID: "a1", Name: "x", ComposePath: "docker-compose.yaml", State: "requested",
+			ExpiresAt: time.Now().Add(time.Hour)}},
+	})
+	if len(fake.UpCalls) != 0 {
+		t.Fatalf("a refused agent's preview ran: %v", fake.UpCalls)
+	}
+}
+
+// Round 40: a recovered preview's override never comes from the shared
+// /tmp/colony-previews, which any local user can write.
+func TestRecoveredOverrideIgnoresSharedTmp(t *testing.T) {
+	ps := &PreviewSupervisor{Dir: t.TempDir()}
+	shared := filepath.Join(os.TempDir(), "colony-previews", "p-legacy-test")
+	if err := os.MkdirAll(shared, 0o755); err != nil {
+		t.Skipf("cannot create the shared folder: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(shared) }()
+	if err := os.WriteFile(filepath.Join(shared, "docker-compose.override.yaml"), []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ps.recoveredOverride("p-legacy-test"); !strings.HasPrefix(got, ps.Dir) {
+		t.Fatalf("the override came from %s", got)
 	}
 }
