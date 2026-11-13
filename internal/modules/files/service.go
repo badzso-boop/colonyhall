@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -588,6 +589,9 @@ func (s *Service) fsRelay() *FsRelay {
 	return s.FsRelay
 }
 
+// terminalName is a terminal's name as the guard creates it.
+var terminalName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+
 // RequestAgentFs relays an ephemeral filesystem request to the agent's guard and waits up to 15s.
 func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID ids.ID, channelID ids.ID, op, root, path, query, name string, lines int) (any, error) {
 	if by.Kind != identity.KindHuman {
@@ -600,6 +604,11 @@ func (s *Service) RequestAgentFs(ctx context.Context, by identity.Actor, agentID
 	}
 	if op == "term_kill" && !by.IsAdmin() {
 		return nil, ErrForbidden
+	}
+	// The guard checks it too; a name like "../other-agent/build" must not
+	// even leave the server (round 40).
+	if (op == "term_output" || op == "term_kill") && !terminalName.MatchString(name) {
+		return nil, &httpx.BadRequest{Detail: "invalid terminal name"}
 	}
 	if s.Actors == nil {
 		return nil, ErrNotFound

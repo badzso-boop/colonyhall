@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -390,4 +391,38 @@ func TestTerminalSurvivesProcessGroupKill(t *testing.T) {
 
 	// Clean up
 	_ = tm.Kill("bot", "survivor", "test-cleanup")
+}
+
+// Round 40: a terminal name from the server cannot reach another agent's
+// folder (or any other output.log).
+func TestTerminalRefsCannotTraverse(t *testing.T) {
+	state := t.TempDir()
+	tm := NewTerminalManager(state, nil, "")
+	other := filepath.Join(state, "terminals", "other", "build")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "output.log"), []byte("other agent's secret output\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../other/build", "../../terminals/other/build", "x/../../other/build"} {
+		if out, err := tm.Output("bot", name, 100); err == nil || out != "" {
+			t.Errorf("Output(%q) read %q, %v", name, out, err)
+		}
+		if _, err := tm.Get("bot", name); err == nil {
+			t.Errorf("Get(%q) succeeded", name)
+		}
+		if err := tm.Kill("bot", name, "admin"); !errors.Is(err, ErrBadTerminalRef) {
+			t.Errorf("Kill(%q): %v", name, err)
+		}
+		if err := tm.Send("bot", name, "ls"); !errors.Is(err, ErrBadTerminalRef) {
+			t.Errorf("Send(%q): %v", name, err)
+		}
+	}
+	if _, err := tm.Output("../other", "build", 100); err == nil {
+		t.Error("a handle with a path in it was accepted")
+	}
+	if out, err := tm.Output("other", "build", 100); err != nil || out == "" {
+		t.Fatalf("the agent's own terminal still reads: %q %v", out, err)
+	}
 }
