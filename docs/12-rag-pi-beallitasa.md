@@ -46,6 +46,7 @@ Wants=network-online.target
 [Service]
 User=embed
 WorkingDirectory=/opt/colony-embed
+Environment=ORT_DISABLE_TELEMETRY=1
 ExecStart=/opt/colony-embed/venv/bin/python -I server.py --mode embed --model model --name multilingual-e5-small-int8 --host 0.0.0.0 --port 8090 --threads 4 --batch 4
 Restart=always
 RestartSec=5

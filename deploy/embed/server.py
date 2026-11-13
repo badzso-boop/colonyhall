@@ -22,9 +22,15 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import numpy as np
-import onnxruntime as ort
-from tokenizers import Tokenizer
+# No usage telemetry: Colonyhall promises none (docs/17, 0.8). ONNX Runtime's
+# Linux build carries a Microsoft 1DS client (mobile.events.data.microsoft.com)
+# that starts while the module loads, so the switch must be set before the
+# import below; disable_telemetry_events() in main() alone comes too late.
+os.environ["ORT_DISABLE_TELEMETRY"] = "1"
+
+import numpy as np  # noqa: E402
+import onnxruntime as ort  # noqa: E402
+from tokenizers import Tokenizer  # noqa: E402
 
 MAX_BODY = 1 << 20  # 1 MB
 MAX_INPUTS = 64  # embeddings per request
@@ -176,8 +182,7 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--batch", type=int, default=8, help="inputs computed together (memory)")
     args = ap.parse_args()
-    # No usage telemetry: Colonyhall promises none (docs/17, 0.8). ONNX
-    # Runtime has a switch for its own; older versions do not.
+    # Belt and braces next to ORT_DISABLE_TELEMETRY (top of the file).
     if hasattr(ort, "disable_telemetry_events"):
         ort.disable_telemetry_events()
     model = Model(args.mode, args.model, args.name, args.threads, args.max_tokens, args.batch)

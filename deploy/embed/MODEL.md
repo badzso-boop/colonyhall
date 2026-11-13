@@ -1,5 +1,10 @@
 # Models for the search (round 36)
 
+**Telemetry:** ONNX Runtime's Linux build (1.31) contains a Microsoft 1DS
+telemetry client (`mobile.events.data.microsoft.com`) that starts when the
+module loads. `server.py` and the `Dockerfile` set `ORT_DISABLE_TELEMETRY=1`
+before that; keep it set wherever the server runs.
+
 The model files are not in the repository. Download them on the machine that
 serves them, check the sha256, and keep them read-only. The server names the
 model in every answer as `<name>@<first 12 hex digits of the ONNX file's sha256>`;

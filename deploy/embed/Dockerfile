@@ -7,6 +7,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py .
+# ONNX Runtime's own usage telemetry stays off (server.py sets it too).
+ENV ORT_DISABLE_TELEMETRY=1
 USER embed
 EXPOSE 8091
 ENTRYPOINT ["python", "-I", "/app/server.py"]

@@ -76,3 +76,27 @@ func TestComposeFilesPassEveryServerSetting(t *testing.T) {
 		}
 	}
 }
+
+// TestModelServerTurnsOffTelemetry: ONNX Runtime's Linux build starts a 1DS
+// telemetry client while it loads, unless ORT_DISABLE_TELEMETRY is set before
+// the import (2026-11-13).
+func TestModelServerTurnsOffTelemetry(t *testing.T) {
+	dir := filepath.Join("..", "..", "deploy", "embed")
+	src, err := os.ReadFile(filepath.Join(dir, "server.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	set := strings.Index(s, `os.environ["ORT_DISABLE_TELEMETRY"] = "1"`)
+	imp := strings.Index(s, "import onnxruntime")
+	if set < 0 || imp < 0 || set > imp {
+		t.Fatalf("server.py must set ORT_DISABLE_TELEMETRY before importing onnxruntime (set at %d, import at %d)", set, imp)
+	}
+	docker, err := os.ReadFile(filepath.Join(dir, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(docker), "ENV ORT_DISABLE_TELEMETRY=1") {
+		t.Fatal("deploy/embed/Dockerfile must set ORT_DISABLE_TELEMETRY=1")
+	}
+}
