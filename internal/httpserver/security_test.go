@@ -52,6 +52,17 @@ func TestSecurityHeadersPerArea(t *testing.T) {
 			}
 		}
 	}
+	// Round 40: API answers are never cached; the PWA's assets may be.
+	ok := func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("{}")) }
+	mux.HandleFunc("GET /api/v1/auth/session", ok)
+	mux.HandleFunc("GET /mcp", ok)
+	for path, want := range map[string]string{"/api/v1/auth/session": "no-store", "/mcp": "no-store", "/healthz": ""} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Errorf("%s: Cache-Control %q, want %q", path, got, want)
+		}
+	}
 }
 
 // A client that stops sending its body is cut off; only a real WebSocket

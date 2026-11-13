@@ -65,6 +65,10 @@ func securityHeaders(appPolicy string, next http.Handler) http.Handler {
 			h.Set("Content-Security-Policy", appPolicy)
 		case strings.HasPrefix(p, "/api/"), p == "/mcp", strings.HasPrefix(p, "/ws/"):
 			h.Set("Content-Security-Policy", apiCSP)
+			// API answers carry CSRF tokens, token secrets shown once,
+			// private files and exports: no browser or proxy keeps them
+			// (round 40). A handler may still set its own policy.
+			h.Set("Cache-Control", "no-store")
 		default:
 			h.Set("Content-Security-Policy", devPageCSP)
 		}
