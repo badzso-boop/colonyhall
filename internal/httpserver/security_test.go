@@ -54,7 +54,8 @@ func TestSecurityHeadersPerArea(t *testing.T) {
 	}
 }
 
-// A client that stops sending its body is cut off; a WebSocket upgrade is not.
+// A client that stops sending its body is cut off; only a real WebSocket
+// route (and the MCP stream) is long-lived.
 func TestReadDeadlineSparesLongLivedConnections(t *testing.T) {
 	mux := http.NewServeMux()
 	readErr := make(chan error, 2)
@@ -86,7 +87,24 @@ func TestReadDeadlineSparesLongLivedConnections(t *testing.T) {
 	if err := send(""); err == nil {
 		t.Fatal("a stalled body must hit the read deadline")
 	}
-	if err := send("Connection: Upgrade\r\nUpgrade: websocket\r\n"); err != nil {
-		t.Fatalf("a WebSocket upgrade got the deadline: %v", err)
+	// Round 40: an Upgrade header on an ordinary route does not lift the
+	// deadline (a slow body would hold the connection without login).
+	if err := send("Connection: Upgrade\r\nUpgrade: websocket\r\n"); err == nil {
+		t.Fatal("an Upgrade header on a POST route lifted the read deadline")
+	}
+	for _, c := range []struct {
+		method, path string
+		want         bool
+	}{
+		{"GET", "/ws/ui", true}, {"GET", "/ws/host", true}, {"POST", "/ws/ui", false}, {"GET", "/api/v1/me", false}, {"GET", "/ws/ui/x", false},
+	} {
+		r := httptest.NewRequest(c.method, c.path, nil)
+		r.Header.Set("Upgrade", "WebSocket")
+		if got := longLived(r); got != c.want {
+			t.Errorf("%s %s with Upgrade: long-lived %v, want %v", c.method, c.path, got, c.want)
+		}
+	}
+	if !longLived(httptest.NewRequest("POST", "/mcp", nil)) {
+		t.Error("the MCP stream keeps no deadline")
 	}
 }

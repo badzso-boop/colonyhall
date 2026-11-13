@@ -84,10 +84,16 @@ const (
 	defaultWriteTimeout = 10 * time.Minute
 )
 
-// longLived are connections that stay open by design: WebSockets and the MCP
-// stream. Everything else gets the deadlines.
+// webSocketPaths are the routes that upgrade to a WebSocket.
+var webSocketPaths = map[string]bool{"/ws/ui": true, "/ws/host": true}
+
+// longLived are connections that stay open by design: the WebSocket
+// upgrades and the MCP stream. Everything else gets the deadlines. The
+// Upgrade header alone is not enough (round 40): any client can send it,
+// and a request body trickled one byte a minute would then hold a
+// connection for ever, before any authentication.
 func longLived(r *http.Request) bool {
-	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+	if r.Method == http.MethodGet && webSocketPaths[r.URL.Path] && strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		return true
 	}
 	return r.URL.Path == "/mcp"
