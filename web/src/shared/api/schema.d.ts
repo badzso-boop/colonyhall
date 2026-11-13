@@ -13,7 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Humans only. Sets the HttpOnly session cookie. Browser requests that change state must send csrf_token in the X-CSRF-Token header. */
+        /** @description Humans only. Sets the HttpOnly session cookie. Browser requests that change state must send csrf_token in the X-CSRF-Token header. Round 40: failures are counted per handle (5) and per client IP (20) in a sliding 15-minute window, stored in the database; over the limit the answer is 429 with Retry-After, even for the right password. Addresses in COLONY_LOGIN_ALLOWLIST are never locked out. */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -189,7 +189,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Requires the admin's password again. */
+        /** @description Requires the admin's password again. Limited like the login, with its own counters (round 40). */
         post: operations["emergencyClear"];
         delete?: never;
         options?: never;
@@ -315,7 +315,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Your own password (current_password required) or, for admins, anyone's in the workspace. */
+        /** @description Your own password (current_password required; wrong guesses are limited like the login, with their own counters, round 40) or, for the owner, another person's in the workspace. */
         put: operations["setPassword"];
         post?: never;
         delete?: never;
@@ -2999,6 +2999,29 @@ export interface components {
             gitea_webhook_configured: boolean;
             max_upload_mb: number;
             search?: components["schemas"]["SearchStatus"];
+            security: components["schemas"]["SecurityStatus"];
+        };
+        /** @description Round 40: the login and release limits. In multi-tenant mode only the workspace's own lockouts; in single-tenant mode also those of unknown handles. */
+        SecurityStatus: {
+            /** @description Lockouts in the last 24 hours. */
+            lockouts_24h: number;
+            /** @description The latest lockouts of the last 24 hours, newest first (at most 20). */
+            lockouts: components["schemas"]["StatusLockout"][];
+            /** @description COLONY_LOGIN_ALLOWLIST (addresses and prefixes only). */
+            allowlist: string[];
+            /** @description Whether COLONY_TRUSTED_PROXIES is set (X-Forwarded-For is believed from them). */
+            trusted_proxies: boolean;
+        };
+        StatusLockout: {
+            /** @enum {string} */
+            scope: "login" | "emergency_clear" | "password" | "claude_login";
+            handle: string;
+            /** @description The client address; empty when unknown. */
+            ip: string;
+            /** Format: date-time */
+            at: string;
+            /** Format: date-time */
+            until: string;
         };
         /** @enum {string} */
         SearchSourceKind: "message" | "wiki" | "decision" | "summary";
@@ -5267,6 +5290,17 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description Too many attempts (round 40); try again after Retry-After seconds. */
+        LockedOut: {
+            headers: {
+                /** @description Seconds until the next attempt is accepted. */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
     parameters: {
         ChannelId: string;
@@ -5300,7 +5334,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
             default: components["responses"]["Problem"];
         };
     };
@@ -5555,6 +5589,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminStatus"];
                 };
             };
+            429: components["responses"]["LockedOut"];
             default: components["responses"]["Problem"];
         };
     };
@@ -5725,6 +5760,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["LockedOut"];
             default: components["responses"]["Problem"];
         };
     };
@@ -7147,7 +7183,7 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
             504: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
@@ -7174,7 +7210,7 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
             504: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };

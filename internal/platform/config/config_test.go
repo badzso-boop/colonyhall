@@ -38,3 +38,25 @@ func TestSourceURL(t *testing.T) {
 		}
 	}
 }
+
+func TestLoginAllowlistAndTrustedProxies(t *testing.T) {
+	t.Setenv("COLONY_STORE", "memory")
+	c, err := FromEnv()
+	if err != nil || len(c.LoginAllowlist) != 0 || len(c.TrustedProxies) != 0 {
+		t.Fatalf("empty by default: %+v %v", c, err)
+	}
+	t.Setenv("COLONY_LOGIN_ALLOWLIST", "127.0.0.1/32, ::1/128, 192.0.2.10")
+	t.Setenv("COLONY_TRUSTED_PROXIES", "10.0.0.2")
+	if c, err = FromEnv(); err != nil || len(c.LoginAllowlist) != 3 || c.LoginAllowlist[2].String() != "192.0.2.10/32" || len(c.TrustedProxies) != 1 {
+		t.Fatalf("parsed: %+v %v", c, err)
+	}
+	t.Setenv("COLONY_LOGIN_ALLOWLIST", "office")
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("a name is not an address")
+	}
+	t.Setenv("COLONY_LOGIN_ALLOWLIST", "")
+	t.Setenv("COLONY_TRUSTED_PROXIES", "10.0.0.0/40")
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("a bad prefix must fail the start")
+	}
+}

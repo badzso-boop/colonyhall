@@ -20,6 +20,7 @@ const system: NonNullable<Schemas["AdminStatus"]["system"]> = {
   gitea_configured: false,
   gitea_webhook_configured: false,
   max_upload_mb: 25,
+  security: { lockouts_24h: 0, lockouts: [], allowlist: [], trusted_proxies: false },
 };
 
 function show(search?: Schemas["SearchStatus"]) {

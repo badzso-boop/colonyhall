@@ -4,6 +4,7 @@ export type UsageGroup = Schemas["UsageGroup"];
 export type SystemStatus = Schemas["SystemStatus"];
 export type AdminStatus = Schemas["AdminStatus"];
 export type SearchStatus = Schemas["SearchStatus"];
+export type SecurityStatus = Schemas["SecurityStatus"];
 
 // ---- Period
 
@@ -227,6 +228,7 @@ export function statusFindings(st: AdminStatus): StatusFinding[] {
     { id: "emergency", tone: st.emergency_stop.active ? "error" : "ok" },
     { id: "integrations", tone: "ok" },
     ...(s.search ? [{ id: "search", tone: searchTone(s.search) }] : []),
+    { id: "security", tone: securityTone(s.security) },
   ];
 }
 
@@ -239,6 +241,11 @@ export function searchTone(s: SearchStatus): Tone {
   if (s.model_mismatch) return "error";
   const down = (b: SearchStatus["embedder"]) => b.configured && !b.reachable;
   return down(s.embedder) || down(s.reranker) ? "warning" : "ok";
+}
+
+/** The security card's tone (round 40): any lockout in the last 24 hours is worth a look. */
+export function securityTone(s: SecurityStatus): Tone {
+  return s.lockouts_24h > 0 ? "warning" : "ok";
 }
 
 const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;

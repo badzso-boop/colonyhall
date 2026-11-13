@@ -169,3 +169,35 @@ WHERE token_hash = sqlc.arg(token_hash) RETURNING *;
 
 -- name: SetWorkspaceState :execrows
 UPDATE workspace SET state = sqlc.arg(state) WHERE id = sqlc.arg(id);
+
+-- Round 40: durable login and release limits (migration 00056). The pre-auth
+-- paths go through the narrow functions; the lockout list runs in the
+-- caller's workspace scope.
+
+-- name: RecordAuthFailure :exec
+SELECT colony_record_auth_failure(sqlc.arg(id)::uuid, sqlc.narg(workspace_id)::uuid, sqlc.arg(scope)::text,
+    sqlc.arg(handle)::text, sqlc.arg(ip)::text, sqlc.arg(failed_at)::timestamptz, sqlc.narg(locked_until)::timestamptz);
+
+-- name: AuthFailures :many
+SELECT f.by_ip::boolean AS by_ip, f.failed_at::timestamptz AS failed_at
+FROM colony_auth_failures(sqlc.arg(scope)::text, sqlc.arg(handle)::text, sqlc.arg(ip)::text, sqlc.arg(since)::timestamptz) AS f;
+
+-- name: ClearAuthFailures :exec
+SELECT colony_clear_auth_failures(sqlc.arg(scope)::text, sqlc.arg(handle)::text, sqlc.arg(at)::timestamptz);
+
+-- name: WorkspaceLockouts :many
+SELECT scope, handle, ip, failed_at, locked_until::timestamptz AS locked_until FROM auth_failure
+WHERE workspace_id = sqlc.arg(workspace_id)::uuid AND locked_until IS NOT NULL AND failed_at > sqlc.arg(since)::timestamptz
+ORDER BY failed_at DESC LIMIT 100;
+
+-- name: UnattributedLockouts :many
+SELECT l.scope::text AS scope, l.handle::text AS handle, l.ip::text AS ip, l.failed_at::timestamptz AS failed_at,
+    l.locked_until::timestamptz AS locked_until
+FROM colony_unattributed_lockouts(sqlc.arg(since)::timestamptz) AS l;
+
+-- name: DeleteAuthFailures :execrows
+DELETE FROM auth_failure WHERE id IN (
+    SELECT f.id FROM auth_failure f WHERE f.failed_at < sqlc.arg(before)::timestamptz
+    LIMIT sqlc.arg(batch)::int
+    FOR UPDATE SKIP LOCKED
+);

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"net/netip"
 	"time"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -43,6 +44,10 @@ type statusDeps struct {
 	WebhookOn   bool
 	MaxUploadMB int
 	Search      *search.Service
+	// Round 40: the login limits' card.
+	Multitenant    bool
+	LoginAllowlist []netip.Prefix
+	TrustedProxies bool
 }
 
 func registerStatus(mux *http.ServeMux, d statusDeps) {
@@ -135,6 +140,11 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 	if err != nil {
 		return out, err
 	}
+	sec, err := d.security(ctx, by, since)
+	if err != nil {
+		return out, err
+	}
+	out.Security = sec
 	if d.Search != nil {
 		st, err := d.Search.Status(ctx, by.WorkspaceID)
 		if err != nil {
@@ -142,6 +152,28 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 		}
 		ss := searchhttp.Status(st)
 		out.Search = &ss
+	}
+	return out, nil
+}
+
+// security is the login limits' card (round 40): the latest lockouts, the
+// allowlist and whether proxies are trusted. In multi-tenant mode only the
+// workspace's own lockouts; an unknown handle's belong to no workspace.
+func (d statusDeps) security(ctx context.Context, by identity.Actor, since time.Time) (apispec.SecurityStatus, error) {
+	out := apispec.SecurityStatus{Lockouts: []apispec.StatusLockout{}, Allowlist: []string{}, TrustedProxies: d.TrustedProxies}
+	for _, p := range d.LoginAllowlist {
+		out.Allowlist = append(out.Allowlist, p.String())
+	}
+	list, err := d.Identity.Lockouts(ctx, by, since, !d.Multitenant)
+	if err != nil {
+		return out, err
+	}
+	out.Lockouts24h = len(list)
+	for i, l := range list {
+		if i == 20 {
+			break
+		}
+		out.Lockouts = append(out.Lockouts, apispec.StatusLockout{Scope: apispec.StatusLockoutScope(l.Scope), Handle: l.Handle, Ip: l.IP, At: l.At, Until: l.Until})
 	}
 	return out, nil
 }

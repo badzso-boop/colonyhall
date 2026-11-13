@@ -476,9 +476,8 @@ func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string)
 		return ErrForbidden
 	}
 	// Limited apart from the login: a lockout there must not block the release.
-	key, now := "emergency-clear:"+by.Handle, s.Clock.Now()
-	if !s.limiter().allow(key, now) {
-		return ErrTooManyAttempts
+	if err := s.CheckLimit(ctx, LimitEmergencyClear, by.Handle); err != nil {
+		return err
 	}
 	hash, err := s.Store.Credential(ctx, by.ID)
 	if errors.Is(err, db.ErrNotFound) {
@@ -492,10 +491,10 @@ func (s *Service) ClearEmergency(ctx context.Context, by Actor, password string)
 		return err
 	}
 	if !ok {
-		s.limiter().fail(key, now)
+		s.LimitFailed(ctx, LimitEmergencyClear, by.Handle, by.WorkspaceID)
 		return ErrBadCredentials
 	}
-	s.limiter().reset(key)
+	s.LimitSucceeded(ctx, LimitEmergencyClear, by.Handle)
 	return s.record(ctx, by, EventEmergencyCleared, "workspace", by.WorkspaceID, EmergencyEvent{By: by.ID.String()},
 		func(ctx context.Context) error { return s.Store.SetEmergencyStop(ctx, by.WorkspaceID, nil, ids.Nil) })
 }

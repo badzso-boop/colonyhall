@@ -1365,6 +1365,30 @@ func (e SetStateRequestState) Valid() bool {
 	}
 }
 
+// Defines values for StatusLockoutScope.
+const (
+	ClaudeLogin    StatusLockoutScope = "claude_login"
+	EmergencyClear StatusLockoutScope = "emergency_clear"
+	Login          StatusLockoutScope = "login"
+	Password       StatusLockoutScope = "password"
+)
+
+// Valid indicates whether the value is a known member of the StatusLockoutScope enum.
+func (e StatusLockoutScope) Valid() bool {
+	switch e {
+	case ClaudeLogin:
+		return true
+	case EmergencyClear:
+		return true
+	case Login:
+		return true
+	case Password:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TerminalSummaryStatus.
 const (
 	TerminalSummaryStatusError    TerminalSummaryStatus = "error"
@@ -3605,6 +3629,21 @@ type SearchStatus struct {
 	Reranker SearchBackend `json:"reranker"`
 }
 
+// SecurityStatus Round 40: the login and release limits. In multi-tenant mode only the workspace's own lockouts; in single-tenant mode also those of unknown handles.
+type SecurityStatus struct {
+	// Allowlist COLONY_LOGIN_ALLOWLIST (addresses and prefixes only).
+	Allowlist []string `json:"allowlist"`
+
+	// Lockouts The latest lockouts of the last 24 hours, newest first (at most 20).
+	Lockouts []StatusLockout `json:"lockouts"`
+
+	// Lockouts24h Lockouts in the last 24 hours.
+	Lockouts24h int `json:"lockouts_24h"`
+
+	// TrustedProxies Whether COLONY_TRUSTED_PROXIES is set (X-Forwarded-For is believed from them).
+	TrustedProxies bool `json:"trusted_proxies"`
+}
+
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
 	// AnswersMessageId Agents (guard): the message this answer replies to, in another channel the agent can read
@@ -3735,6 +3774,20 @@ type StatusGuard struct {
 	Online bool `json:"online"`
 }
 
+// StatusLockout defines model for StatusLockout.
+type StatusLockout struct {
+	At     time.Time `json:"at"`
+	Handle string    `json:"handle"`
+
+	// Ip The client address; empty when unknown.
+	Ip    string             `json:"ip"`
+	Scope StatusLockoutScope `json:"scope"`
+	Until time.Time          `json:"until"`
+}
+
+// StatusLockoutScope defines model for StatusLockout.Scope.
+type StatusLockoutScope string
+
 // StatusSizeSample defines model for StatusSizeSample.
 type StatusSizeSample struct {
 	Date      openapi_types.Date `json:"date"`
@@ -3785,9 +3838,12 @@ type SystemStatus struct {
 		Failed24h int        `json:"failed_24h"`
 		NextRunAt *time.Time `json:"next_run_at,omitempty"`
 	} `json:"scheduler"`
-	Search        *SearchStatus `json:"search,omitempty"`
-	UptimeSeconds int64         `json:"uptime_seconds"`
-	Version       string        `json:"version"`
+	Search *SearchStatus `json:"search,omitempty"`
+
+	// Security Round 40: the login and release limits. In multi-tenant mode only the workspace's own lockouts; in single-tenant mode also those of unknown handles.
+	Security      SecurityStatus `json:"security"`
+	UptimeSeconds int64          `json:"uptime_seconds"`
+	Version       string         `json:"version"`
 }
 
 // TerminalStartRequest defines model for TerminalStartRequest.
@@ -4062,6 +4118,9 @@ type WikiRevisionList struct {
 
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
+
+// LockedOut defines model for LockedOut.
+type LockedOut = Problem
 
 // ListActorsParams defines parameters for ListActors.
 type ListActorsParams struct {

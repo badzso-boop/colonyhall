@@ -36,6 +36,10 @@ services:
       # Several customers on one server, one subdomain each (docs/23-elkulonites.md); off by default.
       COLONY_MULTITENANT: ${COLONY_MULTITENANT:-0}
       COLONY_BASE_DOMAIN: ${COLONY_BASE_DOMAIN:-}
+      # Round 40: reverse proxies whose X-Forwarded-For is believed, and the
+      # addresses never locked out by the login limits (IPs or CIDRs, comma-separated).
+      COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
+      COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
     volumes:
       - files:/data/files
     ports:

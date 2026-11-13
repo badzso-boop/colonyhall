@@ -212,6 +212,8 @@ func run(logger *slog.Logger) error {
 		Store:              cfg.Store,
 		Multitenant:        cfg.Multitenant,
 		BaseDomain:         cfg.BaseDomain,
+		TrustedProxies:     cfg.TrustedProxies,
+		LoginAllowlist:     cfg.LoginAllowlist,
 		DatabaseURL:        cfg.DatabaseURL,
 		Logger:             logger,
 		SecureCookies:      cfg.SecureCookies,

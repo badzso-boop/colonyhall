@@ -116,6 +116,10 @@ services:
       COLONY_SOURCE_URL: ${COLONY_SOURCE_URL:-}
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}
+      # Round 40: reverse proxies whose X-Forwarded-For is believed, and the
+      # addresses never locked out by the login limits (IPs or CIDRs).
+      COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
+      COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
     volumes:
       - files:/data/files
     ports:

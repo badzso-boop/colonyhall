@@ -23,6 +23,7 @@ type Store struct {
 	creds      map[ids.ID]string
 	sessions   map[string]identity.Session // key: string(token hash)
 	revoked    map[ids.ID]time.Time        // session id → when it was revoked
+	failures   []authFailure               // login and release limits (round 40)
 }
 
 // New returns an empty store.

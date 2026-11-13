@@ -104,13 +104,14 @@ Recomputes the hash chain; ok=false names the first altered entry.
 
 `emergencyClear` · Auth: signed in
 
-Requires the admin's password again.
+Requires the admin's password again. Limited like the login, with its own counters (round 40).
 
 Request body (`application/json`, required): [EmergencyClearRequest](#emergencyclearrequest)
 
 | Response | Body |
 | --- | --- |
 | 200 | Cleared: [AdminStatus](#adminstatus) (`application/json`) |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /admin/emergency-stop`
 
@@ -1669,7 +1670,7 @@ Round 38. The machine's owner or an admin removes the guard's Claude login token
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 | 409 | Error: [Problem](#problem) (`application/problem+json`) |
 | 422 | Error: [Problem](#problem) (`application/problem+json`) |
-| 429 | Error: [Problem](#problem) (`application/problem+json`) |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
 | 504 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `PUT /hosts/{hostId}/claude-login`
@@ -1701,7 +1702,7 @@ Request body (`application/json`, required): [SetClaudeLoginRequest](#setclaudel
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 | 409 | Error: [Problem](#problem) (`application/problem+json`) |
 | 422 | Error: [Problem](#problem) (`application/problem+json`) |
-| 429 | Error: [Problem](#problem) (`application/problem+json`) |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
 | 504 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /hosts/{hostId}/fs`
@@ -1802,7 +1803,7 @@ Request body (`application/json`, required): [CreateActorRequest](#createactorre
 
 `setPassword` · Auth: signed in
 
-Your own password (current_password required) or, for admins, anyone's in the workspace.
+Your own password (current_password required; wrong guesses are limited like the login, with their own counters, round 40) or, for the owner, another person's in the workspace.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
@@ -1813,6 +1814,7 @@ Request body (`application/json`, required): [SetPasswordRequest](#setpasswordre
 | Response | Body |
 | --- | --- |
 | 204 | Changed |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
 
 ### `PATCH /actors/{actorId}/profile`
 
@@ -1909,7 +1911,7 @@ The owner only. The people of the workspace with their active sessions and last 
 
 `login` · Auth: public
 
-Humans only. Sets the HttpOnly session cookie. Browser requests that change state must send csrf_token in the X-CSRF-Token header.
+Humans only. Sets the HttpOnly session cookie. Browser requests that change state must send csrf_token in the X-CSRF-Token header. Round 40: failures are counted per handle (5) and per client IP (20) in a sliding 15-minute window, stored in the database; over the limit the answer is 429 with Retry-After, even for the right password. Addresses in COLONY_LOGIN_ALLOWLIST are never locked out.
 
 Request body (`application/json`, required): [LoginRequest](#loginrequest)
 
@@ -1917,7 +1919,7 @@ Request body (`application/json`, required): [LoginRequest](#loginrequest)
 | --- | --- |
 | 200 | Logged in: [SessionInfo](#sessioninfo) (`application/json`) |
 | 401 | Error: [Problem](#problem) (`application/problem+json`) |
-| 429 | Error: [Problem](#problem) (`application/problem+json`) |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /auth/logout`
 
@@ -4707,6 +4709,17 @@ Type: string
 | `pending` | integer | yes | Chunks waiting for an embedding. |
 | `reranker` | [SearchBackend](#searchbackend) | yes |  |
 
+### SecurityStatus
+
+Round 40: the login and release limits. In multi-tenant mode only the workspace's own lockouts; in single-tenant mode also those of unknown handles.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `allowlist` | string[] | yes | COLONY_LOGIN_ALLOWLIST (addresses and prefixes only). |
+| `lockouts` | [StatusLockout](#statuslockout)[] | yes | The latest lockouts of the last 24 hours, newest first (at most 20). |
+| `lockouts_24h` | integer | yes | Lockouts in the last 24 hours. |
+| `trusted_proxies` | boolean | yes | Whether COLONY_TRUSTED_PROXIES is set (X-Forwarded-For is believed from them). |
+
 ### SendMessageRequest
 
 | Field | Type | Required | Description |
@@ -4830,6 +4843,16 @@ Type: string
 | `name` | string | yes |  |
 | `online` | boolean | yes | Seen in the last 90 seconds. |
 
+### StatusLockout
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `at` | string (date-time) | yes |  |
+| `handle` | string | yes |  |
+| `ip` | string | yes | The client address; empty when unknown. |
+| `scope` | string | yes | One of: `login`, `emergency_clear`, `password`, `claude_login`. |
+| `until` | string (date-time) | yes |  |
+
 ### StatusSizeSample
 
 | Field | Type | Required | Description |
@@ -4860,6 +4883,7 @@ Type: string
 | `max_upload_mb` | integer | yes |  |
 | `scheduler` | object | yes |  |
 | `search` | [SearchStatus](#searchstatus) |  |  |
+| `security` | [SecurityStatus](#securitystatus) | yes | Round 40: the login and release limits. In multi-tenant mode only the workspace's own lockouts; in single-tenant mode also those of unknown handles. |
 | `uptime_seconds` | integer (int64) | yes |  |
 | `version` | string | yes |  |
 

@@ -150,6 +150,17 @@ type AuditLog struct {
 	Hash        []byte
 }
 
+type AuthFailure struct {
+	ID          uuid.UUID
+	WorkspaceID *uuid.UUID
+	Scope       string
+	Handle      string
+	Ip          string
+	FailedAt    time.Time
+	LockedUntil *time.Time
+	ClearedAt   *time.Time
+}
+
 type Channel struct {
 	ID                     uuid.UUID
 	WorkspaceID            uuid.UUID

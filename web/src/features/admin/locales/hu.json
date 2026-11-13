@@ -392,6 +392,21 @@
       "table": "Tábla",
       "tableSize": "Méret",
       "rows": "Sorok (becslés)"
+    },
+    "security": {
+      "title": "Biztonság",
+      "lockouts": "Kizárások (24 óra)",
+      "until": "{{at}}, kizárva eddig: {{until}}",
+      "noIp": "ismeretlen cím",
+      "allowlist": "Engedélyezőlista",
+      "none": "nincs",
+      "trustedProxies": "Megbízható proxyk",
+      "scope": {
+        "login": "belépés",
+        "emergency_clear": "vészleállítás feloldása",
+        "password": "jelszócsere",
+        "claude_login": "Claude-belépés"
+      }
     }
   }
 }

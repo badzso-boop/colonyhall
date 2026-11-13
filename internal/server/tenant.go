@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/platform/clientip"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/tenant"
 )
@@ -45,7 +46,7 @@ func tenantHandler(base string, secureCookies bool, workspaces identity.Store, n
 			return
 		}
 		ctx := tenant.With(r.Context(), tenant.Request{Workspace: ws.ID, Slug: ws.Slug, HostCookie: secureCookies,
-			RemoteAddr: r.RemoteAddr, UserAgent: r.UserAgent()})
+			RemoteAddr: clientip.String(clientip.From(r.Context())), UserAgent: r.UserAgent()})
 		next.ServeHTTP(w, r.WithContext(db.WithWorkspace(ctx, ws.ID)))
 	})
 }

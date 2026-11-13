@@ -8,8 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/db"
@@ -181,6 +184,12 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	if status >= 500 {
 		slog.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		detail = ""
+	}
+	// A lockout tells the client when to try again (round 40).
+	var ra interface{ RetryAfter() time.Duration }
+	if errors.As(err, &ra) {
+		secs := int64(math.Ceil(ra.RetryAfter().Seconds()))
+		w.Header().Set("Retry-After", strconv.FormatInt(max(secs, 1), 10))
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)

@@ -3,11 +3,14 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"colonyhall/internal/platform/clientip"
 )
 
 // Config is the runtime configuration of the server.
@@ -61,11 +64,26 @@ type Config struct {
 	// "colonyhall.example.com" for acme.colonyhall.example.com; required
 	// with Multitenant.
 	BaseDomain string
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For is
+	// believed (COLONY_TRUSTED_PROXIES, IPs or CIDRs; round 40). Empty
+	// (the default): the client address is always the TCP peer.
+	TrustedProxies []netip.Prefix
+	// LoginAllowlist are the addresses never locked out by the login and
+	// release limits (COLONY_LOGIN_ALLOWLIST, IPs or CIDRs; round 40).
+	LoginAllowlist []netip.Prefix
 }
 
 // FromEnv reads the configuration from COLONY_* environment variables.
 func FromEnv() (Config, error) {
 	maxUpload := 25
+	trusted, err := clientip.ParseList(os.Getenv("COLONY_TRUSTED_PROXIES"))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: COLONY_TRUSTED_PROXIES: %w", err)
+	}
+	allow, err := clientip.ParseList(os.Getenv("COLONY_LOGIN_ALLOWLIST"))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: COLONY_LOGIN_ALLOWLIST: %w", err)
+	}
 	if v := os.Getenv("COLONY_MAX_UPLOAD_MB"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxUpload = n
@@ -114,6 +132,8 @@ func FromEnv() (Config, error) {
 		GiteaWebhookSecret: os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
 		Multitenant:        os.Getenv("COLONY_MULTITENANT") == "1",
 		BaseDomain:         strings.ToLower(strings.Trim(os.Getenv("COLONY_BASE_DOMAIN"), ". ")),
+		TrustedProxies:     trusted,
+		LoginAllowlist:     allow,
 	}
 	if c.Multitenant && c.BaseDomain == "" {
 		return c, fmt.Errorf("config: COLONY_BASE_DOMAIN is required when COLONY_MULTITENANT=1")

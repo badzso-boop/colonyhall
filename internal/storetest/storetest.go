@@ -76,6 +76,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("eventlog", func(t *testing.T) { testEventlog(t, newBackend(t)) })
 	t.Run("identity", func(t *testing.T) { testIdentity(t, newBackend(t)) })
 	t.Run("credential cleanup", func(t *testing.T) { testCredentialCleanup(t, newBackend(t)) })
+	t.Run("auth failures", func(t *testing.T) { testAuthFailures(t, newBackend(t)) })
 	t.Run("dbstats", func(t *testing.T) { testDBStats(t, newBackend(t)) })
 	t.Run("conversation", func(t *testing.T) { testConversation(t, newBackend(t)) })
 	t.Run("delivery", func(t *testing.T) { testDelivery(t, newBackend(t)) })
