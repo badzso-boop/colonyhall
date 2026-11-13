@@ -780,7 +780,7 @@ func TestPreviewsOnlyForAcceptedAgents(t *testing.T) {
 	}
 	sup.reconcile(context.Background(), HostConfig{
 		Version: "v1",
-		Agents: []HostAgent{{AgentID: "a1", Handle: "full", Client: "claude-code", Mode: "direct", RootDir: root, AllowPreview: true, PermissionMode: "auto"}},
+		Agents:  []HostAgent{{AgentID: "a1", Handle: "full", Client: "claude-code", Mode: "direct", RootDir: root, AllowPreview: true, PermissionMode: "auto"}},
 		Previews: []HostPreview{{ID: "p1", AgentID: "a1", Name: "x", ComposePath: "docker-compose.yaml", State: "requested",
 			ExpiresAt: time.Now().Add(time.Hour)}},
 	})
