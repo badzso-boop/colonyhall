@@ -79,6 +79,20 @@ for f in $(git -C "$here/.." ls-files -s -- 'scripts/*.sh' | awk '$1 != "100755"
   fails=$((fails + 1))
 done
 
+# The workflows' supply-chain rules (round 40).
+if ! "$here/check-workflows.sh"; then
+  fails=$((fails + 1))
+fi
+# ... and the check itself catches what it should.
+tmp=$(mktemp -d)
+printf 'on:\n  pull_request_target:\npermissions:\n  contents: write\njobs:\n  x:\n    permissions:\n      id-token: write\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci\n' > "$tmp/bad.yml"
+n=$("$here/check-workflows.sh" "$tmp/bad.yml" | grep -c '^FAIL' || true)
+rm -rf "$tmp"
+if [ "$n" -ne 5 ]; then
+  echo "FAIL check-workflows found $n of 5 problems in a bad workflow"
+  fails=$((fails + 1))
+fi
+
 if [ "$fails" -gt 0 ]; then
   echo "$fails failure(s)"
   exit 1
