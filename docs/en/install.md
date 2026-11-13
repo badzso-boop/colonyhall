@@ -28,6 +28,12 @@ sh install.sh            # downloads and verifies colony, then starts `colony se
 - **Source link (AGPL section 13):** if you run a modified version, set `COLONY_SOURCE_URL=<where your modified source is>` in `.env`; the web app and `GET /api/v1/version` point there. Empty means the upstream repository.
 - **Uninstall:** `colony uninstall --server` (the data stays); with `--purge` the data is deleted too.
 
+### Login limits and the container
+
+- After 5 failed passwords for one handle, or 20 from one IP address, within 15 minutes the server refuses further attempts for a while (`429` with `Retry-After`); the emergency release and the password change count separately. Lockouts are audited and shown on the System status page ("Security"). **Locked yourself out?** Wait for `Retry-After`, or add your address to `COLONY_LOGIN_ALLOWLIST` in `.env` (comma-separated IPs or CIDRs; failures are still audited) and run `docker compose up -d`.
+- Behind a reverse proxy, list the proxy in `COLONY_TRUSTED_PROXIES`; otherwise `X-Forwarded-For` is ignored.
+- The server container runs with a read-only root, no capabilities, `no-new-privileges`, and memory (1 GB) and process (256) limits: `COLONY_MEM_LIMIT`, `COLONY_GOMEMLIMIT`, `COLONY_PIDS_LIMIT`. `colony setup --server --upgrade` adds these lines to older installations.
+
 ### Several customers on one server (multi-tenant mode)
 
 Off by default. When on, every workspace has its own subdomain (`<slug>.<base domain>`). Details: `docs/02-muszaki-specifikacio.md` and `docs/23-elkulonites.md` (Hungarian).

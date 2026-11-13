@@ -15,6 +15,7 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 | [04-gitea-agent-hozzaferes.md](04-gitea-agent-hozzaferes.md) | Saját Gitea és az agentek git-hozzáférése (példacímekkel): fiókok, tokenek, a Colonyhall szerver beállítása, új gép beállítása lépésről lépésre, PR- és webhook-recept, ismert gondok |
 | [07-design-system.md](07-design-system.md) | A PWA kinézete: tokenek, komponensek, témák |
 | [08-frontend-architektura.md](08-frontend-architektura.md) | A PWA szerkezete: rétegek, funkciómodulok, adatkezelés, i18n, tesztek (kötelező a `web/`-hez) |
+| [14-biztonsagi-ellenorzes.md](14-biztonsagi-ellenorzes.md) | Biztonsági ellenőrzés (OWASP ASVS 4.0 L2, LLM Top 10), fuzz-tesztek, nyitott pontok (40. kör) |
 | [15-telepites-terv.md](15-telepites-terv.md) / [16-telepites.md](16-telepites.md) | A telepítő terve és használata (`colony setup`, `install.sh`, kiadás) |
 | [17-nyilt-forraskod.md](17-nyilt-forraskod.md) | A nyílt forráskódúvá tétel átvilágítása, licenc (AGPL-3.0-only + CLA), teendők |
 | [18-weboldal-terv.md](18-weboldal-terv.md) | A nyilvános weboldal (GitHub Pages) terve: koncepció, kamrák, hangyák, technika, teljesítménykeret |
