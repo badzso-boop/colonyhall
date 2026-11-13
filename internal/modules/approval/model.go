@@ -53,6 +53,10 @@ var (
 	ErrBadDecision    = errors.New("decision must be allow or deny")
 	ErrExpired        = errors.New("approval request has expired")
 	ErrBadToolName    = errors.New("tool name is required")
+	// ErrInputTooLong: the input does not fit the approval card. Approving
+	// a clipped input would run a part nobody saw (round 40), so such a
+	// call is denied without asking.
+	ErrInputTooLong = errors.New("the tool input is too long to show for approval; split it into smaller steps")
 )
 
 // Redact masks secrets in s using the same patterns as the runs module.
