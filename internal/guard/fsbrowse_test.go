@@ -325,3 +325,30 @@ func TestResolveFetchPathRelativeToAgentRoot(t *testing.T) {
 		t.Fatal("an absolute path must pass unchanged")
 	}
 }
+
+// Round 40: a symlinked folder inside the scope does not list what lies
+// outside it.
+func TestFsBrowse_ListThroughSymlinkedFolderDenied(t *testing.T) {
+	root := t.TempDir()
+	ag, _ := newTestAgent(t, false, []string{root}, nil)
+	outside := t.TempDir()
+	_ = os.WriteFile(filepath.Join(outside, "private-notes.txt"), []byte("x"), 0o644)
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ag.ListDirectory(filepath.Base(root), "escape")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ErrorCode == nil || res.Entries != nil && len(*res.Entries) > 0 {
+		t.Fatalf("a symlinked folder outside the scope was listed: %+v", res)
+	}
+	// A symlink that stays inside the scope still works.
+	_ = os.MkdirAll(filepath.Join(root, "real"), 0o755)
+	_ = os.WriteFile(filepath.Join(root, "real", "a.txt"), []byte("x"), 0o644)
+	_ = os.Symlink(filepath.Join(root, "real"), filepath.Join(root, "alias"))
+	res, err = ag.ListDirectory(filepath.Base(root), "alias")
+	if err != nil || res.ErrorCode != nil || res.Entries == nil || len(*res.Entries) != 1 {
+		t.Fatalf("an in-scope symlinked folder: %+v %v", res, err)
+	}
+}

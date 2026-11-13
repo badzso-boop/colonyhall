@@ -175,12 +175,21 @@ func (a *Agent) ListDirectory(rootArg, pathArg string) (*apispec.AgentFsResponse
 		targetDir = filepath.Join(root.Path, cleanRel)
 	}
 
-	// Verify targetDir is accessible
-	if allowed, reason := MayAccessPath(targetDir, a.activeRoots(), a.activeGrants(), a.Sandbox, home, a.DenyFiles, a.ExchangeDir); !allowed {
+	// Verify the real folder is accessible: a symlink inside the scope
+	// (x -> / or x -> ~/.ssh) must not list what is outside it (round 40).
+	realDir, err := filepath.EvalSymlinks(targetDir)
+	if err != nil {
+		code := "denied"
+		if os.IsNotExist(err) {
+			code = "not_found"
+		}
+		return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpList), ErrorCode: &code}, nil
+	}
+	if allowed, reason := MayAccessPath(realDir, a.activeRoots(), a.activeGrants(), a.Sandbox, home, a.DenyFiles, a.ExchangeDir); !allowed {
 		return &apispec.AgentFsResponse{Op: opPtr(apispec.AgentFsResponseOpList), ErrorCode: &reason}, nil
 	}
 
-	dirEntries, err := os.ReadDir(targetDir)
+	dirEntries, err := os.ReadDir(realDir)
 	if err != nil {
 		code := "denied"
 		if os.IsNotExist(err) || errors.Is(err, os.ErrNotExist) {
