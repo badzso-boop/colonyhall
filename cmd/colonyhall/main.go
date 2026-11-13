@@ -205,6 +205,9 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if err := ensureTempDir(); err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -268,4 +271,20 @@ func run(logger *slog.Logger) error {
 	defer cancel()
 	logger.Info("shutting down")
 	return srv.Shutdown(shutdownCtx)
+}
+
+// ensureTempDir creates $TMPDIR when it is set and missing. The hardened
+// container (round 40) has a read-only root and a small /tmp in memory, so
+// the compose files point TMPDIR at the files volume: a file fetch stages
+// up to the fetch limit there, which must not count against the memory
+// limit.
+func ensureTempDir() error {
+	dir := os.Getenv("TMPDIR")
+	if dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("TMPDIR %s: %w", dir, err)
+	}
+	return nil
 }

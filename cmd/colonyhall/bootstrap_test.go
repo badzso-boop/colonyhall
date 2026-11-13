@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"colonyhall/internal/modules/identity"
@@ -83,4 +85,21 @@ func TestBootstrapSlugAndSetSlug(t *testing.T) {
 	if got, err := app.Identity.Store.WorkspaceBySlug(ctx, "acme"); err != nil || got.ID != ws.ID {
 		t.Fatalf("by slug: %+v %v", got, err)
 	}
+}
+
+func TestEnsureTempDirCreatesTMPDIR(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "files", ".tmp")
+	t.Setenv("TMPDIR", dir)
+	if err := ensureTempDir(); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(dir)
+	if err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("TMPDIR not created as a private directory: %v %v", fi, err)
+	}
+	f, err := os.CreateTemp("", "x-*")
+	if err != nil || filepath.Dir(f.Name()) != dir {
+		t.Fatalf("temp files must land in TMPDIR: %v", err)
+	}
+	_ = f.Close()
 }

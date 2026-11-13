@@ -666,3 +666,44 @@ func TestServerUpgradeKeepsTheOldDatabaseRole(t *testing.T) {
 		}
 	}
 }
+
+// Round 40: an existing installation gets the server's container hardening
+// on `colony setup --server --upgrade` (the compose file is rewritten);
+// the database service stays as it was.
+func TestServerUpgradeAddsContainerHardening(t *testing.T) {
+	e, fr, out := testEnv(t, linux, "", true)
+	fr.Have["docker"] = true
+	host, port := readyServer(t)
+	no := false
+	e.Answers = Answers{Mode: "server", Server: ServerAnswers{Bind: host, Port: port, AdminHandle: "anna", AdminName: "Anna", AdminPassword: "correct-horse-battery", Backups: &no}}
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	composePath := filepath.Join(e.serverDir(), "compose.yaml")
+	if err := os.MkdirAll(e.serverDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A compose file from before round 40.
+	if err := os.WriteFile(composePath, []byte("services:\n  server:\n    image: ${COLONY_IMAGE}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Do(e.ServerSteps(true)); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	raw, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := string(raw)
+	others, server, _ := strings.Cut(c, "  server:\n")
+	for _, want := range []string{"read_only: true", "- /tmp:size=16m,mode=1777", "cap_drop: [ALL]", `security_opt: ["no-new-privileges:true"]`,
+		"mem_limit: ${COLONY_MEM_LIMIT:-1g}", "pids_limit: ${COLONY_PIDS_LIMIT:-256}", "TMPDIR: /data/files/.tmp", "GOMEMLIMIT: ${COLONY_GOMEMLIMIT:-768MiB}",
+		"COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}", "COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}"} {
+		if !strings.Contains(server, want) {
+			t.Errorf("the upgraded server service lacks %q", want)
+		}
+	}
+	if !strings.Contains(others, "  db:\n") || strings.Contains(others, "read_only") || strings.Contains(others, "cap_drop") {
+		t.Errorf("the database service must be there and not hardened by this round:\n%s", others)
+	}
+}

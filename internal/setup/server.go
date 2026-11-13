@@ -103,12 +103,16 @@ services:
         condition: service_healthy
 `)
 	}
+	b.WriteString(serverHardening)
 	b.WriteString(`    environment:
       COLONY_STORE: postgres
       COLONY_DATABASE_URL: ${COLONY_DATABASE_URL:?missing in .env}
       COLONY_HTTP_ADDR: ":8080"
       COLONY_SECURE_COOKIES: ${COLONY_SECURE_COOKIES:-0}
       COLONY_FILES_DIR: /data/files
+      TMPDIR: /data/files/.tmp
+      # The Go runtime collects before the container limit (mem_limit) is reached.
+      GOMEMLIMIT: ${COLONY_GOMEMLIMIT:-768MiB}
       COLONY_MAX_UPLOAD_MB: ${COLONY_MAX_UPLOAD_MB:-25}
       COLONY_GITEA_URL: ${COLONY_GITEA_URL:-}
       COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
@@ -133,6 +137,20 @@ volumes:
 	b.WriteString("  files:\n")
 	return b.String()
 }
+
+// serverHardening is the server service's container hardening (round 40):
+// a read-only root with a small /tmp in memory (large temporary files go
+// to the files volume through TMPDIR), no capabilities, no privilege gain,
+// and memory and process limits measured on the dev stack (docs/02).
+// Postgres is left alone.
+const serverHardening = `    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${COLONY_MEM_LIMIT:-1g}
+    pids_limit: ${COLONY_PIDS_LIMIT:-256}
+`
 
 // envFile is the server's .env.
 func envFile(v map[string]string) string {
