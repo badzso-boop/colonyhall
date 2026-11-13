@@ -721,3 +721,27 @@ func TestServerUpgradeAddsContainerHardening(t *testing.T) {
 		t.Errorf("the database service must be there and not hardened by this round:\n%s", others)
 	}
 }
+
+// Round 40: a secret is written into a new 0600 temporary file; a stale
+// "<file>.new" with a loose mode or a symlink there plays no part.
+func TestWriteFileIgnoresStaleNewFile(t *testing.T) {
+	e, _, _ := testEnv(t, linux, "", true)
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := filepath.Join(dir, ".env")
+	if err := os.Symlink(victim, env+".new"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.WriteFile(env, []byte("POSTGRES_PASSWORD=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(victim); string(raw) != "keep" {
+		t.Fatal("the secret went through a symlink")
+	}
+	if fi, _ := os.Stat(env); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+}

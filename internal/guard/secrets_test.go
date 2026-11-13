@@ -99,3 +99,39 @@ func TestSandboxHidesMovedTokenFiles(t *testing.T) {
 		t.Fatal("the token file is hidden before the grant is mounted")
 	}
 }
+
+// Round 40: a rewritten token file is 0600 even when the old one was not,
+// and a symlink at the path is replaced, not followed.
+func TestWritePrivateFixesModeAndSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	tok := filepath.Join(dir, "host.token")
+	if err := os.WriteFile(tok, []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivate(tok, []byte("new\n")); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(tok); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "linked.token")
+	if err := os.Symlink(victim, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivate(link, []byte("secret\n")); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(victim); string(raw) != "keep" {
+		t.Fatal("the symlink was followed")
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink != 0 || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("the token is not a private regular file: %v", fi.Mode())
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".*")); len(left) != 0 {
+		t.Fatalf("temporary files left: %v", left)
+	}
+}

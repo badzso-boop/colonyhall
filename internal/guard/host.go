@@ -40,7 +40,32 @@ func Enroll(ctx context.Context, server, code, name, tokenFile string) error {
 	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(tokenFile, []byte(token+"\n"), 0o600)
+	return writePrivate(tokenFile, []byte(token+"\n"))
+}
+
+// writePrivate writes a secret atomically with mode 0600. os.WriteFile
+// would keep the mode of an existing file (an old 0644 token stayed
+// readable) and follow a symlink at the path (round 40); a new temporary
+// file in the same folder is created 0600 and renamed over the path.
+func writePrivate(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // Supervisor runs a machine in host mode: it reports the machine, follows
