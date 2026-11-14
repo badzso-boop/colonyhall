@@ -156,3 +156,19 @@ func (s *Service) ListActorsWithArchived(ctx context.Context, by Actor) ([]Actor
 	}
 	return list, s.colour(ctx, by.WorkspaceID, ptrs)
 }
+
+// AgentIDsOwnedBy lists the agents ownerID owns in the workspace, archived
+// ones included (round 54: their files stay the owner's to delete).
+func (s *Service) AgentIDsOwnedBy(ctx context.Context, workspaceID, ownerID ids.ID) ([]ids.ID, error) {
+	list, err := s.Store.ListAllActors(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var out []ids.ID
+	for _, a := range list {
+		if a.Kind == KindAgent && a.OwnerID == ownerID && ownerID != ids.Nil {
+			out = append(out, a.ID)
+		}
+	}
+	return out, nil
+}

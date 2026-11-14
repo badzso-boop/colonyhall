@@ -172,6 +172,9 @@ type Attachment struct {
 	Name string `json:"name"`
 	Mime string `json:"mime"`
 	Size int64  `json:"size"`
+	// Deleted: the uploader deleted the file (round 54); the name, type and
+	// size are blank then, so the message shows only "File deleted".
+	Deleted bool `json:"deleted,omitempty"`
 }
 
 // Message is one chat message. Rows are append-only.

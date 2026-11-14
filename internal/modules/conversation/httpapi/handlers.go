@@ -94,12 +94,16 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	if len(m.Attachments) > 0 && m.DeletedAt == nil {
 		atts := make([]apispec.FileAttachment, 0, len(m.Attachments))
 		for _, a := range m.Attachments {
-			atts = append(atts, apispec.FileAttachment{
+			att := apispec.FileAttachment{
 				Id:   a.ID,
 				Name: a.Name,
 				Mime: a.Mime,
 				Size: a.Size,
-			})
+			}
+			if a.Deleted {
+				att.Deleted = &a.Deleted
+			}
+			atts = append(atts, att)
 		}
 		out.Attachments = &atts
 	}

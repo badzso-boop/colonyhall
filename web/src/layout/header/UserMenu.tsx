@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { Check, Keyboard, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
+import { Check, FolderOpen, Keyboard, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import { languages, setLanguage } from "@/shared/i18n";
 import { applyTheme, readTheme, type Theme } from "@/shared/theme";
 import { Avatar, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/shared/ui";
@@ -42,6 +42,11 @@ export function UserMenu() {
         {me.kind === "human" ? (
           <MenuItem onSelect={() => setProfile(true)} icon={<UserRound aria-hidden className="size-4" />}>
             {t("myProfile")}
+          </MenuItem>
+        ) : null}
+        {me.kind === "human" ? (
+          <MenuItem onSelect={() => navigate("/files")} icon={<FolderOpen aria-hidden className="size-4" />}>
+            {t("myFiles")}
           </MenuItem>
         ) : null}
         <MenuSeparator />

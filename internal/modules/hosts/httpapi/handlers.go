@@ -298,6 +298,9 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 			})
 		}
 		out.Previews = &previews
+		if st := cfg.Storage; st != nil {
+			out.Storage = &apispec.HostStorage{State: apispec.StorageState(st.State), UsedBytes: &st.UsedBytes, QuotaBytes: &st.QuotaBytes}
+		}
 		httpx.JSON(w, http.StatusOK, out)
 	}))
 

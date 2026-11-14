@@ -365,16 +365,18 @@ type Event struct {
 }
 
 type File struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	UploadedBy  uuid.UUID
-	ChannelID   uuid.UUID
-	Name        string
-	Mime        string
-	Size        int64
-	Sha256      string
-	CreatedAt   time.Time
-	HumanOnly   bool
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	UploadedBy       uuid.UUID
+	ChannelID        uuid.UUID
+	Name             string
+	Mime             string
+	Size             int64
+	Sha256           string
+	CreatedAt        time.Time
+	HumanOnly        bool
+	DeletedAt        *time.Time
+	ContentRemovedAt *time.Time
 }
 
 type FileFetchRequest struct {
@@ -808,4 +810,15 @@ type WorkspaceGitea struct {
 	Token         string
 	WebhookSecret string
 	UpdatedAt     time.Time
+}
+
+type WorkspaceStorage struct {
+	WorkspaceID  uuid.UUID
+	QuotaBytes   int64
+	FilesBytes   int64
+	DbBytes      int64
+	ChatBytes    int64
+	DbMeasuredAt *time.Time
+	WarnedLevel  int16
+	UpdatedAt    time.Time
 }

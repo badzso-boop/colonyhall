@@ -24,7 +24,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [delegation](#delegation) (5)
 - [delivery](#delivery) (2)
 - [draft](#draft) (3)
-- [files](#files) (14)
+- [files](#files) (18)
 - [git](#git) (4)
 - [hosts](#hosts) (20)
 - [identity](#identity) (17)
@@ -1371,6 +1371,7 @@ Request body (`application/octet-stream`, required): string (binary)
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 | 413 | Error: [Problem](#problem) (`application/problem+json`) |
+| 507 | Round 54: the upload would take the workspace over its storage quota. Do not retry: make room first (delete files in My files) or ask the owner to raise the quota.: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /agent/file-fetch/{id}/fail`
 
@@ -1491,6 +1492,7 @@ Request body (`multipart/form-data`, required): object
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 | 409 | Error: [Problem](#problem) (`application/problem+json`) |
+| 507 | Round 54: the upload would take the workspace over its storage quota. Do not retry: make room first (delete files in My files) or ask the owner to raise the quota.: [Problem](#problem) (`application/problem+json`) |
 
 ### `GET /file-fetch/{id}`
 
@@ -1508,11 +1510,32 @@ Humans only. Get status and result of a file fetch request.
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
+### `DELETE /files/{fileId}`
+
+`deleteFile` · Auth: signed in
+
+Round 54. Deletes a file the caller uploaded, or one the caller's own
+agent uploaded or fetched. Nobody else may, the workspace owner and
+admins included (403). The file is soft-deleted: every message that
+carried it shows "File deleted" (no name, no size), downloads answer
+410, and the content leaves the store once no live file references it.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `fileId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Deleted |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 410 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `GET /files/{fileId}`
 
 `getFile` · Auth: signed in
 
-Get file metadata. Caller must have read access to the channel.
+Get file metadata. Caller must have read access to the channel. A deleted file answers 410.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
@@ -1523,6 +1546,7 @@ Get file metadata. Caller must have read access to the channel.
 | 200 | File metadata: [File](#file) (`application/json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 410 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `GET /files/{fileId}/content`
 
@@ -1539,6 +1563,30 @@ Download file content. Served with Content-Disposition attachment.
 | 200 | File content: string (binary) (`*/*`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 410 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /me/files`
+
+`listMyFiles` · Auth: signed in
+
+Humans (round 54). The caller's own live files in this workspace
+(uploader=me), or the files their agents uploaded or fetched
+(uploader=agents), newest first. The channel and the message are
+given only when the caller can still read the channel.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `uploader` | query | string |  |  |
+| `channel` | query | string (uuid) |  | Only files in this channel |
+| `kind` | query | string |  |  |
+| `cursor` | query | string |  | next_cursor of the previous page |
+| `limit` | query | integer |  |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [MyFilePage](#myfilepage) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /messages/{messageId}/file-fetch`
 
@@ -1582,6 +1630,33 @@ Request body (`application/json`, required): [UpdateFileFetchSettingsRequest](#u
 | Response | Body |
 | --- | --- |
 | 200 | Updated file fetch settings: [FileFetchSettings](#filefetchsettings) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workspace/storage`
+
+`getWorkspaceStorage` · Auth: signed in
+
+Owner and admins (round 54). The workspace's storage: quota, usage in
+total and by kind, the time of the last database estimate and the
+state. Never per person.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [WorkspaceStorage](#workspacestorage) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /workspace/storage/quota`
+
+`setWorkspaceStorageQuota` · Auth: signed in
+
+Owner only (round 54). Sets the quota in bytes; 0 is unlimited (the default). Audited.
+
+Request body (`application/json`, required): [StorageQuotaRequest](#storagequotarequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [WorkspaceStorage](#workspacestorage) (`application/json`) |
 | 400 | Error: [Problem](#problem) (`application/problem+json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 
@@ -3978,6 +4053,7 @@ The recipient's feed changed (activity.created, activity.read); sent to them alo
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `deleted` | boolean |  |  |
 | `id` | string (uuid) | yes |  |
 | `mime` | string | yes |  |
 | `name` | string | yes |  |
@@ -4038,6 +4114,13 @@ The place only, never the text; sent to the draft's owner alone.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `by` | string (uuid) | yes |  |
+
+### EventFileDeleted
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channel_id` | string (uuid) | yes |  |
+| `id` | string (uuid) | yes |  |
 
 ### EventMemberAdded
 
@@ -4125,6 +4208,15 @@ Sent to the item's owner alone; ids only.
 | `item_id` | string (uuid) | yes |  |
 | `message_id` | string (uuid) |  |  |
 
+### EventStorageState
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `previous_state` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
+| `quota_bytes` | integer (int64) | yes |  |
+| `state` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
+| `used_bytes` | integer (int64) | yes |  |
+
 ### FailFileFetchRequest
 
 | Field | Type | Required | Description |
@@ -4150,6 +4242,7 @@ Sent to the item's owner alone; ids only.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `deleted` | boolean |  | Round 54: the uploader deleted the file; name, mime and size are empty |
 | `id` | string (uuid) | yes |  |
 | `mime` | string | yes |  |
 | `name` | string | yes |  |
@@ -4337,6 +4430,7 @@ Sent to the item's owner alone; ids only.
 | --- | --- | --- | --- |
 | `agents` | [HostAgent](#hostagent)[] | yes |  |
 | `previews` | [HostPreview](#hostpreview)[] |  |  |
+| `storage` | [HostStorage](#hoststorage) |  | Round 54: while state is full the guard starts no runs; absent from older servers |
 | `version` | string | yes |  |
 
 ### HostDirEntry
@@ -4429,8 +4523,17 @@ Folders only. With an empty `path` the entries are the guard.yaml roots
 | `rejected` | object[] | yes |  |
 | `roots` | string[] | yes |  |
 | `sandbox` | string |  | e.g. bwrap 0.9.0; empty when none |
+| `storage_paused` | boolean |  | Round 54: the guard starts no runs, the workspace storage is full |
 | `usage_checked_at` | string (date-time) |  | When the guard last asked the clients for their usage (`/usage`) |
 | `worktrees` | object[] |  |  |
+
+### HostStorage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `quota_bytes` | integer (int64) |  |  |
+| `state` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
+| `used_bytes` | integer (int64) |  |  |
 
 ### Hue
 
@@ -4606,6 +4709,36 @@ Set on an agent's answer posted in its origin thread: the DM reply it answers
 | --- | --- | --- | --- |
 | `until` | string (date-time) |  | Omit to mute until unmuted |
 
+### MyFile
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channel` | [MyFileChannel](#myfilechannel) |  |  |
+| `created_at` | string (date-time) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `message_id` | string (uuid) |  | The message the file is attached to (absent when never sent or the channel is not readable) |
+| `mime` | string | yes |  |
+| `name` | string | yes |  |
+| `shared_count` | integer | yes | How many other live files in the workspace have the same content (it stays stored for them) |
+| `size` | integer (int64) | yes |  |
+| `thread_root_id` | string (uuid) |  |  |
+| `uploaded_by` | string (uuid) |  | uploader=agents: the agent |
+
+### MyFileChannel
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes |  |
+| `kind` | string | yes |  |
+| `name` | string | yes |  |
+
+### MyFilePage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `files` | [MyFile](#myfile)[] | yes |  |
+| `next_cursor` | string |  | Absent on the last page |
+
 ### MyThread
 
 | Field | Type | Required | Description |
@@ -4666,6 +4799,7 @@ Type: string
 | `permission_mode` | string | yes |  |
 | `root_dir` | string | yes |  |
 | `sandbox` | boolean | yes |  |
+| `storage_paused` | boolean |  | Round 54: the agent's guard starts no runs, the workspace storage is full |
 | `work_model` | string |  |  |
 | `worktree_branch` | string, nullable |  |  |
 | `worktree_repo` | string | yes |  |
@@ -4848,9 +4982,11 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `detail` | string |  |  |
+| `quota_bytes` | integer (int64) |  | storage_full (507) only: the workspace's quota |
 | `status` | integer | yes |  |
 | `title` | string | yes |  |
 | `type` | string | yes |  |
+| `used_bytes` | integer (int64) |  | storage_full (507) only: the workspace's usage |
 
 ### Question
 
@@ -5389,6 +5525,18 @@ Round 40: the login and release limits. In multi-tenant mode only the workspace'
 | `rows_estimate` | integer (int64) | yes | The planner's estimate (pg_class.reltuples), not count(*). |
 | `total_bytes` | integer (int64) | yes | With indexes and TOAST. |
 
+### StorageQuotaRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `quota_bytes` | integer (int64) | yes | 0 is unlimited |
+
+### StorageState
+
+One of: `ok`, `warning_80`, `warning_95`, `full`
+
+Type: string
+
 ### SystemStatus
 
 | Field | Type | Required | Description |
@@ -5679,6 +5827,18 @@ Type: string
 | --- | --- | --- | --- |
 | `revisions` | [WikiRevision](#wikirevision)[] | yes |  |
 
+### WorkspaceStorage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `attachments_bytes` | integer (int64) | yes |  |
+| `chat_search_bytes` | integer (int64) | yes | Messages, events and the search index (part of the database estimate) |
+| `db_measured_at` | string (date-time) |  | The last hourly database estimate (absent before the first) |
+| `other_bytes` | integer (int64) | yes | The rest of the database share |
+| `quota_bytes` | integer (int64) | yes | 0 is unlimited |
+| `state` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
+| `used_bytes` | integer (int64) | yes |  |
+
 ### WsActivity
 
 Ephemeral (not in the event log). An agent started or stopped working in a channel or thread.
@@ -5708,7 +5868,9 @@ actor.created → EventActorCreated;
 actor.state_changed → EventActorStateChanged; actor.profile_updated →
 EventActorProfileUpdated; workspace.emergency_activated,
 workspace.emergency_cleared → EventEmergency; delivery.item_created →
-EventDeliveryItemCreated; draft.changed (the owner only) →
+EventDeliveryItemCreated; file.deleted → EventFileDeleted;
+workspace.storage_state_changed → EventStorageState (round 54);
+draft.changed (the owner only) →
 EventDraftChanged; message.pinned, message.unpinned → EventPin;
 saved.changed, saved.reminded (the owner only) → EventSaved;
 activity.created, activity.read (the recipient only) → EventActivity.

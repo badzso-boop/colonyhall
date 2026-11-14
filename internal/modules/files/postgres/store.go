@@ -102,12 +102,7 @@ func (s *Store) AttachmentsForMessage(ctx context.Context, messageID ids.ID) ([]
 	}
 	out := make([]files.Attachment, len(rows))
 	for i, r := range rows {
-		out[i] = files.Attachment{
-			ID:   ids.ID(r.ID),
-			Name: r.Name,
-			Mime: r.Mime,
-			Size: r.Size,
-		}
+		out[i] = files.NewAttachment(ids.ID(r.ID), r.Name, r.Mime, r.Size, r.DeletedAt)
 	}
 	return out, nil
 }
@@ -128,12 +123,7 @@ func (s *Store) AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID)
 	}
 	for _, r := range rows {
 		mID := ids.ID(r.MessageID)
-		res[mID] = append(res[mID], files.Attachment{
-			ID:   ids.ID(r.ID),
-			Name: r.Name,
-			Mime: r.Mime,
-			Size: r.Size,
-		})
+		res[mID] = append(res[mID], files.NewAttachment(ids.ID(r.ID), r.Name, r.Mime, r.Size, r.DeletedAt))
 	}
 	return res, nil
 }
@@ -326,6 +316,7 @@ func toDomain(r sqlcgen.File) files.File {
 		SHA256:      r.Sha256,
 		CreatedAt:   r.CreatedAt,
 		HumanOnly:   r.HumanOnly,
+		DeletedAt:   r.DeletedAt,
 	}
 }
 
@@ -356,3 +347,119 @@ func toDomainFetchRequest(r sqlcgen.FileFetchRequest) files.FileFetchRequest {
 }
 
 var _ files.Store = (*Store)(nil)
+
+// MarkDeleted soft-deletes a live file.
+func (s *Store) MarkDeleted(ctx context.Context, id ids.ID, at time.Time) error {
+	n, err := s.q(ctx).MarkFileDeleted(ctx, sqlcgen.MarkFileDeletedParams{ID: uuid.UUID(id), At: &at})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return db.ErrConflict
+	}
+	return nil
+}
+
+// ListMine lists live files of the query's uploaders, newest first.
+func (s *Store) ListMine(ctx context.Context, q files.MyFilesQuery) ([]files.MyFile, error) {
+	uploaders := make([]uuid.UUID, len(q.UploaderIDs))
+	for i, id := range q.UploaderIDs {
+		uploaders[i] = uuid.UUID(id)
+	}
+	p := sqlcgen.ListMyFilesParams{
+		WorkspaceID: uuid.UUID(q.WorkspaceID),
+		Uploaders:   uploaders,
+		Kind:        q.Kind,
+		BeforeAt:    q.BeforeAt,
+		BeforeID:    uuid.UUID(q.BeforeID),
+		MaxRows:     int32(q.Limit),
+	}
+	if q.ChannelID != ids.Nil {
+		c := uuid.UUID(q.ChannelID)
+		p.ChannelID = &c
+	}
+	rows, err := s.q(ctx).ListMyFiles(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]files.MyFile, len(rows))
+	for i, r := range rows {
+		out[i] = files.MyFile{
+			File: files.File{ID: ids.ID(r.ID), WorkspaceID: ids.ID(r.WorkspaceID), UploadedBy: ids.ID(r.UploadedBy),
+				ChannelID: ids.ID(r.ChannelID), Name: r.Name, Mime: r.Mime, Size: r.Size, SHA256: r.Sha256,
+				CreatedAt: r.CreatedAt, HumanOnly: r.HumanOnly, DeletedAt: r.DeletedAt},
+			MessageID:   ids.ID(r.MessageID),
+			SharedCount: int(r.SharedCount),
+		}
+	}
+	return out, nil
+}
+
+// LiveFilesBytes sums the workspace's live contents, each once.
+func (s *Store) LiveFilesBytes(ctx context.Context, workspaceID ids.ID) (int64, error) {
+	return s.q(ctx).LiveFilesBytes(ctx, uuid.UUID(workspaceID))
+}
+
+// LockUsage creates the storage row if missing and locks it.
+func (s *Store) LockUsage(ctx context.Context, workspaceID ids.ID, now time.Time) (files.Usage, error) {
+	if err := s.q(ctx).EnsureWorkspaceStorage(ctx, sqlcgen.EnsureWorkspaceStorageParams{WorkspaceID: uuid.UUID(workspaceID), UpdatedAt: now}); err != nil {
+		return files.Usage{}, err
+	}
+	row, err := s.q(ctx).LockWorkspaceStorage(ctx, uuid.UUID(workspaceID))
+	if err != nil {
+		return files.Usage{}, err
+	}
+	return usageOf(row), nil
+}
+
+// UsageOf reads the storage row; missing is a zero usage.
+func (s *Store) UsageOf(ctx context.Context, workspaceID ids.ID) (files.Usage, error) {
+	row, err := s.q(ctx).WorkspaceStorage(ctx, uuid.UUID(workspaceID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return files.Usage{WorkspaceID: workspaceID}, nil
+	}
+	if err != nil {
+		return files.Usage{}, err
+	}
+	return usageOf(row), nil
+}
+
+// SaveUsage writes the storage row.
+func (s *Store) SaveUsage(ctx context.Context, u files.Usage) error {
+	return s.q(ctx).SaveWorkspaceStorage(ctx, sqlcgen.SaveWorkspaceStorageParams{
+		WorkspaceID: uuid.UUID(u.WorkspaceID), QuotaBytes: u.QuotaBytes, FilesBytes: u.FilesBytes,
+		DbBytes: u.DBBytes, ChatBytes: u.ChatBytes, DbMeasuredAt: u.DBMeasuredAt,
+		WarnedLevel: int16(u.WarnedLevel), UpdatedAt: u.UpdatedAt,
+	})
+}
+
+func usageOf(r sqlcgen.WorkspaceStorage) files.Usage {
+	return files.Usage{WorkspaceID: ids.ID(r.WorkspaceID), QuotaBytes: r.QuotaBytes, FilesBytes: r.FilesBytes,
+		DBBytes: r.DbBytes, ChatBytes: r.ChatBytes, DBMeasuredAt: r.DbMeasuredAt,
+		WarnedLevel: int(r.WarnedLevel), UpdatedAt: r.UpdatedAt}
+}
+
+// LockContent takes the content's advisory lock until the transaction ends.
+func (s *Store) LockContent(ctx context.Context, sha256Hex string) error {
+	return s.q(ctx).LockFileContent(ctx, sha256Hex)
+}
+
+// ContentLive reports whether a live file references the content.
+func (s *Store) ContentLive(ctx context.Context, sha256Hex string) (bool, error) {
+	return s.q(ctx).FileContentLive(ctx, sha256Hex)
+}
+
+// RemovableContents lists hashes of deleted files whose content may remain.
+func (s *Store) RemovableContents(ctx context.Context, limit int) ([]string, error) {
+	return s.q(ctx).RemovableFileContents(ctx, int32(limit))
+}
+
+// MarkContentRemoved records that the sweep handled the hash.
+func (s *Store) MarkContentRemoved(ctx context.Context, sha256Hex string, at time.Time) error {
+	return s.q(ctx).MarkFileContentRemoved(ctx, sqlcgen.MarkFileContentRemovedParams{Sha256: sha256Hex, At: &at})
+}
+
+// WorkspaceHasLiveContent reports whether the workspace has the content live.
+func (s *Store) WorkspaceHasLiveContent(ctx context.Context, workspaceID ids.ID, sha256Hex string) (bool, error) {
+	return s.q(ctx).WorkspaceHasLiveContent(ctx, sqlcgen.WorkspaceHasLiveContentParams{WorkspaceID: uuid.UUID(workspaceID), Sha256: sha256Hex})
+}

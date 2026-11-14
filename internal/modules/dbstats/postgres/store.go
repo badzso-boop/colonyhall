@@ -9,11 +9,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"colonyhall/internal/modules/dbstats"
 	"colonyhall/internal/modules/dbstats/postgres/sqlcgen"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/ids"
 )
 
 // Store implements dbstats.Store.
@@ -62,4 +64,34 @@ func (s *Store) Samples(ctx context.Context, since time.Time) ([]dbstats.Sample,
 // PruneSamples deletes the samples before the day.
 func (s *Store) PruneSamples(ctx context.Context, before time.Time) (int64, error) {
 	return s.q(ctx).PruneSizeSamples(ctx, date(before))
+}
+
+// WorkspaceIDs lists every workspace (system mode).
+func (s *Store) WorkspaceIDs(ctx context.Context) ([]ids.ID, error) {
+	rows, err := s.q(ctx).WorkspaceIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ids.ID, len(rows))
+	for i, r := range rows {
+		out[i] = ids.ID(r)
+	}
+	return out, nil
+}
+
+// WorkspaceRowBytes sums the workspace's rows in the large tables.
+func (s *Store) WorkspaceRowBytes(ctx context.Context, workspaceID ids.ID) (dbstats.RowBytes, error) {
+	r, err := s.q(ctx).WorkspaceRowBytes(ctx, uuid.UUID(workspaceID))
+	if err != nil {
+		return dbstats.RowBytes{}, err
+	}
+	return dbstats.RowBytes{
+		Chat:  r.Message + r.Event + r.SearchChunk + r.SearchLog + r.Delivery,
+		Other: r.AgentRun + r.AuditLog + r.File + r.WikiRevision + r.TerminalEvent,
+	}, nil
+}
+
+// ChatTablesSize is the chat and search tables' size with indexes.
+func (s *Store) ChatTablesSize(ctx context.Context) (int64, error) {
+	return s.q(ctx).ChatTablesSize(ctx)
 }

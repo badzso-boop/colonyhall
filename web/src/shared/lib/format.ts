@@ -105,3 +105,17 @@ export function sessionContext(t: { context_tokens?: number; max_session_tokens?
     runTokens: (t.last_run_tokens ?? 0) > 0 ? k(t.last_run_tokens!) : "0k",
   };
 }
+
+const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
+
+/** A byte count the way pg_size_pretty shows it (1 kB = 1024 B): "21.4 MB". */
+export function formatBytes(bytes: number, locale: string): string {
+  const sign = bytes < 0 ? "-" : "";
+  let n = Math.abs(bytes);
+  let unit = 0;
+  while (n >= 1024 && unit < BYTE_UNITS.length - 1) {
+    n /= 1024;
+    unit++;
+  }
+  return `${sign}${n.toLocaleString(locale, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${BYTE_UNITS[unit]}`;
+}

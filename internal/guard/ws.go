@@ -306,6 +306,12 @@ func (a *Agent) runWSConn(ctx context.Context, agentName string, wakeCh chan<- s
 // onChannelEvent stops work in a channel the agent was removed from, or
 // that was archived (round 34).
 func (a *Agent) onChannelEvent(eventType string, data json.RawMessage) {
+	if eventType == "workspace.storage_state_changed" {
+		if a.OnStorageEvent != nil {
+			a.OnStorageEvent()
+		}
+		return
+	}
 	if eventType != "channel.member_removed" && eventType != "channel.archived" && eventType != "channel.locked" {
 		return
 	}

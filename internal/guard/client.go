@@ -454,6 +454,8 @@ type HostConfig struct {
 	Version  string        `json:"version"`
 	Agents   []HostAgent   `json:"agents"`
 	Previews []HostPreview `json:"previews"`
+	// Storage: round 54; nil from older servers.
+	Storage *HostStorage `json:"storage,omitempty"`
 }
 
 // HostReport is what the guard tells the server about this machine.
@@ -473,14 +475,16 @@ type HostReport struct {
 	// Round 39: CodeGraph's version and the repositories this guard indexed.
 	Codegraph *apispec.CodegraphReport `json:"codegraph,omitempty"`
 	// Round 41: the doctor's checks (DoctorHook), refreshed with the usage poll.
-	Doctor          []apispec.DoctorCheck   `json:"doctor,omitempty"`
-	DoctorCheckedAt *time.Time              `json:"doctor_checked_at,omitempty"`
-	Rejected        []Rejected              `json:"rejected"`
-	Worktrees       []Worktree              `json:"worktrees,omitempty"`
-	ClaudeLimits    *apispec.ClaudeLimits   `json:"claude_limits,omitempty"`
-	AgyLimits       []apispec.AgyLimit      `json:"agy_limits,omitempty"`
-	AgyUsage        []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
-	UsageCheckedAt  *time.Time              `json:"usage_checked_at,omitempty"`
+	Doctor          []apispec.DoctorCheck `json:"doctor,omitempty"`
+	DoctorCheckedAt *time.Time            `json:"doctor_checked_at,omitempty"`
+	Rejected        []Rejected            `json:"rejected"`
+	Worktrees       []Worktree            `json:"worktrees,omitempty"`
+	ClaudeLimits    *apispec.ClaudeLimits `json:"claude_limits,omitempty"`
+	AgyLimits       []apispec.AgyLimit    `json:"agy_limits,omitempty"`
+	// StoragePaused: round 54, the agents wait for room in the storage.
+	StoragePaused  bool                    `json:"storage_paused,omitempty"`
+	AgyUsage       []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
+	UsageCheckedAt *time.Time              `json:"usage_checked_at,omitempty"`
 }
 
 // Worktree is an active git worktree on this machine.

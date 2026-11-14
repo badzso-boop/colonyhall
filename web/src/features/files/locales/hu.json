@@ -31,5 +31,50 @@
     "too_large": "A fájl túl nagy a megnyitáshoz.",
     "not_a_file": "Ez nem fájl.",
     "generic": "A kérés nem sikerült."
-  }
+  },
+  "my": {
+    "title": "Fájljaim",
+    "mine": "Saját feltöltéseim",
+    "agents": "Agentjeim feltöltései",
+    "agentsHint": "Az agentjeid által feltöltött vagy a mappáikból betöltött fájlok. Te törölheted őket, más nem.",
+    "channel": "Csatorna",
+    "allChannels": "Minden csatorna",
+    "kind": "Típus",
+    "allKinds": "Minden típus",
+    "kinds": {
+      "image": "Képek",
+      "document": "Dokumentumok",
+      "other": "Egyéb"
+    },
+    "dm": "Közvetlen üzenet",
+    "noChannel": "Már nem látott csatorna",
+    "shared_one": "még {{count}} példány",
+    "shared_other": "még {{count}} példány",
+    "openMessage": "Üzenet",
+    "select": "{{name}} kijelölése",
+    "selected_one": "{{count}} fájl, {{size}}",
+    "selected_other": "{{count}} fájl, {{size}}",
+    "delete": "Törlés",
+    "empty": "Ebben a munkaterületben még nem töltöttél fel fájlt.",
+    "emptyAgents": "Az agentjeidnek itt nincs fájlja.",
+    "more": "Továbbiak",
+    "confirmTitle_one": "Törlöd ezt a(z) {{count}} fájlt?",
+    "confirmTitle_other": "Törlöd ezt a(z) {{count}} fájlt?",
+    "confirmBody": "Minden üzenetben, amelyhez csatolva voltak, a helyükön „Fájl törölve” jelenik meg, név nélkül. Senki nem töltheti le őket többé. A törlés nem vonható vissza.",
+    "sharedNote": "Némelyiket többször is feltöltötték: a többi példány megmarad, és vele a tárolt tartalom is.",
+    "confirmDelete_one": "{{count}} fájl törlése",
+    "confirmDelete_other": "{{count}} fájl törlése",
+    "cancel": "Mégse",
+    "deleted_one": "{{count}} fájl törölve.",
+    "deleted_other": "{{count}} fájl törölve.",
+    "deleteFailed_one": "{{count}} fájlt nem sikerült törölni.",
+    "deleteFailed_other": "{{count}} fájlt nem sikerült törölni."
+  },
+  "banner": {
+    "warning_80": "A munkaterület tárhelye 80% fölött van: {{used}} / {{quota}} foglalt.",
+    "warning_95": "A munkaterület tárhelye 95% fölött van: {{used}} / {{quota}} foglalt.",
+    "full": "A munkaterület tárhelye megtelt ({{used}} / {{quota}}): a feltöltés hibát ad, az agentek szünetelnek.",
+    "details": "Tárhely"
+  },
+  "full": "A munkaterület tárhelye megtelt: {{used}} / {{quota}} foglalt. Töröld a már nem kellő fájljaidat a Fájljaim oldalon, vagy kérd meg a tulajdonost, hogy emelje a keretet."
 }

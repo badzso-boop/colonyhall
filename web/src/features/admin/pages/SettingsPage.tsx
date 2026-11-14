@@ -30,6 +30,7 @@ import {
 } from "../api";
 import { AdminPage } from "../components/AdminPage";
 import { priceFields, priceHistory, validRepo, type PriceField } from "../model";
+import { StorageCard } from "../components/StorageCard";
 
 const sections = ["tomorites", "fajllekeres", "feladatatadas", "gitea", "arak", "fajlok"] as const;
 type Section = (typeof sections)[number];
@@ -557,6 +558,9 @@ function FilesSection() {
       <p>
         <span className="font-mono text-meta">COLONY_MAX_UPLOAD_MB</span>: <b className="tabular">{status.data?.system?.max_upload_mb ?? "–"} MB</b>
       </p>
+      <div className="max-w-md">
+        <StorageCard />
+      </div>
     </section>
   );
 }

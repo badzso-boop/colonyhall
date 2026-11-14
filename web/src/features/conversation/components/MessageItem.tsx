@@ -4,7 +4,7 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { AlarmClock, ArrowUpRight, Bookmark, BookmarkCheck, Forward, Link2, CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
+import { AlarmClock, ArrowUpRight, Bookmark, BookmarkCheck, Forward, Link2, CornerDownRight, CornerUpLeft, Download, FileText, FileX, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
 import { chipRefs, cn, fullTime, hueVar, messageChipRef, messageHref, messageTime, messageURL, relativeTime, type Chip, type FileLink } from "@/shared/lib";
 import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
 import { EmojiButton } from "@/features/emoji";
@@ -91,10 +91,12 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   const mentionsMe = m.mentions.includes(viewer.id);
   const long = m.body.length > LONG_CHARS || m.body.split("\n").length > LONG_LINES;
   const images = useMemo(
-    () => (m.attachments ?? []).filter((a) => a.mime.startsWith("image/")).map((a) => ({ src: `/api/v1/files/${a.id}/content`, name: a.name })),
+    () => (m.attachments ?? []).filter((a) => !a.deleted && a.mime.startsWith("image/")).map((a) => ({ src: `/api/v1/files/${a.id}/content`, name: a.name })),
     [m.attachments],
   );
-  const others = (m.attachments ?? []).filter((a) => !a.mime.startsWith("image/"));
+  const others = (m.attachments ?? []).filter((a) => !a.deleted && !a.mime.startsWith("image/"));
+  // Round 54: the uploader deleted it; no name, no size, no link.
+  const deletedFiles = (m.attachments ?? []).filter((a) => a.deleted).length;
   const retracted = Boolean(m.deleted_at);
   const name = author ? author.display_name || author.handle : "?";
   const paused = fromAgent && (author.state === "paused" || viewer.pausedAgents.has(author.id));
@@ -276,6 +278,16 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
                 <span className="tabular text-fg-subtle">{Math.max(1, Math.round(a.size / 1024))} KB</span>
                 <Download aria-hidden className="size-3.5 text-fg-subtle" />
               </a>
+            ))}
+          </div>
+        ) : null}
+        {deletedFiles && !retracted && !m.compaction_id ? (
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {Array.from({ length: deletedFiles }, (_, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-meta text-fg-subtle italic">
+                <FileX aria-hidden className="size-3.5" />
+                {t("message.fileDeleted")}
+              </span>
             ))}
           </div>
         ) : null}

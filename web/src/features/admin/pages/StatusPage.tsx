@@ -14,6 +14,7 @@ import { Sparkline } from "../components/charts";
 import { EmergencyReleaseDialog } from "../components/EmergencyReleaseDialog";
 import { SearchStatusCard } from "../components/SearchStatusCard";
 import { SecurityStatusCard } from "../components/SecurityStatusCard";
+import { StorageCard } from "../components/StorageCard";
 import { StatusCard, StatusRow as Row } from "../components/StatusCard";
 import { formatBytes, formatUptime, LAG_EVENTS, LAG_SECONDS, sizeGrowth, statusFindings, statusText, type SystemStatus, type Tone } from "../model";
 
@@ -67,6 +68,7 @@ function StatusBody() {
           <Row label={t("status.latency")} value={`${s.database.latency_ms.toLocaleString(locale, { maximumFractionDigits: 1 })} ms`} />
         </StatusCard>
         <DatabaseSizeCard database={s.database} />
+        <StorageCard />
         <StatusCard title={t("status.emergency")} tone={tone("emergency")}>
           {st.emergency_stop.active ? (
             <>

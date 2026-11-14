@@ -63,6 +63,7 @@
     "noAgent": "There is no agent in this conversation.",
     "schedule": "Schedule…",
     "questions": "Open questions",
+    "storageFull": "Storage full",
     "alsoToChannel": "Also send to #{{name}}",
     "emoji": "Emoji"
   },
@@ -122,7 +123,8 @@
       "add": "Add a reaction"
     },
     "openLinked": "Open the message",
-    "repliedInThread": "Replied in a thread – open"
+    "repliedInThread": "Replied in a thread – open",
+    "fileDeleted": "File deleted"
   },
   "new": {
     "close": "Close",

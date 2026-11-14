@@ -31,5 +31,50 @@
     "too_large": "The file is too large to open.",
     "not_a_file": "This is not a file.",
     "generic": "The request failed."
-  }
+  },
+  "my": {
+    "title": "My files",
+    "mine": "Uploaded by me",
+    "agents": "Uploaded by my agents",
+    "agentsHint": "Files your agents uploaded or fetched from their folders. You can delete them; nobody else can.",
+    "channel": "Channel",
+    "allChannels": "All channels",
+    "kind": "Type",
+    "allKinds": "All types",
+    "kinds": {
+      "image": "Images",
+      "document": "Documents",
+      "other": "Other"
+    },
+    "dm": "Direct message",
+    "noChannel": "A channel you no longer see",
+    "shared_one": "{{count}} more copy",
+    "shared_other": "{{count}} more copies",
+    "openMessage": "Message",
+    "select": "Select {{name}}",
+    "selected_one": "{{count}} file, {{size}}",
+    "selected_other": "{{count}} files, {{size}}",
+    "delete": "Delete",
+    "empty": "You have not uploaded any files in this workspace.",
+    "emptyAgents": "Your agents have no files here.",
+    "more": "Show more",
+    "confirmTitle_one": "Delete {{count}} file?",
+    "confirmTitle_other": "Delete {{count}} files?",
+    "confirmBody": "Every message that carried them will show “File deleted” instead, without the name. Nobody can download them any more. This cannot be undone.",
+    "sharedNote": "Some of them were uploaded more than once: the other copies stay, and so does the stored content.",
+    "confirmDelete_one": "Delete {{count}} file",
+    "confirmDelete_other": "Delete {{count}} files",
+    "cancel": "Cancel",
+    "deleted_one": "{{count}} file deleted.",
+    "deleted_other": "{{count}} files deleted.",
+    "deleteFailed_one": "{{count}} file could not be deleted.",
+    "deleteFailed_other": "{{count}} files could not be deleted."
+  },
+  "banner": {
+    "warning_80": "The workspace storage is over 80%: {{used}} of {{quota}} used.",
+    "warning_95": "The workspace storage is over 95%: {{used}} of {{quota}} used.",
+    "full": "The workspace storage is full ({{used}} of {{quota}}): uploads fail and the agents are paused.",
+    "details": "Storage"
+  },
+  "full": "The workspace storage is full: {{used}} of {{quota}} used. Delete files you no longer need in My files, or ask the owner to raise the quota."
 }

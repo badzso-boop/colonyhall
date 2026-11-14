@@ -21,7 +21,8 @@
     "saved": "Profile saved",
     "failed": "Could not save the profile.",
     "localTime": "Local time: {{time}} ({{zone}})",
-    "label": "Profile of {{name}}"
+    "label": "Profile of {{name}}",
+    "myFiles": "My files: what you uploaded, and deleting it"
   },
   "about": {
     "line": "Colonyhall {{version}} · {{license}}",

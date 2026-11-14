@@ -3,6 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { identityKeys, type Actor, type Session } from "../api";
 import { ProfileDialog } from "./ProfileDialog";
 
@@ -24,9 +25,11 @@ test("Profilom: only changed fields are sent, the name too; the session follows"
   qc.setQueryData(identityKeys.actors, new Map([["me", me]]));
   const onClose = vi.fn();
   render(
-    <QueryClientProvider client={qc}>
-      <ProfileDialog onClose={onClose} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <ProfileDialog onClose={onClose} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   const name = screen.getByRole("textbox", { name: /Megjelenített név/ }) as HTMLInputElement;
   expect(name.value).toBe("Norbi");
@@ -45,9 +48,11 @@ test("an empty name keeps Mentés disabled", () => {
   const qc = new QueryClient();
   qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "x" } as Session);
   render(
-    <QueryClientProvider client={qc}>
-      <ProfileDialog onClose={() => {}} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <ProfileDialog onClose={() => {}} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   fireEvent.change(screen.getByRole("textbox", { name: /Megjelenített név/ }), { target: { value: "  " } });
   expect((screen.getByRole("button", { name: "Mentés" }) as HTMLButtonElement).disabled).toBe(true);
@@ -57,9 +62,11 @@ test("too long a status keeps Mentés disabled", () => {
   const qc = new QueryClient();
   qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "x" } as Session);
   render(
-    <QueryClientProvider client={qc}>
-      <ProfileDialog onClose={() => {}} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <ProfileDialog onClose={() => {}} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   fireEvent.change(screen.getByRole("textbox", { name: /Állapotüzenet/ }), { target: { value: "x".repeat(81) } });
   expect((screen.getByRole("button", { name: "Mentés" }) as HTMLButtonElement).disabled).toBe(true);

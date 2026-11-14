@@ -251,19 +251,8 @@ export function securityTone(s: SecurityStatus): Tone {
   return s.lockouts_24h > 0 ? "warning" : "ok";
 }
 
-const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
-
-/** A byte count the way pg_size_pretty shows it (1 kB = 1024 B): "21.4 MB". */
-export function formatBytes(bytes: number, locale: string): string {
-  const sign = bytes < 0 ? "-" : "";
-  let n = Math.abs(bytes);
-  let unit = 0;
-  while (n >= 1024 && unit < BYTE_UNITS.length - 1) {
-    n /= 1024;
-    unit++;
-  }
-  return `${sign}${n.toLocaleString(locale, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${BYTE_UNITS[unit]}`;
-}
+/** A byte count the way pg_size_pretty shows it; shared since round 54. */
+export { formatBytes } from "@/shared/lib";
 
 export type SizeSample = Schemas["StatusSizeSample"];
 export const GROWTH_DAYS = 30;
@@ -421,4 +410,20 @@ export function auditExportQuery(f: { actor_id?: string; action?: string[]; targ
   if (f.from) q.set("from", f.from);
   if (f.to) q.set("to", f.to);
   return q.toString();
+}
+
+/** Round 54: the used share of the quota in percent; null without a quota. */
+export function storagePercent(used: number, quota: number): number | null {
+  if (!quota) return null;
+  return (used / quota) * 100;
+}
+
+/** The quota field (GB, decimal comma or point) in bytes: "" or 0 is unlimited (0); null when invalid. */
+export function gbToBytes(text: string): number | null {
+  const s = text.trim().replace(",", ".");
+  if (s === "") return 0;
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n > 1024 * 1024) return null;
+  return Math.round(n * 1024 ** 3);
 }

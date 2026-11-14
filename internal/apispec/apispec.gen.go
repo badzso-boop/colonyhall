@@ -1443,6 +1443,30 @@ func (e StatusLockoutScope) Valid() bool {
 	}
 }
 
+// Defines values for StorageState.
+const (
+	StorageStateFull      StorageState = "full"
+	StorageStateOk        StorageState = "ok"
+	StorageStateWarning80 StorageState = "warning_80"
+	StorageStateWarning95 StorageState = "warning_95"
+)
+
+// Valid indicates whether the value is a known member of the StorageState enum.
+func (e StorageState) Valid() bool {
+	switch e {
+	case StorageStateFull:
+		return true
+	case StorageStateOk:
+		return true
+	case StorageStateWarning80:
+		return true
+	case StorageStateWarning95:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TerminalSummaryStatus.
 const (
 	TerminalSummaryStatusError    TerminalSummaryStatus = "error"
@@ -1530,6 +1554,45 @@ func (e ListActiveLeasesParamsState) Valid() bool {
 	case ListActiveLeasesParamsStateActive:
 		return true
 	case ListActiveLeasesParamsStateAll:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMyFilesParamsUploader.
+const (
+	Agents ListMyFilesParamsUploader = "agents"
+	Me     ListMyFilesParamsUploader = "me"
+)
+
+// Valid indicates whether the value is a known member of the ListMyFilesParamsUploader enum.
+func (e ListMyFilesParamsUploader) Valid() bool {
+	switch e {
+	case Agents:
+		return true
+	case Me:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMyFilesParamsKind.
+const (
+	ListMyFilesParamsKindDocument ListMyFilesParamsKind = "document"
+	ListMyFilesParamsKindImage    ListMyFilesParamsKind = "image"
+	ListMyFilesParamsKindOther    ListMyFilesParamsKind = "other"
+)
+
+// Valid indicates whether the value is a known member of the ListMyFilesParamsKind enum.
+func (e ListMyFilesParamsKind) Valid() bool {
+	switch e {
+	case ListMyFilesParamsKindDocument:
+		return true
+	case ListMyFilesParamsKindImage:
+		return true
+	case ListMyFilesParamsKindOther:
 		return true
 	default:
 		return false
@@ -2631,10 +2694,11 @@ type EnrollResponse struct {
 
 // EventAttachment defines model for EventAttachment.
 type EventAttachment struct {
-	Id   openapi_types.UUID `json:"id"`
-	Mime string             `json:"mime"`
-	Name string             `json:"name"`
-	Size int64              `json:"size"`
+	Deleted *bool              `json:"deleted,omitempty"`
+	Id      openapi_types.UUID `json:"id"`
+	Mime    string             `json:"mime"`
+	Name    string             `json:"name"`
+	Size    int64              `json:"size"`
 }
 
 // FailFileFetchRequest defines model for FailFileFetchRequest.
@@ -2661,10 +2725,12 @@ type File struct {
 
 // FileAttachment defines model for FileAttachment.
 type FileAttachment struct {
-	Id   openapi_types.UUID `json:"id"`
-	Mime string             `json:"mime"`
-	Name string             `json:"name"`
-	Size int64              `json:"size"`
+	// Deleted Round 54: the uploader deleted the file; name, mime and size are empty
+	Deleted *bool              `json:"deleted,omitempty"`
+	Id      openapi_types.UUID `json:"id"`
+	Mime    string             `json:"mime"`
+	Name    string             `json:"name"`
+	Size    int64              `json:"size"`
 }
 
 // FileAttachmentWithFetchedAt defines model for FileAttachmentWithFetchedAt.
@@ -2887,7 +2953,10 @@ type HostClaudeLoginResultErrorCode string
 type HostConfig struct {
 	Agents   []HostAgent    `json:"agents"`
 	Previews *[]HostPreview `json:"previews,omitempty"`
-	Version  string         `json:"version"`
+
+	// Storage Round 54: while state is full the guard starts no runs; absent from older servers
+	Storage *HostStorage `json:"storage,omitempty"`
+	Version string       `json:"version"`
 }
 
 // HostDirEntry defines model for HostDirEntry.
@@ -3031,6 +3100,9 @@ type HostReport struct {
 	// Sandbox e.g. bwrap 0.9.0; empty when none
 	Sandbox *string `json:"sandbox,omitempty"`
 
+	// StoragePaused Round 54: the guard starts no runs, the workspace storage is full
+	StoragePaused *bool `json:"storage_paused,omitempty"`
+
 	// UsageCheckedAt When the guard last asked the clients for their usage (`/usage`)
 	UsageCheckedAt *time.Time `json:"usage_checked_at,omitempty"`
 	Worktrees      *[]struct {
@@ -3038,6 +3110,13 @@ type HostReport struct {
 		Branch  string `json:"branch"`
 		Path    string `json:"path"`
 	} `json:"worktrees,omitempty"`
+}
+
+// HostStorage defines model for HostStorage.
+type HostStorage struct {
+	QuotaBytes *int64       `json:"quota_bytes,omitempty"`
+	State      StorageState `json:"state"`
+	UsedBytes  *int64       `json:"used_bytes,omitempty"`
 }
 
 // Hue A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
@@ -3225,6 +3304,41 @@ type MuteRequest struct {
 	Until *time.Time `json:"until,omitempty"`
 }
 
+// MyFile defines model for MyFile.
+type MyFile struct {
+	Channel   *MyFileChannel     `json:"channel,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// MessageId The message the file is attached to (absent when never sent or the channel is not readable)
+	MessageId *openapi_types.UUID `json:"message_id,omitempty"`
+	Mime      string              `json:"mime"`
+	Name      string              `json:"name"`
+
+	// SharedCount How many other live files in the workspace have the same content (it stays stored for them)
+	SharedCount  int                 `json:"shared_count"`
+	Size         int64               `json:"size"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+
+	// UploadedBy uploader=agents: the agent
+	UploadedBy *openapi_types.UUID `json:"uploaded_by,omitempty"`
+}
+
+// MyFileChannel defines model for MyFileChannel.
+type MyFileChannel struct {
+	Id   openapi_types.UUID `json:"id"`
+	Kind string             `json:"kind"`
+	Name string             `json:"name"`
+}
+
+// MyFilePage defines model for MyFilePage.
+type MyFilePage struct {
+	Files []MyFile `json:"files"`
+
+	// NextCursor Absent on the last page
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // MyThread defines model for MyThread.
 type MyThread struct {
 	ChannelId   openapi_types.UUID `json:"channel_id"`
@@ -3280,10 +3394,13 @@ type OverviewAssignment struct {
 	Model            string             `json:"model"`
 
 	// PartnerHandle docs only: the sandboxed partner's handle, without @
-	PartnerHandle  *string                       `json:"partner_handle,omitempty"`
-	PermissionMode string                        `json:"permission_mode"`
-	RootDir        string                        `json:"root_dir"`
-	Sandbox        bool                          `json:"sandbox"`
+	PartnerHandle  *string `json:"partner_handle,omitempty"`
+	PermissionMode string  `json:"permission_mode"`
+	RootDir        string  `json:"root_dir"`
+	Sandbox        bool    `json:"sandbox"`
+
+	// StoragePaused Round 54: the agent's guard starts no runs, the workspace storage is full
+	StoragePaused  *bool                         `json:"storage_paused,omitempty"`
 	WorkModel      *string                       `json:"work_model,omitempty"`
 	WorktreeBranch *string                       `json:"worktree_branch,omitempty"`
 	WorktreeRepo   string                        `json:"worktree_repo"`
@@ -3454,9 +3571,15 @@ type PriceList struct {
 // Problem defines model for Problem.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
-	Status int     `json:"status"`
-	Title  string  `json:"title"`
-	Type   string  `json:"type"`
+
+	// QuotaBytes storage_full (507) only: the workspace's quota
+	QuotaBytes *int64 `json:"quota_bytes,omitempty"`
+	Status     int    `json:"status"`
+	Title      string `json:"title"`
+	Type       string `json:"type"`
+
+	// UsedBytes storage_full (507) only: the workspace's usage
+	UsedBytes *int64 `json:"used_bytes,omitempty"`
 }
 
 // Question defines model for Question.
@@ -4056,6 +4179,15 @@ type StatusTableSize struct {
 	TotalBytes int64 `json:"total_bytes"`
 }
 
+// StorageQuotaRequest defines model for StorageQuotaRequest.
+type StorageQuotaRequest struct {
+	// QuotaBytes 0 is unlimited
+	QuotaBytes int64 `json:"quota_bytes"`
+}
+
+// StorageState defines model for StorageState.
+type StorageState string
+
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
 	Compaction struct {
@@ -4374,11 +4506,33 @@ type WikiRevisionList struct {
 	Revisions []WikiRevision `json:"revisions"`
 }
 
+// WorkspaceStorage defines model for WorkspaceStorage.
+type WorkspaceStorage struct {
+	AttachmentsBytes int64 `json:"attachments_bytes"`
+
+	// ChatSearchBytes Messages, events and the search index (part of the database estimate)
+	ChatSearchBytes int64 `json:"chat_search_bytes"`
+
+	// DbMeasuredAt The last hourly database estimate (absent before the first)
+	DbMeasuredAt *time.Time `json:"db_measured_at,omitempty"`
+
+	// OtherBytes The rest of the database share
+	OtherBytes int64 `json:"other_bytes"`
+
+	// QuotaBytes 0 is unlimited
+	QuotaBytes int64        `json:"quota_bytes"`
+	State      StorageState `json:"state"`
+	UsedBytes  int64        `json:"used_bytes"`
+}
+
 // ChannelId defines model for ChannelId.
 type ChannelId = openapi_types.UUID
 
 // LockedOut defines model for LockedOut.
 type LockedOut = Problem
+
+// StorageFull defines model for StorageFull.
+type StorageFull = Problem
 
 // ListActorsParams defines parameters for ListActors.
 type ListActorsParams struct {
@@ -4505,6 +4659,25 @@ type DeleteDraftParams struct {
 	ChannelId    openapi_types.UUID  `form:"channel_id" json:"channel_id"`
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
+
+// ListMyFilesParams defines parameters for ListMyFiles.
+type ListMyFilesParams struct {
+	Uploader *ListMyFilesParamsUploader `form:"uploader,omitempty" json:"uploader,omitempty"`
+
+	// Channel Only files in this channel
+	Channel *openapi_types.UUID    `form:"channel,omitempty" json:"channel,omitempty"`
+	Kind    *ListMyFilesParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListMyFilesParamsUploader defines parameters for ListMyFiles.
+type ListMyFilesParamsUploader string
+
+// ListMyFilesParamsKind defines parameters for ListMyFiles.
+type ListMyFilesParamsKind string
 
 // ListSavedParams defines parameters for ListSaved.
 type ListSavedParams struct {
@@ -4838,3 +5011,6 @@ type EditWikiPageJSONRequestBody = EditWikiPageRequest
 
 // AppendWikiPageJSONRequestBody defines body for AppendWikiPage for application/json ContentType.
 type AppendWikiPageJSONRequestBody = AppendWikiPageRequest
+
+// SetWorkspaceStorageQuotaJSONRequestBody defines body for SetWorkspaceStorageQuota for application/json ContentType.
+type SetWorkspaceStorageQuotaJSONRequestBody = StorageQuotaRequest

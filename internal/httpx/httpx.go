@@ -184,7 +184,15 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	if typ == "" {
 		typ = "about:blank"
 	}
-	if status >= 500 {
+	// An error may carry a detail meant for the client, with extension
+	// members (round 54: the 507 of a full storage names its numbers).
+	var pd interface {
+		ProblemDetail() (string, map[string]any)
+	}
+	var ext map[string]any
+	if errors.As(err, &pd) {
+		detail, ext = pd.ProblemDetail()
+	} else if status >= 500 {
 		slog.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		detail = ""
 	}
@@ -196,6 +204,19 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
+	if len(ext) > 0 {
+		body := map[string]any{"type": typ, "title": title, "status": status}
+		if detail != "" {
+			body["detail"] = detail
+		}
+		for k, v := range ext {
+			if _, taken := body[k]; !taken {
+				body[k] = v
+			}
+		}
+		_ = json.NewEncoder(w).Encode(body)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(problem{Type: typ, Title: title, Status: status, Detail: detail})
 }
 

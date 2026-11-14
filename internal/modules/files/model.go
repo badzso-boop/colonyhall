@@ -27,6 +27,8 @@ type File struct {
 	SHA256      string
 	CreatedAt   time.Time
 	HumanOnly   bool
+	// DeletedAt is set when the uploader deleted the file (round 54).
+	DeletedAt *time.Time
 }
 
 // FileFetchState represents the state of a file fetch request.
@@ -76,6 +78,15 @@ type FileFetchSettings struct {
 
 // Attachment is a file attached to a message.
 type Attachment = conversation.Attachment
+
+// NewAttachment builds a message's attachment; a deleted file keeps only its
+// ID (round 54: the uploader may want its name gone too).
+func NewAttachment(id ids.ID, name, mime string, size int64, deletedAt *time.Time) Attachment {
+	if deletedAt != nil {
+		return Attachment{ID: id, Deleted: true}
+	}
+	return Attachment{ID: id, Name: name, Mime: mime, Size: size}
+}
 
 // Limits.
 const (

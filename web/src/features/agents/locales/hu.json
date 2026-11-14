@@ -413,6 +413,7 @@
     "overview": "Áttekintés",
     "notYours": "A részleteit (futások, mappák, terminálok) csak a tulajdonosa és az adminok látják."
   },
+  "storagePaused": "Szünetel: megtelt a tárhely",
   "stopCommand": {
     "unknown": "Nincs @{{handle}} nevű agent."
   }

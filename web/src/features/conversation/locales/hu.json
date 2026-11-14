@@ -63,6 +63,7 @@
     "noAgent": "Ebben a beszélgetésben nincs agent.",
     "schedule": "Ütemezés…",
     "questions": "Nyitott kérdések",
+    "storageFull": "Megtelt a tárhely",
     "alsoToChannel": "Küldés a #{{name}} csatornába is",
     "emoji": "Emoji"
   },
@@ -122,7 +123,8 @@
       "add": "Reakció hozzáadása"
     },
     "openLinked": "Ugrás az üzenethez",
-    "repliedInThread": "Válasz egy szálban – megnyitás"
+    "repliedInThread": "Válasz egy szálban – megnyitás",
+    "fileDeleted": "Fájl törölve"
   },
   "new": {
     "close": "Bezárás",

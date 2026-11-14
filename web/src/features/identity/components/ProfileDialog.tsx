@@ -3,6 +3,8 @@
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
+import { FolderOpen } from "lucide-react";
 import { Button, Dialog, Input, Select, Textarea, toast } from "@/shared/ui";
 import { useSession, useUpdateProfile } from "../api";
 import { draftOf, PROFILE_LIMITS, profileChanges, profileErrors, timeZoneOptions, type ProfileDraft } from "../model";
@@ -84,6 +86,10 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
             ))}
           </Select>
         </Field>
+        <Link to="/files" onClick={onClose} className="inline-flex items-center gap-1.5 self-start text-ui text-accent-text hover:underline">
+          <FolderOpen aria-hidden className="size-4" />
+          {t("profile.myFiles")}
+        </Link>
       </form>
     </Dialog>
   );

@@ -92,13 +92,18 @@ type Supervisor struct {
 	doctor        []apispec.DoctorCheck
 	doctorAt      time.Time
 	agyLimiter    *AgyLimiter
-	roots         []string
-	home          string
-	sandbox       *Sandbox
-	codegraph     *CodeGraph
-	previews      *PreviewSupervisor
-	terminals     *TerminalManager
-	runSlots      *RunSlots // max_concurrent_runs, shared by all agents
+	// storage pauses every agent while the workspace storage is full
+	// (round 54); syncCh asks RunHost to fetch the config now.
+	storage   *StorageGate
+	syncCh    chan struct{}
+	syncMu    sync.Mutex
+	roots     []string
+	home      string
+	sandbox   *Sandbox
+	codegraph *CodeGraph
+	previews  *PreviewSupervisor
+	terminals *TerminalManager
+	runSlots  *RunSlots // max_concurrent_runs, shared by all agents
 
 	mu               sync.Mutex
 	lastOK           time.Time
@@ -219,6 +224,14 @@ func (s *Supervisor) start(ctx context.Context) error {
 			s.WakeAll()
 		})
 	}
+	if s.storage == nil {
+		s.storage = NewStorageGate(s.Log, func(full bool) {
+			s.report(context.Background())
+			if !full {
+				s.WakeAll()
+			}
+		})
+	}
 	if s.claudeLimiter == nil {
 		s.claudeLimiter = NewClaudeLimiter(usageFile, s.Cfg.RateLimitReserve, s.Cfg.RateLimitWarn, s.Log, nowFn)
 		s.claudeLimiter.SetOnPauseChange(func(paused bool) {
@@ -253,8 +266,28 @@ func (s *Supervisor) RunHost(ctx context.Context) error {
 			s.stopAll()
 			return nil
 		case <-t.C:
+		case <-s.syncSignal():
+			// A storage state change (round 54): fetch the config now.
 		}
 	}
+}
+
+// SyncNow asks the host loop to fetch the config at once (a storage state
+// change announced on an agent's WebSocket); it never blocks.
+func (s *Supervisor) SyncNow() {
+	select {
+	case s.syncSignal() <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Supervisor) syncSignal() chan struct{} {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	if s.syncCh == nil {
+		s.syncCh = make(chan struct{}, 1)
+	}
+	return s.syncCh
 }
 
 // hostWS is the guard's own WebSocket (host token) for host-level folder
@@ -322,6 +355,7 @@ func (s *Supervisor) sync(ctx context.Context) {
 
 // reconcile starts, updates and stops agent loops to match the config.
 func (s *Supervisor) reconcile(ctx context.Context, cfg HostConfig) {
+	s.storage.Set(cfg.Storage)
 	var rejected []Rejected
 	want := map[string]bool{}
 	for _, ha := range cfg.Agents {
@@ -632,14 +666,16 @@ func (s *Supervisor) startAgent(ctx context.Context, ha HostAgent, key string, g
 			defer s.mu.Unlock()
 			return s.version
 		},
-		Sandbox:       ha.Sandbox,
-		AllowWebRead:  ha.AllowWebRead,
-		WebReadAllow:  s.Cfg.WebReadAllow,
-		WebReadDeny:   s.Cfg.WebReadDeny,
-		Roots:         s.roots,
-		ClaudeLimiter: s.claudeLimiter,
-		AgyLimiter:    s.agyLimiter,
-		Now:           s.Now,
+		Sandbox:        ha.Sandbox,
+		AllowWebRead:   ha.AllowWebRead,
+		WebReadAllow:   s.Cfg.WebReadAllow,
+		WebReadDeny:    s.Cfg.WebReadDeny,
+		Roots:          s.roots,
+		ClaudeLimiter:  s.claudeLimiter,
+		AgyLimiter:     s.agyLimiter,
+		Storage:        s.storage,
+		OnStorageEvent: s.SyncNow,
+		Now:            s.Now,
 		GrantsFunc: func() []Grant {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -949,6 +985,9 @@ func (s *Supervisor) report(ctx context.Context) {
 	}
 	if s.agyLimiter != nil {
 		r.AgyLimits = s.agyLimiter.Report()
+	}
+	if s.storage.Full() {
+		r.StoragePaused = true
 	}
 	s.mu.Lock()
 	r.AgyUsage = s.agyUsage

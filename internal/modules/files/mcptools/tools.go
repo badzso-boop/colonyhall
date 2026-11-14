@@ -47,7 +47,8 @@ func Register(s *mcp.Server, svc *files.Service, resolver ChannelResolver, curre
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "upload",
 		Description: "Upload a file to a channel using base64-encoded content. " +
-			"Returns the file ID, which can then be attached to messages using the send tool's files parameter.",
+			"Returns the file ID, which can then be attached to messages using the send tool's files parameter. " +
+			"When the workspace storage is full the upload fails: do not retry it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in UploadInput) (*mcp.CallToolResult, any, error) {
 		actor, err := current(ctx)
 		if err != nil {
@@ -69,6 +70,11 @@ func Register(s *mcp.Server, svc *files.Service, resolver ChannelResolver, curre
 		}
 
 		f, err := svc.Upload(ctx, actor, ch.ID, in.Name, bytes.NewReader(raw))
+		if errors.Is(err, files.ErrStorageFull) {
+			// Round 54: a full storage does not empty itself; retrying only
+			// spends the agent's quota.
+			return nil, nil, fmt.Errorf("%w Do not retry this upload; tell the person who asked that the workspace storage is full", err)
+		}
 		if err != nil {
 			return nil, nil, err
 		}

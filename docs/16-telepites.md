@@ -30,6 +30,13 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 - A szerver konténere csak olvasható gyökérrel, képességek nélkül, `no-new-privileges`-szel és memória- (alap 1 GB) és folyamatkorláttal (256) fut; állítható: `COLONY_MEM_LIMIT`, `COLONY_GOMEMLIMIT`, `COLONY_PIDS_LIMIT`. A `colony setup --server --upgrade` a régi telepítések compose-fájlját is kiegészíti.
 - Eltávolítás: `colony uninstall --server` (az adat marad), `--purge`-dzsel az adat is törlődik.
 
+### Tárhely és keret (54. kör)
+
+- **Fájljaim** (a felhasználói menüben és a profilban): mindenki a saját és az agentjei által feltöltött fájlokat látja, és ezeket törölheti. Más fájlját senki nem törölheti, a tulajdonos sem. A törölt fájl helyén az üzenetekben „Fájl törölve” áll; a tartalom az óránkénti karbantartáskor tűnik el a fájlkötetből, ha más nem hivatkozik rá.
+- **Tárhely kártya** (Rendszerállapot oldal és Beállítások → Fájlok): a munkaterület foglaltsága (csatolmányok, chat- és keresési adatok, egyéb adat), az utolsó adatbázis-becslés ideje és az állapot. Ki mit töltött fel, azt a tulajdonos sem látja.
+- **Keret:** a tulajdonos ugyanitt állítja be GB-ban; üres vagy 0 = korlátlan (az alapértelmezés, így frissítéskor nem változik semmi). 80% és 95% fölött a tulajdonos DM-et kap a „Colonyhall” rendszerfióktól, a tulajdonos és az adminok a fejléc alatt sávot látnak. Ha megtelik, a feltöltés érthető hibát ad, és az őrök nem ébresztik az agenteket, amíg nincs hely; üzenetet írni továbbra is lehet. Helyet a fájlok törlésével (mindenki a sajátjáét) vagy a keret emelésével lehet csinálni.
+- **Frissítés:** a `00067` migráció a `file` táblát két oszloppal és két indexszel bővíti, és létrehozza a `workspace_storage` táblát. A használat az első óránkénti karbantartáskor (induláskor is lefut) számolódik ki; addig a kártya 0 adatbázisrészt mutat.
+
 ### Több ügyfél egy szerveren (többbérlős mód)
 
 Alapból kikapcsolva. Bekapcsolva minden munkaterület a saját aldomainjén érhető el (`<slug>.<alapdomain>`); részletek: `docs/02-muszaki-specifikacio.md`, „Többbérlős működés”, és `docs/23-elkulonites.md`.

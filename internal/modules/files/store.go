@@ -62,4 +62,40 @@ type Store interface {
 
 	// UpsertFileFetchSettings creates or updates workspace file fetch settings.
 	UpsertFileFetchSettings(ctx context.Context, s FileFetchSettings) error
+
+	// Round 54: deleting files and the workspace storage.
+
+	// MarkDeleted soft-deletes a live file; db.ErrConflict if it is already
+	// deleted.
+	MarkDeleted(ctx context.Context, id ids.ID, at time.Time) error
+	// ListMine lists live files of the query's uploaders, newest first.
+	ListMine(ctx context.Context, q MyFilesQuery) ([]MyFile, error)
+	// LiveFilesBytes is the size of the workspace's live files, each
+	// content (sha256) counted once.
+	LiveFilesBytes(ctx context.Context, workspaceID ids.ID) (int64, error)
+	// WorkspaceHasLiveContent reports whether a live file of the workspace
+	// already has the content (a second copy adds nothing to the usage).
+	WorkspaceHasLiveContent(ctx context.Context, workspaceID ids.ID, sha256Hex string) (bool, error)
+	// LockUsage creates the workspace's storage row if missing and locks
+	// it until the transaction ends (memory: returns it).
+	LockUsage(ctx context.Context, workspaceID ids.ID, now time.Time) (Usage, error)
+	// UsageOf reads the workspace's storage row; a missing row is a zero
+	// usage without a quota.
+	UsageOf(ctx context.Context, workspaceID ids.ID) (Usage, error)
+	// SaveUsage writes the workspace's storage row.
+	SaveUsage(ctx context.Context, u Usage) error
+	// LockContent serializes the writers and the remover of one content
+	// across servers until the transaction ends (memory: a no-op, its
+	// transactions are serial).
+	LockContent(ctx context.Context, sha256Hex string) error
+	// ContentLive reports whether any live file in the whole store (every
+	// workspace) references the content. System mode.
+	ContentLive(ctx context.Context, sha256Hex string) (bool, error)
+	// RemovableContents lists hashes of deleted files whose content was not
+	// removed yet. System mode.
+	RemovableContents(ctx context.Context, limit int) ([]string, error)
+	// MarkContentRemoved records on the deleted rows of the hash that the
+	// content is gone (or still in use: the sweep then skips them too until
+	// another delete). System mode.
+	MarkContentRemoved(ctx context.Context, sha256Hex string, at time.Time) error
 }

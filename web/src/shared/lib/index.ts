@@ -7,7 +7,7 @@ export { hueVar, hues, isHue, type Hue } from "./palette";
 export { matchRanges } from "./highlight";
 export { randomId } from "./uuid";
 export { foldDiff, lineDiff, type DiffItem, type DiffLine } from "./diff";
-export { dayKey, dayLabel, feedItems, fullTime, messageTime, relativeTime, sessionContext, shortTime, type FeedItem } from "./format";
+export { dayKey, dayLabel, feedItems, formatBytes, fullTime, messageTime, relativeTime, sessionContext, shortTime, type FeedItem } from "./format";
 export { parse as parseMarkdown, plain as plainText, sanitizeUrl, type Block, type FileLink, type Inline } from "./markdown";
 export { availableCommands, commandUsage, matchCommands, parseCommand, parseWhen, registerCommand, type Command, type CommandSpec, type NotifyLevel, type RemindWhen } from "./commands";
 export { activeMention, fuzzyScore, insertMention, rankMentions, type MentionCandidate } from "./mention";

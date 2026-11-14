@@ -93,6 +93,8 @@ type Report struct {
 	AgyLimits       []apispec.AgyLimit      `json:"agy_limits,omitempty"`
 	AgyUsage        []apispec.AgyUsageGroup `json:"agy_usage,omitempty"`
 	UsageCheckedAt  *time.Time              `json:"usage_checked_at,omitempty"`
+	// Round 54: the guard starts no runs, the workspace storage is full.
+	StoragePaused bool `json:"storage_paused,omitempty"`
 }
 
 // Worktree describes a git worktree reported by the guard.

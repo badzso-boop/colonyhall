@@ -407,6 +407,27 @@
         "password": "password change",
         "claude_login": "Claude login"
       }
+    },
+    "storage": {
+      "title": "Storage",
+      "used": "Used",
+      "ofQuota": "{{used}} of {{quota}} ({{pct}}%)",
+      "attachments": "Attachments",
+      "chatSearch": "Chat and search data",
+      "other": "Other data",
+      "measured": "Database estimate",
+      "notYet": "Not yet (hourly)",
+      "quota": "Quota",
+      "unlimited": "Unlimited",
+      "quotaGb": "Quota (GB)",
+      "save": "Save",
+      "quotaHint": "Empty or 0: unlimited. At 80% and 95% you get a warning; when it is full, uploads fail and the agents are not woken until there is room. Messages always work.",
+      "state": {
+        "ok": "Enough room",
+        "warning_80": "Over 80%",
+        "warning_95": "Over 95%",
+        "full": "Full: uploads fail, agents are paused"
+      }
     }
   },
   "emergencyStop": {

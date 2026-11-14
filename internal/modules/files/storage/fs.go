@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -92,6 +93,15 @@ func (s *FSStorage) Stat(ctx context.Context, sha256Hex string) (int64, error) {
 		return 0, err
 	}
 	return fi.Size(), nil
+}
+
+// Delete removes the content; a missing one is not an error.
+func (s *FSStorage) Delete(ctx context.Context, sha256Hex string) error {
+	err := os.Remove(filepath.Join(s.dir, sha256Hex))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 var _ files.StorageBackend = (*FSStorage)(nil)

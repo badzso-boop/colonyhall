@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"colonyhall/internal/modules/dbstats"
+	"colonyhall/internal/platform/ids"
 )
 
 // Store implements dbstats.Store in memory.
@@ -71,3 +72,14 @@ func (s *Store) PruneSamples(_ context.Context, before time.Time) (int64, error)
 	}
 	return n, nil
 }
+
+// WorkspaceIDs: there is no database.
+func (s *Store) WorkspaceIDs(context.Context) ([]ids.ID, error) { return nil, dbstats.ErrNoDatabase }
+
+// WorkspaceRowBytes: there is no database.
+func (s *Store) WorkspaceRowBytes(context.Context, ids.ID) (dbstats.RowBytes, error) {
+	return dbstats.RowBytes{}, dbstats.ErrNoDatabase
+}
+
+// ChatTablesSize: there is no database.
+func (s *Store) ChatTablesSize(context.Context) (int64, error) { return 0, dbstats.ErrNoDatabase }

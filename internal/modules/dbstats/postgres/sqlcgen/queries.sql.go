@@ -8,8 +8,24 @@ package sqlcgen
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const chatTablesSize = `-- name: ChatTablesSize :one
+SELECT (pg_total_relation_size('message') + pg_total_relation_size('event')
+      + pg_total_relation_size('search_chunk_text') + pg_total_relation_size('search_log')
+      + pg_total_relation_size('delivery'))::bigint AS size_bytes
+`
+
+// The chat and search tables with indexes and TOAST (single-workspace
+// breakdown).
+func (q *Queries) ChatTablesSize(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, chatTablesSize)
+	var size_bytes int64
+	err := row.Scan(&size_bytes)
+	return size_bytes, err
+}
 
 const databaseSize = `-- name: DatabaseSize :one
 SELECT pg_database_size(current_database())::bigint AS size_bytes
@@ -109,4 +125,80 @@ func (q *Queries) SizeSamples(ctx context.Context, since pgtype.Date) ([]DbSizeS
 		return nil, err
 	}
 	return items, nil
+}
+
+const workspaceIDs = `-- name: WorkspaceIDs :many
+
+SELECT id FROM workspace ORDER BY id
+`
+
+// Round 54: the workspace storage's database share.
+// System mode: every workspace (the hourly usage refresh).
+func (q *Queries) WorkspaceIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, workspaceIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const workspaceRowBytes = `-- name: WorkspaceRowBytes :one
+SELECT
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM message t WHERE t.workspace_id = $1)::bigint AS message,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM event t WHERE t.workspace_id = $1)::bigint AS event,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM search_chunk_text t WHERE t.workspace_id = $1)::bigint AS search_chunk,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM search_log t WHERE t.workspace_id = $1)::bigint AS search_log,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM delivery t WHERE t.workspace_id = $1)::bigint AS delivery,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM agent_run t WHERE t.workspace_id = $1)::bigint AS agent_run,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM audit_log t WHERE t.workspace_id = $1)::bigint AS audit_log,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM file t WHERE t.workspace_id = $1)::bigint AS file,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM wiki_revision t WHERE t.workspace_id = $1)::bigint AS wiki_revision,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM terminal_event t WHERE t.workspace_id = $1)::bigint AS terminal_event
+`
+
+type WorkspaceRowBytesRow struct {
+	Message       int64
+	Event         int64
+	SearchChunk   int64
+	SearchLog     int64
+	Delivery      int64
+	AgentRun      int64
+	AuditLog      int64
+	File          int64
+	WikiRevision  int64
+	TerminalEvent int64
+}
+
+// The size of a workspace's rows in the large tables (pg_column_size of the
+// whole row, TOAST compressed size included), without indexes or page
+// overhead: the caller multiplies by dbstats.OverheadFactor. Run with the
+// connection scoped to the workspace (row-level security narrows it too).
+func (q *Queries) WorkspaceRowBytes(ctx context.Context, workspaceID uuid.UUID) (WorkspaceRowBytesRow, error) {
+	row := q.db.QueryRow(ctx, workspaceRowBytes, workspaceID)
+	var i WorkspaceRowBytesRow
+	err := row.Scan(
+		&i.Message,
+		&i.Event,
+		&i.SearchChunk,
+		&i.SearchLog,
+		&i.Delivery,
+		&i.AgentRun,
+		&i.AuditLog,
+		&i.File,
+		&i.WikiRevision,
+		&i.TerminalEvent,
+	)
+	return i, err
 }
