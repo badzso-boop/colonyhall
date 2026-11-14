@@ -118,7 +118,7 @@ func TestActivityFollowsLevelAndAccess(t *testing.T) {
 		t.Fatalf("remove: %d", s)
 	}
 	it := e.activity(mariTok, "").Items[0]
-	if it.Available || it.Excerpt != nil || it.ChannelName != nil || it.MessageId != nil {
+	if it.Available || it.Excerpt != nil || it.ChannelName != nil || it.MessageId != nil || it.ActorId != nil || it.RefId != nil {
 		t.Fatalf("a lost conversation leaks through the feed: %+v", it)
 	}
 }

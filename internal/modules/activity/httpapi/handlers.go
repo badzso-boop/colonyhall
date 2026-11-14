@@ -39,7 +39,13 @@ func ptrID(id ids.ID) *ids.ID {
 // while the recipient can read its conversation.
 func ToAPI(v activity.View) apispec.ActivityItem {
 	out := apispec.ActivityItem{Id: v.ID, Kind: apispec.ActivityKind(v.Kind), CreatedAt: v.CreatedAt, Read: v.ReadAt != nil,
-		Available: v.Channel != nil, RefId: ptrID(v.RefID), ActorId: ptrID(v.ActorID)}
+		Available: v.Channel != nil}
+	// Who did it and what it refers to belong to the conversation: an item
+	// of one the recipient can no longer read keeps its kind and time only.
+	if v.Channel == nil && v.ChannelID != ids.Nil {
+		return out
+	}
+	out.RefId, out.ActorId = ptrID(v.RefID), ptrID(v.ActorID)
 	if v.Channel == nil {
 		return out
 	}
