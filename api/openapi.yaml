@@ -427,6 +427,37 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /channels/{channelId}/notify:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    put:
+      operationId: setNotifyLevel
+      tags: [conversation]
+      description: |
+        Humans, for themselves (round 55). all: every message counts; mentions:
+        only mentions of the caller (the default in channels); none: muted
+        until unmuted (DELETE /mute returns to the default). It decides the
+        caller's unread badge and activity view, never what agents receive.
+        Emits channel.mute_changed to the caller only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/NotifyLevelRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Set }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /me/channels/read:
+    post:
+      operationId: markAllChannelsRead
+      tags: [conversation]
+      description: Marks every conversation the caller is a member of as read; marked counts those that had unread messages.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarkedCount" } } } }
+
   /channels/{channelId}/members:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
@@ -624,6 +655,237 @@ paths:
       operationId: markAllThreadsRead
       tags: [conversation]
       description: Humans. Marks every thread of the caller with unread replies as read.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarkedCount" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /me/drafts:
+    get:
+      operationId: listDrafts
+      tags: [draft]
+      description: |
+        Humans. The caller's unsent messages, newest first, in conversations
+        the caller can still read (round 55). Nobody else, not even an
+        admin, reads another person's drafts.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DraftList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: saveDraft
+      tags: [draft]
+      description: |
+        Humans. Stores the caller's draft for one conversation and thread
+        (thread_root_id absent = the main stream). Empty text and no files
+        delete it (204). file_ids must be the caller's own uploads in that
+        conversation.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SaveDraftRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/Draft" } } } }
+        "204": { description: Deleted (it was empty) }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteDraft
+      tags: [draft]
+      description: Humans. Removes the caller's draft in one place; a missing one is fine.
+      parameters:
+        - { name: channel_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: thread_root_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /me/emoji:
+    get:
+      operationId: getEmojiUsage
+      tags: [identity]
+      description: |
+        Humans. The caller's recently and frequently used emoji (round 55),
+        for the emoji picker: recent newest first, frequent most used first,
+        at most 24 each. Nobody else reads them.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EmojiUsage" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: recordEmojiUse
+      tags: [identity]
+      description: |
+        Humans. Records that the caller picked an emoji (a reaction or one put
+        in the composer). Only the caller's newest 100 distinct emoji are kept.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EmojiUseRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Recorded }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /channels/{channelId}/pins:
+    get:
+      operationId: listPins
+      tags: [conversation]
+      description: |
+        The conversation's pinned messages, newest pin first (at most 50),
+        for anyone who can read it (round 55).
+      parameters:
+        - { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PinList" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /messages/{messageId}/pin:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: pinMessage
+      tags: [conversation]
+      description: |
+        Pins the message in its conversation (members who can write there;
+        an agent only its own messages, at most 5 per conversation a day).
+        Pinning a pinned message is a no-op. At most 50 pins per conversation.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Pinned }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unpinMessage
+      tags: [conversation]
+      description: Unpins the message (people who can write in the conversation).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Unpinned (no-op if it was not pinned) }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /me/saved:
+    get:
+      operationId: listSaved
+      tags: [saved]
+      description: |
+        Humans. The caller's saved messages and reminders, newest first
+        (round 55). An item whose message the caller can no longer read keeps
+        its note and times but shows nothing of the message.
+      parameters:
+        - { name: filter, in: query, schema: { type: string, enum: [all, reminders, done], default: all } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 100 }, description: next_cursor of the previous page }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SavedPage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: saveItem
+      tags: [saved]
+      description: |
+        Humans. Saves a message the caller can read, sets a reminder, or both
+        (a reminder without a message is /remind <when> <text>). Saving a
+        saved message again updates it and takes it out of "done". A due
+        reminder arrives as a system message in the caller's own DM.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SaveItemRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/SavedItem" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /me/saved/{savedId}:
+    parameters:
+      - { name: savedId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateSaved
+      tags: [saved]
+      description: Humans, their own items. Mark done or not done; set or clear the reminder.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateSavedRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SavedItem" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteSaved
+      tags: [saved]
+      description: Humans, their own items.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /messages/{messageId}/forward:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: forwardMessage
+      tags: [conversation]
+      description: |
+        Humans (round 55). Posts a quote of the message in another
+        conversation the caller can write to: the caller's comment (which may
+        mention), then the quote with its author, place and time and a link
+        back. The quoted text's @mentions are defused, so a forward never
+        wakes an agent by accident. The source must be readable (else 404),
+        the target writable.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ForwardRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Forwarded, content: { application/json: { schema: { $ref: "#/components/schemas/SendResult" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /me/activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      description: |
+        Humans. What concerns the caller, newest first (round 55): mentions,
+        replies in their threads, reactions to their messages, approvals and
+        questions waiting for them, agents' important messages and due
+        reminders. Mentions, replies, reactions and important messages of a
+        conversation the caller set to "none" are left out. An item whose
+        conversation the caller can no longer read keeps its kind and time
+        only. unread_count is the badge.
+      parameters:
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/ActivityKind" } }
+        - { name: unread, in: query, schema: { type: boolean, default: false } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 100 }, description: next_cursor of the previous page }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /me/activity/read:
+    post:
+      operationId: markActivityRead
+      tags: [activity]
+      description: Humans. Marks the caller's items read; the given ones, every one in a conversation, or (empty body) all.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/MarkActivityReadRequest" } } }
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarkedCount" } } } }
@@ -3039,6 +3301,16 @@ components:
         agent_locked_at: { type: string, format: date-time, nullable: true, description: Set while agents cannot write or wake here }
         muted: { type: boolean, description: The caller has muted the channel }
         muted_until: { type: string, format: date-time, nullable: true, description: "End of the caller's mute; null while muted means forever" }
+        notify_level: { $ref: "#/components/schemas/NotifyLevel" }
+    NotifyLevel:
+      type: string
+      enum: [all, mentions, none]
+      description: "The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels"
+    NotifyLevelRequest:
+      type: object
+      required: [level]
+      properties:
+        level: { $ref: "#/components/schemas/NotifyLevel" }
     UpdateChannelRequest:
       type: object
       properties:
@@ -3141,6 +3413,30 @@ components:
         deleted_by: { type: string, format: uuid, nullable: true }
         origin: { $ref: "#/components/schemas/MessageOrigin" }
         answers: { $ref: "#/components/schemas/MessageAnswers" }
+        pinned: { type: boolean, description: Pinned in its conversation now }
+        important: { type: boolean, description: "An agent sent it marked important (a result, a decision, something a person must act on)" }
+        also_in_channel: { type: boolean, description: "A thread reply also shown in the channel's main stream" }
+        forwarded_from_id: { type: string, format: uuid, description: "The message this forward quotes; set only for viewers who can read it" }
+    ForwardRequest:
+      type: object
+      required: [channel_id]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        comment: { type: string, maxLength: 4000 }
+        client_msg_id: { type: string, maxLength: 64 }
+    PinnedMessage:
+      type: object
+      required: [message, pinned_by, pinned_at]
+      properties:
+        message: { $ref: "#/components/schemas/Message" }
+        pinned_by: { type: string, format: uuid }
+        pinned_at: { type: string, format: date-time }
+    PinList:
+      type: object
+      required: [pins]
+      properties:
+        pins: { type: array, items: { $ref: "#/components/schemas/PinnedMessage" } }
     MessageAnswers:
       type: object
       description: "Set on an agent's answer posted in its origin thread: the DM reply it answers"
@@ -3171,6 +3467,8 @@ components:
         elaborate: { type: boolean, description: "Agents: allow a long answer; only when someone asked for detail" }
         file_ids: { type: array, items: { type: string, format: uuid }, description: Attached file IDs }
         answers_message_id: { type: string, format: uuid, description: "Agents (guard): the message this answer replies to, in another channel the agent can read" }
+        important: { type: boolean, description: "Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400)." }
+        also_in_channel: { type: boolean, description: "A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned." }
     SendResult:
       type: object
       properties:
@@ -3282,7 +3580,10 @@ components:
         actor.state_changed → EventActorStateChanged; actor.profile_updated →
         EventActorProfileUpdated; workspace.emergency_activated,
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
-        EventDeliveryItemCreated.
+        EventDeliveryItemCreated; draft.changed (the owner only) →
+        EventDraftChanged; message.pinned, message.unpinned → EventPin;
+        saved.changed, saved.reminded (the owner only) → EventSaved;
+        activity.created, activity.read (the recipient only) → EventActivity.
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -3366,7 +3667,19 @@ components:
         no_thread_follow: { type: boolean }
         silent: { type: boolean }
         attachments: { type: array, items: { $ref: "#/components/schemas/EventAttachment" } }
+        important: { type: boolean }
+        also_in_channel: { type: boolean }
         created_at: { type: string, format: date-time }
+    EventPin:
+      type: object
+      required: [message_id, channel_id, actor_id, message_author_id]
+      properties:
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        message_author_id: { type: string, format: uuid }
+        important: { type: boolean }
     EventAttachment:
       type: object
       required: [id, name, mime, size]
@@ -3443,6 +3756,143 @@ components:
         actor_id: { type: string, format: uuid }
         muted: { type: boolean }
         muted_until: { type: string, format: date-time }
+        level: { $ref: "#/components/schemas/NotifyLevel" }
+    EmojiUsage:
+      type: object
+      required: [recent, frequent]
+      properties:
+        recent: { type: array, maxItems: 24, items: { type: string } }
+        frequent: { type: array, maxItems: 24, items: { type: string } }
+    EmojiUseRequest:
+      type: object
+      required: [emoji]
+      properties:
+        emoji: { type: string, minLength: 1, maxLength: 32, description: "A short emoji sequence, as for reactions" }
+    Draft:
+      type: object
+      required: [channel_id, body, attachments, updated_at]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        body: { type: string }
+        attachments: { type: array, items: { $ref: "#/components/schemas/EventAttachment" } }
+        updated_at: { type: string, format: date-time }
+    DraftList:
+      type: object
+      required: [drafts]
+      properties:
+        drafts: { type: array, items: { $ref: "#/components/schemas/Draft" } }
+    SaveDraftRequest:
+      type: object
+      required: [channel_id, body]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        body: { type: string, maxLength: 20000 }
+        file_ids: { type: array, maxItems: 20, items: { type: string, format: uuid } }
+    EventDraftChanged:
+      type: object
+      description: The place only, never the text; sent to the draft's owner alone.
+      required: [channel_id, deleted]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        deleted: { type: boolean }
+    SavedItem:
+      type: object
+      required: [id, note, created_at, available]
+      properties:
+        id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        note: { type: string }
+        remind_at: { type: string, format: date-time }
+        reminded_at: { type: string, format: date-time }
+        done_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        available: { type: boolean, description: "The caller can still read the message (false for a reminder without one)" }
+        message: { $ref: "#/components/schemas/SavedMessage" }
+    SavedMessage:
+      type: object
+      description: What the caller may see of a saved message; body is cut to 300 characters.
+      required: [id, channel_id, channel_name, channel_kind, author_id, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        channel_kind: { $ref: "#/components/schemas/ChannelKind" }
+        thread_root_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        body: { type: string }
+        reply_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        retracted: { type: boolean }
+    SavedPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/SavedItem" } }
+        next_cursor: { type: string }
+    SaveItemRequest:
+      type: object
+      properties:
+        message_id: { type: string, format: uuid }
+        remind_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 500 }
+    UpdateSavedRequest:
+      type: object
+      properties:
+        done: { type: boolean }
+        remind_at: { type: string, format: date-time }
+        clear_reminder: { type: boolean }
+    EventSaved:
+      type: object
+      description: Sent to the item's owner alone; ids only.
+      required: [item_id]
+      properties:
+        item_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        deleted: { type: boolean }
+    ActivityKind:
+      type: string
+      enum: [mention, thread_reply, reaction, approval, question, important, reminder]
+    ActivityItem:
+      type: object
+      required: [id, kind, created_at, read, available]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActivityKind" }
+        created_at: { type: string, format: date-time }
+        read: { type: boolean }
+        available: { type: boolean, description: The caller can still read the conversation }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        channel_kind: { $ref: "#/components/schemas/ChannelKind" }
+        message_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        ref_id: { type: string, format: uuid, description: "The approval, question or saved item" }
+        emoji: { type: string }
+        excerpt: { type: string, description: "The message's text, cut to 200 characters (only while readable)" }
+    ActivityPage:
+      type: object
+      required: [items, unread_count]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
+        unread_count: { type: integer }
+        next_cursor: { type: string }
+    MarkActivityReadRequest:
+      type: object
+      properties:
+        item_ids: { type: array, maxItems: 200, items: { type: string, format: uuid } }
+        channel_id: { type: string, format: uuid }
+    EventActivity:
+      type: object
+      description: The recipient's feed changed (activity.created, activity.read); sent to them alone.
+      properties:
+        item_id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActivityKind" }
+        marked: { type: integer }
     EventActorCreated:
       type: object
       required: [actor_id, kind, handle, role]

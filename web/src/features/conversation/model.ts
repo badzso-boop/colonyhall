@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import type { Schemas } from "@/shared/api";
-import { isMuted } from "./channel";
+import { rowBadge } from "./channel";
 
 export type Channel = Schemas["Channel"];
 export type Actor = Schemas["Actor"];
@@ -40,7 +40,11 @@ export function dmPeers(ch: Channel, actors: Map<string, Actor>, meId: string): 
 export function conversationTitle(ch: Channel, actors: Map<string, Actor>, meId: string): string {
   if (ch.kind !== "dm") return ch.name;
   const peers = dmPeers(ch, actors, meId);
-  if (peers.length === 0) return ch.name;
+  // The viewer's own DM (reminders arrive there, round 55): their own name.
+  if (peers.length === 0) {
+    const me = (ch.member_ids ?? []).every((id) => id === meId) ? actors.get(meId) : undefined;
+    return me ? me.display_name || me.handle : ch.name;
+  }
   const agentAgent = !(ch.member_ids ?? []).includes(meId);
   return peers.map((a) => (a.kind === "agent" || agentAgent ? `@${a.handle}` : a.display_name || a.handle)).join(agentAgent ? " ↔ " : ", ");
 }
@@ -97,8 +101,9 @@ export function unreadTotals(rows: SidebarRow[], now = new Date()): { unread: nu
   let unread = 0;
   let mentions = 0;
   for (const r of rows) {
-    if (r.channel.unread > 0 && !isMuted(r.channel, now)) unread++;
-    mentions += r.channel.mentions;
+    const b = rowBadge(r.channel, now);
+    if (b.bold) unread++;
+    mentions += b.count;
   }
   return { unread, mentions };
 }
@@ -122,7 +127,10 @@ export function applyReply(list: Msg[], reply: Msg): Msg[] {
   });
 }
 
-/** The main stream of a channel shows root messages only; replies live in threads. */
+/**
+ * The main stream of a channel shows root messages, and the thread replies
+ * also sent to the channel (round 55); other replies live in threads.
+ */
 export function mainStream(messages: Msg[], kind: Channel["kind"]): Msg[] {
-  return kind === "dm" ? messages : messages.filter((m) => !m.thread_root_id);
+  return kind === "dm" ? messages : messages.filter((m) => !m.thread_root_id || m.also_in_channel);
 }

@@ -468,6 +468,36 @@ func (q *Queries) DeleteExpiredHostTokens(ctx context.Context, arg DeleteExpired
 	return result.RowsAffected(), nil
 }
 
+const frequentEmoji = `-- name: FrequentEmoji :many
+SELECT emoji FROM emoji_use WHERE actor_id = $1::uuid
+ORDER BY uses DESC, last_used_at DESC, emoji LIMIT $2::int
+`
+
+type FrequentEmojiParams struct {
+	ActorID uuid.UUID
+	Lim     int32
+}
+
+func (q *Queries) FrequentEmoji(ctx context.Context, arg FrequentEmojiParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, frequentEmoji, arg.ActorID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var emoji string
+		if err := rows.Scan(&emoji); err != nil {
+			return nil, err
+		}
+		items = append(items, emoji)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const handleWorkspaces = `-- name: HandleWorkspaces :many
 SELECT h.id::uuid AS id, h.name::text AS name FROM colony_handle_workspaces($1::text) AS h
 `
@@ -615,6 +645,54 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 	return items, nil
 }
 
+const pruneEmojiUse = `-- name: PruneEmojiUse :exec
+DELETE FROM emoji_use WHERE actor_id = $1::uuid AND emoji IN (
+    SELECT e.emoji FROM emoji_use e WHERE e.actor_id = $1::uuid
+    ORDER BY e.last_used_at DESC, e.emoji
+    OFFSET $2::int
+)
+`
+
+type PruneEmojiUseParams struct {
+	ActorID uuid.UUID
+	Keep    int32
+}
+
+func (q *Queries) PruneEmojiUse(ctx context.Context, arg PruneEmojiUseParams) error {
+	_, err := q.db.Exec(ctx, pruneEmojiUse, arg.ActorID, arg.Keep)
+	return err
+}
+
+const recentEmoji = `-- name: RecentEmoji :many
+SELECT emoji FROM emoji_use WHERE actor_id = $1::uuid
+ORDER BY last_used_at DESC, emoji LIMIT $2::int
+`
+
+type RecentEmojiParams struct {
+	ActorID uuid.UUID
+	Lim     int32
+}
+
+func (q *Queries) RecentEmoji(ctx context.Context, arg RecentEmojiParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, recentEmoji, arg.ActorID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var emoji string
+		if err := rows.Scan(&emoji); err != nil {
+			return nil, err
+		}
+		items = append(items, emoji)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordAuthFailure = `-- name: RecordAuthFailure :exec
 
 SELECT colony_record_auth_failure($1::uuid, $2::uuid, $3::text,
@@ -643,6 +721,32 @@ func (q *Queries) RecordAuthFailure(ctx context.Context, arg RecordAuthFailurePa
 		arg.Ip,
 		arg.FailedAt,
 		arg.LockedUntil,
+	)
+	return err
+}
+
+const recordEmojiUse = `-- name: RecordEmojiUse :exec
+
+INSERT INTO emoji_use (workspace_id, actor_id, emoji, uses, last_used_at)
+VALUES ($1::uuid, $2::uuid, $3::text, 1, $4::timestamptz)
+ON CONFLICT (actor_id, emoji) DO UPDATE
+SET uses = emoji_use.uses + 1, last_used_at = GREATEST(emoji_use.last_used_at, EXCLUDED.last_used_at)
+`
+
+type RecordEmojiUseParams struct {
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	Emoji       string
+	At          time.Time
+}
+
+// Round 55, part C: the emoji picker's recent and frequent, per person.
+func (q *Queries) RecordEmojiUse(ctx context.Context, arg RecordEmojiUseParams) error {
+	_, err := q.db.Exec(ctx, recordEmojiUse,
+		arg.WorkspaceID,
+		arg.ActorID,
+		arg.Emoji,
+		arg.At,
 	)
 	return err
 }

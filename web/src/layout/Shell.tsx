@@ -10,7 +10,9 @@ import { cn, useShortcut } from "@/shared/lib";
 import { useLocalStorage, useWidth } from "@/shared/hooks";
 import { place, usePanes } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
+import { useActivityUnread } from "@/features/activity";
 import { AgentDialogs } from "@/features/agents";
+import { useSession } from "@/features/identity";
 import { ScheduleBuilderHost } from "@/features/schedules";
 import { BottomBar } from "./BottomBar";
 import { CommandPalette } from "./CommandPalette";
@@ -39,7 +41,11 @@ export function Shell() {
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const home = location.pathname === "/" && placement.screen === "main";
-  useDocumentTitle(useMentionTotal(), t("common:appName"));
+  // The tab title counts the viewer's unread activity (round 55); agents and
+  // observers without a feed keep the mention total.
+  const mentionTotal = useMentionTotal();
+  const activityUnread = useActivityUnread(useSession().data?.actor.kind === "human");
+  useDocumentTitle(activityUnread ?? mentionTotal, t("common:appName"));
   const navigate = useNavigate();
   const order = useConversationOrder();
 

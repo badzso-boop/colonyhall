@@ -10,5 +10,7 @@ export { ThreadPane } from "./components/ThreadPane";
 export { registerConversationEvents } from "./events";
 export { buildSidebar, classifyConversation, conversationTitle, type Channel, type ConversationKind } from "./model";
 export { ThreadsEntry } from "./components/ThreadsEntry";
+export { DraftsEntry } from "./components/DraftsEntry";
 export const ConversationPage = lazy(() => import("./pages/ConversationPage"));
 export const ThreadsPage = lazy(() => import("./pages/ThreadsPage"));
+export const DraftsPage = lazy(() => import("./pages/DraftsPage"));

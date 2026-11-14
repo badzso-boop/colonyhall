@@ -28,6 +28,10 @@ import (
 	"colonyhall/internal/httpserver"
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/mcpserver"
+	"colonyhall/internal/modules/activity"
+	activityhttp "colonyhall/internal/modules/activity/httpapi"
+	activitymem "colonyhall/internal/modules/activity/memory"
+	activitypg "colonyhall/internal/modules/activity/postgres"
 	"colonyhall/internal/modules/agentrules"
 	ruleshttp "colonyhall/internal/modules/agentrules/httpapi"
 	rulesmem "colonyhall/internal/modules/agentrules/memory"
@@ -70,6 +74,10 @@ import (
 	delmcp "colonyhall/internal/modules/delivery/mcptools"
 	delmem "colonyhall/internal/modules/delivery/memory"
 	delpg "colonyhall/internal/modules/delivery/postgres"
+	"colonyhall/internal/modules/draft"
+	drafthttp "colonyhall/internal/modules/draft/httpapi"
+	draftmem "colonyhall/internal/modules/draft/memory"
+	draftpg "colonyhall/internal/modules/draft/postgres"
 	"colonyhall/internal/modules/files"
 	fileshttp "colonyhall/internal/modules/files/httpapi"
 	filesmcp "colonyhall/internal/modules/files/mcptools"
@@ -121,6 +129,10 @@ import (
 	runhttp "colonyhall/internal/modules/runs/httpapi"
 	runmem "colonyhall/internal/modules/runs/memory"
 	runpg "colonyhall/internal/modules/runs/postgres"
+	"colonyhall/internal/modules/saved"
+	savedhttp "colonyhall/internal/modules/saved/httpapi"
+	savedmem "colonyhall/internal/modules/saved/memory"
+	savedpg "colonyhall/internal/modules/saved/postgres"
 	"colonyhall/internal/modules/schedule"
 	schedhttp "colonyhall/internal/modules/schedule/httpapi"
 	schedmem "colonyhall/internal/modules/schedule/memory"
@@ -231,6 +243,9 @@ type App struct {
 	Preview      *preview.Service
 	AgentRules   *agentrules.Service
 	Notes        *notes.Service
+	Drafts       *draft.Service
+	Saved        *saved.Service
+	Activity     *activity.Service
 	Planner      *planner.Service
 	Decisions    *decision.Service
 	Leases       *lease.Service
@@ -287,6 +302,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore        preview.Store
 		rlStore        agentrules.Store
 		ntStore        notes.Store
+		drStore        draft.Store
+		svStore        saved.Store
+		acStore        activity.Store
 		agStore        agents.Store
 		plStore        planner.Store
 		dcStore        decision.Store
@@ -313,6 +331,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = previewmem.New()
 		rlStore = rulesmem.New()
 		ntStore = notesmem.New()
+		drStore = draftmem.New()
+		svStore = savedmem.New()
+		acStore = activitymem.New()
 		agStore = agentsmem.New()
 		plStore = plannermem.New()
 		dcStore = decmem.New()
@@ -358,6 +379,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		prStore = &previewpg.Store{DB: pg}
 		rlStore = &rulespg.Store{DB: pg}
 		ntStore = &notespg.Store{DB: pg}
+		drStore = &draftpg.Store{DB: pg}
+		svStore = &savedpg.Store{DB: pg}
+		acStore = &activitypg.Store{DB: pg}
 		agStore = &agentspg.Store{DB: pg}
 		plStore = &plannerpg.Store{DB: pg}
 		dcStore = &decpg.Store{DB: pg}
@@ -450,6 +474,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		IDs:       opt.IDs,
 		Clock:     opt.Clock,
 	}
+	drSvc := &draft.Service{Store: drStore, Conversation: cvSvc, Files: fiSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	svSvc := &saved.Service{Store: svStore, Conversation: cvSvc, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	acSvc := &activity.Service{Store: acStore, Conversation: cvSvc, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock, opt.IDs)
 	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
 	dcSvc.Events, dcSvc.Bus = events, b
@@ -548,6 +575,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		{Name: lease.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: lsSvc.HandleEvent, Logger: opt.Logger},
 		{Name: compaction.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: cmSvc.HandleEvent, Logger: opt.Logger},
 		{Name: delegation.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: dgSvc.HandleEvent, Logger: opt.Logger},
+		{Name: activity.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: acSvc.HandleEvent, Logger: opt.Logger},
+		{Name: draft.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: drSvc.HandleEvent, Logger: opt.Logger},
 		{Name: search.ConsumerName, Store: events, Tx: tx, Bus: b, Handle: seIdx.HandleEvent, Logger: opt.Logger},
 	}
 
@@ -576,6 +605,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	githttp.Register(mux, gitSvc, idSvc)
 	ruleshttp.Register(mux, rlSvc, idSvc)
 	noteshttp.Register(mux, ntSvc, idSvc)
+	drafthttp.Register(mux, drSvc, idSvc)
+	savedhttp.Register(mux, svSvc, cvSvc, idSvc)
+	activityhttp.Register(mux, acSvc, idSvc)
 	calFetcher := opt.CalendarFetcher
 	if calFetcher == nil {
 		calFetcher = plannerfetch.Safe{}
@@ -701,6 +733,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Preview:      prSvc,
 		AgentRules:   rlSvc,
 		Notes:        ntSvc,
+		Drafts:       drSvc,
+		Saved:        svSvc,
+		Activity:     acSvc,
 		Planner:      plSvc,
 		calRefresh:   opt.CalendarRefresh,
 		Decisions:    dcSvc,
@@ -744,6 +779,11 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		a.Planner.Loop(ctx, a.calRefresh)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Saved.Loop(ctx, 15*time.Second, a.logger.Info)
 	}()
 	wg.Add(1)
 	go func() {

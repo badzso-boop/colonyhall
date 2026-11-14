@@ -57,6 +57,9 @@ import (
 const (
 	acmeData = "acmeprivatedata"
 	acmeRef  = "acmeref"
+	// acmeEmoji is the emoji only acme's owner uses (round 55, part C):
+	// an emoji cannot carry acmeData.
+	acmeEmoji = "🦩"
 )
 
 // ctSuite holds the two workspaces and acme's objects.
@@ -148,6 +151,12 @@ func (s *ctSuite) seed() {
 	s.obj["schedule"] = created.ID
 	must(a.do("POST", "/api/v1/sidebar/sections", owner, map[string]any{"name": acmeData + " section"}, &created), http.StatusCreated, "section")
 	s.obj["section"] = created.ID
+	// Round 55: a saved message with a reminder, and a draft.
+	must(a.do("POST", "/api/v1/me/saved", owner, map[string]any{"message_id": s.obj["message"], "note": acmeData + " reminder",
+		"remind_at": a.clock.Now().Add(48 * time.Hour).Format(time.RFC3339)}, &created), http.StatusOK, "saved")
+	s.obj["saved"] = created.ID
+	must(a.do("PUT", "/api/v1/me/drafts", owner, map[string]any{"channel_id": s.obj["channel"], "body": acmeData + " draft"}, nil), http.StatusOK, "draft")
+	must(a.do("POST", "/api/v1/me/emoji", owner, map[string]any{"emoji": acmeEmoji}, nil), http.StatusNoContent, "emoji use")
 	must(a.do("POST", "/api/v1/actors/"+s.obj["actor"]+"/tokens", owner, map[string]any{"label": acmeData}, &created), http.StatusCreated, "token")
 	var toks struct{ Tokens []struct{ ID string } }
 	a.do("GET", "/api/v1/actors/"+s.obj["actor"]+"/tokens", owner, nil, &toks)
@@ -334,6 +343,8 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 		return s.obj["error"], true
 	case "questionId":
 		return s.obj["question"], true
+	case "savedId":
+		return s.obj["saved"], true
 	case "emoji":
 		return "%F0%9F%91%8D", false
 	case "owner":
@@ -833,6 +844,10 @@ func (s *ctSuite) intact() {
 	check("/api/v1/leases", acmeData+" lease")
 	check("/api/v1/questions", acmeData+" question")
 	check("/api/v1/git/mappings", acmeRef+"/repo")
+	check("/api/v1/me/emoji", acmeEmoji)
+	if st, body := s.beta.raw("GET", "/api/v1/me/emoji", betaOwnerToken, nil); st != http.StatusOK || strings.Contains(body, acmeEmoji) {
+		t.Errorf("beta's emoji usage: %d %.200s", st, body)
+	}
 	if st, _ := a.raw("GET", "/api/v1/me", s.acmeAgent, nil); st != http.StatusOK {
 		t.Errorf("acme's agent token after the suite: %d", st)
 	}

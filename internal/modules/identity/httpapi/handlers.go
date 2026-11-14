@@ -21,10 +21,10 @@ func init() {
 	httpx.RegisterValidation(identity.ErrNotAnAgent, identity.ErrInvalidOwner)
 	httpx.RegisterValidation(identity.ErrInvalidHandle, identity.ErrInvalidKind, identity.ErrInvalidRole, identity.ErrWeakPassword,
 		identity.ErrWorkspaceRequired, identity.ErrInvalidState, identity.ErrInvalidTimezone,
-		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidDisplayName, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor)
+		identity.ErrInvalidDescription, identity.ErrInvalidStatusText, identity.ErrInvalidDisplayName, identity.ErrInvalidAvatarEmoji, identity.ErrInvalidColor, identity.ErrInvalidEmoji)
 	httpx.RegisterStatus(http.StatusUnauthorized, identity.ErrBadCredentials)
 	httpx.RegisterStatus(http.StatusTooManyRequests, identity.ErrTooManyAttempts)
-	httpx.RegisterForbidden(identity.ErrHalted)
+	httpx.RegisterForbidden(identity.ErrHalted, identity.ErrEmojiForbidden)
 }
 
 func tokenToAPI(t identity.Token) apispec.Token {
@@ -161,6 +161,29 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 
 	mux.Handle("GET /api/v1/me", auth(func(w http.ResponseWriter, r *http.Request) {
 		httpx.JSON(w, http.StatusOK, meToAPI(httpx.Actor(r)))
+	}))
+
+	// Round 55, part C: the emoji picker's recent and frequent.
+	mux.Handle("GET /api/v1/me/emoji", auth(func(w http.ResponseWriter, r *http.Request) {
+		recent, frequent, err := svc.EmojiUsage(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.EmojiUsage{Recent: recent, Frequent: frequent})
+	}))
+
+	mux.Handle("POST /api/v1/me/emoji", auth(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.EmojiUseRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if err := svc.RecordEmojiUse(r.Context(), httpx.Actor(r), in.Emoji); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	mux.Handle("GET /api/v1/actors", auth(func(w http.ResponseWriter, r *http.Request) {

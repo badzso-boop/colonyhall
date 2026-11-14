@@ -154,7 +154,8 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		AuthorID: m.AuthorID, ClientMsgID: nullString(m.ClientMsgID), Kind: m.Kind, Body: m.Body,
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
 		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
-		AnswersMessageID: nullID(m.AnswersMessageID),
+		AnswersMessageID: nullID(m.AnswersMessageID), Important: m.Important, AlsoInChannel: m.AlsoInChannel,
+		ForwardedFromID: nullID(m.ForwardedFromID),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -227,7 +228,8 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 func toMessage(r sqlcgen.Message) conversation.Message {
 	m := conversation.Message{ID: r.ID, WorkspaceID: r.WorkspaceID, ChannelID: r.ChannelID, AuthorID: r.AuthorID,
 		Kind: r.Kind, Body: r.Body, Mentions: r.Mentions, ReplyCount: int(r.ReplyCount),
-		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt, DeletedAt: r.DeletedAt, DeletedBy: r.DeletedBy}
+		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt, DeletedAt: r.DeletedAt, DeletedBy: r.DeletedBy, Important: r.Important,
+		AlsoInChannel: r.AlsoInChannel}
 	if r.ThreadRootID != nil {
 		m.ThreadRootID = *r.ThreadRootID
 	}
@@ -242,6 +244,9 @@ func toMessage(r sqlcgen.Message) conversation.Message {
 	}
 	if r.AnswersMessageID != nil {
 		m.AnswersMessageID = *r.AnswersMessageID
+	}
+	if r.ForwardedFromID != nil {
+		m.ForwardedFromID = *r.ForwardedFromID
 	}
 	return m
 }
@@ -378,7 +383,11 @@ func (s *Store) AgentLockedChannels(ctx context.Context, workspaceID ids.ID) ([]
 
 // SetMute stores a viewer's mute.
 func (s *Store) SetMute(ctx context.Context, m conversation.Mute) error {
-	return s.q(ctx).SetMute(ctx, sqlcgen.SetMuteParams{ActorID: m.ActorID, ChannelID: m.ChannelID, MutedUntil: m.Until, CreatedAt: m.CreatedAt})
+	level := string(m.Level)
+	if level == "" {
+		level = string(conversation.NotifyNone)
+	}
+	return s.q(ctx).SetMute(ctx, sqlcgen.SetMuteParams{ActorID: m.ActorID, ChannelID: m.ChannelID, MutedUntil: m.Until, CreatedAt: m.CreatedAt, Level: level})
 }
 
 // DeleteMute removes a viewer's mute.
@@ -394,7 +403,8 @@ func (s *Store) Mutes(ctx context.Context, actorID ids.ID) ([]conversation.Mute,
 	}
 	out := make([]conversation.Mute, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, conversation.Mute{ActorID: r.ActorID, ChannelID: r.ChannelID, Until: r.MutedUntil, CreatedAt: r.CreatedAt})
+		out = append(out, conversation.Mute{ActorID: r.ActorID, ChannelID: r.ChannelID, Until: r.MutedUntil, CreatedAt: r.CreatedAt,
+			Level: conversation.NotifyLevel(r.Level)})
 	}
 	return out, nil
 }
@@ -421,4 +431,59 @@ func (s *Store) ThreadsForActor(ctx context.Context, workspaceID, actorID ids.ID
 		})
 	}
 	return out, nil
+}
+
+// InsertPin implements conversation.Store.
+func (s *Store) InsertPin(ctx context.Context, p conversation.Pin) error {
+	err := s.q(ctx).InsertPin(ctx, sqlcgen.InsertPinParams{ID: p.ID, WorkspaceID: p.WorkspaceID, ChannelID: p.ChannelID,
+		MessageID: p.MessageID, PinnedBy: p.PinnedBy, PinnedAt: p.PinnedAt})
+	if db.IsUniqueViolation(err) {
+		return db.ErrConflict
+	}
+	return err
+}
+
+// Unpin implements conversation.Store.
+func (s *Store) Unpin(ctx context.Context, messageID, by ids.ID, at time.Time) (bool, error) {
+	n, err := s.q(ctx).Unpin(ctx, sqlcgen.UnpinParams{By: by, At: at, MessageID: messageID})
+	return n > 0, err
+}
+
+// ActivePins implements conversation.Store.
+func (s *Store) ActivePins(ctx context.Context, channelID ids.ID) ([]conversation.Pin, error) {
+	rows, err := s.q(ctx).ActivePins(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]conversation.Pin, len(rows))
+	for i, r := range rows {
+		out[i] = conversation.Pin{ID: r.ID, WorkspaceID: r.WorkspaceID, ChannelID: r.ChannelID, MessageID: r.MessageID,
+			PinnedBy: r.PinnedBy, PinnedAt: r.PinnedAt, UnpinnedBy: r.UnpinnedBy, UnpinnedAt: r.UnpinnedAt}
+	}
+	return out, nil
+}
+
+// CountActivePins implements conversation.Store.
+func (s *Store) CountActivePins(ctx context.Context, channelID ids.ID) (int, error) {
+	n, err := s.q(ctx).CountActivePins(ctx, channelID)
+	return int(n), err
+}
+
+// CountPinsBy implements conversation.Store.
+func (s *Store) CountPinsBy(ctx context.Context, channelID, actorID ids.ID, since time.Time) (int, error) {
+	n, err := s.q(ctx).CountPinsBy(ctx, sqlcgen.CountPinsByParams{ChannelID: channelID, PinnedBy: actorID, Since: since})
+	return int(n), err
+}
+
+// PinnedAmong implements conversation.Store.
+func (s *Store) PinnedAmong(ctx context.Context, messageIDs []ids.ID) (map[ids.ID]bool, error) {
+	out := map[ids.ID]bool{}
+	if len(messageIDs) == 0 {
+		return out, nil
+	}
+	rows, err := s.q(ctx).PinnedAmong(ctx, messageIDs)
+	for _, id := range rows {
+		out[id] = true
+	}
+	return out, err
 }

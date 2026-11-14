@@ -9,6 +9,39 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActivityKind.
+const (
+	ActivityKindApproval    ActivityKind = "approval"
+	ActivityKindImportant   ActivityKind = "important"
+	ActivityKindMention     ActivityKind = "mention"
+	ActivityKindQuestion    ActivityKind = "question"
+	ActivityKindReaction    ActivityKind = "reaction"
+	ActivityKindReminder    ActivityKind = "reminder"
+	ActivityKindThreadReply ActivityKind = "thread_reply"
+)
+
+// Valid indicates whether the value is a known member of the ActivityKind enum.
+func (e ActivityKind) Valid() bool {
+	switch e {
+	case ActivityKindApproval:
+		return true
+	case ActivityKindImportant:
+		return true
+	case ActivityKindMention:
+		return true
+	case ActivityKindQuestion:
+		return true
+	case ActivityKindReaction:
+		return true
+	case ActivityKindReminder:
+		return true
+	case ActivityKindThreadReply:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ActorKind.
 const (
 	ActorKindAgent ActorKind = "agent"
@@ -978,6 +1011,27 @@ func (e MessageKind) Valid() bool {
 	}
 }
 
+// Defines values for NotifyLevel.
+const (
+	NotifyLevelAll      NotifyLevel = "all"
+	NotifyLevelMentions NotifyLevel = "mentions"
+	NotifyLevelNone     NotifyLevel = "none"
+)
+
+// Valid indicates whether the value is a known member of the NotifyLevel enum.
+func (e NotifyLevel) Valid() bool {
+	switch e {
+	case NotifyLevelAll:
+		return true
+	case NotifyLevelMentions:
+		return true
+	case NotifyLevelNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OverviewAssignmentWriteScope.
 const (
 	OverviewAssignmentWriteScopeAll  OverviewAssignmentWriteScope = "all"
@@ -1482,6 +1536,27 @@ func (e ListActiveLeasesParamsState) Valid() bool {
 	}
 }
 
+// Defines values for ListSavedParamsFilter.
+const (
+	ListSavedParamsFilterAll       ListSavedParamsFilter = "all"
+	ListSavedParamsFilterDone      ListSavedParamsFilter = "done"
+	ListSavedParamsFilterReminders ListSavedParamsFilter = "reminders"
+)
+
+// Valid indicates whether the value is a known member of the ListSavedParamsFilter enum.
+func (e ListSavedParamsFilter) Valid() bool {
+	switch e {
+	case ListSavedParamsFilterAll:
+		return true
+	case ListSavedParamsFilterDone:
+		return true
+	case ListSavedParamsFilterReminders:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListRunsParamsStatus.
 const (
 	ListRunsParamsStatusError   ListRunsParamsStatus = "error"
@@ -1584,6 +1659,40 @@ type ActiveRunProgress struct {
 	RunKey       string              `json:"run_key"`
 	Steps        []AgentStep         `json:"steps"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// ActivityItem defines model for ActivityItem.
+type ActivityItem struct {
+	ActorId *openapi_types.UUID `json:"actor_id,omitempty"`
+
+	// Available The caller can still read the conversation
+	Available   bool                `json:"available"`
+	ChannelId   *openapi_types.UUID `json:"channel_id,omitempty"`
+	ChannelKind *ChannelKind        `json:"channel_kind,omitempty"`
+	ChannelName *string             `json:"channel_name,omitempty"`
+	CreatedAt   time.Time           `json:"created_at"`
+	Emoji       *string             `json:"emoji,omitempty"`
+
+	// Excerpt The message's text, cut to 200 characters (only while readable)
+	Excerpt   *string             `json:"excerpt,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+	Kind      ActivityKind        `json:"kind"`
+	MessageId *openapi_types.UUID `json:"message_id,omitempty"`
+	Read      bool                `json:"read"`
+
+	// RefId The approval, question or saved item
+	RefId        *openapi_types.UUID `json:"ref_id,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// ActivityKind defines model for ActivityKind.
+type ActivityKind string
+
+// ActivityPage defines model for ActivityPage.
+type ActivityPage struct {
+	Items       []ActivityItem `json:"items"`
+	NextCursor  *string        `json:"next_cursor,omitempty"`
+	UnreadCount int            `json:"unread_count"`
 }
 
 // Actor defines model for Actor.
@@ -2039,7 +2148,10 @@ type Channel struct {
 	// MutedUntil End of the caller's mute; null while muted means forever
 	MutedUntil *time.Time `json:"muted_until,omitempty"`
 	Name       string     `json:"name"`
-	Unread     int64      `json:"unread"`
+
+	// NotifyLevel The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+	NotifyLevel *NotifyLevel `json:"notify_level,omitempty"`
+	Unread      int64        `json:"unread"`
 }
 
 // ChannelKind defines model for ChannelKind.
@@ -2457,6 +2569,20 @@ type DoctorCheck struct {
 // DoctorCheckStatus defines model for DoctorCheck.Status.
 type DoctorCheckStatus string
 
+// Draft defines model for Draft.
+type Draft struct {
+	Attachments  []EventAttachment   `json:"attachments"`
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+}
+
+// DraftList defines model for DraftList.
+type DraftList struct {
+	Drafts []Draft `json:"drafts"`
+}
+
 // EditWikiPageRequest defines model for EditWikiPageRequest.
 type EditWikiPageRequest struct {
 	BaseRev int       `json:"base_rev"`
@@ -2477,6 +2603,18 @@ type EmergencyStop struct {
 	Since  *time.Time          `json:"since,omitempty"`
 }
 
+// EmojiUsage defines model for EmojiUsage.
+type EmojiUsage struct {
+	Frequent []string `json:"frequent"`
+	Recent   []string `json:"recent"`
+}
+
+// EmojiUseRequest defines model for EmojiUseRequest.
+type EmojiUseRequest struct {
+	// Emoji A short emoji sequence, as for reactions
+	Emoji string `json:"emoji"`
+}
+
 // EnrollRequest defines model for EnrollRequest.
 type EnrollRequest struct {
 	Code string `json:"code"`
@@ -2489,6 +2627,14 @@ type EnrollResponse struct {
 
 	// Token Host token; shown once
 	Token string `json:"token"`
+}
+
+// EventAttachment defines model for EventAttachment.
+type EventAttachment struct {
+	Id   openapi_types.UUID `json:"id"`
+	Mime string             `json:"mime"`
+	Name string             `json:"name"`
+	Size int64              `json:"size"`
 }
 
 // FailFileFetchRequest defines model for FailFileFetchRequest.
@@ -2572,6 +2718,14 @@ type FolderGrant struct {
 
 // FolderGrantMode defines model for FolderGrant.Mode.
 type FolderGrantMode string
+
+// ForwardRequest defines model for ForwardRequest.
+type ForwardRequest struct {
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ClientMsgId  *string             `json:"client_msg_id,omitempty"`
+	Comment      *string             `json:"comment,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
 
 // FsEntry defines model for FsEntry.
 type FsEntry struct {
@@ -2978,6 +3132,12 @@ type LoginRequest struct {
 	Workspace *string `json:"workspace,omitempty"`
 }
 
+// MarkActivityReadRequest defines model for MarkActivityReadRequest.
+type MarkActivityReadRequest struct {
+	ChannelId *openapi_types.UUID   `json:"channel_id,omitempty"`
+	ItemIds   *[]openapi_types.UUID `json:"item_ids,omitempty"`
+}
+
 // MarkedCount defines model for MarkedCount.
 type MarkedCount struct {
 	Marked int `json:"marked"`
@@ -2985,25 +3145,37 @@ type MarkedCount struct {
 
 // Message defines model for Message.
 type Message struct {
+	// AlsoInChannel A thread reply also shown in the channel's main stream
+	AlsoInChannel *bool `json:"also_in_channel,omitempty"`
+
 	// Answers Set on an agent's answer posted in its origin thread: the DM reply it answers
-	Answers      *MessageAnswers      `json:"answers,omitempty"`
-	Attachments  *[]FileAttachment    `json:"attachments,omitempty"`
-	AuthorId     openapi_types.UUID   `json:"author_id"`
-	Body         string               `json:"body"`
-	ChannelId    openapi_types.UUID   `json:"channel_id"`
-	ClientMsgId  *string              `json:"client_msg_id,omitempty"`
-	CompactionId *openapi_types.UUID  `json:"compaction_id,omitempty"`
-	CreatedAt    time.Time            `json:"created_at"`
-	DeletedAt    *time.Time           `json:"deleted_at,omitempty"`
-	DeletedBy    *openapi_types.UUID  `json:"deleted_by,omitempty"`
-	Id           openapi_types.UUID   `json:"id"`
-	Kind         MessageKind          `json:"kind"`
-	LastReplyAt  *time.Time           `json:"last_reply_at,omitempty"`
-	LinkCards    *[]LinkCard          `json:"link_cards,omitempty"`
-	Mentions     []openapi_types.UUID `json:"mentions"`
-	Origin       *MessageOrigin       `json:"origin,omitempty"`
-	Reactions    *[]ReactionSummary   `json:"reactions,omitempty"`
-	ReplyCount   int                  `json:"reply_count"`
+	Answers      *MessageAnswers     `json:"answers,omitempty"`
+	Attachments  *[]FileAttachment   `json:"attachments,omitempty"`
+	AuthorId     openapi_types.UUID  `json:"author_id"`
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ClientMsgId  *string             `json:"client_msg_id,omitempty"`
+	CompactionId *openapi_types.UUID `json:"compaction_id,omitempty"`
+	CreatedAt    time.Time           `json:"created_at"`
+	DeletedAt    *time.Time          `json:"deleted_at,omitempty"`
+	DeletedBy    *openapi_types.UUID `json:"deleted_by,omitempty"`
+
+	// ForwardedFromId The message this forward quotes; set only for viewers who can read it
+	ForwardedFromId *openapi_types.UUID `json:"forwarded_from_id,omitempty"`
+	Id              openapi_types.UUID  `json:"id"`
+
+	// Important An agent sent it marked important (a result, a decision, something a person must act on)
+	Important   *bool                `json:"important,omitempty"`
+	Kind        MessageKind          `json:"kind"`
+	LastReplyAt *time.Time           `json:"last_reply_at,omitempty"`
+	LinkCards   *[]LinkCard          `json:"link_cards,omitempty"`
+	Mentions    []openapi_types.UUID `json:"mentions"`
+	Origin      *MessageOrigin       `json:"origin,omitempty"`
+
+	// Pinned Pinned in its conversation now
+	Pinned     *bool              `json:"pinned,omitempty"`
+	Reactions  *[]ReactionSummary `json:"reactions,omitempty"`
+	ReplyCount int                `json:"reply_count"`
 
 	// ReplyParticipantIds Up to 3 authors of the replies, the most recent replier first (thread roots only).
 	ReplyParticipantIds *[]openapi_types.UUID `json:"reply_participant_ids,omitempty"`
@@ -3077,6 +3249,15 @@ type MyThreadPage struct {
 	NextCursor    *string    `json:"next_cursor,omitempty"`
 	Threads       []MyThread `json:"threads"`
 	UnreadThreads int        `json:"unread_threads"`
+}
+
+// NotifyLevel The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+type NotifyLevel string
+
+// NotifyLevelRequest defines model for NotifyLevelRequest.
+type NotifyLevelRequest struct {
+	// Level The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+	Level NotifyLevel `json:"level"`
 }
 
 // OpenDMRequest defines model for OpenDMRequest.
@@ -3162,6 +3343,18 @@ type OverviewUsage struct {
 type PairingCode struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// PinList defines model for PinList.
+type PinList struct {
+	Pins []PinnedMessage `json:"pins"`
+}
+
+// PinnedMessage defines model for PinnedMessage.
+type PinnedMessage struct {
+	Message  Message            `json:"message"`
+	PinnedAt time.Time          `json:"pinned_at"`
+	PinnedBy openapi_types.UUID `json:"pinned_by"`
 }
 
 // PlannerAccess defines model for PlannerAccess.
@@ -3485,6 +3678,58 @@ type RunRef struct {
 	Id openapi_types.UUID `json:"id"`
 }
 
+// SaveDraftRequest defines model for SaveDraftRequest.
+type SaveDraftRequest struct {
+	Body         string                `json:"body"`
+	ChannelId    openapi_types.UUID    `json:"channel_id"`
+	FileIds      *[]openapi_types.UUID `json:"file_ids,omitempty"`
+	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
+}
+
+// SaveItemRequest defines model for SaveItemRequest.
+type SaveItemRequest struct {
+	MessageId *openapi_types.UUID `json:"message_id,omitempty"`
+	Note      *string             `json:"note,omitempty"`
+	RemindAt  *time.Time          `json:"remind_at,omitempty"`
+}
+
+// SavedItem defines model for SavedItem.
+type SavedItem struct {
+	// Available The caller can still read the message (false for a reminder without one)
+	Available bool                `json:"available"`
+	ChannelId *openapi_types.UUID `json:"channel_id,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+	DoneAt    *time.Time          `json:"done_at,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+
+	// Message What the caller may see of a saved message; body is cut to 300 characters.
+	Message    *SavedMessage       `json:"message,omitempty"`
+	MessageId  *openapi_types.UUID `json:"message_id,omitempty"`
+	Note       string              `json:"note"`
+	RemindAt   *time.Time          `json:"remind_at,omitempty"`
+	RemindedAt *time.Time          `json:"reminded_at,omitempty"`
+}
+
+// SavedMessage What the caller may see of a saved message; body is cut to 300 characters.
+type SavedMessage struct {
+	AuthorId     openapi_types.UUID  `json:"author_id"`
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ChannelKind  ChannelKind         `json:"channel_kind"`
+	ChannelName  string              `json:"channel_name"`
+	CreatedAt    time.Time           `json:"created_at"`
+	Id           openapi_types.UUID  `json:"id"`
+	ReplyCount   *int                `json:"reply_count,omitempty"`
+	Retracted    *bool               `json:"retracted,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// SavedPage defines model for SavedPage.
+type SavedPage struct {
+	Items      []SavedItem `json:"items"`
+	NextCursor *string     `json:"next_cursor,omitempty"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	Body          string              `json:"body"`
@@ -3646,6 +3891,9 @@ type SecurityStatus struct {
 
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
+	// AlsoInChannel A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned.
+	AlsoInChannel *bool `json:"also_in_channel,omitempty"`
+
 	// AnswersMessageId Agents (guard): the message this answer replies to, in another channel the agent can read
 	AnswersMessageId *openapi_types.UUID `json:"answers_message_id,omitempty"`
 	Body             string              `json:"body"`
@@ -3657,8 +3905,11 @@ type SendMessageRequest struct {
 	Elaborate *bool `json:"elaborate,omitempty"`
 
 	// FileIds Attached file IDs
-	FileIds      *[]openapi_types.UUID `json:"file_ids,omitempty"`
-	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
+	FileIds *[]openapi_types.UUID `json:"file_ids,omitempty"`
+
+	// Important Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400).
+	Important    *bool               `json:"important,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // SendResult defines model for SendResult.
@@ -3979,6 +4230,13 @@ type UpdatePlannerTaskRequest struct {
 	Title  *string            `json:"title,omitempty"`
 }
 
+// UpdateSavedRequest defines model for UpdateSavedRequest.
+type UpdateSavedRequest struct {
+	ClearReminder *bool      `json:"clear_reminder,omitempty"`
+	Done          *bool      `json:"done,omitempty"`
+	RemindAt      *time.Time `json:"remind_at,omitempty"`
+}
+
 // UpdateSidebarSectionRequest defines model for UpdateSidebarSectionRequest.
 type UpdateSidebarSectionRequest struct {
 	Collapsed *bool   `json:"collapsed,omitempty"`
@@ -4232,6 +4490,33 @@ type ListActiveLeasesParams struct {
 // ListActiveLeasesParamsState defines parameters for ListActiveLeases.
 type ListActiveLeasesParamsState string
 
+// ListActivityParams defines parameters for ListActivity.
+type ListActivityParams struct {
+	Kind   *ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
+	Unread *bool         `form:"unread,omitempty" json:"unread,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteDraftParams defines parameters for DeleteDraft.
+type DeleteDraftParams struct {
+	ChannelId    openapi_types.UUID  `form:"channel_id" json:"channel_id"`
+	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
+// ListSavedParams defines parameters for ListSaved.
+type ListSavedParams struct {
+	Filter *ListSavedParamsFilter `form:"filter,omitempty" json:"filter,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListSavedParamsFilter defines parameters for ListSaved.
+type ListSavedParamsFilter string
+
 // ListMyThreadsParams defines parameters for ListMyThreads.
 type ListMyThreadsParams struct {
 	// Cursor next_cursor of the previous page
@@ -4431,6 +4716,9 @@ type SendMessageJSONRequestBody = SendMessageRequest
 // MuteChannelJSONRequestBody defines body for MuteChannel for application/json ContentType.
 type MuteChannelJSONRequestBody = MuteRequest
 
+// SetNotifyLevelJSONRequestBody defines body for SetNotifyLevel for application/json ContentType.
+type SetNotifyLevelJSONRequestBody = NotifyLevelRequest
+
 // UpdateCompactionSummaryJSONRequestBody defines body for UpdateCompactionSummary for application/json ContentType.
 type UpdateCompactionSummaryJSONRequestBody = UpdateCompactionSummaryRequest
 
@@ -4473,8 +4761,26 @@ type SetHostOwnerJSONRequestBody = SetOwnerRequest
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
 
+// MarkActivityReadJSONRequestBody defines body for MarkActivityRead for application/json ContentType.
+type MarkActivityReadJSONRequestBody = MarkActivityReadRequest
+
+// SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
+type SaveDraftJSONRequestBody = SaveDraftRequest
+
+// RecordEmojiUseJSONRequestBody defines body for RecordEmojiUse for application/json ContentType.
+type RecordEmojiUseJSONRequestBody = EmojiUseRequest
+
+// SaveItemJSONRequestBody defines body for SaveItem for application/json ContentType.
+type SaveItemJSONRequestBody = SaveItemRequest
+
+// UpdateSavedJSONRequestBody defines body for UpdateSaved for application/json ContentType.
+type UpdateSavedJSONRequestBody = UpdateSavedRequest
+
 // RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
 type RequestFileFetchJSONRequestBody = CreateFileFetchRequest
+
+// ForwardMessageJSONRequestBody defines body for ForwardMessage for application/json ContentType.
+type ForwardMessageJSONRequestBody = ForwardRequest
 
 // PutPlannerAccessJSONRequestBody defines body for PutPlannerAccess for application/json ContentType.
 type PutPlannerAccessJSONRequestBody = PlannerAccess

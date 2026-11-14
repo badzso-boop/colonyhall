@@ -412,5 +412,8 @@
     "client": "Client",
     "overview": "Overview",
     "notYours": "Its details (runs, folders, terminals) are visible to its owner and the admins only."
+  },
+  "stopCommand": {
+    "unknown": "There is no agent @{{handle}}."
   }
 }

@@ -408,5 +408,12 @@
         "claude_login": "Claude login"
       }
     }
+  },
+  "emergencyStop": {
+    "title": "Emergency stop",
+    "body": "Every agent stops right away, in every conversation. Releasing it needs your password.",
+    "hold": "Stop all",
+    "hint": "Press and hold for 2 seconds: every agent stops",
+    "done": "Emergency stop: every agent stopped."
   }
 }

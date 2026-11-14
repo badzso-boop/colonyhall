@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "postinstall": "node scripts/go-ignore-node-modules.mjs",
+    "gen:emoji": "node scripts/gen-emoji.mjs",
     "gen:api": "openapi-typescript ../api/openapi.yaml -o src/shared/api/schema.d.ts"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
+    "emojibase-data": "18.0.0",
     "eslint": "10.14.0",
     "eslint-import-resolver-typescript": "4.4.5",
     "eslint-plugin-boundaries": "7.4.2",

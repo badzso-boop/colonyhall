@@ -37,9 +37,12 @@ import (
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/httpx"
+	"colonyhall/internal/modules/activity"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
+	"colonyhall/internal/modules/draft"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/saved"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
@@ -707,13 +710,25 @@ func (c *connection) visibleChannel(ctx context.Context, channelID ids.ID) (bool
 	return ok, nil
 }
 
+// personalEvents reach only the actor that caused them (their other tabs and
+// devices), never anyone else, admins included.
+var personalEvents = map[string]bool{
+	conversation.EventMuteChanged: true,
+	draft.EventChanged:            true,
+	saved.EventChanged:            true,
+	saved.EventReminded:           true,
+	activity.EventCreated:         true,
+	activity.EventRead:            true,
+}
+
 // visible decides whether the actor may see an event.
 func (c *connection) visible(ctx context.Context, e eventlog.Event) (bool, error) {
 	if e.WorkspaceID != c.actor.WorkspaceID {
 		return false, nil
 	}
-	if e.Type == conversation.EventMuteChanged {
-		// A mute is the viewer's own preference, even for admins.
+	if personalEvents[e.Type] {
+		// The viewer's own state (a mute, a draft): theirs alone, even
+		// for admins.
 		return e.ActorID == c.actor.ID, nil
 	}
 	if c.actor.IsAdmin() {

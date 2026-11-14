@@ -6,8 +6,10 @@ import { NavLink } from "react-router";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { openWindow } from "@/shared/windows";
-import { ConversationList, ThreadsEntry } from "@/features/conversation";
+import { ActivityEntry } from "@/features/activity";
+import { ConversationList, DraftsEntry, ThreadsEntry } from "@/features/conversation";
 import { useSession } from "@/features/identity";
+import { SavedEntry } from "@/features/saved";
 import { adminPages, pages, type PageEntry } from "./pages";
 
 function PageGroup({ title, entries }: { title: string; entries: PageEntry[] }) {
@@ -60,7 +62,10 @@ export function Sidebar() {
   const admin = role === "owner" || role === "admin";
   return (
     <div className="flex h-full flex-col overflow-y-auto px-2 pt-2 pb-6">
+      <ActivityEntry />
       <ThreadsEntry />
+      <DraftsEntry />
+      <SavedEntry />
       <PageGroup title={t("workspace")} entries={pages.filter((p) => !p.adminOnly || admin)} />
       {admin ? <PageGroup title={t("administration")} entries={adminPages.filter((p) => !p.ownerOnly || role === "owner")} /> : null}
       <ConversationList />

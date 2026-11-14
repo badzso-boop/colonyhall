@@ -439,6 +439,13 @@ type SendInput struct {
 	// AnswersMessageID links an agent's answer to the message it responds
 	// to in another channel; kept only if the agent can read that message.
 	AnswersMessageID ids.ID
+	// Important (agents only, round 55): the message is a result, a decision
+	// or something a human must act on; it is pinned when sent.
+	Important bool
+	// AlsoInChannel shows a thread reply in the channel too (round 55).
+	AlsoInChannel bool
+	// ForwardedFromID is set by ForwardMessage only (checked there).
+	ForwardedFromID ids.ID
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -462,6 +469,9 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	}
 	if len(in.ClientMsgID) > MaxClientMsgID {
 		return SendResult{}, ErrInvalidClientID
+	}
+	if in.Important && by.Kind != identity.KindAgent {
+		return SendResult{}, ErrImportantHumans
 	}
 	if by.Kind == identity.KindAgent && IsAcknowledgement(body) {
 		return s.ackAsReaction(ctx, by, in)
@@ -508,6 +518,10 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		if err != nil || root.ChannelID != c.ID || root.ThreadRootID != ids.Nil {
 			return SendResult{}, ErrBadThread
 		}
+	}
+	// A DM shows its replies in the main stream anyway.
+	if in.AlsoInChannel && (in.ThreadRootID == ids.Nil || c.Kind == KindDM) {
+		return SendResult{}, ErrAlsoNeedsThread
 	}
 	if by.Kind == identity.KindAgent {
 		if err := s.checkAndEnforceRateLimit(ctx, by, c, in.ThreadRootID); err != nil {
@@ -557,13 +571,25 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		if err != nil {
 			return err
 		}
+		if in.Important {
+			// Checked before the first write: the memory store cannot roll back.
+			if err := s.checkAgentPinLimit(ctx, by, c.ID); err != nil {
+				return err
+			}
+			if n, err := s.Store.CountActivePins(ctx, c.ID); err != nil {
+				return err
+			} else if n >= MaxPins {
+				return ErrPinLimit
+			}
+		}
 		now := s.Clock.Now()
 		msg = Message{
 			ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, ChannelID: c.ID, ThreadRootID: in.ThreadRootID,
 			AuthorID: by.ID, ClientMsgID: in.ClientMsgID, Kind: "text", Body: body,
 			Mentions: mentions, CreatedAt: now,
 			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
-			AnswersMessageID: answersID,
+			AnswersMessageID: answersID, Important: in.Important, AlsoInChannel: in.AlsoInChannel,
+			ForwardedFromID: in.ForwardedFromID,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -602,6 +628,14 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		payload.NoThreadFollow = in.NoThreadFollow
 		payload.Silent = in.Silent
 		seq, err = s.appendEvent(ctx, by, c.ID, EventMessageCreated, "message", msg.ID, payload)
+		if err != nil || !in.Important {
+			return err
+		}
+		pinSeq, err := s.pinInTx(ctx, by, c, msg)
+		if pinSeq > 0 {
+			seq = pinSeq
+			msg.Pinned = true
+		}
 		return err
 	})
 	if err != nil {
@@ -676,6 +710,13 @@ func (s *Service) enrichOrigins(ctx context.Context, by identity.Actor, msgs []M
 				msgs[i].AnswersAuthorID = ref.AuthorID
 			} else {
 				msgs[i].AnswersMessageID = ids.Nil
+			}
+		}
+		if msgs[i].ForwardedFromID != ids.Nil {
+			// The forward's mark names its source only to those who can read it.
+			src, err := s.Store.MessageByID(ctx, msgs[i].ForwardedFromID)
+			if err != nil || !canRead(src.ChannelID) {
+				msgs[i].ForwardedFromID = ids.Nil
 			}
 		}
 		if msgs[i].OriginChannelID != ids.Nil {
@@ -772,8 +813,10 @@ func MessageCreatedPayload(m Message) MessageCreated {
 	p := MessageCreated{
 		MessageID: m.ID.String(), ChannelID: m.ChannelID.String(), AuthorID: m.AuthorID.String(),
 		ClientMsgID: m.ClientMsgID, Kind: m.Kind, Body: m.Body, CreatedAt: m.CreatedAt,
-		Mentions:    make([]string, 0, len(m.Mentions)),
-		Attachments: m.Attachments,
+		Mentions:      make([]string, 0, len(m.Mentions)),
+		Attachments:   m.Attachments,
+		Important:     m.Important,
+		AlsoInChannel: m.AlsoInChannel,
 	}
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()
@@ -860,6 +903,9 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	}
 	msgs, err = s.withAttachments(ctx, msgs)
 	if err != nil {
+		return nil, err
+	}
+	if msgs, err = s.withPins(ctx, msgs); err != nil {
 		return nil, err
 	}
 	s.enrichOrigins(ctx, by, msgs)

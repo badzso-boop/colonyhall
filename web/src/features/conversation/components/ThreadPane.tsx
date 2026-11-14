@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Ujj Norbert
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { localeOf } from "@/shared/i18n";
@@ -17,6 +18,7 @@ import { openAgent, openFiles, openTerminals } from "../workPanes";
 import { ActivityLine } from "./ActivityLine";
 import { Composer } from "./Composer";
 import { DropZone } from "./DropZone";
+import { markMessage } from "./Feed";
 import { MessageItem } from "./MessageItem";
 
 /** The thread pane (round 31, part 5): the root, its replies, a composer of its own. */
@@ -32,6 +34,12 @@ export function ThreadPane({ rootId }: { rootId: string }) {
   const channelId = thread.data?.root.channel_id ?? "";
   const tray = useAttachments(channelId);
   const channel = channels.data?.find((c) => c.id === channelId);
+  // A link to a reply (?thread=…&msg=…): scroll to it and mark it for a moment.
+  const [params] = useSearchParams();
+  const target = params.get("msg");
+  const paneBody = useRef<HTMLDivElement>(null);
+  const loadedTarget = thread.data && target && (thread.data.root.id === target || thread.data.replies.some((r) => r.id === target)) ? target : null;
+  useEffect(() => (loadedTarget ? markMessage(paneBody.current, loadedTarget) : undefined), [loadedTarget]);
   const handles = useMemo(() => new Set([...(actors.data?.values() ?? [])].map((a) => a.handle)), [actors.data]);
   const memberIds = useMemo(() => new Set(channel?.member_ids ?? []), [channel]);
   // "Szálaim": seeing the thread to its end marks it read (debounced, like the channel read).
@@ -72,7 +80,7 @@ export function ThreadPane({ rootId }: { rootId: string }) {
     <DropZone onFiles={tray.add} className="flex h-full min-h-0 flex-col">
       {header}
       {viewer.human ? <GrantBar channelId={channelId} threadRootId={rootId} isDm={channel?.kind === "dm"} admin={viewer.admin} /> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
+      <div ref={paneBody} className="min-h-0 flex-1 overflow-y-auto py-2">
         <MessageItem message={thread.data.root} actors={actors.data} handles={handles} viewer={viewer} locale={locale} summary={false} {...handlers} />
         <div className="my-2 flex items-center gap-3 px-4 text-meta text-fg-subtle after:h-px after:flex-1 after:bg-border">
           {t("message.replies", { count: thread.data.replies.length })}
@@ -83,7 +91,15 @@ export function ThreadPane({ rootId }: { rootId: string }) {
         <CompactionLive channelId={channelId} threadRootId={rootId} human={viewer.human} />
       </div>
       <ActivityLine channelId={channelId} threadRootId={rootId} actors={actors.data} />
-      <Composer channelId={channelId} threadRootId={rootId} placeholder={t("composer.threadPlaceholder")} memberIds={memberIds} tray={tray} readOnly={Boolean(channel?.archived_at)} />
+      <Composer
+        channelId={channelId}
+        threadRootId={rootId}
+        placeholder={t("composer.threadPlaceholder")}
+        memberIds={memberIds}
+        tray={tray}
+        readOnly={Boolean(channel?.archived_at)}
+        alsoToChannel={channel && channel.kind !== "dm" ? channel.name : undefined}
+      />
     </DropZone>
   );
 }

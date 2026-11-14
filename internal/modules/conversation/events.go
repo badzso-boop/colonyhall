@@ -71,10 +71,11 @@ type ChannelLocked struct {
 
 // MuteChanged is the payload of EventMuteChanged.
 type MuteChanged struct {
-	ChannelID  string     `json:"channel_id"`
-	ActorID    string     `json:"actor_id"`
-	Muted      bool       `json:"muted"`
-	MutedUntil *time.Time `json:"muted_until,omitempty"`
+	ChannelID  string      `json:"channel_id"`
+	ActorID    string      `json:"actor_id"`
+	Muted      bool        `json:"muted"`
+	MutedUntil *time.Time  `json:"muted_until,omitempty"`
+	Level      NotifyLevel `json:"level,omitempty"`
 }
 
 // MemberRemoved is the payload of EventMemberRemoved.
@@ -98,6 +99,8 @@ type MessageCreated struct {
 	NoThreadFollow bool         `json:"no_thread_follow,omitempty"`
 	Silent         bool         `json:"silent,omitempty"`
 	Attachments    []Attachment `json:"attachments,omitempty"`
+	Important      bool         `json:"important,omitempty"`
+	AlsoInChannel  bool         `json:"also_in_channel,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
 }
 

@@ -1,0 +1,34 @@
+{
+  "title": "Tevékenység",
+  "filter": "Szűrés",
+  "unreadOnly": "Csak olvasatlan",
+  "markAll": "Mind olvasottnak jelölése",
+  "loadMore": "Továbbiak betöltése",
+  "empty": "Nincs új tevékenység",
+  "emptyBody": "Ide kerülnek a megemlítéseid, a szálaidra jött válaszok, a reakciók, a rád váró kérdések és jóváhagyások, az agentek fontos üzenetei és az emlékeztetőid.",
+  "unavailable": "Ehhez már nincs hozzáférésed.",
+  "unread": "olvasatlan",
+  "someone": "Valaki",
+  "dm": "közvetlen üzenet",
+  "unreadCount_one": "{{count}} olvasatlan tevékenység",
+  "unreadCount_other": "{{count}} olvasatlan tevékenység",
+  "filters": {
+    "all": "Mind",
+    "mention": "Megemlítés",
+    "thread_reply": "Szálválasz",
+    "reaction": "Reakció",
+    "approval": "Jóváhagyás",
+    "question": "Kérdés",
+    "important": "Fontos",
+    "reminder": "Emlékeztető"
+  },
+  "kinds": {
+    "mention": "{{who}} megemlített",
+    "thread_reply": "{{who}} válaszolt egy szálban",
+    "reaction": "{{who}} reagált: {{emoji}}",
+    "approval": "{{who}} jóváhagyásra vár",
+    "question": "{{who}} kérdez",
+    "important": "{{who}} fontosnak jelölt egy üzenetet",
+    "reminder": "Emlékeztető"
+  }
+}

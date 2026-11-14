@@ -1551,3 +1551,61 @@ Az ellenőrzés táblázata és a nyitott pontok: `14-biztonsagi-ellenorzes.md`.
 - **Állapotlap:** „Biztonság” kártya: kizárások az utolsó 24 órában, az engedélylista, és hogy van-e megbízható proxy.
 - **A szerver konténere:** csak olvasható gyökér, 16 MB-os memóriabeli `/tmp`, a nagy ideiglenes fájlok a fájlkötetre mennek (`TMPDIR`), `cap_drop: ALL`, `no-new-privileges`, memória- és PID-korlát (mérve: 2000 WebSocket-kliens, 32 párhuzamos 25 MB-os feltöltés és 32 keresés mellett legfeljebb 186 MB és 81 folyamat; alap 1 GB, `GOMEMLIMIT` 768 MB, 256 PID).
 - **Fuzz-tesztek** a külső bemenetet olvasó elemzőkre (az őr stream- és `/usage`-olvasói, fájllinkek, prompt-keret, kliens-IP, CSV, említések, handle, token-előtag); a `go test` a mintákat futtatja, hosszú futás a `14-biztonsagi-ellenorzes.md` szerint.
+
+## Csevegés-alapok (55. kör, 2026-11-14)
+
+Piszkozat, perjel-parancsok, emoji, kitűzés, mentés és emlékeztető, üzenet-műveletek, „a csatornába is”, Tevékenység, olvasatlan-navigáció és értesítési szint. Tudatosan kimaradt: üzenetszerkesztés, jelenlét, formázó eszköztár, push (43. kör, a Tevékenység-feedre épül).
+
+### Piszkozat (`internal/modules/draft`, `00059_draft.sql`)
+
+- `draft` tábla: (actor, csatorna, szál vagy nincs) soronként egy, a szöveg, a még el nem küldött csatolmányok fájlazonosítói, `updated_at`; RLS. Csak ember tart piszkozatot, és csak a tulajdonosa olvassa (admin sem).
+- `GET/PUT/DELETE /me/drafts`. Üres szöveg és nincs fájl = törlés. A fájl csak a hívó saját feltöltése lehet abban a beszélgetésben.
+- A PWA ~1 mp gépelési szünet után, helyváltáskor és az oldal elrejtésekor ment; a `localStorage` csak offline másolat, és csak akkor nyer, ha újabb.
+- A `draft.changed` esemény a helyet viszi, a szöveget soha, és csak a tulajdonos kapja. Egy fogyasztó törli a piszkozatot, ha a tulajdonos egy másik eszközről ugyanoda küldött, kivéve, ha a piszkozat újabb az üzenetnél.
+- A piszkozat nem üzenet: nem jut agenthez, keresőbe, más eseményfolyamába, és az auditba sem kerül a tartalma.
+
+### Kitűzés és „fontos” (`00060_message_pin.sql`)
+
+- `PUT/DELETE /messages/{id}/pin`, `GET /channels/{id}/pins`. Az tűzhet ki, aki írhat a beszélgetésben; beszélgetésenként legfeljebb 50. A sor nem törlődik, a levétel jelölés; a `message.pinned` / `message.unpinned` az eseménynaplón át az auditba is bekerül.
+- **MCP:** a `send` eszköz új `important: true` mezője kitűzi és „Fontos” jelöléssel mutatja az üzenetet; a `pin` eszköz az agent **saját** üzenetét tűzi ki. Mindkettő legfeljebb 5 kitűzés agentenként, beszélgetésenként, naponta (a levett kitűzés is számít). A korlátot az üzenet megírása előtt ellenőrzi, így a visszautasított `send` semmit nem küld. Az eszközleírás megmondja, mire való: eredmény, döntés, vagy amivel embernek tennie kell.
+- A kitűzött üzenet az agenthez ugyanúgy, `<colonyhall_message>` keretben jut el, mint bármely más (11. szabály).
+
+### Mentés és emlékeztető (`internal/modules/saved`, `00062_saved_item.sql`)
+
+- `saved_item`: üzenet vagy szál (a gyökér) mentése, opcionális emlékeztetővel; `/remind` üzenet nélkül csak szöveget és időt tart. `GET/POST /me/saved`, `PATCH/DELETE /me/saved/{id}`; szűrők: mind, emlékeztetős, kész. Csak a tulajdonos olvassa; ha az üzenethez már nincs hozzáférése, a lista semmit nem mutat belőle.
+- Az időválasztás a profil időzónájában történik (20 perc, 1 óra, holnap 9:00, jövő hétfő 9:00, választott idő), a szerver időpontot kap.
+- **Háttérciklus:** a `saved.Service.Loop` a `Clock` portról olvas, és a lejárt emlékeztetőket rendszerüzenetként küldi a személy saját DM-jébe, az üzenet linkjével, amíg az olvasható. **Egyszeri küldés több példánynál is:** a `ClaimReminder` (`UPDATE … SET reminded_at … WHERE reminded_at IS NULL`) ugyanabban a tranzakcióban fut, mint a rendszerüzenet írása, így csak egy példány nyeri el. Tételenként `db.WithWorkspace` szűkít.
+- Üzenetlink a szövegben: `[message:<csatorna>/<üzenet>]` chip. A `saved.changed` és a `saved.reminded` csak a tulajdonoshoz megy.
+
+### Üzenet-műveletek és továbbítás (`00064_message_forward.sql`)
+
+- Menü és billentyűk a fókuszált üzeneten: `r` szál, `s` mentés, `l` link, `f` továbbítás, `p` kitűzés; emlékeztető és reakció a menüből. A link (`?msg=`, válasznál `?thread=` is) a beszélgetést az üzenetnél nyitja; akinek nincs hozzáférése, a szokásos „nem található” választ kapja.
+- `POST /messages/{id}/forward`, csak embernek: a forrásnak olvashatónak (különben 404), a célnak írhatónak kell lennie. Az új üzenet a továbbító megjegyzése (ez említhet), utána idézet szerzővel, hellyel, idővel és visszalinkkel.
+- **Említés-hatástalanítás:** az idézett szövegben a `conversation.DefuseMentions` zero-width space-t tesz az `@` és a chip-hivatkozások után, ahogy a git modul a webhook szövegével teszi, így a továbbítás soha nem ébreszt agentet véletlenül (fuzz-teszt). A `forwarded_from_id` csak annak látszik, aki a forrást olvashatja. Privát csatornából vagy DM-ből továbbítás előtt megerősítés kell. Csatolmány nem megy tovább.
+
+### Szálválasz a csatornába is (`00063_also_in_channel.sql`)
+
+- Egy üzenet `also_in_channel` jelzővel, nem két másolat: a szálban és a csatorna fő folyamában is látszik, „válaszolt egy szálban” linkkel. DM-ben a válaszok amúgy is a fő folyamban vannak, ott a jelző visszautasítva. A kézbesítés nem változik: a szálon kívüli csatorna-agent csak kifejezett említésre ébred.
+
+### Tevékenység (`internal/modules/activity`, `00065_activity_item.sql`)
+
+- Egy eseményfogyasztó építi személyenként: rám vonatkozó említés, válasz olyan szálban, ahol írtam, reakció az üzenetemre, rám váró jóváhagyás és kérdés, agent fontos üzenete, lejárt emlékeztetőm. A `(címzett, forrás-sorszám, fajta)` egyedi, így egy újrajátszott esemény nem ad új tételt. A „semmi” szintű beszélgetés említése, válasza, reakciója és fontos üzenete kimarad.
+- `GET /me/activity` (újabb elöl, kurzoros lapozás `(created_at, id)` szerint, fajta- és olvasatlan-szűrő, olvasatlan szám), `POST /me/activity/read` (tételek, egy beszélgetés vagy minden). Ha a címzett már nem olvashatja a beszélgetést, a tétel csak a fajtáját és az idejét mutatja (ki és mire hivatkozik, az sem látszik).
+- `activity.created` és `activity.read` csak a címzetthez megy. A feed a felülettől független: a 43. kör push-értesítése ezt olvassa.
+
+### Értesítési szint és olvasatlan-navigáció (`00061_notify_level.sql`)
+
+- Beszélgetésenként `all`, `mentions` (csatornában az alapérték, DM-ben `all`), `none`. A `none` a 34. körös némítás: a szint ugyanannak a `channel_mute` sornak egy oszlopa, a régi némítás így működik tovább, a feloldás az alapértékre áll vissza. `PUT /channels/{id}/notify`, `POST /me/channels/read` (mind olvasott).
+- A szint csak azt dönti el, mi zavarja az embert (jelvény, Tevékenység, később push), azt soha, mit kapnak az agentek.
+- A PWA: „Új üzenetek” elválasztó, „Első olvasatlan” (`Shift+Esc`), „Legújabb (N)” görgetéskor, `Esc` olvasottnak jelöl.
+
+### Perjel-parancsok (PWA, `shared/lib/commands.ts`, `features/conversation/useSlash.tsx`)
+
+- Kliensoldali regiszter (`registerCommand`), a parancsok meglévő API-kat hívnak: `/remind`, `/remind me about this`, `/pin`, `/save`, `/mute`, `/unmute`, `/notify`, `/status`, `/search`, `/thread`, `/drafts`, `/saved`, `/activity`, `/help`, valamint a korábbi `/schedule`, `/daily`, `/cron`, `/answer`. A `/stop @agent` és az `/emergency` csak adminnak látszik és fut, és csak a megerősítést nyitja meg (a vészleállítás továbbra is nyomva tartással indul).
+- „Ez az üzenet”: szálban a gyökér, különben a beszélgetés legújabb üzenete; a `/pin` a beszélgetésben a saját legújabb üzenetemet tűzi ki.
+- Ismeretlen parancs: tipp, a szöveg nem megy el. `//szöveg` perjellel kezdődő üzenetet küld; a `/tmp/x` típusú szöveg (szó után nem szóköz) üzenet marad.
+
+### Emoji (`features/emoji`, `00066_emoji_use.sql`)
+
+- Az adat saját: a `web/scripts/gen-emoji.mjs` az `emojibase-data` (MIT, fejlesztői függőség; CLDR-nevek magyarul és angolul) csomagból írja a `web/src/features/emoji/data/emoji.json`-t. A rendszer emojibetűje rajzol, más originről semmi nem töltődik. A választó és az adat lusta darab.
+- A legutóbbi és a gyakori emojik a szerveren, személyenként: `GET/POST /me/emoji` (identity modul, `emoji_use` tábla, RLS; mindkét listából legfeljebb 24, személyenként a legújabb 100 különböző emoji marad; csak ember; az emoji a reakciók szabályát követi).

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/activity"
 	"colonyhall/internal/modules/agentrules"
 	"colonyhall/internal/modules/agents"
 	"colonyhall/internal/modules/approval"
@@ -26,6 +27,7 @@ import (
 	"colonyhall/internal/modules/decision"
 	"colonyhall/internal/modules/delegation"
 	"colonyhall/internal/modules/delivery"
+	"colonyhall/internal/modules/draft"
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/hosts"
@@ -36,6 +38,7 @@ import (
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
+	"colonyhall/internal/modules/saved"
 	"colonyhall/internal/modules/schedule"
 	"colonyhall/internal/modules/search"
 	"colonyhall/internal/modules/sidebar"
@@ -72,6 +75,9 @@ type Backend struct {
 	Delegation   delegation.Store
 	Search       search.Store
 	DBStats      dbstats.Store
+	Drafts       draft.Store
+	Saved        saved.Store
+	Activity     activity.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -104,6 +110,12 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("delegation", func(t *testing.T) { testDelegation(t, newBackend(t)) })
 	t.Run("agents", func(t *testing.T) { testAgentLifecycle(t, newBackend(t)) })
 	t.Run("channeledit", func(t *testing.T) { testChannelEdit(t, newBackend(t)) })
+	t.Run("drafts", func(t *testing.T) { testDrafts(t, newBackend(t)) })
+	t.Run("pins", func(t *testing.T) { testPins(t, newBackend(t)) })
+	t.Run("notify level", func(t *testing.T) { testNotifyLevel(t, newBackend(t)) })
+	t.Run("saved", func(t *testing.T) { testSaved(t, newBackend(t)) })
+	t.Run("activity", func(t *testing.T) { testActivity(t, newBackend(t)) })
+	t.Run("emoji usage", func(t *testing.T) { testEmojiUsage(t, newBackend(t)) })
 }
 
 var (

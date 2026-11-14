@@ -4,14 +4,14 @@
 import { createContext, useContext, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
-import { ArrowDown, ArrowUp, BellOff, ChevronDown, ChevronRight, Eye, Hash, Lock, LockKeyhole, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BellOff, CheckCheck, ChevronDown, ChevronRight, Eye, Hash, Lock, LockKeyhole, MoreHorizontal, Pencil, PencilLine, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { useLocalStorage, useNow } from "@/shared/hooks";
 import { Avatar, Badge, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Tooltip, toast } from "@/shared/ui";
 import { useActivity } from "@/features/agents";
 import { useActors, useSession } from "@/features/identity";
-import { useChannels, useMoveConversation, useReorderSections, useSections } from "../api";
-import { isMuted } from "../channel";
+import { useChannels, useDrafts, useMarkAllRead, useMoveConversation, useReorderSections, useSections } from "../api";
+import { isMuted, rowBadge } from "../channel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { ProfileAnchor } from "./ProfilePopover";
 import { RowMenu } from "./RowMenu";
@@ -129,9 +129,13 @@ function Row({ row, actors, meId, sections, sectionId, human }: RowProps) {
   const move = useMoveConversation();
   const [profileOpen, setProfileOpen] = useState(false);
   const channelId = row.channel.id;
-  const muted = isMuted(row.channel, useNow(60_000));
+  const now = useNow(60_000);
+  const muted = isMuted(row.channel, now);
+  const badge = rowBadge(row.channel, now);
+  // A draft anywhere in the conversation (main stream or a thread) shows a pencil.
+  const hasDraft = useDrafts(human).data?.some((d) => d.channel_id === channelId) ?? false;
   // A muted row is never bold for unread messages; a mention still shows its badge.
-  const unread = row.channel.unread > 0 && !muted;
+  const unread = badge.bold;
   // A DM with one other person or agent: its row menu offers the profile.
   const peers = row.kind === "human-dm" || row.kind === "agent-dm" ? dmPeers(row.channel, actors, meId) : [];
   const peerId = peers.length === 1 ? peers[0]!.id : null;
@@ -172,6 +176,7 @@ function Row({ row, actors, meId, sections, sectionId, human }: RowProps) {
           <span className={cn("min-w-0 flex-1 truncate", row.kind !== "channel" && row.kind !== "human-dm" && "font-mono text-meta", row.kind === "agent-agent" && "text-fg-muted")}>
             {row.title}
           </span>
+          {hasDraft ? <PencilLine aria-label={t("drafts.has")} className="size-3.5 shrink-0 text-fg-subtle" /> : null}
           {muted ? <BellOff aria-label={t("mute.muted")} className="size-3.5 shrink-0 text-fg-subtle" /> : null}
           {row.channel.agent_locked_at ? <LockKeyhole aria-label={t("channel.lock.locked")} className="size-3.5 shrink-0 text-warning" /> : null}
           {row.observed ? (
@@ -179,10 +184,10 @@ function Row({ row, actors, meId, sections, sectionId, human }: RowProps) {
               <Eye aria-label={t("row.observed")} className="size-3.5 shrink-0 text-fg-subtle" />
             </Tooltip>
           ) : null}
-          {row.channel.mentions > 0 ? (
+          {badge.count > 0 ? (
             <Badge tone="accent" className="h-4.5 min-w-4.5">
-              <span className="sr-only">{t("row.mentions", { count: row.channel.mentions })}</span>
-              <span aria-hidden>{row.channel.mentions}</span>
+              <span className="sr-only">{t(row.channel.mentions > 0 ? "row.mentions" : "row.unreadCount", { count: badge.count })}</span>
+              <span aria-hidden>{badge.count}</span>
             </Badge>
           ) : null}
         </NavLink>
@@ -317,6 +322,42 @@ function Group({ group, actors, meId, sections, human }: GroupProps) {
   );
 }
 
+/** The conversations' own menu (round 55, part I): "Mind olvasottnak jelölése". */
+function ListMenu({ anyUnread }: { anyUnread: boolean }) {
+  const { t } = useTranslation("conversation");
+  const markAll = useMarkAllRead();
+  return (
+    <div className="mt-3 flex justify-end">
+      <Menu>
+        <MenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={t("notify.menu")}
+            title={t("notify.menu")}
+            className="grid size-6 place-items-center rounded-sm text-fg-subtle hover:bg-surface-sunken hover:text-fg"
+          >
+            <MoreHorizontal aria-hidden className="size-3.5" />
+          </button>
+        </MenuTrigger>
+        <MenuContent align="end">
+          <MenuItem
+            icon={<CheckCheck aria-hidden className="size-4" />}
+            disabled={!anyUnread}
+            onSelect={() =>
+              markAll.mutate(undefined, {
+                onSuccess: (n) => toast(t("notify.markedAll", { count: n })),
+                onError: (e) => toast(e.message, { tone: "danger" }),
+              })
+            }
+          >
+            {t("notify.markAllRead")}
+          </MenuItem>
+        </MenuContent>
+      </Menu>
+    </div>
+  );
+}
+
 /** The conversation groups of the sidebar (round 31, part 4; sections: 34, part 2). */
 export function ConversationList() {
   const { t } = useTranslation("conversation");
@@ -339,6 +380,7 @@ export function ConversationList() {
   const props = { actors: actors.data, meId, sections: list, human };
   return (
     <nav aria-label={t("groups.channels")}>
+      {human ? <ListMenu anyUnread={(channels.data ?? []).some((c) => c.unread > 0 || c.mentions > 0)} /> : null}
       <DndProvider>
         {groups.filter((g) => g.custom).map((g) => (
           <Group key={g.id} group={g} {...props} />
@@ -369,7 +411,8 @@ export function ConversationList() {
 /** Mentions across all conversations (the tab title and favicon dot). */
 export function useMentionTotal(): number {
   const channels = useChannels();
-  return (channels.data ?? []).reduce((n, c) => n + c.mentions, 0);
+  const now = new Date();
+  return (channels.data ?? []).reduce((n, c) => n + rowBadge(c, now).count, 0);
 }
 
 /** The conversations in sidebar order (keyboard navigation, the command palette). */

@@ -273,6 +273,16 @@ Asztalon `max-w-3xl`, 70 vh (a nagy Dialog fölött), telefonon teljes képerny�
 - **Kártyák:** `rounded-lg border bg-surface`, a számok `tabular`. Egyszer látható titok: `SecretOnce` (figyelmeztetés, másolás).
 - **`Notice`:** új `success` tónus.
 
-## 14. Ami még jön
+## 14. Csevegés-alapok (55. kör)
+
+- **Perjel-menü** (`features/conversation`, a lista a `shared/lib/commands` regiszterből): a szerkesztő fölött nyíló lista, soronként a használat monóban (`/remind 20m …`) és egy sor leírás `fg-muted` színnel; nyíl, Enter, Tab és érintés is választ. A teljesen beírt parancsot az Enter lefuttatja, nem egészíti ki újra. Csak az látszik, amit az ember futtathat (`/stop`, `/emergency`: admin). Hibás használat: `danger` toast a használattal, a szöveg megmarad.
+- **Emojiválasztó** (`features/emoji`, `EmojiButton`): kis Popover (320 px), felül kereső, alatta a csoportok ikonsora (Lucide), a rács 8 oszlopos, 36 px-es gombokkal, a csoportcím ragadós. Elöl a „Legutóbbiak” és a „Gyakoriak”. A rajzolás a rendszer emojibetűjével, kép nincs. A választó és az adat külön, lustán töltött darab; addig `Skeleton`. A szerkesztő `:szó` javaslata ugyanaz a lista, mint az `@` említésé: emoji, `:shortcode:` monóban, a név `fg-muted`.
+- **Üzenet eszközsora:** a két gyorsreakció mellett a reakcióválasztó (`SmilePlus`), utána a „…” menü (válasz szálban, link másolása, továbbítás, mentés, emlékeztető, kitűzés). Nyitott menü vagy választó mellett az eszközsor látható marad.
+- **Kitűzés és „fontos”:** a fejlécben gombostű ikon a számmal, mellette panel a kitűzött üzenetekkel. Az agent fontos üzenete bal oldalt `warning` csíkot és `warning` tónusú „Fontos” jelvényt kap zászló ikonnal.
+- **Tevékenység-elemek:** soronként ikon a fajtával, ki, hol, mikor, az olvasatlan félkövér pöttyel. Szűrő a fajtákra, „Mind olvasott”. Az oldalsáv és a böngészőfül címe mutatja az olvasatlan számot.
+- **Ugrógombok:** az „Új üzenetek” elválasztó `accent-text` felirat `accent` vonallal; felül középen „Első olvasatlan” kapszula (`accent` alap, mellette pipa: olvasottnak jelöl), alul „Legújabb (N)” kapszula, mindkettő `shadow-overlay`. Gyorsbillentyű: `Shift+Esc` az első olvasatlanhoz, `Esc` olvasottnak jelöl; mindkettő a súgóban.
+- **Piszkozat:** az oldalsáv sorában kis ceruza (`fg-subtle`), a „Piszkozatok” bejegyzés a „Szálak” mellett.
+
+## 15. Ami még jön
 
 - A fejlesztői oldal kivezetése külön, kis körben, miután Norbi egy ideig a PWA-t használta.
