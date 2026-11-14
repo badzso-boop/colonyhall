@@ -408,5 +408,12 @@
         "claude_login": "Claude-belépés"
       }
     }
+  },
+  "emergencyStop": {
+    "title": "Vészleállítás",
+    "body": "Minden agent azonnal leáll, minden beszélgetésben. A feloldáshoz a jelszavad kell.",
+    "hold": "Mind áll",
+    "hint": "Nyomd és tartsd 2 másodpercig: minden agent leáll",
+    "done": "Vészleállítás: minden agent leállt."
   }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, insertMention, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
+import { activeMention, cn, insertMention, matchCommands, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
 import { useActors, useSession } from "@/features/identity";
@@ -9,6 +9,7 @@ import { answerSuggestions, useAnswerQuestion, useOpenQuestions } from "@/featur
 import { useCreateSchedule, useRetract, useSendMessage } from "../api";
 import type { AttachmentTray } from "../attachments";
 import { useDraft } from "../useDraft";
+import { useSlash } from "../useSlash";
 
 type Props = {
   channelId: string;
@@ -90,6 +91,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   useShortcut("shift+enter", "composer", "newline", undefined, !threadRootId);
   useShortcut("arrowup", "composer", "lastMessage", undefined, !threadRootId);
 
+  const slashRun = useSlash({ channelId, threadRootId });
   const draft = useDraft({ channelId, threadRootId, enabled: session.data?.actor.kind === "human" && !readOnly, text, setText, tray });
 
   const mention = activeMention(text, caret);
@@ -97,7 +99,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     () => (mention && actors.data ? rankMentions(mention.query, [...actors.data.values()], memberIds) : []),
     [mention, actors.data, memberIds],
   );
-  const slash = /^\/\w*$/.test(text) ? commandList.filter((c) => `/${c.name}`.startsWith(text)) : [];
+  const slash = matchCommands(text, { admin: slashRun.admin });
   const questionList = answerSuggestions(text, openQuestions.data ?? []);
   const popup: "mention" | "slash" | "question" | null = mentionList.length ? "mention" : slash.length ? "slash" : questionList.length ? "question" : null;
   const options = popup === "mention" ? mentionList.length : popup === "question" ? questionList.length : slash.length;
@@ -134,8 +136,19 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     if (!body && !tray.fileIds.length) return;
     const cmd = parseCommand(body);
     try {
-      if (cmd.kind === "invalid") {
+      if (cmd.kind === "invalid" && (cmd.name === "answer" || cmd.name === "schedule")) {
         toast(t(cmd.name === "answer" ? "composer.answerHelp" : "composer.scheduleHelp"), { tone: "danger" });
+        return;
+      }
+      if (cmd.kind !== "message" && cmd.kind !== "schedule" && cmd.kind !== "answer") {
+        const result = await slashRun.run(cmd);
+        if (result === "keep") return;
+        const next = result === "help" ? "/" : "";
+        setText(next);
+        setCaret(next.length);
+        setPick(0);
+        if (result === "clear") draft.sent();
+        area.current?.focus();
         return;
       }
       if (cmd.kind === "schedule") {
@@ -146,7 +159,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
         toast(t("composer.answered", { q: q.formatted_number }));
       } else {
         const res = await send.mutateAsync({
-          body: body || tray.items.map((a) => a.file.name).join(", "),
+          body: cmd.body ?? (body || tray.items.map((a) => a.file.name).join(", ")),
           client_msg_id: randomId(),
           ...(threadRootId ? { thread_root_id: threadRootId } : {}),
           ...(threadRootId && alsoToChannel && alsoInChannel ? { also_in_channel: true } : {}),
@@ -174,7 +187,9 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : options - 1)) % options);
         return;
       }
-      if (e.key === "Enter" || e.key === "Tab") {
+      // Enter on a command typed in full runs it; Tab still completes.
+      const typedInFull = popup === "slash" && e.key === "Enter" && `/${slash[pick]?.name}` === text;
+      if ((e.key === "Enter" || e.key === "Tab") && !typedInFull) {
         e.preventDefault();
         choose(pick);
         return;
@@ -267,6 +282,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
               ))}
         </ul>
       ) : null}
+      {slashRun.dialog}
       <Tray tray={tray} />
       <textarea
         ref={area}

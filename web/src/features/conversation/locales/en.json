@@ -69,7 +69,22 @@
     "schedule": "A one-off scheduled message",
     "daily": "A daily message",
     "cron": "A repeating message with a cron expression",
-    "answer": "Answer a question (Q number)"
+    "answer": "Answer a question (Q number)",
+    "remind": "Remind me: in 20m, 1h, tomorrow, monday or at 14:00; /remind me about this",
+    "pin": "Pin my last message here (in a thread: its first message)",
+    "save": "Save the latest message for later (in a thread: the thread)",
+    "mute": "Mute this conversation",
+    "unmute": "Unmute: back to the default notifications",
+    "notify": "Notifications here: all messages, only mentions or nothing",
+    "status": "Set or clear your status text",
+    "search": "Search for something",
+    "thread": "Open the thread of the latest message",
+    "drafts": "Open your drafts",
+    "saved": "Open your saved items",
+    "activity": "Open your activity",
+    "stop": "Stop an agent (with a confirmation)",
+    "emergency": "Open the emergency stop (press and hold to confirm)",
+    "help": "List every command"
   },
   "message": {
     "more": "More",
@@ -330,5 +345,18 @@
     "open": "Open",
     "leak": "People who are not in {{name}} will see this.",
     "leakDm": "This is a direct message; people who are not in it will see this."
+  },
+  "slash": {
+    "unknown": "Unknown command: /{{name}}. /help lists them; //text sends a message that starts with /.",
+    "usage": "Use: {{usage}}",
+    "noMessage": "There is no message here to use it on yet.",
+    "pinned": "Pinned.",
+    "alreadyPinned": "It is already pinned.",
+    "saved": "Saved for later.",
+    "reminder": "I will remind you: {{when}}.",
+    "notify": "Notifications here: {{level}}.",
+    "unmuted": "Unmuted.",
+    "status": "Status set.",
+    "statusCleared": "Status cleared."
   }
 }

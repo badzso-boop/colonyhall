@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { identityKeys } from "@/features/identity";
 import { Toaster, useToasts } from "@/shared/ui";
 import type { AttachmentTray } from "../attachments";
@@ -21,10 +22,10 @@ const tray: AttachmentTray = { items: [], add: vi.fn(), remove: vi.fn(), retry: 
 
 type Draft = { channel_id: string; thread_root_id?: string; body: string; attachments: []; updated_at: string };
 
-function setup(drafts: Draft[] = [], thread?: { rootId: string; channel: string }) {
+function setup(drafts: Draft[] = [], thread?: { rootId: string; channel: string }, role = "member") {
   const qc = new QueryClient();
   qc.setQueryData(identityKeys.actors, new Map([[me.id, me], [agent.id, agent]]));
-  qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "" });
+  qc.setQueryData(identityKeys.session, { actor: { ...me, role }, csrf_token: "" });
   const sent: unknown[] = [];
   const draftCalls: Array<{ method: string; body?: unknown; query?: string }> = [];
   vi.stubGlobal(
@@ -34,6 +35,10 @@ function setup(drafts: Draft[] = [], thread?: { rootId: string; channel: string 
       if (path.endsWith("/me/drafts")) {
         if (req.method === "GET") return new Response(JSON.stringify({ drafts }), { headers: { "Content-Type": "application/json" } });
         draftCalls.push({ method: req.method, body: await req.clone().json().catch(() => undefined), query: new URL(req.url).search });
+        return new Response(null, { status: 204 });
+      }
+      if (req.method === "PUT" || req.method === "DELETE") {
+        sent.push({ method: req.method, path, body: await req.clone().json().catch(() => null) });
         return new Response(null, { status: 204 });
       }
       if (req.method === "POST") sent.push({ path: new URL(req.url).pathname, body: await req.clone().json().catch(() => null) });
@@ -47,7 +52,9 @@ function setup(drafts: Draft[] = [], thread?: { rootId: string; channel: string 
   );
   render(
     <QueryClientProvider client={qc}>
+      <MemoryRouter>
       <Composer channelId="c1" threadRootId={thread?.rootId} alsoToChannel={thread?.channel} placeholder="Üzenet" memberIds={new Set(["ag"])} tray={tray} />
+      </MemoryRouter>
       <Toaster closeLabel="Bezárás" />
     </QueryClientProvider>,
   );
@@ -152,4 +159,69 @@ test("a thread reply can also go to the channel, as one flagged message", async 
   await waitFor(() => expect(sent).toHaveLength(1));
   expect(sent[0]).toMatchObject({ body: { body: "kész", thread_root_id: "r1", also_in_channel: true } });
   await waitFor(() => expect((screen.getByRole("checkbox", { name: "Küldés a #general csatornába is" }) as HTMLInputElement).checked).toBe(false));
+});
+
+async function submit(box: HTMLTextAreaElement, value: string) {
+  fireEvent.change(box, { target: { value, selectionStart: value.length } });
+  await act(async () => {
+    fireEvent.keyDown(box, { key: "Enter" });
+  });
+}
+
+test("an unknown command is refused with a hint and kept, never sent", async () => {
+  const { box, sent } = setup();
+  await submit(box, "/frobnicate now");
+  expect(sent).toHaveLength(0);
+  expect(screen.getByRole("status").textContent).toContain("/frobnicate");
+  expect(box.value).toBe("/frobnicate now");
+});
+
+test("//text sends a message that starts with /", async () => {
+  const { box, sent } = setup();
+  await submit(box, "//pin is a command");
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toMatchObject({ path: "/api/v1/channels/c1/messages", body: { body: "/pin is a command" } });
+});
+
+test("/notify sets the level here instead of sending", async () => {
+  const { box, sent } = setup();
+  await submit(box, "/notify all");
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toMatchObject({ method: "PUT", path: "/api/v1/channels/c1/notify", body: { level: "all" } });
+  await waitFor(() => expect(box.value).toBe(""));
+});
+
+test("/remind keeps a text with a time as a saved reminder", async () => {
+  const { box, sent } = setup();
+  await submit(box, "/remind 20m nézd meg a buildet");
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toMatchObject({ path: "/api/v1/me/saved", body: { note: "nézd meg a buildet" } });
+  expect(typeof (sent[0] as { body: { remind_at: string } }).body.remind_at).toBe("string");
+});
+
+test("/help lists every command", async () => {
+  const { box } = setup();
+  await submit(box, "/help");
+  await waitFor(() => expect(box.value).toBe("/"));
+  const list = screen.getByRole("listbox", { name: "Parancsok" });
+  expect(list.textContent).toContain("/remind");
+  expect(list.textContent).toContain("/search");
+});
+
+test("/emergency is neither listed nor run for a member, and only opens a dialog for an admin", async () => {
+  const { box, sent } = setup();
+  fireEvent.change(box, { target: { value: "/em", selectionStart: 3 } });
+  expect(screen.queryByRole("listbox", { name: "Parancsok" })).toBeNull();
+  await submit(box, "/emergency");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(sent).toHaveLength(0);
+});
+
+test("/emergency opens the press-and-hold dialog for an admin; Enter stops nothing", async () => {
+  const { box, sent } = setup([], undefined, "admin");
+  fireEvent.change(box, { target: { value: "/em", selectionStart: 3 } });
+  expect(screen.getByRole("listbox", { name: "Parancsok" }).textContent).toContain("/emergency");
+  await submit(box, "/emergency");
+  await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+  expect(sent).toHaveLength(0);
 });

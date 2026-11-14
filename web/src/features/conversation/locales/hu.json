@@ -69,7 +69,22 @@
     "schedule": "Egyszeri ütemezett üzenet",
     "daily": "Naponta ismétlődő üzenet",
     "cron": "Ismétlődő üzenet cron-kifejezéssel",
-    "answer": "Válasz egy kérdésre (Q-szám)"
+    "answer": "Válasz egy kérdésre (Q-szám)",
+    "remind": "Emlékeztető: 20m, 1h, holnap, hétfő vagy 14:00; /remind me about this",
+    "pin": "Az utolsó üzenetem kitűzése itt (szálban: a szál első üzenete)",
+    "save": "A legutóbbi üzenet mentése későbbre (szálban: a szál)",
+    "mute": "A beszélgetés némítása",
+    "unmute": "Némítás feloldása: vissza az alapértelmezett értesítéshez",
+    "notify": "Értesítés itt: minden üzenet, csak említés vagy semmi",
+    "status": "Az állapotszöveged beállítása vagy törlése",
+    "search": "Keresés",
+    "thread": "A legutóbbi üzenet szálának megnyitása",
+    "drafts": "A piszkozataid",
+    "saved": "A mentett elemeid",
+    "activity": "A tevékenységeid",
+    "stop": "Egy agent leállítása (megerősítéssel)",
+    "emergency": "A vészleállítás megnyitása (nyomva tartással erősíted meg)",
+    "help": "Az összes parancs"
   },
   "message": {
     "more": "Több",
@@ -330,5 +345,18 @@
     "open": "Megnyitás",
     "leak": "Akik nincsenek benne a(z) {{name}} csatornában, ezt látni fogják.",
     "leakDm": "Ez egy közvetlen üzenet; akik nincsenek benne, látni fogják."
+  },
+  "slash": {
+    "unknown": "Ismeretlen parancs: /{{name}}. A /help felsorolja őket; //szöveg perjellel kezdődő üzenetet küld.",
+    "usage": "Így: {{usage}}",
+    "noMessage": "Itt még nincs üzenet, amire vonatkozhatna.",
+    "pinned": "Kitűzve.",
+    "alreadyPinned": "Már ki van tűzve.",
+    "saved": "Elmentve későbbre.",
+    "reminder": "Emlékeztetlek: {{when}}.",
+    "notify": "Értesítés itt: {{level}}.",
+    "unmuted": "Némítás feloldva.",
+    "status": "Állapot beállítva.",
+    "statusCleared": "Állapot törölve."
   }
 }
