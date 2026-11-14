@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 import { feedItems } from "@/shared/lib";
 import { localeOf } from "@/shared/i18n";
 import { Skeleton } from "@/shared/ui";
@@ -9,6 +10,27 @@ import { CompactionLive } from "@/features/compaction";
 import { MessageItem, type MessageHandlers, type Viewer } from "./MessageItem";
 
 const NEAR_BOTTOM = 80;
+/** How many older pages a link may load while looking for its message. */
+const MAX_JUMP_PAGES = 40;
+
+/**
+ * Scrolls a message into the middle of its scroller and marks it for a
+ * moment (data-highlight, styled by MessageItem). Returns the clean-up.
+ */
+export function markMessage(root: HTMLElement | null, id: string): () => void {
+  let el: HTMLElement | null = null;
+  const frame = requestAnimationFrame(() => {
+    el = root?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`) ?? null;
+    el?.scrollIntoView({ block: "center" });
+    el?.setAttribute("data-highlight", "");
+  });
+  const timer = window.setTimeout(() => el?.removeAttribute("data-highlight"), 2500);
+  return () => {
+    cancelAnimationFrame(frame);
+    window.clearTimeout(timer);
+    el?.removeAttribute("data-highlight");
+  };
+}
 
 /**
  * A conversation's feed (round 31, part 5): day separators, the
@@ -62,6 +84,35 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
     }
     seenCount.current = stream.length;
   }, [stream.length]);
+
+  // A link to a message (?msg=…, round 55): load older pages until it is
+  // there, scroll it to the middle and mark it for a moment. A thread reply
+  // (?thread=…&msg=…) is shown in the thread; here its root is the target.
+  const [params] = useSearchParams();
+  const jumpMsg = params.get("msg");
+  const jumpThread = params.get("thread");
+  const jumpDone = useRef<string | null>(null);
+  const jumpTries = useRef(0);
+  useEffect(() => {
+    const key = jumpMsg ? `${jumpThread ?? ""}:${jumpMsg}` : null;
+    if (!key || !jumpMsg || jumpDone.current === key || messages.isPending) return;
+    const target = stream.some((m) => m.id === jumpMsg) ? jumpMsg : jumpThread && stream.some((m) => m.id === jumpThread) ? jumpThread : null;
+    if (target) {
+      jumpDone.current = key;
+      jumpTries.current = 0;
+      atBottom.current = false;
+      seenCount.current = stream.length;
+      return markMessage(scroller.current, target);
+    }
+    if (messages.hasNextPage && !messages.isFetchingNextPage && jumpTries.current < MAX_JUMP_PAGES) {
+      jumpTries.current++;
+      prevHeight.current = scroller.current?.scrollHeight ?? null;
+      seenCount.current = Number.MAX_SAFE_INTEGER;
+      void messages.fetchNextPage();
+    } else if (!messages.hasNextPage || jumpTries.current >= MAX_JUMP_PAGES) {
+      jumpDone.current = key; // not here (retracted, or too old): stay at the end
+    }
+  }, [jumpMsg, jumpThread, stream, messages]);
 
   useEffect(markIfVisible, [markIfVisible, stream.length]);
   useEffect(() => {
@@ -155,3 +206,4 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
     </div>
   );
 }
+

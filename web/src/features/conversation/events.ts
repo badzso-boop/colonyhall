@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { onEvent, onResync, type AppEvent } from "@/shared/api";
-import { conversationKeys, draftsKey, type Message, type MessagePages } from "./api";
+import { conversationKeys, draftsKey, pinsKey, type Message, type MessagePages } from "./api";
 import { applyReply } from "./model";
 
 function fromEvent(e: AppEvent<"message.created">): Message {
@@ -18,6 +18,7 @@ function fromEvent(e: AppEvent<"message.created">): Message {
     created_at: d.created_at,
     reactions: [],
     attachments: d.attachments ?? [],
+    ...(d.important ? { important: true, pinned: true } : {}),
   };
 }
 
@@ -57,6 +58,13 @@ export function registerConversationEvents(qc: QueryClient): () => void {
       reloadChannel(e.data.channel_id);
       if (e.data.thread_root_id) void qc.invalidateQueries({ queryKey: conversationKeys.thread(e.data.thread_root_id) });
     }),
+    ...(["message.pinned", "message.unpinned"] as const).map((type) =>
+      onEvent(type, (e) => {
+        void qc.invalidateQueries({ queryKey: pinsKey(e.data.channel_id) });
+        reloadChannel(e.data.channel_id);
+        if (e.data.thread_root_id) void qc.invalidateQueries({ queryKey: conversationKeys.thread(e.data.thread_root_id) });
+      }),
+    ),
     onEvent("reaction.added", (e) => reloadChannel(e.data.channel_id)),
     onEvent("reaction.removed", (e) => reloadChannel(e.data.channel_id)),
     onEvent("channel.created", channels),

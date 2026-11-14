@@ -52,8 +52,8 @@ ORDER BY joined_at ASC;
 -- name: InsertMessage :exec
 INSERT INTO message (id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body,
                      mentions, reply_count, last_reply_at, created_at, origin_channel_id, origin_thread_id,
-                     answers_message_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);
+                     answers_message_id, important)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);
 
 -- name: LatestTopLevelMessageByAuthor :one
 SELECT * FROM message
@@ -195,3 +195,23 @@ JOIN message r ON r.id = t.id
 WHERE NOT sqlc.arg(unread_only)::boolean OR t.unread_replies > 0
 ORDER BY r.last_reply_at DESC, r.id DESC
 LIMIT sqlc.arg(page_size);
+
+-- name: InsertPin :exec
+INSERT INTO message_pin (id, workspace_id, channel_id, message_id, pinned_by, pinned_at)
+VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: Unpin :execrows
+UPDATE message_pin SET unpinned_by = sqlc.arg(by)::uuid, unpinned_at = sqlc.arg(at)::timestamptz
+WHERE message_id = sqlc.arg(message_id) AND unpinned_at IS NULL;
+
+-- name: ActivePins :many
+SELECT * FROM message_pin WHERE channel_id = $1 AND unpinned_at IS NULL ORDER BY pinned_at DESC, id DESC;
+
+-- name: CountActivePins :one
+SELECT count(*) FROM message_pin WHERE channel_id = $1 AND unpinned_at IS NULL;
+
+-- name: CountPinsBy :one
+SELECT count(*) FROM message_pin WHERE channel_id = $1 AND pinned_by = $2 AND pinned_at > sqlc.arg(since)::timestamptz;
+
+-- name: PinnedAmong :many
+SELECT message_id FROM message_pin WHERE message_id = ANY(sqlc.arg(message_ids)::uuid[]) AND unpinned_at IS NULL;

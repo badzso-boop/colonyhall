@@ -276,5 +276,16 @@
     "files_other": "+ {{count}} files",
     "delete": "Delete draft",
     "has": "Draft"
+  },
+  "pins": {
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinned": "Pinned",
+    "unpinned": "Unpinned",
+    "pinnedHere": "Pinned message",
+    "important": "Important",
+    "title": "Pinned messages",
+    "open_one": "{{count}} pinned message",
+    "open_other": "{{count}} pinned messages"
   }
 }

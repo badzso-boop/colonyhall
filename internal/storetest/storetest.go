@@ -104,6 +104,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("agents", func(t *testing.T) { testAgentLifecycle(t, newBackend(t)) })
 	t.Run("channeledit", func(t *testing.T) { testChannelEdit(t, newBackend(t)) })
 	t.Run("drafts", func(t *testing.T) { testDrafts(t, newBackend(t)) })
+	t.Run("pins", func(t *testing.T) { testPins(t, newBackend(t)) })
 }
 
 var (

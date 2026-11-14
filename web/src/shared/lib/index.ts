@@ -11,3 +11,4 @@ export { activeMention, fuzzyScore, insertMention, rankMentions, type MentionCan
 export { insertIntoComposer, useComposerInsert } from "./composerInsert";
 export { closeScheduleBuilder, openScheduleBuilder, useScheduleDraft, type ScheduleDraft } from "./scheduleDraft";
 export { comboOf, handleKey, installShortcuts, keyLabels, registerShortcut, useShortcut, useShortcuts, type Scope, type Shortcut } from "./shortcuts";
+export { messageHref, messageURL, type MessageRef } from "./links";

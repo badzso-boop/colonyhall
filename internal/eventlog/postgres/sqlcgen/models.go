@@ -455,6 +455,7 @@ type Message struct {
 	OriginChannelID  *uuid.UUID
 	OriginThreadID   *uuid.UUID
 	AnswersMessageID *uuid.UUID
+	Important        bool
 }
 
 type MessageFile struct {
@@ -462,6 +463,17 @@ type MessageFile struct {
 	FileID      uuid.UUID
 	Position    int32
 	WorkspaceID uuid.UUID
+}
+
+type MessagePin struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ChannelID   uuid.UUID
+	MessageID   uuid.UUID
+	PinnedBy    uuid.UUID
+	PinnedAt    time.Time
+	UnpinnedBy  *uuid.UUID
+	UnpinnedAt  *time.Time
 }
 
 type ModelPrice struct {

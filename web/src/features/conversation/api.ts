@@ -390,3 +390,24 @@ export function useDraftWriter() {
     };
   }, [qc]);
 }
+
+export type PinnedMessage = Schemas["PinnedMessage"];
+export const pinsKey = (channelId: string) => ["conversation", "pins", channelId] as const;
+
+/** The conversation's pinned messages, newest pin first (round 55, part D). */
+export function usePins(channelId: string) {
+  return useQuery({
+    queryKey: pinsKey(channelId),
+    queryFn: async () => unwrap(await api.GET("/channels/{channelId}/pins", { params: { path: { channelId } } })).pins,
+  });
+}
+
+/** Pins or unpins a message; message.pinned / message.unpinned refresh the views. */
+export function useSetPin() {
+  return useMutation({
+    mutationFn: async ({ messageId, pinned }: { messageId: string; pinned: boolean }) => {
+      const params = { params: { path: { messageId } } };
+      unwrap(pinned ? await api.PUT("/messages/{messageId}/pin", params) : await api.DELETE("/messages/{messageId}/pin", params));
+    },
+  });
+}

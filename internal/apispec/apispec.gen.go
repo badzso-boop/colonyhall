@@ -3008,24 +3008,30 @@ type MarkedCount struct {
 // Message defines model for Message.
 type Message struct {
 	// Answers Set on an agent's answer posted in its origin thread: the DM reply it answers
-	Answers      *MessageAnswers      `json:"answers,omitempty"`
-	Attachments  *[]FileAttachment    `json:"attachments,omitempty"`
-	AuthorId     openapi_types.UUID   `json:"author_id"`
-	Body         string               `json:"body"`
-	ChannelId    openapi_types.UUID   `json:"channel_id"`
-	ClientMsgId  *string              `json:"client_msg_id,omitempty"`
-	CompactionId *openapi_types.UUID  `json:"compaction_id,omitempty"`
-	CreatedAt    time.Time            `json:"created_at"`
-	DeletedAt    *time.Time           `json:"deleted_at,omitempty"`
-	DeletedBy    *openapi_types.UUID  `json:"deleted_by,omitempty"`
-	Id           openapi_types.UUID   `json:"id"`
-	Kind         MessageKind          `json:"kind"`
-	LastReplyAt  *time.Time           `json:"last_reply_at,omitempty"`
-	LinkCards    *[]LinkCard          `json:"link_cards,omitempty"`
-	Mentions     []openapi_types.UUID `json:"mentions"`
-	Origin       *MessageOrigin       `json:"origin,omitempty"`
-	Reactions    *[]ReactionSummary   `json:"reactions,omitempty"`
-	ReplyCount   int                  `json:"reply_count"`
+	Answers      *MessageAnswers     `json:"answers,omitempty"`
+	Attachments  *[]FileAttachment   `json:"attachments,omitempty"`
+	AuthorId     openapi_types.UUID  `json:"author_id"`
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ClientMsgId  *string             `json:"client_msg_id,omitempty"`
+	CompactionId *openapi_types.UUID `json:"compaction_id,omitempty"`
+	CreatedAt    time.Time           `json:"created_at"`
+	DeletedAt    *time.Time          `json:"deleted_at,omitempty"`
+	DeletedBy    *openapi_types.UUID `json:"deleted_by,omitempty"`
+	Id           openapi_types.UUID  `json:"id"`
+
+	// Important An agent sent it marked important (a result, a decision, something a person must act on)
+	Important   *bool                `json:"important,omitempty"`
+	Kind        MessageKind          `json:"kind"`
+	LastReplyAt *time.Time           `json:"last_reply_at,omitempty"`
+	LinkCards   *[]LinkCard          `json:"link_cards,omitempty"`
+	Mentions    []openapi_types.UUID `json:"mentions"`
+	Origin      *MessageOrigin       `json:"origin,omitempty"`
+
+	// Pinned Pinned in its conversation now
+	Pinned     *bool              `json:"pinned,omitempty"`
+	Reactions  *[]ReactionSummary `json:"reactions,omitempty"`
+	ReplyCount int                `json:"reply_count"`
 
 	// ReplyParticipantIds Up to 3 authors of the replies, the most recent replier first (thread roots only).
 	ReplyParticipantIds *[]openapi_types.UUID `json:"reply_participant_ids,omitempty"`
@@ -3184,6 +3190,18 @@ type OverviewUsage struct {
 type PairingCode struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// PinList defines model for PinList.
+type PinList struct {
+	Pins []PinnedMessage `json:"pins"`
+}
+
+// PinnedMessage defines model for PinnedMessage.
+type PinnedMessage struct {
+	Message  Message            `json:"message"`
+	PinnedAt time.Time          `json:"pinned_at"`
+	PinnedBy openapi_types.UUID `json:"pinned_by"`
 }
 
 // PlannerAccess defines model for PlannerAccess.
@@ -3687,8 +3705,11 @@ type SendMessageRequest struct {
 	Elaborate *bool `json:"elaborate,omitempty"`
 
 	// FileIds Attached file IDs
-	FileIds      *[]openapi_types.UUID `json:"file_ids,omitempty"`
-	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
+	FileIds *[]openapi_types.UUID `json:"file_ids,omitempty"`
+
+	// Important Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400).
+	Important    *bool               `json:"important,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // SendResult defines model for SendResult.

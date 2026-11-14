@@ -276,5 +276,16 @@
     "files_other": "+ {{count}} fájl",
     "delete": "Piszkozat törlése",
     "has": "Piszkozat"
+  },
+  "pins": {
+    "pin": "Kitűzés",
+    "unpin": "Kitűzés megszüntetése",
+    "pinned": "Kitűzve",
+    "unpinned": "Kitűzés megszüntetve",
+    "pinnedHere": "Kitűzött üzenet",
+    "important": "Fontos",
+    "title": "Kitűzött üzenetek",
+    "open_one": "{{count}} kitűzött üzenet",
+    "open_other": "{{count}} kitűzött üzenet"
   }
 }

@@ -25,6 +25,8 @@ export type EventPayloads = {
   "workspace.emergency_cleared": S["EventEmergency"];
   "delivery.item_created": S["EventDeliveryItemCreated"];
   "draft.changed": S["EventDraftChanged"];
+  "message.pinned": S["EventPin"];
+  "message.unpinned": S["EventPin"];
 };
 
 export type KnownEvent = keyof EventPayloads;

@@ -151,6 +151,10 @@ type Message struct {
 	// AnswersMessageID is the DM reply an agent's answer in its origin
 	// thread responds to (set by the guard, checked on send).
 	AnswersMessageID ids.ID
+	// Important: an agent marked it (MCP send important: true); such a
+	// message is pinned when sent (round 55, part D).
+	Important        bool
+	Pinned           bool              // filled on reads
 	AnswersChannelID ids.ID            // filled on reads
 	AnswersAuthorID  ids.ID            // filled on reads
 	Reactions        []ReactionSummary // filled on reads
@@ -172,8 +176,32 @@ type LinkCardProvider interface {
 	LinkCardsForMessages(ctx context.Context, messages []Message) (map[ids.ID][]LinkCard, error)
 }
 
+// Pin is a message pinned in its conversation. Unpinning marks the row.
+type Pin struct {
+	ID          ids.ID
+	WorkspaceID ids.ID
+	ChannelID   ids.ID
+	MessageID   ids.ID
+	PinnedBy    ids.ID
+	PinnedAt    time.Time
+	UnpinnedBy  *ids.ID
+	UnpinnedAt  *time.Time
+}
+
+// PinnedMessage is a pin with its message, for the conversation's list.
+type PinnedMessage struct {
+	Pin     Pin
+	Message Message
+}
+
 // Limits.
 const (
+	// MaxPins bounds the pinned messages of one conversation.
+	MaxPins = 50
+	// AgentPinsPerDay bounds how many pins one agent makes in one
+	// conversation in 24 hours, so an agent cannot flood the list.
+	AgentPinsPerDay = 5
+
 	MaxBodyLen      = 20000
 	MaxClientMsgID  = 64
 	DefaultPageSize = 50
@@ -203,6 +231,11 @@ var (
 	ErrDMUnchangeable     = errors.New("a DM cannot be renamed, archived or have its members changed")
 	ErrNothingToUpdate    = errors.New("give a name or a description to change")
 	ErrBadMuteUntil       = errors.New("until must be in the future")
+	ErrPinLimit           = errors.New("a conversation has at most 50 pinned messages; unpin one first")
+	ErrAgentPinLimit      = errors.New("an agent pins at most 5 messages per conversation per day")
+	ErrPinOwnOnly         = errors.New("an agent can pin only its own messages")
+	ErrPinRetracted       = errors.New("a retracted message cannot be pinned")
+	ErrImportantHumans    = errors.New("only agents mark a message important; people pin it")
 )
 
 // MaxDescriptionLen is the maximum allowed length of a channel description.

@@ -734,6 +734,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/channels/{channelId}/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The conversation's pinned messages, newest pin first (at most 50),
+         *     for anyone who can read it (round 55).
+         */
+        get: operations["listPins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{messageId}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Pins the message in its conversation (members who can write there;
+         *     an agent only its own messages, at most 5 per conversation a day).
+         *     Pinning a pinned message is a no-op. At most 50 pins per conversation.
+         */
+        put: operations["pinMessage"];
+        post?: never;
+        /** @description Unpins the message (people who can write in the conversation). */
+        delete: operations["unpinMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/reactions/{emoji}": {
         parameters: {
             query?: never;
@@ -3327,6 +3371,20 @@ export interface components {
             deleted_by?: string | null;
             origin?: components["schemas"]["MessageOrigin"];
             answers?: components["schemas"]["MessageAnswers"];
+            /** @description Pinned in its conversation now */
+            pinned?: boolean;
+            /** @description An agent sent it marked important (a result, a decision, something a person must act on) */
+            important?: boolean;
+        };
+        PinnedMessage: {
+            message: components["schemas"]["Message"];
+            /** Format: uuid */
+            pinned_by: string;
+            /** Format: date-time */
+            pinned_at: string;
+        };
+        PinList: {
+            pins: components["schemas"]["PinnedMessage"][];
         };
         /** @description Set on an agent's answer posted in its origin thread: the DM reply it answers */
         MessageAnswers: {
@@ -3362,6 +3420,8 @@ export interface components {
              * @description Agents (guard): the message this answer replies to, in another channel the agent can read
              */
             answers_message_id?: string;
+            /** @description Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400). */
+            important?: boolean;
         };
         SendResult: {
             message?: components["schemas"]["Message"];
@@ -3470,7 +3530,7 @@ export interface components {
          *     EventActorProfileUpdated; workspace.emergency_activated,
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
          *     EventDeliveryItemCreated; draft.changed (the owner only) →
-         *     EventDraftChanged.
+         *     EventDraftChanged; message.pinned, message.unpinned → EventPin.
          */
         WsEvent: {
             /** @enum {string} */
@@ -3563,8 +3623,22 @@ export interface components {
             no_thread_follow?: boolean;
             silent?: boolean;
             attachments?: components["schemas"]["EventAttachment"][];
+            important?: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        EventPin: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            message_author_id: string;
+            important?: boolean;
         };
         EventAttachment: {
             /** Format: uuid */
@@ -6575,6 +6649,79 @@ export interface operations {
                 content?: never;
             };
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    pinMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pinned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    unpinMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unpinned (no-op if it was not pinned) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

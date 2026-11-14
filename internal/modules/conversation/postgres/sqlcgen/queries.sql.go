@@ -12,6 +12,39 @@ import (
 	"github.com/google/uuid"
 )
 
+const activePins = `-- name: ActivePins :many
+SELECT id, workspace_id, channel_id, message_id, pinned_by, pinned_at, unpinned_by, unpinned_at FROM message_pin WHERE channel_id = $1 AND unpinned_at IS NULL ORDER BY pinned_at DESC, id DESC
+`
+
+func (q *Queries) ActivePins(ctx context.Context, channelID uuid.UUID) ([]MessagePin, error) {
+	rows, err := q.db.Query(ctx, activePins, channelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MessagePin
+	for rows.Next() {
+		var i MessagePin
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ChannelID,
+			&i.MessageID,
+			&i.PinnedBy,
+			&i.PinnedAt,
+			&i.UnpinnedBy,
+			&i.UnpinnedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const addMember = `-- name: AddMember :exec
 INSERT INTO channel_member (channel_id, actor_id, can_write, msg_count, mention_count, joined_at, left_at)
 VALUES ($1, $2, $3, $4, $5, $6, NULL)
@@ -236,6 +269,34 @@ func (q *Queries) ChannelsForActor(ctx context.Context, arg ChannelsForActorPara
 	return items, nil
 }
 
+const countActivePins = `-- name: CountActivePins :one
+SELECT count(*) FROM message_pin WHERE channel_id = $1 AND unpinned_at IS NULL
+`
+
+func (q *Queries) CountActivePins(ctx context.Context, channelID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActivePins, channelID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPinsBy = `-- name: CountPinsBy :one
+SELECT count(*) FROM message_pin WHERE channel_id = $1 AND pinned_by = $2 AND pinned_at > $3::timestamptz
+`
+
+type CountPinsByParams struct {
+	ChannelID uuid.UUID
+	PinnedBy  uuid.UUID
+	Since     time.Time
+}
+
+func (q *Queries) CountPinsBy(ctx context.Context, arg CountPinsByParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPinsBy, arg.ChannelID, arg.PinnedBy, arg.Since)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createChannel = `-- name: CreateChannel :exec
 INSERT INTO channel (id, workspace_id, kind, name, description, msg_count, created_by, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -309,8 +370,8 @@ func (q *Queries) IncrementMsgCount(ctx context.Context, id uuid.UUID) (int64, e
 const insertMessage = `-- name: InsertMessage :exec
 INSERT INTO message (id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body,
                      mentions, reply_count, last_reply_at, created_at, origin_channel_id, origin_thread_id,
-                     answers_message_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                     answers_message_id, important)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 `
 
 type InsertMessageParams struct {
@@ -329,6 +390,7 @@ type InsertMessageParams struct {
 	OriginChannelID  *uuid.UUID
 	OriginThreadID   *uuid.UUID
 	AnswersMessageID *uuid.UUID
+	Important        bool
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) error {
@@ -348,12 +410,39 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.OriginChannelID,
 		arg.OriginThreadID,
 		arg.AnswersMessageID,
+		arg.Important,
+	)
+	return err
+}
+
+const insertPin = `-- name: InsertPin :exec
+INSERT INTO message_pin (id, workspace_id, channel_id, message_id, pinned_by, pinned_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertPinParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ChannelID   uuid.UUID
+	MessageID   uuid.UUID
+	PinnedBy    uuid.UUID
+	PinnedAt    time.Time
+}
+
+func (q *Queries) InsertPin(ctx context.Context, arg InsertPinParams) error {
+	_, err := q.db.Exec(ctx, insertPin,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ChannelID,
+		arg.MessageID,
+		arg.PinnedBy,
+		arg.PinnedAt,
 	)
 	return err
 }
 
 const lastMessageNotBy = `-- name: LastMessageNotBy :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message WHERE channel_id = $1 AND author_id <> $2 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1
 `
 
 type LastMessageNotByParams struct {
@@ -382,12 +471,13 @@ func (q *Queries) LastMessageNotBy(ctx context.Context, arg LastMessageNotByPara
 		&i.OriginChannelID,
 		&i.OriginThreadID,
 		&i.AnswersMessageID,
+		&i.Important,
 	)
 	return i, err
 }
 
 const latestTopLevelMessageByAuthor = `-- name: LatestTopLevelMessageByAuthor :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message
 WHERE channel_id = $1 AND author_id = $2 AND thread_root_id IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT 1
@@ -419,6 +509,7 @@ func (q *Queries) LatestTopLevelMessageByAuthor(ctx context.Context, arg LatestT
 		&i.OriginChannelID,
 		&i.OriginThreadID,
 		&i.AnswersMessageID,
+		&i.Important,
 	)
 	return i, err
 }
@@ -469,8 +560,8 @@ func (q *Queries) ListMembers(ctx context.Context, channelID uuid.UUID) ([]ListM
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM (
-    SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM (
+    SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message
     WHERE channel_id = $1 AND deleted_at IS NULL
       AND ($2::uuid IS NULL OR id < $2::uuid)
     ORDER BY id DESC
@@ -511,6 +602,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.OriginChannelID,
 			&i.OriginThreadID,
 			&i.AnswersMessageID,
+			&i.Important,
 		); err != nil {
 			return nil, err
 		}
@@ -523,7 +615,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const mainStreamMessages = `-- name: MainStreamMessages :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message WHERE channel_id = $1 AND thread_root_id IS NULL AND deleted_at IS NULL
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message WHERE channel_id = $1 AND thread_root_id IS NULL AND deleted_at IS NULL
 ORDER BY id
 `
 
@@ -554,6 +646,7 @@ func (q *Queries) MainStreamMessages(ctx context.Context, channelID uuid.UUID) (
 			&i.OriginChannelID,
 			&i.OriginThreadID,
 			&i.AnswersMessageID,
+			&i.Important,
 		); err != nil {
 			return nil, err
 		}
@@ -615,7 +708,7 @@ func (q *Queries) MemberIDs(ctx context.Context, channelID uuid.UUID) ([]uuid.UU
 }
 
 const messageByClientID = `-- name: MessageByClientID :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message WHERE author_id = $1 AND client_msg_id = $2
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message WHERE author_id = $1 AND client_msg_id = $2
 `
 
 type MessageByClientIDParams struct {
@@ -644,12 +737,13 @@ func (q *Queries) MessageByClientID(ctx context.Context, arg MessageByClientIDPa
 		&i.OriginChannelID,
 		&i.OriginThreadID,
 		&i.AnswersMessageID,
+		&i.Important,
 	)
 	return i, err
 }
 
 const messageByID = `-- name: MessageByID :one
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message WHERE id = $1
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message WHERE id = $1
 `
 
 func (q *Queries) MessageByID(ctx context.Context, id uuid.UUID) (Message, error) {
@@ -673,12 +767,13 @@ func (q *Queries) MessageByID(ctx context.Context, id uuid.UUID) (Message, error
 		&i.OriginChannelID,
 		&i.OriginThreadID,
 		&i.AnswersMessageID,
+		&i.Important,
 	)
 	return i, err
 }
 
 const messagesByIDs = `-- name: MessagesByIDs :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message WHERE id = ANY($1::uuid[]) ORDER BY id
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message WHERE id = ANY($1::uuid[]) ORDER BY id
 `
 
 func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message, error) {
@@ -708,6 +803,7 @@ func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message
 			&i.OriginChannelID,
 			&i.OriginThreadID,
 			&i.AnswersMessageID,
+			&i.Important,
 		); err != nil {
 			return nil, err
 		}
@@ -742,6 +838,30 @@ func (q *Queries) Mutes(ctx context.Context, actorID uuid.UUID) ([]ChannelMute, 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pinnedAmong = `-- name: PinnedAmong :many
+SELECT message_id FROM message_pin WHERE message_id = ANY($1::uuid[]) AND unpinned_at IS NULL
+`
+
+func (q *Queries) PinnedAmong(ctx context.Context, messageIds []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, pinnedAmong, messageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var message_id uuid.UUID
+		if err := rows.Scan(&message_id); err != nil {
+			return nil, err
+		}
+		items = append(items, message_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1000,7 +1120,7 @@ func (q *Queries) SetThreadRead(ctx context.Context, arg SetThreadReadParams) er
 }
 
 const threadMessages = `-- name: ThreadMessages :many
-SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id FROM message WHERE (id = $1 OR thread_root_id = $1) AND deleted_at IS NULL
+SELECT id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body, mentions, reply_count, last_reply_at, created_at, deleted_at, deleted_by, origin_channel_id, origin_thread_id, answers_message_id, important FROM message WHERE (id = $1 OR thread_root_id = $1) AND deleted_at IS NULL
 ORDER BY id
 `
 
@@ -1031,6 +1151,7 @@ func (q *Queries) ThreadMessages(ctx context.Context, rootID uuid.UUID) ([]Messa
 			&i.OriginChannelID,
 			&i.OriginThreadID,
 			&i.AnswersMessageID,
+			&i.Important,
 		); err != nil {
 			return nil, err
 		}
@@ -1043,7 +1164,7 @@ func (q *Queries) ThreadMessages(ctx context.Context, rootID uuid.UUID) ([]Messa
 }
 
 const threadsForActor = `-- name: ThreadsForActor :many
-SELECT r.id, r.workspace_id, r.channel_id, r.thread_root_id, r.author_id, r.client_msg_id, r.kind, r.body, r.mentions, r.reply_count, r.last_reply_at, r.created_at, r.deleted_at, r.deleted_by, r.origin_channel_id, r.origin_thread_id, r.answers_message_id, t.last_read_at, t.unread_replies, t.mentioned
+SELECT r.id, r.workspace_id, r.channel_id, r.thread_root_id, r.author_id, r.client_msg_id, r.kind, r.body, r.mentions, r.reply_count, r.last_reply_at, r.created_at, r.deleted_at, r.deleted_by, r.origin_channel_id, r.origin_thread_id, r.answers_message_id, r.important, t.last_read_at, t.unread_replies, t.mentioned
 FROM (
     SELECT root.id,
            tr.last_read_at,
@@ -1123,6 +1244,7 @@ func (q *Queries) ThreadsForActor(ctx context.Context, arg ThreadsForActorParams
 			&i.Message.OriginChannelID,
 			&i.Message.OriginThreadID,
 			&i.Message.AnswersMessageID,
+			&i.Message.Important,
 			&i.LastReadAt,
 			&i.UnreadReplies,
 			&i.Mentioned,
@@ -1135,6 +1257,25 @@ func (q *Queries) ThreadsForActor(ctx context.Context, arg ThreadsForActorParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const unpin = `-- name: Unpin :execrows
+UPDATE message_pin SET unpinned_by = $1::uuid, unpinned_at = $2::timestamptz
+WHERE message_id = $3 AND unpinned_at IS NULL
+`
+
+type UnpinParams struct {
+	By        uuid.UUID
+	At        time.Time
+	MessageID uuid.UUID
+}
+
+func (q *Queries) Unpin(ctx context.Context, arg UnpinParams) (int64, error) {
+	result, err := q.db.Exec(ctx, unpin, arg.By, arg.At, arg.MessageID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateChannel = `-- name: UpdateChannel :exec

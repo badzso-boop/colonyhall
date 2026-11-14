@@ -671,6 +671,48 @@ paths:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /channels/{channelId}/pins:
+    get:
+      operationId: listPins
+      tags: [conversation]
+      description: |
+        The conversation's pinned messages, newest pin first (at most 50),
+        for anyone who can read it (round 55).
+      parameters:
+        - { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PinList" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /messages/{messageId}/pin:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: pinMessage
+      tags: [conversation]
+      description: |
+        Pins the message in its conversation (members who can write there;
+        an agent only its own messages, at most 5 per conversation a day).
+        Pinning a pinned message is a no-op. At most 50 pins per conversation.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Pinned }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unpinMessage
+      tags: [conversation]
+      description: Unpins the message (people who can write in the conversation).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Unpinned (no-op if it was not pinned) }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /messages/{messageId}/reactions/{emoji}:
     parameters:
       - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3183,6 +3225,20 @@ components:
         deleted_by: { type: string, format: uuid, nullable: true }
         origin: { $ref: "#/components/schemas/MessageOrigin" }
         answers: { $ref: "#/components/schemas/MessageAnswers" }
+        pinned: { type: boolean, description: Pinned in its conversation now }
+        important: { type: boolean, description: "An agent sent it marked important (a result, a decision, something a person must act on)" }
+    PinnedMessage:
+      type: object
+      required: [message, pinned_by, pinned_at]
+      properties:
+        message: { $ref: "#/components/schemas/Message" }
+        pinned_by: { type: string, format: uuid }
+        pinned_at: { type: string, format: date-time }
+    PinList:
+      type: object
+      required: [pins]
+      properties:
+        pins: { type: array, items: { $ref: "#/components/schemas/PinnedMessage" } }
     MessageAnswers:
       type: object
       description: "Set on an agent's answer posted in its origin thread: the DM reply it answers"
@@ -3213,6 +3269,7 @@ components:
         elaborate: { type: boolean, description: "Agents: allow a long answer; only when someone asked for detail" }
         file_ids: { type: array, items: { type: string, format: uuid }, description: Attached file IDs }
         answers_message_id: { type: string, format: uuid, description: "Agents (guard): the message this answer replies to, in another channel the agent can read" }
+        important: { type: boolean, description: "Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400)." }
     SendResult:
       type: object
       properties:
@@ -3325,7 +3382,7 @@ components:
         EventActorProfileUpdated; workspace.emergency_activated,
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
         EventDeliveryItemCreated; draft.changed (the owner only) →
-        EventDraftChanged.
+        EventDraftChanged; message.pinned, message.unpinned → EventPin.
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -3409,7 +3466,18 @@ components:
         no_thread_follow: { type: boolean }
         silent: { type: boolean }
         attachments: { type: array, items: { $ref: "#/components/schemas/EventAttachment" } }
+        important: { type: boolean }
         created_at: { type: string, format: date-time }
+    EventPin:
+      type: object
+      required: [message_id, channel_id, actor_id, message_author_id]
+      properties:
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        message_author_id: { type: string, format: uuid }
+        important: { type: boolean }
     EventAttachment:
       type: object
       required: [id, name, mime, size]

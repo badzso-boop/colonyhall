@@ -25,6 +25,7 @@ type Store struct {
 	reacts   map[reactKey]reactRow
 	mutes    map[memberKey]conversation.Mute
 	reads    map[memberKey]time.Time // (thread root, actor) -> last read
+	pins     []conversation.Pin
 }
 
 type reactKey struct {
@@ -678,4 +679,85 @@ func cursorBefore(at time.Time, id ids.ID, c conversation.ThreadCursor) bool {
 		return at.Before(c.LastReplyAt)
 	}
 	return bytes.Compare(id[:], c.RootID[:]) < 0
+}
+
+// InsertPin implements conversation.Store.
+func (s *Store) InsertPin(_ context.Context, p conversation.Pin) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, o := range s.pins {
+		if o.MessageID == p.MessageID && o.UnpinnedAt == nil {
+			return db.ErrConflict
+		}
+	}
+	s.pins = append(s.pins, p)
+	return nil
+}
+
+// Unpin implements conversation.Store.
+func (s *Store) Unpin(_ context.Context, messageID, by ids.ID, at time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, o := range s.pins {
+		if o.MessageID == messageID && o.UnpinnedAt == nil {
+			s.pins[i].UnpinnedBy, s.pins[i].UnpinnedAt = &by, &at
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ActivePins implements conversation.Store.
+func (s *Store) ActivePins(_ context.Context, channelID ids.ID) ([]conversation.Pin, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []conversation.Pin
+	for _, p := range s.pins {
+		if p.ChannelID == channelID && p.UnpinnedAt == nil {
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if !out[i].PinnedAt.Equal(out[j].PinnedAt) {
+			return out[i].PinnedAt.After(out[j].PinnedAt)
+		}
+		return bytes.Compare(out[i].ID[:], out[j].ID[:]) > 0
+	})
+	return out, nil
+}
+
+// CountActivePins implements conversation.Store.
+func (s *Store) CountActivePins(ctx context.Context, channelID ids.ID) (int, error) {
+	pins, err := s.ActivePins(ctx, channelID)
+	return len(pins), err
+}
+
+// CountPinsBy implements conversation.Store.
+func (s *Store) CountPinsBy(_ context.Context, channelID, actorID ids.ID, since time.Time) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := 0
+	for _, p := range s.pins {
+		if p.ChannelID == channelID && p.PinnedBy == actorID && p.PinnedAt.After(since) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// PinnedAmong implements conversation.Store.
+func (s *Store) PinnedAmong(_ context.Context, messageIDs []ids.ID) (map[ids.ID]bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	want := map[ids.ID]bool{}
+	for _, id := range messageIDs {
+		want[id] = true
+	}
+	out := map[ids.ID]bool{}
+	for _, p := range s.pins {
+		if p.UnpinnedAt == nil && want[p.MessageID] {
+			out[p.MessageID] = true
+		}
+	}
+	return out, nil
 }

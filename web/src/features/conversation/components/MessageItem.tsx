@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { CornerDownRight, CornerUpLeft, Download, FileText, MessageSquare, MoreHorizontal, SquareTerminal, Undo2 } from "lucide-react";
+import { CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
 import { chipRefs, cn, fullTime, hueVar, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
 import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
 import { ErrorChip, StepDrawer } from "@/features/agents";
@@ -11,7 +11,7 @@ import { DecisionChip } from "@/features/decisions";
 import { MessageFileSheet } from "@/features/files";
 import { QuestionChip } from "@/features/questions";
 import type { Actor } from "../model";
-import { useRetract, useToggleReaction, type Message } from "../api";
+import { useRetract, useSetPin, useToggleReaction, type Message } from "../api";
 import { isRateLimitNote, REACTIONS, terminalNotice } from "../messageParts";
 import { LinkCards } from "./LinkCards";
 import { ProfileTrigger } from "./ProfilePopover";
@@ -76,6 +76,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   const [confirmRetract, setConfirmRetract] = useState(false);
   const [file, setFile] = useState<FileLink | null>(null);
   const react = useToggleReaction();
+  const setPin = useSetPin();
   const author = actors.get(m.author_id);
   const fromAgent = author?.kind === "agent";
   const now = new Date();
@@ -92,6 +93,15 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   const approvals = viewer.human && !retracted ? chipRefs(m.body, "approval") : [];
   const terminal = viewer.human && fromAgent && !retracted ? terminalNotice(m.body) : null;
   const canRetract = viewer.human && m.author_id === viewer.id && !retracted;
+  const canPin = viewer.human && viewer.canWrite && !retracted;
+  const togglePin = () =>
+    setPin.mutate(
+      { messageId: m.id, pinned: !m.pinned },
+      {
+        onSuccess: () => toast(t(m.pinned ? "pins.unpinned" : "pins.pinned")),
+        onError: (e) => toast(e instanceof Error ? e.message : String(e), { tone: "danger" }),
+      },
+    );
 
   // The rate-limit note (round 27): a muted system line, not a message.
   if (!retracted && isRateLimitNote(m.body, author?.kind)) {
@@ -139,6 +149,9 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
       className={cn(
         "group relative grid grid-cols-[36px_1fr] gap-x-2.5 px-4 py-1.5 outline-none hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:shadow-[inset_2px_0_0_var(--color-focus-ring)]",
         mentionsMe && "bg-accent-soft shadow-[inset_2px_0_0_var(--color-accent)] hover:bg-accent-soft",
+        m.important && !retracted && "shadow-[inset_2px_0_0_var(--color-warning)]",
+        // A link pointed here (markMessage sets it for a moment).
+        "data-highlight:bg-warning-soft motion-safe:transition-colors",
       )}
     >
       {author ? (
@@ -162,6 +175,17 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
           <time className="text-meta text-fg-subtle" dateTime={m.created_at} title={fullTime(m.created_at, locale)}>
             {messageTime(m.created_at, now, locale)}
           </time>
+          {m.important && !retracted ? (
+            <Badge tone="warning">
+              <Flag aria-hidden className="mr-1 inline size-3" />
+              {t("pins.important")}
+            </Badge>
+          ) : null}
+          {m.pinned && !retracted ? (
+            <Tooltip content={t("pins.pinnedHere")}>
+              <Pin aria-label={t("pins.pinnedHere")} className="size-3.5 self-center text-fg-subtle" />
+            </Tooltip>
+          ) : null}
         </header>
         {retracted ? (
           <p className="text-fg-subtle italic">🗑 {t("message.retracted")}</p>
@@ -306,15 +330,22 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
               </Tooltip>
             );
           })}
-          {canRetract ? (
+          {canRetract || canPin ? (
             <Menu>
               <MenuTrigger asChild>
                 <IconButton size="sm" label={t("message.menu")} icon={<MoreHorizontal className="size-4" />} />
               </MenuTrigger>
               <MenuContent>
-                <MenuItem danger icon={<Undo2 aria-hidden className="size-4" />} onSelect={() => setConfirmRetract(true)}>
-                  {t("message.retract")}
-                </MenuItem>
+                {canPin ? (
+                  <MenuItem icon={m.pinned ? <PinOff aria-hidden className="size-4" /> : <Pin aria-hidden className="size-4" />} onSelect={togglePin}>
+                    {t(m.pinned ? "pins.unpin" : "pins.pin")}
+                  </MenuItem>
+                ) : null}
+                {canRetract ? (
+                  <MenuItem danger icon={<Undo2 aria-hidden className="size-4" />} onSelect={() => setConfirmRetract(true)}>
+                    {t("message.retract")}
+                  </MenuItem>
+                ) : null}
               </MenuContent>
             </Menu>
           ) : null}

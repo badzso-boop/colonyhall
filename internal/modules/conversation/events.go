@@ -95,6 +95,7 @@ type MessageCreated struct {
 	NoThreadFollow bool         `json:"no_thread_follow,omitempty"`
 	Silent         bool         `json:"silent,omitempty"`
 	Attachments    []Attachment `json:"attachments,omitempty"`
+	Important      bool         `json:"important,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
 }
 

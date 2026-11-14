@@ -7,6 +7,7 @@ import { Avatar, Button, IconButton, Menu, MenuContent, MenuItem, MenuSeparator,
 import { useMembers, useMute, useSetArchived, useSetLocked } from "../api";
 import { isMuted, muteChoices, muteUntil, type ChannelTab } from "../channel";
 import type { Actor, Channel } from "../model";
+import { PinsButton } from "./PinsButton";
 
 const URL_PATTERN = /(https?:\/\/[^\s<>()]+)/g;
 
@@ -103,6 +104,7 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
           </button>
         ) : null}
         {extra}
+        <PinsButton channelId={channel.id} actors={actors} />
         {isChannel && members.data ? (
           <button
             type="button"

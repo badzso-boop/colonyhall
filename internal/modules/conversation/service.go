@@ -436,6 +436,9 @@ type SendInput struct {
 	// AnswersMessageID links an agent's answer to the message it responds
 	// to in another channel; kept only if the agent can read that message.
 	AnswersMessageID ids.ID
+	// Important (agents only, round 55): the message is a result, a decision
+	// or something a human must act on; it is pinned when sent.
+	Important bool
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -459,6 +462,9 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 	}
 	if len(in.ClientMsgID) > MaxClientMsgID {
 		return SendResult{}, ErrInvalidClientID
+	}
+	if in.Important && by.Kind != identity.KindAgent {
+		return SendResult{}, ErrImportantHumans
 	}
 	if by.Kind == identity.KindAgent && IsAcknowledgement(body) {
 		return s.ackAsReaction(ctx, by, in)
@@ -554,13 +560,24 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		if err != nil {
 			return err
 		}
+		if in.Important {
+			// Checked before the first write: the memory store cannot roll back.
+			if err := s.checkAgentPinLimit(ctx, by, c.ID); err != nil {
+				return err
+			}
+			if n, err := s.Store.CountActivePins(ctx, c.ID); err != nil {
+				return err
+			} else if n >= MaxPins {
+				return ErrPinLimit
+			}
+		}
 		now := s.Clock.Now()
 		msg = Message{
 			ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, ChannelID: c.ID, ThreadRootID: in.ThreadRootID,
 			AuthorID: by.ID, ClientMsgID: in.ClientMsgID, Kind: "text", Body: body,
 			Mentions: mentions, CreatedAt: now,
 			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
-			AnswersMessageID: answersID,
+			AnswersMessageID: answersID, Important: in.Important,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -599,6 +616,14 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		payload.NoThreadFollow = in.NoThreadFollow
 		payload.Silent = in.Silent
 		seq, err = s.appendEvent(ctx, by, c.ID, EventMessageCreated, "message", msg.ID, payload)
+		if err != nil || !in.Important {
+			return err
+		}
+		pinSeq, err := s.pinInTx(ctx, by, c, msg)
+		if pinSeq > 0 {
+			seq = pinSeq
+			msg.Pinned = true
+		}
 		return err
 	})
 	if err != nil {
@@ -771,6 +796,7 @@ func MessageCreatedPayload(m Message) MessageCreated {
 		ClientMsgID: m.ClientMsgID, Kind: m.Kind, Body: m.Body, CreatedAt: m.CreatedAt,
 		Mentions:    make([]string, 0, len(m.Mentions)),
 		Attachments: m.Attachments,
+		Important:   m.Important,
 	}
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()
@@ -857,6 +883,9 @@ func (s *Service) ListMessages(ctx context.Context, by identity.Actor, channelID
 	}
 	msgs, err = s.withAttachments(ctx, msgs)
 	if err != nil {
+		return nil, err
+	}
+	if msgs, err = s.withPins(ctx, msgs); err != nil {
 		return nil, err
 	}
 	s.enrichOrigins(ctx, by, msgs)
