@@ -31,6 +31,8 @@ test("conversationTitle names channels and DM peers", () => {
   expect(conversationTitle(ch("3", "dm", "x", ["me", "anna"]), actors, "me")).toBe("Anna Kovács");
   expect(conversationTitle(ch("4", "dm", "x", ["me", "backend"]), actors, "me")).toBe("@backend-claude");
   expect(conversationTitle(ch("6", "dm", "x", ["backend", "reviewer"]), actors, "me")).toBe("@backend-claude ↔ @reviewer-claude");
+  // The viewer's own DM, where reminders arrive (round 55): their name, not dm-….
+  expect(conversationTitle(ch("7", "dm", "dm-0123456789abcdef", ["me"]), actors, "me")).toBe("Norbi");
 });
 
 test("buildSidebar: own sections first, each conversation once, then the fixed groups", () => {

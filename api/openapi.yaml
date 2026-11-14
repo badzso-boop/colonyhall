@@ -744,6 +744,66 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /me/saved:
+    get:
+      operationId: listSaved
+      tags: [saved]
+      description: |
+        Humans. The caller's saved messages and reminders, newest first
+        (round 55). An item whose message the caller can no longer read keeps
+        its note and times but shows nothing of the message.
+      parameters:
+        - { name: filter, in: query, schema: { type: string, enum: [all, reminders, done], default: all } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 100 }, description: next_cursor of the previous page }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SavedPage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: saveItem
+      tags: [saved]
+      description: |
+        Humans. Saves a message the caller can read, sets a reminder, or both
+        (a reminder without a message is /remind <when> <text>). Saving a
+        saved message again updates it and takes it out of "done". A due
+        reminder arrives as a system message in the caller's own DM.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SaveItemRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/SavedItem" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /me/saved/{savedId}:
+    parameters:
+      - { name: savedId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateSaved
+      tags: [saved]
+      description: Humans, their own items. Mark done or not done; set or clear the reminder.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateSavedRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SavedItem" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteSaved
+      tags: [saved]
+      description: Humans, their own items.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /messages/{messageId}/reactions/{emoji}:
     parameters:
       - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3423,7 +3483,8 @@ components:
         EventActorProfileUpdated; workspace.emergency_activated,
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
         EventDeliveryItemCreated; draft.changed (the owner only) →
-        EventDraftChanged; message.pinned, message.unpinned → EventPin.
+        EventDraftChanged; message.pinned, message.unpinned → EventPin;
+        saved.changed, saved.reminded (the owner only) → EventSaved.
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -3625,6 +3686,61 @@ components:
       properties:
         channel_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
+        deleted: { type: boolean }
+    SavedItem:
+      type: object
+      required: [id, note, created_at, available]
+      properties:
+        id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        note: { type: string }
+        remind_at: { type: string, format: date-time }
+        reminded_at: { type: string, format: date-time }
+        done_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        available: { type: boolean, description: "The caller can still read the message (false for a reminder without one)" }
+        message: { $ref: "#/components/schemas/SavedMessage" }
+    SavedMessage:
+      type: object
+      description: What the caller may see of a saved message; body is cut to 300 characters.
+      required: [id, channel_id, channel_name, channel_kind, author_id, body, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        channel_kind: { $ref: "#/components/schemas/ChannelKind" }
+        thread_root_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        body: { type: string }
+        reply_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        retracted: { type: boolean }
+    SavedPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/SavedItem" } }
+        next_cursor: { type: string }
+    SaveItemRequest:
+      type: object
+      properties:
+        message_id: { type: string, format: uuid }
+        remind_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 500 }
+    UpdateSavedRequest:
+      type: object
+      properties:
+        done: { type: boolean }
+        remind_at: { type: string, format: date-time }
+        clear_reminder: { type: boolean }
+    EventSaved:
+      type: object
+      description: Sent to the item's owner alone; ids only.
+      required: [item_id]
+      properties:
+        item_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
         deleted: { type: boolean }
     EventActorCreated:
       type: object

@@ -1,4 +1,4 @@
-import { chipRefs, splitChips } from "./chips";
+import { chipRefs, messageChipRef, splitChips } from "./chips";
 
 const id = "0b5c2a8e-1f2d-4c3b-9a8e-7d6c5b4a3f21";
 
@@ -35,4 +35,16 @@ test("error and approval references need a full id", () => {
 test("chipRefs lists one kind once", () => {
   expect(chipRefs(`[approval:${id}] Q-1 [approval:${id}] Q-2 Q-1`, "question")).toEqual(["Q-1", "Q-2"]);
   expect(chipRefs(`[approval:${id}] again [approval:${id}]`, "approval")).toEqual([id]);
+});
+
+test("a message chip links to a message, with its thread when given", () => {
+  const ch = "0b5c2a8e-1f2d-4c3b-9a8e-7d6c5b4a3f21";
+  const msg = "1b5c2a8e-1f2d-4c3b-9a8e-7d6c5b4a3f22";
+  const root = "2b5c2a8e-1f2d-4c3b-9a8e-7d6c5b4a3f23";
+  const parts = splitChips(`⏰ Emlékeztető: x\n[message:${ch}/${msg}] és [message:${ch}/${msg}/${root}]`);
+  const chips = parts.filter((p) => p.type === "chip");
+  expect(chips.map((c) => c.type === "chip" && c.kind)).toEqual(["message", "message"]);
+  expect(messageChipRef(chips[0]!.type === "chip" ? chips[0]!.ref : "")).toEqual({ channel_id: ch, id: msg });
+  expect(messageChipRef(chips[1]!.type === "chip" ? chips[1]!.ref : "")).toEqual({ channel_id: ch, id: msg, thread_root_id: root });
+  expect(splitChips("[message:not-a-uuid/x]")).toEqual([{ type: "text", text: "[message:not-a-uuid/x]" }]);
 });

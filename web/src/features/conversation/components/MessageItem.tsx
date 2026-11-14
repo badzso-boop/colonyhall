@@ -1,8 +1,8 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
-import { chipRefs, cn, fullTime, hueVar, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
+import { AlarmClock, ArrowUpRight, Bookmark, BookmarkCheck, CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
+import { chipRefs, cn, fullTime, hueVar, messageChipRef, messageHref, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
 import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
 import { ErrorChip, StepDrawer } from "@/features/agents";
 import { ApprovalCard, DelegationActions } from "@/features/approvals";
@@ -10,6 +10,7 @@ import { CompactionCard } from "@/features/compaction";
 import { DecisionChip } from "@/features/decisions";
 import { MessageFileSheet } from "@/features/files";
 import { QuestionChip } from "@/features/questions";
+import { useSaveActions } from "@/features/saved";
 import type { Actor } from "../model";
 import { useRetract, useSetPin, useToggleReaction, type Message } from "../api";
 import { isRateLimitNote, REACTIONS, terminalNotice } from "../messageParts";
@@ -77,6 +78,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   const [file, setFile] = useState<FileLink | null>(null);
   const react = useToggleReaction();
   const setPin = useSetPin();
+  const saveActions = useSaveActions(m.id, viewer.human && !m.deleted_at);
   const author = actors.get(m.author_id);
   const fromAgent = author?.kind === "agent";
   const now = new Date();
@@ -127,6 +129,15 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
       case "approval":
         // Shown as a card under the message (humans); never as text.
         return null;
+      case "message":
+        // A link to another message (a reminder, a forward): it opens there,
+        // or the conversation's "not found" for someone without access.
+        return (
+          <Link to={messageHref(messageChipRef(c.ref))} className="inline-flex items-center gap-0.5 font-medium text-accent-text hover:underline">
+            {t("message.openLinked")}
+            <ArrowUpRight aria-hidden className="size-3.5" />
+          </Link>
+        );
     }
   };
 
@@ -330,12 +341,18 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
               </Tooltip>
             );
           })}
-          {canRetract || canPin ? (
+          {viewer.human ? (
             <Menu>
               <MenuTrigger asChild>
                 <IconButton size="sm" label={t("message.menu")} icon={<MoreHorizontal className="size-4" />} />
               </MenuTrigger>
               <MenuContent>
+                <MenuItem icon={saveActions.saved ? <BookmarkCheck aria-hidden className="size-4" /> : <Bookmark aria-hidden className="size-4" />} onSelect={saveActions.toggle}>
+                  {t(saveActions.saved ? "actions.unsave" : "actions.save")}
+                </MenuItem>
+                <MenuItem icon={<AlarmClock aria-hidden className="size-4" />} onSelect={saveActions.remind}>
+                  {t("actions.remind")}
+                </MenuItem>
                 {canPin ? (
                   <MenuItem icon={m.pinned ? <PinOff aria-hidden className="size-4" /> : <Pin aria-hidden className="size-4" />} onSelect={togglePin}>
                     {t(m.pinned ? "pins.unpin" : "pins.pin")}
@@ -351,6 +368,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
           ) : null}
         </div>
       ) : null}
+      {saveActions.dialog}
       {lightbox !== null ? (
         <Lightbox
           images={images}

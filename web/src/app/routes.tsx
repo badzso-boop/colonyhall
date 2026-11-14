@@ -9,6 +9,7 @@ import { LoginPage } from "@/features/identity";
 import { LeasesPage } from "@/features/leases";
 import { NotesPage } from "@/features/notes";
 import { RulesPage } from "@/features/rules";
+import { SavedPage } from "@/features/saved";
 import { SchedulesPage } from "@/features/schedules";
 import { SearchPage } from "@/features/search";
 import { WikiIndexPage, WikiTopicPage } from "@/features/wiki";
@@ -35,6 +36,7 @@ export function AppRoutes() {
         <Route path="c/:channelId" element={<ConversationPage />} />
         <Route path="threads" element={<ThreadsPage />} />
         <Route path="drafts" element={<DraftsPage />} />
+        <Route path="saved" element={<SavedPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="calendar" element={<CalendarPage />} />

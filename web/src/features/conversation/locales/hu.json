@@ -18,7 +18,10 @@
     "newChannel": "Új csatorna",
     "newDm": "Új közvetlen üzenet",
     "newAgentDm": "Új beszélgetés agenttel",
-    "toggle": "{{name}} csoport összecsukása vagy kinyitása"
+    "toggle": "{{name}} csoport összecsukása vagy kinyitása",
+    "save": "Mentés későbbre",
+    "unsave": "Mentés megszüntetése",
+    "remind": "Emlékeztess…"
   },
   "empty": {
     "title": "Válassz egy beszélgetést",
@@ -94,7 +97,8 @@
     "reaction": {
       "agree": "👍 egyetértés (az agent így olvassa)",
       "disagree": "👎 nem ért egyet (az agent így olvassa)"
-    }
+    },
+    "openLinked": "Ugrás az üzenethez"
   },
   "new": {
     "close": "Bezárás",

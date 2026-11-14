@@ -18,7 +18,10 @@
     "newChannel": "New channel",
     "newDm": "New direct message",
     "newAgentDm": "New conversation with an agent",
-    "toggle": "Collapse or expand {{name}}"
+    "toggle": "Collapse or expand {{name}}",
+    "save": "Save for later",
+    "unsave": "Remove from saved",
+    "remind": "Remind me…"
   },
   "empty": {
     "title": "Pick a conversation",
@@ -94,7 +97,8 @@
     "reaction": {
       "agree": "👍 agree (how the agent reads it)",
       "disagree": "👎 disagree (how the agent reads it)"
-    }
+    },
+    "openLinked": "Open the message"
   },
   "new": {
     "close": "Close",

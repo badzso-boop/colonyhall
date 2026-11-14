@@ -37,7 +37,11 @@ export function dmPeers(ch: Channel, actors: Map<string, Actor>, meId: string): 
 export function conversationTitle(ch: Channel, actors: Map<string, Actor>, meId: string): string {
   if (ch.kind !== "dm") return ch.name;
   const peers = dmPeers(ch, actors, meId);
-  if (peers.length === 0) return ch.name;
+  // The viewer's own DM (reminders arrive there, round 55): their own name.
+  if (peers.length === 0) {
+    const me = (ch.member_ids ?? []).every((id) => id === meId) ? actors.get(meId) : undefined;
+    return me ? me.display_name || me.handle : ch.name;
+  }
   const agentAgent = !(ch.member_ids ?? []).includes(meId);
   return peers.map((a) => (a.kind === "agent" || agentAgent ? `@${a.handle}` : a.display_name || a.handle)).join(agentAgent ? " ↔ " : ", ");
 }

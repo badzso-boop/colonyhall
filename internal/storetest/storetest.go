@@ -34,6 +34,7 @@ import (
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/modules/runs"
+	"colonyhall/internal/modules/saved"
 	"colonyhall/internal/modules/schedule"
 	"colonyhall/internal/modules/search"
 	"colonyhall/internal/modules/sidebar"
@@ -71,6 +72,7 @@ type Backend struct {
 	Search       search.Store
 	DBStats      dbstats.Store
 	Drafts       draft.Store
+	Saved        saved.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -106,6 +108,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("drafts", func(t *testing.T) { testDrafts(t, newBackend(t)) })
 	t.Run("pins", func(t *testing.T) { testPins(t, newBackend(t)) })
 	t.Run("notify level", func(t *testing.T) { testNotifyLevel(t, newBackend(t)) })
+	t.Run("saved", func(t *testing.T) { testSaved(t, newBackend(t)) })
 }
 
 var (

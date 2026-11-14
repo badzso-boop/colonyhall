@@ -13,6 +13,7 @@ import { registerLeaseEvents } from "@/features/leases";
 import { registerPlannerEvents } from "@/features/planner";
 import { registerQuestionEvents } from "@/features/questions";
 import { registerRulesEvents } from "@/features/rules";
+import { registerSavedEvents } from "@/features/saved";
 import { registerScheduleEvents } from "@/features/schedules";
 import { registerWikiEvents } from "@/features/wiki";
 
@@ -49,6 +50,7 @@ function useLiveUpdates(enabled: boolean) {
       registerLeaseEvents(qc),
       registerRulesEvents(qc),
       registerHostEvents(qc),
+      registerSavedEvents(qc),
     ];
     const ws = new WsClient(wsURL());
     ws.start();

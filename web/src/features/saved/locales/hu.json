@@ -1,0 +1,43 @@
+{
+  "title": "Mentett",
+  "filter": "Szűrés",
+  "filters": {
+    "all": "Mind",
+    "reminders": "Emlékeztetővel",
+    "done": "Kész"
+  },
+  "empty": {
+    "all": "Nincs mentett üzeneted",
+    "reminders": "Nincs függő emlékeztetőd",
+    "done": "Nincs kész elem"
+  },
+  "emptyBody": "Mentsd el, amire később vissza akarsz térni; csak te látod.",
+  "dm": "Közvetlen üzenet",
+  "inThread": "szálban",
+  "unavailable": "Ez az üzenet már nem érhető el neked.",
+  "retracted": "🗑 Visszavonva",
+  "reminded": "Kiküldve",
+  "remindMe": "Emlékeztess…",
+  "markDone": "Kész",
+  "undone": "Vissza a listába",
+  "remove": "Eltávolítás",
+  "loadMore": "Továbbiak betöltése",
+  "newReminder": "Új emlékeztető",
+  "save": "Mentés",
+  "unsave": "Mentés megszüntetése",
+  "savedToast": "Elmentve",
+  "removed": "Eltávolítva a mentettek közül",
+  "cancel": "Mégse",
+  "reminder": {
+    "title": "Emlékeztető",
+    "zone": "Időzóna: {{zone}}",
+    "20m": "20 perc múlva",
+    "1h": "1 óra múlva",
+    "tomorrow": "Holnap 9:00",
+    "monday": "Jövő hétfő 9:00",
+    "custom": "Más időpont",
+    "setCustom": "Beállítás",
+    "note": "Mire emlékeztesselek?",
+    "set": "⏰ Emlékeztető: {{when}}"
+  }
+}

@@ -820,6 +820,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The caller's saved messages and reminders, newest first
+         *     (round 55). An item whose message the caller can no longer read keeps
+         *     its note and times but shows nothing of the message.
+         */
+        get: operations["listSaved"];
+        put?: never;
+        /**
+         * @description Humans. Saves a message the caller can read, sets a reminder, or both
+         *     (a reminder without a message is /remind <when> <text>). Saving a
+         *     saved message again updates it and takes it out of "done". A due
+         *     reminder arrives as a system message in the caller's own DM.
+         */
+        post: operations["saveItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/saved/{savedId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                savedId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Humans, their own items. */
+        delete: operations["deleteSaved"];
+        options?: never;
+        head?: never;
+        /** @description Humans, their own items. Mark done or not done; set or clear the reminder. */
+        patch: operations["updateSaved"];
+        trace?: never;
+    };
     "/messages/{messageId}/reactions/{emoji}": {
         parameters: {
             query?: never;
@@ -3581,7 +3628,8 @@ export interface components {
          *     EventActorProfileUpdated; workspace.emergency_activated,
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
          *     EventDeliveryItemCreated; draft.changed (the owner only) →
-         *     EventDraftChanged; message.pinned, message.unpinned → EventPin.
+         *     EventDraftChanged; message.pinned, message.unpinned → EventPin;
+         *     saved.changed, saved.reminded (the owner only) → EventSaved.
          */
         WsEvent: {
             /** @enum {string} */
@@ -3799,6 +3847,69 @@ export interface components {
             /** Format: uuid */
             thread_root_id?: string;
             deleted: boolean;
+        };
+        SavedItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: uuid */
+            channel_id?: string;
+            note: string;
+            /** Format: date-time */
+            remind_at?: string;
+            /** Format: date-time */
+            reminded_at?: string;
+            /** Format: date-time */
+            done_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The caller can still read the message (false for a reminder without one) */
+            available: boolean;
+            message?: components["schemas"]["SavedMessage"];
+        };
+        /** @description What the caller may see of a saved message; body is cut to 300 characters. */
+        SavedMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            channel_id: string;
+            channel_name: string;
+            channel_kind: components["schemas"]["ChannelKind"];
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            author_id: string;
+            body: string;
+            reply_count?: number;
+            /** Format: date-time */
+            created_at: string;
+            retracted?: boolean;
+        };
+        SavedPage: {
+            items: components["schemas"]["SavedItem"][];
+            next_cursor?: string;
+        };
+        SaveItemRequest: {
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: date-time */
+            remind_at?: string;
+            note?: string;
+        };
+        UpdateSavedRequest: {
+            done?: boolean;
+            /** Format: date-time */
+            remind_at?: string;
+            clear_reminder?: boolean;
+        };
+        /** @description Sent to the item's owner alone; ids only. */
+        EventSaved: {
+            /** Format: uuid */
+            item_id: string;
+            /** Format: uuid */
+            message_id?: string;
+            deleted?: boolean;
         };
         EventActorCreated: {
             /** Format: uuid */
@@ -6821,6 +6932,114 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSaved: {
+        parameters: {
+            query?: {
+                filter?: "all" | "reminders" | "done";
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSaved: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                savedId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateSaved: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                savedId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSavedRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

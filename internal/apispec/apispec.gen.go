@@ -1503,6 +1503,27 @@ func (e ListActiveLeasesParamsState) Valid() bool {
 	}
 }
 
+// Defines values for ListSavedParamsFilter.
+const (
+	ListSavedParamsFilterAll       ListSavedParamsFilter = "all"
+	ListSavedParamsFilterDone      ListSavedParamsFilter = "done"
+	ListSavedParamsFilterReminders ListSavedParamsFilter = "reminders"
+)
+
+// Valid indicates whether the value is a known member of the ListSavedParamsFilter enum.
+func (e ListSavedParamsFilter) Valid() bool {
+	switch e {
+	case ListSavedParamsFilterAll:
+		return true
+	case ListSavedParamsFilterDone:
+		return true
+	case ListSavedParamsFilterReminders:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListRunsParamsStatus.
 const (
 	ListRunsParamsStatusError   ListRunsParamsStatus = "error"
@@ -3566,6 +3587,50 @@ type SaveDraftRequest struct {
 	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
 }
 
+// SaveItemRequest defines model for SaveItemRequest.
+type SaveItemRequest struct {
+	MessageId *openapi_types.UUID `json:"message_id,omitempty"`
+	Note      *string             `json:"note,omitempty"`
+	RemindAt  *time.Time          `json:"remind_at,omitempty"`
+}
+
+// SavedItem defines model for SavedItem.
+type SavedItem struct {
+	// Available The caller can still read the message (false for a reminder without one)
+	Available bool                `json:"available"`
+	ChannelId *openapi_types.UUID `json:"channel_id,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+	DoneAt    *time.Time          `json:"done_at,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+
+	// Message What the caller may see of a saved message; body is cut to 300 characters.
+	Message    *SavedMessage       `json:"message,omitempty"`
+	MessageId  *openapi_types.UUID `json:"message_id,omitempty"`
+	Note       string              `json:"note"`
+	RemindAt   *time.Time          `json:"remind_at,omitempty"`
+	RemindedAt *time.Time          `json:"reminded_at,omitempty"`
+}
+
+// SavedMessage What the caller may see of a saved message; body is cut to 300 characters.
+type SavedMessage struct {
+	AuthorId     openapi_types.UUID  `json:"author_id"`
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ChannelKind  ChannelKind         `json:"channel_kind"`
+	ChannelName  string              `json:"channel_name"`
+	CreatedAt    time.Time           `json:"created_at"`
+	Id           openapi_types.UUID  `json:"id"`
+	ReplyCount   *int                `json:"reply_count,omitempty"`
+	Retracted    *bool               `json:"retracted,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// SavedPage defines model for SavedPage.
+type SavedPage struct {
+	Items      []SavedItem `json:"items"`
+	NextCursor *string     `json:"next_cursor,omitempty"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	Body          string              `json:"body"`
@@ -4063,6 +4128,13 @@ type UpdatePlannerTaskRequest struct {
 	Title  *string            `json:"title,omitempty"`
 }
 
+// UpdateSavedRequest defines model for UpdateSavedRequest.
+type UpdateSavedRequest struct {
+	ClearReminder *bool      `json:"clear_reminder,omitempty"`
+	Done          *bool      `json:"done,omitempty"`
+	RemindAt      *time.Time `json:"remind_at,omitempty"`
+}
+
 // UpdateSidebarSectionRequest defines model for UpdateSidebarSectionRequest.
 type UpdateSidebarSectionRequest struct {
 	Collapsed *bool   `json:"collapsed,omitempty"`
@@ -4322,6 +4394,17 @@ type DeleteDraftParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
 
+// ListSavedParams defines parameters for ListSaved.
+type ListSavedParams struct {
+	Filter *ListSavedParamsFilter `form:"filter,omitempty" json:"filter,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListSavedParamsFilter defines parameters for ListSaved.
+type ListSavedParamsFilter string
+
 // ListMyThreadsParams defines parameters for ListMyThreads.
 type ListMyThreadsParams struct {
 	// Cursor next_cursor of the previous page
@@ -4568,6 +4651,12 @@ type SetHostStateJSONRequestBody = SetHostStateRequest
 
 // SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
 type SaveDraftJSONRequestBody = SaveDraftRequest
+
+// SaveItemJSONRequestBody defines body for SaveItem for application/json ContentType.
+type SaveItemJSONRequestBody = SaveItemRequest
+
+// UpdateSavedJSONRequestBody defines body for UpdateSaved for application/json ContentType.
+type UpdateSavedJSONRequestBody = UpdateSavedRequest
 
 // RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
 type RequestFileFetchJSONRequestBody = CreateFileFetchRequest

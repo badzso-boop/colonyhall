@@ -1,0 +1,43 @@
+{
+  "title": "Saved",
+  "filter": "Filter",
+  "filters": {
+    "all": "All",
+    "reminders": "With a reminder",
+    "done": "Done"
+  },
+  "empty": {
+    "all": "Nothing saved yet",
+    "reminders": "No pending reminders",
+    "done": "Nothing done yet"
+  },
+  "emptyBody": "Save what you want to come back to; only you see it.",
+  "dm": "Direct message",
+  "inThread": "in a thread",
+  "unavailable": "This message is no longer available to you.",
+  "retracted": "🗑 Retracted",
+  "reminded": "Sent",
+  "remindMe": "Remind me…",
+  "markDone": "Done",
+  "undone": "Back to the list",
+  "remove": "Remove",
+  "loadMore": "Load more",
+  "newReminder": "New reminder",
+  "save": "Save",
+  "unsave": "Remove from saved",
+  "savedToast": "Saved",
+  "removed": "Removed from saved",
+  "cancel": "Cancel",
+  "reminder": {
+    "title": "Reminder",
+    "zone": "Time zone: {{zone}}",
+    "20m": "In 20 minutes",
+    "1h": "In 1 hour",
+    "tomorrow": "Tomorrow 9:00",
+    "monday": "Next Monday 9:00",
+    "custom": "Another time",
+    "setCustom": "Set",
+    "note": "What should I remind you of?",
+    "set": "⏰ Reminder: {{when}}"
+  }
+}

@@ -600,6 +600,19 @@ type RunError struct {
 	CreatedAt    time.Time
 }
 
+type SavedItem struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	MessageID   *uuid.UUID
+	ChannelID   *uuid.UUID
+	Note        string
+	RemindAt    *time.Time
+	RemindedAt  *time.Time
+	DoneAt      *time.Time
+	CreatedAt   time.Time
+}
+
 type Schedule struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID

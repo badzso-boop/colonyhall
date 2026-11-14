@@ -38,6 +38,7 @@ import (
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/draft"
 	"colonyhall/internal/modules/identity"
+	"colonyhall/internal/modules/saved"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
@@ -710,6 +711,8 @@ func (c *connection) visibleChannel(ctx context.Context, channelID ids.ID) (bool
 var personalEvents = map[string]bool{
 	conversation.EventMuteChanged: true,
 	draft.EventChanged:            true,
+	saved.EventChanged:            true,
+	saved.EventReminded:           true,
 }
 
 // visible decides whether the actor may see an event.

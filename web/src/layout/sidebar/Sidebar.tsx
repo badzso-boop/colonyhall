@@ -5,6 +5,7 @@ import { cn } from "@/shared/lib";
 import { openWindow } from "@/shared/windows";
 import { ConversationList, DraftsEntry, ThreadsEntry } from "@/features/conversation";
 import { useSession } from "@/features/identity";
+import { SavedEntry } from "@/features/saved";
 import { adminPages, pages, type PageEntry } from "./pages";
 
 function PageGroup({ title, entries }: { title: string; entries: PageEntry[] }) {
@@ -59,6 +60,7 @@ export function Sidebar() {
     <div className="flex h-full flex-col overflow-y-auto px-2 pt-2 pb-6">
       <ThreadsEntry />
       <DraftsEntry />
+      <SavedEntry />
       <PageGroup title={t("workspace")} entries={pages.filter((p) => !p.adminOnly || admin)} />
       {admin ? <PageGroup title={t("administration")} entries={adminPages.filter((p) => !p.ownerOnly || role === "owner")} /> : null}
       <ConversationList />

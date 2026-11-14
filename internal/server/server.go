@@ -122,6 +122,10 @@ import (
 	runhttp "colonyhall/internal/modules/runs/httpapi"
 	runmem "colonyhall/internal/modules/runs/memory"
 	runpg "colonyhall/internal/modules/runs/postgres"
+	"colonyhall/internal/modules/saved"
+	savedhttp "colonyhall/internal/modules/saved/httpapi"
+	savedmem "colonyhall/internal/modules/saved/memory"
+	savedpg "colonyhall/internal/modules/saved/postgres"
 	"colonyhall/internal/modules/schedule"
 	schedhttp "colonyhall/internal/modules/schedule/httpapi"
 	schedmem "colonyhall/internal/modules/schedule/memory"
@@ -233,6 +237,7 @@ type App struct {
 	AgentRules   *agentrules.Service
 	Notes        *notes.Service
 	Drafts       *draft.Service
+	Saved        *saved.Service
 	Planner      *planner.Service
 	Decisions    *decision.Service
 	Leases       *lease.Service
@@ -290,6 +295,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		rlStore        agentrules.Store
 		ntStore        notes.Store
 		drStore        draft.Store
+		svStore        saved.Store
 		agStore        agents.Store
 		plStore        planner.Store
 		dcStore        decision.Store
@@ -317,6 +323,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		rlStore = rulesmem.New()
 		ntStore = notesmem.New()
 		drStore = draftmem.New()
+		svStore = savedmem.New()
 		agStore = agentsmem.New()
 		plStore = plannermem.New()
 		dcStore = decmem.New()
@@ -363,6 +370,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		rlStore = &rulespg.Store{DB: pg}
 		ntStore = &notespg.Store{DB: pg}
 		drStore = &draftpg.Store{DB: pg}
+		svStore = &savedpg.Store{DB: pg}
 		agStore = &agentspg.Store{DB: pg}
 		plStore = &plannerpg.Store{DB: pg}
 		dcStore = &decpg.Store{DB: pg}
@@ -456,6 +464,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Clock:     opt.Clock,
 	}
 	drSvc := &draft.Service{Store: drStore, Conversation: cvSvc, Files: fiSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	svSvc := &saved.Service{Store: svStore, Conversation: cvSvc, Directory: idSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	ntSvc := notes.NewService(ntStore, cvSvc, idSvc, opt.Clock, opt.IDs)
 	dcSvc := decision.NewService(dcStore, wiSvc, cvSvc, tx, opt.Clock, opt.IDs)
 	dcSvc.Events, dcSvc.Bus = events, b
@@ -584,6 +593,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	ruleshttp.Register(mux, rlSvc, idSvc)
 	noteshttp.Register(mux, ntSvc, idSvc)
 	drafthttp.Register(mux, drSvc, idSvc)
+	savedhttp.Register(mux, svSvc, cvSvc, idSvc)
 	calFetcher := opt.CalendarFetcher
 	if calFetcher == nil {
 		calFetcher = plannerfetch.Safe{}
@@ -710,6 +720,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		AgentRules:   rlSvc,
 		Notes:        ntSvc,
 		Drafts:       drSvc,
+		Saved:        svSvc,
 		Planner:      plSvc,
 		calRefresh:   opt.CalendarRefresh,
 		Decisions:    dcSvc,
@@ -753,6 +764,11 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		a.Planner.Loop(ctx, a.calRefresh)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Saved.Loop(ctx, 15*time.Second, a.logger.Info)
 	}()
 	wg.Add(1)
 	go func() {

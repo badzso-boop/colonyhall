@@ -196,7 +196,15 @@ test("pin and unpin from the message menu; an agent's important message is marke
   await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.path === "/api/v1/messages/m1/pin")).toBe(true));
 });
 
-test("a read-only viewer gets no pin action", () => {
-  setup(msg({ body: "x" }), { ...human, canWrite: false });
+test("a read-only viewer gets no pin action, but can save and set a reminder", async () => {
+  const { calls } = setup(msg({ body: "x" }), { ...human, canWrite: false });
+  fireEvent.keyDown(screen.getByRole("button", { name: "További műveletek" }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Mentés későbbre" }));
+  expect(screen.queryByRole("menuitem", { name: "Kitűzés" })).toBeNull();
+  await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/me/saved" && (c.body as { message_id?: string })?.message_id === "m1")).toBe(true));
+});
+
+test("an agent viewer has no message menu", () => {
+  setup(msg({ body: "x" }), { ...human, human: false });
   expect(screen.queryByRole("button", { name: "További műveletek" })).toBeNull();
 });
