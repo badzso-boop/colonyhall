@@ -706,6 +706,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The caller's unsent messages, newest first, in conversations
+         *     the caller can still read (round 55). Nobody else, not even an
+         *     admin, reads another person's drafts.
+         */
+        get: operations["listDrafts"];
+        /**
+         * @description Humans. Stores the caller's draft for one conversation and thread
+         *     (thread_root_id absent = the main stream). Empty text and no files
+         *     delete it (204). file_ids must be the caller's own uploads in that
+         *     conversation.
+         */
+        put: operations["saveDraft"];
+        post?: never;
+        /** @description Humans. Removes the caller's draft in one place; a missing one is fine. */
+        delete: operations["deleteDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/reactions/{emoji}": {
         parameters: {
             query?: never;
@@ -3441,7 +3469,8 @@ export interface components {
          *     actor.state_changed → EventActorStateChanged; actor.profile_updated →
          *     EventActorProfileUpdated; workspace.emergency_activated,
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
-         *     EventDeliveryItemCreated.
+         *     EventDeliveryItemCreated; draft.changed (the owner only) →
+         *     EventDraftChanged.
          */
         WsEvent: {
             /** @enum {string} */
@@ -3615,6 +3644,35 @@ export interface components {
             muted: boolean;
             /** Format: date-time */
             muted_until?: string;
+        };
+        Draft: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            body: string;
+            attachments: components["schemas"]["EventAttachment"][];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DraftList: {
+            drafts: components["schemas"]["Draft"][];
+        };
+        SaveDraftRequest: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            body: string;
+            file_ids?: string[];
+        };
+        /** @description The place only, never the text; sent to the draft's owner alone. */
+        EventDraftChanged: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            deleted: boolean;
         };
         EventActorCreated: {
             /** Format: uuid */
@@ -6435,6 +6493,86 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MarkedCount"];
                 };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Deleted (it was empty) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteDraft: {
+        parameters: {
+            query: {
+                channel_id: string;
+                thread_root_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

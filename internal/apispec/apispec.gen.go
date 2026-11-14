@@ -2457,6 +2457,20 @@ type DoctorCheck struct {
 // DoctorCheckStatus defines model for DoctorCheck.Status.
 type DoctorCheckStatus string
 
+// Draft defines model for Draft.
+type Draft struct {
+	Attachments  []EventAttachment   `json:"attachments"`
+	Body         string              `json:"body"`
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+}
+
+// DraftList defines model for DraftList.
+type DraftList struct {
+	Drafts []Draft `json:"drafts"`
+}
+
 // EditWikiPageRequest defines model for EditWikiPageRequest.
 type EditWikiPageRequest struct {
 	BaseRev int       `json:"base_rev"`
@@ -2489,6 +2503,14 @@ type EnrollResponse struct {
 
 	// Token Host token; shown once
 	Token string `json:"token"`
+}
+
+// EventAttachment defines model for EventAttachment.
+type EventAttachment struct {
+	Id   openapi_types.UUID `json:"id"`
+	Mime string             `json:"mime"`
+	Name string             `json:"name"`
+	Size int64              `json:"size"`
 }
 
 // FailFileFetchRequest defines model for FailFileFetchRequest.
@@ -3485,6 +3507,14 @@ type RunRef struct {
 	Id openapi_types.UUID `json:"id"`
 }
 
+// SaveDraftRequest defines model for SaveDraftRequest.
+type SaveDraftRequest struct {
+	Body         string                `json:"body"`
+	ChannelId    openapi_types.UUID    `json:"channel_id"`
+	FileIds      *[]openapi_types.UUID `json:"file_ids,omitempty"`
+	ThreadRootId *openapi_types.UUID   `json:"thread_root_id,omitempty"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	Body          string              `json:"body"`
@@ -4232,6 +4262,12 @@ type ListActiveLeasesParams struct {
 // ListActiveLeasesParamsState defines parameters for ListActiveLeases.
 type ListActiveLeasesParamsState string
 
+// DeleteDraftParams defines parameters for DeleteDraft.
+type DeleteDraftParams struct {
+	ChannelId    openapi_types.UUID  `form:"channel_id" json:"channel_id"`
+	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
 // ListMyThreadsParams defines parameters for ListMyThreads.
 type ListMyThreadsParams struct {
 	// Cursor next_cursor of the previous page
@@ -4472,6 +4508,9 @@ type SetHostOwnerJSONRequestBody = SetOwnerRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
+
+// SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
+type SaveDraftJSONRequestBody = SaveDraftRequest
 
 // RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
 type RequestFileFetchJSONRequestBody = CreateFileFetchRequest

@@ -17,16 +17,25 @@ const question = (id: string, number: number, text: string) => ({
 });
 const questions = [question("q12", 12, "Melyik adatbázis?"), question("q3", 3, "Mehet a deploy?")];
 
-const tray: AttachmentTray = { items: [], add: vi.fn(), remove: vi.fn(), retry: vi.fn(), clear: vi.fn(), busy: false, fileIds: [], failed: false };
+const tray: AttachmentTray = { items: [], add: vi.fn(), remove: vi.fn(), retry: vi.fn(), clear: vi.fn(), restore: vi.fn(), busy: false, fileIds: [], failed: false };
 
-function setup() {
+type Draft = { channel_id: string; thread_root_id?: string; body: string; attachments: []; updated_at: string };
+
+function setup(drafts: Draft[] = []) {
   const qc = new QueryClient();
   qc.setQueryData(identityKeys.actors, new Map([[me.id, me], [agent.id, agent]]));
   qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "" });
   const sent: unknown[] = [];
+  const draftCalls: Array<{ method: string; body?: unknown; query?: string }> = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (req: Request) => {
+      const path = new URL(req.url).pathname;
+      if (path.endsWith("/me/drafts")) {
+        if (req.method === "GET") return new Response(JSON.stringify({ drafts }), { headers: { "Content-Type": "application/json" } });
+        draftCalls.push({ method: req.method, body: await req.clone().json().catch(() => undefined), query: new URL(req.url).search });
+        return new Response(null, { status: 204 });
+      }
       if (req.method === "POST") sent.push({ path: new URL(req.url).pathname, body: await req.clone().json().catch(() => null) });
       if (req.method === "GET" && new URL(req.url).pathname.endsWith("/questions")) {
         const state = new URL(req.url).searchParams.get("state");
@@ -42,11 +51,12 @@ function setup() {
       <Toaster closeLabel="Bezárás" />
     </QueryClientProvider>,
   );
-  return { sent, box: screen.getByRole("textbox", { name: "Üzenet" }) as HTMLTextAreaElement };
+  return { sent, draftCalls, box: screen.getByRole("textbox", { name: "Üzenet" }) as HTMLTextAreaElement };
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
   useToasts.setState({ items: [] });
 });
 
@@ -101,4 +111,33 @@ test("/answer suggests the open question numbers", async () => {
   fireEvent.keyDown(box, { key: "Enter" });
   expect(box.value).toBe("/answer Q-12 ");
   expect(screen.queryByRole("listbox")).toBeNull();
+});
+
+test("the draft comes back from the server when the conversation opens", async () => {
+  const { box } = setup([{ channel_id: "c1", body: "félkész gondolat", attachments: [], updated_at: "2026-11-14T10:00:00Z" }]);
+  await waitFor(() => expect(box.value).toBe("félkész gondolat"));
+});
+
+test("a newer local copy (typed offline) wins over the server's", async () => {
+  localStorage.setItem("colony.draft.c1:", JSON.stringify({ body: "offline", files: [], at: "2026-11-14T11:00:00Z" }));
+  const { box } = setup([{ channel_id: "c1", body: "régi", attachments: [], updated_at: "2026-11-14T10:00:00Z" }]);
+  await waitFor(() => expect(box.value).toBe("offline"));
+});
+
+test("typing saves the draft after a pause, and sending removes it", async () => {
+  const { box, draftCalls } = setup();
+  await waitFor(() => expect(box).toBeTruthy());
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20));
+  });
+  fireEvent.change(box, { target: { value: "majdnem kész", selectionStart: 12 } });
+  expect(draftCalls).toHaveLength(0);
+  expect(localStorage.getItem("colony.draft.c1:")).toContain("majdnem kész");
+  await waitFor(() => expect(draftCalls).toHaveLength(1), { timeout: 2500 });
+  expect(draftCalls[0]).toMatchObject({ method: "PUT", body: { channel_id: "c1", body: "majdnem kész" } });
+  await act(async () => {
+    fireEvent.keyDown(box, { key: "Enter" });
+  });
+  await waitFor(() => expect(draftCalls.at(-1)).toMatchObject({ method: "DELETE", query: "?channel_id=c1" }));
+  expect(localStorage.getItem("colony.draft.c1:")).toBeNull();
 });

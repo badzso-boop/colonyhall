@@ -8,6 +8,7 @@ import { useActors, useSession } from "@/features/identity";
 import { answerSuggestions, useAnswerQuestion, useOpenQuestions } from "@/features/questions";
 import { useCreateSchedule, useRetract, useSendMessage } from "../api";
 import type { AttachmentTray } from "../attachments";
+import { useDraft } from "../useDraft";
 
 type Props = {
   channelId: string;
@@ -38,7 +39,7 @@ function Tray({ tray }: { tray: AttachmentTray }) {
                 ? t("composer.uploading", { pct: Math.round(a.progress * 100) })
                 : a.status === "error"
                   ? t(a.error === "too_large" ? "composer.tooLarge" : "composer.failed")
-                  : `${Math.max(1, Math.round(a.file.size / 1024))} KB`}
+                  : `${Math.max(1, Math.round((a.size ?? a.file.size) / 1024))} KB`}
             </span>
           </span>
           {a.status === "error" && a.error !== "too_large" ? (
@@ -85,6 +86,8 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   useShortcut("enter", "composer", "send", undefined, !threadRootId);
   useShortcut("shift+enter", "composer", "newline", undefined, !threadRootId);
   useShortcut("arrowup", "composer", "lastMessage", undefined, !threadRootId);
+
+  const draft = useDraft({ channelId, threadRootId, enabled: session.data?.actor.kind === "human" && !readOnly, text, setText, tray });
 
   const mention = activeMention(text, caret);
   const mentionList = useMemo(
@@ -153,6 +156,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       }
       setText("");
       setCaret(0);
+      draft.sent();
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), { tone: "danger" });
     }

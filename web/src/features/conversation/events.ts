@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { onEvent, onResync, type AppEvent } from "@/shared/api";
-import { conversationKeys, type Message, type MessagePages } from "./api";
+import { conversationKeys, draftsKey, type Message, type MessagePages } from "./api";
 import { applyReply } from "./model";
 
 function fromEvent(e: AppEvent<"message.created">): Message {
@@ -34,6 +34,8 @@ export function registerConversationEvents(qc: QueryClient): () => void {
   };
 
   const offs = [
+    // Another tab or device saved, sent or removed a draft (the owner alone gets this).
+    onEvent("draft.changed", () => void qc.invalidateQueries({ queryKey: draftsKey })),
     onEvent("message.created", (e) => {
       const m = fromEvent(e);
       // The newest page is pages[0]: append there (once, even if the event is replayed).

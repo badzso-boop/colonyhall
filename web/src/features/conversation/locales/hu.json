@@ -262,5 +262,19 @@
     "unknown": "Ismeretlen résztvevő.",
     "dm": "Üzenet",
     "dmFailed": "Nem sikerült megnyitni a közvetlen üzenetet."
+  },
+  "drafts": {
+    "title": "Piszkozatok",
+    "count_one": "{{count}} piszkozat",
+    "count_other": "{{count}} piszkozat",
+    "none": "Nincs piszkozatod",
+    "noneBody": "Ami elküldetlenül marad a szerkesztőben, ide kerül, és minden eszközödön megvan.",
+    "inThread": "szálban",
+    "onlyFiles_one": "{{count}} csatolt fájl",
+    "onlyFiles_other": "{{count}} csatolt fájl",
+    "files_one": "+ {{count}} fájl",
+    "files_other": "+ {{count}} fájl",
+    "delete": "Piszkozat törlése",
+    "has": "Piszkozat"
   }
 }

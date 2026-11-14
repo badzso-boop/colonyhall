@@ -629,6 +629,48 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarkedCount" } } } }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /me/drafts:
+    get:
+      operationId: listDrafts
+      tags: [draft]
+      description: |
+        Humans. The caller's unsent messages, newest first, in conversations
+        the caller can still read (round 55). Nobody else, not even an
+        admin, reads another person's drafts.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DraftList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: saveDraft
+      tags: [draft]
+      description: |
+        Humans. Stores the caller's draft for one conversation and thread
+        (thread_root_id absent = the main stream). Empty text and no files
+        delete it (204). file_ids must be the caller's own uploads in that
+        conversation.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SaveDraftRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/Draft" } } } }
+        "204": { description: Deleted (it was empty) }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteDraft
+      tags: [draft]
+      description: Humans. Removes the caller's draft in one place; a missing one is fine.
+      parameters:
+        - { name: channel_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: thread_root_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /messages/{messageId}/reactions/{emoji}:
     parameters:
       - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3282,7 +3324,8 @@ components:
         actor.state_changed → EventActorStateChanged; actor.profile_updated →
         EventActorProfileUpdated; workspace.emergency_activated,
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
-        EventDeliveryItemCreated.
+        EventDeliveryItemCreated; draft.changed (the owner only) →
+        EventDraftChanged.
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -3443,6 +3486,36 @@ components:
         actor_id: { type: string, format: uuid }
         muted: { type: boolean }
         muted_until: { type: string, format: date-time }
+    Draft:
+      type: object
+      required: [channel_id, body, attachments, updated_at]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        body: { type: string }
+        attachments: { type: array, items: { $ref: "#/components/schemas/EventAttachment" } }
+        updated_at: { type: string, format: date-time }
+    DraftList:
+      type: object
+      required: [drafts]
+      properties:
+        drafts: { type: array, items: { $ref: "#/components/schemas/Draft" } }
+    SaveDraftRequest:
+      type: object
+      required: [channel_id, body]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        body: { type: string, maxLength: 20000 }
+        file_ids: { type: array, maxItems: 20, items: { type: string, format: uuid } }
+    EventDraftChanged:
+      type: object
+      description: The place only, never the text; sent to the draft's owner alone.
+      required: [channel_id, deleted]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        deleted: { type: boolean }
     EventActorCreated:
       type: object
       required: [actor_id, kind, handle, role]

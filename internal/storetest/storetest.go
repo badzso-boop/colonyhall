@@ -23,6 +23,7 @@ import (
 	"colonyhall/internal/modules/decision"
 	"colonyhall/internal/modules/delegation"
 	"colonyhall/internal/modules/delivery"
+	"colonyhall/internal/modules/draft"
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/git"
 	"colonyhall/internal/modules/hosts"
@@ -69,6 +70,7 @@ type Backend struct {
 	Delegation   delegation.Store
 	Search       search.Store
 	DBStats      dbstats.Store
+	Drafts       draft.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -101,6 +103,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("delegation", func(t *testing.T) { testDelegation(t, newBackend(t)) })
 	t.Run("agents", func(t *testing.T) { testAgentLifecycle(t, newBackend(t)) })
 	t.Run("channeledit", func(t *testing.T) { testChannelEdit(t, newBackend(t)) })
+	t.Run("drafts", func(t *testing.T) { testDrafts(t, newBackend(t)) })
 }
 
 var (

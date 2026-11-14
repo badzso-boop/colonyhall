@@ -22,6 +22,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [decisions](#decisions) (1)
 - [delegation](#delegation) (5)
 - [delivery](#delivery) (2)
+- [draft](#draft) (3)
 - [files](#files) (14)
 - [git](#git) (4)
 - [hosts](#hosts) (20)
@@ -1128,6 +1129,56 @@ Request body (`application/json`, required): [AckRequest](#ackrequest)
 | Response | Body |
 | --- | --- |
 | 200 | Acknowledged: [AckResponse](#ackresponse) (`application/json`) |
+
+## draft
+
+### `DELETE /me/drafts`
+
+`deleteDraft` · Auth: signed in
+
+Humans. Removes the caller's draft in one place; a missing one is fine.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `channel_id` | query | string (uuid) | yes |  |
+| `thread_root_id` | query | string (uuid) |  |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Deleted |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /me/drafts`
+
+`listDrafts` · Auth: signed in
+
+Humans. The caller's unsent messages, newest first, in conversations
+the caller can still read (round 55). Nobody else, not even an
+admin, reads another person's drafts.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [DraftList](#draftlist) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /me/drafts`
+
+`saveDraft` · Auth: signed in
+
+Humans. Stores the caller's draft for one conversation and thread
+(thread_root_id absent = the main stream). Empty text and no files
+delete it (204). file_ids must be the caller's own uploads in that
+conversation.
+
+Request body (`application/json`, required): [SaveDraftRequest](#savedraftrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | Saved: [Draft](#draft) (`application/json`) |
+| 204 | Deleted (it was empty) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ## files
 
@@ -3532,6 +3583,22 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `id` | string | yes | config, server, token, claude, agy, sandbox, tmux, git, service, disk |
 | `status` | string | yes | One of: `ok`, `warn`, `fail`. |
 
+### Draft
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `attachments` | [EventAttachment](#eventattachment)[] | yes |  |
+| `body` | string | yes |  |
+| `channel_id` | string (uuid) | yes |  |
+| `thread_root_id` | string (uuid) |  |  |
+| `updated_at` | string (date-time) | yes |  |
+
+### DraftList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `drafts` | [Draft](#draft)[] | yes |  |
+
 ### EditWikiPageRequest
 
 | Field | Type | Required | Description |
@@ -3643,6 +3710,16 @@ The changed fields; never the description text (clients refetch the channel).
 | --- | --- | --- | --- |
 | `item_kind` | string | yes |  |
 | `recipient_id` | string (uuid) | yes |  |
+
+### EventDraftChanged
+
+The place only, never the text; sent to the draft's owner alone.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channel_id` | string (uuid) | yes |  |
+| `deleted` | boolean | yes |  |
+| `thread_root_id` | string (uuid) |  |  |
 
 ### EventEmergency
 
@@ -4594,6 +4671,15 @@ Type: string
 | --- | --- | --- | --- |
 | `id` | string (uuid) | yes |  |
 
+### SaveDraftRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `body` | string | yes |  |
+| `channel_id` | string (uuid) | yes |  |
+| `file_ids` | string (uuid)[] |  |  |
+| `thread_root_id` | string (uuid) |  |  |
+
 ### Schedule
 
 | Field | Type | Required | Description |
@@ -5181,7 +5267,8 @@ actor.created → EventActorCreated;
 actor.state_changed → EventActorStateChanged; actor.profile_updated →
 EventActorProfileUpdated; workspace.emergency_activated,
 workspace.emergency_cleared → EventEmergency; delivery.item_created →
-EventDeliveryItemCreated.
+EventDeliveryItemCreated; draft.changed (the owner only) →
+EventDraftChanged.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |

@@ -10,12 +10,15 @@ export type Attachment = {
   status: "uploading" | "done" | "error";
   progress: number;
   fileId?: string;
+  /** Set for an upload restored from a draft: the file itself is not here, only its metadata. */
+  size?: number;
   /** "too_large" for a 413, otherwise a generic failure. */
   error?: "too_large" | "failed";
 };
 
 export type TrayAction =
   | { type: "add"; items: Array<{ key: number; file: File }> }
+  | { type: "restore"; items: Array<{ key: number; file: File; fileId: string; size: number }> }
   | { type: "progress"; key: number; progress: number }
   | { type: "done"; key: number; fileId: string }
   | { type: "error"; key: number; error: "too_large" | "failed" }
@@ -28,6 +31,8 @@ export function trayReducer(items: Attachment[], a: TrayAction): Attachment[] {
   switch (a.type) {
     case "add":
       return [...items, ...a.items.map((x) => ({ ...x, status: "uploading" as const, progress: 0 }))];
+    case "restore":
+      return [...items, ...a.items.map((x) => ({ ...x, status: "done" as const, progress: 1 }))];
     case "progress":
       return patch(a.key, { progress: a.progress });
     case "done":
@@ -99,12 +104,21 @@ export function useAttachments(channelId: string) {
 
   const clear = useCallback(() => dispatch({ type: "clear" }), []);
 
+  /** Puts a draft's earlier uploads back (already on the server). */
+  const restore = useCallback((files: Array<{ id: string; name: string; mime: string; size: number }>) => {
+    if (!files.length) return;
+    dispatch({
+      type: "restore",
+      items: files.map((f) => ({ key: nextKey++, file: new File([], f.name, { type: f.mime }), fileId: f.id, size: f.size })),
+    });
+  }, []);
+
   useEffect(() => {
     const map = controllers.current;
     return () => map.forEach((c) => c.abort());
   }, []);
 
-  return { items, add, remove, retry, clear, ...trayState(items) };
+  return { items, add, remove, retry, clear, restore, ...trayState(items) };
 }
 
 export type AttachmentTray = ReturnType<typeof useAttachments>;

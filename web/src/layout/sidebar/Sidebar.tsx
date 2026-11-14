@@ -3,7 +3,7 @@ import { NavLink } from "react-router";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { openWindow } from "@/shared/windows";
-import { ConversationList, ThreadsEntry } from "@/features/conversation";
+import { ConversationList, DraftsEntry, ThreadsEntry } from "@/features/conversation";
 import { useSession } from "@/features/identity";
 import { adminPages, pages, type PageEntry } from "./pages";
 
@@ -58,6 +58,7 @@ export function Sidebar() {
   return (
     <div className="flex h-full flex-col overflow-y-auto px-2 pt-2 pb-6">
       <ThreadsEntry />
+      <DraftsEntry />
       <PageGroup title={t("workspace")} entries={pages.filter((p) => !p.adminOnly || admin)} />
       {admin ? <PageGroup title={t("administration")} entries={adminPages.filter((p) => !p.ownerOnly || role === "owner")} /> : null}
       <ConversationList />

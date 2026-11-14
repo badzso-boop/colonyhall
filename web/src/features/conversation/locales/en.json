@@ -262,5 +262,19 @@
     "unknown": "Unknown participant.",
     "dm": "Message",
     "dmFailed": "Could not open the direct message."
+  },
+  "drafts": {
+    "title": "Drafts",
+    "count_one": "{{count}} draft",
+    "count_other": "{{count}} drafts",
+    "none": "No drafts",
+    "noneBody": "Whatever stays unsent in the composer lands here, on every device you use.",
+    "inThread": "in a thread",
+    "onlyFiles_one": "{{count}} attached file",
+    "onlyFiles_other": "{{count}} attached files",
+    "files_one": "+ {{count}} file",
+    "files_other": "+ {{count}} files",
+    "delete": "Delete draft",
+    "has": "Draft"
   }
 }

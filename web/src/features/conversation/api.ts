@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "@/shared/api";
 import { itemOrder, moveConversation, moveSection, sectionOrder, upsertSection } from "./sections";
@@ -350,4 +351,42 @@ export function useMarkAllThreadsRead() {
     mutationFn: async () => unwrap(await api.POST("/me/threads/read")).marked,
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["conversation", "myThreads"] }),
   });
+}
+
+export type Draft = Schemas["Draft"];
+export const draftsKey = ["conversation", "drafts"] as const;
+
+/** The viewer's drafts (humans; round 55, part A), newest first. */
+export function useDrafts(enabled: boolean) {
+  return useQuery({
+    queryKey: draftsKey,
+    enabled,
+    queryFn: async () => unwrap(await api.GET("/me/drafts")).drafts,
+    staleTime: 30_000,
+  });
+}
+
+/** Stores a draft on the server (empty deletes) and updates the cached list. */
+export function useDraftWriter() {
+  const qc = useQueryClient();
+  return useMemo(() => {
+    const same = (d: Draft, channelId: string, threadRootId?: string) => d.channel_id === channelId && (d.thread_root_id ?? "") === (threadRootId ?? "");
+    const drop = (channelId: string, threadRootId?: string) =>
+      qc.setQueryData<Draft[]>(draftsKey, (list) => list?.filter((d) => !same(d, channelId, threadRootId)));
+    return {
+      save: async (body: Schemas["SaveDraftRequest"]) => {
+        const res = await api.PUT("/me/drafts", { body });
+        if (res.response.status === 204) {
+          drop(body.channel_id, body.thread_root_id);
+          return;
+        }
+        const d = unwrap(res);
+        qc.setQueryData<Draft[]>(draftsKey, (list) => [d, ...(list ?? []).filter((x) => !same(x, d.channel_id, d.thread_root_id))]);
+      },
+      remove: async (channelId: string, threadRootId?: string) => {
+        drop(channelId, threadRootId);
+        unwrap(await api.DELETE("/me/drafts", { params: { query: { channel_id: channelId, ...(threadRootId ? { thread_root_id: threadRootId } : {}) } } }));
+      },
+    };
+  }, [qc]);
 }

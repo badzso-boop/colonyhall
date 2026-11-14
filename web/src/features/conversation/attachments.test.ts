@@ -16,3 +16,9 @@ test("the tray: add, progress, done, error, retry, remove", () => {
   expect(trayState(s)).toEqual({ busy: false, fileIds: ["f1"], failed: false });
   expect(trayReducer(s, { type: "clear" })).toEqual([]);
 });
+
+test("a draft's uploads come back as done, ready to send", () => {
+  const s = trayReducer([], { type: "restore", items: [{ key: 7, file: new File([], "plan.txt"), fileId: "f7", size: 2048 }] });
+  expect(s[0]).toMatchObject({ status: "done", progress: 1, fileId: "f7", size: 2048 });
+  expect(trayState(s)).toEqual({ busy: false, fileIds: ["f7"], failed: false });
+});

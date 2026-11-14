@@ -314,6 +314,17 @@ type Delivery struct {
 	ViaGrant    bool
 }
 
+type Draft struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ActorID      uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Body         string
+	FileIds      []uuid.UUID
+	UpdatedAt    time.Time
+}
+
 type Event struct {
 	Seq           int64
 	ID            uuid.UUID
