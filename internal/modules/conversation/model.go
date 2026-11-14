@@ -199,7 +199,11 @@ type Message struct {
 	AnswersMessageID ids.ID
 	// Important: an agent marked it (MCP send important: true); such a
 	// message is pinned when sent (round 55, part D).
-	Important        bool
+	Important bool
+	// AlsoInChannel: a thread reply also shown in the channel's main stream
+	// (round 55, part G). Delivery is unchanged: channel agents wake only
+	// when mentioned.
+	AlsoInChannel    bool
 	Pinned           bool              // filled on reads
 	AnswersChannelID ids.ID            // filled on reads
 	AnswersAuthorID  ids.ID            // filled on reads
@@ -278,6 +282,7 @@ var (
 	ErrNothingToUpdate    = errors.New("give a name or a description to change")
 	ErrBadMuteUntil       = errors.New("until must be in the future")
 	ErrBadNotifyLevel     = errors.New("level must be all, mentions or none")
+	ErrAlsoNeedsThread    = errors.New("also_in_channel is for thread replies in a channel")
 	ErrPinLimit           = errors.New("a conversation has at most 50 pinned messages; unpin one first")
 	ErrAgentPinLimit      = errors.New("an agent pins at most 5 messages per conversation per day")
 	ErrPinOwnOnly         = errors.New("an agent can pin only its own messages")

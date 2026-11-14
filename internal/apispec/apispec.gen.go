@@ -3052,6 +3052,9 @@ type MarkedCount struct {
 
 // Message defines model for Message.
 type Message struct {
+	// AlsoInChannel A thread reply also shown in the channel's main stream
+	AlsoInChannel *bool `json:"also_in_channel,omitempty"`
+
 	// Answers Set on an agent's answer posted in its origin thread: the DM reply it answers
 	Answers      *MessageAnswers     `json:"answers,omitempty"`
 	Attachments  *[]FileAttachment   `json:"attachments,omitempty"`
@@ -3792,6 +3795,9 @@ type SecurityStatus struct {
 
 // SendMessageRequest defines model for SendMessageRequest.
 type SendMessageRequest struct {
+	// AlsoInChannel A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned.
+	AlsoInChannel *bool `json:"also_in_channel,omitempty"`
+
 	// AnswersMessageId Agents (guard): the message this answer replies to, in another channel the agent can read
 	AnswersMessageId *openapi_types.UUID `json:"answers_message_id,omitempty"`
 	Body             string              `json:"body"`

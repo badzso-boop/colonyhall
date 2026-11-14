@@ -124,7 +124,10 @@ export function applyReply(list: Msg[], reply: Msg): Msg[] {
   });
 }
 
-/** The main stream of a channel shows root messages only; replies live in threads. */
+/**
+ * The main stream of a channel shows root messages, and the thread replies
+ * also sent to the channel (round 55); other replies live in threads.
+ */
 export function mainStream(messages: Msg[], kind: Channel["kind"]): Msg[] {
-  return kind === "dm" ? messages : messages.filter((m) => !m.thread_root_id);
+  return kind === "dm" ? messages : messages.filter((m) => !m.thread_root_id || m.also_in_channel);
 }

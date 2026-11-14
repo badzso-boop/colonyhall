@@ -3473,6 +3473,8 @@ export interface components {
             pinned?: boolean;
             /** @description An agent sent it marked important (a result, a decision, something a person must act on) */
             important?: boolean;
+            /** @description A thread reply also shown in the channel's main stream */
+            also_in_channel?: boolean;
         };
         PinnedMessage: {
             message: components["schemas"]["Message"];
@@ -3520,6 +3522,8 @@ export interface components {
             answers_message_id?: string;
             /** @description Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400). */
             important?: boolean;
+            /** @description A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned. */
+            also_in_channel?: boolean;
         };
         SendResult: {
             message?: components["schemas"]["Message"];
@@ -3723,6 +3727,7 @@ export interface components {
             silent?: boolean;
             attachments?: components["schemas"]["EventAttachment"][];
             important?: boolean;
+            also_in_channel?: boolean;
             /** Format: date-time */
             created_at: string;
         };

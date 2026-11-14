@@ -57,7 +57,8 @@
     "commandsLabel": "Parancsok",
     "noAgent": "Ebben a beszélgetésben nincs agent.",
     "schedule": "Ütemezés…",
-    "questions": "Nyitott kérdések"
+    "questions": "Nyitott kérdések",
+    "alsoToChannel": "Küldés a #{{name}} csatornába is"
   },
   "commands": {
     "schedule": "Egyszeri ütemezett üzenet",
@@ -98,7 +99,8 @@
       "agree": "👍 egyetértés (az agent így olvassa)",
       "disagree": "👎 nem ért egyet (az agent így olvassa)"
     },
-    "openLinked": "Ugrás az üzenethez"
+    "openLinked": "Ugrás az üzenethez",
+    "repliedInThread": "↳ Válasz egy szálban – megnyitás"
   },
   "new": {
     "close": "Bezárás",

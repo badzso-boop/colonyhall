@@ -97,6 +97,7 @@ type MessageCreated struct {
 	Silent         bool         `json:"silent,omitempty"`
 	Attachments    []Attachment `json:"attachments,omitempty"`
 	Important      bool         `json:"important,omitempty"`
+	AlsoInChannel  bool         `json:"also_in_channel,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
 }
 

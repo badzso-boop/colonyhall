@@ -19,6 +19,7 @@ function fromEvent(e: AppEvent<"message.created">): Message {
     reactions: [],
     attachments: d.attachments ?? [],
     ...(d.important ? { important: true, pinned: true } : {}),
+    ...(d.also_in_channel ? { also_in_channel: true } : {}),
   };
 }
 

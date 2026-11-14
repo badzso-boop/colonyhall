@@ -17,6 +17,8 @@ type Props = {
   memberIds: Set<string>;
   tray: AttachmentTray;
   readOnly?: boolean;
+  /** A thread reply in a channel: offer "also send to #name" (round 55, part G). */
+  alsoToChannel?: string;
   /** Opens the work pane for the conversation's agent; absent when there is none. */
   onOpenFiles?: () => void;
   onOpenTerminals?: () => void;
@@ -54,7 +56,7 @@ function Tray({ tray }: { tray: AttachmentTray }) {
 }
 
 /** The message composer (round 31, part 5). */
-export function Composer({ channelId, threadRootId, placeholder, memberIds, tray, readOnly, onOpenFiles, onOpenTerminals }: Props) {
+export function Composer({ channelId, threadRootId, placeholder, memberIds, tray, readOnly, alsoToChannel, onOpenFiles, onOpenTerminals }: Props) {
   const { t } = useTranslation("conversation");
   const width = useWidth();
   const actors = useActors();
@@ -67,6 +69,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [pick, setPick] = useState(0);
+  const [alsoInChannel, setAlsoInChannel] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -146,6 +149,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
           body: body || tray.items.map((a) => a.file.name).join(", "),
           client_msg_id: randomId(),
           ...(threadRootId ? { thread_root_id: threadRootId } : {}),
+          ...(threadRootId && alsoToChannel && alsoInChannel ? { also_in_channel: true } : {}),
           ...(tray.fileIds.length ? { file_ids: tray.fileIds } : {}),
         });
         tray.clear();
@@ -156,6 +160,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       }
       setText("");
       setCaret(0);
+      setAlsoInChannel(false);
       draft.sent();
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), { tone: "danger" });
@@ -325,7 +330,14 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
             {t("composer.terminal")}
           </button>
         ) : null}
-        <span className="ml-2 hidden truncate text-meta text-fg-subtle @xl:inline">{t("composer.hint")}</span>
+        {threadRootId && alsoToChannel ? (
+          <label className="ml-1 inline-flex min-w-0 cursor-pointer items-center gap-1.5 text-meta text-fg-muted">
+            <input type="checkbox" checked={alsoInChannel} onChange={(e) => setAlsoInChannel(e.target.checked)} className="size-3.5 accent-(--color-accent)" />
+            <span className="truncate">{t("composer.alsoToChannel", { name: alsoToChannel })}</span>
+          </label>
+        ) : (
+          <span className="ml-2 hidden truncate text-meta text-fg-subtle @xl:inline">{t("composer.hint")}</span>
+        )}
         <IconButton
           label={t("composer.send")}
           icon={<SendHorizontal className="size-4" />}

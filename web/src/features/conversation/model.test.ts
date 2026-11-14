@@ -76,3 +76,15 @@ test("mainStream keeps replies out of channels but not out of DMs", () => {
   expect(mainStream(list, "public").map((m) => m.id)).toEqual(["a"]);
   expect(mainStream(list, "dm").map((m) => m.id)).toEqual(["a", "b"]);
 });
+
+test("the main stream keeps thread replies also sent to the channel", async () => {
+  const { mainStream } = await import("./model");
+  const base = { channel_id: "c", author_id: "a", kind: "text" as const, body: "", mentions: [], reply_count: 0, created_at: "" };
+  const list = [
+    { ...base, id: "r" },
+    { ...base, id: "x", thread_root_id: "r" },
+    { ...base, id: "y", thread_root_id: "r", also_in_channel: true },
+  ];
+  expect(mainStream(list, "public").map((m) => m.id)).toEqual(["r", "y"]);
+  expect(mainStream(list, "dm").map((m) => m.id)).toEqual(["r", "x", "y"]);
+});

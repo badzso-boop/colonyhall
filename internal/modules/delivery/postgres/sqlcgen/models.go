@@ -457,6 +457,7 @@ type Message struct {
 	OriginThreadID   *uuid.UUID
 	AnswersMessageID *uuid.UUID
 	Important        bool
+	AlsoInChannel    bool
 }
 
 type MessageFile struct {

@@ -30,7 +30,7 @@ func init() {
 	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
 	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil, conversation.ErrBadChannelKind)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
-	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans, conversation.ErrBadNotifyLevel)
+	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans, conversation.ErrBadNotifyLevel, conversation.ErrAlsoNeedsThread)
 	httpx.RegisterForbidden(conversation.ErrPinOwnOnly)
 	httpx.RegisterStatus(http.StatusConflict, conversation.ErrPinLimit)
 	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrAgentPinLimit)
@@ -71,6 +71,9 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	}
 	if m.Important {
 		out.Important = httpx.Ptr(true)
+	}
+	if m.AlsoInChannel {
+		out.AlsoInChannel = httpx.Ptr(true)
 	}
 	if len(m.ReplyParticipantIDs) > 0 {
 		out.ReplyParticipantIds = &m.ReplyParticipantIDs
@@ -561,7 +564,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 		silent := in.Silent != nil && *in.Silent && actor.Kind != identity.KindAgent
 		res, err := svc.SendMessage(r.Context(), actor, conversation.SendInput{
 			ChannelID: channelID, ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil),
-			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body, Elaborate: httpx.Deref(in.Elaborate, false), Important: httpx.Deref(in.Important, false),
+			ClientMsgID: httpx.Deref(in.ClientMsgId, ""), Body: in.Body, Elaborate: httpx.Deref(in.Elaborate, false), Important: httpx.Deref(in.Important, false), AlsoInChannel: httpx.Deref(in.AlsoInChannel, false),
 			FileIDs: fileIDs, Silent: silent,
 			AnswersMessageID: httpx.Deref(in.AnswersMessageId, ids.Nil),
 		})

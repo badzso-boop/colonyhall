@@ -21,7 +21,7 @@ const tray: AttachmentTray = { items: [], add: vi.fn(), remove: vi.fn(), retry: 
 
 type Draft = { channel_id: string; thread_root_id?: string; body: string; attachments: []; updated_at: string };
 
-function setup(drafts: Draft[] = []) {
+function setup(drafts: Draft[] = [], thread?: { rootId: string; channel: string }) {
   const qc = new QueryClient();
   qc.setQueryData(identityKeys.actors, new Map([[me.id, me], [agent.id, agent]]));
   qc.setQueryData(identityKeys.session, { actor: me, csrf_token: "" });
@@ -47,7 +47,7 @@ function setup(drafts: Draft[] = []) {
   );
   render(
     <QueryClientProvider client={qc}>
-      <Composer channelId="c1" placeholder="Üzenet" memberIds={new Set(["ag"])} tray={tray} />
+      <Composer channelId="c1" threadRootId={thread?.rootId} alsoToChannel={thread?.channel} placeholder="Üzenet" memberIds={new Set(["ag"])} tray={tray} />
       <Toaster closeLabel="Bezárás" />
     </QueryClientProvider>,
   );
@@ -140,4 +140,16 @@ test("typing saves the draft after a pause, and sending removes it", async () =>
   });
   await waitFor(() => expect(draftCalls.at(-1)).toMatchObject({ method: "DELETE", query: "?channel_id=c1" }));
   expect(localStorage.getItem("colony.draft.c1:")).toBeNull();
+});
+
+test("a thread reply can also go to the channel, as one flagged message", async () => {
+  const { box, sent } = setup([], { rootId: "r1", channel: "general" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Küldés a #general csatornába is" }));
+  fireEvent.change(box, { target: { value: "kész", selectionStart: 4 } });
+  await act(async () => {
+    fireEvent.keyDown(box, { key: "Enter" });
+  });
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]).toMatchObject({ body: { body: "kész", thread_root_id: "r1", also_in_channel: true } });
+  await waitFor(() => expect((screen.getByRole("checkbox", { name: "Küldés a #general csatornába is" }) as HTMLInputElement).checked).toBe(false));
 });

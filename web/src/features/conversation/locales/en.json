@@ -57,7 +57,8 @@
     "commandsLabel": "Commands",
     "noAgent": "There is no agent in this conversation.",
     "schedule": "Schedule…",
-    "questions": "Open questions"
+    "questions": "Open questions",
+    "alsoToChannel": "Also send to #{{name}}"
   },
   "commands": {
     "schedule": "A one-off scheduled message",
@@ -98,7 +99,8 @@
       "agree": "👍 agree (how the agent reads it)",
       "disagree": "👎 disagree (how the agent reads it)"
     },
-    "openLinked": "Open the message"
+    "openLinked": "Open the message",
+    "repliedInThread": "↳ Replied in a thread – open"
   },
   "new": {
     "close": "Close",

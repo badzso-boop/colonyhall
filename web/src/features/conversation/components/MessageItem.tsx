@@ -259,6 +259,12 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
         ) : null}
         {m.link_cards?.length && !retracted ? <LinkCards cards={m.link_cards} /> : null}
         {viewer.human && fromAgent && !retracted ? <DelegationActions message={m} admin={viewer.admin} /> : null}
+        {summary && m.thread_root_id && m.also_in_channel && onOpenThread ? (
+          <button type="button" onClick={() => onOpenThread(m.thread_root_id!)} className="mt-1 inline-flex items-center gap-1 text-meta text-accent-text hover:underline">
+            <CornerDownRight aria-hidden className="size-3.5" />
+            {t("message.repliedInThread")}
+          </button>
+        ) : null}
         {m.origin ? (
           <Link to={`/c/${m.origin.channel_id}?thread=${m.origin.thread_id}`} className="mt-1 inline-flex items-center gap-1 text-meta text-accent-text hover:underline">
             <CornerUpLeft aria-hidden className="size-3.5" />

@@ -151,7 +151,7 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		AuthorID: m.AuthorID, ClientMsgID: nullString(m.ClientMsgID), Kind: m.Kind, Body: m.Body,
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
 		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
-		AnswersMessageID: nullID(m.AnswersMessageID), Important: m.Important,
+		AnswersMessageID: nullID(m.AnswersMessageID), Important: m.Important, AlsoInChannel: m.AlsoInChannel,
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -224,7 +224,8 @@ func oneChannel(r sqlcgen.Channel, err error) (conversation.Channel, error) {
 func toMessage(r sqlcgen.Message) conversation.Message {
 	m := conversation.Message{ID: r.ID, WorkspaceID: r.WorkspaceID, ChannelID: r.ChannelID, AuthorID: r.AuthorID,
 		Kind: r.Kind, Body: r.Body, Mentions: r.Mentions, ReplyCount: int(r.ReplyCount),
-		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt, DeletedAt: r.DeletedAt, DeletedBy: r.DeletedBy, Important: r.Important}
+		LastReplyAt: r.LastReplyAt, CreatedAt: r.CreatedAt, DeletedAt: r.DeletedAt, DeletedBy: r.DeletedBy, Important: r.Important,
+		AlsoInChannel: r.AlsoInChannel}
 	if r.ThreadRootID != nil {
 		m.ThreadRootID = *r.ThreadRootID
 	}

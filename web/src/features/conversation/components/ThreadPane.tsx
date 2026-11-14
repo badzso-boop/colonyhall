@@ -88,7 +88,15 @@ export function ThreadPane({ rootId }: { rootId: string }) {
         <CompactionLive channelId={channelId} threadRootId={rootId} human={viewer.human} />
       </div>
       <ActivityLine channelId={channelId} threadRootId={rootId} actors={actors.data} />
-      <Composer channelId={channelId} threadRootId={rootId} placeholder={t("composer.threadPlaceholder")} memberIds={memberIds} tray={tray} readOnly={Boolean(channel?.archived_at)} />
+      <Composer
+        channelId={channelId}
+        threadRootId={rootId}
+        placeholder={t("composer.threadPlaceholder")}
+        memberIds={memberIds}
+        tray={tray}
+        readOnly={Boolean(channel?.archived_at)}
+        alsoToChannel={channel && channel.kind !== "dm" ? channel.name : undefined}
+      />
     </DropZone>
   );
 }

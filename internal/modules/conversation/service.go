@@ -439,6 +439,8 @@ type SendInput struct {
 	// Important (agents only, round 55): the message is a result, a decision
 	// or something a human must act on; it is pinned when sent.
 	Important bool
+	// AlsoInChannel shows a thread reply in the channel too (round 55).
+	AlsoInChannel bool
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -512,6 +514,10 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			return SendResult{}, ErrBadThread
 		}
 	}
+	// A DM shows its replies in the main stream anyway.
+	if in.AlsoInChannel && (in.ThreadRootID == ids.Nil || c.Kind == KindDM) {
+		return SendResult{}, ErrAlsoNeedsThread
+	}
 	if by.Kind == identity.KindAgent {
 		if err := s.checkAndEnforceRateLimit(ctx, by, c, in.ThreadRootID); err != nil {
 			return SendResult{}, err
@@ -577,7 +583,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			AuthorID: by.ID, ClientMsgID: in.ClientMsgID, Kind: "text", Body: body,
 			Mentions: mentions, CreatedAt: now,
 			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
-			AnswersMessageID: answersID, Important: in.Important,
+			AnswersMessageID: answersID, Important: in.Important, AlsoInChannel: in.AlsoInChannel,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -794,9 +800,10 @@ func MessageCreatedPayload(m Message) MessageCreated {
 	p := MessageCreated{
 		MessageID: m.ID.String(), ChannelID: m.ChannelID.String(), AuthorID: m.AuthorID.String(),
 		ClientMsgID: m.ClientMsgID, Kind: m.Kind, Body: m.Body, CreatedAt: m.CreatedAt,
-		Mentions:    make([]string, 0, len(m.Mentions)),
-		Attachments: m.Attachments,
-		Important:   m.Important,
+		Mentions:      make([]string, 0, len(m.Mentions)),
+		Attachments:   m.Attachments,
+		Important:     m.Important,
+		AlsoInChannel: m.AlsoInChannel,
 	}
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()

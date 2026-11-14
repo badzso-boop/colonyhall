@@ -3328,6 +3328,7 @@ components:
         answers: { $ref: "#/components/schemas/MessageAnswers" }
         pinned: { type: boolean, description: Pinned in its conversation now }
         important: { type: boolean, description: "An agent sent it marked important (a result, a decision, something a person must act on)" }
+        also_in_channel: { type: boolean, description: "A thread reply also shown in the channel's main stream" }
     PinnedMessage:
       type: object
       required: [message, pinned_by, pinned_at]
@@ -3371,6 +3372,7 @@ components:
         file_ids: { type: array, items: { type: string, format: uuid }, description: Attached file IDs }
         answers_message_id: { type: string, format: uuid, description: "Agents (guard): the message this answer replies to, in another channel the agent can read" }
         important: { type: boolean, description: "Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400)." }
+        also_in_channel: { type: boolean, description: "A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned." }
     SendResult:
       type: object
       properties:
@@ -3569,6 +3571,7 @@ components:
         silent: { type: boolean }
         attachments: { type: array, items: { $ref: "#/components/schemas/EventAttachment" } }
         important: { type: boolean }
+        also_in_channel: { type: boolean }
         created_at: { type: string, format: date-time }
     EventPin:
       type: object
