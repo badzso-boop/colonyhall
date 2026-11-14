@@ -618,7 +618,6 @@ type SearchChunkText struct {
 	EmbedAttempts int32
 	EmbedRetryAt  *time.Time
 	IndexedAt     time.Time
-	TsvUnaccent   interface{}
 }
 
 type SearchLog struct {

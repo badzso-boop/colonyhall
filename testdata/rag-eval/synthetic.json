@@ -21,20 +21,7 @@
       { "label": "m-gitea", "channel": "uzemeltetes", "body": "Az agentek a Gitea belső címét használják, a nyilvános címet csak ember nyitja meg böngészőből." },
       { "label": "m-secret-plan", "channel": "vezetoseg", "body": "A jövő évi költségvetés tervezete: két új gép a homelabba." },
       { "label": "m-worktree", "channel": "fejlesztes", "body": "Minden kör külön git worktree-ben készül, a main ágra csak kérésre kerül commit." },
-      { "label": "m-push", "channel": "fejlesztes", "body": "A push-értesítés még nincs kész, a PWA után jön." },
-      { "label": "m-mailtest", "channel": "fejlesztes", "body": "Melyik tesztszervert használunk a levelek teszteléséhez a helyi fejlesztésben? Gyűjtsük össze a tapasztalatokat." },
-      { "label": "m-mailtest-r1", "channel": "fejlesztes", "thread": "m-mailtest", "body": "Én eddig a saját postafiókomra küldtem mindent." },
-      { "label": "m-mailtest-r2", "channel": "fejlesztes", "thread": "m-mailtest", "body": "A kimenő levelek most a fejlesztői gépen elakadnak." },
-      { "label": "m-mailtest-r3", "channel": "fejlesztes", "thread": "m-mailtest", "body": "Jó lenne, ha semmi nem menne ki az internetre." },
-      { "label": "m-mailtest-r4", "channel": "fejlesztes", "thread": "m-mailtest", "body": "A konténerek között a 25-ös port nincs kiadva." },
-      { "label": "m-mailtest-r5", "channel": "fejlesztes", "thread": "m-mailtest", "body": "Az ügyfélnek menő visszaigazolást is látni kellene." },
-      { "label": "m-mailtest-r6", "channel": "fejlesztes", "thread": "m-mailtest", "body": "A sablonok gyorsítótárát is figyelni kell." },
-      { "label": "m-mailtest-r7", "channel": "fejlesztes", "thread": "m-mailtest", "body": "Holnap megnézem, mit használnak a többiek." },
-      { "label": "m-mailtest-r8", "channel": "fejlesztes", "thread": "m-mailtest", "body": "A tesztek alatt ne kapjon levelet egy valódi ügyfél sem." },
-      { "label": "m-mailtest-r9", "channel": "fejlesztes", "thread": "m-mailtest", "body": "A naplóban látszik, hogy a küldés időtúllépéssel áll le." },
-      { "label": "m-mailtest-r10", "channel": "fejlesztes", "thread": "m-mailtest", "body": "Kellene egy webes felület, ahol a leveleket elolvassuk." },
-      { "label": "m-mailtest-r11", "channel": "fejlesztes", "thread": "m-mailtest", "body": "A csatolmányokat is ellenőrizni akarjuk." },
-      { "label": "m-mailtest-r12", "channel": "fejlesztes", "thread": "m-mailtest", "body": "Ezt a hét végéig zárjuk le." }
+      { "label": "m-push", "channel": "fejlesztes", "body": "A push-értesítés még nincs kész, a PWA után jön." }
     ],
     "wiki": [
       { "label": "w-gitea", "title": "Gitea agent-hozzáférés", "body": "Az agentek fiókja colony-agents, nem admin. Az írási token a gép saját git-beállításába kerül, soha nem a chatbe." },
@@ -44,8 +31,7 @@
     "decisions": [
       { "label": "d-github", "channel": "fejlesztes", "text": "A Colonyhall kódja GitHubon marad", "rationale": "A homelab Gitea az agentek által létrehozott repóké" },
       { "label": "d-guard-native", "channel": "uzemeltetes", "text": "Az őr natívan fut, nem konténerben", "rationale": "A bejelentkezett CLI-ket használja, konténerben újra be kellene lépni" },
-      { "label": "d-two-spaces", "channel": "fejlesztes", "text": "Két beágyazási tér lesz: szöveg és kód", "rationale": "A kódhoz kódra tanított modell kell" },
-      { "label": "d-mailpit", "channel": "fejlesztes", "text": "A helyi fejlesztésben a Mailpit szolgál SMTP tesztszerverként", "rationale": "Elkap minden kimenő levelet, semmit nem küld ki, és webes felületen mutatja őket" }
+      { "label": "d-two-spaces", "channel": "fejlesztes", "text": "Két beágyazási tér lesz: szöveg és kód", "rationale": "A kódhoz kódra tanított modell kell" }
     ]
   },
   "questions": [
@@ -66,11 +52,6 @@
     { "id": "q15", "kind": "decision", "query": "miért nem konténerben fut az őr", "relevant": ["d-guard-native"] },
     { "id": "q16", "kind": "decision", "query": "beágyazási tér kódhoz", "relevant": ["d-two-spaces"] },
     { "id": "q17", "kind": "keyword", "query": "git worktree kör", "relevant": ["m-worktree"] },
-    { "id": "q18", "kind": "keyword", "query": "push-értesítés", "relevant": ["m-push"] },
-    { "id": "q19", "kind": "accents", "query": "kozos mentese ejjel", "relevant": ["m-backup"] },
-    { "id": "q20", "kind": "accents", "query": "közös mentése éjjel", "relevant": ["m-backup"] },
-    { "id": "q21", "kind": "accents", "query": "felhasznaloi szolgaltataskent ujrainditas", "relevant": ["m-guard"] },
-    { "id": "q22", "kind": "accents", "query": "felhasználói szolgáltatásként újraindítás", "relevant": ["m-guard"] },
-    { "id": "q23", "kind": "crowded", "query": "milyen tesztszervert használunk a levelek teszteléséhez a helyi fejlesztésben?", "relevant": ["d-mailpit"] }
+    { "id": "q18", "kind": "keyword", "query": "push-értesítés", "relevant": ["m-push"] }
   ]
 }

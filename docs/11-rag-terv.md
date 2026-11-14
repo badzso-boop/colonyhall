@@ -233,21 +233,17 @@ WHERE c.workspace_id = $ws AND (
 
 **Kulcsszavas ág (szöveg):** `websearch_to_tsquery` mindkét konfigurációval (`hungarian` a szótövezett egyezésre: „szerverre” → „szerver”; `simple` a pontos szavakra, azonosítókra), a kettő `||`-vel. **A szavak VAGY-kapcsolatban** vannak (a `&` helyett `|`, a kifejezések `"…"` és a kizárás `-szó` megmarad): egy természetes kérdés („miért bukott el a markdown teszt”) ritkán tartalmazza a válasz minden szavát; a `ts_rank_cd(..., 32)` a több egyezést előre teszi. A találati szavak kiemelése `ts_headline`-nal, `«` és `»` közé (sima szöveg, HTML nélkül).
 
-**Ékezetek (53. kör, 2026-11-13):** a valódi készletben az ékezet nélkül írt kérdések („konyv”, „ugyfel”) 86%-ban kerültek az első 10-be, az ékezetesek 96%-ban, mert a két `tsvector` megtartja az ékezeteket, így ezeknél csak a vektoros ág dolgozott. Ezért van egy harmadik vektor (`tsv_unaccent`, `simple` az ékezet nélküli szövegen) és ugyanígy kezelt kérdés; a pontszámba a másik kettő mellé adódik. Az ékezeteket a `colony_unaccent()` veszi le (`translate()`, beépített és `IMMUTABLE`), **nem** az `unaccent` bővítmény: azt az alkalmazás szerepköre nem hozhatja létre, és a migráció egy meglévő szervert megállítana. A memóriás tár ugyanazokat a betűket hajtja össze (`memory/store.go`). Szótövezés az ékezet nélküli vektoron nincs (a magyar szótövező az ékezetes végződésekre épül), ezért az ékezet nélküli ragozott alakot a vektoros ág fogja.
-
 **Kulcsszavas ág (kód, 36b):** az `ident_text` az azonosítók szétszedve (`parseAgyReset` → `parse agy reset`, `max_concurrent_runs` → `max concurrent runs`), és ugyanez a kérdésre is; mellette `pg_trgm` hasonlóság a `qualified_name`-re és a `path`-ra (`%` operátor, `similarity` > 0,3).
 
 **Vektoros ág:** `ORDER BY embedding <=> $q LIMIT 50`, koszinusz; `hnsw.ef_search = 100`.
 
 **Egyesítés:** Reciprocal Rank Fusion, `k = 60`, mindkét ágból az első 50; **a kulcsszavas ág súlya 0,2** (a szemantikusé 1), a valódi készlet mérése alapján (2026-11-10, lásd „Mérés”).
 
-**Változatos jelöltlista (53. kör, 2026-11-13):** egy szál minden válaszának darabja a fejlécében hordja a szál nyitóüzenetét, így egy hosszú szál sok, egymáshoz hasonló darabbal töltötte meg a rerank jelöltlistáját; a valódi készletben két döntés emiatt esett ki, pedig csak döntésekre szűrve mindhárom módban első volt (rerank 0,999). Ezért az egyesített lista első `max(Limit, RerankTop)` helyén egy forrásból legfeljebb **2**, egy szálból legfeljebb **3** darab lehet (`PoolPerSource`, `PoolPerThread`, `service.go` `diversify`); a többi nem vész el, utánuk jön az eredeti sorrendben, és kitölti a helyeket, ha nincs elég más forrás. Rerank nélkül is így áll össze az oldal.
-
-**Mérendő:** a kulcsszavas ág 0,2-es súlya mellett egy csak kulcsszóval talált darab (0,2/61) a szemantikus ág bármelyik jelöltje mögé kerül; ha a valódi készlet ezt mutatja, a súly újramérése.
-
-**Rerank:** az egyesített (és a fenti korláttal rendezett) lista első **10** eleme (`COLONY_RERANK_TOP`, alap 10; a homelabon 20, lásd `13-rag-reranker-beallitasa.md`) a rerankerhez, legfeljebb `COLONY_RERANK_TIMEOUT` ideig (alap 5 mp; utána a keresés rerank nélkül válaszol), (a darab fejléce + szövege, max ~300 token); a végső sorrend a reranker pontszáma; a reranker nélküli helyek RRF szerint maradnak.
+**Rerank:** az egyesített lista első **10** eleme (`COLONY_RERANK_TOP`; Norbi döntése a valódi készlet mérése után, 2026-11-10, lásd „Mérés”) a rerankerhez, legfeljebb `COLONY_RERANK_TIMEOUT` ideig (alap 5 mp; utána a keresés rerank nélkül válaszol), (a darab fejléce + szövege, max ~300 token); a végső sorrend a reranker pontszáma; a reranker nélküli helyek RRF szerint maradnak.
 
 **Végső korlát:** alapból 8, legfeljebb 20. Találatonként: típus, kivonat (a kulcsszavas találat szavai), forráshivatkozás (csatorna + üzenet, wiki slug, `D-NN`, tömörítés), szerző, idő, és embernek, ha admin, minden fokozat pontszáma. Az agent a találatokat `<colonyhall_search_result …>` keretben kapja; a szöveg HTML-escape-elt, így egy találat nem zárhatja be a keretét, és nem nyithat újat.
+
+**Visszavont kísérlet (53. kör, 2026-11-13/14):** egy harmadik, ékezet nélküli kulcsszavas vektor (a pontszám három `ts_rank_cd` összege) és egy jelöltlista-korlát (forrásonként 2, szálanként 3). A valódi készleten a hibrid + rerank nem javult (recall@10 0,830 → 0,838), a kulcsszavas (0,597 → 0,463) és a rerank nélküli hibrid (0,827 → 0,767) romlott, ezért Norbi visszavonta (`00058` törli az oszlopot). A tanulság: a kimaradó döntéseket nem egy hosszú szál szorítja ki, hanem a darabok fejlécében lévő csatornanév (a „visegradevent” szóra a csatorna minden darabja egyezik), és a háromtagú összeg a fejlécben lévő ékezet nélküli neveket háromszoros súllyal számolta. Egy következő próbálkozáshoz: a fejléc kisebb súllyal (`setweight`), a pontszámban a szöveges és az ékezet nélküli vektorból csak a nagyobb, mérés adatbázis-másolaton.
 
 ## 9. Ha valami nem elérhető
 
@@ -285,7 +281,7 @@ A munkás a Pi kiesésekor exponenciálisan lép vissza (5 mp → 5 perc), nem p
 
 ## Mérés: a kiértékelő készlet
 
-`colonyhall rag-eval -set FÁJL` kiírja egymás mellett a négy konfiguráció (kulcsszavas, szemantikus, hibrid, hibrid + rerank) recall@5, recall@10, MRR@10, nDCG@10 értékét és a p50/p95 késleltetést, alatta konfigurációnként azokat a kérdéseket, amelyeknél nincs jó forrás az első 10-ben (53. kör). A készlet JSON:
+`colonyhall rag-eval -set FÁJL` kiírja egymás mellett a négy konfiguráció (kulcsszavas, szemantikus, hibrid, hibrid + rerank) recall@5, recall@10, MRR@10, nDCG@10 értékét és a p50/p95 késleltetést. A készlet JSON:
 
 ```json
 {

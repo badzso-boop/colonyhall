@@ -119,19 +119,17 @@ func (q *Queries) InsertLog(ctx context.Context, arg InsertLogParams) error {
 const keywordSearch = `-- name: KeywordSearch :many
 WITH q AS (
     SELECT regexp_replace(websearch_to_tsquery('hungarian', $9)::text, ' & (?!!)', ' | ', 'g')::tsquery AS hu,
-           regexp_replace(websearch_to_tsquery('simple', $9)::text, ' & (?!!)', ' | ', 'g')::tsquery AS si,
-           -- Round 53: the same words without accents, against tsv_unaccent.
-           regexp_replace(websearch_to_tsquery('simple', colony_unaccent($9))::text, ' & (?!!)', ' | ', 'g')::tsquery AS un
+           regexp_replace(websearch_to_tsquery('simple', $9)::text, ' & (?!!)', ' | ', 'g')::tsquery AS si
 )
 SELECT c.id, c.workspace_id, c.source_kind, c.source_id, c.source_ref, c.part, c.visibility, c.channel_id, c.thread_root_id,
     c.author_id, c.source_at, c.header, c.body, c.content_hash, COALESCE(c.embed_model, '')::text AS embed_model,
     c.indexed_at,
-    (ts_rank_cd(c.tsv_hu, q.hu, 32) + ts_rank_cd(c.tsv_simple, q.si, 32) + ts_rank_cd(c.tsv_unaccent, q.un, 32))::float8 AS score,
+    (ts_rank_cd(c.tsv_hu, q.hu, 32) + ts_rank_cd(c.tsv_simple, q.si, 32))::float8 AS score,
     ts_headline('hungarian', c.body, q.hu || q.si, 'StartSel=«, StopSel=», MaxWords=35, MinWords=12, MaxFragments=2, FragmentDelimiter=" … "')::text AS snippet
 FROM search_chunk_text c, q
 WHERE c.workspace_id = $1
   AND (c.visibility = 'workspace' OR c.channel_id = ANY($2::uuid[]))
-  AND (c.tsv_hu @@ q.hu OR c.tsv_simple @@ q.si OR c.tsv_unaccent @@ q.un)
+  AND (c.tsv_hu @@ q.hu OR c.tsv_simple @@ q.si)
   AND (cardinality($3::text[]) = 0 OR c.source_kind = ANY($3::text[]))
   AND ($4::uuid IS NULL OR c.channel_id = $4::uuid)
   AND ($5::uuid IS NULL OR c.author_id = $5::uuid)
@@ -179,7 +177,7 @@ type KeywordSearchRow struct {
 // (a natural-language question rarely has all its words in the answer);
 // ts_rank_cd puts the chunks with more of them first. Phrases ("…") and
 // exclusions (-word) keep their meaning. The cast to tsquery does not
-// stem again. The unaccented vector (round 53) lets "konyv" find "könyv".
+// stem again.
 func (q *Queries) KeywordSearch(ctx context.Context, arg KeywordSearchParams) ([]KeywordSearchRow, error) {
 	rows, err := q.db.Query(ctx, keywordSearch,
 		arg.WorkspaceID,

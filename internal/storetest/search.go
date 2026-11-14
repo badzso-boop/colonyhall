@@ -41,7 +41,6 @@ func testSearch(t *testing.T, b Backend) {
 	pub := gen.New()
 	sec := gen.New()
 	wik := gen.New()
-	wikPlain := gen.New()
 	must(t, s.ReplaceSource(ctx, search.SourceMessage, pub, []search.Chunk{
 		mk(search.SourceMessage, pub, 0, search.VisibilityChannel, f.channel.ID, "A szerver a homelabon fut Dockerben.", t0),
 	}))
@@ -83,22 +82,6 @@ func testSearch(t *testing.T, b Backend) {
 	if got[0].Rank != 1 || got[0].Snippet == "" {
 		t.Fatalf("rank and snippet: %+v", got[0])
 	}
-	// Accents (round 53): people type "telepitese" for "telepítése", and
-	// an unaccented word must find the accented text, and the other way.
-	got, err = s.Keyword(ctx, search.Access{WorkspaceID: f.ws.ID}, "telepitese", search.Filters{}, 10)
-	must(t, err)
-	if m := sources(got); len(m) != 1 || !m[wik] {
-		t.Fatalf("keyword without accents: %v", m)
-	}
-	must(t, s.ReplaceSource(ctx, search.SourceWiki, wikPlain, []search.Chunk{
-		mk(search.SourceWiki, wikPlain, 0, search.VisibilityWorkspace, ids.Nil, "Wiki: a konyvtar rendezese.", t0.Add(3*time.Minute)),
-	}))
-	got, err = s.Keyword(ctx, search.Access{WorkspaceID: f.ws.ID}, "könyvtár", search.Filters{}, 10)
-	must(t, err)
-	if m := sources(got); len(m) != 1 || !m[wikPlain] {
-		t.Fatalf("accented keyword on unaccented text: %v", m)
-	}
-	must(t, s.DeleteSource(ctx, search.SourceWiki, wikPlain))
 	// Another workspace sees nothing.
 	got, err = s.Keyword(ctx, search.Access{WorkspaceID: gen.New(), ChannelIDs: []ids.ID{f.channel.ID}}, "homelabon", search.Filters{}, 10)
 	must(t, err)
