@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { Resource } from "i18next";
 import { initI18n, languages } from "@/shared/i18n";
 

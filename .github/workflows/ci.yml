@@ -21,6 +21,13 @@ on:
     # Nightly: the race detector and the vulnerability scan only.
     - cron: "17 2 * * *"
 
+# Where the jobs run: the repository variable CI_RUNNER, a JSON array of
+# runner labels (the maintainer's homelab runner: ["self-hosted","linux",
+# "colonyhall"]). Unset or empty: GitHub-hosted ubuntu-24.04. The workflow
+# itself allows the self-hosted runner only while the repository is private
+# and never for a pull request from a fork, so a stranger's code can never
+# run on that machine, even if the variable is left set. The timeouts allow
+# for its two slower cores.
 # A newer push to the same branch or pull request cancels the older run.
 concurrency:
   group: ci-${{ github.ref }}
@@ -38,8 +45,8 @@ env:
 
 jobs:
   changes:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -56,7 +63,7 @@ jobs:
       vuln: ${{ steps.filter.outputs.vuln }}
       browser: ${{ steps.filter.outputs.browser }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -86,18 +93,22 @@ jobs:
   go-test:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Enable the sandbox tests (bwrap)
+        # A self-hosted runner has bwrap installed and no sudo.
+        if: runner.environment == 'github-hosted'
         # The guard's sandbox tests skip themselves without a working bwrap,
         # and Ubuntu 24.04 blocks unprivileged user namespaces by default.
         run: |
@@ -110,18 +121,22 @@ jobs:
   go-e2e:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Enable the sandbox tests (bwrap)
+        # A self-hosted runner has bwrap installed and no sudo.
+        if: runner.environment == 'github-hosted'
         # The guard's sandbox tests skip themselves without a working bwrap,
         # and Ubuntu 24.04 blocks unprivileged user namespaces by default.
         run: |
@@ -136,18 +151,22 @@ jobs:
   go-race:
     needs: changes
     if: needs.changes.outputs.race == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Enable the sandbox tests (bwrap)
+        # A self-hosted runner has bwrap installed and no sudo.
+        if: runner.environment == 'github-hosted'
         # The guard's sandbox tests skip themselves without a working bwrap,
         # and Ubuntu 24.04 blocks unprivileged user namespaces by default.
         run: |
@@ -160,8 +179,8 @@ jobs:
   go-pg:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     services:
@@ -173,34 +192,40 @@ jobs:
           POSTGRES_USER: colony
           POSTGRES_PASSWORD: colony
           POSTGRES_DB: colony_test
+        # A random host port: a self-hosted runner's machine may run its own
+        # Postgres on 5432.
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U colony -d colony_test"
           --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: make test-pg TEST_DB='postgres://colony:colony@localhost:5432/colony_test?sslmode=disable'
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
+      - run: make test-pg TEST_DB='postgres://colony:colony@localhost:${{ job.services.postgres.ports['5432'] }}/colony_test?sslmode=disable'
 
   go-lint:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
@@ -208,18 +233,20 @@ jobs:
   gen-check:
     needs: changes
     if: needs.changes.outputs.gen == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -230,15 +257,15 @@ jobs:
   web-typecheck:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -248,15 +275,15 @@ jobs:
   web-lint:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -270,8 +297,8 @@ jobs:
   web-test:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -279,10 +306,10 @@ jobs:
       matrix:
         shard: [1]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -297,15 +324,15 @@ jobs:
   devpage-test:
     needs: changes
     if: needs.changes.outputs.devpage == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: make test-devpage
@@ -313,12 +340,12 @@ jobs:
   shellcheck:
     needs: changes
     if: needs.changes.outputs.shell == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: make shellcheck
@@ -326,12 +353,12 @@ jobs:
   # No secrets and no private infrastructure details (addresses, host and
   # user names) in the tracked files: on every run, docs-only changes too.
   privacy:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: make privacy
@@ -340,12 +367,12 @@ jobs:
   actionlint:
     needs: changes
     if: needs.changes.outputs.actions == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: make actionlint ci-selftest
@@ -353,18 +380,20 @@ jobs:
   vuln:
     needs: changes
     if: needs.changes.outputs.vuln == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: make vuln
@@ -374,17 +403,19 @@ jobs:
   install-test:
     needs: changes
     if: needs.changes.outputs.install == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - run: make test-install
 
   # The PWA build and the binaries with the real embedded web/dist. Starts at
@@ -392,24 +423,26 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: make web build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binaries
           path: bin/
@@ -419,23 +452,28 @@ jobs:
   docker-image:
     needs: [changes, build]
     if: needs.changes.outputs.docker == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      # On a self-hosted runner the build uses the machine's Docker and its
+      # layer cache; the GitHub Actions cache service answered it with an
+      # HTML error page (2026-11-14), and a local cache needs no upload.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: ${{ runner.environment == 'github-hosted' && 'docker-container' || 'docker' }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: deploy/Dockerfile
           platforms: linux/amd64
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: ${{ runner.environment == 'github-hosted' && 'type=gha' || '' }}
+          cache-to: ${{ runner.environment == 'github-hosted' && 'type=gha,mode=max' || '' }}
 
   # Browser end-to-end tests: not written yet (docs/02-muszaki-specifikacio.md,
   # "CI", has the plan). Switched on by `browser=$build` in
@@ -443,8 +481,8 @@ jobs:
   e2e-browser:
     needs: [changes, build]
     if: needs.changes.outputs.browser == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -476,12 +514,12 @@ jobs:
       - docker-image
       - e2e-browser
     if: always()
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: scripts

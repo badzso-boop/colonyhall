@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -55,6 +58,11 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
   // Ctrl+Shift+T is the browser's "reopen tab" and cannot be taken: X for terminals.
   useShortcut("mod+shift+x", "conversation", "terminals", () => agent && dispatch(openTerminals(agent.id)), Boolean(agent));
   useShortcut("r", "conversation", "replyThread");
+  // Round 55, part F: handled by the focused message itself, listed here for the help.
+  useShortcut("s", "conversation", "saveMessage");
+  useShortcut("l", "conversation", "copyLink");
+  useShortcut("f", "conversation", "forwardMessage");
+  useShortcut("p", "conversation", "pinMessage");
 
   const handlers = {
     onOpenThread: (rootId: string) => dispatch({ type: "openThread", rootId }),

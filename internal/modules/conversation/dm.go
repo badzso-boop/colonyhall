@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package conversation
 
 import (
@@ -45,6 +48,19 @@ func (s *Service) OpenDM(ctx context.Context, by identity.Actor, others []ids.ID
 	if len(members) < 2 || len(members) > MaxDMParticipants+1 {
 		return Channel{}, ErrBadDM
 	}
+	return s.openDM(ctx, by, members)
+}
+
+// SelfDM returns the person's own DM (only them in it), creating it on
+// first use. Reminders arrive there as system messages (round 55, part E).
+func (s *Service) SelfDM(ctx context.Context, by identity.Actor) (Channel, error) {
+	if by.Kind != identity.KindHuman {
+		return Channel{}, ErrForbidden
+	}
+	return s.openDM(ctx, by, []ids.ID{by.ID})
+}
+
+func (s *Service) openDM(ctx context.Context, by identity.Actor, members []ids.ID) (Channel, error) {
 	name := dmName(members)
 	var c Channel
 	var seq int64

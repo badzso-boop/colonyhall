@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # Supply-chain rules for the GitHub workflows (round 40), checked by
 # ci-selftest.sh (the CI's actionlint job). Strangers open pull requests
 # against a public repository; these keep their code away from tokens.

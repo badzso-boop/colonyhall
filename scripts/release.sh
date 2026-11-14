@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # Build the release artifacts: colony and colonyhall for every platform,
 # SHA256SUMS and install.sh, into OUT (default dist/).
 #

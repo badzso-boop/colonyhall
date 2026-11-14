@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package bus carries "something changed" signals between components.
 // Following the Dendrite notifier pattern, a notification only carries the
 // newest event sequence number; receivers always read the events themselves

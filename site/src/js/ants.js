@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // One ant: the "Mark" character chosen at the design gate (docs/18, 12),
 // drawn in Canvas 2D from code. Seen from above, the BrandMark's proportions
 // with big eyes; legs follow an alternating-tripod gait whose phase advances

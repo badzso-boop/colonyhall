@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { lazy } from "react";
 
 export { conversationKeys, useChannels, useMessages, useSendMessage, useThread, type Message } from "./api";
@@ -7,5 +10,7 @@ export { ThreadPane } from "./components/ThreadPane";
 export { registerConversationEvents } from "./events";
 export { buildSidebar, classifyConversation, conversationTitle, type Channel, type ConversationKind } from "./model";
 export { ThreadsEntry } from "./components/ThreadsEntry";
+export { DraftsEntry } from "./components/DraftsEntry";
 export const ConversationPage = lazy(() => import("./pages/ConversationPage"));
 export const ThreadsPage = lazy(() => import("./pages/ThreadsPage"));
+export const DraftsPage = lazy(() => import("./pages/DraftsPage"));

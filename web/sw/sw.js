@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Colonyhall service worker: caches the app shell only (docs/07, PWA basics).
 // Never caches the API (/api/), the WebSocket (/ws/) or anything outside
 // /app/. BUILD is filled in at build time (vite.config.ts), so every deploy

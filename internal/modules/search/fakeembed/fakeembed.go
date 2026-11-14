@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package fakeembed is a deterministic stand-in for the embedding and
 // reranking servers, for tests, the dev stack and the synthetic evaluation:
 // a text's vector is its hashed bag of word stems (the first five letters),

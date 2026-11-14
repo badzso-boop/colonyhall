@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { applyCompactionEvent, liveHere, parseCompactionEvent, previewLines, type Live } from "./model";
 
 test("parseCompactionEvent checks the payload", () => {

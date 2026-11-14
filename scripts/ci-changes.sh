@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # Decide which CI jobs a change needs (.github/workflows/ci.yml, `changes`).
 #
 #   scripts/ci-changes.sh MODE < changed-files

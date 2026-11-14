@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import { fromQuery, reduce, toQuery, type PaneAction, type PaneState } from "./panes";

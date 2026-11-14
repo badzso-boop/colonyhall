@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package guard is the "őr": a small client process next to the AI clients.
 // It watches each agent's inbox over the REST API and, when something
 // arrives, runs the agent's client once to decide, then posts the replies,

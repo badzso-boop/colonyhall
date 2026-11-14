@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp, FolderInput, MoreHorizontal, UserRound } from "lucide-react";
@@ -6,7 +9,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, toast } from "
 import { useMoveConversation } from "../api";
 import type { Section, SidebarRow } from "../model";
 import { itemOrder } from "../sections";
-import { MuteMenuItems } from "./ChannelHeader";
+import { NotifyMenuItems } from "./ChannelHeader";
 import { MoveDialog } from "./SectionDialogs";
 
 type Item = { key: string; label: string; icon: ReactNode; onSelect: () => void; danger?: boolean };
@@ -58,7 +61,7 @@ export function RowMenu({ row, sections, sectionId, onShowProfile }: { row: Side
             </MenuItem>
           ))}
           <MenuSeparator />
-          <MuteMenuItems channel={row.channel} />
+          <NotifyMenuItems channel={row.channel} />
         </MenuContent>
       </Menu>
       {dialog === "move" ? <MoveDialog channelId={channelId} title={row.title} sections={sections} from={sectionId} onClose={() => setDialog(null)} /> : null}

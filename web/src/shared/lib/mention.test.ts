@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { activeMention, fuzzyScore, insertMention, rankMentions } from "./mention";
 
 const a = (id: string, handle: string, display_name = handle, halted = false) => ({ id, handle, display_name, halted });

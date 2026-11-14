@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package httpserver adds the cross-cutting HTTP parts around the module
 // routes: health checks, request logging, panic recovery, the development
 // web page at / and the PWA at /app/.

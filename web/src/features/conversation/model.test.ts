@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { buildSidebar, classifyConversation, conversationTitle, type Actor, type Channel } from "./model";
 
 const actor = (id: string, kind: "human" | "agent", handle: string, display = handle): Actor => ({
@@ -31,6 +34,8 @@ test("conversationTitle names channels and DM peers", () => {
   expect(conversationTitle(ch("3", "dm", "x", ["me", "anna"]), actors, "me")).toBe("Anna Kovács");
   expect(conversationTitle(ch("4", "dm", "x", ["me", "backend"]), actors, "me")).toBe("@backend-claude");
   expect(conversationTitle(ch("6", "dm", "x", ["backend", "reviewer"]), actors, "me")).toBe("@backend-claude ↔ @reviewer-claude");
+  // The viewer's own DM, where reminders arrive (round 55): their name, not dm-….
+  expect(conversationTitle(ch("7", "dm", "dm-0123456789abcdef", ["me"]), actors, "me")).toBe("Norbi");
 });
 
 test("buildSidebar: own sections first, each conversation once, then the fixed groups", () => {
@@ -73,4 +78,16 @@ test("mainStream keeps replies out of channels but not out of DMs", () => {
   const list = [msg("a"), msg("b", { thread_root_id: "a" })];
   expect(mainStream(list, "public").map((m) => m.id)).toEqual(["a"]);
   expect(mainStream(list, "dm").map((m) => m.id)).toEqual(["a", "b"]);
+});
+
+test("the main stream keeps thread replies also sent to the channel", async () => {
+  const { mainStream } = await import("./model");
+  const base = { channel_id: "c", author_id: "a", kind: "text" as const, body: "", mentions: [], reply_count: 0, created_at: "" };
+  const list = [
+    { ...base, id: "r" },
+    { ...base, id: "x", thread_root_id: "r" },
+    { ...base, id: "y", thread_root_id: "r", also_in_channel: true },
+  ];
+  expect(mainStream(list, "public").map((m) => m.id)).toEqual(["r", "y"]);
+  expect(mainStream(list, "dm").map((m) => m.id)).toEqual(["r", "x", "y"]);
 });

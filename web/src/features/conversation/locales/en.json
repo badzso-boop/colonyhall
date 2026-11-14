@@ -10,13 +10,23 @@
     "observed": "Observing only",
     "private": "Private channel",
     "mentions": "{{count}} mentions",
-    "unread": "unread"
+    "unread": "unread",
+    "unreadCount_one": "{{count}} unread message",
+    "unreadCount_other": "{{count}} unread messages"
   },
   "actions": {
     "newChannel": "New channel",
     "newDm": "New direct message",
     "newAgentDm": "New conversation with an agent",
-    "toggle": "Collapse or expand {{name}}"
+    "toggle": "Collapse or expand {{name}}",
+    "save": "Save for later",
+    "unsave": "Remove from saved",
+    "remind": "Remind me…",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "linkFailed": "Could not copy to the clipboard",
+    "forward": "Forward…",
+    "forwarded": "forwarded"
   },
   "empty": {
     "title": "Pick a conversation",
@@ -53,13 +63,30 @@
     "noAgent": "There is no agent in this conversation.",
     "schedule": "Schedule…",
     "questions": "Open questions",
-    "storageFull": "Storage full"
+    "storageFull": "Storage full",
+    "alsoToChannel": "Also send to #{{name}}",
+    "emoji": "Emoji"
   },
   "commands": {
     "schedule": "A one-off scheduled message",
     "daily": "A daily message",
     "cron": "A repeating message with a cron expression",
-    "answer": "Answer a question (Q number)"
+    "answer": "Answer a question (Q number)",
+    "remind": "Remind me: in 20m, 1h, tomorrow, monday or at 14:00; /remind me about this",
+    "pin": "Pin my last message here (in a thread: its first message)",
+    "save": "Save the latest message for later (in a thread: the thread)",
+    "mute": "Mute this conversation",
+    "unmute": "Unmute: back to the default notifications",
+    "notify": "Notifications here: all messages, only mentions or nothing",
+    "status": "Set or clear your status text",
+    "search": "Search for something",
+    "thread": "Open the thread of the latest message",
+    "drafts": "Open your drafts",
+    "saved": "Open your saved items",
+    "activity": "Open your activity",
+    "stop": "Stop an agent (with a confirmation)",
+    "emergency": "Open the emergency stop (press and hold to confirm)",
+    "help": "List every command"
   },
   "message": {
     "more": "More",
@@ -92,8 +119,11 @@
     "menu": "More actions",
     "reaction": {
       "agree": "👍 agree (how the agent reads it)",
-      "disagree": "👎 disagree (how the agent reads it)"
+      "disagree": "👎 disagree (how the agent reads it)",
+      "add": "Add a reaction"
     },
+    "openLinked": "Open the message",
+    "repliedInThread": "Replied in a thread – open",
     "fileDeleted": "File deleted"
   },
   "new": {
@@ -264,5 +294,73 @@
     "unknown": "Unknown participant.",
     "dm": "Message",
     "dmFailed": "Could not open the direct message."
+  },
+  "drafts": {
+    "title": "Drafts",
+    "count_one": "{{count}} draft",
+    "count_other": "{{count}} drafts",
+    "none": "No drafts",
+    "noneBody": "Whatever stays unsent in the composer lands here, on every device you use.",
+    "inThread": "in a thread",
+    "onlyFiles_one": "{{count}} attached file",
+    "onlyFiles_other": "{{count}} attached files",
+    "files_one": "+ {{count}} file",
+    "files_other": "+ {{count}} files",
+    "delete": "Delete draft",
+    "has": "Draft"
+  },
+  "pins": {
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinned": "Pinned",
+    "unpinned": "Unpinned",
+    "pinnedHere": "Pinned message",
+    "important": "Important",
+    "title": "Pinned messages",
+    "open_one": "{{count}} pinned message",
+    "open_other": "{{count}} pinned messages"
+  },
+  "notify": {
+    "title": "Notifications",
+    "all": "All messages",
+    "mentions": "Only mentions",
+    "none": "Nothing (mute)",
+    "current": "current",
+    "markAllRead": "Mark all as read",
+    "markedAll_one": "{{count}} conversation marked read",
+    "markedAll_other": "{{count}} conversations marked read",
+    "menu": "Conversations menu"
+  },
+  "unread": {
+    "first_one": "First unread ({{count}} new)",
+    "first_other": "First unread ({{count}} new)",
+    "latest_one": "↓ Latest · {{count}} message below",
+    "latest_other": "↓ Latest · {{count}} messages below",
+    "markRead": "Mark as read (Esc)"
+  },
+  "forward": {
+    "title": "Forward message",
+    "search": "Search conversations…",
+    "targets": "Where to",
+    "comment": "Comment (optional; you can mention people here)",
+    "send": "Forward",
+    "sendAnyway": "Forward anyway",
+    "done": "Forwarded",
+    "open": "Open",
+    "leak": "People who are not in {{name}} will see this.",
+    "leakDm": "This is a direct message; people who are not in it will see this."
+  },
+  "slash": {
+    "unknown": "Unknown command: /{{name}}. /help lists them; //text sends a message that starts with /.",
+    "usage": "Use: {{usage}}",
+    "noMessage": "There is no message here to use it on yet.",
+    "pinned": "Pinned.",
+    "alreadyPinned": "It is already pinned.",
+    "saved": "Saved for later.",
+    "reminder": "I will remind you: {{when}}.",
+    "notify": "Notifications here: {{level}}.",
+    "unmuted": "Unmuted.",
+    "status": "Status set.",
+    "statusCleared": "Status cleared."
   }
 }

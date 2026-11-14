@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -7,10 +10,11 @@ import { cn, useShortcut } from "@/shared/lib";
 import { useLocalStorage, useWidth } from "@/shared/hooks";
 import { place, usePanes } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
+import { useActivityUnread } from "@/features/activity";
 import { AgentDialogs } from "@/features/agents";
+import { useSession } from "@/features/identity";
 import { ScheduleBuilderHost } from "@/features/schedules";
 import { StorageBanner } from "@/features/files";
-import { useSession } from "@/features/identity";
 import { BottomBar } from "./BottomBar";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionBar } from "./ConnectionBar";
@@ -38,7 +42,11 @@ export function Shell() {
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const home = location.pathname === "/" && placement.screen === "main";
-  useDocumentTitle(useMentionTotal(), t("common:appName"));
+  // The tab title counts the viewer's unread activity (round 55); agents and
+  // observers without a feed keep the mention total.
+  const mentionTotal = useMentionTotal();
+  const activityUnread = useActivityUnread(useSession().data?.actor.kind === "human");
+  useDocumentTitle(activityUnread ?? mentionTotal, t("common:appName"));
   const navigate = useNavigate();
   const order = useConversationOrder();
   const role = useSession().data?.actor.role;

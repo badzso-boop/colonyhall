@@ -1,5 +1,10 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
+import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "@/shared/api";
+import { activityKeys } from "@/features/activity";
 import { itemOrder, moveConversation, moveSection, sectionOrder, upsertSection } from "./sections";
 
 export type Message = Schemas["Message"];
@@ -171,6 +176,11 @@ export function useMarkRead() {
   return useMutation({
     mutationFn: async (channelId: string) => {
       await api.POST("/channels/{channelId}/read", { params: { path: { channelId } } });
+      // What concerned the viewer there has been seen too (round 55, part H).
+      if (qc.getQueryData(activityKeys.unread)) {
+        await api.POST("/me/activity/read", { body: { channel_id: channelId } });
+        void qc.invalidateQueries({ queryKey: activityKeys.all });
+      }
     },
     onSuccess: (_d, channelId) => {
       qc.setQueryData<Schemas["Channel"][]>(conversationKeys.channels, (list) =>
@@ -349,5 +359,101 @@ export function useMarkAllThreadsRead() {
   return useMutation({
     mutationFn: async () => unwrap(await api.POST("/me/threads/read")).marked,
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["conversation", "myThreads"] }),
+  });
+}
+
+export type Draft = Schemas["Draft"];
+export const draftsKey = ["conversation", "drafts"] as const;
+
+/** The viewer's drafts (humans; round 55, part A), newest first. */
+export function useDrafts(enabled: boolean) {
+  return useQuery({
+    queryKey: draftsKey,
+    enabled,
+    queryFn: async () => unwrap(await api.GET("/me/drafts")).drafts,
+    staleTime: 30_000,
+  });
+}
+
+/** Stores a draft on the server (empty deletes) and updates the cached list. */
+export function useDraftWriter() {
+  const qc = useQueryClient();
+  return useMemo(() => {
+    const same = (d: Draft, channelId: string, threadRootId?: string) => d.channel_id === channelId && (d.thread_root_id ?? "") === (threadRootId ?? "");
+    const drop = (channelId: string, threadRootId?: string) =>
+      qc.setQueryData<Draft[]>(draftsKey, (list) => list?.filter((d) => !same(d, channelId, threadRootId)));
+    return {
+      save: async (body: Schemas["SaveDraftRequest"]) => {
+        const res = await api.PUT("/me/drafts", { body });
+        if (res.response.status === 204) {
+          drop(body.channel_id, body.thread_root_id);
+          return;
+        }
+        const d = unwrap(res);
+        qc.setQueryData<Draft[]>(draftsKey, (list) => [d, ...(list ?? []).filter((x) => !same(x, d.channel_id, d.thread_root_id))]);
+      },
+      remove: async (channelId: string, threadRootId?: string) => {
+        drop(channelId, threadRootId);
+        unwrap(await api.DELETE("/me/drafts", { params: { query: { channel_id: channelId, ...(threadRootId ? { thread_root_id: threadRootId } : {}) } } }));
+      },
+    };
+  }, [qc]);
+}
+
+export type PinnedMessage = Schemas["PinnedMessage"];
+export const pinsKey = (channelId: string) => ["conversation", "pins", channelId] as const;
+
+/** The conversation's pinned messages, newest pin first (round 55, part D). */
+export function usePins(channelId: string) {
+  return useQuery({
+    queryKey: pinsKey(channelId),
+    queryFn: async () => unwrap(await api.GET("/channels/{channelId}/pins", { params: { path: { channelId } } })).pins,
+  });
+}
+
+/** Pins or unpins a message; message.pinned / message.unpinned refresh the views. */
+export function useSetPin() {
+  return useMutation({
+    mutationFn: async ({ messageId, pinned }: { messageId: string; pinned: boolean }) => {
+      const params = { params: { path: { messageId } } };
+      unwrap(pinned ? await api.PUT("/messages/{messageId}/pin", params) : await api.DELETE("/messages/{messageId}/pin", params));
+    },
+  });
+}
+
+/** Sets the viewer's notification level (round 55, part I); "none" mutes until unmuted. */
+export function useNotifyLevel(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (level: Schemas["NotifyLevel"]) => {
+      unwrap(await api.PUT("/channels/{channelId}/notify", { params: { path: { channelId } }, body: { level } }));
+      return level;
+    },
+    onSuccess: (level) => {
+      qc.setQueryData<Schemas["Channel"][]>(conversationKeys.channels, (list) =>
+        list?.map((c) => (c.id === channelId ? { ...c, notify_level: level, muted: level === "none" ? true : undefined, muted_until: undefined } : c)),
+      );
+      void qc.invalidateQueries({ queryKey: conversationKeys.channels });
+    },
+  });
+}
+
+/** "Mind olvasott": every conversation of the viewer read. */
+export function useMarkAllRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST("/me/channels/read")).marked,
+    onSuccess: () => {
+      qc.setQueryData<Schemas["Channel"][]>(conversationKeys.channels, (list) => list?.map((c) => ({ ...c, unread: 0, mentions: 0 })));
+      void qc.invalidateQueries({ queryKey: conversationKeys.channels });
+    },
+  });
+}
+
+/** Forwards a message to another conversation (round 55, part F). */
+export function useForward() {
+  return useMutation({
+    mutationFn: async ({ messageId, ...body }: Schemas["ForwardRequest"] & { messageId: string }) =>
+      unwrap(await api.POST("/messages/{messageId}/forward", { params: { path: { messageId } }, body })),
   });
 }

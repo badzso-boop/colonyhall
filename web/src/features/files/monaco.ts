@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Loads the vendored Monaco Editor (served by the dev page at /vendor/monaco,
 // round 20) once, by URL: the PWA does not bundle a second copy.
 

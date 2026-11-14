@@ -10,13 +10,23 @@
     "observed": "Csak megfigyelés",
     "private": "Privát csatorna",
     "mentions": "{{count}} megemlítés",
-    "unread": "olvasatlan"
+    "unread": "olvasatlan",
+    "unreadCount_one": "{{count}} olvasatlan üzenet",
+    "unreadCount_other": "{{count}} olvasatlan üzenet"
   },
   "actions": {
     "newChannel": "Új csatorna",
     "newDm": "Új közvetlen üzenet",
     "newAgentDm": "Új beszélgetés agenttel",
-    "toggle": "{{name}} csoport összecsukása vagy kinyitása"
+    "toggle": "{{name}} csoport összecsukása vagy kinyitása",
+    "save": "Mentés későbbre",
+    "unsave": "Mentés megszüntetése",
+    "remind": "Emlékeztess…",
+    "copyLink": "Link másolása",
+    "linkCopied": "Link a vágólapon",
+    "linkFailed": "Nem sikerült a vágólapra másolni",
+    "forward": "Továbbítás…",
+    "forwarded": "továbbítva"
   },
   "empty": {
     "title": "Válassz egy beszélgetést",
@@ -53,13 +63,30 @@
     "noAgent": "Ebben a beszélgetésben nincs agent.",
     "schedule": "Ütemezés…",
     "questions": "Nyitott kérdések",
-    "storageFull": "Megtelt a tárhely"
+    "storageFull": "Megtelt a tárhely",
+    "alsoToChannel": "Küldés a #{{name}} csatornába is",
+    "emoji": "Emoji"
   },
   "commands": {
     "schedule": "Egyszeri ütemezett üzenet",
     "daily": "Naponta ismétlődő üzenet",
     "cron": "Ismétlődő üzenet cron-kifejezéssel",
-    "answer": "Válasz egy kérdésre (Q-szám)"
+    "answer": "Válasz egy kérdésre (Q-szám)",
+    "remind": "Emlékeztető: 20m, 1h, holnap, hétfő vagy 14:00; /remind me about this",
+    "pin": "Az utolsó üzenetem kitűzése itt (szálban: a szál első üzenete)",
+    "save": "A legutóbbi üzenet mentése későbbre (szálban: a szál)",
+    "mute": "A beszélgetés némítása",
+    "unmute": "Némítás feloldása: vissza az alapértelmezett értesítéshez",
+    "notify": "Értesítés itt: minden üzenet, csak említés vagy semmi",
+    "status": "Az állapotszöveged beállítása vagy törlése",
+    "search": "Keresés",
+    "thread": "A legutóbbi üzenet szálának megnyitása",
+    "drafts": "A piszkozataid",
+    "saved": "A mentett elemeid",
+    "activity": "A tevékenységeid",
+    "stop": "Egy agent leállítása (megerősítéssel)",
+    "emergency": "A vészleállítás megnyitása (nyomva tartással erősíted meg)",
+    "help": "Az összes parancs"
   },
   "message": {
     "more": "Több",
@@ -92,8 +119,11 @@
     "menu": "További műveletek",
     "reaction": {
       "agree": "👍 egyetértés (az agent így olvassa)",
-      "disagree": "👎 nem ért egyet (az agent így olvassa)"
+      "disagree": "👎 nem ért egyet (az agent így olvassa)",
+      "add": "Reakció hozzáadása"
     },
+    "openLinked": "Ugrás az üzenethez",
+    "repliedInThread": "Válasz egy szálban – megnyitás",
     "fileDeleted": "Fájl törölve"
   },
   "new": {
@@ -264,5 +294,73 @@
     "unknown": "Ismeretlen résztvevő.",
     "dm": "Üzenet",
     "dmFailed": "Nem sikerült megnyitni a közvetlen üzenetet."
+  },
+  "drafts": {
+    "title": "Piszkozatok",
+    "count_one": "{{count}} piszkozat",
+    "count_other": "{{count}} piszkozat",
+    "none": "Nincs piszkozatod",
+    "noneBody": "Ami elküldetlenül marad a szerkesztőben, ide kerül, és minden eszközödön megvan.",
+    "inThread": "szálban",
+    "onlyFiles_one": "{{count}} csatolt fájl",
+    "onlyFiles_other": "{{count}} csatolt fájl",
+    "files_one": "+ {{count}} fájl",
+    "files_other": "+ {{count}} fájl",
+    "delete": "Piszkozat törlése",
+    "has": "Piszkozat"
+  },
+  "pins": {
+    "pin": "Kitűzés",
+    "unpin": "Kitűzés megszüntetése",
+    "pinned": "Kitűzve",
+    "unpinned": "Kitűzés megszüntetve",
+    "pinnedHere": "Kitűzött üzenet",
+    "important": "Fontos",
+    "title": "Kitűzött üzenetek",
+    "open_one": "{{count}} kitűzött üzenet",
+    "open_other": "{{count}} kitűzött üzenet"
+  },
+  "notify": {
+    "title": "Értesítések",
+    "all": "Minden üzenet",
+    "mentions": "Csak ha megemlítenek",
+    "none": "Semmi (némítás)",
+    "current": "jelenlegi",
+    "markAllRead": "Mind olvasottnak jelölése",
+    "markedAll_one": "{{count}} beszélgetés olvasottnak jelölve",
+    "markedAll_other": "{{count}} beszélgetés olvasottnak jelölve",
+    "menu": "Beszélgetések menü"
+  },
+  "unread": {
+    "first_one": "Első olvasatlan ({{count}} új)",
+    "first_other": "Első olvasatlan ({{count}} új)",
+    "latest_one": "↓ Legutóbbi · {{count}} üzenet lent",
+    "latest_other": "↓ Legutóbbi · {{count}} üzenet lent",
+    "markRead": "Olvasottnak jelölés (Esc)"
+  },
+  "forward": {
+    "title": "Üzenet továbbítása",
+    "search": "Beszélgetés keresése…",
+    "targets": "Hová",
+    "comment": "Megjegyzés (nem kötelező; megemlíthetsz benne)",
+    "send": "Továbbítás",
+    "sendAnyway": "Mégis továbbítom",
+    "done": "Továbbítva",
+    "open": "Megnyitás",
+    "leak": "Akik nincsenek benne a(z) {{name}} csatornában, ezt látni fogják.",
+    "leakDm": "Ez egy közvetlen üzenet; akik nincsenek benne, látni fogják."
+  },
+  "slash": {
+    "unknown": "Ismeretlen parancs: /{{name}}. A /help felsorolja őket; //szöveg perjellel kezdődő üzenetet küld.",
+    "usage": "Így: {{usage}}",
+    "noMessage": "Itt még nincs üzenet, amire vonatkozhatna.",
+    "pinned": "Kitűzve.",
+    "alreadyPinned": "Már ki van tűzve.",
+    "saved": "Elmentve későbbre.",
+    "reminder": "Emlékeztetlek: {{when}}.",
+    "notify": "Értesítés itt: {{level}}.",
+    "unmuted": "Némítás feloldva.",
+    "status": "Állapot beállítva.",
+    "statusCleared": "Állapot törölve."
   }
 }

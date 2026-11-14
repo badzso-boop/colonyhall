@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import { onActivity, onProgress, type ActivityFrame, type ProgressFrame } from "@/shared/api";

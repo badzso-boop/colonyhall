@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ActivityItem struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	RecipientID  uuid.UUID
+	Kind         string
+	ChannelID    *uuid.UUID
+	MessageID    *uuid.UUID
+	ThreadRootID *uuid.UUID
+	ActorID      *uuid.UUID
+	RefID        *uuid.UUID
+	Emoji        string
+	SourceSeq    int64
+	CreatedAt    time.Time
+	ReadAt       *time.Time
+}
+
 type Actor struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -194,6 +210,7 @@ type ChannelMute struct {
 	MutedUntil  *time.Time
 	CreatedAt   time.Time
 	WorkspaceID uuid.UUID
+	Level       string
 }
 
 type Compaction struct {
@@ -312,6 +329,25 @@ type Delivery struct {
 	FromActorID *uuid.UUID
 	DelegatedBy *uuid.UUID
 	ViaGrant    bool
+}
+
+type Draft struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ActorID      uuid.UUID
+	ChannelID    uuid.UUID
+	ThreadRootID *uuid.UUID
+	Body         string
+	FileIds      []uuid.UUID
+	UpdatedAt    time.Time
+}
+
+type EmojiUse struct {
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	Emoji       string
+	Uses        int32
+	LastUsedAt  time.Time
 }
 
 type Event struct {
@@ -446,6 +482,9 @@ type Message struct {
 	OriginChannelID  *uuid.UUID
 	OriginThreadID   *uuid.UUID
 	AnswersMessageID *uuid.UUID
+	Important        bool
+	AlsoInChannel    bool
+	ForwardedFromID  *uuid.UUID
 }
 
 type MessageFile struct {
@@ -453,6 +492,17 @@ type MessageFile struct {
 	FileID      uuid.UUID
 	Position    int32
 	WorkspaceID uuid.UUID
+}
+
+type MessagePin struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ChannelID   uuid.UUID
+	MessageID   uuid.UUID
+	PinnedBy    uuid.UUID
+	PinnedAt    time.Time
+	UnpinnedBy  *uuid.UUID
+	UnpinnedAt  *time.Time
 }
 
 type ModelPrice struct {
@@ -576,6 +626,19 @@ type RunError struct {
 	Summary      string
 	Detail       string
 	CreatedAt    time.Time
+}
+
+type SavedItem struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	MessageID   *uuid.UUID
+	ChannelID   *uuid.UUID
+	Note        string
+	RemindAt    *time.Time
+	RemindedAt  *time.Time
+	DoneAt      *time.Time
+	CreatedAt   time.Time
 }
 
 type Schedule struct {

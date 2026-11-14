@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // @vitest-environment node
 // The layer rules of docs/08-frontend-architektura.md (2., 10., 11.) are
 // enforced by eslint.config.js; this test makes sure they keep catching

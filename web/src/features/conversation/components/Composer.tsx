@@ -1,15 +1,21 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, formatBytes, insertMention, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
+import { activeMention, cn, formatBytes, insertMention, matchCommands, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, Notice, toast } from "@/shared/ui";
 import { localeOf } from "@/shared/i18n";
+import { EmojiButton, emojiName, insertAtColon, useEmojiSuggest, useRecordEmoji } from "@/features/emoji";
 import { useActors, useSession } from "@/features/identity";
 import { answerSuggestions, useAnswerQuestion, useOpenQuestions } from "@/features/questions";
 import { useCreateSchedule, useRetract, useSendMessage } from "../api";
 import type { AttachmentTray } from "../attachments";
+import { useDraft } from "../useDraft";
+import { useSlash } from "../useSlash";
 
 type Props = {
   channelId: string;
@@ -18,6 +24,8 @@ type Props = {
   memberIds: Set<string>;
   tray: AttachmentTray;
   readOnly?: boolean;
+  /** A thread reply in a channel: offer "also send to #name" (round 55, part G). */
+  alsoToChannel?: string;
   /** Opens the work pane for the conversation's agent; absent when there is none. */
   onOpenFiles?: () => void;
   onOpenTerminals?: () => void;
@@ -50,7 +58,7 @@ function Tray({ tray }: { tray: AttachmentTray }) {
                 ? t("composer.uploading", { pct: Math.round(a.progress * 100) })
                 : a.status === "error"
                   ? t(a.error === "too_large" ? "composer.tooLarge" : a.error === "storage_full" ? "composer.storageFull" : "composer.failed")
-                  : `${Math.max(1, Math.round(a.file.size / 1024))} KB`}
+                  : `${Math.max(1, Math.round((a.size ?? a.file.size) / 1024))} KB`}
             </span>
           </span>
           {a.status === "error" && a.error !== "too_large" && a.error !== "storage_full" ? (
@@ -66,8 +74,8 @@ function Tray({ tray }: { tray: AttachmentTray }) {
 }
 
 /** The message composer (round 31, part 5). */
-export function Composer({ channelId, threadRootId, placeholder, memberIds, tray, readOnly, onOpenFiles, onOpenTerminals }: Props) {
-  const { t } = useTranslation("conversation");
+export function Composer({ channelId, threadRootId, placeholder, memberIds, tray, readOnly, alsoToChannel, onOpenFiles, onOpenTerminals }: Props) {
+  const { t, i18n } = useTranslation("conversation");
   const width = useWidth();
   const actors = useActors();
   const session = useSession();
@@ -79,6 +87,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [pick, setPick] = useState(0);
+  const [alsoInChannel, setAlsoInChannel] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -99,15 +108,28 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   useShortcut("shift+enter", "composer", "newline", undefined, !threadRootId);
   useShortcut("arrowup", "composer", "lastMessage", undefined, !threadRootId);
 
+  const slashRun = useSlash({ channelId, threadRootId });
+  const draft = useDraft({ channelId, threadRootId, enabled: session.data?.actor.kind === "human" && !readOnly, text, setText, tray });
+
   const mention = activeMention(text, caret);
   const mentionList = useMemo(
     () => (mention && actors.data ? rankMentions(mention.query, [...actors.data.values()], memberIds) : []),
     [mention, actors.data, memberIds],
   );
-  const slash = /^\/\w*$/.test(text) ? commandList.filter((c) => `/${c.name}`.startsWith(text)) : [];
+  const slash = matchCommands(text, { admin: slashRun.admin });
   const questionList = answerSuggestions(text, openQuestions.data ?? []);
-  const popup: "mention" | "slash" | "question" | null = mentionList.length ? "mention" : slash.length ? "slash" : questionList.length ? "question" : null;
-  const options = popup === "mention" ? mentionList.length : popup === "question" ? questionList.length : slash.length;
+  const emojiList = useEmojiSuggest(text, caret);
+  const recordEmoji = useRecordEmoji();
+  const popup: "mention" | "slash" | "question" | "emoji" | null = mentionList.length
+    ? "mention"
+    : slash.length
+      ? "slash"
+      : questionList.length
+        ? "question"
+        : emojiList.length
+          ? "emoji"
+          : null;
+  const options = popup === "mention" ? mentionList.length : popup === "question" ? questionList.length : popup === "emoji" ? emojiList.length : slash.length;
 
   if (readOnly) {
     return <p className="m-4 mt-0 rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-ui text-fg-muted">{t("composer.readOnly")}</p>;
@@ -127,6 +149,14 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     } else if (popup === "question") {
       const q = questionList[i];
       if (q) setText(`/answer ${q.formatted_number} `);
+    } else if (popup === "emoji") {
+      const e = emojiList[i];
+      if (!e) return;
+      const next = insertAtColon(text, caret, e.char);
+      setText(next.text);
+      setCaret(next.caret);
+      recordEmoji.mutate(e.char);
+      requestAnimationFrame(() => area.current?.setSelectionRange(next.caret, next.caret));
     }
     setPick(0);
     area.current?.focus();
@@ -141,8 +171,19 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     if (!body && !tray.fileIds.length) return;
     const cmd = parseCommand(body);
     try {
-      if (cmd.kind === "invalid") {
+      if (cmd.kind === "invalid" && (cmd.name === "answer" || cmd.name === "schedule")) {
         toast(t(cmd.name === "answer" ? "composer.answerHelp" : "composer.scheduleHelp"), { tone: "danger" });
+        return;
+      }
+      if (cmd.kind !== "message" && cmd.kind !== "schedule" && cmd.kind !== "answer") {
+        const result = await slashRun.run(cmd);
+        if (result === "keep") return;
+        const next = result === "help" ? "/" : "";
+        setText(next);
+        setCaret(next.length);
+        setPick(0);
+        if (result === "clear") draft.sent();
+        area.current?.focus();
         return;
       }
       if (cmd.kind === "schedule") {
@@ -153,9 +194,10 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
         toast(t("composer.answered", { q: q.formatted_number }));
       } else {
         const res = await send.mutateAsync({
-          body: body || tray.items.map((a) => a.file.name).join(", "),
+          body: cmd.body ?? (body || tray.items.map((a) => a.file.name).join(", ")),
           client_msg_id: randomId(),
           ...(threadRootId ? { thread_root_id: threadRootId } : {}),
+          ...(threadRootId && alsoToChannel && alsoInChannel ? { also_in_channel: true } : {}),
           ...(tray.fileIds.length ? { file_ids: tray.fileIds } : {}),
         });
         tray.clear();
@@ -166,6 +208,8 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       }
       setText("");
       setCaret(0);
+      setAlsoInChannel(false);
+      draft.sent();
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), { tone: "danger" });
     }
@@ -178,7 +222,9 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : options - 1)) % options);
         return;
       }
-      if (e.key === "Enter" || e.key === "Tab") {
+      // Enter on a command typed in full runs it; Tab still completes.
+      const typedInFull = popup === "slash" && e.key === "Enter" && `/${slash[pick]?.name}` === text;
+      if ((e.key === "Enter" || e.key === "Tab") && !typedInFull) {
         e.preventDefault();
         choose(pick);
         return;
@@ -204,6 +250,20 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     }
   };
 
+  const insertEmoji = (char: string) => {
+    const el = area.current;
+    const at = el ? el.selectionStart : text.length;
+    const end = el ? el.selectionEnd : text.length;
+    const next = text.slice(0, at) + char + text.slice(end);
+    const pos = at + char.length;
+    setText(next);
+    setCaret(pos);
+    requestAnimationFrame(() => {
+      area.current?.focus();
+      area.current?.setSelectionRange(pos, pos);
+    });
+  };
+
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
     if (files.length) {
@@ -217,7 +277,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       {popup ? (
         <ul
           role="listbox"
-          aria-label={t(popup === "mention" ? "composer.mentions" : popup === "question" ? "composer.questions" : "composer.commandsLabel")}
+          aria-label={t(popup === "mention" ? "composer.mentions" : popup === "question" ? "composer.questions" : popup === "emoji" ? "composer.emoji" : "composer.commandsLabel")}
           className="absolute inset-x-0 bottom-full z-(--z-overlay) mb-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-overlay"
         >
           {popup === "mention"
@@ -237,6 +297,23 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
                   <span className="truncate text-meta text-fg-muted">{a.display_name}</span>
                 </li>
               ))
+            : popup === "emoji"
+              ? emojiList.map((e, i) => (
+                  <li
+                    key={e.char}
+                    role="option"
+                    aria-selected={i === pick}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      choose(i);
+                    }}
+                    className={cn("flex h-9 cursor-pointer items-center gap-2 rounded-sm px-2", i === pick && "bg-surface-sunken")}
+                  >
+                    <span className="text-xl leading-none">{e.char}</span>
+                    <span className="font-mono text-ui">{e.code ? `:${e.code}:` : ""}</span>
+                    <span className="truncate text-meta text-fg-muted">{emojiName(e, i18n.language)}</span>
+                  </li>
+                ))
             : popup === "question"
               ? questionList.map((q, i) => (
                   <li
@@ -271,6 +348,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
               ))}
         </ul>
       ) : null}
+      {slashRun.dialog}
       <Tray tray={tray} />
       <textarea
         ref={area}
@@ -320,6 +398,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
             ) : null}
           </MenuContent>
         </Menu>
+        <EmojiButton label={t("composer.emoji")} align="start" onPick={insertEmoji} />
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => (tray.add(e.target.files ?? []), (e.target.value = ""))} />
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (tray.add(e.target.files ?? []), (e.target.value = ""))} />
         {onOpenFiles ? (
@@ -334,7 +413,14 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
             {t("composer.terminal")}
           </button>
         ) : null}
-        <span className="ml-2 hidden truncate text-meta text-fg-subtle @xl:inline">{t("composer.hint")}</span>
+        {threadRootId && alsoToChannel ? (
+          <label className="ml-1 inline-flex min-w-0 cursor-pointer items-center gap-1.5 text-meta text-fg-muted">
+            <input type="checkbox" checked={alsoInChannel} onChange={(e) => setAlsoInChannel(e.target.checked)} className="size-3.5 accent-(--color-accent)" />
+            <span className="truncate">{t("composer.alsoToChannel", { name: alsoToChannel })}</span>
+          </label>
+        ) : (
+          <span className="ml-2 hidden truncate text-meta text-fg-subtle @xl:inline">{t("composer.hint")}</span>
+        )}
         <IconButton
           label={t("composer.send")}
           icon={<SendHorizontal className="size-4" />}

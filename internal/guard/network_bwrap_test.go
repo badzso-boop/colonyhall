@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package guard
 
 import (
@@ -13,7 +16,7 @@ import (
 )
 
 func TestSandboxNetwork_RealBwrap(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second) // 30 s timed out under -race on a GitHub runner
 	defer cancel()
 
 	rootsDir := t.TempDir()

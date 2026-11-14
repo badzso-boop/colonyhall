@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package db holds the transaction port and its Postgres and in-memory
 // implementations. Stores never begin transactions themselves: a service
 // wraps a use case in TxRunner.InTx, and every store call made with the

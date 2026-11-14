@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # The CI job graph on this machine (`make ci`, `make ci-quick`): the jobs of
 # .github/workflows/ci.yml that can run locally, started together, each with
 # its own log, and one summary table at the end.

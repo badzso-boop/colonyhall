@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Bell, MoreHorizontal, Search, ShieldAlert, Trash2 } from "lucide-react";

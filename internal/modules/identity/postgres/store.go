@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package postgres implements identity.Store on Postgres. SQL lives in
 // queries.sql; sqlcgen is generated from it by sqlc.
 package postgres
@@ -471,4 +474,26 @@ func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state string) 
 		return db.ErrNotFound
 	}
 	return err
+}
+
+// RecordEmojiUse counts one use of an emoji and keeps the actor's newest
+// keep distinct emoji. Run it in a transaction (the service does).
+func (s *Store) RecordEmojiUse(ctx context.Context, workspaceID, actorID ids.ID, emoji string, at time.Time, keep int) error {
+	q := s.q(ctx)
+	if err := q.RecordEmojiUse(ctx, sqlcgen.RecordEmojiUseParams{WorkspaceID: workspaceID, ActorID: actorID, Emoji: emoji, At: at}); err != nil {
+		return err
+	}
+	return q.PruneEmojiUse(ctx, sqlcgen.PruneEmojiUseParams{ActorID: actorID, Keep: int32(keep)})
+}
+
+// EmojiUsage returns the actor's recent and frequent emoji, at most limit each.
+func (s *Store) EmojiUsage(ctx context.Context, actorID ids.ID, limit int) (recent, frequent []string, err error) {
+	q := s.q(ctx)
+	if recent, err = q.RecentEmoji(ctx, sqlcgen.RecentEmojiParams{ActorID: actorID, Lim: int32(limit)}); err != nil {
+		return nil, nil, err
+	}
+	if frequent, err = q.FrequentEmoji(ctx, sqlcgen.FrequentEmojiParams{ActorID: actorID, Lim: int32(limit)}); err != nil {
+		return nil, nil, err
+	}
+	return recent, frequent, nil
 }

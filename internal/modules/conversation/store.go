@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package conversation
 
 import (
@@ -82,6 +85,19 @@ type Store interface {
 	LastMessageNotBy(ctx context.Context, channelID, actorID ids.ID) (Message, error)
 	// LatestTopLevelMessageByAuthor returns the newest top-level message in the channel by the author.
 	LatestTopLevelMessageByAuthor(ctx context.Context, channelID, authorID ids.ID) (Message, error)
+	// InsertPin pins a message; db.ErrConflict when it is pinned already.
+	InsertPin(ctx context.Context, p Pin) error
+	// Unpin marks the message's active pin; it reports whether there was one.
+	Unpin(ctx context.Context, messageID, by ids.ID, at time.Time) (bool, error)
+	// ActivePins lists the conversation's pins, newest first.
+	ActivePins(ctx context.Context, channelID ids.ID) ([]Pin, error)
+	CountActivePins(ctx context.Context, channelID ids.ID) (int, error)
+	// CountPinsBy counts the actor's pins in the conversation since a time,
+	// unpinned ones included.
+	CountPinsBy(ctx context.Context, channelID, actorID ids.ID, since time.Time) (int, error)
+	// PinnedAmong returns which of the messages are pinned now.
+	PinnedAmong(ctx context.Context, messageIDs []ids.ID) (map[ids.ID]bool, error)
+
 	// RetractMessage marks a message as retracted (soft delete).
 	RetractMessage(ctx context.Context, id ids.ID, deletedBy ids.ID, at time.Time) error
 }

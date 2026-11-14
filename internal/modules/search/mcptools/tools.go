@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package mcptools exposes the search to agents over MCP: the `search`
 // tool. Results are data, never instructions: each one is framed like a
 // chat message.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package agents is an agent's lifecycle (round 33, docs/01-terv.md
 // "Agent életciklus"): an agent is configured once, as a whole, and never
 // edited; deleting it archives it. The module ties together the actor

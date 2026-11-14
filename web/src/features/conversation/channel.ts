@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { Channel, Actor } from "./model";
 
 /** The channel settings tabs (round 34, 1.3), the URL's ?channel-settings=<tab>. */
@@ -58,4 +61,28 @@ export function orderMembers<T extends { actor: Actor }>(rows: T[]): T[] {
     }
     return name(x.actor).localeCompare(name(y.actor), "hu");
   });
+}
+
+export type NotifyLevel = "all" | "mentions" | "none";
+export const notifyLevels: NotifyLevel[] = ["all", "mentions", "none"];
+
+/** The viewer's level now: muted is none; otherwise their choice or the default (all in a DM, mentions in a channel). */
+export function notifyLevel(ch: Channel, now: Date): NotifyLevel {
+  if (isMuted(ch, now)) return "none";
+  const l = ch.notify_level;
+  if (l === "all" || l === "mentions") return l;
+  return ch.kind === "dm" ? "all" : "mentions";
+}
+
+/**
+ * The sidebar row's look (round 55, part I): bold for unread messages unless
+ * muted; the number counts only what would notify (every unread message at
+ * "all", mentions otherwise; a muted row keeps its mention badge, round 34).
+ */
+export function rowBadge(ch: Channel, now: Date): { bold: boolean; count: number } {
+  const level = notifyLevel(ch, now);
+  return {
+    bold: level !== "none" && ch.unread > 0,
+    count: level === "all" ? Math.max(ch.unread, ch.mentions) : ch.mentions,
+  };
 }

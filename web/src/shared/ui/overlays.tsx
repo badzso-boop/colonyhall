@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { ReactNode } from "react";
 import { Dialog as RDialog, DropdownMenu as RMenu, Popover as RPopover, Tabs as RTabs, Tooltip as RTooltip } from "radix-ui";
 import { X } from "lucide-react";
@@ -125,12 +128,13 @@ export function MenuContent({ children, align = "end" }: { children: ReactNode; 
   );
 }
 
-export function MenuItem({ children, onSelect, danger, icon }: { children: ReactNode; onSelect?: () => void; danger?: boolean; icon?: ReactNode }) {
+export function MenuItem({ children, onSelect, danger, icon, disabled }: { children: ReactNode; onSelect?: () => void; danger?: boolean; icon?: ReactNode; disabled?: boolean }) {
   return (
     <RMenu.Item
       onSelect={onSelect}
+      disabled={disabled}
       className={cn(
-        "flex h-8 cursor-pointer items-center gap-2 rounded-sm px-2 outline-none select-none data-highlighted:bg-surface-sunken",
+        "flex h-8 cursor-pointer items-center gap-2 rounded-sm px-2 outline-none select-none data-highlighted:bg-surface-sunken data-disabled:cursor-default data-disabled:text-fg-subtle",
         danger ? "text-danger" : "text-fg",
       )}
     >

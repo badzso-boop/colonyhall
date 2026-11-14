@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { formatDuration, sshAttach, terminalBadge } from "./model";
 
 const term = (status: "running" | "finished" | "killed" | "error", exit_code: number | null = null) => ({

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { components } from "./schema";
 
 type S = components["schemas"];
@@ -26,6 +29,13 @@ export type EventPayloads = {
   "workspace.emergency_activated": S["EventEmergency"];
   "workspace.emergency_cleared": S["EventEmergency"];
   "delivery.item_created": S["EventDeliveryItemCreated"];
+  "draft.changed": S["EventDraftChanged"];
+  "message.pinned": S["EventPin"];
+  "message.unpinned": S["EventPin"];
+  "saved.changed": S["EventSaved"];
+  "saved.reminded": S["EventSaved"];
+  "activity.created": S["EventActivity"];
+  "activity.read": S["EventActivity"];
 };
 
 export type KnownEvent = keyof EventPayloads;

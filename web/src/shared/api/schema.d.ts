@@ -514,6 +514,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/channels/{channelId}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Humans, for themselves (round 55). all: every message counts; mentions:
+         *     only mentions of the caller (the default in channels); none: muted
+         *     until unmuted (DELETE /mute returns to the default). It decides the
+         *     caller's unread badge and activity view, never what agents receive.
+         *     Emits channel.mute_changed to the caller only.
+         */
+        put: operations["setNotifyLevel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/channels/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Marks every conversation the caller is a member of as read; marked counts those that had unread messages. */
+        post: operations["markAllChannelsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/channels/{channelId}/members": {
         parameters: {
             query?: never;
@@ -760,6 +802,218 @@ export interface paths {
         put?: never;
         /** @description Humans. Marks every thread of the caller with unread replies as read. */
         post: operations["markAllThreadsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The caller's unsent messages, newest first, in conversations
+         *     the caller can still read (round 55). Nobody else, not even an
+         *     admin, reads another person's drafts.
+         */
+        get: operations["listDrafts"];
+        /**
+         * @description Humans. Stores the caller's draft for one conversation and thread
+         *     (thread_root_id absent = the main stream). Empty text and no files
+         *     delete it (204). file_ids must be the caller's own uploads in that
+         *     conversation.
+         */
+        put: operations["saveDraft"];
+        post?: never;
+        /** @description Humans. Removes the caller's draft in one place; a missing one is fine. */
+        delete: operations["deleteDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/emoji": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The caller's recently and frequently used emoji (round 55),
+         *     for the emoji picker: recent newest first, frequent most used first,
+         *     at most 24 each. Nobody else reads them.
+         */
+        get: operations["getEmojiUsage"];
+        put?: never;
+        /**
+         * @description Humans. Records that the caller picked an emoji (a reaction or one put
+         *     in the composer). Only the caller's newest 100 distinct emoji are kept.
+         */
+        post: operations["recordEmojiUse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/{channelId}/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The conversation's pinned messages, newest pin first (at most 50),
+         *     for anyone who can read it (round 55).
+         */
+        get: operations["listPins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{messageId}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Pins the message in its conversation (members who can write there;
+         *     an agent only its own messages, at most 5 per conversation a day).
+         *     Pinning a pinned message is a no-op. At most 50 pins per conversation.
+         */
+        put: operations["pinMessage"];
+        post?: never;
+        /** @description Unpins the message (people who can write in the conversation). */
+        delete: operations["unpinMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The caller's saved messages and reminders, newest first
+         *     (round 55). An item whose message the caller can no longer read keeps
+         *     its note and times but shows nothing of the message.
+         */
+        get: operations["listSaved"];
+        put?: never;
+        /**
+         * @description Humans. Saves a message the caller can read, sets a reminder, or both
+         *     (a reminder without a message is /remind <when> <text>). Saving a
+         *     saved message again updates it and takes it out of "done". A due
+         *     reminder arrives as a system message in the caller's own DM.
+         */
+        post: operations["saveItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/saved/{savedId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                savedId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Humans, their own items. */
+        delete: operations["deleteSaved"];
+        options?: never;
+        head?: never;
+        /** @description Humans, their own items. Mark done or not done; set or clear the reminder. */
+        patch: operations["updateSaved"];
+        trace?: never;
+    };
+    "/messages/{messageId}/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Humans (round 55). Posts a quote of the message in another
+         *     conversation the caller can write to: the caller's comment (which may
+         *     mention), then the quote with its author, place and time and a link
+         *     back. The quoted text's @mentions are defused, so a forward never
+         *     wakes an agent by accident. The source must be readable (else 404),
+         *     the target writable.
+         */
+        post: operations["forwardMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. What concerns the caller, newest first (round 55): mentions,
+         *     replies in their threads, reactions to their messages, approvals and
+         *     questions waiting for them, agents' important messages and due
+         *     reminders. Mentions, replies, reactions and important messages of a
+         *     conversation the caller set to "none" are left out. An item whose
+         *     conversation the caller can no longer read keeps its kind and time
+         *     only. unread_count is the badge.
+         */
+        get: operations["listActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/activity/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Humans. Marks the caller's items read; the given ones, every one in a conversation, or (empty body) all. */
+        post: operations["markActivityRead"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3272,6 +3526,15 @@ export interface components {
              * @description End of the caller's mute; null while muted means forever
              */
             muted_until?: string | null;
+            notify_level?: components["schemas"]["NotifyLevel"];
+        };
+        /**
+         * @description The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+         * @enum {string}
+         */
+        NotifyLevel: "all" | "mentions" | "none";
+        NotifyLevelRequest: {
+            level: components["schemas"]["NotifyLevel"];
         };
         UpdateChannelRequest: {
             name?: string;
@@ -3376,6 +3639,35 @@ export interface components {
             deleted_by?: string | null;
             origin?: components["schemas"]["MessageOrigin"];
             answers?: components["schemas"]["MessageAnswers"];
+            /** @description Pinned in its conversation now */
+            pinned?: boolean;
+            /** @description An agent sent it marked important (a result, a decision, something a person must act on) */
+            important?: boolean;
+            /** @description A thread reply also shown in the channel's main stream */
+            also_in_channel?: boolean;
+            /**
+             * Format: uuid
+             * @description The message this forward quotes; set only for viewers who can read it
+             */
+            forwarded_from_id?: string;
+        };
+        ForwardRequest: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            comment?: string;
+            client_msg_id?: string;
+        };
+        PinnedMessage: {
+            message: components["schemas"]["Message"];
+            /** Format: uuid */
+            pinned_by: string;
+            /** Format: date-time */
+            pinned_at: string;
+        };
+        PinList: {
+            pins: components["schemas"]["PinnedMessage"][];
         };
         /** @description Set on an agent's answer posted in its origin thread: the DM reply it answers */
         MessageAnswers: {
@@ -3411,6 +3703,10 @@ export interface components {
              * @description Agents (guard): the message this answer replies to, in another channel the agent can read
              */
             answers_message_id?: string;
+            /** @description Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400). */
+            important?: boolean;
+            /** @description A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned. */
+            also_in_channel?: boolean;
         };
         SendResult: {
             message?: components["schemas"]["Message"];
@@ -3519,7 +3815,11 @@ export interface components {
          *     EventActorProfileUpdated; workspace.emergency_activated,
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
          *     EventDeliveryItemCreated; file.deleted → EventFileDeleted;
-         *     workspace.storage_state_changed → EventStorageState (round 54).
+         *     workspace.storage_state_changed → EventStorageState (round 54);
+         *     draft.changed (the owner only) →
+         *     EventDraftChanged; message.pinned, message.unpinned → EventPin;
+         *     saved.changed, saved.reminded (the owner only) → EventSaved;
+         *     activity.created, activity.read (the recipient only) → EventActivity.
          */
         WsEvent: {
             /** @enum {string} */
@@ -3612,8 +3912,23 @@ export interface components {
             no_thread_follow?: boolean;
             silent?: boolean;
             attachments?: components["schemas"]["EventAttachment"][];
+            important?: boolean;
+            also_in_channel?: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        EventPin: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            message_author_id: string;
+            important?: boolean;
         };
         EventAttachment: {
             /** Format: uuid */
@@ -3708,6 +4023,154 @@ export interface components {
             muted: boolean;
             /** Format: date-time */
             muted_until?: string;
+            level?: components["schemas"]["NotifyLevel"];
+        };
+        EmojiUsage: {
+            recent: string[];
+            frequent: string[];
+        };
+        EmojiUseRequest: {
+            /** @description A short emoji sequence, as for reactions */
+            emoji: string;
+        };
+        Draft: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            body: string;
+            attachments: components["schemas"]["EventAttachment"][];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DraftList: {
+            drafts: components["schemas"]["Draft"][];
+        };
+        SaveDraftRequest: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            body: string;
+            file_ids?: string[];
+        };
+        /** @description The place only, never the text; sent to the draft's owner alone. */
+        EventDraftChanged: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            deleted: boolean;
+        };
+        SavedItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: uuid */
+            channel_id?: string;
+            note: string;
+            /** Format: date-time */
+            remind_at?: string;
+            /** Format: date-time */
+            reminded_at?: string;
+            /** Format: date-time */
+            done_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The caller can still read the message (false for a reminder without one) */
+            available: boolean;
+            message?: components["schemas"]["SavedMessage"];
+        };
+        /** @description What the caller may see of a saved message; body is cut to 300 characters. */
+        SavedMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            channel_id: string;
+            channel_name: string;
+            channel_kind: components["schemas"]["ChannelKind"];
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            author_id: string;
+            body: string;
+            reply_count?: number;
+            /** Format: date-time */
+            created_at: string;
+            retracted?: boolean;
+        };
+        SavedPage: {
+            items: components["schemas"]["SavedItem"][];
+            next_cursor?: string;
+        };
+        SaveItemRequest: {
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: date-time */
+            remind_at?: string;
+            note?: string;
+        };
+        UpdateSavedRequest: {
+            done?: boolean;
+            /** Format: date-time */
+            remind_at?: string;
+            clear_reminder?: boolean;
+        };
+        /** @description Sent to the item's owner alone; ids only. */
+        EventSaved: {
+            /** Format: uuid */
+            item_id: string;
+            /** Format: uuid */
+            message_id?: string;
+            deleted?: boolean;
+        };
+        /** @enum {string} */
+        ActivityKind: "mention" | "thread_reply" | "reaction" | "approval" | "question" | "important" | "reminder";
+        ActivityItem: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ActivityKind"];
+            /** Format: date-time */
+            created_at: string;
+            read: boolean;
+            /** @description The caller can still read the conversation */
+            available: boolean;
+            /** Format: uuid */
+            channel_id?: string;
+            channel_name?: string;
+            channel_kind?: components["schemas"]["ChannelKind"];
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            actor_id?: string;
+            /**
+             * Format: uuid
+             * @description The approval, question or saved item
+             */
+            ref_id?: string;
+            emoji?: string;
+            /** @description The message's text, cut to 200 characters (only while readable) */
+            excerpt?: string;
+        };
+        ActivityPage: {
+            items: components["schemas"]["ActivityItem"][];
+            unread_count: number;
+            next_cursor?: string;
+        };
+        MarkActivityReadRequest: {
+            item_ids?: string[];
+            /** Format: uuid */
+            channel_id?: string;
+        };
+        /** @description The recipient's feed changed (activity.created, activity.read); sent to them alone. */
+        EventActivity: {
+            /** Format: uuid */
+            item_id?: string;
+            kind?: components["schemas"]["ActivityKind"];
+            marked?: number;
         };
         EventActorCreated: {
             /** Format: uuid */
@@ -6294,6 +6757,55 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    setNotifyLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyLevelRequest"];
+            };
+        };
+        responses: {
+            /** @description Set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    markAllChannelsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkedCount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listChannelMembers: {
         parameters: {
             query?: never;
@@ -6700,6 +7212,400 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkedCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Deleted (it was empty) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteDraft: {
+        parameters: {
+            query: {
+                channel_id: string;
+                thread_root_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getEmojiUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmojiUsage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordEmojiUse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmojiUseRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    pinMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pinned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    unpinMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unpinned (no-op if it was not pinned) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSaved: {
+        parameters: {
+            query?: {
+                filter?: "all" | "reminders" | "done";
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSaved: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                savedId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateSaved: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                savedId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSavedRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    forwardMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForwardRequest"];
+            };
+        };
+        responses: {
+            /** @description Forwarded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["ActivityKind"];
+                unread?: boolean;
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    markActivityRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkActivityReadRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

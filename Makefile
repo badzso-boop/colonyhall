@@ -1,7 +1,11 @@
 GO      ?= go
 COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
-SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
+# Rootless Docker maps the container's root to the calling user, so files
+# sqlc writes are ours only when it runs as root there; with ordinary Docker
+# it runs as us (a self-hosted CI runner uses rootless Docker).
+DOCKER_UID := $(shell docker info -f '{{range .SecurityOptions}}{{.}} {{end}}' 2>/dev/null | grep -q rootless && echo 0:0 || echo $$(id -u):$$(id -g))
+SQLC     = docker run --rm -u $(DOCKER_UID) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
 .PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
         test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest privacy
@@ -106,8 +110,9 @@ test-install:    ## install.sh tests in Debian, Ubuntu and Fedora containers (ne
 actionlint:      ## actionlint on every GitHub workflow (Docker image)
 	$(ACTIONLINT) -color
 
-privacy:         ## No secrets (gitleaks) and no private infrastructure details in the tracked files
+privacy:         ## No secrets (gitleaks), no private infrastructure details, and an SPDX header on every source file
 	python3 -I scripts/check-private-data.py
+	python3 -I scripts/check-spdx.py
 	git ls-files -z | tar --null --ignore-failed-read -T - -cf .cache-privacy.tar 2>/dev/null; \
 	  docker run --rm -i -v "$(CURDIR)/.gitleaks.toml":/cfg.toml:ro --entrypoint sh zricethezav/gitleaks:v8.28.0 \
 	    -c 'mkdir -p /tmp/scan && tar -xf - -C /tmp/scan && gitleaks dir /tmp/scan --config /cfg.toml --redact --no-banner' < .cache-privacy.tar; \

@@ -1,0 +1,19 @@
+{
+  "search": "Emoji keresése",
+  "groupsLabel": "Emojicsoportok",
+  "recent": "Legutóbbiak",
+  "frequent": "Gyakoriak",
+  "none": "Nincs ilyen emoji.",
+  "suggestions": "Emojik",
+  "groups": {
+    "0": "Hangulatjelek és érzelmek",
+    "1": "Emberek és testrészek",
+    "3": "Állatok és természet",
+    "4": "Étel és ital",
+    "5": "Utazás és helyek",
+    "6": "Tevékenységek",
+    "7": "Tárgyak",
+    "8": "Szimbólumok",
+    "9": "Zászlók"
+  }
+}

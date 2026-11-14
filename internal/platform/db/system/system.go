@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package system marks a context as working for every workspace at once:
 // the event consumers, the scheduler and the other background loops read
 // across tenants (round 45, docs/23-elkulonites.md). Row-level security

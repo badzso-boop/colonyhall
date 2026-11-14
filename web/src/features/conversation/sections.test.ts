@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { Section } from "./model";
 import { dropIndex, itemOrder, moveConversation, moveSection, sectionOf, sectionOrder, upsertSection, validSectionName } from "./sections";
 

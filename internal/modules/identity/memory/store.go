@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package memory is the in-memory reference implementation of identity.Store.
 package memory
 
@@ -21,9 +24,10 @@ type Store struct {
 	tokens     map[string]identity.Token // key: string(hash)
 	tokenByID  map[ids.ID]string         // token id → hash key
 	creds      map[ids.ID]string
-	sessions   map[string]identity.Session // key: string(token hash)
-	revoked    map[ids.ID]time.Time        // session id → when it was revoked
-	failures   []authFailure               // login and release limits (round 40)
+	sessions   map[string]identity.Session    // key: string(token hash)
+	revoked    map[ids.ID]time.Time           // session id → when it was revoked
+	failures   []authFailure                  // login and release limits (round 40)
+	emoji      map[ids.ID]map[string]emojiUse // actor → emoji → use (round 55)
 }
 
 // New returns an empty store.
@@ -36,6 +40,7 @@ func New() *Store {
 		creds:      map[ids.ID]string{},
 		sessions:   map[string]identity.Session{},
 		revoked:    map[ids.ID]time.Time{},
+		emoji:      map[ids.ID]map[string]emojiUse{},
 	}
 }
 

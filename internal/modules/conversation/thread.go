@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package conversation
 
 import (
@@ -40,6 +43,9 @@ func (s *Service) Thread(ctx context.Context, by identity.Actor, messageID ids.I
 	}
 	all, err = s.withAttachments(ctx, all)
 	if err != nil {
+		return Message{}, nil, err
+	}
+	if all, err = s.withPins(ctx, all); err != nil {
 		return Message{}, nil, err
 	}
 	s.enrichOrigins(ctx, by, all)

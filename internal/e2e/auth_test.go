@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package e2e
 
 import (
@@ -7,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +30,28 @@ type browser struct {
 
 func (e *env) browser() *browser {
 	jar, _ := cookiejar.New(nil)
-	return &browser{e: e, client: &http.Client{Jar: jar}}
+	return &browser{e: e, client: &http.Client{Jar: sessionJar{jar}}}
+}
+
+// sessionJar keeps every cookie for the browser's lifetime. The server
+// stamps expiry dates from the tests' manual clock (2026-10-15 plus 30
+// days), but cookiejar compares them with the real time, so from
+// 2026-11-14 it threw the login cookie away and every browser test failed.
+// Expiry is the server's job and is tested there, not the jar's.
+type sessionJar struct{ http.CookieJar }
+
+func (j sessionJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	kept := make([]*http.Cookie, 0, len(cookies))
+	for _, c := range cookies {
+		if c.MaxAge < 0 { // a logout deletes the cookie: keep that
+			kept = append(kept, c)
+			continue
+		}
+		cc := *c
+		cc.Expires, cc.MaxAge = time.Time{}, 0
+		kept = append(kept, &cc)
+	}
+	j.CookieJar.SetCookies(u, kept)
 }
 
 func (b *browser) do(method, path string, body any, out any) int {

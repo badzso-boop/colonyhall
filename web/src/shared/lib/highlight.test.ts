@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { matchRanges } from "./highlight";
 
 test("a substring first, else the letters of a subsequence; nothing when it does not match", () => {

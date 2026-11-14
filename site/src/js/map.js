@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The tunnel map (docs/18, 4.5) and the workrooms (docs/18, 3, chamber 4).
 // The map's tunnels are dug as it scrolls in; then ants carry a message
 // from the hall (the server) to an outpost and a reply back. In the

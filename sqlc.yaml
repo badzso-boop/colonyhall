@@ -92,6 +92,18 @@ sql:
     gen: { go: { <<: *go, out: internal/modules/notes/postgres/sqlcgen } }
   - engine: postgresql
     schema: migrations
+    queries: internal/modules/draft/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/draft/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/saved/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/saved/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/activity/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/activity/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
     queries: internal/modules/agents/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/agents/postgres/sqlcgen } }
   - engine: postgresql

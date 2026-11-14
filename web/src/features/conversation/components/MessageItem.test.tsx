@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -48,7 +51,7 @@ function setup(m: Message, viewer: Viewer = human, extra: { onOpenTerminal?: (a:
       if (p.endsWith("/delegations")) return json({ delegations: [] });
       if (p.endsWith("/file-fetch")) return json({ id: "ff1", workspace_id: "w", channel_id: "c1", agent_id: "ag", requested_by: "me", path: "/srv/app/README.md", state: "done", created_at: "", file: { id: "f9", name: "README.md", mime: "text/markdown", size: 20, fetched_at: "" } }, 201);
       if (p.endsWith("/files/f9/content")) return new Response("# Olvass el\n\nszöveg");
-      if (p.endsWith("/retract")) return new Response(null, { status: 204 });
+      if (p.endsWith("/retract") || p.endsWith("/pin")) return new Response(null, { status: 204 });
       if (p.includes("/reactions/")) return new Response(null, { status: 204 });
       return json({});
     }),
@@ -166,7 +169,10 @@ test("retract from the message menu, confirmed in place; a retracted message sho
 
 test("someone else's message has no retract; reactions toggle with their meaning as the name", async () => {
   const { calls } = setup(msg({ body: "javaslat", reactions: [{ emoji: "👍", count: 1, actor_ids: ["me"] }] }));
-  expect(screen.queryByRole("button", { name: "További műveletek" })).toBeNull();
+  fireEvent.keyDown(screen.getByRole("button", { name: "További műveletek" }), { key: "Enter" });
+  await screen.findByRole("menuitem", { name: "Kitűzés" });
+  expect(screen.queryByRole("menuitem", { name: "Visszavonás" })).toBeNull();
+  fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: /👍 egyetértés/ }));
   fireEvent.click(screen.getByRole("button", { name: /👎 nem ért egyet/ }));
   await waitFor(() => expect(calls.filter((c) => c.path.includes("/reactions/")).map((c) => c.method)).toEqual(["DELETE", "PUT"]));
@@ -179,4 +185,38 @@ test("a deleted attachment shows only “Fájl törölve”: no name, no size, n
   const links = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
   expect(links).not.toContain("/api/v1/files/f1/content");
   expect(document.querySelector("img[src*=\"/files/f1/\"]")).toBeNull();
+});
+
+test("pin and unpin from the message menu; an agent's important message is marked", async () => {
+  const { calls, rerender } = setup(msg({ body: "kész a deploy", important: true }));
+  expect(screen.getByText("Fontos")).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("button", { name: "További műveletek" }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Kitűzés" }));
+  await waitFor(() => expect(calls.some((c) => c.method === "PUT" && c.path === "/api/v1/messages/m1/pin")).toBe(true));
+  rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <TooltipProvider>
+          <MessageItem message={msg({ body: "kész a deploy", pinned: true })} actors={actors} handles={handles} viewer={human} locale="hu-HU" summary />
+        </TooltipProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(screen.getByLabelText("Kitűzött üzenet")).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("button", { name: "További műveletek" }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Kitűzés megszüntetése" }));
+  await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.path === "/api/v1/messages/m1/pin")).toBe(true));
+});
+
+test("a read-only viewer gets no pin action, but can save and set a reminder", async () => {
+  const { calls } = setup(msg({ body: "x" }), { ...human, canWrite: false });
+  fireEvent.keyDown(screen.getByRole("button", { name: "További műveletek" }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Mentés későbbre" }));
+  expect(screen.queryByRole("menuitem", { name: "Kitűzés" })).toBeNull();
+  await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/me/saved" && (c.body as { message_id?: string })?.message_id === "m1")).toBe(true));
+});
+
+test("an agent viewer has no message menu", () => {
+  setup(msg({ body: "x" }), { ...human, human: false });
+  expect(screen.queryByRole("button", { name: "További műveletek" })).toBeNull();
 });

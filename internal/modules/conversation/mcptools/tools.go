@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package mcptools exposes channel messaging as MCP tools.
 package mcptools
 
@@ -24,6 +27,12 @@ type SendInput struct {
 	ClientMsgID string   `json:"client_msg_id,omitempty" jsonschema:"optional idempotency key; resending with the same key does not duplicate"`
 	Files       []string `json:"files,omitempty" jsonschema:"optional file IDs to attach to the message"`
 	Elaborate   bool     `json:"elaborate,omitempty" jsonschema:"allow a long answer; set only when someone asked you to elaborate"`
+	Important   bool     `json:"important,omitempty" jsonschema:"mark and pin it: only for a result, a decision, or something a person must act on (at most 5 a day per conversation)"`
+}
+
+// PinInput is the input of the pin tool.
+type PinInput struct {
+	Message string `json:"message" jsonschema:"id of your own message to pin"`
 }
 
 // ReadInput is the input of the read tool.
@@ -55,7 +64,9 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 		Name: "send",
 		Description: "Post a message to a channel or a direct message (@handle), optionally as a thread reply. " +
 			"Reply in the thread the request came from. Mention (@handle) only people who must act. " +
-			"Never send acknowledgements or thanks: use react with 👍 instead.",
+			"Never send acknowledgements or thanks: use react with 👍 instead. " +
+			"Set important only for a result, a decision, or something a person must act on: it is pinned in the " +
+			"conversation and shown to its people as important (at most 5 pins per conversation a day).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SendInput) (*mcp.CallToolResult, any, error) {
 		actor, err := current(ctx)
 		if err != nil {
@@ -94,7 +105,7 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 		}
 		res, err := svc.SendMessage(ctx, actor, conversation.SendInput{
 			ChannelID: ch.ID, ThreadRootID: root, ClientMsgID: in.ClientMsgID, Body: in.Text, Elaborate: in.Elaborate,
-			FileIDs: fileIDs, OriginChannelID: origChanID, OriginThreadID: origThreadID,
+			FileIDs: fileIDs, OriginChannelID: origChanID, OriginThreadID: origThreadID, Important: in.Important,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -102,7 +113,30 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 		if r := res.ConvertedToReaction; r != nil {
 			return text(fmt.Sprintf("not posted: acknowledgements become a %s reaction (added to message=%s)", r.Emoji, r.MessageID)), nil, nil
 		}
+		if res.Message.Pinned {
+			return text(fmt.Sprintf("sent message=%s to %s, marked important and pinned", res.Message.ID, label(ch))), nil, nil
+		}
 		return text(fmt.Sprintf("sent message=%s to %s", res.Message.ID, label(ch))), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "pin",
+		Description: "Pin one of your own messages in its conversation, so its people find it later. Pin only a " +
+			"result, a decision, or something a person must act on; at most 5 pins per conversation a day. " +
+			"You cannot pin other people's messages.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in PinInput) (*mcp.CallToolResult, any, error) {
+		actor, err := current(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		id, err := ids.Parse(in.Message)
+		if err != nil {
+			return nil, nil, fmt.Errorf("message must be a message id")
+		}
+		if err := svc.Pin(ctx, actor, id); err != nil {
+			return nil, nil, err
+		}
+		return text("pinned message=" + id.String()), nil, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -276,6 +310,12 @@ func formatMessages(ctx context.Context, dir identity.Directory, title string, m
 		fmt.Fprintf(&b, "\n- %s @%s message=%s", m.CreatedAt.Format("2006-01-02 15:04"), handles[m.AuthorID], m.ID)
 		if m.ThreadRootID != ids.Nil {
 			fmt.Fprintf(&b, " thread=%s", m.ThreadRootID)
+		}
+		if m.Important {
+			b.WriteString(" important")
+		}
+		if m.Pinned {
+			b.WriteString(" pinned")
 		}
 		for _, r := range m.Reactions {
 			fmt.Fprintf(&b, " %s%d", r.Emoji, r.Count)

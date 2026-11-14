@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package planner is a human's personal task list and subscribed ICS
 // calendars. Only the owner writes them; agents the owner allowed may read
 // them through MCP (never write).

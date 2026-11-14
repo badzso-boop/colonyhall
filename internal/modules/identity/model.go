@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package identity owns workspaces, actors (humans and agents) and API tokens.
 package identity
 

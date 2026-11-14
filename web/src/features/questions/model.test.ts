@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { answerSuggestions, answeredSince, countdown, isQuestion, waitingForHumans, type Question } from "./model";
 
 const q = (over: Partial<Question>): Question => ({

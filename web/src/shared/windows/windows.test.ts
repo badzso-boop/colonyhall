@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { BUBBLE, MIN, deserialize, initial, reduce, serialize, stack, type Viewport, type WinAction, type Windows } from "./windows";
 
 const vp: Viewport = { w: 1440, h: 900 };

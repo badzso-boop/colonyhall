@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Command apidoc writes docs/en/api.md, a plain Markdown reference of the
 // REST API, from api/openapi.yaml (round 48). `make gen` runs it and
 // `make gen-check` fails when the reference is stale. Run it from the

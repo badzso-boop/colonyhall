@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package dbstats reports how big the database is and how it grows, for the
 // operator's System status page (round 50). It is server-wide: no table here
 // belongs to a workspace.
