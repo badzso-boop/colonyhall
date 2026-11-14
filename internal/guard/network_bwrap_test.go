@@ -13,7 +13,7 @@ import (
 )
 
 func TestSandboxNetwork_RealBwrap(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second) // 30 s timed out under -race on a GitHub runner
 	defer cancel()
 
 	rootsDir := t.TempDir()
