@@ -893,6 +893,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. What concerns the caller, newest first (round 55): mentions,
+         *     replies in their threads, reactions to their messages, approvals and
+         *     questions waiting for them, agents' important messages and due
+         *     reminders. Mentions, replies, reactions and important messages of a
+         *     conversation the caller set to "none" are left out. An item whose
+         *     conversation the caller can no longer read keeps its kind and time
+         *     only. unread_count is the badge.
+         */
+        get: operations["listActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/activity/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Humans. Marks the caller's items read; the given ones, every one in a conversation, or (empty body) all. */
+        post: operations["markActivityRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/reactions/{emoji}": {
         parameters: {
             query?: never;
@@ -3672,7 +3714,8 @@ export interface components {
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
          *     EventDeliveryItemCreated; draft.changed (the owner only) →
          *     EventDraftChanged; message.pinned, message.unpinned → EventPin;
-         *     saved.changed, saved.reminded (the owner only) → EventSaved.
+         *     saved.changed, saved.reminded (the owner only) → EventSaved;
+         *     activity.created, activity.read (the recipient only) → EventActivity.
          */
         WsEvent: {
             /** @enum {string} */
@@ -3954,6 +3997,53 @@ export interface components {
             /** Format: uuid */
             message_id?: string;
             deleted?: boolean;
+        };
+        /** @enum {string} */
+        ActivityKind: "mention" | "thread_reply" | "reaction" | "approval" | "question" | "important" | "reminder";
+        ActivityItem: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ActivityKind"];
+            /** Format: date-time */
+            created_at: string;
+            read: boolean;
+            /** @description The caller can still read the conversation */
+            available: boolean;
+            /** Format: uuid */
+            channel_id?: string;
+            channel_name?: string;
+            channel_kind?: components["schemas"]["ChannelKind"];
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            actor_id?: string;
+            /**
+             * Format: uuid
+             * @description The approval, question or saved item
+             */
+            ref_id?: string;
+            emoji?: string;
+            /** @description The message's text, cut to 200 characters (only while readable) */
+            excerpt?: string;
+        };
+        ActivityPage: {
+            items: components["schemas"]["ActivityItem"][];
+            unread_count: number;
+            next_cursor?: string;
+        };
+        MarkActivityReadRequest: {
+            item_ids?: string[];
+            /** Format: uuid */
+            channel_id?: string;
+        };
+        /** @description The recipient's feed changed (activity.created, activity.read); sent to them alone. */
+        EventActivity: {
+            /** Format: uuid */
+            item_id?: string;
+            kind?: components["schemas"]["ActivityKind"];
+            marked?: number;
         };
         EventActorCreated: {
             /** Format: uuid */
@@ -7117,6 +7207,61 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["ActivityKind"];
+                unread?: boolean;
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    markActivityRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkActivityReadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkedCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

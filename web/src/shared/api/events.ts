@@ -29,6 +29,8 @@ export type EventPayloads = {
   "message.unpinned": S["EventPin"];
   "saved.changed": S["EventSaved"];
   "saved.reminded": S["EventSaved"];
+  "activity.created": S["EventActivity"];
+  "activity.read": S["EventActivity"];
 };
 
 export type KnownEvent = keyof EventPayloads;

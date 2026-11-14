@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { ApiError, WsClient, onUnauthorized, wsURL } from "@/shared/api";
+import { registerActivityEvents } from "@/features/activity";
 import { registerAdminEvents } from "@/features/admin";
 import { registerAgentEvents } from "@/features/agents";
 import { registerApprovalEvents } from "@/features/approvals";
@@ -51,6 +52,7 @@ function useLiveUpdates(enabled: boolean) {
       registerRulesEvents(qc),
       registerHostEvents(qc),
       registerSavedEvents(qc),
+      registerActivityEvents(qc),
     ];
     const ws = new WsClient(wsURL());
     ws.start();

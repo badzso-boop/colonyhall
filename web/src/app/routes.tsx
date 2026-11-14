@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router";
 import { AuditPage, RunsPage, SettingsPage, StatusPage, TokensPage, UsersPage } from "@/features/admin";
+import { ActivityPage } from "@/features/activity";
 import { AgentsPage } from "@/features/agents";
 import { ConversationPage, DraftsPage, ThreadsPage } from "@/features/conversation";
 import { DecisionsPage } from "@/features/decisions";
@@ -37,6 +38,7 @@ export function AppRoutes() {
         <Route path="threads" element={<ThreadsPage />} />
         <Route path="drafts" element={<DraftsPage />} />
         <Route path="saved" element={<SavedPage />} />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="calendar" element={<CalendarPage />} />

@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ActivityItem struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	RecipientID  uuid.UUID
+	Kind         string
+	ChannelID    *uuid.UUID
+	MessageID    *uuid.UUID
+	ThreadRootID *uuid.UUID
+	ActorID      *uuid.UUID
+	RefID        *uuid.UUID
+	Emoji        string
+	SourceSeq    int64
+	CreatedAt    time.Time
+	ReadAt       *time.Time
+}
+
 type Actor struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

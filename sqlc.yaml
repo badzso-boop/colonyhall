@@ -100,6 +100,10 @@ sql:
     gen: { go: { <<: *go, out: internal/modules/saved/postgres/sqlcgen } }
   - engine: postgresql
     schema: migrations
+    queries: internal/modules/activity/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/activity/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
     queries: internal/modules/agents/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/agents/postgres/sqlcgen } }
   - engine: postgresql

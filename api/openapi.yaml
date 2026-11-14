@@ -828,6 +828,42 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /me/activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      description: |
+        Humans. What concerns the caller, newest first (round 55): mentions,
+        replies in their threads, reactions to their messages, approvals and
+        questions waiting for them, agents' important messages and due
+        reminders. Mentions, replies, reactions and important messages of a
+        conversation the caller set to "none" are left out. An item whose
+        conversation the caller can no longer read keeps its kind and time
+        only. unread_count is the badge.
+      parameters:
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/ActivityKind" } }
+        - { name: unread, in: query, schema: { type: boolean, default: false } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 100 }, description: next_cursor of the previous page }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityPage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /me/activity/read:
+    post:
+      operationId: markActivityRead
+      tags: [activity]
+      description: Humans. Marks the caller's items read; the given ones, every one in a conversation, or (empty body) all.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/MarkActivityReadRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarkedCount" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /messages/{messageId}/reactions/{emoji}:
     parameters:
       - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3519,7 +3555,8 @@ components:
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
         EventDeliveryItemCreated; draft.changed (the owner only) →
         EventDraftChanged; message.pinned, message.unpinned → EventPin;
-        saved.changed, saved.reminded (the owner only) → EventSaved.
+        saved.changed, saved.reminded (the owner only) → EventSaved;
+        activity.created, activity.read (the recipient only) → EventActivity.
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -3778,6 +3815,46 @@ components:
         item_id: { type: string, format: uuid }
         message_id: { type: string, format: uuid }
         deleted: { type: boolean }
+    ActivityKind:
+      type: string
+      enum: [mention, thread_reply, reaction, approval, question, important, reminder]
+    ActivityItem:
+      type: object
+      required: [id, kind, created_at, read, available]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActivityKind" }
+        created_at: { type: string, format: date-time }
+        read: { type: boolean }
+        available: { type: boolean, description: The caller can still read the conversation }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        channel_kind: { $ref: "#/components/schemas/ChannelKind" }
+        message_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        ref_id: { type: string, format: uuid, description: "The approval, question or saved item" }
+        emoji: { type: string }
+        excerpt: { type: string, description: "The message's text, cut to 200 characters (only while readable)" }
+    ActivityPage:
+      type: object
+      required: [items, unread_count]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
+        unread_count: { type: integer }
+        next_cursor: { type: string }
+    MarkActivityReadRequest:
+      type: object
+      properties:
+        item_ids: { type: array, maxItems: 200, items: { type: string, format: uuid } }
+        channel_id: { type: string, format: uuid }
+    EventActivity:
+      type: object
+      description: The recipient's feed changed (activity.created, activity.read); sent to them alone.
+      properties:
+        item_id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ActivityKind" }
+        marked: { type: integer }
     EventActorCreated:
       type: object
       required: [actor_id, kind, handle, role]

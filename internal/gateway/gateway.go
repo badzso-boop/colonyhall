@@ -34,6 +34,7 @@ import (
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/eventlog"
 	"colonyhall/internal/httpx"
+	"colonyhall/internal/modules/activity"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/delivery"
 	"colonyhall/internal/modules/draft"
@@ -713,6 +714,8 @@ var personalEvents = map[string]bool{
 	draft.EventChanged:            true,
 	saved.EventChanged:            true,
 	saved.EventReminded:           true,
+	activity.EventCreated:         true,
+	activity.EventRead:            true,
 }
 
 // visible decides whether the actor may see an event.

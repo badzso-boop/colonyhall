@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api, unwrap, type Schemas } from "@/shared/api";
+import { activityKeys } from "@/features/activity";
 import { itemOrder, moveConversation, moveSection, sectionOrder, upsertSection } from "./sections";
 
 export type Message = Schemas["Message"];
@@ -172,6 +173,11 @@ export function useMarkRead() {
   return useMutation({
     mutationFn: async (channelId: string) => {
       await api.POST("/channels/{channelId}/read", { params: { path: { channelId } } });
+      // What concerned the viewer there has been seen too (round 55, part H).
+      if (qc.getQueryData(activityKeys.unread)) {
+        await api.POST("/me/activity/read", { body: { channel_id: channelId } });
+        void qc.invalidateQueries({ queryKey: activityKeys.all });
+      }
     },
     onSuccess: (_d, channelId) => {
       qc.setQueryData<Schemas["Channel"][]>(conversationKeys.channels, (list) =>

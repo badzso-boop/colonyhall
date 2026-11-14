@@ -9,6 +9,39 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActivityKind.
+const (
+	ActivityKindApproval    ActivityKind = "approval"
+	ActivityKindImportant   ActivityKind = "important"
+	ActivityKindMention     ActivityKind = "mention"
+	ActivityKindQuestion    ActivityKind = "question"
+	ActivityKindReaction    ActivityKind = "reaction"
+	ActivityKindReminder    ActivityKind = "reminder"
+	ActivityKindThreadReply ActivityKind = "thread_reply"
+)
+
+// Valid indicates whether the value is a known member of the ActivityKind enum.
+func (e ActivityKind) Valid() bool {
+	switch e {
+	case ActivityKindApproval:
+		return true
+	case ActivityKindImportant:
+		return true
+	case ActivityKindMention:
+		return true
+	case ActivityKindQuestion:
+		return true
+	case ActivityKindReaction:
+		return true
+	case ActivityKindReminder:
+		return true
+	case ActivityKindThreadReply:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ActorKind.
 const (
 	ActorKindAgent ActorKind = "agent"
@@ -1628,6 +1661,40 @@ type ActiveRunProgress struct {
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
+// ActivityItem defines model for ActivityItem.
+type ActivityItem struct {
+	ActorId *openapi_types.UUID `json:"actor_id,omitempty"`
+
+	// Available The caller can still read the conversation
+	Available   bool                `json:"available"`
+	ChannelId   *openapi_types.UUID `json:"channel_id,omitempty"`
+	ChannelKind *ChannelKind        `json:"channel_kind,omitempty"`
+	ChannelName *string             `json:"channel_name,omitempty"`
+	CreatedAt   time.Time           `json:"created_at"`
+	Emoji       *string             `json:"emoji,omitempty"`
+
+	// Excerpt The message's text, cut to 200 characters (only while readable)
+	Excerpt   *string             `json:"excerpt,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+	Kind      ActivityKind        `json:"kind"`
+	MessageId *openapi_types.UUID `json:"message_id,omitempty"`
+	Read      bool                `json:"read"`
+
+	// RefId The approval, question or saved item
+	RefId        *openapi_types.UUID `json:"ref_id,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// ActivityKind defines model for ActivityKind.
+type ActivityKind string
+
+// ActivityPage defines model for ActivityPage.
+type ActivityPage struct {
+	Items       []ActivityItem `json:"items"`
+	NextCursor  *string        `json:"next_cursor,omitempty"`
+	UnreadCount int            `json:"unread_count"`
+}
+
 // Actor defines model for Actor.
 type Actor struct {
 	// ArchivedAt Set on a deleted (archived) agent; its handle may belong to a newer agent
@@ -3053,6 +3120,12 @@ type LoginRequest struct {
 	Workspace *string `json:"workspace,omitempty"`
 }
 
+// MarkActivityReadRequest defines model for MarkActivityReadRequest.
+type MarkActivityReadRequest struct {
+	ChannelId *openapi_types.UUID   `json:"channel_id,omitempty"`
+	ItemIds   *[]openapi_types.UUID `json:"item_ids,omitempty"`
+}
+
 // MarkedCount defines model for MarkedCount.
 type MarkedCount struct {
 	Marked int `json:"marked"`
@@ -4405,6 +4478,16 @@ type ListActiveLeasesParams struct {
 // ListActiveLeasesParamsState defines parameters for ListActiveLeases.
 type ListActiveLeasesParamsState string
 
+// ListActivityParams defines parameters for ListActivity.
+type ListActivityParams struct {
+	Kind   *ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
+	Unread *bool         `form:"unread,omitempty" json:"unread,omitempty"`
+
+	// Cursor next_cursor of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // DeleteDraftParams defines parameters for DeleteDraft.
 type DeleteDraftParams struct {
 	ChannelId    openapi_types.UUID  `form:"channel_id" json:"channel_id"`
@@ -4665,6 +4748,9 @@ type SetHostOwnerJSONRequestBody = SetOwnerRequest
 
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
+
+// MarkActivityReadJSONRequestBody defines body for MarkActivityRead for application/json ContentType.
+type MarkActivityReadJSONRequestBody = MarkActivityReadRequest
 
 // SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
 type SaveDraftJSONRequestBody = SaveDraftRequest

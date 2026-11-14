@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/modules/activity"
 	"colonyhall/internal/modules/agentrules"
 	"colonyhall/internal/modules/agents"
 	"colonyhall/internal/modules/approval"
@@ -73,6 +74,7 @@ type Backend struct {
 	DBStats      dbstats.Store
 	Drafts       draft.Store
 	Saved        saved.Store
+	Activity     activity.Store
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -109,6 +111,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("pins", func(t *testing.T) { testPins(t, newBackend(t)) })
 	t.Run("notify level", func(t *testing.T) { testNotifyLevel(t, newBackend(t)) })
 	t.Run("saved", func(t *testing.T) { testSaved(t, newBackend(t)) })
+	t.Run("activity", func(t *testing.T) { testActivity(t, newBackend(t)) })
 }
 
 var (
