@@ -164,7 +164,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### MIT: github.com/jackc/pgx/v5 v5.11.0
+### MIT: github.com/jackc/pgx/v5 v5.12.0
 
 ```text
 Copyright (c) 2013-2021 Jack Christensen
@@ -468,7 +468,7 @@ CC-BY-4.0. See https://creativecommons.org/licenses/by/4.0/legalcode for
 the full license text.
 ```
 
-### Apache-2.0: github.com/oapi-codegen/runtime v1.7.0, github.com/sethvargo/go-retry v0.5.0
+### Apache-2.0: github.com/oapi-codegen/runtime v1.9.0, github.com/sethvargo/go-retry v0.5.0
 
 ```text
 Apache License
@@ -674,7 +674,7 @@ Apache License
    limitations under the License.
 ```
 
-### MIT: github.com/pressly/goose/v3 v3.29.0
+### MIT: github.com/pressly/goose/v3 v3.30.0
 
 ```text
 MIT License
