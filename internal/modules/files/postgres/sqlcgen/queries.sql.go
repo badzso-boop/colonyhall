@@ -29,7 +29,7 @@ func (q *Queries) AttachFileToMessage(ctx context.Context, arg AttachFileToMessa
 }
 
 const attachmentsForMessage = `-- name: AttachmentsForMessage :many
-SELECT f.id, f.name, f.mime, f.size
+SELECT f.id, f.name, f.mime, f.size, f.deleted_at
 FROM message_file mf
 JOIN file f ON f.id = mf.file_id
 WHERE mf.message_id = $1
@@ -37,10 +37,11 @@ ORDER BY mf.position ASC
 `
 
 type AttachmentsForMessageRow struct {
-	ID   uuid.UUID
-	Name string
-	Mime string
-	Size int64
+	ID        uuid.UUID
+	Name      string
+	Mime      string
+	Size      int64
+	DeletedAt *time.Time
 }
 
 func (q *Queries) AttachmentsForMessage(ctx context.Context, messageID uuid.UUID) ([]AttachmentsForMessageRow, error) {
@@ -57,6 +58,7 @@ func (q *Queries) AttachmentsForMessage(ctx context.Context, messageID uuid.UUID
 			&i.Name,
 			&i.Mime,
 			&i.Size,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -69,7 +71,7 @@ func (q *Queries) AttachmentsForMessage(ctx context.Context, messageID uuid.UUID
 }
 
 const attachmentsForMessages = `-- name: AttachmentsForMessages :many
-SELECT mf.message_id, f.id, f.name, f.mime, f.size
+SELECT mf.message_id, f.id, f.name, f.mime, f.size, f.deleted_at
 FROM message_file mf
 JOIN file f ON f.id = mf.file_id
 WHERE mf.message_id = ANY($1::uuid[])
@@ -82,6 +84,7 @@ type AttachmentsForMessagesRow struct {
 	Name      string
 	Mime      string
 	Size      int64
+	DeletedAt *time.Time
 }
 
 func (q *Queries) AttachmentsForMessages(ctx context.Context, dollar_1 []uuid.UUID) ([]AttachmentsForMessagesRow, error) {
@@ -99,6 +102,7 @@ func (q *Queries) AttachmentsForMessages(ctx context.Context, dollar_1 []uuid.UU
 			&i.Name,
 			&i.Mime,
 			&i.Size,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -110,8 +114,22 @@ func (q *Queries) AttachmentsForMessages(ctx context.Context, dollar_1 []uuid.UU
 	return items, nil
 }
 
+const ensureWorkspaceStorage = `-- name: EnsureWorkspaceStorage :exec
+INSERT INTO workspace_storage (workspace_id, updated_at) VALUES ($1, $2) ON CONFLICT (workspace_id) DO NOTHING
+`
+
+type EnsureWorkspaceStorageParams struct {
+	WorkspaceID uuid.UUID
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) EnsureWorkspaceStorage(ctx context.Context, arg EnsureWorkspaceStorageParams) error {
+	_, err := q.db.Exec(ctx, ensureWorkspaceStorage, arg.WorkspaceID, arg.UpdatedAt)
+	return err
+}
+
 const fileByID = `-- name: FileByID :one
-SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only
+SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only, deleted_at, content_removed_at
 FROM file
 WHERE id = $1
 `
@@ -130,8 +148,21 @@ func (q *Queries) FileByID(ctx context.Context, id uuid.UUID) (File, error) {
 		&i.Sha256,
 		&i.CreatedAt,
 		&i.HumanOnly,
+		&i.DeletedAt,
+		&i.ContentRemovedAt,
 	)
 	return i, err
+}
+
+const fileContentLive = `-- name: FileContentLive :one
+SELECT EXISTS (SELECT 1 FROM file WHERE sha256 = $1 AND deleted_at IS NULL)
+`
+
+func (q *Queries) FileContentLive(ctx context.Context, sha256 string) (bool, error) {
+	row := q.db.QueryRow(ctx, fileContentLive, sha256)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const fileFetchRequestByAgentAndPath = `-- name: FileFetchRequestByAgentAndPath :one
@@ -229,7 +260,7 @@ func (q *Queries) FileFetchRequestByMessageAndPath(ctx context.Context, arg File
 }
 
 const filesByIDs = `-- name: FilesByIDs :many
-SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only
+SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only, deleted_at, content_removed_at
 FROM file
 WHERE id = ANY($1::uuid[])
 `
@@ -254,6 +285,8 @@ func (q *Queries) FilesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]File,
 			&i.Sha256,
 			&i.CreatedAt,
 			&i.HumanOnly,
+			&i.DeletedAt,
+			&i.ContentRemovedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -405,9 +438,9 @@ func (q *Queries) ListFileFetchRequestsByAgent(ctx context.Context, arg ListFile
 }
 
 const listFilesByChannel = `-- name: ListFilesByChannel :many
-SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only
+SELECT id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at, human_only, deleted_at, content_removed_at
 FROM file
-WHERE channel_id = $1
+WHERE channel_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
@@ -431,6 +464,99 @@ func (q *Queries) ListFilesByChannel(ctx context.Context, channelID uuid.UUID) (
 			&i.Sha256,
 			&i.CreatedAt,
 			&i.HumanOnly,
+			&i.DeletedAt,
+			&i.ContentRemovedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMyFiles = `-- name: ListMyFiles :many
+SELECT f.id, f.workspace_id, f.uploaded_by, f.channel_id, f.name, f.mime, f.size, f.sha256, f.created_at, f.human_only, f.deleted_at,
+       coalesce(mf.message_id, '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS message_id,
+       (SELECT count(*) FROM file o
+         WHERE o.workspace_id = f.workspace_id AND o.sha256 = f.sha256 AND o.id <> f.id AND o.deleted_at IS NULL)::int AS shared_count
+FROM file f
+LEFT JOIN LATERAL (SELECT x.message_id FROM message_file x WHERE x.file_id = f.id ORDER BY x.message_id LIMIT 1) mf ON true
+WHERE f.workspace_id = $1
+  AND f.uploaded_by = ANY($2::uuid[])
+  AND f.deleted_at IS NULL
+  AND ($3::uuid IS NULL OR f.channel_id = $3::uuid)
+  AND ($4::text = ''
+       OR ($4::text = 'image' AND f.mime LIKE 'image/%')
+       OR ($4::text = 'document' AND f.mime NOT LIKE 'image/%' AND (f.mime LIKE 'text/%' OR f.mime IN ('application/pdf', 'application/json', 'application/msword', 'application/rtf') OR f.mime LIKE 'application/vnd.%'))
+       OR ($4::text = 'other' AND f.mime NOT LIKE 'image/%' AND NOT (f.mime LIKE 'text/%' OR f.mime IN ('application/pdf', 'application/json', 'application/msword', 'application/rtf') OR f.mime LIKE 'application/vnd.%')))
+  AND ($5::timestamptz IS NULL OR (f.created_at, f.id) < ($5::timestamptz, $6::uuid))
+ORDER BY f.created_at DESC, f.id DESC
+LIMIT $7::int
+`
+
+type ListMyFilesParams struct {
+	WorkspaceID uuid.UUID
+	Uploaders   []uuid.UUID
+	ChannelID   *uuid.UUID
+	Kind        string
+	BeforeAt    *time.Time
+	BeforeID    uuid.UUID
+	MaxRows     int32
+}
+
+type ListMyFilesRow struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	UploadedBy  uuid.UUID
+	ChannelID   uuid.UUID
+	Name        string
+	Mime        string
+	Size        int64
+	Sha256      string
+	CreatedAt   time.Time
+	HumanOnly   bool
+	DeletedAt   *time.Time
+	MessageID   uuid.UUID
+	SharedCount int32
+}
+
+// A person's (or their agents') live files, newest first, with the message
+// each is attached to (the earliest by ID, UUIDv7: the first sent) and how
+// many other live files in the workspace share its content.
+func (q *Queries) ListMyFiles(ctx context.Context, arg ListMyFilesParams) ([]ListMyFilesRow, error) {
+	rows, err := q.db.Query(ctx, listMyFiles,
+		arg.WorkspaceID,
+		arg.Uploaders,
+		arg.ChannelID,
+		arg.Kind,
+		arg.BeforeAt,
+		arg.BeforeID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMyFilesRow
+	for rows.Next() {
+		var i ListMyFilesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.UploadedBy,
+			&i.ChannelID,
+			&i.Name,
+			&i.Mime,
+			&i.Size,
+			&i.Sha256,
+			&i.CreatedAt,
+			&i.HumanOnly,
+			&i.DeletedAt,
+			&i.MessageID,
+			&i.SharedCount,
 		); err != nil {
 			return nil, err
 		}
@@ -480,6 +606,148 @@ func (q *Queries) ListPendingFileFetchRequestsBefore(ctx context.Context, create
 		return nil, err
 	}
 	return items, nil
+}
+
+const liveFilesBytes = `-- name: LiveFilesBytes :one
+SELECT coalesce(sum(size), 0)::bigint FROM (
+    SELECT DISTINCT ON (sha256) size FROM file WHERE workspace_id = $1 AND deleted_at IS NULL
+) t
+`
+
+func (q *Queries) LiveFilesBytes(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, liveFilesBytes, workspaceID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const lockFileContent = `-- name: LockFileContent :exec
+SELECT pg_advisory_xact_lock(hashtextextended('colonyhall.file_content:' || $1::text, 0))
+`
+
+// One lock per content for every server: an upload holds it from the row
+// insert to the content write, the sweep from the check to the removal.
+func (q *Queries) LockFileContent(ctx context.Context, sha256 string) error {
+	_, err := q.db.Exec(ctx, lockFileContent, sha256)
+	return err
+}
+
+const lockWorkspaceStorage = `-- name: LockWorkspaceStorage :one
+SELECT workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at FROM workspace_storage WHERE workspace_id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockWorkspaceStorage(ctx context.Context, workspaceID uuid.UUID) (WorkspaceStorage, error) {
+	row := q.db.QueryRow(ctx, lockWorkspaceStorage, workspaceID)
+	var i WorkspaceStorage
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.QuotaBytes,
+		&i.FilesBytes,
+		&i.DbBytes,
+		&i.ChatBytes,
+		&i.DbMeasuredAt,
+		&i.WarnedLevel,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const markFileContentRemoved = `-- name: MarkFileContentRemoved :exec
+UPDATE file SET content_removed_at = $1
+WHERE sha256 = $2 AND deleted_at IS NOT NULL AND content_removed_at IS NULL
+`
+
+type MarkFileContentRemovedParams struct {
+	At     *time.Time
+	Sha256 string
+}
+
+func (q *Queries) MarkFileContentRemoved(ctx context.Context, arg MarkFileContentRemovedParams) error {
+	_, err := q.db.Exec(ctx, markFileContentRemoved, arg.At, arg.Sha256)
+	return err
+}
+
+const markFileDeleted = `-- name: MarkFileDeleted :execrows
+
+UPDATE file SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL
+`
+
+type MarkFileDeletedParams struct {
+	At *time.Time
+	ID uuid.UUID
+}
+
+// Round 54: deleting files and the workspace storage.
+func (q *Queries) MarkFileDeleted(ctx context.Context, arg MarkFileDeletedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markFileDeleted, arg.At, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const removableFileContents = `-- name: RemovableFileContents :many
+SELECT DISTINCT sha256 FROM file
+WHERE deleted_at IS NOT NULL AND content_removed_at IS NULL
+LIMIT $1::int
+`
+
+func (q *Queries) RemovableFileContents(ctx context.Context, maxRows int32) ([]string, error) {
+	rows, err := q.db.Query(ctx, removableFileContents, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var sha256 string
+		if err := rows.Scan(&sha256); err != nil {
+			return nil, err
+		}
+		items = append(items, sha256)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const saveWorkspaceStorage = `-- name: SaveWorkspaceStorage :exec
+INSERT INTO workspace_storage (workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (workspace_id) DO UPDATE SET
+    quota_bytes = EXCLUDED.quota_bytes,
+    files_bytes = EXCLUDED.files_bytes,
+    db_bytes = EXCLUDED.db_bytes,
+    chat_bytes = EXCLUDED.chat_bytes,
+    db_measured_at = EXCLUDED.db_measured_at,
+    warned_level = EXCLUDED.warned_level,
+    updated_at = EXCLUDED.updated_at
+`
+
+type SaveWorkspaceStorageParams struct {
+	WorkspaceID  uuid.UUID
+	QuotaBytes   int64
+	FilesBytes   int64
+	DbBytes      int64
+	ChatBytes    int64
+	DbMeasuredAt *time.Time
+	WarnedLevel  int16
+	UpdatedAt    time.Time
+}
+
+func (q *Queries) SaveWorkspaceStorage(ctx context.Context, arg SaveWorkspaceStorageParams) error {
+	_, err := q.db.Exec(ctx, saveWorkspaceStorage,
+		arg.WorkspaceID,
+		arg.QuotaBytes,
+		arg.FilesBytes,
+		arg.DbBytes,
+		arg.ChatBytes,
+		arg.DbMeasuredAt,
+		arg.WarnedLevel,
+		arg.UpdatedAt,
+	)
+	return err
 }
 
 const updateFileFetchRequestCompleted = `-- name: UpdateFileFetchRequestCompleted :execrows
@@ -546,4 +814,40 @@ func (q *Queries) UpsertFileFetchSettings(ctx context.Context, arg UpsertFileFet
 		arg.UpdatedAt,
 	)
 	return err
+}
+
+const workspaceHasLiveContent = `-- name: WorkspaceHasLiveContent :one
+SELECT EXISTS (SELECT 1 FROM file WHERE workspace_id = $1 AND sha256 = $2 AND deleted_at IS NULL)
+`
+
+type WorkspaceHasLiveContentParams struct {
+	WorkspaceID uuid.UUID
+	Sha256      string
+}
+
+func (q *Queries) WorkspaceHasLiveContent(ctx context.Context, arg WorkspaceHasLiveContentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, workspaceHasLiveContent, arg.WorkspaceID, arg.Sha256)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const workspaceStorage = `-- name: WorkspaceStorage :one
+SELECT workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at FROM workspace_storage WHERE workspace_id = $1
+`
+
+func (q *Queries) WorkspaceStorage(ctx context.Context, workspaceID uuid.UUID) (WorkspaceStorage, error) {
+	row := q.db.QueryRow(ctx, workspaceStorage, workspaceID)
+	var i WorkspaceStorage
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.QuotaBytes,
+		&i.FilesBytes,
+		&i.DbBytes,
+		&i.ChatBytes,
+		&i.DbMeasuredAt,
+		&i.WarnedLevel,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

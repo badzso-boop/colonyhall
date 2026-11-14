@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"colonyhall/internal/platform/clock"
+	"colonyhall/internal/platform/ids"
 )
 
 const (
@@ -60,4 +61,38 @@ func (s *Service) Report(ctx context.Context) (r Report, ok bool, err error) {
 	}
 	r.Growth, err = s.Store.Samples(ctx, Day(s.Clock.Now()).AddDate(0, 0, -GrowthDays))
 	return r, err == nil, err
+}
+
+// Workspaces lists every workspace; ok is false without a database. System
+// mode.
+func (s *Service) Workspaces(ctx context.Context) ([]ids.ID, bool, error) {
+	list, err := s.Store.WorkspaceIDs(ctx)
+	if errors.Is(err, ErrNoDatabase) {
+		return nil, false, nil
+	}
+	return list, err == nil, err
+}
+
+// WorkspaceEstimate is the workspace's share of the database (round 54).
+// On a server with one workspace it is the whole database (round 50's
+// size); with several, the workspace's rows in the large tables times
+// OverheadFactor. ctx must be scoped to the workspace.
+func (s *Service) WorkspaceEstimate(ctx context.Context, workspaceID ids.ID, only bool) (Estimate, error) {
+	if only {
+		size, err := s.Store.Size(ctx)
+		if err != nil {
+			return Estimate{}, err
+		}
+		chat, err := s.Store.ChatTablesSize(ctx)
+		if err != nil {
+			return Estimate{}, err
+		}
+		return Estimate{Total: size, Chat: min(chat, size)}, nil
+	}
+	rb, err := s.Store.WorkspaceRowBytes(ctx, workspaceID)
+	if err != nil {
+		return Estimate{}, err
+	}
+	chat := int64(float64(rb.Chat) * OverheadFactor)
+	return Estimate{Total: chat + int64(float64(rb.Other)*OverheadFactor), Chat: chat}, nil
 }

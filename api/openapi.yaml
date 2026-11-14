@@ -562,6 +562,7 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "507": { $ref: "#/components/responses/StorageFull" }
 
   /dms:
     post:
@@ -599,6 +600,54 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /me/files:
+    get:
+      operationId: listMyFiles
+      tags: [files]
+      description: |
+        Humans (round 54). The caller's own live files in this workspace
+        (uploader=me), or the files their agents uploaded or fetched
+        (uploader=agents), newest first. The channel and the message are
+        given only when the caller can still read the channel.
+      parameters:
+        - { name: uploader, in: query, schema: { type: string, enum: [me, agents], default: me } }
+        - { name: channel, in: query, schema: { type: string, format: uuid }, description: Only files in this channel }
+        - { name: kind, in: query, schema: { type: string, enum: [image, document, other] } }
+        - { name: cursor, in: query, schema: { type: string }, description: next_cursor of the previous page }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MyFilePage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /workspace/storage:
+    get:
+      operationId: getWorkspaceStorage
+      tags: [files]
+      description: |
+        Owner and admins (round 54). The workspace's storage: quota, usage in
+        total and by kind, the time of the last database estimate and the
+        state. Never per person.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkspaceStorage" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /workspace/storage/quota:
+    put:
+      operationId: setWorkspaceStorageQuota
+      tags: [files]
+      description: Owner only (round 54). Sets the quota in bytes; 0 is unlimited (the default). Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/StorageQuotaRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkspaceStorage" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /me/threads:
     get:
@@ -1950,7 +1999,7 @@ paths:
     get:
       operationId: getFile
       tags: [files]
-      description: Get file metadata. Caller must have read access to the channel.
+      description: Get file metadata. Caller must have read access to the channel. A deleted file answers 410.
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200":
@@ -1958,6 +2007,22 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/File" } } }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteFile
+      tags: [files]
+      description: |
+        Round 54. Deletes a file the caller uploaded, or one the caller's own
+        agent uploaded or fetched. Nobody else may, the workspace owner and
+        admins included (403). The file is soft-deleted: every message that
+        carried it shows "File deleted" (no name, no size), downloads answer
+        410, and the content leaves the store once no live file references it.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
 
   /files/{fileId}/content:
     parameters:
@@ -1980,6 +2045,7 @@ paths:
                 format: binary
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
 
   /git/mappings:
     get:
@@ -2282,6 +2348,7 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
+        "507": { $ref: "#/components/responses/StorageFull" }
 
   /agent/file-fetch/{id}/fail:
     parameters:
@@ -2506,6 +2573,14 @@ components:
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
+    StorageFull:
+      description: |
+        Round 54: the upload would take the workspace over its storage quota.
+        Do not retry: make room first (delete files in My files) or ask the
+        owner to raise the quota.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
     LockedOut:
       description: Too many attempts (round 40); try again after Retry-After seconds.
       headers:
@@ -2525,6 +2600,8 @@ components:
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
+        used_bytes: { type: integer, format: int64, description: "storage_full (507) only: the workspace's usage" }
+        quota_bytes: { type: integer, format: int64, description: "storage_full (507) only: the workspace's quota" }
 
     PlannerTaskStatus:
       type: string
@@ -3282,7 +3359,8 @@ components:
         actor.state_changed → EventActorStateChanged; actor.profile_updated →
         EventActorProfileUpdated; workspace.emergency_activated,
         workspace.emergency_cleared → EventEmergency; delivery.item_created →
-        EventDeliveryItemCreated.
+        EventDeliveryItemCreated; file.deleted → EventFileDeleted;
+        workspace.storage_state_changed → EventStorageState (round 54).
       required: [type, seq, event_type, actor_id, at, data]
       properties:
         type: { type: string, enum: [event] }
@@ -3375,6 +3453,21 @@ components:
         name: { type: string }
         mime: { type: string }
         size: { type: integer, format: int64 }
+        deleted: { type: boolean }
+    EventFileDeleted:
+      type: object
+      required: [id, channel_id]
+      properties:
+        id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+    EventStorageState:
+      type: object
+      required: [state, previous_state, used_bytes, quota_bytes]
+      properties:
+        state: { $ref: "#/components/schemas/StorageState" }
+        previous_state: { $ref: "#/components/schemas/StorageState" }
+        used_bytes: { type: integer, format: int64 }
+        quota_bytes: { type: integer, format: int64 }
     EventMessageRetracted:
       type: object
       required: [message_id, channel_id, author_id, retracted_by, at]
@@ -3548,6 +3641,7 @@ components:
               path: { type: string }
               branch: { type: string }
         claude_limits: { $ref: "#/components/schemas/ClaudeLimits" }
+        storage_paused: { type: boolean, description: "Round 54: the guard starts no runs, the workspace storage is full" }
         agy_limits:
           type: array
           maxItems: 20
@@ -3700,6 +3794,9 @@ components:
         version: { type: string }
         agents: { type: array, items: { $ref: "#/components/schemas/HostAgent" } }
         previews: { type: array, items: { $ref: "#/components/schemas/HostPreview" } }
+        storage:
+          allOf: [{ $ref: "#/components/schemas/HostStorage" }]
+          description: "Round 54: while state is full the guard starts no runs; absent from older servers"
     AgentToken:
       type: object
       required: [token, expires_at]
@@ -4163,6 +4260,60 @@ components:
         name: { type: string }
         mime: { type: string }
         size: { type: integer, format: int64 }
+        deleted: { type: boolean, description: "Round 54: the uploader deleted the file; name, mime and size are empty" }
+    MyFile:
+      type: object
+      required: [id, name, mime, size, created_at, shared_count]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        mime: { type: string }
+        size: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        channel: { $ref: "#/components/schemas/MyFileChannel" }
+        message_id: { type: string, format: uuid, description: The message the file is attached to (absent when never sent or the channel is not readable) }
+        thread_root_id: { type: string, format: uuid }
+        shared_count: { type: integer, description: How many other live files in the workspace have the same content (it stays stored for them) }
+        uploaded_by: { type: string, format: uuid, description: "uploader=agents: the agent" }
+    MyFileChannel:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+    MyFilePage:
+      type: object
+      required: [files]
+      properties:
+        files: { type: array, items: { $ref: "#/components/schemas/MyFile" } }
+        next_cursor: { type: string, description: Absent on the last page }
+    StorageState:
+      type: string
+      enum: [ok, warning_80, warning_95, full]
+    WorkspaceStorage:
+      type: object
+      required: [quota_bytes, used_bytes, attachments_bytes, chat_search_bytes, other_bytes, state]
+      properties:
+        quota_bytes: { type: integer, format: int64, description: 0 is unlimited }
+        used_bytes: { type: integer, format: int64 }
+        attachments_bytes: { type: integer, format: int64 }
+        chat_search_bytes: { type: integer, format: int64, description: "Messages, events and the search index (part of the database estimate)" }
+        other_bytes: { type: integer, format: int64, description: The rest of the database share }
+        db_measured_at: { type: string, format: date-time, description: The last hourly database estimate (absent before the first) }
+        state: { $ref: "#/components/schemas/StorageState" }
+    StorageQuotaRequest:
+      type: object
+      required: [quota_bytes]
+      properties:
+        quota_bytes: { type: integer, format: int64, minimum: 0, description: 0 is unlimited }
+    HostStorage:
+      type: object
+      required: [state]
+      properties:
+        state: { $ref: "#/components/schemas/StorageState" }
+        used_bytes: { type: integer, format: int64 }
+        quota_bytes: { type: integer, format: int64 }
     File:
       type: object
       required: [id, workspace_id, uploaded_by, channel_id, name, mime, size, sha256, created_at]
@@ -4792,6 +4943,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/FolderGrant" }
         claude_limits: { $ref: "#/components/schemas/ClaudeLimits" }
+        storage_paused: { type: boolean, description: "Round 54: the agent's guard starts no runs, the workspace storage is full" }
 
     OverviewThread:
       type: object

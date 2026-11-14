@@ -79,6 +79,10 @@ type Service struct {
 	FsRelay      *FsRelay
 	FsTimeout    time.Duration
 	Logger       *slog.Logger
+	// Agents finds a person's agents for "My files" (round 54).
+	Agents OwnedAgents
+	// Notifier warns the owner at 80%, 95% and full (round 54); nil: none.
+	Notifier StorageNotifier
 }
 
 // MaxUploadBytes returns the maximum allowed upload size in bytes.
@@ -183,12 +187,6 @@ func (s *Service) upload(ctx context.Context, by identity.Actor, channelID ids.I
 
 	sha256Hex := hex.EncodeToString(hasher.Sum(nil))
 
-	// Put into storage backend
-	_, err = s.Storage.Put(ctx, sha256Hex, tmp)
-	if err != nil {
-		return File{}, fmt.Errorf("storage put: %w", err)
-	}
-
 	now := s.Clock.Now()
 	f := File{
 		ID:          s.IDs.New(),
@@ -213,30 +211,11 @@ func (s *Service) upload(ctx context.Context, by identity.Actor, channelID ids.I
 		SHA256:      f.SHA256,
 	}
 
-	var seq int64
-	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
-		if err := s.Store.Insert(ctx, f); err != nil {
-			return err
-		}
-		if s.Events != nil {
-			ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventFileUploaded, by.ID, f.ChannelID, "files", f.ID, evPayload, now)
-			if err != nil {
-				return err
-			}
-			if err := s.Events.Append(ctx, &ev); err != nil {
-				return err
-			}
-			seq = ev.Seq
-		}
-		return nil
-	})
+	err = s.storeNew(ctx, by.ID, newFile{file: f, content: tmp,
+		evType: EventFileUploaded, evChannel: f.ChannelID, evAgg: f.ID, evPayload: evPayload})
 	if err != nil {
 		return File{}, err
 	}
-	if seq > 0 && s.Bus != nil {
-		s.Bus.Notify(seq)
-	}
-
 	return f, nil
 }
 
@@ -248,6 +227,10 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, fileID ids.ID) (Fi
 	}
 	if f.WorkspaceID != by.WorkspaceID {
 		return File{}, ErrNotFound
+	}
+	if f.DeletedAt != nil {
+		// Before the access checks: a deleted file is gone for everyone.
+		return File{}, ErrGone
 	}
 
 	if f.HumanOnly && by.Kind != identity.KindHuman {
@@ -284,6 +267,9 @@ func (s *Service) OpenContentAuthorized(ctx context.Context, fileID ids.ID) (Fil
 	f, err := s.Store.ByID(ctx, fileID)
 	if err != nil {
 		return File{}, nil, err
+	}
+	if f.DeletedAt != nil {
+		return File{}, nil, ErrGone
 	}
 	rc, err := s.Storage.Open(ctx, f.SHA256)
 	if err != nil {
@@ -382,6 +368,9 @@ func (s *Service) ValidateAndAttach(ctx context.Context, by identity.Actor, chan
 		}
 		if f.WorkspaceID != by.WorkspaceID {
 			return ErrNotFound
+		}
+		if f.DeletedAt != nil {
+			return ErrGone
 		}
 		if f.ChannelID != channelID {
 			return ErrChannelMismatch
@@ -872,11 +861,6 @@ func (s *Service) SaveFetchedContent(ctx context.Context, by identity.Actor, req
 	}
 
 	sha256Hex := hex.EncodeToString(hasher.Sum(nil))
-	_, err = s.Storage.Put(ctx, sha256Hex, tmp)
-	if err != nil {
-		return FileFetchRequest{}, File{}, fmt.Errorf("storage put: %w", err)
-	}
-
 	now := s.Clock.Now()
 	mimeType := contentType
 	if mimeType == "" {
@@ -896,17 +880,20 @@ func (s *Service) SaveFetchedContent(ctx context.Context, by identity.Actor, req
 		HumanOnly:   true,
 	}
 
-	err = s.commit(ctx, func(ctx context.Context) error {
-		if err := s.Store.Insert(ctx, f); err != nil {
-			return err
-		}
-		return s.Store.UpdateFileFetchRequestCompleted(ctx, req.ID, f.ID, now)
-	}, by.WorkspaceID, EventFileFetchCompleted, by.ID, req.ChannelID, req.ID, FetchCompletedPayload{
-		RequestID: req.ID.String(),
-		AgentID:   by.ID.String(),
-		MessageID: req.MessageID.String(),
-		FileID:    f.ID.String(),
-	}, now)
+	err = s.storeNew(ctx, by.ID, newFile{file: f, content: tmp,
+		extra: func(ctx context.Context) error {
+			return s.Store.UpdateFileFetchRequestCompleted(ctx, req.ID, f.ID, now)
+		},
+		evType: EventFileFetchCompleted, evChannel: req.ChannelID, evAgg: req.ID,
+		evPayload: FetchCompletedPayload{
+			RequestID: req.ID.String(),
+			AgentID:   by.ID.String(),
+			MessageID: req.MessageID.String(),
+			FileID:    f.ID.String(),
+		}})
+	if errors.Is(err, db.ErrConflict) {
+		return FileFetchRequest{}, File{}, ErrInvalidRequestState
+	}
 	if err != nil {
 		return FileFetchRequest{}, File{}, err
 	}

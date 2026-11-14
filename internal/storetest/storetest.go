@@ -69,6 +69,9 @@ type Backend struct {
 	Delegation   delegation.Store
 	Search       search.Store
 	DBStats      dbstats.Store
+	// System puts a context in system mode (the background loops' scope);
+	// only test code may import db/system, so the caller supplies it.
+	System func(context.Context) context.Context
 }
 
 // Run executes the whole suite. newBackend must return empty stores.
@@ -89,6 +92,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("wiki", func(t *testing.T) { testWiki(t, newBackend(t)) })
 	t.Run("question", func(t *testing.T) { testQuestion(t, newBackend(t)) })
 	t.Run("files", func(t *testing.T) { testFiles(t, newBackend(t)) })
+	t.Run("file storage", func(t *testing.T) { testFileStorage(t, newBackend(t)) })
 	t.Run("git", func(t *testing.T) { testGit(t, newBackend(t)) })
 	t.Run("preview", func(t *testing.T) { testPreview(t, newBackend(t)) })
 	t.Run("agentrules", func(t *testing.T) { testAgentRules(t, newBackend(t)) })

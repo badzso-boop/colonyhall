@@ -184,6 +184,7 @@ func registerOverview(
 				HostId:           asgn.HostID,
 				HostName:         strPtr(hostName),
 				ClaudeLimits:     host.Report.ClaudeLimits,
+				StoragePaused:    boolPtrIf(host.Report.StoragePaused),
 				Client:           asgn.Client,
 				Model:            asgn.Model,
 				WorkModel:        strPtr(asgn.WorkModel),
@@ -505,4 +506,12 @@ func toOverviewQuestionSpec(ctx context.Context, q question.Question, dir identi
 		WithdrawnAt:      q.WithdrawnAt,
 		ExpiredAt:        q.ExpiredAt,
 	}
+}
+
+// boolPtrIf is &true when b, nil otherwise (an absent flag).
+func boolPtrIf(b bool) *bool {
+	if !b {
+		return nil
+	}
+	return &b
 }

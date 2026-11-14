@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"colonyhall/internal/apispec"
 	"colonyhall/internal/httpx"
@@ -35,7 +36,166 @@ func init() {
 	httpx.RegisterStatus(http.StatusNotFound, files.ErrNotFound)
 	httpx.RegisterStatus(http.StatusRequestEntityTooLarge, files.ErrFileTooLarge)
 	httpx.RegisterStatus(http.StatusGatewayTimeout, files.ErrFsTimeout)
-	httpx.RegisterStatus(http.StatusGone, files.ErrFsGone)
+	httpx.RegisterStatus(http.StatusGone, files.ErrFsGone, files.ErrGone)
+	// Round 54.
+	httpx.RegisterForbidden(files.ErrNotUploader, files.ErrNotOwner, files.ErrNotAdmin)
+	httpx.RegisterValidation(files.ErrInvalidQuota)
+	httpx.RegisterProblemType(http.StatusInsufficientStorage, "storage_full", files.ErrStorageFull)
+}
+
+// StorageToAPI converts a usage to the owner's view (never per person).
+func StorageToAPI(u files.Usage) apispec.WorkspaceStorage {
+	b := u.Breakdown()
+	return apispec.WorkspaceStorage{
+		QuotaBytes:       u.QuotaBytes,
+		UsedBytes:        u.Used(),
+		AttachmentsBytes: b.Attachments,
+		ChatSearchBytes:  b.ChatSearch,
+		OtherBytes:       b.Other,
+		DbMeasuredAt:     u.DBMeasuredAt,
+		State:            apispec.StorageState(u.State()),
+	}
+}
+
+// A "My files" cursor is "<created_at, unix nanoseconds>_<file id>".
+func formatFileCursor(f files.File) string {
+	return strconv.FormatInt(f.CreatedAt.UnixNano(), 10) + "_" + f.ID.String()
+}
+
+func parseFileCursor(c string) (time.Time, ids.ID, error) {
+	ns, id, ok := strings.Cut(c, "_")
+	if !ok {
+		return time.Time{}, ids.Nil, errors.New("bad cursor")
+	}
+	n, err := strconv.ParseInt(ns, 10, 64)
+	if err != nil {
+		return time.Time{}, ids.Nil, err
+	}
+	fid, err := ids.Parse(id)
+	if err != nil {
+		return time.Time{}, ids.Nil, err
+	}
+	return time.Unix(0, n).UTC(), fid, nil
+}
+
+func myFileToAPI(v files.MyFileView, withUploader bool) apispec.MyFile {
+	out := apispec.MyFile{
+		Id: v.ID, Name: v.Name, Mime: v.Mime, Size: v.Size, CreatedAt: v.CreatedAt, SharedCount: v.SharedCount,
+	}
+	if v.Channel != nil {
+		out.Channel = &apispec.MyFileChannel{Id: v.Channel.ID, Name: v.Channel.Name, Kind: v.Channel.Kind}
+	}
+	if v.MessageID != ids.Nil {
+		m := v.MessageID
+		out.MessageId = &m
+	}
+	if v.ThreadRootID != ids.Nil {
+		t := v.ThreadRootID
+		out.ThreadRootId = &t
+	}
+	if withUploader {
+		u := v.UploadedBy
+		out.UploadedBy = &u
+	}
+	return out
+}
+
+// registerStorage mounts "My files", the file delete and the workspace
+// storage endpoints (round 54).
+func registerStorage(mux *http.ServeMux, svc *files.Service, wrap func(http.HandlerFunc) http.Handler) {
+	mux.Handle("GET /api/v1/me/files", wrap(func(w http.ResponseWriter, r *http.Request) {
+		qs := r.URL.Query()
+		q := files.MyFilesQuery{}
+		who := files.UploaderMe
+		switch v := qs.Get("uploader"); v {
+		case "", "me":
+		case "agents":
+			who = files.UploaderAgents
+		default:
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "uploader must be me or agents"})
+			return
+		}
+		if c := qs.Get("channel"); c != "" {
+			id, err := ids.Parse(c)
+			if err != nil {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "channel must be a UUID"})
+				return
+			}
+			q.ChannelID = id
+		}
+		switch k := qs.Get("kind"); k {
+		case "", files.KindImage, files.KindDocument, files.KindOther:
+			q.Kind = k
+		default:
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "kind must be image, document or other"})
+			return
+		}
+		if c := qs.Get("cursor"); c != "" {
+			at, id, err := parseFileCursor(c)
+			if err != nil {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "cursor is not a next_cursor value"})
+				return
+			}
+			q.BeforeAt, q.BeforeID = &at, id
+		}
+		q.Limit = files.DefaultMyFilesLimit
+		if l := qs.Get("limit"); l != "" {
+			n, err := strconv.Atoi(l)
+			if err != nil || n < 1 || n > files.MaxMyFilesLimit {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "limit must be between 1 and 200"})
+				return
+			}
+			q.Limit = n
+		}
+		rows, err := svc.ListMine(r.Context(), httpx.Actor(r), q, who)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.MyFilePage{Files: make([]apispec.MyFile, 0, len(rows))}
+		for _, v := range rows {
+			out.Files = append(out.Files, myFileToAPI(v, who == files.UploaderAgents))
+		}
+		if len(rows) == q.Limit {
+			out.NextCursor = httpx.Ptr(formatFileCursor(rows[len(rows)-1].File))
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	mux.Handle("DELETE /api/v1/files/{fileId}", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "fileId")
+		if !ok {
+			return
+		}
+		if err := svc.Delete(r.Context(), httpx.Actor(r), id); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("GET /api/v1/workspace/storage", wrap(func(w http.ResponseWriter, r *http.Request) {
+		u, err := svc.StorageUsage(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, StorageToAPI(u))
+	}))
+
+	mux.Handle("PUT /api/v1/workspace/storage/quota", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.StorageQuotaRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		u, err := svc.SetQuota(r.Context(), httpx.Actor(r), in.QuotaBytes)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, StorageToAPI(u))
+	}))
 }
 
 // FileToAPI converts a files.File model to apispec.File.
@@ -94,6 +254,7 @@ func FileFetchRequestToAPI(req files.FileFetchRequest, f *files.File) apispec.Fi
 // Register mounts the files endpoints on mux.
 func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthenticator) {
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
+	registerStorage(mux, svc, wrap)
 
 	// POST /api/v1/channels/{channelId}/files
 	mux.Handle("POST /api/v1/channels/{channelId}/files", wrap(func(w http.ResponseWriter, r *http.Request) {

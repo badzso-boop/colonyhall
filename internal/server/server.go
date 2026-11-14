@@ -404,6 +404,11 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		DetectMime:   http.DetectContentType,
 	}
 	cvSvc.Attachments = fiSvc
+	// Round 54: "My files" lists a person's agents' files; the owner hears
+	// of 80%, 95% and full; the guards read the state in their host config.
+	fiSvc.Agents = idSvc
+	fiSvc.Notifier = &storageNotifier{identity: idSvc, conversation: cvSvc, logger: opt.Logger}
+	hoSvc.Storage = storageStates{files: fiSvc}
 
 	gitProv := opt.GitProvider
 	if gitProv == nil && opt.GiteaURL != "" {

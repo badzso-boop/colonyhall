@@ -62,4 +62,12 @@ func (s *Storage) Stat(_ context.Context, sha256Hex string) (int64, error) {
 	return int64(len(b)), nil
 }
 
+// Delete removes the content; a missing one is not an error.
+func (s *Storage) Delete(_ context.Context, sha256Hex string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.data, sha256Hex)
+	return nil
+}
+
 var _ files.StorageBackend = (*Storage)(nil)

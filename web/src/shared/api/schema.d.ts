@@ -667,6 +667,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans (round 54). The caller's own live files in this workspace
+         *     (uploader=me), or the files their agents uploaded or fetched
+         *     (uploader=agents), newest first. The channel and the message are
+         *     given only when the caller can still read the channel.
+         */
+        get: operations["listMyFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspace/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Owner and admins (round 54). The workspace's storage: quota, usage in
+         *     total and by kind, the time of the last database estimate and the
+         *     state. Never per person.
+         */
+        get: operations["getWorkspaceStorage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspace/storage/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Owner only (round 54). Sets the quota in bytes; 0 is unlimited (the default). Audited. */
+        put: operations["setWorkspaceStorageQuota"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/threads": {
         parameters: {
             query?: never;
@@ -2137,11 +2197,18 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description Get file metadata. Caller must have read access to the channel. */
+        /** @description Get file metadata. Caller must have read access to the channel. A deleted file answers 410. */
         get: operations["getFile"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * @description Round 54. Deletes a file the caller uploaded, or one the caller's own
+         *     agent uploaded or fetched. Nobody else may, the workspace owner and
+         *     admins included (403). The file is soft-deleted: every message that
+         *     carried it shows "File deleted" (no name, no size), downloads answer
+         *     410, and the content leaves the store once no live file references it.
+         */
+        delete: operations["deleteFile"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2688,6 +2755,16 @@ export interface components {
             title: string;
             status: number;
             detail?: string;
+            /**
+             * Format: int64
+             * @description storage_full (507) only: the workspace's usage
+             */
+            used_bytes?: number;
+            /**
+             * Format: int64
+             * @description storage_full (507) only: the workspace's quota
+             */
+            quota_bytes?: number;
         };
         /** @enum {string} */
         PlannerTaskStatus: "scheduled" | "started" | "done";
@@ -3441,7 +3518,8 @@ export interface components {
          *     actor.state_changed → EventActorStateChanged; actor.profile_updated →
          *     EventActorProfileUpdated; workspace.emergency_activated,
          *     workspace.emergency_cleared → EventEmergency; delivery.item_created →
-         *     EventDeliveryItemCreated.
+         *     EventDeliveryItemCreated; file.deleted → EventFileDeleted;
+         *     workspace.storage_state_changed → EventStorageState (round 54).
          */
         WsEvent: {
             /** @enum {string} */
@@ -3544,6 +3622,21 @@ export interface components {
             mime: string;
             /** Format: int64 */
             size: number;
+            deleted?: boolean;
+        };
+        EventFileDeleted: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            channel_id: string;
+        };
+        EventStorageState: {
+            state: components["schemas"]["StorageState"];
+            previous_state: components["schemas"]["StorageState"];
+            /** Format: int64 */
+            used_bytes: number;
+            /** Format: int64 */
+            quota_bytes: number;
         };
         EventMessageRetracted: {
             /** Format: uuid */
@@ -3703,6 +3796,8 @@ export interface components {
                 branch: string;
             }[];
             claude_limits?: components["schemas"]["ClaudeLimits"];
+            /** @description Round 54: the guard starts no runs, the workspace storage is full */
+            storage_paused?: boolean;
             /** @description Antigravity models paused on this machine after a quota error. */
             agy_limits?: components["schemas"]["AgyLimit"][];
             /** @description The Antigravity quota groups, from `agy -p /usage` (no model call). */
@@ -3906,6 +4001,8 @@ export interface components {
             version: string;
             agents: components["schemas"]["HostAgent"][];
             previews?: components["schemas"]["HostPreview"][];
+            /** @description Round 54: while state is full the guard starts no runs; absent from older servers */
+            storage?: components["schemas"]["HostStorage"];
         };
         AgentToken: {
             token: string;
@@ -4452,6 +4549,87 @@ export interface components {
             mime: string;
             /** Format: int64 */
             size: number;
+            /** @description Round 54: the uploader deleted the file; name, mime and size are empty */
+            deleted?: boolean;
+        };
+        MyFile: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            mime: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            created_at: string;
+            channel?: components["schemas"]["MyFileChannel"];
+            /**
+             * Format: uuid
+             * @description The message the file is attached to (absent when never sent or the channel is not readable)
+             */
+            message_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** @description How many other live files in the workspace have the same content (it stays stored for them) */
+            shared_count: number;
+            /**
+             * Format: uuid
+             * @description uploader=agents: the agent
+             */
+            uploaded_by?: string;
+        };
+        MyFileChannel: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: string;
+        };
+        MyFilePage: {
+            files: components["schemas"]["MyFile"][];
+            /** @description Absent on the last page */
+            next_cursor?: string;
+        };
+        /** @enum {string} */
+        StorageState: "ok" | "warning_80" | "warning_95" | "full";
+        WorkspaceStorage: {
+            /**
+             * Format: int64
+             * @description 0 is unlimited
+             */
+            quota_bytes: number;
+            /** Format: int64 */
+            used_bytes: number;
+            /** Format: int64 */
+            attachments_bytes: number;
+            /**
+             * Format: int64
+             * @description Messages, events and the search index (part of the database estimate)
+             */
+            chat_search_bytes: number;
+            /**
+             * Format: int64
+             * @description The rest of the database share
+             */
+            other_bytes: number;
+            /**
+             * Format: date-time
+             * @description The last hourly database estimate (absent before the first)
+             */
+            db_measured_at?: string;
+            state: components["schemas"]["StorageState"];
+        };
+        StorageQuotaRequest: {
+            /**
+             * Format: int64
+             * @description 0 is unlimited
+             */
+            quota_bytes: number;
+        };
+        HostStorage: {
+            state: components["schemas"]["StorageState"];
+            /** Format: int64 */
+            used_bytes?: number;
+            /** Format: int64 */
+            quota_bytes?: number;
         };
         File: {
             /** Format: uuid */
@@ -5013,6 +5191,8 @@ export interface components {
             partner_handle?: string;
             grants: components["schemas"]["FolderGrant"][];
             claude_limits?: components["schemas"]["ClaudeLimits"];
+            /** @description Round 54: the agent's guard starts no runs, the workspace storage is full */
+            storage_paused?: boolean;
         };
         OverviewThread: {
             /** Format: uuid */
@@ -5284,6 +5464,19 @@ export interface components {
     responses: {
         /** @description Error */
         Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
+         * @description Round 54: the upload would take the workspace over its storage quota.
+         *     Do not retry: make room first (delete files in My files) or ask the
+         *     owner to raise the quota.
+         */
+        StorageFull: {
             headers: {
                 [name: string]: unknown;
             };
@@ -6314,6 +6507,7 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            507: components["responses"]["StorageFull"];
             default: components["responses"]["Problem"];
         };
     };
@@ -6386,6 +6580,86 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMyFiles: {
+        parameters: {
+            query?: {
+                uploader?: "me" | "agents";
+                /** @description Only files in this channel */
+                channel?: string;
+                kind?: "image" | "document" | "other";
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyFilePage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getWorkspaceStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceStorage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setWorkspaceStorageQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageQuotaRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceStorage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -8717,6 +8991,31 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -8742,6 +9041,7 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -9311,6 +9611,7 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            507: components["responses"]["StorageFull"];
             default: components["responses"]["Problem"];
         };
     };

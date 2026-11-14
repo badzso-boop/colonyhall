@@ -21,3 +21,33 @@ SELECT * FROM db_size_sample WHERE sampled_on >= sqlc.arg(since)::date ORDER BY 
 
 -- name: PruneSizeSamples :execrows
 DELETE FROM db_size_sample WHERE sampled_on < sqlc.arg(before)::date;
+
+-- Round 54: the workspace storage's database share.
+
+-- name: WorkspaceIDs :many
+-- System mode: every workspace (the hourly usage refresh).
+SELECT id FROM workspace ORDER BY id;
+
+-- name: WorkspaceRowBytes :one
+-- The size of a workspace's rows in the large tables (pg_column_size of the
+-- whole row, TOAST compressed size included), without indexes or page
+-- overhead: the caller multiplies by dbstats.OverheadFactor. Run with the
+-- connection scoped to the workspace (row-level security narrows it too).
+SELECT
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM message t WHERE t.workspace_id = $1)::bigint AS message,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM event t WHERE t.workspace_id = $1)::bigint AS event,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM search_chunk_text t WHERE t.workspace_id = $1)::bigint AS search_chunk,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM search_log t WHERE t.workspace_id = $1)::bigint AS search_log,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM delivery t WHERE t.workspace_id = $1)::bigint AS delivery,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM agent_run t WHERE t.workspace_id = $1)::bigint AS agent_run,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM audit_log t WHERE t.workspace_id = $1)::bigint AS audit_log,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM file t WHERE t.workspace_id = $1)::bigint AS file,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM wiki_revision t WHERE t.workspace_id = $1)::bigint AS wiki_revision,
+    (SELECT coalesce(sum(pg_column_size(t.*)), 0) FROM terminal_event t WHERE t.workspace_id = $1)::bigint AS terminal_event;
+
+-- name: ChatTablesSize :one
+-- The chat and search tables with indexes and TOAST (single-workspace
+-- breakdown).
+SELECT (pg_total_relation_size('message') + pg_total_relation_size('event')
+      + pg_total_relation_size('search_chunk_text') + pg_total_relation_size('search_log')
+      + pg_total_relation_size('delivery'))::bigint AS size_bytes;

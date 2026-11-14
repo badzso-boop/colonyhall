@@ -39,6 +39,8 @@ type Service struct {
 	IDs       ids.Generator
 	Clock     clock.Clock
 	Previews  PreviewProvider
+	// Storage reports the workspace storage state in the host config.
+	Storage StorageStates
 }
 
 // admin checks that by may manage hosts: a human admin who is not halted.
@@ -781,6 +783,22 @@ type Config struct {
 	Version  string
 	Agents   []AgentConfig
 	Previews []HostPreview
+	// Storage is the workspace storage (round 54); nil without a provider.
+	Storage *HostStorage
+}
+
+// HostStorage is the workspace storage as the guard sees it: while State is
+// "full" it starts no runs.
+type HostStorage struct {
+	State      string
+	UsedBytes  int64
+	QuotaBytes int64
+}
+
+// StorageStates reads a workspace's storage state (the files module, wired
+// in by the server).
+type StorageStates interface {
+	HostStorage(ctx context.Context, workspaceID ids.ID) (HostStorage, error)
 }
 
 // Config returns the host's current config.
@@ -800,15 +818,30 @@ func (s *Service) Config(ctx context.Context, h Host) (Config, error) {
 	if previews == nil {
 		previews = []HostPreview{}
 	}
+	var storage *HostStorage
+	storageState := ""
+	if s.Storage != nil {
+		st, err := s.Storage.HostStorage(ctx, h.WorkspaceID)
+		if err != nil {
+			return Config{}, err
+		}
+		storage = &st
+		// Only the state changes the version (the numbers move with every
+		// upload); "ok" leaves it as before round 54.
+		if st.State != "ok" {
+			storageState = st.State
+		}
+	}
 	raw, err := json.Marshal(struct {
 		Agents   []AgentConfig `json:"agents"`
 		Previews []HostPreview `json:"previews"`
-	}{Agents: agents, Previews: previews})
+		Storage  string        `json:"storage,omitempty"`
+	}{Agents: agents, Previews: previews, Storage: storageState})
 	if err != nil {
 		return Config{}, err
 	}
 	sum := sha256.Sum256(raw)
-	return Config{Version: hex.EncodeToString(sum[:8]), Agents: agents, Previews: previews}, nil
+	return Config{Version: hex.EncodeToString(sum[:8]), Agents: agents, Previews: previews, Storage: storage}, nil
 }
 
 func (s *Service) agentConfigs(ctx context.Context, hostID ids.ID) ([]AgentConfig, error) {

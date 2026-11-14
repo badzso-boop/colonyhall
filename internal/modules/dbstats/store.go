@@ -3,6 +3,8 @@ package dbstats
 import (
 	"context"
 	"time"
+
+	"colonyhall/internal/platform/ids"
 )
 
 // Store reads sizes from the database and keeps the daily samples.
@@ -19,4 +21,13 @@ type Store interface {
 	Samples(ctx context.Context, since time.Time) ([]Sample, error)
 	// PruneSamples deletes the samples before the day and returns how many went.
 	PruneSamples(ctx context.Context, before time.Time) (int64, error)
+
+	// Round 54 (memory: ErrNoDatabase).
+
+	// WorkspaceIDs lists every workspace. System mode.
+	WorkspaceIDs(ctx context.Context) ([]ids.ID, error)
+	// WorkspaceRowBytes sums the workspace's rows in the large tables.
+	WorkspaceRowBytes(ctx context.Context, workspaceID ids.ID) (RowBytes, error)
+	// ChatTablesSize is the chat and search tables' size with indexes.
+	ChatTablesSize(ctx context.Context) (int64, error)
 }
