@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The gate (docs/18, 4.4): an ant with a task waits at a red gate beside the
 // web app's approval card. Approve opens the gate and the ant goes through.
 // Stop halts the whole colony: every ant on the page stops, the trails go

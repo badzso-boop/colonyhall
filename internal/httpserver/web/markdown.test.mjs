@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Tests for ColonyMarkdown parser using Node's built-in test runner.
 import test from "node:test";
 import assert from "node:assert/strict";

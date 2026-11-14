@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The page-wide motion state: the visitor's pause button (WCAG 2.2.2), the
 // system's reduced-motion setting, and the colony's emergency stop (the
 // gate). Kept in memory for the life of the page only: no cookies, no

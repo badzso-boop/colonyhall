@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Runs after npm install/ci. Some npm packages ship Go sources (e.g.
 // flatted/golang), and `go test ./...` / `golangci-lint run ./...` in the
 // repo root would pick them up as packages of the colonyhall module. A

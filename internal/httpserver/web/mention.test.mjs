@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import test from "node:test";
 import assert from "node:assert/strict";
 import "./mention.js";
