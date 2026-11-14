@@ -4719,7 +4719,7 @@ Set on an agent's answer posted in its origin thread: the DM reply it answers
 | `message_id` | string (uuid) |  | The message the file is attached to (absent when never sent or the channel is not readable) |
 | `mime` | string | yes |  |
 | `name` | string | yes |  |
-| `shared_count` | integer | yes | How many other live files in the workspace have the same content (it stays stored for them) |
+| `shared_count` | integer | yes | How many of the caller's (or their agents') other live files have the same content (it stays stored for them); other people's copies are not counted |
 | `size` | integer (int64) | yes |  |
 | `thread_root_id` | string (uuid) |  |  |
 | `uploaded_by` | string (uuid) |  | uploader=agents: the agent |

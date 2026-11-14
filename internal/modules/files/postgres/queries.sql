@@ -105,11 +105,14 @@ UPDATE file SET deleted_at = sqlc.arg(at) WHERE id = sqlc.arg(id) AND deleted_at
 -- name: ListMyFiles :many
 -- A person's (or their agents') live files, newest first, with the message
 -- each is attached to (the earliest by ID, UUIDv7: the first sent) and how
--- many other live files in the workspace share its content.
+-- many of the same uploaders' other live files share its content. Only
+-- those: counting everyone's copies would tell the caller whether some
+-- other person (in a channel the caller may not read) holds a given file.
 SELECT f.id, f.workspace_id, f.uploaded_by, f.channel_id, f.name, f.mime, f.size, f.sha256, f.created_at, f.human_only, f.deleted_at,
        coalesce(mf.message_id, '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS message_id,
        (SELECT count(*) FROM file o
-         WHERE o.workspace_id = f.workspace_id AND o.sha256 = f.sha256 AND o.id <> f.id AND o.deleted_at IS NULL)::int AS shared_count
+         WHERE o.workspace_id = f.workspace_id AND o.sha256 = f.sha256 AND o.id <> f.id AND o.deleted_at IS NULL
+           AND o.uploaded_by = ANY(sqlc.arg(uploaders)::uuid[]))::int AS shared_count
 FROM file f
 LEFT JOIN LATERAL (SELECT x.message_id FROM message_file x WHERE x.file_id = f.id ORDER BY x.message_id LIMIT 1) mf ON true
 WHERE f.workspace_id = sqlc.arg(workspace_id)

@@ -3315,7 +3315,7 @@ type MyFile struct {
 	Mime      string              `json:"mime"`
 	Name      string              `json:"name"`
 
-	// SharedCount How many other live files in the workspace have the same content (it stays stored for them)
+	// SharedCount How many of the caller's (or their agents') other live files have the same content (it stays stored for them); other people's copies are not counted
 	SharedCount  int                 `json:"shared_count"`
 	Size         int64               `json:"size"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`

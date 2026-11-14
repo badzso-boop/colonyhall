@@ -45,7 +45,13 @@ func testFileStorage(t *testing.T, b Backend) {
 	f2 := file(f.ws.ID, f.human.ID, f.channel.ID, shaA, "image/png", 100, 2) // the same content again
 	f3 := file(f.ws.ID, f.agent.ID, f.channel.ID, shaB, "application/zip", 50, 3)
 	f4 := file(other.ID, oHuman.ID, oChannel.ID, shaA, "application/pdf", 100, 4) // A in another workspace
-	for _, x := range []files.File{f1, f2, f3} {
+	// Someone else in the same workspace holds A too: it must not show in
+	// the caller's shared count (that would reveal who holds which file).
+	peer := identity.Actor{ID: gen.New(), WorkspaceID: f.ws.ID, Kind: identity.KindHuman, Handle: "peer",
+		DisplayName: "Peer", Role: identity.RoleMember, State: "active", CreatedAt: t0}
+	must(t, b.Identity.CreateActor(ctx, peer))
+	f5 := file(f.ws.ID, peer.ID, f.channel.ID, shaA, "application/pdf", 100, 5)
+	for _, x := range []files.File{f1, f2, f3, f5} {
 		must(t, b.Files.Insert(ctx, x))
 	}
 	must(t, b.Files.Insert(octx, f4))
@@ -75,8 +81,14 @@ func testFileStorage(t *testing.T, b Backend) {
 		t.Fatalf("message links: %v %v", mine[1].MessageID, mine[0].MessageID)
 	}
 	if mine[0].SharedCount != 1 || mine[1].SharedCount != 1 {
-		t.Fatalf("shared counts %d %d, want 1 1 (the other workspace's copy does not count)", mine[0].SharedCount, mine[1].SharedCount)
+		t.Fatalf("shared counts %d %d, want 1 1 (another person's and the other workspace's copies do not count)", mine[0].SharedCount, mine[1].SharedCount)
 	}
+	// And the other way round: the peer learns nothing of the caller's copies.
+	if got, err := b.Files.ListMine(ctx, files.MyFilesQuery{WorkspaceID: f.ws.ID, UploaderIDs: []ids.ID{peer.ID}, Limit: 10}); err != nil || len(got) != 1 || got[0].SharedCount != 0 {
+		t.Fatalf("peer's files: %+v %v; want f5 with shared count 0", got, err)
+	}
+	// Out of the way for the usage and sweep checks below (A stays removable).
+	must(t, b.Files.MarkDeleted(ctx, f5.ID, t0.Add(time.Minute)))
 	for kind, want := range map[string]ids.ID{files.KindImage: f2.ID, files.KindDocument: f1.ID} {
 		got, err := b.Files.ListMine(ctx, files.MyFilesQuery{WorkspaceID: f.ws.ID, UploaderIDs: []ids.ID{f.human.ID}, Kind: kind, Limit: 10})
 		if err != nil || len(got) != 1 || got[0].ID != want {

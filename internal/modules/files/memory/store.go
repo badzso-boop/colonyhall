@@ -348,7 +348,7 @@ func (s *Store) ListMine(_ context.Context, q files.MyFilesQuery) ([]files.MyFil
 			}
 		}
 		for _, o := range s.files {
-			if o.WorkspaceID == f.WorkspaceID && o.SHA256 == f.SHA256 && o.ID != f.ID && o.DeletedAt == nil {
+			if o.WorkspaceID == f.WorkspaceID && o.SHA256 == f.SHA256 && o.ID != f.ID && o.DeletedAt == nil && uploaders[o.UploadedBy] {
 				mf.SharedCount++
 			}
 		}

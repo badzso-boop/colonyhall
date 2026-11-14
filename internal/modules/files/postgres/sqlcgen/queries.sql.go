@@ -481,11 +481,12 @@ const listMyFiles = `-- name: ListMyFiles :many
 SELECT f.id, f.workspace_id, f.uploaded_by, f.channel_id, f.name, f.mime, f.size, f.sha256, f.created_at, f.human_only, f.deleted_at,
        coalesce(mf.message_id, '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS message_id,
        (SELECT count(*) FROM file o
-         WHERE o.workspace_id = f.workspace_id AND o.sha256 = f.sha256 AND o.id <> f.id AND o.deleted_at IS NULL)::int AS shared_count
+         WHERE o.workspace_id = f.workspace_id AND o.sha256 = f.sha256 AND o.id <> f.id AND o.deleted_at IS NULL
+           AND o.uploaded_by = ANY($1::uuid[]))::int AS shared_count
 FROM file f
 LEFT JOIN LATERAL (SELECT x.message_id FROM message_file x WHERE x.file_id = f.id ORDER BY x.message_id LIMIT 1) mf ON true
-WHERE f.workspace_id = $1
-  AND f.uploaded_by = ANY($2::uuid[])
+WHERE f.workspace_id = $2
+  AND f.uploaded_by = ANY($1::uuid[])
   AND f.deleted_at IS NULL
   AND ($3::uuid IS NULL OR f.channel_id = $3::uuid)
   AND ($4::text = ''
@@ -498,8 +499,8 @@ LIMIT $7::int
 `
 
 type ListMyFilesParams struct {
-	WorkspaceID uuid.UUID
 	Uploaders   []uuid.UUID
+	WorkspaceID uuid.UUID
 	ChannelID   *uuid.UUID
 	Kind        string
 	BeforeAt    *time.Time
@@ -525,11 +526,13 @@ type ListMyFilesRow struct {
 
 // A person's (or their agents') live files, newest first, with the message
 // each is attached to (the earliest by ID, UUIDv7: the first sent) and how
-// many other live files in the workspace share its content.
+// many of the same uploaders' other live files share its content. Only
+// those: counting everyone's copies would tell the caller whether some
+// other person (in a channel the caller may not read) holds a given file.
 func (q *Queries) ListMyFiles(ctx context.Context, arg ListMyFilesParams) ([]ListMyFilesRow, error) {
 	rows, err := q.db.Query(ctx, listMyFiles,
-		arg.WorkspaceID,
 		arg.Uploaders,
+		arg.WorkspaceID,
 		arg.ChannelID,
 		arg.Kind,
 		arg.BeforeAt,

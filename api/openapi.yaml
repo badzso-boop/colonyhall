@@ -4724,7 +4724,7 @@ components:
         channel: { $ref: "#/components/schemas/MyFileChannel" }
         message_id: { type: string, format: uuid, description: The message the file is attached to (absent when never sent or the channel is not readable) }
         thread_root_id: { type: string, format: uuid }
-        shared_count: { type: integer, description: How many other live files in the workspace have the same content (it stays stored for them) }
+        shared_count: { type: integer, description: "How many of the caller's (or their agents') other live files have the same content (it stays stored for them); other people's copies are not counted" }
         uploaded_by: { type: string, format: uuid, description: "uploader=agents: the agent" }
     MyFileChannel:
       type: object

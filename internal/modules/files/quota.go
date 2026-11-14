@@ -197,8 +197,10 @@ type MyFile struct {
 	// when it was never sent); the service fills ThreadRootID.
 	MessageID    ids.ID
 	ThreadRootID ids.ID
-	// SharedCount is how many other live files in the workspace have the
-	// same content (deleting this one keeps the content for them).
+	// SharedCount is how many other live files of the same uploaders (the
+	// caller and their agents) have the same content (deleting this one
+	// keeps the content for them). Other people's copies are not counted:
+	// that would tell the caller who else holds a given file.
 	SharedCount int
 }
 

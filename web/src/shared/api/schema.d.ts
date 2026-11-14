@@ -5032,7 +5032,7 @@ export interface components {
             message_id?: string;
             /** Format: uuid */
             thread_root_id?: string;
-            /** @description How many other live files in the workspace have the same content (it stays stored for them) */
+            /** @description How many of the caller's (or their agents') other live files have the same content (it stays stored for them); other people's copies are not counted */
             shared_count: number;
             /**
              * Format: uuid
