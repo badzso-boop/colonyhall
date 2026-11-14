@@ -34,6 +34,13 @@ sh install.sh            # downloads and verifies colony, then starts `colony se
 - Behind a reverse proxy, list the proxy in `COLONY_TRUSTED_PROXIES`; otherwise `X-Forwarded-For` is ignored.
 - The server container runs with a read-only root, no capabilities, `no-new-privileges`, and memory (1 GB) and process (256) limits: `COLONY_MEM_LIMIT`, `COLONY_GOMEMLIMIT`, `COLONY_PIDS_LIMIT`. `colony setup --server --upgrade` adds these lines to older installations.
 
+### Storage and quota
+
+- **My files** (in the user menu and the profile): everyone sees the files they and their agents uploaded, and can delete them. Nobody can delete someone else's file, the owner included. A deleted file shows as "File deleted" in its messages; its content leaves the files volume at the next hourly maintenance once nothing else references it.
+- **Storage card** (System status, and Settings → Files): the workspace's usage (attachments, chat and search data, other data), when the database share was last estimated, and the state. The owner never sees who uploaded what.
+- **Quota:** the owner sets it there in GB; empty or 0 is unlimited (the default, so an upgrade changes nothing). Above 80% and 95% the owner gets a DM from the "Colonyhall" system account, and the owner and admins see a banner under the header. When it is full, uploads fail with a clear error and the guards do not wake the agents until there is room; messages still work. Make room by deleting files (everyone their own) or by raising the quota.
+- **Upgrade:** migration `00059` adds two columns and two indexes to `file` and the `workspace_storage` table. The usage is computed by the first hourly maintenance (it also runs at start-up); until then the card shows no database share.
+
 ### Several customers on one server (multi-tenant mode)
 
 Off by default. When on, every workspace has its own subdomain (`<slug>.<base domain>`). Details: `docs/02-muszaki-specifikacio.md` and `docs/23-elkulonites.md` (Hungarian).
