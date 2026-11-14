@@ -412,5 +412,6 @@
     "client": "Kliens",
     "overview": "Áttekintés",
     "notYours": "A részleteit (futások, mappák, terminálok) csak a tulajdonosa és az adminok látják."
-  }
+  },
+  "storagePaused": "Szünetel: megtelt a tárhely"
 }

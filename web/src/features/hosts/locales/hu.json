@@ -306,5 +306,6 @@
       "badToken": "Ez nem úgy néz ki, mint a claude setup-token kimenete (egy sor, szóköz nélkül).",
       "error": "Nem sikerült. Próbáld újra."
     }
-  }
+  },
+  "storagePaused": "Szünetel: megtelt a tárhely"
 }

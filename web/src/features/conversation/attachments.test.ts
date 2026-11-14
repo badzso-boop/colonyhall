@@ -16,3 +16,11 @@ test("the tray: add, progress, done, error, retry, remove", () => {
   expect(trayState(s)).toEqual({ busy: false, fileIds: ["f1"], failed: false });
   expect(trayReducer(s, { type: "clear" })).toEqual([]);
 });
+
+test("a full storage (507) is its own error with the numbers, not retried", () => {
+  let s: Attachment[] = trayReducer([], { type: "add", items: [{ key: 1, file: f("a.bin") }] });
+  s = trayReducer(s, { type: "error", key: 1, error: "storage_full", full: { used: 950, quota: 1000 } });
+  expect(s[0]).toMatchObject({ status: "error", error: "storage_full", full: { used: 950, quota: 1000 } });
+  s = trayReducer(s, { type: "retry", key: 1 });
+  expect(s[0]!.full).toBeUndefined();
+});

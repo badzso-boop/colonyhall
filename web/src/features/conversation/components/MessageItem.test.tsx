@@ -171,3 +171,12 @@ test("someone else's message has no retract; reactions toggle with their meaning
   fireEvent.click(screen.getByRole("button", { name: /👎 nem ért egyet/ }));
   await waitFor(() => expect(calls.filter((c) => c.path.includes("/reactions/")).map((c) => c.method)).toEqual(["DELETE", "PUT"]));
 });
+
+test("a deleted attachment shows only “Fájl törölve”: no name, no size, no link", () => {
+  setup(msg({ body: "itt a terv", attachments: [{ id: "f1", name: "", mime: "", size: 0, deleted: true }, { id: "f2", name: "ok.txt", mime: "text/plain", size: 2048 }] }));
+  expect(screen.getByText("Fájl törölve")).toBeTruthy();
+  expect(screen.getByText("ok.txt")).toBeTruthy();
+  const links = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+  expect(links).not.toContain("/api/v1/files/f1/content");
+  expect(document.querySelector("img[src*=\"/files/f1/\"]")).toBeNull();
+});

@@ -52,7 +52,8 @@
     "commandsLabel": "Parancsok",
     "noAgent": "Ebben a beszélgetésben nincs agent.",
     "schedule": "Ütemezés…",
-    "questions": "Nyitott kérdések"
+    "questions": "Nyitott kérdések",
+    "storageFull": "Megtelt a tárhely"
   },
   "commands": {
     "schedule": "Egyszeri ütemezett üzenet",
@@ -92,7 +93,8 @@
     "reaction": {
       "agree": "👍 egyetértés (az agent így olvassa)",
       "disagree": "👎 nem ért egyet (az agent így olvassa)"
-    }
+    },
+    "fileDeleted": "Fájl törölve"
   },
   "new": {
     "close": "Bezárás",

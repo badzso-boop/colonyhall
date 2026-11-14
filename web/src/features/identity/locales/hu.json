@@ -21,7 +21,8 @@
     "saved": "Profil mentve",
     "failed": "A profilt nem sikerült menteni.",
     "localTime": "Helyi idő: {{time}} ({{zone}})",
-    "label": "{{name}} profilja"
+    "label": "{{name}} profilja",
+    "myFiles": "Fájljaim: amit feltöltöttél, és a törlésük"
   },
   "about": {
     "line": "Colonyhall {{version}} · {{license}}",

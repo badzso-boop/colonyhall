@@ -412,5 +412,6 @@
     "client": "Client",
     "overview": "Overview",
     "notYours": "Its details (runs, folders, terminals) are visible to its owner and the admins only."
-  }
+  },
+  "storagePaused": "Paused: workspace storage full"
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { uploadFile, ApiError } from "@/shared/api";
+import { storageFull } from "@/features/files";
 
 // The composer's attachment tray (round 31, part 5): uploads start at
 // once, sending waits for running uploads, failures can be retried.
@@ -10,15 +11,19 @@ export type Attachment = {
   status: "uploading" | "done" | "error";
   progress: number;
   fileId?: string;
-  /** "too_large" for a 413, otherwise a generic failure. */
-  error?: "too_large" | "failed";
+  /** "too_large" for a 413, "storage_full" for a 507 (round 54), otherwise a generic failure. */
+  error?: UploadError;
+  /** The workspace's usage and quota of a "storage_full" error. */
+  full?: { used: number; quota: number };
 };
+
+export type UploadError = "too_large" | "storage_full" | "failed";
 
 export type TrayAction =
   | { type: "add"; items: Array<{ key: number; file: File }> }
   | { type: "progress"; key: number; progress: number }
   | { type: "done"; key: number; fileId: string }
-  | { type: "error"; key: number; error: "too_large" | "failed" }
+  | { type: "error"; key: number; error: UploadError; full?: { used: number; quota: number } }
   | { type: "retry"; key: number }
   | { type: "remove"; key: number }
   | { type: "clear" };
@@ -33,9 +38,9 @@ export function trayReducer(items: Attachment[], a: TrayAction): Attachment[] {
     case "done":
       return patch(a.key, { status: "done", progress: 1, fileId: a.fileId });
     case "error":
-      return patch(a.key, { status: "error", error: a.error });
+      return patch(a.key, { status: "error", error: a.error, full: a.full });
     case "retry":
-      return patch(a.key, { status: "uploading", progress: 0, error: undefined });
+      return patch(a.key, { status: "uploading", progress: 0, error: undefined, full: undefined });
     case "remove":
       return items.filter((i) => i.key !== a.key);
     case "clear":
@@ -67,7 +72,9 @@ export function useAttachments(channelId: string) {
         .then((f) => dispatch({ type: "done", key, fileId: f.id }))
         .catch((e: unknown) => {
           if (e instanceof DOMException && e.name === "AbortError") return;
-          dispatch({ type: "error", key, error: e instanceof ApiError && e.status === 413 ? "too_large" : "failed" });
+          const full = storageFull(e);
+          if (full) dispatch({ type: "error", key, error: "storage_full", full });
+          else dispatch({ type: "error", key, error: e instanceof ApiError && e.status === 413 ? "too_large" : "failed" });
         })
         .finally(() => controllers.current.delete(key));
     },

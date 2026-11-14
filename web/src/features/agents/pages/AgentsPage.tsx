@@ -101,6 +101,7 @@ export default function AgentsPage() {
         </span>
         <span className="flex flex-wrap items-center gap-1.5 text-meta">
           <Badge tone={stateTone[r.state]}>{t(`state.${r.state}`)}</Badge>
+          {r.host?.report?.storage_paused && r.state !== "archived" ? <Badge tone="warning">{t("storagePaused")}</Badge> : null}
           {r.config ? (
             <span className="text-fg-muted">
               <Highlight text={`${r.config.client} · ${r.config.model || "–"}`} query={q} />

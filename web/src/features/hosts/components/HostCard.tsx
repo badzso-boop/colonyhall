@@ -61,6 +61,9 @@ export function HostCard({ host, now, selected }: { host: Host; now: Date; selec
             {t("agyBadge", { count: r.agy_limits.length })}
           </span>
         ) : null}
+        {r.storage_paused ? (
+          <span className="rounded-full border border-warning/40 bg-warning-soft px-1.5 text-meta text-warning">{t("storagePaused")}</span>
+        ) : null}
         <OnlineBadge host={host} now={now} />
       </div>
       <p className="mt-0.5 truncate text-meta text-fg-muted">

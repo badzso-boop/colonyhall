@@ -306,5 +306,6 @@
       "badToken": "This does not look like the output of claude setup-token (one line, no spaces).",
       "error": "That did not work. Try again."
     }
-  }
+  },
+  "storagePaused": "Paused: workspace storage full"
 }

@@ -29,3 +29,16 @@ test("ranges for large files", () => {
   expect(rangeFor(5 * 1024 * 1024, "start")).toBe("bytes=0-1048575");
   expect(rangeFor(5 * 1024 * 1024, "end")).toBe(`bytes=${4 * 1024 * 1024}-${5 * 1024 * 1024 - 1}`);
 });
+
+test("My files: the message link and the channel filter", async () => {
+  const { channelOptions, messageLink } = await import("./model");
+  const ch = { id: "c1", name: "general", kind: "public" };
+  expect(messageLink({ channel: ch, message_id: "m1" })).toBe("/c/c1");
+  expect(messageLink({ channel: ch, message_id: "m2", thread_root_id: "r1" })).toBe("/c/c1?thread=r1");
+  expect(messageLink({ message_id: "m1" })).toBeNull();
+  expect(messageLink({ channel: ch })).toBeNull();
+  const opts = channelOptions([{ channel: ch }, { channel: { id: "d1", name: "dm-abc", kind: "dm" } }, {}], new Map([["c0", "#alpha"]]), "DM");
+  expect(new Map(opts)).toEqual(new Map([["c0", "#alpha"], ["d1", "DM"], ["c1", "#general"]]));
+  const names = [...opts.values()];
+  expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+});

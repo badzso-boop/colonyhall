@@ -7,6 +7,7 @@ import { registerAgentEvents } from "@/features/agents";
 import { registerApprovalEvents } from "@/features/approvals";
 import { registerCompactionEvents } from "@/features/compaction";
 import { registerConversationEvents } from "@/features/conversation";
+import { registerFilesEvents } from "@/features/files";
 import { registerHostEvents } from "@/features/hosts";
 import { registerIdentityEvents, useSession } from "@/features/identity";
 import { registerLeaseEvents } from "@/features/leases";
@@ -49,6 +50,7 @@ function useLiveUpdates(enabled: boolean) {
       registerLeaseEvents(qc),
       registerRulesEvents(qc),
       registerHostEvents(qc),
+      registerFilesEvents(qc),
     ];
     const ws = new WsClient(wsURL());
     ws.start();

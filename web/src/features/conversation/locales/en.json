@@ -52,7 +52,8 @@
     "commandsLabel": "Commands",
     "noAgent": "There is no agent in this conversation.",
     "schedule": "Schedule…",
-    "questions": "Open questions"
+    "questions": "Open questions",
+    "storageFull": "Storage full"
   },
   "commands": {
     "schedule": "A one-off scheduled message",
@@ -92,7 +93,8 @@
     "reaction": {
       "agree": "👍 agree (how the agent reads it)",
       "disagree": "👎 disagree (how the agent reads it)"
-    }
+    },
+    "fileDeleted": "File deleted"
   },
   "new": {
     "close": "Close",

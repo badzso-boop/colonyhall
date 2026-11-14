@@ -6,6 +6,8 @@ type S = components["schemas"];
 export type EventPayloads = {
   "message.created": S["EventMessageCreated"];
   "message.retracted": S["EventMessageRetracted"];
+  "file.deleted": S["EventFileDeleted"];
+  "workspace.storage_state_changed": S["EventStorageState"];
   "reaction.added": S["EventReaction"];
   "reaction.removed": S["EventReaction"];
   "channel.created": S["EventChannelCreated"];

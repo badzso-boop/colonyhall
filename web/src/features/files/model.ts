@@ -62,3 +62,18 @@ export const RANGE = 1024 * 1024;
 export function rangeFor(size: number, part: "start" | "end"): string {
   return part === "start" ? `bytes=0-${RANGE - 1}` : `bytes=${Math.max(0, size - RANGE)}-${size - 1}`;
 }
+
+type ListedFile = { channel?: { id: string; name: string; kind: string }; message_id?: string; thread_root_id?: string };
+
+/** "My files" channel filter: the channels seen so far plus those of these rows, by name. */
+export function channelOptions(rows: ListedFile[], seen: Map<string, string>, dmLabel: string): Map<string, string> {
+  const all = new Map(seen);
+  for (const r of rows) if (r.channel) all.set(r.channel.id, r.channel.kind === "dm" ? dmLabel : `#${r.channel.name}`);
+  return new Map([...all].sort((a, b) => a[1].localeCompare(b[1])));
+}
+
+/** Where a listed file's message is: its thread, or the channel; null when it cannot be shown. */
+export function messageLink(f: ListedFile): string | null {
+  if (!f.channel || !f.message_id) return null;
+  return f.thread_root_id ? `/c/${f.channel.id}?thread=${f.thread_root_id}` : `/c/${f.channel.id}`;
+}

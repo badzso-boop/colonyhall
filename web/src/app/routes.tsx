@@ -4,6 +4,7 @@ import { AgentsPage } from "@/features/agents";
 import { ConversationPage, ThreadsPage } from "@/features/conversation";
 import { DecisionsPage } from "@/features/decisions";
 import { DesignPage } from "@/features/design";
+import { MyFilesPage } from "@/features/files";
 import { HostsPage } from "@/features/hosts";
 import { LoginPage } from "@/features/identity";
 import { LeasesPage } from "@/features/leases";
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="tasks" element={<TasksPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="notes" element={<NotesPage />} />
+        <Route path="files" element={<MyFilesPage />} />
         <Route path="schedules" element={<SchedulesPage />} />
         <Route path="wiki" element={<WikiIndexPage />} />
         <Route path="wiki/:slug" element={<WikiTopicPage />} />

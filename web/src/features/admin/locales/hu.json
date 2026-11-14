@@ -407,6 +407,27 @@
         "password": "jelszócsere",
         "claude_login": "Claude-belépés"
       }
+    },
+    "storage": {
+      "title": "Tárhely",
+      "used": "Foglalt",
+      "ofQuota": "{{used}} / {{quota}} ({{pct}}%)",
+      "attachments": "Csatolmányok",
+      "chatSearch": "Chat- és keresési adatok",
+      "other": "Egyéb adat",
+      "measured": "Adatbázis-becslés",
+      "notYet": "Még nincs (óránként)",
+      "quota": "Keret",
+      "unlimited": "Korlátlan",
+      "quotaGb": "Keret (GB)",
+      "save": "Mentés",
+      "quotaHint": "Üres vagy 0: korlátlan. 80% és 95% fölött figyelmeztetést kapsz; ha megtelik, a feltöltés hibát ad, és az őrök nem ébresztik az agenteket, amíg nincs hely. Üzenetet mindig lehet írni.",
+      "state": {
+        "ok": "Van hely",
+        "warning_80": "80% fölött",
+        "warning_95": "95% fölött",
+        "full": "Megtelt: a feltöltés hibát ad, az agentek szünetelnek"
+      }
     }
   }
 }

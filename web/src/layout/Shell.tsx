@@ -9,6 +9,8 @@ import { place, usePanes } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
 import { AgentDialogs } from "@/features/agents";
 import { ScheduleBuilderHost } from "@/features/schedules";
+import { StorageBanner } from "@/features/files";
+import { useSession } from "@/features/identity";
 import { BottomBar } from "./BottomBar";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionBar } from "./ConnectionBar";
@@ -39,6 +41,8 @@ export function Shell() {
   useDocumentTitle(useMentionTotal(), t("common:appName"));
   const navigate = useNavigate();
   const order = useConversationOrder();
+  const role = useSession().data?.actor.role;
+  const admin = role === "owner" || role === "admin";
 
   // Shortcuts of the frame (round 31 part 8); Radix closes dialogs on Esc itself.
   useShortcut("mod+k", "global", "palette", () => openOverlay("palette"));
@@ -86,6 +90,7 @@ export function Shell() {
       </a>
       <Header onToggleSidebar={toggle} />
       <ConnectionBar />
+      <StorageBanner admin={admin} />
       <div className="relative flex min-h-0 flex-1">
         <aside
           aria-label={t("sidebar")}

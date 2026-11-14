@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
 import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";
-import { activeMention, cn, commandList, insertMention, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
+import { activeMention, cn, commandList, formatBytes, insertMention, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
-import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
+import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, Notice, toast } from "@/shared/ui";
+import { localeOf } from "@/shared/i18n";
 import { useActors, useSession } from "@/features/identity";
 import { answerSuggestions, useAnswerQuestion, useOpenQuestions } from "@/features/questions";
 import { useCreateSchedule, useRetract, useSendMessage } from "../api";
@@ -22,9 +24,19 @@ type Props = {
 };
 
 function Tray({ tray }: { tray: AttachmentTray }) {
-  const { t } = useTranslation("conversation");
+  const { t, i18n } = useTranslation("conversation");
   if (!tray.items.length) return null;
+  const full = tray.items.find((a) => a.error === "storage_full")?.full;
+  const locale = localeOf(i18n.language);
   return (
+    <>
+    {full ? (
+      <div className="px-2.5 pt-2.5">
+        <Notice tone="danger" action={<Link to="/files" className="text-meta font-medium underline">{t("files:my.title")}</Link>}>
+          {t("files:full", { used: formatBytes(full.used, locale), quota: formatBytes(full.quota, locale) })}
+        </Notice>
+      </div>
+    ) : null}
     <ul className="flex flex-wrap gap-2 px-2.5 pt-2.5">
       {tray.items.map((a) => (
         <li key={a.key} className="relative flex min-w-48 items-center gap-2 overflow-hidden rounded-md border border-border bg-surface-sunken py-1.5 pr-1 pl-2 text-meta">
@@ -37,11 +49,11 @@ function Tray({ tray }: { tray: AttachmentTray }) {
               {a.status === "uploading"
                 ? t("composer.uploading", { pct: Math.round(a.progress * 100) })
                 : a.status === "error"
-                  ? t(a.error === "too_large" ? "composer.tooLarge" : "composer.failed")
+                  ? t(a.error === "too_large" ? "composer.tooLarge" : a.error === "storage_full" ? "composer.storageFull" : "composer.failed")
                   : `${Math.max(1, Math.round(a.file.size / 1024))} KB`}
             </span>
           </span>
-          {a.status === "error" && a.error !== "too_large" ? (
+          {a.status === "error" && a.error !== "too_large" && a.error !== "storage_full" ? (
             <IconButton size="sm" label={t("composer.retry")} icon={<RotateCw className="size-3.5" />} onClick={() => tray.retry(a)} />
           ) : null}
           <IconButton size="sm" label={t("composer.remove", { name: a.file.name })} icon={<X className="size-3.5" />} onClick={() => tray.remove(a.key)} />
@@ -49,6 +61,7 @@ function Tray({ tray }: { tray: AttachmentTray }) {
         </li>
       ))}
     </ul>
+    </>
   );
 }
 

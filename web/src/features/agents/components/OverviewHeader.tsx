@@ -52,6 +52,7 @@ export function OverviewHeader({ overview, state, hostColor, admin }: { overview
             </Badge>
           ) : null}
           {assignment ? <Badge>{`${assignment.client} · ${assignment.model}`}</Badge> : null}
+          {assignment?.storage_paused && !archived ? <Badge tone="warning">{t("storagePaused")}</Badge> : null}
           {assignment ? (
             assignment.sandbox ? (
               <Badge tone="info">

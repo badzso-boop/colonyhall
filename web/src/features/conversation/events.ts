@@ -55,6 +55,11 @@ export function registerConversationEvents(qc: QueryClient): () => void {
       reloadChannel(e.data.channel_id);
       if (e.data.thread_root_id) void qc.invalidateQueries({ queryKey: conversationKeys.thread(e.data.thread_root_id) });
     }),
+    // Round 54: a deleted file shows "File deleted" in every message that carried it.
+    onEvent("file.deleted", (e) => {
+      reloadChannel(e.data.channel_id);
+      void qc.invalidateQueries({ queryKey: ["conversation", "thread"] });
+    }),
     onEvent("reaction.added", (e) => reloadChannel(e.data.channel_id)),
     onEvent("reaction.removed", (e) => reloadChannel(e.data.channel_id)),
     onEvent("channel.created", channels),
