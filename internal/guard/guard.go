@@ -118,6 +118,12 @@ type Agent struct {
 	// agents: their config folder (and log) is writable from the sandbox, so
 	// what it says must not stop other agents on the machine.
 	AgyScope string
+	// Storage stops runs while the workspace storage is full (round 54);
+	// nil never stops them.
+	Storage *StorageGate
+	// OnStorageEvent is called when the server announces a storage state
+	// change, so the machine refetches its config at once.
+	OnStorageEvent func()
 
 	fileFetchMu       sync.Mutex
 	fileFetchInFlight map[string]bool
@@ -330,6 +336,12 @@ func (a *Agent) Tick(ctx context.Context) error {
 	a.setMe(me)
 	a.halted.Store(me.Halted)
 	if me.Halted {
+		return nil
+	}
+	// The workspace storage is full: no run of any kind (direct, work,
+	// scheduled, summaries) until there is room; the items stay in the
+	// inbox, and the machine wakes every agent when the state changes.
+	if a.Storage.Full() {
 		return nil
 	}
 	_, total, err := a.Client.Inbox(ctx, 1)
