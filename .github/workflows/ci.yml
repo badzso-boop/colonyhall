@@ -23,10 +23,11 @@ on:
 
 # Where the jobs run: the repository variable CI_RUNNER, a JSON array of
 # runner labels (the maintainer's homelab runner: ["self-hosted","linux",
-# "colonyhall"]). Unset or empty: GitHub-hosted ubuntu-24.04. Self-hosted
-# only while the repository is private: on a public repository a stranger's
-# pull request would run on that machine. The timeouts allow for its two
-# slower cores.
+# "colonyhall"]). Unset or empty: GitHub-hosted ubuntu-24.04. The workflow
+# itself allows the self-hosted runner only while the repository is private
+# and never for a pull request from a fork, so a stranger's code can never
+# run on that machine, even if the variable is left set. The timeouts allow
+# for its two slower cores.
 # A newer push to the same branch or pull request cancels the older run.
 concurrency:
   group: ci-${{ github.ref }}
@@ -44,7 +45,7 @@ env:
 
 jobs:
   changes:
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -92,7 +93,7 @@ jobs:
   go-test:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -118,7 +119,7 @@ jobs:
   go-e2e:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -146,7 +147,7 @@ jobs:
   go-race:
     needs: changes
     if: needs.changes.outputs.race == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -172,7 +173,7 @@ jobs:
   go-pg:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -204,7 +205,7 @@ jobs:
   go-lint:
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -222,7 +223,7 @@ jobs:
   gen-check:
     needs: changes
     if: needs.changes.outputs.gen == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -244,7 +245,7 @@ jobs:
   web-typecheck:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -262,7 +263,7 @@ jobs:
   web-lint:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -284,7 +285,7 @@ jobs:
   web-test:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -311,7 +312,7 @@ jobs:
   devpage-test:
     needs: changes
     if: needs.changes.outputs.devpage == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -327,7 +328,7 @@ jobs:
   shellcheck:
     needs: changes
     if: needs.changes.outputs.shell == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -340,7 +341,7 @@ jobs:
   # No secrets and no private infrastructure details (addresses, host and
   # user names) in the tracked files: on every run, docs-only changes too.
   privacy:
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -354,7 +355,7 @@ jobs:
   actionlint:
     needs: changes
     if: needs.changes.outputs.actions == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -367,7 +368,7 @@ jobs:
   vuln:
     needs: changes
     if: needs.changes.outputs.vuln == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -388,7 +389,7 @@ jobs:
   install-test:
     needs: changes
     if: needs.changes.outputs.install == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -406,7 +407,7 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -433,7 +434,7 @@ jobs:
   docker-image:
     needs: [changes, build]
     if: needs.changes.outputs.docker == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -457,7 +458,7 @@ jobs:
   e2e-browser:
     needs: [changes, build]
     if: needs.changes.outputs.browser == 'true'
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -490,7 +491,7 @@ jobs:
       - docker-image
       - e2e-browser
     if: always()
-    runs-on: ${{ vars.CI_RUNNER && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (vars.CI_RUNNER && github.event.repository.private && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.CI_RUNNER) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
