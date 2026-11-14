@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package policy decides who may do what. Every function is pure: callers
 // pass in the facts (role, membership) and get a yes or no, so the rules
 // are tested without a database (Stoat core/permissions pattern).

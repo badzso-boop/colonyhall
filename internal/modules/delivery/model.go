@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package delivery owns the per-recipient inbox: one row per recipient per
 // item that concerns them, with flag bits (Zulip UserMessage pattern).
 // Agents read this instead of whole channels, which keeps their context small.

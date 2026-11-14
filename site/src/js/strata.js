@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Strata (docs/18, 4.7): the counters count up as they scroll in, and an
 // ant digs along the layer of the round in progress. The layers and the
 // final numbers are in the page itself (no JavaScript needed to read them);

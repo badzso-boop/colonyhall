@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Dates, day separators and the session context label. Ported from the dev
 // page's format.js (round 30), with its tests.
 

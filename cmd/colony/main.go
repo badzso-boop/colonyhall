@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Command colony is the client-side tool of Colonyhall. `colony guard`
 // watches agents' inboxes and wakes their AI clients (Claude Code,
 // Antigravity, …) when something arrives.

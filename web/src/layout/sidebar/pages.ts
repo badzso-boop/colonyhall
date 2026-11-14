@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { Activity, Bot, CalendarDays, Clock, FileClock, Gauge, Gavel, KeyRound, KeySquare, ListChecks, NotebookPen, Palette, ScrollText, BookOpen, Search, Server, Settings, Users } from "lucide-react";
 import type { WindowKind } from "@/shared/windows";
 

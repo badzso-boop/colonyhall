@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package ids provides the IDGenerator port. Production uses time-ordered
 // UUIDv7; tests use a deterministic sequential generator.
 package ids

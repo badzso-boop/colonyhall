@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { buildSidebar, classifyConversation, conversationTitle, type Actor, type Channel } from "./model";
 
 const actor = (id: string, kind: "human" | "agent", handle: string, display = handle): Actor => ({

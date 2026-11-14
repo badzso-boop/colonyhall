@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package httpapi exposes hosts over REST: admin routes (session or
 // bearer) and guard routes (host token).
 package httpapi

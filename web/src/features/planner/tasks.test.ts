@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { firstLine, groupTasks, neighbours, nextStatus, type Task } from "./tasks";
 
 const task = (id: string, status: Task["status"], position: number): Task => ({

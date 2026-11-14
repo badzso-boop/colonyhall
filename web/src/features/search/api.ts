@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/shared/api";
 import type { SearchMode } from "./model";

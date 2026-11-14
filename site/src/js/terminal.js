@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The terminal chamber (docs/18, 4.6). The terminal (always dark, as in the
 // web app) types the install while it is on screen: the commands, then
 // `colony setup`'s questions and answers with an invented machine name.

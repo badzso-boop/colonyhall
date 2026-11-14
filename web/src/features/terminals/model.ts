@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { Terminal } from "./api";
 
 /** The status badge: its i18n key, the exit code and the tone. */

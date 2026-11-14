@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { X } from "lucide-react";
 import { cn } from "@/shared/lib";
 import { IconButton } from "./IconButton";

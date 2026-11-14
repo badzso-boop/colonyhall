@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package schedule owns scheduled messages. At the given time the server
 // posts the message in the creator's name; the mentioned agent then wakes
 // up exactly as if the person had written it at that moment, so every rule

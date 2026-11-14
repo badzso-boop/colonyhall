@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package postgres implements search.Store on Postgres with full-text
 // search (hungarian and simple configurations) and pgvector.
 package postgres

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The Colonyhall mark, defined once: an ant seen from above (head, thorax,
 // abdomen, two antennae, three pairs of legs) on a 24×24 grid. This script
 // writes every brand file from it, so the SVGs and PNGs cannot drift:

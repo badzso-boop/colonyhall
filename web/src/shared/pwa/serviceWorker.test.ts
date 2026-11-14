@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { registerServiceWorker } from "./serviceWorker";
 
 // A minimal fake of the registration API: enough to drive the update flow.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package runs keeps what agents' runs leave behind. For now: error
 // details, which the chat must not show (it only gets "I ran into an error"
 // and a reference) and which only humans may read.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package storetest is the shared contract test suite for every Store
 // implementation (Mattermost storetest pattern). The same tests run against
 // the in-memory reference stores and against Postgres, which proves the two

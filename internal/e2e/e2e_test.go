@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package e2e runs whole flows against an in-process server with the
 // in-memory stores, a manual clock and sequential IDs, so every run is
 // deterministic and needs no database or AI.

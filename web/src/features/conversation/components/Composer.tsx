@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, RotateCw, SendHorizontal, SquareTerminal, X } from "lucide-react";

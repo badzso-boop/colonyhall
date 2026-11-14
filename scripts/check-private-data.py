@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 """Fail when the maintainer's private infrastructure shows up in a tracked file.
 
 The maintainer's real addresses, host and user names and paths live outside

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package palette is the fixed set of colours for machines and agents
 // (round 33). The web client maps each name to theme tokens; the server
 // stores and checks only the name, never a hex value.

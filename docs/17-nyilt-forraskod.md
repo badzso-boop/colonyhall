@@ -93,7 +93,7 @@ Keresett minták: a karbantartó Tailscale- és LAN-címei, a szerver felhaszná
 
 - **A „Forráskód” link (AGPL 13. pont):** új környezeti változó `COLONY_SOURCE_URL` (alapból a nyilvános repó címe); a szerver a `GET /api/v1/version` új végponton adja vissza a verzióval együtt; a PWA a Beállítások / Névjegy részen és a bejelentkező oldal láblécében mutatja. Aki módosított változatot üzemeltet, a saját forrására állítja.
 - **A CLA aláírása:** a `contributor-assistant/github-action` (külső szolgáltatás és titok nélkül, az aláírások a repó egy külön ágában); a szöveg az Apache Individual CLA alapján, kiegészítve az Element-féle vállalással. Céges változat egyelőre nem kell. A hozzájárulónak egyszeri megjegyzés a PR-ben („I have read the CLA…”).
-- **Fejlécek:** nincs fájlonkénti licencfejléc; egy `LICENSE` (az AGPL-3.0 szövege), egy `NOTICE` (szerzői jog, harmadik felek), és SPDX-azonosító a `package.json`-okban.
+- **Fejlécek:** ~~nincs fájlonkénti licencfejléc~~ **Módosítva (Norbi, 2026-11-14): minden forrásfájl elején SPDX-fejléc** (`SPDX-License-Identifier: AGPL-3.0-only` és `Copyright (C) 2026 Ujj Norbert`; Go, TypeScript, JavaScript, shell, Python; a generált fájlok, a beépített harmadik fél kódja és a tesztadatok kivételével). Ellenőrzi a `scripts/check-spdx.py` a `make privacy` részeként (így a `make ci`-ben és a GitHubon is); `--fix` pótolja. Mellette marad a `LICENSE` (az AGPL-3.0 szövege), a `NOTICE` (szerzői jog, harmadik felek) és az SPDX-azonosító a `package.json`-okban. A szabály a `CONTRIBUTING.md` „Licence” részében.
 
 ## 0.4 A név
 

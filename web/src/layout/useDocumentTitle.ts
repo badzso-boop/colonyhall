@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useEffect } from "react";
 
 /** "(3) Colonyhall" and a red dot on the favicon while there are unread mentions. */

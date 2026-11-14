@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package httpapi exposes the planner over REST, for its human owner only.
 package httpapi
 

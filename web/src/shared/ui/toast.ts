@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { create } from "zustand";
 
 export type ToastAction = { label: string; run: () => void };

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 import { ExternalLink } from "lucide-react";

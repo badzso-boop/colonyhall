@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package fakeagent is a deterministic stand-in for an AI agent. It talks to
 // Colonyhall over the same MCP endpoint as a real client and answers inbox
 // items from a YAML scenario, so whole flows can be tested without any AI.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 /**
  * The pane manager (round 31, part 5): pure state and rules, no React.
  *

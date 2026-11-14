@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Components use semantic tokens only (docs/08-frontend-architektura.md, 6.):
 // no hex/rgb/hsl colours and no Tailwind default palette outside tokens.css.
 // Read from disk: Vitest imports CSS as empty, even with ?raw.

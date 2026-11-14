@@ -110,8 +110,9 @@ test-install:    ## install.sh tests in Debian, Ubuntu and Fedora containers (ne
 actionlint:      ## actionlint on every GitHub workflow (Docker image)
 	$(ACTIONLINT) -color
 
-privacy:         ## No secrets (gitleaks) and no private infrastructure details in the tracked files
+privacy:         ## No secrets (gitleaks), no private infrastructure details, and an SPDX header on every source file
 	python3 -I scripts/check-private-data.py
+	python3 -I scripts/check-spdx.py
 	git ls-files -z | tar --null --ignore-failed-read -T - -cf .cache-privacy.tar 2>/dev/null; \
 	  docker run --rm -i -v "$(CURDIR)/.gitleaks.toml":/cfg.toml:ro --entrypoint sh zricethezav/gitleaks:v8.28.0 \
 	    -c 'mkdir -p /tmp/scan && tar -xf - -C /tmp/scan && gitleaks dir /tmp/scan --config /cfg.toml --redact --no-banner' < .cache-privacy.tar; \

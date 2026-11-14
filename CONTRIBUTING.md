@@ -27,7 +27,7 @@ make ci-quick     # while you work: Go unit tests, lint, web typecheck and lint,
 make ci           # before a pull request: every CI job, in parallel, with a throwaway Postgres
 ```
 
-`make ci` is what GitHub runs (`.github/workflows/ci.yml`); a pull request needs it green. It includes `make privacy`, which fails when a tracked file contains a real address, host name or home path: use the documentation values (`192.0.2.x`, `100.64.0.x`, `example.com`, `/home/alice`).
+`make ci` is what GitHub runs (`.github/workflows/ci.yml`); a pull request needs it green. It includes `make privacy`, which fails when a source file has no licence header (see [Licence](#licence)) or a tracked file contains a real address, host name or home path: use the documentation values (`192.0.2.x`, `100.64.0.x`, `example.com`, `/home/alice`).
 
 ## How the code is organised
 
@@ -53,5 +53,15 @@ The full rules are in [CLAUDE.md](CLAUDE.md) (in Hungarian; it is also what AI c
 - Never commit secrets, `.env` files, tokens or real infrastructure details.
 
 ## Licence
+
+Every source file starts with a licence header (after a `#!` line, if there is one):
+
+```go
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+```
+
+(`#` instead of `//` in shell and Python files.) This applies to Go, TypeScript, JavaScript, shell and Python files; generated files, vendored third-party code and test data are left alone. `make privacy` (part of `make ci` and the CI) fails on a file without it, and `python3 scripts/check-spdx.py --fix` adds it. Keep the existing copyright line. Under the [CLA](CLA.md) you keep the copyright of what you write and license it to the project, so if you add substantial code to a file you may add your own line below it (`// Copyright (C) 2026 Your Name`).
+
 
 By contributing you agree that your contribution is licensed under the [AGPL-3.0-only](LICENSE) and under the terms of the [CLA](CLA.md).

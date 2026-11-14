@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The fixed palette for machines and agents (round 33; tokens.css
 // --color-hue-<name>-solid|soft|fg). The server stores the name, never hex.
 

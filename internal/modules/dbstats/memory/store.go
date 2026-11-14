@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package memory implements dbstats.Store without a database: sizes are
 // unknown, samples are kept in memory (for tests).
 package memory

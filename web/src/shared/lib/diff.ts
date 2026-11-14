@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // A line diff for the wiki history and the agent rules (round 32): our own
 // longest-common-subsequence, no dependency.
 

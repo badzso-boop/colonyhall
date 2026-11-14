@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { formatScore, groupHits, hitHref, scoreParts, searchPath, snippetParts, type SearchHit } from "./model";
 
 const hit = (over: Partial<SearchHit>): SearchHit => ({

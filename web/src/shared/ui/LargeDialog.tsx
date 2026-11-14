@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useState, type ReactNode } from "react";
 import { Dialog as RDialog } from "radix-ui";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";

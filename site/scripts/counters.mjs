@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Counts the numbers under the strata (docs/18, 4.7) from git and the
 // repository, and writes them to site/src/data/counters.json. The output is
 // committed, so the site's build needs neither the network nor the full
