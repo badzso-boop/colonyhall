@@ -63,7 +63,8 @@
     "noAgent": "Ebben a beszélgetésben nincs agent.",
     "schedule": "Ütemezés…",
     "questions": "Nyitott kérdések",
-    "alsoToChannel": "Küldés a #{{name}} csatornába is"
+    "alsoToChannel": "Küldés a #{{name}} csatornába is",
+    "emoji": "Emoji"
   },
   "commands": {
     "schedule": "Egyszeri ütemezett üzenet",
@@ -117,7 +118,8 @@
     "menu": "További műveletek",
     "reaction": {
       "agree": "👍 egyetértés (az agent így olvassa)",
-      "disagree": "👎 nem ért egyet (az agent így olvassa)"
+      "disagree": "👎 nem ért egyet (az agent így olvassa)",
+      "add": "Reakció hozzáadása"
     },
     "openLinked": "Ugrás az üzenethez",
     "repliedInThread": "↳ Válasz egy szálban – megnyitás"

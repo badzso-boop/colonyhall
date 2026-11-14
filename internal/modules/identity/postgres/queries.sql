@@ -201,3 +201,26 @@ DELETE FROM auth_failure WHERE id IN (
     LIMIT sqlc.arg(batch)::int
     FOR UPDATE SKIP LOCKED
 );
+
+-- Round 55, part C: the emoji picker's recent and frequent, per person.
+
+-- name: RecordEmojiUse :exec
+INSERT INTO emoji_use (workspace_id, actor_id, emoji, uses, last_used_at)
+VALUES (sqlc.arg(workspace_id)::uuid, sqlc.arg(actor_id)::uuid, sqlc.arg(emoji)::text, 1, sqlc.arg(at)::timestamptz)
+ON CONFLICT (actor_id, emoji) DO UPDATE
+SET uses = emoji_use.uses + 1, last_used_at = GREATEST(emoji_use.last_used_at, EXCLUDED.last_used_at);
+
+-- name: PruneEmojiUse :exec
+DELETE FROM emoji_use WHERE actor_id = sqlc.arg(actor_id)::uuid AND emoji IN (
+    SELECT e.emoji FROM emoji_use e WHERE e.actor_id = sqlc.arg(actor_id)::uuid
+    ORDER BY e.last_used_at DESC, e.emoji
+    OFFSET sqlc.arg(keep)::int
+);
+
+-- name: RecentEmoji :many
+SELECT emoji FROM emoji_use WHERE actor_id = sqlc.arg(actor_id)::uuid
+ORDER BY last_used_at DESC, emoji LIMIT sqlc.arg(lim)::int;
+
+-- name: FrequentEmoji :many
+SELECT emoji FROM emoji_use WHERE actor_id = sqlc.arg(actor_id)::uuid
+ORDER BY uses DESC, last_used_at DESC, emoji LIMIT sqlc.arg(lim)::int;

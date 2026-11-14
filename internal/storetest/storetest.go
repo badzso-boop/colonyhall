@@ -112,6 +112,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("notify level", func(t *testing.T) { testNotifyLevel(t, newBackend(t)) })
 	t.Run("saved", func(t *testing.T) { testSaved(t, newBackend(t)) })
 	t.Run("activity", func(t *testing.T) { testActivity(t, newBackend(t)) })
+	t.Run("emoji usage", func(t *testing.T) { testEmojiUsage(t, newBackend(t)) })
 }
 
 var (

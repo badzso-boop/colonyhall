@@ -63,7 +63,8 @@
     "noAgent": "There is no agent in this conversation.",
     "schedule": "Schedule…",
     "questions": "Open questions",
-    "alsoToChannel": "Also send to #{{name}}"
+    "alsoToChannel": "Also send to #{{name}}",
+    "emoji": "Emoji"
   },
   "commands": {
     "schedule": "A one-off scheduled message",
@@ -117,7 +118,8 @@
     "menu": "More actions",
     "reaction": {
       "agree": "👍 agree (how the agent reads it)",
-      "disagree": "👎 disagree (how the agent reads it)"
+      "disagree": "👎 disagree (how the agent reads it)",
+      "add": "Add a reaction"
     },
     "openLinked": "Open the message",
     "repliedInThread": "↳ Replied in a thread – open"

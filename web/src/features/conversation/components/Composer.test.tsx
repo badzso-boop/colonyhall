@@ -225,3 +225,13 @@ test("/emergency opens the press-and-hold dialog for an admin; Enter stops nothi
   await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
   expect(sent).toHaveLength(0);
 });
+
+test(":word suggests emoji and Enter puts the emoji in its place", async () => {
+  const { box, sent } = setup();
+  fireEvent.change(box, { target: { value: "szia :thu", selectionStart: 9 } });
+  const list = await screen.findByRole("listbox", { name: "Emoji" }, { timeout: 10_000 });
+  expect(list.textContent).toContain("👍");
+  fireEvent.keyDown(box, { key: "Enter" });
+  expect(box.value).toBe("szia 👍 ");
+  await waitFor(() => expect(sent).toContainEqual({ path: "/api/v1/me/emoji", body: { emoji: "👍" } }));
+});

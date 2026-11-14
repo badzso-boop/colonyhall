@@ -4,6 +4,7 @@ import { CalendarClock, Camera, FileText, FolderOpen, Image as ImageIcon, Paperc
 import { activeMention, cn, insertMention, matchCommands, openScheduleBuilder, parseCommand, randomId, rankMentions, useComposerInsert, useShortcut } from "@/shared/lib";
 import { useWidth } from "@/shared/hooks";
 import { Avatar, IconButton, Menu, MenuContent, MenuItem, MenuTrigger, toast } from "@/shared/ui";
+import { EmojiButton, emojiName, insertAtColon, useEmojiSuggest, useRecordEmoji } from "@/features/emoji";
 import { useActors, useSession } from "@/features/identity";
 import { answerSuggestions, useAnswerQuestion, useOpenQuestions } from "@/features/questions";
 import { useCreateSchedule, useRetract, useSendMessage } from "../api";
@@ -58,7 +59,7 @@ function Tray({ tray }: { tray: AttachmentTray }) {
 
 /** The message composer (round 31, part 5). */
 export function Composer({ channelId, threadRootId, placeholder, memberIds, tray, readOnly, alsoToChannel, onOpenFiles, onOpenTerminals }: Props) {
-  const { t } = useTranslation("conversation");
+  const { t, i18n } = useTranslation("conversation");
   const width = useWidth();
   const actors = useActors();
   const session = useSession();
@@ -101,8 +102,18 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
   );
   const slash = matchCommands(text, { admin: slashRun.admin });
   const questionList = answerSuggestions(text, openQuestions.data ?? []);
-  const popup: "mention" | "slash" | "question" | null = mentionList.length ? "mention" : slash.length ? "slash" : questionList.length ? "question" : null;
-  const options = popup === "mention" ? mentionList.length : popup === "question" ? questionList.length : slash.length;
+  const emojiList = useEmojiSuggest(text, caret);
+  const recordEmoji = useRecordEmoji();
+  const popup: "mention" | "slash" | "question" | "emoji" | null = mentionList.length
+    ? "mention"
+    : slash.length
+      ? "slash"
+      : questionList.length
+        ? "question"
+        : emojiList.length
+          ? "emoji"
+          : null;
+  const options = popup === "mention" ? mentionList.length : popup === "question" ? questionList.length : popup === "emoji" ? emojiList.length : slash.length;
 
   if (readOnly) {
     return <p className="m-4 mt-0 rounded-lg border border-border bg-surface-sunken px-3 py-2.5 text-ui text-fg-muted">{t("composer.readOnly")}</p>;
@@ -122,6 +133,14 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     } else if (popup === "question") {
       const q = questionList[i];
       if (q) setText(`/answer ${q.formatted_number} `);
+    } else if (popup === "emoji") {
+      const e = emojiList[i];
+      if (!e) return;
+      const next = insertAtColon(text, caret, e.char);
+      setText(next.text);
+      setCaret(next.caret);
+      recordEmoji.mutate(e.char);
+      requestAnimationFrame(() => area.current?.setSelectionRange(next.caret, next.caret));
     }
     setPick(0);
     area.current?.focus();
@@ -215,6 +234,20 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
     }
   };
 
+  const insertEmoji = (char: string) => {
+    const el = area.current;
+    const at = el ? el.selectionStart : text.length;
+    const end = el ? el.selectionEnd : text.length;
+    const next = text.slice(0, at) + char + text.slice(end);
+    const pos = at + char.length;
+    setText(next);
+    setCaret(pos);
+    requestAnimationFrame(() => {
+      area.current?.focus();
+      area.current?.setSelectionRange(pos, pos);
+    });
+  };
+
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
     if (files.length) {
@@ -228,7 +261,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
       {popup ? (
         <ul
           role="listbox"
-          aria-label={t(popup === "mention" ? "composer.mentions" : popup === "question" ? "composer.questions" : "composer.commandsLabel")}
+          aria-label={t(popup === "mention" ? "composer.mentions" : popup === "question" ? "composer.questions" : popup === "emoji" ? "composer.emoji" : "composer.commandsLabel")}
           className="absolute inset-x-0 bottom-full z-(--z-overlay) mb-1 max-h-72 overflow-y-auto rounded-md border border-border bg-surface-raised p-1 shadow-overlay"
         >
           {popup === "mention"
@@ -248,6 +281,23 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
                   <span className="truncate text-meta text-fg-muted">{a.display_name}</span>
                 </li>
               ))
+            : popup === "emoji"
+              ? emojiList.map((e, i) => (
+                  <li
+                    key={e.char}
+                    role="option"
+                    aria-selected={i === pick}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      choose(i);
+                    }}
+                    className={cn("flex h-9 cursor-pointer items-center gap-2 rounded-sm px-2", i === pick && "bg-surface-sunken")}
+                  >
+                    <span className="text-xl leading-none">{e.char}</span>
+                    <span className="font-mono text-ui">{e.code ? `:${e.code}:` : ""}</span>
+                    <span className="truncate text-meta text-fg-muted">{emojiName(e, i18n.language)}</span>
+                  </li>
+                ))
             : popup === "question"
               ? questionList.map((q, i) => (
                   <li
@@ -332,6 +382,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
             ) : null}
           </MenuContent>
         </Menu>
+        <EmojiButton label={t("composer.emoji")} onPick={insertEmoji} />
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => (tray.add(e.target.files ?? []), (e.target.value = ""))} />
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (tray.add(e.target.files ?? []), (e.target.value = ""))} />
         {onOpenFiles ? (

@@ -702,6 +702,33 @@ paths:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /me/emoji:
+    get:
+      operationId: getEmojiUsage
+      tags: [identity]
+      description: |
+        Humans. The caller's recently and frequently used emoji (round 55),
+        for the emoji picker: recent newest first, frequent most used first,
+        at most 24 each. Nobody else reads them.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EmojiUsage" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: recordEmojiUse
+      tags: [identity]
+      description: |
+        Humans. Records that the caller picked an emoji (a reaction or one put
+        in the composer). Only the caller's newest 100 distinct emoji are kept.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EmojiUseRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Recorded }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /channels/{channelId}/pins:
     get:
       operationId: listPins
@@ -3730,6 +3757,17 @@ components:
         muted: { type: boolean }
         muted_until: { type: string, format: date-time }
         level: { $ref: "#/components/schemas/NotifyLevel" }
+    EmojiUsage:
+      type: object
+      required: [recent, frequent]
+      properties:
+        recent: { type: array, maxItems: 24, items: { type: string } }
+        frequent: { type: array, maxItems: 24, items: { type: string } }
+    EmojiUseRequest:
+      type: object
+      required: [emoji]
+      properties:
+        emoji: { type: string, minLength: 1, maxLength: 32, description: "A short emoji sequence, as for reactions" }
     Draft:
       type: object
       required: [channel_id, body, attachments, updated_at]

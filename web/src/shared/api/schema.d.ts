@@ -776,6 +776,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/emoji": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Humans. The caller's recently and frequently used emoji (round 55),
+         *     for the emoji picker: recent newest first, frequent most used first,
+         *     at most 24 each. Nobody else reads them.
+         */
+        get: operations["getEmojiUsage"];
+        put?: never;
+        /**
+         * @description Humans. Records that the caller picked an emoji (a reaction or one put
+         *     in the composer). Only the caller's newest 100 distinct emoji are kept.
+         */
+        post: operations["recordEmojiUse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/channels/{channelId}/pins": {
         parameters: {
             query?: never;
@@ -3906,6 +3931,14 @@ export interface components {
             muted_until?: string;
             level?: components["schemas"]["NotifyLevel"];
         };
+        EmojiUsage: {
+            recent: string[];
+            frequent: string[];
+        };
+        EmojiUseRequest: {
+            /** @description A short emoji sequence, as for reactions */
+            emoji: string;
+        };
         Draft: {
             /** Format: uuid */
             channel_id: string;
@@ -6994,6 +7027,53 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getEmojiUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmojiUsage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordEmojiUse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmojiUseRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };

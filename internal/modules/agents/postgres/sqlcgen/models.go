@@ -342,6 +342,14 @@ type Draft struct {
 	UpdatedAt    time.Time
 }
 
+type EmojiUse struct {
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	Emoji       string
+	Uses        int32
+	LastUsedAt  time.Time
+}
+
 type Event struct {
 	Seq           int64
 	ID            uuid.UUID

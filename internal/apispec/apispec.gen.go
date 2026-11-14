@@ -2603,6 +2603,18 @@ type EmergencyStop struct {
 	Since  *time.Time          `json:"since,omitempty"`
 }
 
+// EmojiUsage defines model for EmojiUsage.
+type EmojiUsage struct {
+	Frequent []string `json:"frequent"`
+	Recent   []string `json:"recent"`
+}
+
+// EmojiUseRequest defines model for EmojiUseRequest.
+type EmojiUseRequest struct {
+	// Emoji A short emoji sequence, as for reactions
+	Emoji string `json:"emoji"`
+}
+
 // EnrollRequest defines model for EnrollRequest.
 type EnrollRequest struct {
 	Code string `json:"code"`
@@ -4754,6 +4766,9 @@ type MarkActivityReadJSONRequestBody = MarkActivityReadRequest
 
 // SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
 type SaveDraftJSONRequestBody = SaveDraftRequest
+
+// RecordEmojiUseJSONRequestBody defines body for RecordEmojiUse for application/json ContentType.
+type RecordEmojiUseJSONRequestBody = EmojiUseRequest
 
 // SaveItemJSONRequestBody defines body for SaveItem for application/json ContentType.
 type SaveItemJSONRequestBody = SaveItemRequest

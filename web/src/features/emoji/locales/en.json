@@ -1,0 +1,19 @@
+{
+  "search": "Search emoji",
+  "groupsLabel": "Emoji groups",
+  "recent": "Recent",
+  "frequent": "Frequent",
+  "none": "No emoji found.",
+  "suggestions": "Emoji",
+  "groups": {
+    "0": "Smileys and emotion",
+    "1": "People and body",
+    "3": "Animals and nature",
+    "4": "Food and drink",
+    "5": "Travel and places",
+    "6": "Activities",
+    "7": "Objects",
+    "8": "Symbols",
+    "9": "Flags"
+  }
+}

@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { AlarmClock, ArrowUpRight, Bookmark, BookmarkCheck, Forward, Link2, CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
 import { chipRefs, cn, fullTime, hueVar, messageChipRef, messageHref, messageTime, messageURL, relativeTime, type Chip, type FileLink } from "@/shared/lib";
 import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
+import { EmojiButton } from "@/features/emoji";
 import { ErrorChip, StepDrawer } from "@/features/agents";
 import { ApprovalCard, DelegationActions } from "@/features/approvals";
 import { CompactionCard } from "@/features/compaction";
@@ -365,6 +366,11 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
               </Tooltip>
             );
           })}
+          <EmojiButton
+            size="sm"
+            label={t("message.reaction.add")}
+            onPick={(e) => react.mutate({ messageId: m.id, emoji: e, mine: m.reactions?.some((r) => r.emoji === e && r.actor_ids.includes(viewer.id)) ?? false })}
+          />
           {viewer.human ? (
             <Menu>
               <MenuTrigger asChild>

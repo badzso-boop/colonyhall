@@ -13,12 +13,13 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 
 ## Contents
 
+- [activity](#activity) (2)
 - [admin](#admin) (7)
 - [agentrules](#agentrules) (4)
 - [agents](#agents) (12)
 - [approval](#approval) (2)
 - [compaction](#compaction) (10)
-- [conversation](#conversation) (26)
+- [conversation](#conversation) (32)
 - [decisions](#decisions) (1)
 - [delegation](#delegation) (5)
 - [delivery](#delivery) (2)
@@ -26,18 +27,59 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [files](#files) (14)
 - [git](#git) (4)
 - [hosts](#hosts) (20)
-- [identity](#identity) (15)
+- [identity](#identity) (17)
 - [leases](#leases) (2)
 - [notes](#notes) (1)
 - [planner](#planner) (11)
 - [previews](#previews) (4)
 - [question](#question) (2)
 - [runs](#runs) (10)
+- [saved](#saved) (4)
 - [schedule](#schedule) (4)
 - [search](#search) (1)
 - [sidebar](#sidebar) (8)
 - [wiki](#wiki) (8)
 - [Schemas](#schemas)
+
+## activity
+
+### `GET /me/activity`
+
+`listActivity` · Auth: signed in
+
+Humans. What concerns the caller, newest first (round 55): mentions,
+replies in their threads, reactions to their messages, approvals and
+questions waiting for them, agents' important messages and due
+reminders. Mentions, replies, reactions and important messages of a
+conversation the caller set to "none" are left out. An item whose
+conversation the caller can no longer read keeps its kind and time
+only. unread_count is the badge.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `kind` | query | [ActivityKind](#activitykind) |  |  |
+| `unread` | query | boolean |  |  |
+| `cursor` | query | string |  | next_cursor of the previous page |
+| `limit` | query | integer |  |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ActivityPage](#activitypage) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /me/activity/read`
+
+`markActivityRead` · Auth: signed in
+
+Humans. Marks the caller's items read; the given ones, every one in a conversation, or (empty body) all.
+
+Request body (`application/json`): [MarkActivityReadRequest](#markactivityreadrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [MarkedCount](#markedcount) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ## admin
 
@@ -833,6 +875,45 @@ Request body (`application/json`): [MuteRequest](#muterequest)
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
+### `PUT /channels/{channelId}/notify`
+
+`setNotifyLevel` · Auth: signed in
+
+Humans, for themselves (round 55). all: every message counts; mentions:
+only mentions of the caller (the default in channels); none: muted
+until unmuted (DELETE /mute returns to the default). It decides the
+caller's unread badge and activity view, never what agents receive.
+Emits channel.mute_changed to the caller only.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `channelId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [NotifyLevelRequest](#notifylevelrequest)
+
+| Response | Body |
+| --- | --- |
+| 204 | Set |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /channels/{channelId}/pins`
+
+`listPins` · Auth: signed in
+
+The conversation's pinned messages, newest pin first (at most 50),
+for anyone who can read it (round 55).
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `channelId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [PinList](#pinlist) (`application/json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `GET /channels/{channelId}/progress`
 
 `getChannelProgress` · Auth: signed in
@@ -908,6 +989,16 @@ Request body (`application/json`, required): [OpenDMRequest](#opendmrequest)
 | --- | --- |
 | 200 | The DM channel: [Channel](#channel) (`application/json`) |
 
+### `POST /me/channels/read`
+
+`markAllChannelsRead` · Auth: signed in
+
+Marks every conversation the caller is a member of as read; marked counts those that had unread messages.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [MarkedCount](#markedcount) (`application/json`) |
+
 ### `GET /me/threads`
 
 `listMyThreads` · Auth: signed in
@@ -939,6 +1030,68 @@ Humans. Marks every thread of the caller with unread replies as read.
 | --- | --- |
 | 200 | OK: [MarkedCount](#markedcount) (`application/json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /messages/{messageId}/forward`
+
+`forwardMessage` · Auth: signed in
+
+Humans (round 55). Posts a quote of the message in another
+conversation the caller can write to: the caller's comment (which may
+mention), then the quote with its author, place and time and a link
+back. The quoted text's @mentions are defused, so a forward never
+wakes an agent by accident. The source must be readable (else 404),
+the target writable.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `messageId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [ForwardRequest](#forwardrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Forwarded: [SendResult](#sendresult) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /messages/{messageId}/pin`
+
+`unpinMessage` · Auth: signed in
+
+Unpins the message (people who can write in the conversation).
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `messageId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Unpinned (no-op if it was not pinned) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /messages/{messageId}/pin`
+
+`pinMessage` · Auth: signed in
+
+Pins the message in its conversation (members who can write there;
+an agent only its own messages, at most 5 per conversation a day).
+Pinning a pinned message is a no-op. At most 50 pins per conversation.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `messageId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Pinned |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+| 429 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `DELETE /messages/{messageId}/reactions/{emoji}`
 
@@ -1999,6 +2152,34 @@ The current actor and, for cookie sessions, the CSRF token (e.g. after a page re
 | 200 | The authenticated actor: [Actor](#actor) (`application/json`) |
 | 401 | Error: [Problem](#problem) (`application/problem+json`) |
 
+### `GET /me/emoji`
+
+`getEmojiUsage` · Auth: signed in
+
+Humans. The caller's recently and frequently used emoji (round 55),
+for the emoji picker: recent newest first, frequent most used first,
+at most 24 each. Nobody else reads them.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [EmojiUsage](#emojiusage) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /me/emoji`
+
+`recordEmojiUse` · Auth: signed in
+
+Humans. Records that the caller picked an emoji (a reaction or one put
+in the composer). Only the caller's newest 100 distinct emoji are kept.
+
+Request body (`application/json`, required): [EmojiUseRequest](#emojiuserequest)
+
+| Response | Body |
+| --- | --- |
+| 204 | Recorded |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `DELETE /tokens/{tokenId}`
 
 `revokeToken` · Auth: signed in
@@ -2439,6 +2620,80 @@ Humans only. Token usage and run counts per agent and day (Europe/Budapest timez
 | --- | --- |
 | 200 | OK: [UsageResponse](#usageresponse) (`application/json`) |
 
+## saved
+
+### `GET /me/saved`
+
+`listSaved` · Auth: signed in
+
+Humans. The caller's saved messages and reminders, newest first
+(round 55). An item whose message the caller can no longer read keeps
+its note and times but shows nothing of the message.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `filter` | query | string |  |  |
+| `cursor` | query | string |  | next_cursor of the previous page |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [SavedPage](#savedpage) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /me/saved`
+
+`saveItem` · Auth: signed in
+
+Humans. Saves a message the caller can read, sets a reminder, or both
+(a reminder without a message is /remind <when> <text>). Saving a
+saved message again updates it and takes it out of "done". A due
+reminder arrives as a system message in the caller's own DM.
+
+Request body (`application/json`, required): [SaveItemRequest](#saveitemrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | Saved: [SavedItem](#saveditem) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /me/saved/{savedId}`
+
+`deleteSaved` · Auth: signed in
+
+Humans, their own items.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `savedId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Removed |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PATCH /me/saved/{savedId}`
+
+`updateSaved` · Auth: signed in
+
+Humans, their own items. Mark done or not done; set or clear the reminder.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `savedId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [UpdateSavedRequest](#updatesavedrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [SavedItem](#saveditem) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ## schedule
 
 ### `GET /schedules`
@@ -2774,6 +3029,39 @@ Any actor. List all revisions of a wiki page.
 | `run_key` | string | yes |  |
 | `steps` | [AgentStep](#agentstep)[] | yes |  |
 | `thread_root_id` | string (uuid) |  |  |
+
+### ActivityItem
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `actor_id` | string (uuid) |  |  |
+| `available` | boolean | yes | The caller can still read the conversation |
+| `channel_id` | string (uuid) |  |  |
+| `channel_kind` | [ChannelKind](#channelkind) |  | One of: `public`, `private`, `dm`. |
+| `channel_name` | string |  |  |
+| `created_at` | string (date-time) | yes |  |
+| `emoji` | string |  |  |
+| `excerpt` | string |  | The message's text, cut to 200 characters (only while readable) |
+| `id` | string (uuid) | yes |  |
+| `kind` | [ActivityKind](#activitykind) | yes | One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`. |
+| `message_id` | string (uuid) |  |  |
+| `read` | boolean | yes |  |
+| `ref_id` | string (uuid) |  | The approval, question or saved item |
+| `thread_root_id` | string (uuid) |  |  |
+
+### ActivityKind
+
+One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`
+
+Type: string
+
+### ActivityPage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `items` | [ActivityItem](#activityitem)[] | yes |  |
+| `next_cursor` | string |  |  |
+| `unread_count` | integer | yes |  |
 
 ### Actor
 
@@ -3187,6 +3475,7 @@ Type: string
 | `muted` | boolean |  | The caller has muted the channel |
 | `muted_until` | string (date-time), nullable |  | End of the caller's mute; null while muted means forever |
 | `name` | string | yes |  |
+| `notify_level` | [NotifyLevel](#notifylevel) |  | The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels One of: `all`, `mentions`, `none`. |
 | `unread` | integer (int64) | yes |  |
 
 ### ChannelKind
@@ -3622,6 +3911,19 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `by` | string (uuid) |  |  |
 | `since` | string (date-time) |  |  |
 
+### EmojiUsage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `frequent` | string[] | yes |  |
+| `recent` | string[] | yes |  |
+
+### EmojiUseRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `emoji` | string | yes | A short emoji sequence, as for reactions |
+
 ### EnrollRequest
 
 | Field | Type | Required | Description |
@@ -3635,6 +3937,16 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | --- | --- | --- | --- |
 | `host_id` | string (uuid) | yes |  |
 | `token` | string | yes | Host token; shown once |
+
+### EventActivity
+
+The recipient's feed changed (activity.created, activity.read); sent to them alone.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `item_id` | string (uuid) |  |  |
+| `kind` | [ActivityKind](#activitykind) |  | One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`. |
+| `marked` | integer |  |  |
 
 ### EventActorCreated
 
@@ -3746,12 +4058,14 @@ The place only, never the text; sent to the draft's owner alone.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `also_in_channel` | boolean |  |  |
 | `attachments` | [EventAttachment](#eventattachment)[] |  |  |
 | `author_id` | string (uuid) | yes |  |
 | `body` | string | yes |  |
 | `channel_id` | string (uuid) | yes |  |
 | `client_msg_id` | string |  |  |
 | `created_at` | string (date-time) | yes |  |
+| `important` | boolean |  |  |
 | `kind` | string | yes | One of: `text`, `system`. |
 | `mentions` | string (uuid)[] | yes |  |
 | `message_id` | string (uuid) | yes |  |
@@ -3776,8 +4090,20 @@ The place only, never the text; sent to the draft's owner alone.
 | --- | --- | --- | --- |
 | `actor_id` | string (uuid) | yes |  |
 | `channel_id` | string (uuid) | yes |  |
+| `level` | [NotifyLevel](#notifylevel) |  | The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels One of: `all`, `mentions`, `none`. |
 | `muted` | boolean | yes |  |
 | `muted_until` | string (date-time) |  |  |
+
+### EventPin
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `actor_id` | string (uuid) | yes |  |
+| `channel_id` | string (uuid) | yes |  |
+| `important` | boolean |  |  |
+| `message_author_id` | string (uuid) | yes |  |
+| `message_id` | string (uuid) | yes |  |
+| `thread_root_id` | string (uuid) |  |  |
 
 ### EventReaction
 
@@ -3788,6 +4114,16 @@ The place only, never the text; sent to the draft's owner alone.
 | `emoji` | string | yes |  |
 | `message_author_id` | string (uuid) | yes |  |
 | `message_id` | string (uuid) | yes |  |
+
+### EventSaved
+
+Sent to the item's owner alone; ids only.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `deleted` | boolean |  |  |
+| `item_id` | string (uuid) | yes |  |
+| `message_id` | string (uuid) |  |  |
 
 ### FailFileFetchRequest
 
@@ -3863,6 +4199,15 @@ The place only, never the text; sent to the draft's owner alone.
 | `mode` | string | yes | One of: `read`, `write`. |
 | `outside_roots` | boolean |  | Only when created: the path is outside the roots the host reported |
 | `path` | string | yes |  |
+
+### ForwardRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channel_id` | string (uuid) | yes |  |
+| `client_msg_id` | string |  |  |
+| `comment` | string |  |  |
+| `thread_root_id` | string (uuid) |  |  |
 
 ### FsEntry
 
@@ -4175,6 +4520,13 @@ Type: string
 | `password` | string | yes |  |
 | `workspace` | string |  | Only needed when the handle exists in several workspaces |
 
+### MarkActivityReadRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channel_id` | string (uuid) |  |  |
+| `item_ids` | string (uuid)[] |  |  |
+
 ### MarkedCount
 
 | Field | Type | Required | Description |
@@ -4185,6 +4537,7 @@ Type: string
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `also_in_channel` | boolean |  | A thread reply also shown in the channel's main stream |
 | `answers` | [MessageAnswers](#messageanswers) |  | Set on an agent's answer posted in its origin thread: the DM reply it answers |
 | `attachments` | [FileAttachment](#fileattachment)[] |  |  |
 | `author_id` | string (uuid) | yes |  |
@@ -4195,12 +4548,15 @@ Type: string
 | `created_at` | string (date-time) | yes |  |
 | `deleted_at` | string (date-time), nullable |  |  |
 | `deleted_by` | string (uuid), nullable |  |  |
+| `forwarded_from_id` | string (uuid) |  | The message this forward quotes; set only for viewers who can read it |
 | `id` | string (uuid) | yes |  |
+| `important` | boolean |  | An agent sent it marked important (a result, a decision, something a person must act on) |
 | `kind` | string | yes | One of: `text`, `system`. |
 | `last_reply_at` | string (date-time) |  |  |
 | `link_cards` | [LinkCard](#linkcard)[] |  |  |
 | `mentions` | string (uuid)[] | yes |  |
 | `origin` | [MessageOrigin](#messageorigin) |  |  |
+| `pinned` | boolean |  | Pinned in its conversation now |
 | `reactions` | [ReactionSummary](#reactionsummary)[] |  |  |
 | `reply_count` | integer | yes |  |
 | `reply_participant_ids` | string (uuid)[] |  | Up to 3 authors of the replies, the most recent replier first (thread roots only). |
@@ -4270,6 +4626,20 @@ Set on an agent's answer posted in its origin thread: the DM reply it answers
 | `next_cursor` | string |  | Absent on the last page |
 | `threads` | [MyThread](#mythread)[] | yes |  |
 | `unread_threads` | integer | yes |  |
+
+### NotifyLevel
+
+The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+
+One of: `all`, `mentions`, `none`
+
+Type: string
+
+### NotifyLevelRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `level` | [NotifyLevel](#notifylevel) | yes | The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels One of: `all`, `mentions`, `none`. |
 
 ### OpenDMRequest
 
@@ -4356,6 +4726,20 @@ Set on an agent's answer posted in its origin thread: the DM reply it answers
 | --- | --- | --- | --- |
 | `code` | string | yes |  |
 | `expires_at` | string (date-time) | yes |  |
+
+### PinList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pins` | [PinnedMessage](#pinnedmessage)[] | yes |  |
+
+### PinnedMessage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `message` | [Message](#message) | yes |  |
+| `pinned_at` | string (date-time) | yes |  |
+| `pinned_by` | string (uuid) | yes |  |
 
 ### PlannerAccess
 
@@ -4680,6 +5064,53 @@ Type: string
 | `file_ids` | string (uuid)[] |  |  |
 | `thread_root_id` | string (uuid) |  |  |
 
+### SaveItemRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `message_id` | string (uuid) |  |  |
+| `note` | string |  |  |
+| `remind_at` | string (date-time) |  |  |
+
+### SavedItem
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `available` | boolean | yes | The caller can still read the message (false for a reminder without one) |
+| `channel_id` | string (uuid) |  |  |
+| `created_at` | string (date-time) | yes |  |
+| `done_at` | string (date-time) |  |  |
+| `id` | string (uuid) | yes |  |
+| `message` | [SavedMessage](#savedmessage) |  | What the caller may see of a saved message; body is cut to 300 characters. |
+| `message_id` | string (uuid) |  |  |
+| `note` | string | yes |  |
+| `remind_at` | string (date-time) |  |  |
+| `reminded_at` | string (date-time) |  |  |
+
+### SavedMessage
+
+What the caller may see of a saved message; body is cut to 300 characters.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `author_id` | string (uuid) | yes |  |
+| `body` | string | yes |  |
+| `channel_id` | string (uuid) | yes |  |
+| `channel_kind` | [ChannelKind](#channelkind) | yes | One of: `public`, `private`, `dm`. |
+| `channel_name` | string | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `reply_count` | integer |  |  |
+| `retracted` | boolean |  |  |
+| `thread_root_id` | string (uuid) |  |  |
+
+### SavedPage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `items` | [SavedItem](#saveditem)[] | yes |  |
+| `next_cursor` | string |  |  |
+
 ### Schedule
 
 | Field | Type | Required | Description |
@@ -4812,11 +5243,13 @@ Round 40: the login and release limits. In multi-tenant mode only the workspace'
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `also_in_channel` | boolean |  | A thread reply in a channel that is also shown in its main stream (one message). Channel agents still wake only when mentioned. |
 | `answers_message_id` | string (uuid) |  | Agents (guard): the message this answer replies to, in another channel the agent can read |
 | `body` | string | yes |  |
 | `client_msg_id` | string |  | Idempotency key chosen by the client |
 | `elaborate` | boolean |  | Agents: allow a long answer; only when someone asked for detail |
 | `file_ids` | string (uuid)[] |  | Attached file IDs |
+| `important` | boolean |  | Agents: a result, a decision or something a person must act on; pinned when sent (at most 5 a day per conversation). People pin instead (400). |
 | `thread_root_id` | string (uuid) |  |  |
 
 ### SendResult
@@ -5106,6 +5539,14 @@ Round 40: the login and release limits. In multi-tenant mode only the workspace'
 | `status` | [PlannerTaskStatus](#plannertaskstatus) |  | One of: `scheduled`, `started`, `done`. |
 | `title` | string |  |  |
 
+### UpdateSavedRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `clear_reminder` | boolean |  |  |
+| `done` | boolean |  |  |
+| `remind_at` | string (date-time) |  |  |
+
 ### UpdateSidebarSectionRequest
 
 | Field | Type | Required | Description |
@@ -5268,7 +5709,9 @@ actor.state_changed → EventActorStateChanged; actor.profile_updated →
 EventActorProfileUpdated; workspace.emergency_activated,
 workspace.emergency_cleared → EventEmergency; delivery.item_created →
 EventDeliveryItemCreated; draft.changed (the owner only) →
-EventDraftChanged.
+EventDraftChanged; message.pinned, message.unpinned → EventPin;
+saved.changed, saved.reminded (the owner only) → EventSaved;
+activity.created, activity.read (the recipient only) → EventActivity.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |

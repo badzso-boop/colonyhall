@@ -113,4 +113,12 @@ type Store interface {
 	UnattributedLockouts(ctx context.Context, since time.Time) ([]Lockout, error)
 	// DeleteAuthFailures deletes attempts before a time (system mode).
 	DeleteAuthFailures(ctx context.Context, before time.Time) (int64, error)
+
+	// RecordEmojiUse counts one use of an emoji by the actor at a time
+	// (the last use is the later of the stored and the new one) and keeps
+	// only the actor's keep most recently used distinct emoji.
+	RecordEmojiUse(ctx context.Context, workspaceID, actorID ids.ID, emoji string, at time.Time, keep int) error
+	// EmojiUsage returns the actor's emoji, at most limit each: recent by
+	// last use, newest first; frequent by use count, ties newest first.
+	EmojiUsage(ctx context.Context, actorID ids.ID, limit int) (recent, frequent []string, err error)
 }
