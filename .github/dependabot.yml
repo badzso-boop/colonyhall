@@ -35,6 +35,15 @@ updates:
   - package-ecosystem: docker
     directories: [/deploy, /deploy/embed]
     schedule: { interval: weekly, day: monday }
+    # Node: only LTS lines, chosen by hand (Dependabot offered 22 -> 25, an
+    # odd, short-lived release). Python: by hand, after checking that the
+    # model server's wheels (onnxruntime) exist for the new version
+    # (it offered 3.12 -> 3.15). Patch updates still come. (2026-11-14)
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       base-images:
         patterns: ["*"]
