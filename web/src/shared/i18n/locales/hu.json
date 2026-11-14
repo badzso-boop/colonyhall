@@ -54,6 +54,10 @@
     "calToday": "Naptár: ma",
     "agentSearch": "Keresés az agentek között",
     "markRead": "A beszélgetés olvasottnak jelölése",
-    "firstUnread": "Ugrás az első olvasatlan üzenetre"
+    "firstUnread": "Ugrás az első olvasatlan üzenetre",
+    "saveMessage": "Mentés későbbre (kijelölt üzenetnél)",
+    "copyLink": "Link másolása (kijelölt üzenetnél)",
+    "forwardMessage": "Továbbítás (kijelölt üzenetnél)",
+    "pinMessage": "Kitűzés (kijelölt üzenetnél)"
   }
 }

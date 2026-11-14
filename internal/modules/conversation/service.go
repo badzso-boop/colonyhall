@@ -441,6 +441,8 @@ type SendInput struct {
 	Important bool
 	// AlsoInChannel shows a thread reply in the channel too (round 55).
 	AlsoInChannel bool
+	// ForwardedFromID is set by ForwardMessage only (checked there).
+	ForwardedFromID ids.ID
 }
 
 // SendResult is the outcome of SendMessage: either a posted message, or
@@ -584,6 +586,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			Mentions: mentions, CreatedAt: now,
 			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
 			AnswersMessageID: answersID, Important: in.Important, AlsoInChannel: in.AlsoInChannel,
+			ForwardedFromID: in.ForwardedFromID,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -704,6 +707,13 @@ func (s *Service) enrichOrigins(ctx context.Context, by identity.Actor, msgs []M
 				msgs[i].AnswersAuthorID = ref.AuthorID
 			} else {
 				msgs[i].AnswersMessageID = ids.Nil
+			}
+		}
+		if msgs[i].ForwardedFromID != ids.Nil {
+			// The forward's mark names its source only to those who can read it.
+			src, err := s.Store.MessageByID(ctx, msgs[i].ForwardedFromID)
+			if err != nil || !canRead(src.ChannelID) {
+				msgs[i].ForwardedFromID = ids.Nil
 			}
 		}
 		if msgs[i].OriginChannelID != ids.Nil {

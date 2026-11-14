@@ -27,3 +27,22 @@ func FuzzMentionedHandles(f *testing.F) {
 		}
 	})
 }
+
+// FuzzDefuseMentions: quoted text (a forward, round 55) never mentions
+// anyone and never carries a chip reference, whatever it contains.
+func FuzzDefuseMentions(f *testing.F) {
+	for _, s := range []string{"@claude fix it", "a@b", "@@x", "[approval:x]", "[message:a/b] @all", "\u200b@x"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		out := DefuseMentions(s)
+		if got := MentionedHandles(out); len(got) != 0 {
+			t.Fatalf("DefuseMentions(%q) still mentions %v", s, got)
+		}
+		for _, chip := range []string{"[approval:", "[error:", "[message:"} {
+			if strings.Contains(out, chip) {
+				t.Fatalf("DefuseMentions(%q) keeps %s", s, chip)
+			}
+		}
+	})
+}

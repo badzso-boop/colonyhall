@@ -1,8 +1,8 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { AlarmClock, ArrowUpRight, Bookmark, BookmarkCheck, CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
-import { chipRefs, cn, fullTime, hueVar, messageChipRef, messageHref, messageTime, relativeTime, type Chip, type FileLink } from "@/shared/lib";
+import { AlarmClock, ArrowUpRight, Bookmark, BookmarkCheck, Forward, Link2, CornerDownRight, CornerUpLeft, Download, FileText, Flag, MessageSquare, MoreHorizontal, Pin, PinOff, SquareTerminal, Undo2 } from "lucide-react";
+import { chipRefs, cn, fullTime, hueVar, messageChipRef, messageHref, messageTime, messageURL, relativeTime, type Chip, type FileLink } from "@/shared/lib";
 import { Avatar, Badge, Button, IconButton, Lightbox, Markdown, Menu, MenuContent, MenuItem, MenuTrigger, Tooltip, toast } from "@/shared/ui";
 import { ErrorChip, StepDrawer } from "@/features/agents";
 import { ApprovalCard, DelegationActions } from "@/features/approvals";
@@ -14,6 +14,7 @@ import { useSaveActions } from "@/features/saved";
 import type { Actor } from "../model";
 import { useRetract, useSetPin, useToggleReaction, type Message } from "../api";
 import { isRateLimitNote, REACTIONS, terminalNotice } from "../messageParts";
+import { ForwardDialog } from "./ForwardDialog";
 import { LinkCards } from "./LinkCards";
 import { ProfileTrigger } from "./ProfilePopover";
 
@@ -76,6 +77,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [confirmRetract, setConfirmRetract] = useState(false);
   const [file, setFile] = useState<FileLink | null>(null);
+  const [forwarding, setForwarding] = useState(false);
   const react = useToggleReaction();
   const setPin = useSetPin();
   const saveActions = useSaveActions(m.id, viewer.human && !m.deleted_at);
@@ -96,6 +98,11 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
   const terminal = viewer.human && fromAgent && !retracted ? terminalNotice(m.body) : null;
   const canRetract = viewer.human && m.author_id === viewer.id && !retracted;
   const canPin = viewer.human && viewer.canWrite && !retracted;
+  const copyLink = () =>
+    void navigator.clipboard
+      .writeText(messageURL(m, window.location.origin))
+      .then(() => toast(t("actions.linkCopied")))
+      .catch(() => toast(t("actions.linkFailed"), { tone: "danger" }));
   const togglePin = () =>
     setPin.mutate(
       { messageId: m.id, pinned: !m.pinned },
@@ -151,10 +158,20 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
       data-message-id={m.id}
       tabIndex={-1}
       onKeyDown={(e) => {
-        // "r": reply in thread on the focused message (listed in the shortcut help).
-        if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey && summary && onOpenThread && e.target === e.currentTarget) {
+        // Keys on the focused message (listed in the shortcut help): r reply
+        // in thread, s save, l copy link, f forward, p pin.
+        if (e.ctrlKey || e.metaKey || e.altKey || e.target !== e.currentTarget || retracted) return;
+        const act: Record<string, (() => void) | undefined> = {
+          r: summary && onOpenThread ? () => onOpenThread(m.thread_root_id ?? m.id) : undefined,
+          s: viewer.human ? saveActions.toggle : undefined,
+          l: viewer.human ? copyLink : undefined,
+          f: viewer.human ? () => setForwarding(true) : undefined,
+          p: canPin ? togglePin : undefined,
+        };
+        const run = act[e.key];
+        if (run) {
           e.preventDefault();
-          onOpenThread(m.id);
+          run();
         }
       }}
       className={cn(
@@ -192,6 +209,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
               {t("pins.important")}
             </Badge>
           ) : null}
+          {m.forwarded_from_id && !retracted ? <span className="text-meta text-fg-subtle">{t("actions.forwarded")}</span> : null}
           {m.pinned && !retracted ? (
             <Tooltip content={t("pins.pinnedHere")}>
               <Pin aria-label={t("pins.pinnedHere")} className="size-3.5 self-center text-fg-subtle" />
@@ -353,6 +371,17 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
                 <IconButton size="sm" label={t("message.menu")} icon={<MoreHorizontal className="size-4" />} />
               </MenuTrigger>
               <MenuContent>
+                {onOpenThread ? (
+                  <MenuItem icon={<MessageSquare aria-hidden className="size-4" />} onSelect={() => onOpenThread(m.thread_root_id ?? m.id)}>
+                    {t("message.replyInThread")}
+                  </MenuItem>
+                ) : null}
+                <MenuItem icon={<Link2 aria-hidden className="size-4" />} onSelect={copyLink}>
+                  {t("actions.copyLink")}
+                </MenuItem>
+                <MenuItem icon={<Forward aria-hidden className="size-4" />} onSelect={() => setForwarding(true)}>
+                  {t("actions.forward")}
+                </MenuItem>
                 <MenuItem icon={saveActions.saved ? <BookmarkCheck aria-hidden className="size-4" /> : <Bookmark aria-hidden className="size-4" />} onSelect={saveActions.toggle}>
                   {t(saveActions.saved ? "actions.unsave" : "actions.save")}
                 </MenuItem>
@@ -375,6 +404,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
         </div>
       ) : null}
       {saveActions.dialog}
+      {forwarding ? <ForwardDialog message={m} onClose={() => setForwarding(false)} /> : null}
       {lightbox !== null ? (
         <Lightbox
           images={images}

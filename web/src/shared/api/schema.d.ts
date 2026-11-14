@@ -867,6 +867,32 @@ export interface paths {
         patch: operations["updateSaved"];
         trace?: never;
     };
+    "/messages/{messageId}/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Humans (round 55). Posts a quote of the message in another
+         *     conversation the caller can write to: the caller's comment (which may
+         *     mention), then the quote with its author, place and time and a link
+         *     back. The quoted text's @mentions are defused, so a forward never
+         *     wakes an agent by accident. The source must be readable (else 404),
+         *     the target writable.
+         */
+        post: operations["forwardMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{messageId}/reactions/{emoji}": {
         parameters: {
             query?: never;
@@ -3475,6 +3501,19 @@ export interface components {
             important?: boolean;
             /** @description A thread reply also shown in the channel's main stream */
             also_in_channel?: boolean;
+            /**
+             * Format: uuid
+             * @description The message this forward quotes; set only for viewers who can read it
+             */
+            forwarded_from_id?: string;
+        };
+        ForwardRequest: {
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            comment?: string;
+            client_msg_id?: string;
         };
         PinnedMessage: {
             message: components["schemas"]["Message"];
@@ -7047,6 +7086,37 @@ export interface operations {
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    forwardMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForwardRequest"];
+            };
+        };
+        responses: {
+            /** @description Forwarded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

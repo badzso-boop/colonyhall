@@ -152,6 +152,7 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
 		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
 		AnswersMessageID: nullID(m.AnswersMessageID), Important: m.Important, AlsoInChannel: m.AlsoInChannel,
+		ForwardedFromID: nullID(m.ForwardedFromID),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -240,6 +241,9 @@ func toMessage(r sqlcgen.Message) conversation.Message {
 	}
 	if r.AnswersMessageID != nil {
 		m.AnswersMessageID = *r.AnswersMessageID
+	}
+	if r.ForwardedFromID != nil {
+		m.ForwardedFromID = *r.ForwardedFromID
 	}
 	return m
 }

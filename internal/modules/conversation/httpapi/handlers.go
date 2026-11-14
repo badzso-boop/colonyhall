@@ -30,7 +30,7 @@ func init() {
 	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
 	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil, conversation.ErrBadChannelKind)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
-	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans, conversation.ErrBadNotifyLevel, conversation.ErrAlsoNeedsThread)
+	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans, conversation.ErrBadNotifyLevel, conversation.ErrAlsoNeedsThread, conversation.ErrForwardRetracted)
 	httpx.RegisterForbidden(conversation.ErrPinOwnOnly)
 	httpx.RegisterStatus(http.StatusConflict, conversation.ErrPinLimit)
 	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrAgentPinLimit)
@@ -74,6 +74,9 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	}
 	if m.AlsoInChannel {
 		out.AlsoInChannel = httpx.Ptr(true)
+	}
+	if m.ForwardedFromID != ids.Nil {
+		out.ForwardedFromId = httpx.Ptr(m.ForwardedFromID)
 	}
 	if len(m.ReplyParticipantIDs) > 0 {
 		out.ReplyParticipantIds = &m.ReplyParticipantIDs
@@ -783,6 +786,30 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}
+	mux.Handle("POST /api/v1/messages/{id}/forward", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var in apispec.ForwardRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		res, err := svc.ForwardMessage(r.Context(), httpx.Actor(r), id, conversation.ForwardInput{ChannelID: in.ChannelId,
+			ThreadRootID: httpx.Deref(in.ThreadRootId, ids.Nil), Comment: httpx.Deref(in.Comment, ""), ClientMsgID: httpx.Deref(in.ClientMsgId, "")})
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.SendResult{}
+		if res.Message != nil {
+			m := MessageToAPI(*res.Message)
+			out.Message = &m
+		}
+		httpx.JSON(w, http.StatusCreated, out)
+	}))
+
 	mux.Handle("PUT /api/v1/messages/{id}/pin", wrap(pin(true)))
 	mux.Handle("DELETE /api/v1/messages/{id}/pin", wrap(pin(false)))
 

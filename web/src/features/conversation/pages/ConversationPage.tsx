@@ -55,6 +55,11 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
   // Ctrl+Shift+T is the browser's "reopen tab" and cannot be taken: X for terminals.
   useShortcut("mod+shift+x", "conversation", "terminals", () => agent && dispatch(openTerminals(agent.id)), Boolean(agent));
   useShortcut("r", "conversation", "replyThread");
+  // Round 55, part F: handled by the focused message itself, listed here for the help.
+  useShortcut("s", "conversation", "saveMessage");
+  useShortcut("l", "conversation", "copyLink");
+  useShortcut("f", "conversation", "forwardMessage");
+  useShortcut("p", "conversation", "pinMessage");
 
   const handlers = {
     onOpenThread: (rootId: string) => dispatch({ type: "openThread", rootId }),

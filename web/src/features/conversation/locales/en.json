@@ -21,7 +21,12 @@
     "toggle": "Collapse or expand {{name}}",
     "save": "Save for later",
     "unsave": "Remove from saved",
-    "remind": "Remind me…"
+    "remind": "Remind me…",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "linkFailed": "Could not copy to the clipboard",
+    "forward": "Forward…",
+    "forwarded": "forwarded"
   },
   "empty": {
     "title": "Pick a conversation",
@@ -313,5 +318,17 @@
     "latest_one": "↓ Latest · {{count}} message below",
     "latest_other": "↓ Latest · {{count}} messages below",
     "markRead": "Mark as read (Esc)"
+  },
+  "forward": {
+    "title": "Forward message",
+    "search": "Search conversations…",
+    "targets": "Where to",
+    "comment": "Comment (optional; you can mention people here)",
+    "send": "Forward",
+    "sendAnyway": "Forward anyway",
+    "done": "Forwarded",
+    "open": "Open",
+    "leak": "People who are not in {{name}} will see this.",
+    "leakDm": "This is a direct message; people who are not in it will see this."
   }
 }

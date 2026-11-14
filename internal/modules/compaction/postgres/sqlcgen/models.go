@@ -458,6 +458,7 @@ type Message struct {
 	AnswersMessageID *uuid.UUID
 	Important        bool
 	AlsoInChannel    bool
+	ForwardedFromID  *uuid.UUID
 }
 
 type MessageFile struct {

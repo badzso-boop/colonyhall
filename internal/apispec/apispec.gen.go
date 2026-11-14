@@ -2640,6 +2640,14 @@ type FolderGrant struct {
 // FolderGrantMode defines model for FolderGrant.Mode.
 type FolderGrantMode string
 
+// ForwardRequest defines model for ForwardRequest.
+type ForwardRequest struct {
+	ChannelId    openapi_types.UUID  `json:"channel_id"`
+	ClientMsgId  *string             `json:"client_msg_id,omitempty"`
+	Comment      *string             `json:"comment,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
 // FsEntry defines model for FsEntry.
 type FsEntry struct {
 	Heavy          *bool       `json:"heavy,omitempty"`
@@ -3066,7 +3074,10 @@ type Message struct {
 	CreatedAt    time.Time           `json:"created_at"`
 	DeletedAt    *time.Time          `json:"deleted_at,omitempty"`
 	DeletedBy    *openapi_types.UUID `json:"deleted_by,omitempty"`
-	Id           openapi_types.UUID  `json:"id"`
+
+	// ForwardedFromId The message this forward quotes; set only for viewers who can read it
+	ForwardedFromId *openapi_types.UUID `json:"forwarded_from_id,omitempty"`
+	Id              openapi_types.UUID  `json:"id"`
 
 	// Important An agent sent it marked important (a result, a decision, something a person must act on)
 	Important   *bool                `json:"important,omitempty"`
@@ -4666,6 +4677,9 @@ type UpdateSavedJSONRequestBody = UpdateSavedRequest
 
 // RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
 type RequestFileFetchJSONRequestBody = CreateFileFetchRequest
+
+// ForwardMessageJSONRequestBody defines body for ForwardMessage for application/json ContentType.
+type ForwardMessageJSONRequestBody = ForwardRequest
 
 // PutPlannerAccessJSONRequestBody defines body for PutPlannerAccess for application/json ContentType.
 type PutPlannerAccessJSONRequestBody = PlannerAccess

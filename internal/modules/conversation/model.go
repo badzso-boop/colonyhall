@@ -203,7 +203,10 @@ type Message struct {
 	// AlsoInChannel: a thread reply also shown in the channel's main stream
 	// (round 55, part G). Delivery is unchanged: channel agents wake only
 	// when mentioned.
-	AlsoInChannel    bool
+	AlsoInChannel bool
+	// ForwardedFromID is the message a forward quotes (round 55, part F);
+	// cleared on reads for viewers who cannot read the source.
+	ForwardedFromID  ids.ID
 	Pinned           bool              // filled on reads
 	AnswersChannelID ids.ID            // filled on reads
 	AnswersAuthorID  ids.ID            // filled on reads
@@ -283,6 +286,7 @@ var (
 	ErrBadMuteUntil       = errors.New("until must be in the future")
 	ErrBadNotifyLevel     = errors.New("level must be all, mentions or none")
 	ErrAlsoNeedsThread    = errors.New("also_in_channel is for thread replies in a channel")
+	ErrForwardRetracted   = errors.New("a retracted message cannot be forwarded")
 	ErrPinLimit           = errors.New("a conversation has at most 50 pinned messages; unpin one first")
 	ErrAgentPinLimit      = errors.New("an agent pins at most 5 messages per conversation per day")
 	ErrPinOwnOnly         = errors.New("an agent can pin only its own messages")

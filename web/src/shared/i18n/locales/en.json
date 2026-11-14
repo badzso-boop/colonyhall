@@ -54,6 +54,10 @@
     "calToday": "Calendar: today",
     "agentSearch": "Search the agents",
     "markRead": "Mark the conversation as read",
-    "firstUnread": "Jump to the first unread message"
+    "firstUnread": "Jump to the first unread message",
+    "saveMessage": "Save for later (focused message)",
+    "copyLink": "Copy link (focused message)",
+    "forwardMessage": "Forward (focused message)",
+    "pinMessage": "Pin (focused message)"
   }
 }

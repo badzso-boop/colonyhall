@@ -21,7 +21,12 @@
     "toggle": "{{name}} csoport összecsukása vagy kinyitása",
     "save": "Mentés későbbre",
     "unsave": "Mentés megszüntetése",
-    "remind": "Emlékeztess…"
+    "remind": "Emlékeztess…",
+    "copyLink": "Link másolása",
+    "linkCopied": "Link a vágólapon",
+    "linkFailed": "Nem sikerült a vágólapra másolni",
+    "forward": "Továbbítás…",
+    "forwarded": "továbbítva"
   },
   "empty": {
     "title": "Válassz egy beszélgetést",
@@ -313,5 +318,17 @@
     "latest_one": "↓ Legutóbbi · {{count}} üzenet lent",
     "latest_other": "↓ Legutóbbi · {{count}} üzenet lent",
     "markRead": "Olvasottnak jelölés (Esc)"
+  },
+  "forward": {
+    "title": "Üzenet továbbítása",
+    "search": "Beszélgetés keresése…",
+    "targets": "Hová",
+    "comment": "Megjegyzés (nem kötelező; megemlíthetsz benne)",
+    "send": "Továbbítás",
+    "sendAnyway": "Mégis továbbítom",
+    "done": "Továbbítva",
+    "open": "Megnyitás",
+    "leak": "Akik nincsenek benne a(z) {{name}} csatornában, ezt látni fogják.",
+    "leakDm": "Ez egy közvetlen üzenet; akik nincsenek benne, látni fogják."
   }
 }

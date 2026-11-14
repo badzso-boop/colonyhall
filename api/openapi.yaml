@@ -804,6 +804,30 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /messages/{messageId}/forward:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: forwardMessage
+      tags: [conversation]
+      description: |
+        Humans (round 55). Posts a quote of the message in another
+        conversation the caller can write to: the caller's comment (which may
+        mention), then the quote with its author, place and time and a link
+        back. The quoted text's @mentions are defused, so a forward never
+        wakes an agent by accident. The source must be readable (else 404),
+        the target writable.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ForwardRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Forwarded, content: { application/json: { schema: { $ref: "#/components/schemas/SendResult" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /messages/{messageId}/reactions/{emoji}:
     parameters:
       - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3329,6 +3353,15 @@ components:
         pinned: { type: boolean, description: Pinned in its conversation now }
         important: { type: boolean, description: "An agent sent it marked important (a result, a decision, something a person must act on)" }
         also_in_channel: { type: boolean, description: "A thread reply also shown in the channel's main stream" }
+        forwarded_from_id: { type: string, format: uuid, description: "The message this forward quotes; set only for viewers who can read it" }
+    ForwardRequest:
+      type: object
+      required: [channel_id]
+      properties:
+        channel_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        comment: { type: string, maxLength: 4000 }
+        client_msg_id: { type: string, maxLength: 64 }
     PinnedMessage:
       type: object
       required: [message, pinned_by, pinned_at]

@@ -440,3 +440,11 @@ export function useMarkAllRead() {
     },
   });
 }
+
+/** Forwards a message to another conversation (round 55, part F). */
+export function useForward() {
+  return useMutation({
+    mutationFn: async ({ messageId, ...body }: Schemas["ForwardRequest"] & { messageId: string }) =>
+      unwrap(await api.POST("/messages/{messageId}/forward", { params: { path: { messageId } }, body })),
+  });
+}
