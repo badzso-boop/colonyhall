@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 // The schedule builder's choices and the cron they make (round 32,
 // part 6). Cron weekdays: 0 = Sunday … 6 = Saturday, as robfig/cron reads them.
 // The server's parser has no "L" (last day of the month), so Havonta offers 1–31.
@@ -87,7 +88,9 @@ export function parseCron(cron: string): Rule {
   return { mode: "advanced", cron: cron.trim() };
 }
 
-type T = (key: string, opts?: Record<string, unknown>) => string;
+// i18next 27 types t() per namespace; a plain (key, opts) => string no longer
+// accepts it.
+type T = TFunction<"schedules">;
 
 /** The rule in words: "Minden hétköznap 09:00-kor", "Hetente hétfőn és szerdán 18:30-kor". */
 export function describeRule(rule: Rule, t: T, locale: string): string {

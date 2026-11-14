@@ -1,6 +1,8 @@
+import type { TFunction } from "i18next";
 import { buildCron, describeRule, parseCron, quickChips, type Rule } from "./rule";
 
-const t = (key: string, o?: Record<string, unknown>) => `${key} ${JSON.stringify(o)}`;
+// A stand-in for t(): echoes the key and its options.
+const t = ((key: string, o?: Record<string, unknown>) => `${key} ${JSON.stringify(o)}`) as unknown as TFunction<"schedules">;
 
 test("each mode builds the cron (or the one-off time) the server reads", () => {
   expect(buildCron({ mode: "once", date: "2026-11-02", time: "9:30" })).toEqual({ at: "2026-11-02 09:30" });
