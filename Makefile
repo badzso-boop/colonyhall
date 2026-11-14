@@ -1,7 +1,11 @@
 GO      ?= go
 COMPOSE  = docker compose -f deploy/compose.dev.yaml
 TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
-SQLC     = docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
+# Rootless Docker maps the container's root to the calling user, so files
+# sqlc writes are ours only when it runs as root there; with ordinary Docker
+# it runs as us (a self-hosted CI runner uses rootless Docker).
+DOCKER_UID := $(shell docker info -f '{{range .SecurityOptions}}{{.}} {{end}}' 2>/dev/null | grep -q rootless && echo 0:0 || echo $$(id -u):$$(id -g))
+SQLC     = docker run --rm -u $(DOCKER_UID) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
 .PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
         test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest privacy

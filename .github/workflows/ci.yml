@@ -104,6 +104,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Enable the sandbox tests (bwrap)
         # A self-hosted runner has bwrap installed and no sudo.
         if: runner.environment == 'github-hosted'
@@ -130,6 +132,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Enable the sandbox tests (bwrap)
         # A self-hosted runner has bwrap installed and no sudo.
         if: runner.environment == 'github-hosted'
@@ -158,6 +162,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Enable the sandbox tests (bwrap)
         # A self-hosted runner has bwrap installed and no sudo.
         if: runner.environment == 'github-hosted'
@@ -200,6 +206,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - run: make test-pg TEST_DB='postgres://colony:colony@localhost:${{ job.services.postgres.ports['5432'] }}/colony_test?sslmode=disable'
 
   go-lint:
@@ -216,6 +224,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
@@ -234,6 +244,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -379,6 +391,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -400,6 +414,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - run: make test-install
 
   # The PWA build and the binaries with the real embedded web/dist. Starts at
@@ -418,6 +434,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+          # A self-hosted runner keeps its module cache between jobs.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
