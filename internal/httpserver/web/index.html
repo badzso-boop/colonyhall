@@ -1539,6 +1539,11 @@ function renderMsg(m) {
   if (m.attachments && m.attachments.length) {
     const attDiv = div.querySelector(".attachments");
     for (const att of m.attachments) {
+      if (att.deleted) {
+        // Round 54: the uploader deleted it; no name, no size, no link.
+        attDiv.append(el("span", { className: "attachment-link" }, "🗑 File deleted"));
+        continue;
+      }
       const isImg = att.mime && att.mime.startsWith("image/") && !att.mime.includes("svg");
       const isMd = att.name.endsWith(".md") || att.mime === "text/markdown";
       if (isImg) {
