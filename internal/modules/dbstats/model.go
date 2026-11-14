@@ -51,6 +51,9 @@ type Estimate struct {
 // OverheadFactor turns the rows' pg_column_size sum into a share of the
 // database with indexes, page and tuple overhead and free space. Measured on
 // the dev stack (round 54, docs/02-muszaki-specifikacio.md "Tárhely"): the
-// ten tables' pg_total_relation_size over their rows' pg_column_size sum,
-// rounded up so the estimate is never wildly low.
-const OverheadFactor = 3.0
+// ten tables' pg_total_relation_size over their rows' pg_column_size is 1.42
+// together (1.22 for the search log, which dominates, up to 6.1 for small
+// tables); 2.0 also covers the tables the estimate leaves out. On the dev
+// database (one workspace) it gives 29.0 MB for a pg_database_size of
+// 32.2 MB.
+const OverheadFactor = 2.0
