@@ -52,6 +52,8 @@
     "calPrev": "Naptár: előző időszak",
     "calNext": "Naptár: következő időszak",
     "calToday": "Naptár: ma",
-    "agentSearch": "Keresés az agentek között"
+    "agentSearch": "Keresés az agentek között",
+    "markRead": "A beszélgetés olvasottnak jelölése",
+    "firstUnread": "Ugrás az első olvasatlan üzenetre"
   }
 }

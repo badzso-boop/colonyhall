@@ -375,7 +375,11 @@ func (s *Store) AgentLockedChannels(ctx context.Context, workspaceID ids.ID) ([]
 
 // SetMute stores a viewer's mute.
 func (s *Store) SetMute(ctx context.Context, m conversation.Mute) error {
-	return s.q(ctx).SetMute(ctx, sqlcgen.SetMuteParams{ActorID: m.ActorID, ChannelID: m.ChannelID, MutedUntil: m.Until, CreatedAt: m.CreatedAt})
+	level := string(m.Level)
+	if level == "" {
+		level = string(conversation.NotifyNone)
+	}
+	return s.q(ctx).SetMute(ctx, sqlcgen.SetMuteParams{ActorID: m.ActorID, ChannelID: m.ChannelID, MutedUntil: m.Until, CreatedAt: m.CreatedAt, Level: level})
 }
 
 // DeleteMute removes a viewer's mute.
@@ -391,7 +395,8 @@ func (s *Store) Mutes(ctx context.Context, actorID ids.ID) ([]conversation.Mute,
 	}
 	out := make([]conversation.Mute, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, conversation.Mute{ActorID: r.ActorID, ChannelID: r.ChannelID, Until: r.MutedUntil, CreatedAt: r.CreatedAt})
+		out = append(out, conversation.Mute{ActorID: r.ActorID, ChannelID: r.ChannelID, Until: r.MutedUntil, CreatedAt: r.CreatedAt,
+			Level: conversation.NotifyLevel(r.Level)})
 	}
 	return out, nil
 }

@@ -514,6 +514,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/channels/{channelId}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Humans, for themselves (round 55). all: every message counts; mentions:
+         *     only mentions of the caller (the default in channels); none: muted
+         *     until unmuted (DELETE /mute returns to the default). It decides the
+         *     caller's unread badge and activity view, never what agents receive.
+         *     Emits channel.mute_changed to the caller only.
+         */
+        put: operations["setNotifyLevel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/channels/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Marks every conversation the caller is a member of as read; marked counts those that had unread messages. */
+        post: operations["markAllChannelsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/channels/{channelId}/members": {
         parameters: {
             query?: never;
@@ -3267,6 +3309,15 @@ export interface components {
              * @description End of the caller's mute; null while muted means forever
              */
             muted_until?: string | null;
+            notify_level?: components["schemas"]["NotifyLevel"];
+        };
+        /**
+         * @description The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+         * @enum {string}
+         */
+        NotifyLevel: "all" | "mentions" | "none";
+        NotifyLevelRequest: {
+            level: components["schemas"]["NotifyLevel"];
         };
         UpdateChannelRequest: {
             name?: string;
@@ -3718,6 +3769,7 @@ export interface components {
             muted: boolean;
             /** Format: date-time */
             muted_until?: string;
+            level?: components["schemas"]["NotifyLevel"];
         };
         Draft: {
             /** Format: uuid */
@@ -6230,6 +6282,55 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setNotifyLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["ChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyLevelRequest"];
+            };
+        };
+        responses: {
+            /** @description Set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    markAllChannelsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkedCount"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };

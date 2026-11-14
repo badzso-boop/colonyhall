@@ -10,7 +10,9 @@
     "observed": "Observing only",
     "private": "Private channel",
     "mentions": "{{count}} mentions",
-    "unread": "unread"
+    "unread": "unread",
+    "unreadCount_one": "{{count}} unread message",
+    "unreadCount_other": "{{count}} unread messages"
   },
   "actions": {
     "newChannel": "New channel",
@@ -287,5 +289,23 @@
     "title": "Pinned messages",
     "open_one": "{{count}} pinned message",
     "open_other": "{{count}} pinned messages"
+  },
+  "notify": {
+    "title": "Notifications",
+    "all": "All messages",
+    "mentions": "Only mentions",
+    "none": "Nothing (mute)",
+    "current": "current",
+    "markAllRead": "Mark all as read",
+    "markedAll_one": "{{count}} conversation marked read",
+    "markedAll_other": "{{count}} conversations marked read",
+    "menu": "Conversations menu"
+  },
+  "unread": {
+    "first_one": "First unread ({{count}} new)",
+    "first_other": "First unread ({{count}} new)",
+    "latest_one": "↓ Latest · {{count}} message below",
+    "latest_other": "↓ Latest · {{count}} messages below",
+    "markRead": "Mark as read (Esc)"
   }
 }

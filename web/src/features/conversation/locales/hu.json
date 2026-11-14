@@ -10,7 +10,9 @@
     "observed": "Csak megfigyelés",
     "private": "Privát csatorna",
     "mentions": "{{count}} megemlítés",
-    "unread": "olvasatlan"
+    "unread": "olvasatlan",
+    "unreadCount_one": "{{count}} olvasatlan üzenet",
+    "unreadCount_other": "{{count}} olvasatlan üzenet"
   },
   "actions": {
     "newChannel": "Új csatorna",
@@ -287,5 +289,23 @@
     "title": "Kitűzött üzenetek",
     "open_one": "{{count}} kitűzött üzenet",
     "open_other": "{{count}} kitűzött üzenet"
+  },
+  "notify": {
+    "title": "Értesítések",
+    "all": "Minden üzenet",
+    "mentions": "Csak ha megemlítenek",
+    "none": "Semmi (némítás)",
+    "current": "jelenlegi",
+    "markAllRead": "Mind olvasottnak jelölése",
+    "markedAll_one": "{{count}} beszélgetés olvasottnak jelölve",
+    "markedAll_other": "{{count}} beszélgetés olvasottnak jelölve",
+    "menu": "Beszélgetések menü"
+  },
+  "unread": {
+    "first_one": "Első olvasatlan ({{count}} új)",
+    "first_other": "Első olvasatlan ({{count}} új)",
+    "latest_one": "↓ Legutóbbi · {{count}} üzenet lent",
+    "latest_other": "↓ Legutóbbi · {{count}} üzenet lent",
+    "markRead": "Olvasottnak jelölés (Esc)"
   }
 }

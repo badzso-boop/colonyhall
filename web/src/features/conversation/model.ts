@@ -1,5 +1,5 @@
 import type { Schemas } from "@/shared/api";
-import { isMuted } from "./channel";
+import { rowBadge } from "./channel";
 
 export type Channel = Schemas["Channel"];
 export type Actor = Schemas["Actor"];
@@ -94,8 +94,9 @@ export function unreadTotals(rows: SidebarRow[], now = new Date()): { unread: nu
   let unread = 0;
   let mentions = 0;
   for (const r of rows) {
-    if (r.channel.unread > 0 && !isMuted(r.channel, now)) unread++;
-    mentions += r.channel.mentions;
+    const b = rowBadge(r.channel, now);
+    if (b.bold) unread++;
+    mentions += b.count;
   }
   return { unread, mentions };
 }

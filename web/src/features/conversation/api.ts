@@ -411,3 +411,32 @@ export function useSetPin() {
     },
   });
 }
+
+/** Sets the viewer's notification level (round 55, part I); "none" mutes until unmuted. */
+export function useNotifyLevel(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (level: Schemas["NotifyLevel"]) => {
+      unwrap(await api.PUT("/channels/{channelId}/notify", { params: { path: { channelId } }, body: { level } }));
+      return level;
+    },
+    onSuccess: (level) => {
+      qc.setQueryData<Schemas["Channel"][]>(conversationKeys.channels, (list) =>
+        list?.map((c) => (c.id === channelId ? { ...c, notify_level: level, muted: level === "none" ? true : undefined, muted_until: undefined } : c)),
+      );
+      void qc.invalidateQueries({ queryKey: conversationKeys.channels });
+    },
+  });
+}
+
+/** "Mind olvasott": every conversation of the viewer read. */
+export function useMarkAllRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST("/me/channels/read")).marked,
+    onSuccess: () => {
+      qc.setQueryData<Schemas["Channel"][]>(conversationKeys.channels, (list) => list?.map((c) => ({ ...c, unread: 0, mentions: 0 })));
+      void qc.invalidateQueries({ queryKey: conversationKeys.channels });
+    },
+  });
+}

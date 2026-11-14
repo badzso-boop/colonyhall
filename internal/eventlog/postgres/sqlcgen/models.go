@@ -194,6 +194,7 @@ type ChannelMute struct {
 	MutedUntil  *time.Time
 	CreatedAt   time.Time
 	WorkspaceID uuid.UUID
+	Level       string
 }
 
 type Compaction struct {

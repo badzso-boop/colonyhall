@@ -978,6 +978,27 @@ func (e MessageKind) Valid() bool {
 	}
 }
 
+// Defines values for NotifyLevel.
+const (
+	NotifyLevelAll      NotifyLevel = "all"
+	NotifyLevelMentions NotifyLevel = "mentions"
+	NotifyLevelNone     NotifyLevel = "none"
+)
+
+// Valid indicates whether the value is a known member of the NotifyLevel enum.
+func (e NotifyLevel) Valid() bool {
+	switch e {
+	case NotifyLevelAll:
+		return true
+	case NotifyLevelMentions:
+		return true
+	case NotifyLevelNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OverviewAssignmentWriteScope.
 const (
 	OverviewAssignmentWriteScopeAll  OverviewAssignmentWriteScope = "all"
@@ -2039,7 +2060,10 @@ type Channel struct {
 	// MutedUntil End of the caller's mute; null while muted means forever
 	MutedUntil *time.Time `json:"muted_until,omitempty"`
 	Name       string     `json:"name"`
-	Unread     int64      `json:"unread"`
+
+	// NotifyLevel The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+	NotifyLevel *NotifyLevel `json:"notify_level,omitempty"`
+	Unread      int64        `json:"unread"`
 }
 
 // ChannelKind defines model for ChannelKind.
@@ -3105,6 +3129,15 @@ type MyThreadPage struct {
 	NextCursor    *string    `json:"next_cursor,omitempty"`
 	Threads       []MyThread `json:"threads"`
 	UnreadThreads int        `json:"unread_threads"`
+}
+
+// NotifyLevel The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+type NotifyLevel string
+
+// NotifyLevelRequest defines model for NotifyLevelRequest.
+type NotifyLevelRequest struct {
+	// Level The caller's notification level: their choice, none while muted, else all for DMs and mentions for channels
+	Level NotifyLevel `json:"level"`
 }
 
 // OpenDMRequest defines model for OpenDMRequest.
@@ -4487,6 +4520,9 @@ type SendMessageJSONRequestBody = SendMessageRequest
 
 // MuteChannelJSONRequestBody defines body for MuteChannel for application/json ContentType.
 type MuteChannelJSONRequestBody = MuteRequest
+
+// SetNotifyLevelJSONRequestBody defines body for SetNotifyLevel for application/json ContentType.
+type SetNotifyLevelJSONRequestBody = NotifyLevelRequest
 
 // UpdateCompactionSummaryJSONRequestBody defines body for UpdateCompactionSummary for application/json ContentType.
 type UpdateCompactionSummaryJSONRequestBody = UpdateCompactionSummaryRequest

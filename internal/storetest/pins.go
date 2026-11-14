@@ -74,3 +74,23 @@ func testPins(t *testing.T, b Backend) {
 	// Pinning again after an unpin works.
 	must(t, pin(a, t0.Add(4*time.Minute)))
 }
+
+// testNotifyLevel: the mute row keeps its level (round 55, part I).
+func testNotifyLevel(t *testing.T, b Backend) {
+	f := setup(t, b)
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
+	st := b.Conversation
+	must(t, st.SetMute(ctx, conversation.Mute{ActorID: f.human.ID, ChannelID: f.channel.ID, CreatedAt: t0, Level: conversation.NotifyAll}))
+	mutes, err := st.Mutes(ctx, f.human.ID)
+	must(t, err)
+	if len(mutes) != 1 || mutes[0].Level != conversation.NotifyAll || mutes[0].Active(t0) {
+		t.Fatalf("level all is no mute: %+v", mutes)
+	}
+	until := t0.Add(time.Hour)
+	must(t, st.SetMute(ctx, conversation.Mute{ActorID: f.human.ID, ChannelID: f.channel.ID, Until: &until, CreatedAt: t0, Level: conversation.NotifyNone}))
+	mutes, err = st.Mutes(ctx, f.human.ID)
+	must(t, err)
+	if len(mutes) != 1 || mutes[0].LevelAt(t0) != conversation.NotifyNone || mutes[0].LevelAt(t0.Add(2*time.Hour)) != "" {
+		t.Fatalf("a timed mute: %+v", mutes)
+	}
+}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
-import { feedItems } from "@/shared/lib";
+import { feedItems, useShortcut } from "@/shared/lib";
+import { usePanes } from "@/shared/panes";
+import { ArrowUp, X } from "lucide-react";
 import { localeOf } from "@/shared/i18n";
 import { Skeleton } from "@/shared/ui";
 import { useMarkRead, useMessages } from "../api";
@@ -50,6 +52,13 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
   const prevHeight = useRef<number | null>(null);
   const seenCount = useRef(0);
   const [unseen, setUnseen] = useState(0);
+  // Round 55, part I: how many messages are below the view while scrolled
+  // up, and whether the "Új üzenetek" divider is above the view.
+  const [below, setBelow] = useState(0);
+  const [dividerAbove, setDividerAbove] = useState(false);
+  const [unreadDismissed, setUnreadDismissed] = useState(false);
+  const divider = useRef<HTMLDivElement>(null);
+  const [panes] = usePanes();
   // The first unread message when the conversation was opened (fixed while it is open).
   const [unreadFrom] = useState(() => channel.unread);
 
@@ -60,6 +69,22 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
     [stream, locale, t],
   );
   const dividerAt = unreadFrom > 0 && unreadFrom < stream.length ? stream[stream.length - unreadFrom]?.id : undefined;
+
+  // Where the view is: the end, messages below it, the divider above it.
+  const measure = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM;
+    const bottom = el.scrollTop + el.clientHeight;
+    let n = 0;
+    if (!atBottom.current) el.querySelectorAll<HTMLElement>("[data-message-id]").forEach((m) => m.offsetTop > bottom && n++);
+    setBelow(n);
+    setDividerAbove(divider.current !== null && divider.current.offsetTop < el.scrollTop);
+  }, []);
+
+  const jumpToFirstUnread = useCallback(() => {
+    divider.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, []);
 
   const markIfVisible = useCallback(() => {
     // An admin observing a conversation they are not in has no read position (the server answers 404).
@@ -115,6 +140,21 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
   }, [jumpMsg, jumpThread, stream, messages]);
 
   useEffect(markIfVisible, [markIfVisible, stream.length]);
+  // After the first layout (opened at the end): is the first unread above?
+  useEffect(() => {
+    const id = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(id);
+  }, [measure, stream.length]);
+
+  // Esc marks the conversation read (unless a pane is open: Esc closes it);
+  // Shift+Esc jumps to the first unread message.
+  const panesOpen = panes.thread !== null || panes.tabs.length > 0;
+  const markNow = () => {
+    setUnreadDismissed(true);
+    if (channel.is_member && (channel.unread > 0 || channel.mentions > 0)) markRead.mutate(channel.id);
+  };
+  useShortcut("escape", "conversation", "markRead", markNow, !panesOpen);
+  useShortcut("shift+escape", "conversation", "firstUnread", jumpToFirstUnread, Boolean(dividerAt));
   useEffect(() => {
     document.addEventListener("visibilitychange", markIfVisible);
     return () => document.removeEventListener("visibilitychange", markIfVisible);
@@ -151,9 +191,8 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
       <div
         ref={scroller}
         className="h-full overflow-y-auto py-2"
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM;
+        onScroll={() => {
+          measure();
           if (atBottom.current) {
             setUnseen(0);
             markIfVisible();
@@ -173,7 +212,7 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
           ) : (
             <div key={it.message.id}>
               {it.message.id === dividerAt ? (
-                <div className="my-1 flex items-center gap-3 px-4 text-meta font-semibold text-accent-text after:h-px after:flex-1 after:bg-accent">
+                <div ref={divider} className="my-1 flex scroll-mt-12 items-center gap-3 px-4 text-meta font-semibold text-accent-text after:h-px after:flex-1 after:bg-accent">
                   {t("message.newMessages")}
                 </div>
               ) : null}
@@ -191,7 +230,18 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
         )}
         <CompactionLive channelId={channel.id} human={viewer.human} />
       </div>
-      {unseen > 0 ? (
+      {dividerAt && dividerAbove && !unreadDismissed ? (
+        <div className="absolute top-2 left-1/2 flex -translate-x-1/2 items-center overflow-hidden rounded-full bg-accent text-meta font-semibold text-accent-fg shadow-overlay">
+          <button type="button" onClick={jumpToFirstUnread} className="flex items-center gap-1 py-1 pr-2 pl-3 hover:bg-accent-hover">
+            <ArrowUp aria-hidden className="size-3.5" />
+            {t("unread.first", { count: unreadFrom })}
+          </button>
+          <button type="button" aria-label={t("unread.markRead")} title={t("unread.markRead")} onClick={markNow} className="border-l border-accent-fg/30 py-1 pr-2.5 pl-2 hover:bg-accent-hover">
+            <X aria-hidden className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
+      {unseen > 0 || below > 0 ? (
         <button
           type="button"
           onClick={() => {
@@ -200,7 +250,7 @@ export function Feed({ channel, actors, viewer, handlers }: { channel: Channel; 
           }}
           className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-meta font-semibold text-accent-fg shadow-overlay"
         >
-          {t("message.jumpNew", { count: unseen })}
+          {unseen > 0 ? t("message.jumpNew", { count: unseen }) : t("unread.latest", { count: below })}
         </button>
       ) : null}
     </div>

@@ -264,8 +264,69 @@ func (s *Service) Mute(ctx context.Context, by identity.Actor, channelID ids.ID,
 		return ErrBadMuteUntil
 	}
 	return s.changeMute(ctx, by, channelID, func(ctx context.Context) error {
-		return s.Store.SetMute(ctx, Mute{ActorID: by.ID, ChannelID: channelID, Until: until, CreatedAt: now})
-	}, MuteChanged{ChannelID: channelID.String(), ActorID: by.ID.String(), Muted: true, MutedUntil: until})
+		return s.Store.SetMute(ctx, Mute{ActorID: by.ID, ChannelID: channelID, Until: until, CreatedAt: now, Level: NotifyNone})
+	}, MuteChanged{ChannelID: channelID.String(), ActorID: by.ID.String(), Muted: true, MutedUntil: until, Level: NotifyNone})
+}
+
+// SetNotifyLevel sets the caller's notification level for a conversation
+// (humans only, round 55): none is a mute until unmuted; all and mentions
+// replace a mute. Like the mute, it changes only what the caller is
+// bothered by, never what agents receive.
+func (s *Service) SetNotifyLevel(ctx context.Context, by identity.Actor, channelID ids.ID, level NotifyLevel) error {
+	if by.Kind != identity.KindHuman {
+		return ErrForbidden
+	}
+	if !ValidNotifyLevel(level) {
+		return ErrBadNotifyLevel
+	}
+	if level == NotifyNone {
+		return s.Mute(ctx, by, channelID, nil)
+	}
+	now := s.Clock.Now()
+	return s.changeMute(ctx, by, channelID, func(ctx context.Context) error {
+		return s.Store.SetMute(ctx, Mute{ActorID: by.ID, ChannelID: channelID, CreatedAt: now, Level: level})
+	}, MuteChanged{ChannelID: channelID.String(), ActorID: by.ID.String(), Level: level})
+}
+
+// NotifyLevelFor is the actor's effective level in a channel now: their
+// setting, or the default for the channel's kind.
+func (s *Service) NotifyLevelFor(ctx context.Context, actorID ids.ID, c Channel) (NotifyLevel, error) {
+	mutes, err := s.Store.Mutes(ctx, actorID)
+	if err != nil {
+		return "", err
+	}
+	now := s.Clock.Now()
+	for _, m := range mutes {
+		if m.ChannelID == c.ID {
+			if l := m.LevelAt(now); l != "" {
+				return l, nil
+			}
+		}
+	}
+	return DefaultNotifyLevel(c.Kind), nil
+}
+
+// MarkAllRead marks every conversation of the caller as read (the
+// sidebar's "Mind olvasott"); it returns how many had unread messages.
+func (s *Service) MarkAllRead(ctx context.Context, by identity.Actor) (int, error) {
+	views, err := s.Store.ChannelsForActor(ctx, by.WorkspaceID, by.ID, false)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
+		for _, v := range views {
+			if v.Unread == 0 && v.Mentions == 0 {
+				continue
+			}
+			if err := s.Store.SetSeen(ctx, v.ID, by.ID, v.MsgCount); err != nil {
+				return err
+			}
+			n++
+		}
+		return nil
+	})
+	return n, err
 }
 
 // Unmute removes the caller's mute.
@@ -302,21 +363,28 @@ func (s *Service) changeMute(ctx context.Context, by identity.Actor, channelID i
 	return nil
 }
 
-// withMutes fills the viewer's active mutes into the views.
+// withMutes fills the viewer's active mutes and notification levels into
+// the views.
 func (s *Service) withMutes(ctx context.Context, actorID ids.ID, views []ChannelView) error {
 	mutes, err := s.Store.Mutes(ctx, actorID)
-	if err != nil || len(mutes) == 0 {
+	if err != nil {
 		return err
 	}
 	now := s.Clock.Now()
 	byChannel := make(map[ids.ID]Mute, len(mutes))
 	for _, m := range mutes {
-		if m.Active(now) {
-			byChannel[m.ChannelID] = m
-		}
+		byChannel[m.ChannelID] = m
 	}
 	for i := range views {
-		if m, ok := byChannel[views[i].ID]; ok {
+		views[i].NotifyLevel = DefaultNotifyLevel(views[i].Kind)
+		m, ok := byChannel[views[i].ID]
+		if !ok {
+			continue
+		}
+		if l := m.LevelAt(now); l != "" {
+			views[i].NotifyLevel = l
+		}
+		if m.Active(now) {
 			views[i].Muted, views[i].MutedUntil = true, m.Until
 		}
 	}

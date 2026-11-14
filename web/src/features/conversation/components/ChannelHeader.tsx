@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, Bell, BellOff, Hash, Lock, LockKeyhole, LockKeyholeOpen, Settings } from "lucide-react";
+import { Archive, AtSign, Bell, BellOff, BellRing, Check, Hash, Lock, LockKeyhole, LockKeyholeOpen, Settings } from "lucide-react";
 import { useNow } from "@/shared/hooks";
 import { cn, fullTime, hueVar } from "@/shared/lib";
 import { Avatar, Button, IconButton, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, toast } from "@/shared/ui";
-import { useMembers, useMute, useSetArchived, useSetLocked } from "../api";
-import { isMuted, muteChoices, muteUntil, type ChannelTab } from "../channel";
+import { useMembers, useMute, useNotifyLevel, useSetArchived, useSetLocked } from "../api";
+import { isMuted, muteChoices, muteUntil, notifyLevel, notifyLevels, type ChannelTab, type NotifyLevel } from "../channel";
 import type { Actor, Channel } from "../model";
 import { PinsButton } from "./PinsButton";
 
@@ -29,8 +29,42 @@ export function LinkedText({ text }: { text: string }) {
   );
 }
 
+const levelIcon: Record<NotifyLevel, typeof Bell> = { all: BellRing, mentions: AtSign, none: BellOff };
+
+/**
+ * The notification level (round 55, part I): all messages, only mentions,
+ * or nothing (a mute until unmuted), the current one ticked; then the
+ * timed mutes of round 34.
+ */
+export function NotifyMenuItems({ channel }: { channel: Channel }) {
+  const { t } = useTranslation("conversation");
+  const set = useNotifyLevel(channel.id);
+  const now = useNow(60_000);
+  const current = notifyLevel(channel, now);
+  return (
+    <>
+      <p className="px-2 pt-1 pb-0.5 text-meta font-semibold text-fg-subtle">{t("notify.title")}</p>
+      {notifyLevels.map((l) => {
+        const Icon = levelIcon[l];
+        return (
+          <MenuItem
+            key={l}
+            icon={<Icon className="size-4" />}
+            onSelect={() => set.mutate(l, { onError: (e) => toast(e.message, { tone: "danger" }) })}
+          >
+            <span className="flex-1">{t(`notify.${l}`)}</span>
+            {l === current ? <Check aria-label={t("notify.current")} className="ml-3 size-4 text-accent-text" /> : null}
+          </MenuItem>
+        );
+      })}
+      <MenuSeparator />
+      <MuteMenuItems channel={channel} timedOnly />
+    </>
+  );
+}
+
 /** "Némítás" with its durations, or "Némítás feloldása" while muted. */
-export function MuteMenuItems({ channel }: { channel: Channel }) {
+export function MuteMenuItems({ channel, timedOnly }: { channel: Channel; timedOnly?: boolean }) {
   const { t, i18n } = useTranslation("conversation");
   const mute = useMute(channel.id);
   const now = useNow(60_000);
@@ -44,7 +78,7 @@ export function MuteMenuItems({ channel }: { channel: Channel }) {
     );
   return (
     <>
-      {muteChoices.map((c) => (
+      {muteChoices.filter((c) => !timedOnly || c !== "forever").map((c) => (
         <MenuItem key={c} icon={c === "1h" ? <BellOff className="size-4" /> : <span className="size-4" />} onSelect={() => run(muteUntil(c, new Date()))}>
           {t(`mute.${c}`)}
         </MenuItem>
@@ -131,7 +165,7 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
             <IconButton size="sm" label={t("mute.menu")} icon={muted ? <BellOff className="size-4" /> : <Bell className="size-4" />} />
           </MenuTrigger>
           <MenuContent>
-            <MuteMenuItems channel={channel} />
+            <NotifyMenuItems channel={channel} />
             {isChannel ? (
               <>
                 <MenuSeparator />

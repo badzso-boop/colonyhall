@@ -52,6 +52,8 @@
     "calPrev": "Calendar: previous range",
     "calNext": "Calendar: next range",
     "calToday": "Calendar: today",
-    "agentSearch": "Search the agents"
+    "agentSearch": "Search the agents",
+    "markRead": "Mark the conversation as read",
+    "firstUnread": "Jump to the first unread message"
   }
 }

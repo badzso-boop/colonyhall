@@ -30,7 +30,7 @@ func init() {
 	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
 	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil, conversation.ErrBadChannelKind)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
-	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans)
+	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans, conversation.ErrBadNotifyLevel)
 	httpx.RegisterForbidden(conversation.ErrPinOwnOnly)
 	httpx.RegisterStatus(http.StatusConflict, conversation.ErrPinLimit)
 	httpx.RegisterStatus(http.StatusTooManyRequests, conversation.ErrAgentPinLimit)
@@ -133,6 +133,9 @@ func channelToAPI(c conversation.ChannelView) apispec.Channel {
 	if c.Muted {
 		out.Muted = httpx.Ptr(true)
 		out.MutedUntil = c.MutedUntil
+	}
+	if c.NotifyLevel != "" {
+		out.NotifyLevel = httpx.Ptr(apispec.NotifyLevel(c.NotifyLevel))
 	}
 	return out
 }
@@ -305,6 +308,32 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("PUT /api/v1/channels/{id}/notify", wrap(func(w http.ResponseWriter, r *http.Request) {
+		channelID, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		var in apispec.NotifyLevelRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if err := svc.SetNotifyLevel(r.Context(), httpx.Actor(r), channelID, conversation.NotifyLevel(in.Level)); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.Handle("POST /api/v1/me/channels/read", wrap(func(w http.ResponseWriter, r *http.Request) {
+		n, err := svc.MarkAllRead(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.MarkedCount{Marked: n})
 	}))
 
 	mux.Handle("DELETE /api/v1/channels/{id}/mute", wrap(func(w http.ResponseWriter, r *http.Request) {

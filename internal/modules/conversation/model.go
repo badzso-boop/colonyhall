@@ -71,19 +71,65 @@ type ChannelView struct {
 	// Muted is the viewer's own mute; MutedUntil nil while muted means forever.
 	Muted      bool
 	MutedUntil *time.Time
+	// NotifyLevel is the viewer's effective notification level (round 55):
+	// their choice, NotifyNone while muted, or the default for the kind.
+	NotifyLevel NotifyLevel
 }
 
-// Mute is one viewer's mute of a channel. Until nil means forever; an
-// expired mute counts as unmuted.
+// NotifyLevel decides what of a conversation counts for one person: the
+// unread badge, the activity view and (round 43) push.
+type NotifyLevel string
+
+// Notification levels.
+const (
+	NotifyAll      NotifyLevel = "all"
+	NotifyMentions NotifyLevel = "mentions"
+	NotifyNone     NotifyLevel = "none" // muted
+)
+
+// DefaultNotifyLevel: every message of a DM, only mentions in a channel.
+func DefaultNotifyLevel(kind ChannelKind) NotifyLevel {
+	if kind == KindDM {
+		return NotifyAll
+	}
+	return NotifyMentions
+}
+
+// ValidNotifyLevel reports whether l is a known level.
+func ValidNotifyLevel(l NotifyLevel) bool {
+	return l == NotifyAll || l == NotifyMentions || l == NotifyNone
+}
+
+// Mute is one viewer's notification setting for a channel (round 34's mute,
+// round 55's level). Level NotifyNone (or empty) is a mute: Until nil means
+// forever, and an expired mute counts as unmuted (the default level). Other
+// levels have no Until.
 type Mute struct {
 	ActorID   ids.ID
 	ChannelID ids.ID
 	Until     *time.Time
 	CreatedAt time.Time
+	Level     NotifyLevel
 }
 
 // Active reports whether the mute is in force at now.
-func (m Mute) Active(now time.Time) bool { return m.Until == nil || m.Until.After(now) }
+func (m Mute) Active(now time.Time) bool {
+	if m.Level != "" && m.Level != NotifyNone {
+		return false
+	}
+	return m.Until == nil || m.Until.After(now)
+}
+
+// LevelAt is the level this setting gives at now, or "" for the default.
+func (m Mute) LevelAt(now time.Time) NotifyLevel {
+	if m.Level == NotifyAll || m.Level == NotifyMentions {
+		return m.Level
+	}
+	if m.Active(now) {
+		return NotifyNone
+	}
+	return ""
+}
 
 // ThreadSummary is one thread the viewer takes part in, for "Szálaim".
 type ThreadSummary struct {
@@ -231,6 +277,7 @@ var (
 	ErrDMUnchangeable     = errors.New("a DM cannot be renamed, archived or have its members changed")
 	ErrNothingToUpdate    = errors.New("give a name or a description to change")
 	ErrBadMuteUntil       = errors.New("until must be in the future")
+	ErrBadNotifyLevel     = errors.New("level must be all, mentions or none")
 	ErrPinLimit           = errors.New("a conversation has at most 50 pinned messages; unpin one first")
 	ErrAgentPinLimit      = errors.New("an agent pins at most 5 messages per conversation per day")
 	ErrPinOwnOnly         = errors.New("an agent can pin only its own messages")

@@ -816,7 +816,7 @@ func (q *Queries) MessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message
 }
 
 const mutes = `-- name: Mutes :many
-SELECT actor_id, channel_id, muted_until, created_at, workspace_id FROM channel_mute WHERE actor_id = $1 ORDER BY channel_id
+SELECT actor_id, channel_id, muted_until, created_at, workspace_id, level FROM channel_mute WHERE actor_id = $1 ORDER BY channel_id
 `
 
 func (q *Queries) Mutes(ctx context.Context, actorID uuid.UUID) ([]ChannelMute, error) {
@@ -834,6 +834,7 @@ func (q *Queries) Mutes(ctx context.Context, actorID uuid.UUID) ([]ChannelMute, 
 			&i.MutedUntil,
 			&i.CreatedAt,
 			&i.WorkspaceID,
+			&i.Level,
 		); err != nil {
 			return nil, err
 		}
@@ -1064,9 +1065,9 @@ func (q *Queries) SetMemberCanWrite(ctx context.Context, arg SetMemberCanWritePa
 }
 
 const setMute = `-- name: SetMute :exec
-INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (actor_id, channel_id) DO UPDATE SET muted_until = EXCLUDED.muted_until, created_at = EXCLUDED.created_at
+INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at, level)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (actor_id, channel_id) DO UPDATE SET muted_until = EXCLUDED.muted_until, created_at = EXCLUDED.created_at, level = EXCLUDED.level
 `
 
 type SetMuteParams struct {
@@ -1074,6 +1075,7 @@ type SetMuteParams struct {
 	ChannelID  uuid.UUID
 	MutedUntil *time.Time
 	CreatedAt  time.Time
+	Level      string
 }
 
 func (q *Queries) SetMute(ctx context.Context, arg SetMuteParams) error {
@@ -1082,6 +1084,7 @@ func (q *Queries) SetMute(ctx context.Context, arg SetMuteParams) error {
 		arg.ChannelID,
 		arg.MutedUntil,
 		arg.CreatedAt,
+		arg.Level,
 	)
 	return err
 }

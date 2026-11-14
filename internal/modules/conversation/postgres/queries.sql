@@ -151,9 +151,9 @@ UPDATE channel SET agent_locked_at = sqlc.narg(agent_locked_at), agent_locked_by
 SELECT id FROM channel WHERE workspace_id = $1 AND agent_locked_at IS NOT NULL ORDER BY id;
 
 -- name: SetMute :exec
-INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (actor_id, channel_id) DO UPDATE SET muted_until = EXCLUDED.muted_until, created_at = EXCLUDED.created_at;
+INSERT INTO channel_mute (actor_id, channel_id, muted_until, created_at, level)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (actor_id, channel_id) DO UPDATE SET muted_until = EXCLUDED.muted_until, created_at = EXCLUDED.created_at, level = EXCLUDED.level;
 
 -- name: DeleteMute :exec
 DELETE FROM channel_mute WHERE actor_id = $1 AND channel_id = $2;

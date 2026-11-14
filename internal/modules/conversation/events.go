@@ -68,10 +68,11 @@ type ChannelLocked struct {
 
 // MuteChanged is the payload of EventMuteChanged.
 type MuteChanged struct {
-	ChannelID  string     `json:"channel_id"`
-	ActorID    string     `json:"actor_id"`
-	Muted      bool       `json:"muted"`
-	MutedUntil *time.Time `json:"muted_until,omitempty"`
+	ChannelID  string      `json:"channel_id"`
+	ActorID    string      `json:"actor_id"`
+	Muted      bool        `json:"muted"`
+	MutedUntil *time.Time  `json:"muted_until,omitempty"`
+	Level      NotifyLevel `json:"level,omitempty"`
 }
 
 // MemberRemoved is the payload of EventMemberRemoved.
