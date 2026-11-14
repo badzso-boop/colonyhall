@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Links to a message (round 55): the conversation opens at the message;
 // a thread reply also opens its thread. A person without access gets the
 // conversation's normal "not found".

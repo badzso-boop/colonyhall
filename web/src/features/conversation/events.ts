@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { QueryClient } from "@tanstack/react-query";
 import { onEvent, onResync, type AppEvent } from "@/shared/api";
 import { conversationKeys, draftsKey, pinsKey, type Message, type MessagePages } from "./api";

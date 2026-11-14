@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { agentAuthors, groupNotes, searchNotes } from "./model";
 
 const n = (id: string, agent: string, thread: string, at: string, text = "") => ({ id, agent_id: agent, thread_root_id: thread, text, created_at: at });

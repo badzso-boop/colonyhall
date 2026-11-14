@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package secretscan flags text that looks like it carries a secret, so
 // the search index can leave it out (round 36, docs/11-rag-terv.md, 6.).
 // The rules are a small subset written after the categories of gitleaks'

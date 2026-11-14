@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useMemo } from "react";
 import { useHosts } from "@/features/hosts";
 import { useSession } from "@/features/identity";

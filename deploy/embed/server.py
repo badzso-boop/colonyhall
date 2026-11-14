@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 """Colonyhall's small model server for the search (round 36,
 docs/11-rag-terv.md): text embeddings on the Raspberry Pi
 (POST /v1/embeddings, OpenAI-compatible) or reranking on the homelab

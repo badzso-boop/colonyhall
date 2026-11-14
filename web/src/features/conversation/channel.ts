@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { Channel, Actor } from "./model";
 
 /** The channel settings tabs (round 34, 1.3), the URL's ?channel-settings=<tab>. */

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package draft keeps unsent messages (round 55, part A): one per person,
 // conversation and thread. A draft is not a message: it never reaches
 // agents, search or anyone else's event stream, and only its owner reads it.

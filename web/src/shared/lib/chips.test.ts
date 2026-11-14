@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { chipRefs, messageChipRef, splitChips } from "./chips";
 
 const id = "0b5c2a8e-1f2d-4c3b-9a8e-7d6c5b4a3f21";

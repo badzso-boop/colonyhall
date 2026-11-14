@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The live monitor in the hero (docs/18, 4.2). A prewritten script with an
 // invented person and invented agents: the ants carry the messages in, and
 // a working agent's ant goes into the workroom under the monitor, from where

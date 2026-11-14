@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package activity is the personal activity feed (round 55, part H): what
 // concerns one person, built from the event log by a consumer. The REST
 // view, the WebSocket badge and (round 43) push all read it.

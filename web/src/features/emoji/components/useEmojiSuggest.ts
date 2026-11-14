@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useEffect, useMemo, useState } from "react";
 import { loadEmoji } from "../load";
 import { activeColon, searchEmoji, type Emoji } from "../model";

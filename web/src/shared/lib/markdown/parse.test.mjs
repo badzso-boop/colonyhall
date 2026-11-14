@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The dev page's markdown tests (markdown.test.mjs), run against the same
 // parser in the PWA. Keep them in step with the original.
 import assert from "node:assert/strict";

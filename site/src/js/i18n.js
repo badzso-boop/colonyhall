@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Strings for the scripts. The build puts the page's language (only the keys
 // the scripts and data files use) into <script id="site-data">; no fetch.
 const blob = JSON.parse(document.getElementById("site-data")?.textContent || "{}");

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // ColonyMarkdown: A safe, deterministic markdown renderer for Colonyhall chat and file viewer.
 // Builds DOM nodes directly without innerHTML.
 (function () {

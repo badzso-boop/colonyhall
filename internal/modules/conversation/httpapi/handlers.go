@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package httpapi exposes the conversation module over REST.
 // Request and response shapes come from api/openapi.yaml (internal/apispec).
 package httpapi

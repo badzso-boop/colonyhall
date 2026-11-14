@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { isMuted, muteUntil, notifyLevel, orderMembers, rowBadge, validChannelName } from "./channel";
 import type { Actor, Channel } from "./model";
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { breadcrumb, covered, rootOf, selectable, setAccess, summary, toggle, visibleEntries, within, type Selection } from "./picker";
 
 test("paths: within, the root, the breadcrumb", () => {

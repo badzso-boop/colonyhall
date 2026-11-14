@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { ApiError, createApi, onUnauthorized, setCsrfToken, unwrap } from "./client";
 
 // Tests run outside a page, so the client needs an absolute base URL.

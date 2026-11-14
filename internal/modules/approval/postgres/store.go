@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package postgres implements approval.Store on Postgres. SQL lives in
 // queries.sql; sqlcgen is generated from it by sqlc.
 package postgres

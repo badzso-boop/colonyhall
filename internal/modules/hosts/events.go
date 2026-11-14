@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package hosts
 
 // Event types (all recorded in the audit log; admins see them live).

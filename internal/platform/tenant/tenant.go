@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package tenant carries the workspace a request's subdomain names, in
 // multi-tenant mode (round 45, docs/23-elkulonites.md). The server's tenant
 // middleware puts it in the request context before anything else runs;

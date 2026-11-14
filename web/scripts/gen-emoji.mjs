@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Writes src/features/emoji/data/emoji.json (and its LICENSE) from emojibase-data (MIT; the
 // CLDR names and keywords in English and Hungarian). Run after updating the
 // package: `npm run gen:emoji`. The PWA bundles the result in the picker's

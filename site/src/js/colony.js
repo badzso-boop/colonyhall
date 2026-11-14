@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The colony: every ant on the page, one canvas, one requestAnimationFrame
 // loop, and the name tags as DOM text (docs/18, 4.1 and 8). The loop runs
 // only while an ant (or a layer, such as a pheromone trail) is on screen,

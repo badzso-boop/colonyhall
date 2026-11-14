@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useEffect, useState } from "react";
 
 /** The current time, re-read every `everyMs` (the calendar's now line, countdowns). */

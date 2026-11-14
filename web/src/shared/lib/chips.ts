@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // References in a message's text that the chat turns into chips
 // (round 34, part 6): Q-12 (a question), D-12 (a decision),
 // [error:<id>] (a run error, details for humans) and [approval:<id>]

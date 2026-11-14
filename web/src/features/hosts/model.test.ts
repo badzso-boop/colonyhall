@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { Schemas } from "@/shared/api";
 import { compareVersions, enrollCommand, grantsByPath, hostWarnings, isOnline, mmss, newlyEnrolled, secondsLeft } from "./model";
 

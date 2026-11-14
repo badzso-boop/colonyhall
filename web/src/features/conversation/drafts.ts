@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Drafts (round 55, part A): one unsent message per conversation and
 // thread. The server keeps them per person; localStorage is only the
 // offline fallback, and the newer of the two wins.

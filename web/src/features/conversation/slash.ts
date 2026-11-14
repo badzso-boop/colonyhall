@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The composer's slash commands (round 55, part B): which message "this"
 // is, and when a /remind fires. Pure; useSlash runs them.
 import type { RemindWhen } from "@/shared/lib";

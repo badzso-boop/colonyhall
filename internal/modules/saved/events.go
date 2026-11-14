@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 package saved
 
 // Events. They carry ids only (never the note) and reach the owner alone.

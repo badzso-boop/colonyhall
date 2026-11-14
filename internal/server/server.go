@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package server is the composition root: it picks the store backend,
 // wires the modules together and builds the HTTP handler. Nothing else in
 // the code base knows which concrete adapters are in use.

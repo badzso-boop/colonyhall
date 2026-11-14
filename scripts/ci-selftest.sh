@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # Tests of the CI's own scripts: the path filter (ci-changes.sh) and the final
 # gate (ci-ok.sh). Run by `make ci-selftest` and the CI's actionlint job.
 set -eu

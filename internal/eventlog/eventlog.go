@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package eventlog is the append-only, sequence-numbered record of every
 // state change (transactional outbox). Services append events inside the
 // same transaction as their data change; consumers and the WebSocket

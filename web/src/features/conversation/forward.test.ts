@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { expect, test } from "vitest";
 import { forwardTargets, needsLeakConfirm } from "./forward";
 import type { Channel } from "./model";

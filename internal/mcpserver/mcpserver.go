@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package mcpserver serves the MCP endpoint. Each request is authenticated
 // with the agent's bearer token, and the session gets a server whose tools
 // act as that agent.

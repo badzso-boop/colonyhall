@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Check, Copy, FileText } from "lucide-react";
 import { cn, parseMarkdown, sanitizeUrl, splitChips, type Block, type Chip, type FileLink, type Inline } from "@/shared/lib";

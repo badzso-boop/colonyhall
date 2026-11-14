@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Ant sketches for the design gate (docs/18, section 11, step 0).
 // Not part of the build. Every ant is drawn from code in Canvas 2D; the legs
 // follow a procedural alternating-tripod gait: the front and hind leg on one

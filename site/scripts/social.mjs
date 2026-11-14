@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Makes the social preview image (og:image, and the GitHub social preview)
 // from the finished site's hero, with Playwright (docs/18, 5). The page
 // shows only invented people and agents, so no demo seed is needed.

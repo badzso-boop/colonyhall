@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { foldDiff, lineDiff } from "./diff";
 
 test("unchanged runs fold to a count around the changes", () => {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { ComponentProps, SelectHTMLAttributes } from "react";
 import { Checkbox as RCheckbox, Switch as RSwitch } from "radix-ui";
 import { Check } from "lucide-react";

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package embedhttp is the HTTP adapter for the search's Embedder and
 // Reranker ports: an OpenAI-compatible POST /v1/embeddings (the Raspberry
 // Pi) and a Jina/Cohere-style POST /v1/rerank (the homelab reranker); see

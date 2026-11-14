@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The emoji picker's data and search (round 55, part C). The data is
 // bundled (data/emoji.json, from emojibase-data) and drawn with the system
 // emoji font: nothing is loaded from another origin.

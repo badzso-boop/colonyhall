@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The composer's slash commands (round 55, part B; the first four came from
 // the dev page). They are understood in the client and call existing APIs;
 // nothing typed as a command is sent as a message. The registry is a plain

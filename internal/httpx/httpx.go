@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package httpx holds HTTP helpers shared by every module's httpapi package:
 // the authenticated actor in the request context, JSON encoding and
 // RFC 9457 problem responses.

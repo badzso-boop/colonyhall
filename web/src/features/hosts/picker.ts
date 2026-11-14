@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The folder picker's selection logic (round 33, part 7). Paths are the
 // guard's absolute paths; a root is one of the host's guard.yaml roots.
 

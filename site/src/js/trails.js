@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Pheromone trails (docs/18, 4.3): when an agent hands a task to another, a
 // faintly glowing red trail runs between the two, then fades. The only loud
 // use of the red in the chambers. Stopping the colony puts every trail out.

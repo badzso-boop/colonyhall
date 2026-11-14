@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import type { ActivityItem } from "./api";
 
 export const activityKinds = ["mention", "thread_reply", "reaction", "approval", "question", "important", "reminder"] as const;

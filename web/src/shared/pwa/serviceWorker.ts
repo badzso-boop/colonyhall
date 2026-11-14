@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 /**
  * Registers the service worker (production builds only) and calls onUpdate
  * when a new version is installed and waiting. The page never reloads by

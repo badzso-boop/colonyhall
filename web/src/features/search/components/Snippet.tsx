@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { snippetParts } from "../model";
 
 /** A hit's snippet with the keyword matches (between « and ») marked; built from text nodes, never as HTML. */

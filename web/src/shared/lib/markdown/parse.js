@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The markdown parser of the chat and the file viewer, from the dev page's
 // markdown.js (rounds 17 and 20), unchanged apart from being an ES module:
 // it only parses (text → blocks); rendering is Markdown.tsx, which builds

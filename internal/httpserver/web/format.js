@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // ColonyFormat: message dates, day separators and the session context label.
 // Pure functions, so they are tested in Node (format.test.mjs).
 (function (global) {

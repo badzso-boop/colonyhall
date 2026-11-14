@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Saved items and reminders (round 55, part E): the reminder times are
 // chosen in the person's own time zone (their profile), sent as instants.
 

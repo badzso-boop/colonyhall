@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Entry point (an ES module, so deferred). The page is complete without it;
 // this adds the copy buttons, the pause control and the colony.
 import { t } from "./i18n.js";

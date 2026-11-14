@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package hosts owns the machines that run a guard (`colony guard`): their
 // pairing, which agents run on which machine, and which folders each agent
 // may use there. The machine owner's root folders (guard.yaml) are the

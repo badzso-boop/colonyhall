@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Ban, Brain, ChevronRight, FilePen, FileText, Globe, PenLine, Puzzle, Search, Settings, TerminalSquare, type LucideIcon } from "lucide-react";

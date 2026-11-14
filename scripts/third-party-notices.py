@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 """Write THIRD_PARTY_NOTICES.md: the licences of everything shipped in the
 binaries and the container image (round 48).
 

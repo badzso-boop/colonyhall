@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Builds the site into site/dist and checks the rules every version of the
 // site keeps, whatever its design (round 48, part 5.2; docs/18):
 //   - nothing loaded from another origin at runtime: no external scripts,

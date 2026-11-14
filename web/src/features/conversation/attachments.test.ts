@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { trayReducer, trayState, type Attachment } from "./attachments";
 
 const f = (name: string) => new File(["x"], name);
