@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { MAX_TABS, empty, fromQuery, place, reduce, toQuery, type PaneAction, type PaneState, type WorkTab } from "./panes";
 
 const term = (name: string): WorkTab => ({ kind: "terminal", agentId: "a1", ref: name });

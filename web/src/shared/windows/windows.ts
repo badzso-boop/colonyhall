@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 /**
  * Floating windows (round 32, part 1): pure state and rules, no React.
  *

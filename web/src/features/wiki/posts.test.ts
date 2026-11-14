@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { lineDiff, quote, tagCounts, wikiPosts, type Revision } from "./posts";
 
 const rev = (rev: number, kind: Revision["kind"], body: string, author = "a"): Revision => ({ page_id: "p", rev, kind, body, author_id: author, created_at: `2026-10-30T0${rev}:00:00Z` });

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { dayKey, dayLabel, feedItems, fullTime, messageTime, relativeTime, sessionContext } from "./format";
 
 // Local-time dates, so the tests hold in any time zone (as in round 30).

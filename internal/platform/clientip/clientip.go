@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package clientip decides which address a request comes from (round 40).
 //
 // The answer is the TCP peer (RemoteAddr). X-Forwarded-For is believed only

@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # The final CI gate (.github/workflows/ci.yml, `ci-ok`): the one required
 # status check. Reads the `needs` context as JSON from $NEEDS and fails when a
 # job failed or was cancelled, or was skipped although the path filter of the

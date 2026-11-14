@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 export { Avatar, type AvatarKind, type AvatarSize, type AvatarStatus } from "./Avatar";
 export { Badge, type BadgeTone } from "./Badge";
 export { BrandMark } from "./BrandMark";

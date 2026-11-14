@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package mcptools gives agents read-only access to a person's planner.
 // There are no write tools on purpose: only the owner changes tasks.
 package mcptools

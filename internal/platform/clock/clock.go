@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package clock provides the Clock port. Domain and service code must take
 // time from a Clock instead of calling time.Now directly, so tests can run
 // with a deterministic, manually advanced clock.

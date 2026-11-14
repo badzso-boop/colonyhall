@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { dayKey } from "@/shared/lib";
 import { eventDays, eventsByDay, layoutDay, minutesToNext, monthGrid, rangeTitle, shift, startOfWeek, viewRange, type CalEvent } from "./calendar";
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { countdown, filterLeases, leaseState, remaining, sortLeases, type Lease } from "./model";
 
 const now = new Date("2026-10-30T10:00:00Z");

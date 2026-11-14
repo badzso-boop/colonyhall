@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 /**
  * A random UUID v4. `crypto.randomUUID` exists only in secure contexts
  * (HTTPS or localhost); the server is also reached over plain HTTP on

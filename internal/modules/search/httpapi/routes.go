@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package httpapi is the search's REST transport: GET /api/v1/search.
 package httpapi
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { buildCron, describeRule, parseCron, quickChips, type Rule } from "./rule";
 
 const t = (key: string, o?: Record<string, unknown>) => `${key} ${JSON.stringify(o)}`;

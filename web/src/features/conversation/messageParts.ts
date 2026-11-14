@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Pure rules for the parts of a message the dev page showed and the PWA
 // ports (round 34, part 6). The texts they read are written by the
 // server or the guard, so the patterns follow those (Hungarian) bodies.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { lazy } from "react";
 
 export { conversationKeys, useChannels, useMessages, useSendMessage, useThread, type Message } from "./api";

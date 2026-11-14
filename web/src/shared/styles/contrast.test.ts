@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // WCAG AA for the token pairs the components use (docs/07-design-system.md):
 // text ≥ 4.5:1, icons/placeholders/control borders ≥ 3:1, in both themes.
 // The values are read from tokens.css, so a change cannot slip past.

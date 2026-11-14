@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # Run the installer tests (internal/setup) inside throwaway containers of the
 # supported Linux distributions: install.sh with the system's own sh, curl
 # and tar against the tests' fake GitHub. Needs Docker; not part of `make test`.

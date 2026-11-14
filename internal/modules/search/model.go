@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package search is hybrid keyword and semantic search over chat messages,
 // wiki pages, decisions and compaction summaries (round 36a,
 // docs/11-rag-terv.md). The index is a projection of those sources, kept

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { cn } from "@/shared/lib";
 
 // The Colonyhall mark (an ant seen from above), from public/brand/mark.svg.

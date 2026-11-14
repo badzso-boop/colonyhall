@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The schedule builder's choices and the cron they make (round 32,
 // part 6). Cron weekdays: 0 = Sunday … 6 = Saturday, as robfig/cron reads them.
 // The server's parser has no "L" (last day of the month), so Havonta offers 1–31.

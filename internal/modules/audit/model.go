@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // Package audit keeps a tamper-evident copy of the event log. Every entry
 // stores the hash of the previous entry of the same workspace, so altering
 // or deleting a row breaks the chain, which Verify detects.

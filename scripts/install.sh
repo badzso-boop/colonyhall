@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Ujj Norbert
+
 # Colonyhall installer: downloads the `colony` binary for this machine from a
 # GitHub release, verifies it against SHA256SUMS, puts it into ~/.local/bin
 # and starts `colony setup`, which does the rest (docs/15-telepites-terv.md).

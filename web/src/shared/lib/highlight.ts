@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 /**
  * The parts of `text` a query matched, for highlighting search hits: the
  * first case-insensitive substring if there is one, otherwise the letters

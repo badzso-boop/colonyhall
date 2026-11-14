@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 export { cn } from "./cn";
 export { chipRefs, splitChips, type Chip, type ChipKind, type ChipPart } from "./chips";
 export { hueVar, hues, isHue, type Hue } from "./palette";

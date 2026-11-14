@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // @ autocomplete ranking, ported from the dev page's mention.js (round 26).
 
 export type MentionCandidate = { id: string; handle: string; display_name: string; halted?: boolean };

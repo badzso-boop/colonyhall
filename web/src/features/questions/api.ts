@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, onResync, onUntypedEvent, unwrap } from "@/shared/api";
 import { waitingForHumans, type Question } from "./model";

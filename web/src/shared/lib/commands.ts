@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ujj Norbert
+
 // The composer's slash commands (from the dev page). They are understood in
 // the client: /schedule, /daily and /cron create a schedule, /answer answers
 // a question; anything else is sent as a message.
