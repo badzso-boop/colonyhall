@@ -62,7 +62,9 @@ export function HostCard({ host, now, selected }: { host: Host; now: Date; selec
           </span>
         ) : null}
         {r.storage_paused ? (
-          <span className="rounded-full border border-warning/40 bg-warning-soft px-1.5 text-meta text-warning">{t("storagePaused")}</span>
+          <span className="shrink-0 rounded-full border border-warning/40 bg-warning-soft px-1.5 text-meta text-warning" title={t("storagePausedTitle")}>
+            {t("storagePaused")}
+          </span>
         ) : null}
         <OnlineBadge host={host} now={now} />
       </div>

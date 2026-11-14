@@ -307,5 +307,6 @@
       "error": "Nem sikerült. Próbáld újra."
     }
   },
-  "storagePaused": "Szünetel: megtelt a tárhely"
+  "storagePaused": "Szünetel: tárhely",
+  "storagePausedTitle": "Szünetel: megtelt a munkaterület tárhelye, az agentek nem ébrednek"
 }

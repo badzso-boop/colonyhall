@@ -307,5 +307,6 @@
       "error": "That did not work. Try again."
     }
   },
-  "storagePaused": "Paused: workspace storage full"
+  "storagePaused": "Paused: storage",
+  "storagePausedTitle": "Paused: the workspace storage is full; the agents are not woken"
 }
