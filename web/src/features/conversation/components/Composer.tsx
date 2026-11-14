@@ -382,7 +382,7 @@ export function Composer({ channelId, threadRootId, placeholder, memberIds, tray
             ) : null}
           </MenuContent>
         </Menu>
-        <EmojiButton label={t("composer.emoji")} onPick={insertEmoji} />
+        <EmojiButton label={t("composer.emoji")} align="start" onPick={insertEmoji} />
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => (tray.add(e.target.files ?? []), (e.target.value = ""))} />
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (tray.add(e.target.files ?? []), (e.target.value = ""))} />
         {onOpenFiles ? (
