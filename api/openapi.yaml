@@ -3325,6 +3325,7 @@ components:
           properties:
             ok: { type: boolean }
             latency_ms: { type: number, format: double }
+            operator_only: { type: boolean, description: "Round 51: multi-tenant mode; the whole database's size is the operator's to see, so size_bytes, tables and growth are absent." }
             size_bytes: { type: integer, format: int64, description: "The whole database (pg_database_size); absent on the memory store, and in multi-tenant mode (round 51: only the operator sees the whole database)." }
             tables:
               type: array

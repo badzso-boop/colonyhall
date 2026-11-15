@@ -87,3 +87,26 @@ export function useActors() {
     },
   });
 }
+
+/** Round 51: the workspace an owner invite is for (public; the token travels in the body). */
+export function useInviteLookup(token: string) {
+  return useQuery({
+    queryKey: ["identity", "invite", token],
+    queryFn: async () => unwrap(await api.POST("/invites/lookup", { body: { token } })),
+    enabled: token !== "",
+    retry: false,
+    staleTime: Infinity,
+  });
+}
+
+/** Round 51: become the owner with the invite, and be logged in. */
+export function useAcceptInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["AcceptInviteRequest"]) => unwrap(await api.POST("/invites/accept", { body })),
+    onSuccess: (s) => {
+      setCsrfToken(s.csrf_token);
+      qc.setQueryData(identityKeys.session, s);
+    },
+  });
+}

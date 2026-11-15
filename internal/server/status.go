@@ -86,10 +86,11 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 	out.Database.LatencyMs = float64(time.Since(begin).Microseconds()) / 1000
 	// Round 51: in multi-tenant mode the whole database is the operator's
 	// to see (GET /operator/system/database), not a customer admin's.
-	if !d.Multitenant {
-		if err := d.databaseSize(ctx, &out); err != nil {
-			return out, err
-		}
+	if d.Multitenant {
+		hidden := true
+		out.Database.OperatorOnly = &hidden
+	} else if err := d.databaseSize(ctx, &out); err != nil {
+		return out, err
 	}
 
 	head, err := d.Events.Head(ctx)

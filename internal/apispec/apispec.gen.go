@@ -4423,6 +4423,9 @@ type SystemStatus struct {
 		LatencyMs float64             `json:"latency_ms"`
 		Ok        bool                `json:"ok"`
 
+		// OperatorOnly Round 51: multi-tenant mode; the whole database's size is the operator's to see, so size_bytes, tables and growth are absent.
+		OperatorOnly *bool `json:"operator_only,omitempty"`
+
 		// SizeBytes The whole database (pg_database_size); absent on the memory store, and in multi-tenant mode (round 51: only the operator sees the whole database).
 		SizeBytes *int64 `json:"size_bytes,omitempty"`
 

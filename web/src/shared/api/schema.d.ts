@@ -3521,6 +3521,8 @@ export interface components {
                 ok: boolean;
                 /** Format: double */
                 latency_ms: number;
+                /** @description Round 51: multi-tenant mode; the whole database's size is the operator's to see, so size_bytes, tables and growth are absent. */
+                operator_only?: boolean;
                 /**
                  * Format: int64
                  * @description The whole database (pg_database_size); absent on the memory store, and in multi-tenant mode (round 51: only the operator sees the whole database).

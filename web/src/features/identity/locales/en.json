@@ -28,5 +28,21 @@
     "line": "Colonyhall {{version}} · {{license}}",
     "source": "Source code",
     "sourceHint": "This server's source code (AGPL-3.0, section 13)"
+  },
+  "invite": {
+    "invalidTitle": "This invite is not valid",
+    "gone": "This invite link is no longer valid (it was used, it expired or a new one replaced it). Ask the operator for a new one.",
+    "error": "The invite could not be loaded; try again.",
+    "title": "Invite: {{workspace}}",
+    "body": "You become the workspace's owner. The link works once, until {{expires}}.",
+    "handle": "Handle",
+    "handleHelp": "2–32 characters: lower-case letters, digits and hyphens.",
+    "name": "Display name (optional)",
+    "password": "Password",
+    "passwordHelp": "At least {{min}} characters.",
+    "again": "Password again",
+    "mismatch": "The two passwords differ.",
+    "handleTaken": "This handle is taken; choose another.",
+    "submit": "Become the owner"
   }
 }

@@ -1,0 +1,104 @@
+{
+  "title": "Operations",
+  "nav": { "label": "Operations", "customers": "Customers", "audit": "Audit", "system": "System", "account": "My account" },
+  "logout": "Log out",
+  "devAccess": "Developer mode: the operator sees all data",
+  "done": "Done",
+  "cancel": "Cancel",
+  "never": "Never",
+  "login": {
+    "title": "Operator sign-in",
+    "handle": "Handle",
+    "password": "Password",
+    "code": "Code",
+    "codeHelp": "The 6-digit code from the authenticator app, or a backup code (XXXXX-XXXXX).",
+    "submit": "Sign in",
+    "failed": "Wrong handle, password or code.",
+    "locked": "Too many failed attempts; try again later.",
+    "error": "Sign-in failed; try again."
+  },
+  "state": { "active": "Active", "suspended": "Suspended" },
+  "invite": {
+    "owner": "Has an owner",
+    "none": "No invite",
+    "open": "Invite open",
+    "expired": "Invite expired",
+    "used": "Invite used",
+    "revoked": "Invite revoked",
+    "title": "New invite: {{name}}",
+    "body": "A new invite link for the owner, valid for 7 days. The previous link stops working.",
+    "create": "Create link",
+    "handOver": "Give the link to the customer's owner. It works once, until {{expires}}. It is not shown again."
+  },
+  "storage": {
+    "unlimited": "{{used}} (no quota)",
+    "ofQuota": "{{used}} / {{quota}} ({{pct}}%)",
+    "warning_80": "Over 80%",
+    "warning_95": "Over 95%",
+    "full": "Full"
+  },
+  "create": {
+    "title": "New customer",
+    "doneTitle": "Created: {{name}}",
+    "name": "Name",
+    "slug": "Subdomain",
+    "slugHelp": "3–40 characters: lower-case letters, digits and hyphens. The address starts with it: <subdomain>.<domain>.",
+    "submit": "Create",
+    "slugTaken": "Another customer already uses this subdomain.",
+    "invalid": "Check the name and the subdomain."
+  },
+  "customers": {
+    "title": "Customers",
+    "new": "New customer",
+    "empty": "No customers yet.",
+    "name": "Customer",
+    "slug": "Subdomain",
+    "state": "State",
+    "owner": "Owner",
+    "users": "Users",
+    "agents": "Agents",
+    "hosts": "Machines",
+    "hostsValue": "{{online}} / {{total}} online",
+    "storage": "Storage",
+    "lastActivity": "Last activity",
+    "back": "Customers"
+  },
+  "detail": {
+    "suspendedNotice": "Suspended ({{when}}): every request, machine and agent is refused; the data is kept.",
+    "newInvite": "New invite",
+    "suspend": "Suspend",
+    "restore": "Restore",
+    "inviteExpires": "Invite expires",
+    "created": "Created",
+    "reason": "Reason for the suspension"
+  },
+  "suspend": {
+    "title": "Suspend: {{name}}",
+    "body": "Every request, machine and agent of the workspace is refused and open connections close. The data is kept; after a restore everything continues.",
+    "reason": "Reason",
+    "reasonHelp": "Goes to the operator audit only; the customer does not see it."
+  },
+  "restore": {
+    "title": "Restore: {{name}}",
+    "body": "The workspace becomes available again; its machines and agents carry on."
+  },
+  "audit": { "title": "Audit", "empty": "No entries yet.", "cli": "from the command line", "more": "Older" },
+  "system": { "title": "System" },
+  "account": {
+    "title": "My account",
+    "handle": "Handle",
+    "name": "Name",
+    "sessionEnds": "Session ends",
+    "sessionEndsValue": "at {{when}} at the latest (sooner after 30 idle minutes)",
+    "backupCodes": "Backup codes",
+    "backupCodesLeft_one": "{{count}} left",
+    "backupCodesLeft_other": "{{count}} left",
+    "backupCodesLow": "Few backup codes left; make new ones.",
+    "renew": "New backup codes",
+    "renewSubmit": "New codes",
+    "renewBody": "The old backup codes stop working. Enter your password and the code from the authenticator app.",
+    "totp": "Authenticator app code",
+    "totpHelp": "Lost phone: on the server, colonyhall operator-reset-totp -handle <name>.",
+    "codesOnce": "These codes are shown now for the last time. Keep them off this computer; each works once."
+  }
+}

@@ -10,7 +10,7 @@ import { DecisionsPage } from "@/features/decisions";
 import { DesignPage } from "@/features/design";
 import { MyFilesPage } from "@/features/files";
 import { HostsPage } from "@/features/hosts";
-import { LoginPage } from "@/features/identity";
+import { InvitePage, LoginPage } from "@/features/identity";
 import { LeasesPage } from "@/features/leases";
 import { NotesPage } from "@/features/notes";
 import { RulesPage } from "@/features/rules";
@@ -24,11 +24,12 @@ import { Home } from "./Home";
 import { RequireSession } from "./session";
 
 // Route → the page a feature exports from its index.ts (lazy loaded).
-// /login and /design are public; everything else needs a session.
+// /login, /invite (round 51) and /design are public; everything else needs a session.
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="login" element={<LoginPage />} />
+      <Route path="invite" element={<InvitePage />} />
       <Route path="design" element={<DesignPage />} />
       <Route
         element={

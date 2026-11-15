@@ -11,7 +11,8 @@ let csrfToken = "";
 let unauthorized: () => void = () => {};
 
 /** On these a 401 is a wrong password, which the form shows; the session is fine. */
-const passwordChecked = (path: string) => path.endsWith("/auth/login") || path.endsWith("/admin/emergency-clear") || path.endsWith("/password");
+const passwordChecked = (path: string) =>
+  path.endsWith("/auth/login") || path.endsWith("/admin/emergency-clear") || path.endsWith("/password") || path.endsWith("/operator/me/backup-codes");
 
 /** The CSRF token of the cookie session (from /auth/session or /auth/login). */
 export function setCsrfToken(token: string): void {

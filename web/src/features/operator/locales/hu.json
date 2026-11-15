@@ -1,0 +1,104 @@
+{
+  "title": "Üzemeltetés",
+  "nav": { "label": "Üzemeltetés", "customers": "Ügyfelek", "audit": "Napló", "system": "Rendszer", "account": "Fiókom" },
+  "logout": "Kilépés",
+  "devAccess": "Fejlesztői mód: az üzemeltető minden adatot lát",
+  "done": "Kész",
+  "cancel": "Mégse",
+  "never": "Még soha",
+  "login": {
+    "title": "Üzemeltetői belépés",
+    "handle": "Felhasználónév",
+    "password": "Jelszó",
+    "code": "Kód",
+    "codeHelp": "A hitelesítő alkalmazás 6 jegyű kódja, vagy egy tartalék kód (XXXXX-XXXXX).",
+    "submit": "Belépés",
+    "failed": "Hibás felhasználónév, jelszó vagy kód.",
+    "locked": "Túl sok sikertelen próbálkozás; próbáld később.",
+    "error": "A belépés nem sikerült; próbáld újra."
+  },
+  "state": { "active": "Aktív", "suspended": "Felfüggesztve" },
+  "invite": {
+    "owner": "Van tulajdonos",
+    "none": "Nincs meghívó",
+    "open": "Meghívó él",
+    "expired": "Meghívó lejárt",
+    "used": "Meghívó felhasználva",
+    "revoked": "Meghívó visszavonva",
+    "title": "Új meghívó: {{name}}",
+    "body": "Új, 7 napig érvényes meghívólink a tulajdonosnak. Az előző link érvényét veszti.",
+    "create": "Link létrehozása",
+    "handOver": "Add át a linket az ügyfél tulajdonosának. Egyszer használható, és {{expires}}-ig érvényes. Később nem jelenik meg újra."
+  },
+  "storage": {
+    "unlimited": "{{used}} (nincs keret)",
+    "ofQuota": "{{used}} / {{quota}} ({{pct}}%)",
+    "warning_80": "80% fölött",
+    "warning_95": "95% fölött",
+    "full": "Megtelt"
+  },
+  "create": {
+    "title": "Új ügyfél",
+    "doneTitle": "Létrejött: {{name}}",
+    "name": "Név",
+    "slug": "Aldomain",
+    "slugHelp": "3–40 karakter: kisbetű, szám és kötőjel. Ez lesz a cím eleje: <aldomain>.<domain>.",
+    "submit": "Létrehozás",
+    "slugTaken": "Ezt az aldomaint már használja egy másik ügyfél.",
+    "invalid": "Ellenőrizd a nevet és az aldomaint."
+  },
+  "customers": {
+    "title": "Ügyfelek",
+    "new": "Új ügyfél",
+    "empty": "Még nincs ügyfél.",
+    "name": "Ügyfél",
+    "slug": "Aldomain",
+    "state": "Állapot",
+    "owner": "Tulajdonos",
+    "users": "Felhasználók",
+    "agents": "Agentek",
+    "hosts": "Gépek",
+    "hostsValue": "{{online}} / {{total}} online",
+    "storage": "Tárhely",
+    "lastActivity": "Utolsó aktivitás",
+    "back": "Ügyfelek"
+  },
+  "detail": {
+    "suspendedNotice": "Felfüggesztve ({{when}}): minden kérés, gép és agent elutasítva, az adatok megmaradtak.",
+    "newInvite": "Új meghívó",
+    "suspend": "Felfüggesztés",
+    "restore": "Visszaállítás",
+    "inviteExpires": "Meghívó lejárata",
+    "created": "Létrehozva",
+    "reason": "A felfüggesztés oka"
+  },
+  "suspend": {
+    "title": "Felfüggesztés: {{name}}",
+    "body": "A munkaterület minden kérését, gépét és agentjét elutasítjuk, a nyitott kapcsolatok bezárulnak. Az adatok megmaradnak, a visszaállítás után minden folytatódik.",
+    "reason": "Indoklás",
+    "reasonHelp": "Csak az üzemeltetői naplóba kerül; az ügyfél nem látja."
+  },
+  "restore": {
+    "title": "Visszaállítás: {{name}}",
+    "body": "A munkaterület újra elérhető lesz, a gépek és az agentek folytatják a munkát."
+  },
+  "audit": { "title": "Napló", "empty": "Még nincs bejegyzés.", "cli": "parancssorból", "more": "Régebbiek" },
+  "system": { "title": "Rendszer" },
+  "account": {
+    "title": "Fiókom",
+    "handle": "Felhasználónév",
+    "name": "Név",
+    "sessionEnds": "A munkamenet vége",
+    "sessionEndsValue": "legkésőbb {{when}} (30 perc tétlenség után előbb)",
+    "backupCodes": "Tartalék kódok",
+    "backupCodesLeft_one": "{{count}} maradt",
+    "backupCodesLeft_other": "{{count}} maradt",
+    "backupCodesLow": "Kevés tartalék kód maradt; készíts újakat.",
+    "renew": "Új tartalék kódok",
+    "renewSubmit": "Új kódok",
+    "renewBody": "A régi tartalék kódok érvényüket vesztik. Add meg a jelszavad és a hitelesítő alkalmazás kódját.",
+    "totp": "A hitelesítő alkalmazás kódja",
+    "totpHelp": "Elveszett telefon esetén a szerveren: colonyhall operator-reset-totp -handle <név>.",
+    "codesOnce": "Ezek a kódok most jelennek meg utoljára. Tárold őket a gépen kívül; mindegyik egyszer használható."
+  }
+}

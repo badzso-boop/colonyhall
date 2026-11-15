@@ -10,3 +10,4 @@ export { SourceLink } from "./components/SourceLink";
 export { registerIdentityEvents } from "./events";
 export { localTime, safeNext } from "./model";
 export const LoginPage = lazy(() => import("./pages/LoginPage"));
+export const InvitePage = lazy(() => import("./pages/InvitePage"));

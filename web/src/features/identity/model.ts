@@ -81,3 +81,15 @@ export function timeZoneOptions(current: string): string[] {
   if (current) all.add(current);
   return [...all].sort((a, b) => a.localeCompare(b));
 }
+
+/** Round 51: the invite token from the link's fragment (#col_…); empty when there is none. */
+export function inviteToken(hash: string): string {
+  return decodeURIComponent(hash.replace(/^#/, "")).trim();
+}
+
+/** The handle rule (identity.ValidateHandle): 2–32 lower-case letters, digits and '-', not starting with '-'. */
+export function validOwnerHandle(h: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{1,31}$/.test(h);
+}
+
+export const MIN_OWNER_PASSWORD = 12;
