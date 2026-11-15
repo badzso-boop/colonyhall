@@ -737,6 +737,9 @@ var personalEvents = map[string]bool{
 	saved.EventReminded:           true,
 	activity.EventCreated:         true,
 	activity.EventRead:            true,
+	// Round 51b: a break-glass read is for the audit, not a live stream
+	// (its actor, the operator's, has no socket).
+	identity.EventBreakGlassRead: true,
 }
 
 // visible decides whether the actor may see an event.

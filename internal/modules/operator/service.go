@@ -34,8 +34,10 @@ type Service struct {
 	Keys      *secretbox.Keyring
 	Limiter   Limiter
 	Customers Customers
-	Clock     clock.Clock
-	IDs       ids.Generator
+	// BreakGlass opens and closes the read-only accesses (round 51b).
+	BreakGlass BreakGlassAccess
+	Clock      clock.Clock
+	IDs        ids.Generator
 	// DevAccess: COLONY_OPERATOR_DEV_ACCESS=1 (development only); every
 	// operator page shows it.
 	DevAccess bool

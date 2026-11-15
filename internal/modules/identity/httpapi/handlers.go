@@ -27,6 +27,8 @@ func init() {
 	httpx.RegisterForbidden(identity.ErrHalted, identity.ErrEmojiForbidden)
 	// Round 51: workspaces, invites and suspension.
 	httpx.RegisterProblemType(http.StatusGone, "invite_invalid", identity.ErrInviteInvalid)
+	httpx.RegisterProblemType(http.StatusGone, "break_glass_invalid", identity.ErrBreakGlassInvalid)
+	httpx.RegisterProblemType(http.StatusConflict, "workspace_not_active", identity.ErrWorkspaceNotActive)
 	httpx.RegisterProblemType(http.StatusConflict, "has_owner", identity.ErrHasOwner)
 	httpx.RegisterProblemType(http.StatusConflict, "slug_taken", identity.ErrSlugTaken)
 	httpx.RegisterValidation(identity.ErrInvalidSlug, identity.ErrInvalidWorkspaceName, identity.ErrInvalidReason)
@@ -180,6 +182,49 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 		httpx.JSON(w, http.StatusOK, apispec.SessionInfo{Actor: ToAPI(a), CsrfToken: sess.CSRFToken})
 	})
 
+	// Round 51b: the operator's break-glass access, from the customer's side.
+	mux.HandleFunc("POST /api/v1/break-glass/redeem", func(w http.ResponseWriter, r *http.Request) {
+		if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "application/json" {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "Content-Type must be application/json"})
+			return
+		}
+		var in apispec.RedeemBreakGlassRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		a, sess, secret, err := svc.RedeemBreakGlass(r.Context(), in.Token, r.UserAgent())
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		setCookie(w, r, secret, sess.ExpiresAt)
+		httpx.JSON(w, http.StatusOK, sessionInfo(a, sess.CSRFToken))
+	})
+
+	mux.Handle("GET /api/v1/workspace/break-glass", auth(func(w http.ResponseWriter, r *http.Request) {
+		list, err := svc.ListBreakGlass(r.Context(), httpx.Actor(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, BreakGlassListToAPI(list, svc.Clock.Now()))
+	}))
+
+	mux.Handle("DELETE /api/v1/workspace/break-glass/{breakGlassId}", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, err := ids.Parse(r.PathValue("breakGlassId"))
+		if err != nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "breakGlassId must be a UUID"})
+			return
+		}
+		by := httpx.Actor(r)
+		if err := svc.CloseBreakGlass(r.Context(), &by, by.WorkspaceID, id); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
 	mux.Handle("POST /api/v1/auth/logout", auth(func(w http.ResponseWriter, r *http.Request) {
 		if sess, ok := httpx.Session(r); ok {
 			if err := svc.Logout(r.Context(), sess.ID); err != nil {
@@ -192,11 +237,11 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("GET /api/v1/auth/session", auth(func(w http.ResponseWriter, r *http.Request) {
-		info := apispec.SessionInfo{Actor: ToAPI(httpx.Actor(r))}
+		csrf := ""
 		if sess, ok := httpx.Session(r); ok {
-			info.CsrfToken = sess.CSRFToken
+			csrf = sess.CSRFToken
 		}
-		httpx.JSON(w, http.StatusOK, info)
+		httpx.JSON(w, http.StatusOK, sessionInfo(httpx.Actor(r), csrf))
 	}))
 
 	mux.Handle("GET /api/v1/me", auth(func(w http.ResponseWriter, r *http.Request) {
@@ -446,4 +491,34 @@ func pathID(w http.ResponseWriter, r *http.Request) (ids.ID, bool) {
 		return ids.Nil, false
 	}
 	return id, true
+}
+
+// sessionInfo is the caller and, for a break-glass session (round 51b),
+// the access the app shows in its banner.
+func sessionInfo(a identity.Actor, csrf string) apispec.SessionInfo {
+	info := apispec.SessionInfo{Actor: ToAPI(a), CsrfToken: csrf}
+	if bg := a.BreakGlass; bg != nil {
+		info.BreakGlass = &apispec.BreakGlassSession{Id: bg.ID, ExpiresAt: bg.ExpiresAt, OperatorHandle: bg.OperatorHandle}
+	}
+	return info
+}
+
+// BreakGlassListToAPI converts break-glass accesses (the operator API uses
+// it too).
+func BreakGlassListToAPI(list []identity.BreakGlass, now time.Time) apispec.BreakGlassList {
+	out := apispec.BreakGlassList{BreakGlass: make([]apispec.BreakGlass, 0, len(list))}
+	for _, b := range list {
+		out.BreakGlass = append(out.BreakGlass, BreakGlassToAPI(b, now))
+	}
+	return out
+}
+
+// BreakGlassToAPI converts one access.
+func BreakGlassToAPI(b identity.BreakGlass, now time.Time) apispec.BreakGlass {
+	x := apispec.BreakGlass{Id: b.ID, OperatorHandle: b.OperatorHandle, Reason: b.Reason, DevMode: b.DevMode,
+		OpenedAt: b.OpenedAt, ExpiresAt: b.ExpiresAt, Open: b.Open(now), ClosedAt: b.ClosedAt}
+	if b.ClosedBy != "" {
+		x.ClosedBy = &b.ClosedBy
+	}
+	return x
 }

@@ -757,7 +757,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			overview = &memoryOverview{identity: idSvc, idStore: idStore, hosts: hoStore, files: fiSvc, audit: auStore}
 		}
 		opSvc = &operator.Service{Store: opStore, Tx: tx, Keys: opt.SecretKeys, Limiter: idSvc, Clock: opt.Clock, IDs: opt.IDs,
-			DevAccess: opt.OperatorDevAccess,
+			DevAccess: opt.OperatorDevAccess, BreakGlass: breakGlass{identity: idSvc},
 			Customers: &customers{identity: idSvc, files: fiSvc, overview: overview, clock: opt.Clock,
 				closeWorkspace: func(id ids.ID) {
 					n, h := gw.CloseWorkspace(id), hostGw.CloseWorkspace(id)

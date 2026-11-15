@@ -190,11 +190,14 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			if item.ReplyMessageID != ids.Nil {
 				ar.ReplyMessageId = &item.ReplyMessageID
 			}
-			if len(item.WebReads) > 0 {
+			// Round 51b: the operator's break-glass access sees that a run
+			// happened, never what it read or did (it may have been a DM).
+			breakGlass := httpx.Actor(r).BreakGlass != nil
+			if len(item.WebReads) > 0 && !breakGlass {
 				wr := item.WebReads
 				ar.WebReads = &wr
 			}
-			if len(item.Steps) > 0 {
+			if len(item.Steps) > 0 && !breakGlass {
 				stList := make([]apispec.AgentStep, len(item.Steps))
 				for i, s := range item.Steps {
 					as := apispec.AgentStep{

@@ -124,6 +124,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("emoji usage", func(t *testing.T) { testEmojiUsage(t, newBackend(t)) })
 	t.Run("operator", func(t *testing.T) { testOperator(t, newBackend(t)) })
 	t.Run("invites and suspension", func(t *testing.T) { testInvitesAndSuspension(t, newBackend(t)) })
+	t.Run("break-glass", func(t *testing.T) { testBreakGlass(t, newBackend(t)) })
 }
 
 var (

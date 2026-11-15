@@ -25,12 +25,15 @@ const (
 	KindQuestion    Kind = "question"
 	KindImportant   Kind = "important"
 	KindReminder    Kind = "reminder"
+	// KindOperatorAccess: the platform operator opened a break-glass
+	// access to the workspace (round 51b); for its owners.
+	KindOperatorAccess Kind = "operator_access"
 )
 
 // ValidKind reports whether k is a known kind.
 func ValidKind(k Kind) bool {
 	switch k {
-	case KindMention, KindThreadReply, KindReaction, KindApproval, KindQuestion, KindImportant, KindReminder:
+	case KindMention, KindThreadReply, KindReaction, KindApproval, KindQuestion, KindImportant, KindReminder, KindOperatorAccess:
 		return true
 	}
 	return false

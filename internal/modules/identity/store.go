@@ -88,6 +88,23 @@ type Store interface {
 	// LatestInvite is the workspace's newest invite (db.ErrNotFound: none).
 	LatestInvite(ctx context.Context, workspaceID ids.ID) (Invite, error)
 
+	// Break-glass access (round 51b).
+	CreateBreakGlass(ctx context.Context, b BreakGlass) error
+	BreakGlassByID(ctx context.Context, id ids.ID) (BreakGlass, error)
+	BreakGlassByHandoffHash(ctx context.Context, hash []byte) (BreakGlass, error)
+	// UseBreakGlassHandoff marks the handoff used; false when it was used,
+	// expired or the access is closed.
+	UseBreakGlassHandoff(ctx context.Context, id ids.ID, at time.Time) (bool, error)
+	// CloseBreakGlass closes an open access; false when it was closed.
+	CloseBreakGlass(ctx context.Context, id ids.ID, by string, at time.Time) (bool, error)
+	// ListBreakGlass lists the workspace's accesses, newest first.
+	ListBreakGlass(ctx context.Context, workspaceID ids.ID, limit int) ([]BreakGlass, error)
+	// OverdueBreakGlass lists the open accesses whose time is up (system mode).
+	OverdueBreakGlass(ctx context.Context, now time.Time) ([]BreakGlass, error)
+	// BreakGlassActor is the workspace's operator actor (db.ErrNotFound: none yet).
+	BreakGlassActor(ctx context.Context, workspaceID ids.ID) (ids.ID, error)
+	IsBreakGlassActor(ctx context.Context, actorID ids.ID) (bool, error)
+
 	// Credential returns the actor's password hash.
 	Credential(ctx context.Context, actorID ids.ID) (string, error)
 	SetCredential(ctx context.Context, actorID ids.ID, hash string, at time.Time) error

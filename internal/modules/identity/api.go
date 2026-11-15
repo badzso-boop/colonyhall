@@ -29,6 +29,9 @@ type Authenticator interface {
 type RequestAuthenticator interface {
 	Authenticator
 	AuthenticateSession(ctx context.Context, secret string) (Actor, Session, error)
+	// RecordBreakGlassRead writes a break-glass session's read into the
+	// workspace's audit (round 51b).
+	RecordBreakGlassRead(ctx context.Context, a Actor, method, path string) error
 }
 
 // HostTokens lets the hosts module mint and revoke the short-lived agent

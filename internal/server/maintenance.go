@@ -46,6 +46,15 @@ func (a *App) Maintain(ctx context.Context) {
 	} else if n > 0 {
 		a.logger.Info("deleted old login failures", "rows", n)
 	}
+	// Round 51b: an access past its time is closed in the records too (its
+	// session already stopped working at the time: every request checks).
+	if n, err := a.Identity.ExpireBreakGlass(ctx); err != nil {
+		if ctx.Err() == nil {
+			a.logger.Warn("break-glass expiry failed", "err", err)
+		}
+	} else if n > 0 {
+		a.logger.Info("closed expired break-glass accesses", "count", n)
+	}
 	if a.Operator != nil {
 		if n, err := a.Operator.CleanupSessions(ctx); err != nil {
 			if ctx.Err() == nil {

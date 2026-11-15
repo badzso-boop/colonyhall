@@ -258,4 +258,21 @@ func TestPostgresRowLevelSecurity(t *testing.T) {
 	if !errors.Is(err, db.ErrScopeChanged) {
 		t.Fatalf("a nested transaction with another scope: %v", err)
 	}
+
+	// Round 51b: a read-only context (the operator's break-glass session)
+	// gets connections on which Postgres itself refuses every write, in a
+	// transaction or not; reads work; the next plain user writes again.
+	ro := db.ReadOnly(inA)
+	if _, err := ids.ActorByID(ro, alice.ID); err != nil {
+		t.Fatalf("a read-only read: %v", err)
+	}
+	carol := identity.Actor{ID: gen.New(), WorkspaceID: a.ID, Kind: identity.KindHuman, Handle: "carol", DisplayName: "Carol",
+		Role: identity.RoleMember, State: "active", CreatedAt: t0}
+	if err := ids.CreateActor(ro, carol); err == nil {
+		t.Fatal("a read-only context wrote a row")
+	}
+	if err := pg.InTx(ro, func(ctx context.Context) error { return ids.CreateActor(ctx, carol) }); err == nil {
+		t.Fatal("a read-only transaction wrote a row")
+	}
+	must(t, ids.CreateActor(inA, carol))
 }

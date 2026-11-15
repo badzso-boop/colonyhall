@@ -195,6 +195,14 @@ func (s *ctSuite) seed() {
 
 	acmeWS := acmeWorkspace(t, a)
 	s.seedShortLived(acmeWS)
+	// Round 51b: an operator's break-glass access to acme (its row and its
+	// operator actor are acme's).
+	bg, _, err := a.app.Identity.OpenBreakGlass(context.Background(), identity.OpenBreakGlassInput{WorkspaceID: acmeWS,
+		OperatorID: ids.V7{}.New(), OperatorHandle: "ops", Reason: acmeData + " break-glass reason", ExpiresAt: a.clock.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatalf("seed break-glass: %v", err)
+	}
+	s.obj["breakglass"] = bg.ID.String()
 
 	for _, id := range s.obj {
 		if _, err := ids.Parse(id); err == nil {
@@ -382,6 +390,12 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 	case "workspaceId":
 		// Round 51: the operator's routes (admin host only).
 		return s.obj["workspace"], true
+	case "breakGlassId":
+		// Round 51b: an operator's access to acme.
+		return s.obj["breakglass"], true
+	case "planId":
+		// Round 51b: plans are the operator's (admin host only); any id.
+		return ids.V7{}.New().String(), false
 	case "requestId":
 		// Relay requests live in memory for seconds: acme has none; an id
 		// that exists nowhere still has to be refused cleanly.

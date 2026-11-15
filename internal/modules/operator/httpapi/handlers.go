@@ -23,7 +23,7 @@ import (
 
 func init() {
 	httpx.RegisterStatus(http.StatusUnauthorized, operator.ErrBadCredentials, operator.ErrUnauthorized)
-	httpx.RegisterValidation(operator.ErrInvalidHandle, operator.ErrInvalidPlan)
+	httpx.RegisterValidation(operator.ErrInvalidHandle, operator.ErrInvalidPlan, operator.ErrInvalidBreakGlass)
 	httpx.RegisterProblemType(http.StatusConflict, "plan_over_quota", operator.ErrPlanOverQuota)
 	httpx.RegisterProblemType(http.StatusConflict, "plan_archived", operator.ErrPlanArchived)
 	httpx.RegisterProblemType(http.StatusConflict, "plan_name_taken", operator.ErrPlanNameTaken)
@@ -332,6 +332,65 @@ func Register(mux *http.ServeMux, svc *operator.Service, opt Options) {
 			StateAfter: apispec.StorageState(chk.StateAfter)})
 	}))
 
+	// Round 51b: break-glass access.
+	mux.Handle("GET /api/v1/operator/workspaces/{workspaceId}/break-glass", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := workspaceID(w, r)
+		if !ok {
+			return
+		}
+		list, err := svc.ListBreakGlass(r.Context(), id)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.BreakGlassList{BreakGlass: make([]apispec.BreakGlass, 0, len(list))}
+		for _, b := range list {
+			out.BreakGlass = append(out.BreakGlass, breakGlassToAPI(b))
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	mux.Handle("POST /api/v1/operator/workspaces/{workspaceId}/break-glass", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := workspaceID(w, r)
+		if !ok {
+			return
+		}
+		var in apispec.BreakGlassRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		c, err := svc.Customer(r.Context(), id)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		link, err := svc.OpenBreakGlass(r.Context(), from(r).op, id, httpx.Deref(in.Reason, ""), in.Minutes, remote(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, apispec.BreakGlassOpened{BreakGlass: breakGlassToAPI(link.BreakGlass),
+			Url: customerURL(r, opt, c.Slug, "/app/break-glass#"+link.Token), HandoffExpiresAt: link.HandoffExpiresAt})
+	}))
+
+	mux.Handle("DELETE /api/v1/operator/workspaces/{workspaceId}/break-glass/{breakGlassId}", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := workspaceID(w, r)
+		if !ok {
+			return
+		}
+		bg, err := ids.Parse(r.PathValue("breakGlassId"))
+		if err != nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "breakGlassId must be a UUID"})
+			return
+		}
+		if err := svc.CloseBreakGlass(r.Context(), from(r).op, id, bg, remote(r)); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
 	mux.Handle("GET /api/v1/operator/audit", auth(func(w http.ResponseWriter, r *http.Request) {
 		var before time.Time
 		if v := r.URL.Query().Get("before"); v != "" {
@@ -400,12 +459,27 @@ func workspaceID(w http.ResponseWriter, r *http.Request) (ids.ID, bool) {
 // request came to admin.<domain>[:port], the link goes to <slug>.<domain>
 // with the same port.
 func inviteToAPI(r *http.Request, opt Options, slug string, link operator.InviteLink) apispec.InviteLink {
+	return apispec.InviteLink{Url: customerURL(r, opt, slug, "/app/invite#"+link.Token), ExpiresAt: link.ExpiresAt}
+}
+
+// customerURL is a link on the customer's subdomain: the request came to
+// admin.<domain>[:port], the link goes to <slug>.<domain> with the same port.
+func customerURL(r *http.Request, opt Options, slug, path string) string {
 	scheme := "http"
 	if opt.SecureCookies {
 		scheme = "https"
 	}
 	host := strings.TrimPrefix(strings.ToLower(r.Host), "admin.")
-	return apispec.InviteLink{Url: scheme + "://" + slug + "." + host + "/app/invite#" + link.Token, ExpiresAt: link.ExpiresAt}
+	return scheme + "://" + slug + "." + host + path
+}
+
+func breakGlassToAPI(b operator.BreakGlass) apispec.BreakGlass {
+	x := apispec.BreakGlass{Id: b.ID, OperatorHandle: b.OperatorHandle, Reason: b.Reason, DevMode: b.DevMode,
+		OpenedAt: b.OpenedAt, ExpiresAt: b.ExpiresAt, Open: b.Open, ClosedAt: b.ClosedAt}
+	if b.ClosedBy != "" {
+		x.ClosedBy = &b.ClosedBy
+	}
+	return x
 }
 
 func accountToAPI(o operator.Operator) apispec.OperatorAccount {

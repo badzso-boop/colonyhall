@@ -60,6 +60,11 @@ ALTER TABLE break_glass FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant ON break_glass USING (workspace_id = colony_ws() OR colony_system())
     WITH CHECK (workspace_id = colony_ws() OR colony_system());
 
+-- The owners' notification of an opened access (round 55's feed).
+ALTER TABLE activity_item DROP CONSTRAINT activity_item_kind_check;
+ALTER TABLE activity_item ADD CONSTRAINT activity_item_kind_check
+    CHECK (kind IN ('mention', 'thread_reply', 'reaction', 'approval', 'question', 'important', 'reminder', 'operator_access'));
+
 -- A session opened by a break-glass handoff (read-only, the operator actor).
 ALTER TABLE session ADD COLUMN break_glass_id uuid REFERENCES break_glass(id);
 
@@ -144,6 +149,10 @@ BEGIN
 END $$;
 -- +goose StatementEnd
 ALTER TABLE session DROP COLUMN break_glass_id;
+DELETE FROM activity_item WHERE kind = 'operator_access';
+ALTER TABLE activity_item DROP CONSTRAINT activity_item_kind_check;
+ALTER TABLE activity_item ADD CONSTRAINT activity_item_kind_check
+    CHECK (kind IN ('mention', 'thread_reply', 'reaction', 'approval', 'question', 'important', 'reminder'));
 DROP TABLE IF EXISTS break_glass;
 ALTER TABLE workspace_storage DROP COLUMN plan_memory_bytes;
 ALTER TABLE workspace_storage DROP COLUMN plan_cpu_cores;

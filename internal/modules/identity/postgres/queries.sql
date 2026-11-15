@@ -77,8 +77,8 @@ SELECT $1, $2, $3, a.workspace_id FROM actor a WHERE a.id = $1
 ON CONFLICT (actor_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = EXCLUDED.updated_at;
 
 -- name: CreateSession :exec
-INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id)
-SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id FROM actor a WHERE a.id = $2;
+INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id, break_glass_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id, sqlc.narg(break_glass_id) FROM actor a WHERE a.id = $2;
 
 -- name: SessionByTokenHash :one
 SELECT sqlc.embed(s), sqlc.embed(a)
@@ -251,3 +251,37 @@ UPDATE workspace_invite SET used_by = sqlc.arg(actor_id) WHERE id = sqlc.arg(id)
 
 -- name: LatestInvite :one
 SELECT * FROM workspace_invite WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1;
+
+-- Round 51b: break-glass access.
+
+-- name: CreateBreakGlass :exec
+INSERT INTO break_glass (id, workspace_id, operator_id, operator_handle, actor_id, reason, dev_mode, opened_at, expires_at,
+    handoff_hash, handoff_expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+
+-- name: BreakGlassByID :one
+SELECT * FROM break_glass WHERE id = $1;
+
+-- name: BreakGlassByHandoffHash :one
+SELECT * FROM break_glass WHERE handoff_hash = $1;
+
+-- name: UseBreakGlassHandoff :execrows
+UPDATE break_glass SET handoff_used_at = sqlc.arg(at)
+WHERE id = sqlc.arg(id) AND handoff_used_at IS NULL AND closed_at IS NULL
+  AND handoff_expires_at > sqlc.arg(at) AND expires_at > sqlc.arg(at);
+
+-- name: CloseBreakGlass :execrows
+UPDATE break_glass SET closed_at = sqlc.arg(at), closed_by = sqlc.arg(closed_by)
+WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+
+-- name: ListBreakGlass :many
+SELECT * FROM break_glass WHERE workspace_id = $1 ORDER BY opened_at DESC, id DESC LIMIT sqlc.arg(max_rows)::int;
+
+-- name: OverdueBreakGlass :many
+SELECT * FROM break_glass WHERE closed_at IS NULL AND expires_at <= $1 ORDER BY expires_at;
+
+-- name: BreakGlassActor :one
+SELECT actor_id FROM break_glass WHERE workspace_id = $1 ORDER BY opened_at DESC LIMIT 1;
+
+-- name: IsBreakGlassActor :one
+SELECT EXISTS (SELECT 1 FROM break_glass WHERE actor_id = $1);

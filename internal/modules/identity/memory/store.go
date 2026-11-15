@@ -30,6 +30,7 @@ type Store struct {
 	failures   []authFailure                  // login and release limits (round 40)
 	emoji      map[ids.ID]map[string]emojiUse // actor → emoji → use (round 55)
 	invites    []identity.Invite              // round 51
+	breakGlass []identity.BreakGlass          // round 51b
 }
 
 // New returns an empty store.
@@ -708,4 +709,130 @@ func (s *Store) ListWorkspaces(_ context.Context) ([]identity.Workspace, error) 
 	}
 	slices.SortFunc(out, func(a, b identity.Workspace) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	return out, nil
+}
+
+// Round 51b: break-glass access.
+
+// CreateBreakGlass stores an access.
+func (s *Store) CreateBreakGlass(_ context.Context, b identity.BreakGlass) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.breakGlass = append(s.breakGlass, b)
+	return nil
+}
+
+func (s *Store) findBreakGlass(match func(identity.BreakGlass) bool) (identity.BreakGlass, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, b := range s.breakGlass {
+		if match(b) {
+			return b, nil
+		}
+	}
+	return identity.BreakGlass{}, db.ErrNotFound
+}
+
+// BreakGlassByID reads an access.
+func (s *Store) BreakGlassByID(_ context.Context, id ids.ID) (identity.BreakGlass, error) {
+	return s.findBreakGlass(func(b identity.BreakGlass) bool { return b.ID == id })
+}
+
+// BreakGlassByHandoffHash finds an access by its handoff token.
+func (s *Store) BreakGlassByHandoffHash(_ context.Context, hash []byte) (identity.BreakGlass, error) {
+	return s.findBreakGlass(func(b identity.BreakGlass) bool { return string(b.HandoffHash) == string(hash) })
+}
+
+// UseBreakGlassHandoff marks the handoff used.
+func (s *Store) UseBreakGlassHandoff(_ context.Context, id ids.ID, at time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, b := range s.breakGlass {
+		if b.ID == id {
+			if b.HandoffUsedAt != nil || b.ClosedAt != nil || !at.Before(b.HandoffExpiresAt) || !at.Before(b.ExpiresAt) {
+				return false, nil
+			}
+			s.breakGlass[k].HandoffUsedAt = &at
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// CloseBreakGlass closes an open access.
+func (s *Store) CloseBreakGlass(_ context.Context, id ids.ID, by string, at time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, b := range s.breakGlass {
+		if b.ID == id {
+			if b.ClosedAt != nil {
+				return false, nil
+			}
+			s.breakGlass[k].ClosedAt, s.breakGlass[k].ClosedBy = &at, by
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ListBreakGlass lists the workspace's accesses, newest first.
+func (s *Store) ListBreakGlass(_ context.Context, workspaceID ids.ID, limit int) ([]identity.BreakGlass, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []identity.BreakGlass
+	for _, b := range s.breakGlass {
+		if b.WorkspaceID == workspaceID {
+			out = append(out, b)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { // newest first, then the higher id (as Postgres)
+		if !out[i].OpenedAt.Equal(out[j].OpenedAt) {
+			return out[i].OpenedAt.After(out[j].OpenedAt)
+		}
+		return bytes.Compare(out[i].ID[:], out[j].ID[:]) > 0
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// OverdueBreakGlass lists the open accesses whose time is up.
+func (s *Store) OverdueBreakGlass(_ context.Context, now time.Time) ([]identity.BreakGlass, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []identity.BreakGlass
+	for _, b := range s.breakGlass {
+		if b.ClosedAt == nil && !now.Before(b.ExpiresAt) {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+// BreakGlassActor is the workspace's operator actor.
+func (s *Store) BreakGlassActor(_ context.Context, workspaceID ids.ID) (ids.ID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var best *identity.BreakGlass
+	for k, b := range s.breakGlass {
+		if b.WorkspaceID == workspaceID && (best == nil || b.OpenedAt.After(best.OpenedAt)) {
+			best = &s.breakGlass[k]
+		}
+	}
+	if best == nil {
+		return ids.Nil, db.ErrNotFound
+	}
+	return best.ActorID, nil
+}
+
+// IsBreakGlassActor reports whether the actor is an operator actor.
+func (s *Store) IsBreakGlassActor(_ context.Context, actorID ids.ID) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, b := range s.breakGlass {
+		if b.ActorID == actorID {
+			return true, nil
+		}
+	}
+	return false, nil
 }

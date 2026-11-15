@@ -23,6 +23,24 @@ type Scope struct {
 	// Operator: the platform operator's scope (round 51); it sees the
 	// platform tables and no workspace.
 	Operator bool
+	// ReadOnly: every transaction on the connection is read-only (round
+	// 51b, the operator's break-glass session): a write is refused by
+	// Postgres itself, whatever the code above tries.
+	ReadOnly bool
+}
+
+type readOnlyKey struct{}
+
+// ReadOnly marks ctx read-only: the connections it gets refuse writes
+// (default_transaction_read_only). It survives WithWorkspace.
+func ReadOnly(ctx context.Context) context.Context {
+	return context.WithValue(ctx, readOnlyKey{}, true)
+}
+
+// IsReadOnly reports whether ctx is read-only.
+func IsReadOnly(ctx context.Context) bool {
+	v, _ := ctx.Value(readOnlyKey{}).(bool)
+	return v
 }
 
 type workspaceKey struct{}
@@ -37,13 +55,14 @@ func WithWorkspace(ctx context.Context, id ids.ID) context.Context {
 // ScopeOf returns ctx's scope.
 func ScopeOf(ctx context.Context) Scope {
 	id, _ := ctx.Value(workspaceKey{}).(ids.ID)
+	ro := IsReadOnly(ctx)
 	if system.Is(ctx) {
-		return Scope{System: true}
+		return Scope{System: true, ReadOnly: ro}
 	}
 	if opscope.Is(ctx) {
-		return Scope{Operator: true}
+		return Scope{Operator: true, ReadOnly: ro}
 	}
-	return Scope{Workspace: id}
+	return Scope{Workspace: id, ReadOnly: ro}
 }
 
 // settings returns the values of colony.workspace_id, colony.system and
@@ -75,7 +94,11 @@ func applyScope(ctx context.Context, c *pgx.Conn) (bool, error) {
 		return true, nil
 	}
 	ws, sys, op := want.settings()
-	if _, err := c.Exec(ctx, "SELECT set_config('colony.workspace_id', $1, false), set_config('colony.system', $2, false), set_config('colony.operator', $3, false)", ws, sys, op); err != nil {
+	ro := "off"
+	if want.ReadOnly {
+		ro = "on"
+	}
+	if _, err := c.Exec(ctx, "SELECT set_config('colony.workspace_id', $1, false), set_config('colony.system', $2, false), set_config('colony.operator', $3, false), set_config('default_transaction_read_only', $4, false)", ws, sys, op, ro); err != nil {
 		delete(data, scopeDataKey)
 		return false, err // destroy the connection: its settings are unknown
 	}

@@ -55,6 +55,11 @@ func (m *memoryOverview) Customers(ctx context.Context, only ids.ID, onlineSince
 			return nil, err
 		}
 		for _, a := range actors {
+			if bg, err := m.idStore.IsBreakGlassActor(ctx, a.ID); err != nil {
+				return nil, err
+			} else if bg {
+				continue // the operator's own actor is not a customer's user
+			}
 			switch a.Kind {
 			case identity.KindHuman:
 				cu.Users++
@@ -91,6 +96,15 @@ func (m *memoryOverview) Customers(ctx context.Context, only ids.ID, onlineSince
 		cu.Storage = operator.Storage{OwnerQuotaBytes: u.QuotaBytes, FilesBytes: u.FilesBytes, DBBytes: u.DBBytes}
 		if u.Plan != nil {
 			cu.PlanID, cu.Storage.PlanStorageBytes = u.Plan.ID, u.Plan.StorageBytes
+		}
+		bgs, err := m.idStore.ListBreakGlass(ctx, ws.ID, 50)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range bgs {
+			if b.ClosedAt == nil {
+				cu.BreakGlassOpen = true
+			}
 		}
 		if inv, err := m.identity.LatestInvite(ctx, ws.ID); err == nil {
 			cu.Invite = &operator.InviteState{CreatedAt: inv.CreatedAt, ExpiresAt: inv.ExpiresAt, Used: inv.UsedAt != nil, Revoked: inv.RevokedAt != nil}

@@ -26,6 +26,9 @@ type Session struct {
 	ExpiresAt time.Time
 	// LastSeenAt is when it last authenticated a request (a minute apart at most).
 	LastSeenAt *time.Time
+	// BreakGlassID: the session is the operator's read-only break-glass
+	// access (round 51b); ids.Nil for every other session.
+	BreakGlassID ids.ID
 }
 
 // SessionStat is one actor's login activity.
@@ -89,6 +92,12 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 	hash, err := s.Store.Credential(ctx, a.ID)
 	if errors.Is(err, db.ErrNotFound) {
 		_, _ = VerifyPassword(in.Password, dummyHash)
+		return fail()
+	}
+	if bg, err := s.Store.IsBreakGlassActor(ctx, a.ID); err != nil {
+		return Actor{}, Session{}, "", err
+	} else if bg {
+		// Round 51b: the operator actor never logs in with a password.
 		return fail()
 	}
 	if err != nil {
@@ -196,10 +205,19 @@ func (s *Service) AuthenticateSession(ctx context.Context, secret string) (Actor
 	if !s.Clock.Now().Before(sess.ExpiresAt) {
 		return Actor{}, Session{}, ErrUnauthorized
 	}
+	var bg *BreakGlassAccess
+	if sess.BreakGlassID != ids.Nil {
+		// Round 51b: only the request layer that enforces the break-glass
+		// rules accepts it, and only while the access is open.
+		if bg, err = s.breakGlassOf(ctx, sess); err != nil {
+			return Actor{}, Session{}, err
+		}
+	}
 	a, err = s.load(ctx, a)
 	if err != nil {
 		return Actor{}, Session{}, err
 	}
+	a.BreakGlass = bg
 	now := s.Clock.Now()
 	_ = s.Store.TouchSession(ctx, sess.ID, now, now.Add(-touchEvery))
 	return a, sess, nil
@@ -223,6 +241,12 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 		return db.ErrNotFound
 	}
 	if target.Kind != KindHuman {
+		return ErrForbidden
+	}
+	// Round 51b: the operator actor never gets a password.
+	if bg, err := s.Store.IsBreakGlassActor(ctx, target.ID); err != nil {
+		return err
+	} else if bg {
 		return ErrForbidden
 	}
 	switch {
