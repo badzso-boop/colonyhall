@@ -2,17 +2,31 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import { ApiError } from "@/shared/api";
+import { localeOf } from "@/shared/i18n";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";
 import { ArrowLeft, Building2 } from "lucide-react";
 import { SecretOnce } from "@/features/admin";
-import { fullTime } from "@/shared/lib";
-import { Button, Dialog, Notice, PageHeader, Skeleton, Textarea } from "@/shared/ui";
-import { useCustomer, useInviteOwner, useRestoreCustomer, useSuspendCustomer } from "../api";
+import { formatBytes, fullTime } from "@/shared/lib";
+import { Badge, Button, Checkbox, Dialog, Input, Notice, PageHeader, Select, Skeleton, Textarea, toast } from "@/shared/ui";
+import {
+  useAssignPlan,
+  useBreakGlassList,
+  useCloseOperatorBreakGlass,
+  useCustomer,
+  useInviteOwner,
+  useOpenBreakGlass,
+  useOperatorSession,
+  usePlanCheck,
+  usePlans,
+  useRestoreCustomer,
+  useSuspendCustomer,
+} from "../api";
 import { OwnerBadge, StateBadge, StorageText } from "../components/CustomerBadges";
-import { canInvite, type Customer } from "../model";
+import { breakGlassMaxMinutes, breakGlassDevMaxMinutes, breakGlassReady, canInvite, type Customer } from "../model";
 
-type Action = "suspend" | "restore" | "invite" | null;
+type Action = "suspend" | "restore" | "invite" | "plan" | "breakGlass" | null;
 
 /** One customer: account data, its owner invite, suspend and restore. */
 export default function CustomerPage() {
@@ -45,6 +59,8 @@ export default function CustomerPage() {
           <Details customer={c} />
           <div className="flex flex-wrap gap-2">
             {canInvite(c) ? <Button onClick={() => setAction("invite")}>{t("detail.newInvite")}</Button> : null}
+            <Button onClick={() => setAction("plan")}>{t("plan.change")}</Button>
+            {c.state === "active" ? <Button onClick={() => setAction("breakGlass")}>{t("breakGlass.open")}</Button> : null}
             {c.state === "active" ? (
               <Button variant="danger" onClick={() => setAction("suspend")}>
                 {t("detail.suspend")}
@@ -58,6 +74,9 @@ export default function CustomerPage() {
           {action === "suspend" ? <SuspendDialog customer={c} onClose={() => setAction(null)} /> : null}
           {action === "restore" ? <RestoreDialog customer={c} onClose={() => setAction(null)} /> : null}
           {action === "invite" ? <InviteDialog customer={c} onClose={() => setAction(null)} /> : null}
+          {action === "plan" ? <PlanDialog customer={c} onClose={() => setAction(null)} /> : null}
+          {action === "breakGlass" ? <BreakGlassDialog customer={c} onClose={() => setAction(null)} /> : null}
+          <BreakGlassList customer={c} />
         </div>
       ) : null}
     </div>
@@ -77,6 +96,8 @@ function Details({ customer: c }: { customer: Customer }) {
     [t("customers.agents"), c.agents],
     [t("customers.hosts"), t("customers.hostsValue", { online: c.hosts_online, total: c.hosts })],
     [t("customers.storage"), <StorageText storage={c.storage} />],
+    [t("plan.label"), <PlanName id={c.plan_id} />],
+    [t("breakGlass.label"), c.break_glass_open ? <Badge tone="warning">{t("breakGlass.isOpen")}</Badge> : "–"],
     [t("customers.lastActivity"), when(c.last_activity_at)],
     [t("detail.created"), when(c.created_at)],
   ];
@@ -172,5 +193,156 @@ function InviteDialog({ customer, onClose }: { customer: Customer; onClose: () =
         {invite.error ? <p role="alert" className="text-danger">{invite.error.message}</p> : null}
       </div>
     </Dialog>
+  );
+}
+
+function PlanName({ id }: { id?: string }) {
+  const { t, i18n } = useTranslation("operator");
+  const plans = usePlans();
+  if (!id) return <>{t("plan.none")}</>;
+  const p = plans.data?.find((x) => x.id === id);
+  if (!p) return <>…</>;
+  return <>{t("plan.value", { name: p.name, storage: formatBytes(p.storage_bytes, localeOf(i18n.language)), cpu: p.cpu_cores })}</>;
+}
+
+/** Round 51b: the plan, with the check before it is assigned; one below the usage needs a confirmation. */
+function PlanDialog({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const { t, i18n } = useTranslation("operator");
+  const locale = localeOf(i18n.language);
+  const plans = usePlans();
+  const assign = useAssignPlan(customer.id);
+  const [planId, setPlanId] = useState(customer.plan_id ?? "");
+  const [confirm, setConfirm] = useState(false);
+  const check = usePlanCheck(customer.id, planId);
+  const chk = planId ? check.data : undefined;
+  const full = chk ? !chk.fits : false;
+  const choices = (plans.data ?? []).filter((p) => !p.archived_at || p.id === customer.plan_id);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    assign.mutate({ plan_id: planId || undefined, confirm_over_quota: confirm }, { onSuccess: onClose });
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("plan.title", { name: customer.name })} closeLabel={t("common:close")}
+      footer={
+        <>
+          <Button onClick={onClose}>{t("cancel")}</Button>
+          <Button type="submit" form="operator-assign-plan" variant={full ? "danger" : "primary"} loading={assign.isPending} disabled={full && !confirm}>
+            {t("plan.assign")}
+          </Button>
+        </>
+      }>
+      <form id="operator-assign-plan" onSubmit={submit} className="flex flex-col gap-3 text-ui">
+        <label className="flex flex-col gap-1">
+          <span className="font-medium">{t("plan.label")}</span>
+          <Select value={planId} onChange={(e) => { setPlanId(e.target.value); setConfirm(false); }}>
+            <option value="">{t("plan.none")}</option>
+            {choices.map((p) => (
+              <option key={p.id} value={p.id}>
+                {t("plan.value", { name: p.name, storage: formatBytes(p.storage_bytes, locale), cpu: p.cpu_cores })}
+              </option>
+            ))}
+          </Select>
+        </label>
+        {chk ? (
+          <p className={full ? "text-danger" : "text-fg-muted"}>
+            {t(full ? "plan.wouldFill" : "plan.fits", { used: formatBytes(chk.used_bytes, locale), quota: formatBytes(chk.new_quota_bytes, locale) })}
+          </p>
+        ) : null}
+        {full ? (
+          <label className="flex items-start gap-2">
+            <Checkbox checked={confirm} onCheckedChange={(v) => setConfirm(v === true)} className="mt-0.5" />
+            <span>{t("plan.confirm")}</span>
+          </label>
+        ) : null}
+        {assign.error ? <p role="alert" className="text-danger">{assign.error.message}</p> : null}
+      </form>
+    </Dialog>
+  );
+}
+
+/** Round 51b: a read-only look into the workspace, with a reason and a time; the link (60 s, once) is shown once. */
+function BreakGlassDialog({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const { t, i18n } = useTranslation("operator");
+  const dev = !!useOperatorSession().data?.dev_access;
+  const open = useOpenBreakGlass(customer.id);
+  const [reason, setReason] = useState("");
+  const [minutes, setMinutes] = useState("60");
+  const m = Number(minutes);
+  const ready = breakGlassReady(reason, m, dev);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (ready) open.mutate({ reason: reason.trim() || undefined, minutes: m });
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("breakGlass.title", { name: customer.name })} closeLabel={t("common:close")}
+      footer={
+        open.data ? (
+          <Button variant="primary" onClick={onClose}>{t("done")}</Button>
+        ) : (
+          <>
+            <Button onClick={onClose}>{t("cancel")}</Button>
+            <Button type="submit" form="operator-break-glass" variant="danger" loading={open.isPending} disabled={!ready}>
+              {t("breakGlass.open")}
+            </Button>
+          </>
+        )
+      }>
+      {open.data ? (
+        <div className="flex flex-col gap-3 text-ui">
+          <p>{t("breakGlass.handOver", { until: fullTime(open.data.handoff_expires_at, i18n.language) })}</p>
+          <a href={open.data.url} target="_blank" rel="noreferrer noopener" className="font-medium text-accent-text underline">
+            {t("breakGlass.go")}
+          </a>
+        </div>
+      ) : (
+        <form id="operator-break-glass" onSubmit={submit} className="flex flex-col gap-3 text-ui">
+          <p>{t("breakGlass.body")}</p>
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">{t("breakGlass.reason")}</span>
+            <Textarea required={!dev} maxLength={500} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <span className="text-meta text-fg-subtle">{t(dev ? "breakGlass.reasonDev" : "breakGlass.reasonHelp")}</span>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">{t("breakGlass.minutes")}</span>
+            <Input inputMode="numeric" className="w-32" value={minutes} aria-invalid={minutes !== "" && !Number.isInteger(m)} onChange={(e) => setMinutes(e.target.value)} />
+            <span className="text-meta text-fg-subtle">{t("breakGlass.minutesHelp", { max: dev ? breakGlassDevMaxMinutes : breakGlassMaxMinutes })}</span>
+          </label>
+          {open.error ? <p role="alert" className="text-danger">{open.error instanceof ApiError ? open.error.message : String(open.error)}</p> : null}
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
+function BreakGlassList({ customer }: { customer: Customer }) {
+  const { t, i18n } = useTranslation("operator");
+  const list = useBreakGlassList(customer.id);
+  const close = useCloseOperatorBreakGlass(customer.id);
+  if (!list.data?.length) return null;
+  return (
+    <section className="flex max-w-2xl flex-col gap-2">
+      <h2 className="text-ui font-semibold">{t("breakGlass.history")}</h2>
+      <ul className="flex flex-col gap-2">
+        {list.data.map((b) => (
+          <li key={b.id} className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-3 text-ui">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">@{b.operator_handle}</span>
+              {b.open ? <Badge tone="warning">{t("breakGlass.isOpen")}</Badge> : <Badge>{t(`breakGlass.closedBy.${b.closed_by ?? "expired"}`)}</Badge>}
+              {b.dev_mode ? <Badge tone="danger">{t("devAccess")}</Badge> : null}
+              {b.open ? (
+                <Button size="sm" variant="ghost" className="ml-auto" loading={close.isPending}
+                  onClick={() => close.mutate(b.id, { onError: (e) => toast(e.message, { tone: "danger" }) })}>
+                  {t("breakGlass.close")}
+                </Button>
+              ) : null}
+            </div>
+            <p className="break-words">{b.reason}</p>
+            <p className="tabular text-meta text-fg-muted">
+              {fullTime(b.opened_at, i18n.language)} – {fullTime(b.closed_at ?? b.expires_at, i18n.language)}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

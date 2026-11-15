@@ -13,3 +13,7 @@ test("an item leads to its message, in its thread, or nowhere once unreadable", 
   expect(activityTarget(item({ kind: "approval", channel_id: "c" }))).toBe("/c/c");
   expect(activityTarget(item({ available: false, channel_id: "c", message_id: "m" }))).toBeNull();
 });
+
+test("the operator's access leads to where the owner sees and closes it (round 51b)", () => {
+  expect(activityTarget({ id: "i", kind: "operator_access", created_at: "", read: false, available: false })).toBe("/admin/settings?section=uzemelteto");
+});

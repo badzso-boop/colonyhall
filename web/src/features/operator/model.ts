@@ -71,3 +71,40 @@ export function slugsById(list: Pick<Customer, "id" | "slug">[]): Map<string, st
 export function normaliseCode(code: string): string {
   return code.replace(/\s+/g, "");
 }
+
+// Round 51b: plans.
+
+const GiB = 1024 ** 3;
+
+/** "15" or "15,5" GB → bytes; null when it is not a positive number. */
+export function gbToBytes(text: string): number | null {
+  const s = text.trim().replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0 || n > 1024 * 1024) return null;
+  return Math.round(n * GiB);
+}
+
+/** Bytes → a GB figure for an input ("15", "15.5"). */
+export function bytesToGb(n: number): string {
+  return String(+(n / GiB).toFixed(2));
+}
+
+/** A whole number of CPU cores, 1–1024; null otherwise. */
+export function parseCores(text: string): number | null {
+  const s = text.trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return n >= 1 && n <= 1024 ? n : null;
+}
+
+/** Break-glass limits (operator.BreakGlassMinReason …). */
+export const breakGlassMinReason = 20;
+export const breakGlassMaxMinutes = 240;
+export const breakGlassDevMaxMinutes = 720;
+
+/** Whether a break-glass request may be sent: a reason of 20+ characters (any in development mode), 1–240 minutes (720). */
+export function breakGlassReady(reason: string, minutes: number, dev: boolean): boolean {
+  const max = dev ? breakGlassDevMaxMinutes : breakGlassMaxMinutes;
+  return Number.isInteger(minutes) && minutes >= 1 && minutes <= max && (dev || reason.trim().length >= breakGlassMinReason);
+}

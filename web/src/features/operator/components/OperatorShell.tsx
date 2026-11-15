@@ -11,6 +11,7 @@ import { useOperatorLogout, useOperatorSession } from "../api";
 
 const links = [
   { to: "/", key: "nav.customers", end: true },
+  { to: "/plans", key: "nav.plans", end: false },
   { to: "/audit", key: "nav.audit", end: false },
   { to: "/system", key: "nav.system", end: false },
   { to: "/account", key: "nav.account", end: false },

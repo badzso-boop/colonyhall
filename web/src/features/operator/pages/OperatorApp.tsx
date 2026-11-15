@@ -13,6 +13,7 @@ import AuditPage from "./AuditPage";
 import CustomerPage from "./CustomerPage";
 import CustomersPage from "./CustomersPage";
 import OperatorLoginPage from "./OperatorLoginPage";
+import PlansPage from "./PlansPage";
 import SystemPage from "./SystemPage";
 
 /** The operator console on admin.<domain> (round 51): a chunk of its own, never loaded by a workspace's app. */
@@ -29,6 +30,7 @@ export default function OperatorApp() {
       >
         <Route index element={<CustomersPage />} />
         <Route path="customers/:id" element={<CustomerPage />} />
+        <Route path="plans" element={<PlansPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="account" element={<AccountPage />} />

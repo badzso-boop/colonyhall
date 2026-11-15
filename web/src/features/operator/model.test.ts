@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Ujj Norbert
 
-import { canInvite, inviteStatus, isOperatorHost, normaliseCode, slugFromName, slugsById, storagePercent, validSlug } from "./model";
+import { breakGlassReady, bytesToGb, canInvite, gbToBytes, inviteStatus, isOperatorHost, normaliseCode, parseCores, slugFromName, slugsById, storagePercent, validSlug } from "./model";
 
 const now = new Date("2026-11-15T10:00:00Z");
 
@@ -46,4 +46,24 @@ test("subdomains follow the server's rule", () => {
 test("helpers", () => {
   expect(slugsById([{ id: "1", slug: "acme" }]).get("1")).toBe("acme");
   expect(normaliseCode(" 123 456 ")).toBe("123456");
+});
+
+test("plan numbers: GB and cores (round 51b)", () => {
+  expect(gbToBytes("15")).toBe(15 * 1024 ** 3);
+  expect(gbToBytes("1,5")).toBe(Math.round(1.5 * 1024 ** 3));
+  expect(gbToBytes("0")).toBeNull();
+  expect(gbToBytes("x")).toBeNull();
+  expect(bytesToGb(20 * 1024 ** 3)).toBe("20");
+  expect(parseCores("4")).toBe(4);
+  expect(parseCores("0")).toBeNull();
+  expect(parseCores("2.5")).toBeNull();
+});
+
+test("break-glass needs a reason and at most 4 hours, unless in development mode (round 51b)", () => {
+  const reason = "Hibakeresés: nem tölt be a csatorna";
+  expect(breakGlassReady(reason, 60, false)).toBe(true);
+  expect(breakGlassReady("rövid", 60, false)).toBe(false);
+  expect(breakGlassReady(reason, 300, false)).toBe(false);
+  expect(breakGlassReady("", 300, true)).toBe(true);
+  expect(breakGlassReady("", 0, true)).toBe(false);
 });

@@ -110,3 +110,40 @@ export function useAcceptInvite() {
     },
   });
 }
+
+// Round 51b: the operator's break-glass access.
+export type BreakGlass = Schemas["BreakGlass"];
+
+/** Opens the read-only session from the handoff link's token (60 seconds, once). */
+export function useRedeemBreakGlass() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => unwrap(await api.POST("/break-glass/redeem", { body: { token } })),
+    onSuccess: (s) => {
+      setCsrfToken(s.csrf_token);
+      qc.setQueryData(identityKeys.session, s);
+    },
+  });
+}
+
+const breakGlassKey = ["identity", "break-glass"] as const;
+
+/** The operator's accesses to this workspace (owner and admins). */
+export function useBreakGlassList(enabled: boolean) {
+  return useQuery({
+    queryKey: breakGlassKey,
+    queryFn: async () => unwrap(await api.GET("/workspace/break-glass")).break_glass,
+    enabled,
+  });
+}
+
+/** Closes an access at once (the owner). */
+export function useCloseBreakGlass() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      unwrap(await api.DELETE("/workspace/break-glass/{breakGlassId}", { params: { path: { breakGlassId: id } } }));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: breakGlassKey }),
+  });
+}

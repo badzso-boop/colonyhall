@@ -218,6 +218,10 @@
     "fajlok": {
       "title": "Fájlok",
       "body": "A feltöltési korlátot a szerver környezete adja, itt nem módosítható."
+    },
+    "uzemelteto": {
+      "title": "Üzemeltetői hozzáférés",
+      "body": "Ha a munkaterület egy üzemeltető szerverén fut, az üzemeltető hibakereséshez indoklással, legfeljebb 4 órára, csak olvasva belenézhet. DM-eket, privát csatornákat és keresést nem lát; minden megnyitott oldal az auditnaplóba kerül, és a tulajdonos értesítést kap. A tulajdonos itt azonnal lezárhatja."
     }
   },
   "users": {
@@ -427,7 +431,10 @@
         "warning_80": "80% fölött",
         "warning_95": "95% fölött",
         "full": "Megtelt: a feltöltés hibát ad, az agentek szünetelnek"
-      }
+      },
+      "plan": "Csomag",
+      "planValue": "{{name}} · {{storage}} · {{cpu}} mag · {{memory}} memória",
+      "belowPlan": "A keretet a csomag tárhelye alá állíthatod, fölé nem."
     }
   },
   "emergencyStop": {

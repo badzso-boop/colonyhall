@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 import { CircleCheck, CircleMinus, Settings, Trash2 } from "lucide-react";
 import { useChannels } from "@/features/conversation";
-import { useActors } from "@/features/identity";
+import { BreakGlassCard, useActors } from "@/features/identity";
 import { localeOf } from "@/shared/i18n";
 import { cn, fullTime } from "@/shared/lib";
 import { Button, Dialog, EmptyState, Input, Notice, Select, Skeleton, Tab, TabList, Tabs, toast } from "@/shared/ui";
@@ -32,7 +32,7 @@ import { AdminPage } from "../components/AdminPage";
 import { priceFields, priceHistory, validRepo, type PriceField } from "../model";
 import { StorageCard } from "../components/StorageCard";
 
-const sections = ["tomorites", "fajllekeres", "feladatatadas", "gitea", "arak", "fajlok"] as const;
+const sections = ["tomorites", "fajllekeres", "feladatatadas", "gitea", "arak", "fajlok", "uzemelteto"] as const;
 type Section = (typeof sections)[number];
 
 /** Beállítások (/admin/settings): a left section list, tabs on a phone; each section saves on its own. */
@@ -77,6 +77,7 @@ export default function SettingsPage() {
             {active === "gitea" ? <GiteaSection /> : null}
             {active === "arak" ? <PricesSection /> : null}
             {active === "fajlok" ? <FilesSection /> : null}
+            {active === "uzemelteto" ? <OperatorAccessSection /> : null}
           </div>
         </div>
       </div>
@@ -561,6 +562,17 @@ function FilesSection() {
       <div className="max-w-md">
         <StorageCard />
       </div>
+    </section>
+  );
+}
+
+/** Round 51b: the hosting operator's break-glass accesses (read-only, audited; the owner may close them). */
+function OperatorAccessSection() {
+  const { t } = useTranslation("admin");
+  return (
+    <section className="flex flex-col gap-3 text-ui">
+      <p className="text-fg-muted">{t("settings.uzemelteto.body")}</p>
+      <BreakGlassCard />
     </section>
   );
 }

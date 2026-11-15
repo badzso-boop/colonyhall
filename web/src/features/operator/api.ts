@@ -130,3 +130,93 @@ export function useOperatorDatabase() {
     queryFn: async () => unwrap(await api.GET("/operator/system/database")),
   });
 }
+
+// Round 51b: plans and break-glass access.
+export type Plan = Schemas["Plan"];
+export type BreakGlass = Schemas["BreakGlass"];
+
+const planKeys = {
+  all: ["operator", "plans"] as const,
+  check: (ws: string, plan: string) => ["operator", "plan-check", ws, plan] as const,
+  breakGlass: (ws: string) => ["operator", "break-glass", ws] as const,
+};
+
+export function usePlans() {
+  return useQuery({ queryKey: planKeys.all, queryFn: async () => unwrap(await api.GET("/operator/plans")).plans });
+}
+
+export function useCreatePlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["PlanRequest"]) => unwrap(await api.POST("/operator/plans", { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: planKeys.all }),
+  });
+}
+
+export function useUpdatePlan(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["PlanPatchRequest"]) => unwrap(await api.PATCH("/operator/plans/{planId}", { params: { path: { planId: id } }, body })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: planKeys.all });
+      void qc.invalidateQueries({ queryKey: operatorKeys.customers });
+    },
+  });
+}
+
+/** What a plan would mean for a workspace's storage (before assigning it). */
+export function usePlanCheck(workspaceId: string, planId: string) {
+  return useQuery({
+    queryKey: planKeys.check(workspaceId, planId),
+    queryFn: async () =>
+      unwrap(await api.GET("/operator/workspaces/{workspaceId}/plan-check", { params: { path: { workspaceId }, query: { plan_id: planId } } })),
+    enabled: planId !== "",
+  });
+}
+
+export function useAssignPlan(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["AssignPlanRequest"]) =>
+      unwrap(await api.PUT("/operator/workspaces/{workspaceId}/plan", { params: { path: { workspaceId } }, body })),
+    onSuccess: (c) => {
+      qc.setQueryData(operatorKeys.customer(workspaceId), c);
+      void qc.invalidateQueries({ queryKey: operatorKeys.customers });
+      void qc.invalidateQueries({ queryKey: planKeys.all });
+    },
+  });
+}
+
+export function useBreakGlassList(workspaceId: string) {
+  return useQuery({
+    queryKey: planKeys.breakGlass(workspaceId),
+    queryFn: async () => unwrap(await api.GET("/operator/workspaces/{workspaceId}/break-glass", { params: { path: { workspaceId } } })).break_glass,
+  });
+}
+
+export function useOpenBreakGlass(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Schemas["BreakGlassRequest"]) =>
+      unwrap(await api.POST("/operator/workspaces/{workspaceId}/break-glass", { params: { path: { workspaceId } }, body })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: planKeys.breakGlass(workspaceId) });
+      void qc.invalidateQueries({ queryKey: operatorKeys.customer(workspaceId) });
+    },
+  });
+}
+
+export function useCloseOperatorBreakGlass(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      unwrap(
+        await api.DELETE("/operator/workspaces/{workspaceId}/break-glass/{breakGlassId}", { params: { path: { workspaceId, breakGlassId: id } } }),
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: planKeys.breakGlass(workspaceId) });
+      void qc.invalidateQueries({ queryKey: operatorKeys.customer(workspaceId) });
+    },
+  });
+}

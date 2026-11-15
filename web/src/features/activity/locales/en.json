@@ -20,7 +20,8 @@
     "approval": "Approvals",
     "question": "Questions",
     "important": "Important",
-    "reminder": "Reminders"
+    "reminder": "Reminders",
+    "operator_access": "Operator"
   },
   "kinds": {
     "mention": "{{who}} mentioned you",
@@ -29,6 +30,7 @@
     "approval": "{{who}} waits for an approval",
     "question": "{{who}} asks",
     "important": "{{who}} marked a message important",
-    "reminder": "Reminder"
+    "reminder": "Reminder",
+    "operator_access": "The operator opened read-only access to the workspace"
   }
 }

@@ -20,7 +20,8 @@
     "approval": "Jóváhagyás",
     "question": "Kérdés",
     "important": "Fontos",
-    "reminder": "Emlékeztető"
+    "reminder": "Emlékeztető",
+    "operator_access": "Üzemeltető"
   },
   "kinds": {
     "mention": "{{who}} megemlített",
@@ -29,6 +30,7 @@
     "approval": "{{who}} jóváhagyásra vár",
     "question": "{{who}} kérdez",
     "important": "{{who}} fontosnak jelölt egy üzenetet",
-    "reminder": "Emlékeztető"
+    "reminder": "Emlékeztető",
+    "operator_access": "Az üzemeltető csak olvasható hozzáférést nyitott a munkaterülethez"
   }
 }
