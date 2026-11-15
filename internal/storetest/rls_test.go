@@ -213,6 +213,40 @@ func TestPostgresRowLevelSecurity(t *testing.T) {
 		}
 	}
 
+	// Round 51: the operator's overview reads in the operator scope itself
+	// through colony_operator_overview(): the numbers are right although
+	// the scope sees no workspace rows, no other scope may call it, and it
+	// leaves no system mode behind on the connection.
+	var overview operator.Overview = ops
+	got, err := overview.Customers(op, a.ID, t0.Add(-time.Minute))
+	if err != nil || len(got) != 1 || got[0].ID != a.ID || got[0].Name != "acme" || got[0].Slug != "acme" ||
+		got[0].Users != 1 || !got[0].HasOwner || got[0].Agents != 0 || got[0].Hosts != 0 || got[0].Invite != nil {
+		t.Fatalf("overview of workspace A: %+v %v", got, err)
+	}
+	everyone := a.ID // the ids package name is taken by the store here
+	clear(everyone[:])
+	all, err := overview.Customers(op, everyone, t0.Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[[16]byte]bool{}
+	for _, c := range all {
+		seen[c.ID] = true
+	}
+	if !seen[a.ID] || !seen[b.ID] {
+		t.Fatalf("overview of every workspace misses A or B: %+v", all)
+	}
+	for name, c := range map[string]context.Context{"workspace": inA, "unscoped": ctx, "system": system.Context(ctx)} {
+		if _, err := overview.Customers(c, a.ID, t0); err == nil {
+			t.Fatalf("a %s scope ran the operator's overview", name)
+		}
+	}
+	var left int
+	must(t, pg.Q(op).QueryRow(op, "SELECT count(*) FROM actor").Scan(&left))
+	if left != 0 {
+		t.Fatalf("the overview left system mode on: the operator scope now sees %d actors", left)
+	}
+
 	// Round 51: a nested transaction with another scope fails instead of
 	// running with the outer one (system mode here would see workspace B).
 	err = pg.InTx(system.Context(ctx), func(ctx context.Context) error {

@@ -73,3 +73,19 @@ VALUES ($1, sqlc.narg(operator_id), $2, sqlc.narg(workspace_id), $3, $4, $5);
 SELECT * FROM operator_audit
 WHERE sqlc.narg(before)::timestamptz IS NULL OR created_at < sqlc.narg(before)::timestamptz
 ORDER BY created_at DESC, id DESC LIMIT sqlc.arg(lim);
+
+-- name: Overview :many
+-- The workspaces' account data and numbers, in the operator scope
+-- (colony_operator_overview refuses any other). only_ws: one workspace, or
+-- the nil UUID for all. A missing time is 0001-01-01 (sqlc cannot type a
+-- nullable function column); the store turns it into nil.
+SELECT o.ws_id::uuid AS id, o.ws_name::text AS name, o.ws_slug::text AS slug, o.ws_state::text AS state,
+       coalesce(o.ws_suspended_at, '0001-01-01Z')::timestamptz AS suspended_at, o.ws_suspended_reason::text AS suspended_reason,
+       o.ws_created_at::timestamptz AS created_at, o.has_owner::boolean AS has_owner,
+       o.users_count::integer AS users, o.agents_count::integer AS agents, o.hosts_count::integer AS hosts,
+       o.hosts_online::integer AS hosts_online, coalesce(o.last_activity, '0001-01-01Z')::timestamptz AS last_activity,
+       o.quota_bytes::bigint AS quota_bytes, o.files_bytes::bigint AS files_bytes, o.db_bytes::bigint AS db_bytes,
+       coalesce(o.invite_created_at, '0001-01-01Z')::timestamptz AS invite_created_at,
+       coalesce(o.invite_expires_at, '0001-01-01Z')::timestamptz AS invite_expires_at,
+       coalesce(o.invite_used, false)::boolean AS invite_used, coalesce(o.invite_revoked, false)::boolean AS invite_revoked
+FROM colony_operator_overview(sqlc.arg(only_ws)::uuid, sqlc.arg(online_since)::timestamptz) AS o;

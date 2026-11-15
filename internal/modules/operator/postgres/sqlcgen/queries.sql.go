@@ -296,6 +296,92 @@ func (q *Queries) OperatorByID(ctx context.Context, id uuid.UUID) (Operator, err
 	return i, err
 }
 
+const overview = `-- name: Overview :many
+SELECT o.ws_id::uuid AS id, o.ws_name::text AS name, o.ws_slug::text AS slug, o.ws_state::text AS state,
+       coalesce(o.ws_suspended_at, '0001-01-01Z')::timestamptz AS suspended_at, o.ws_suspended_reason::text AS suspended_reason,
+       o.ws_created_at::timestamptz AS created_at, o.has_owner::boolean AS has_owner,
+       o.users_count::integer AS users, o.agents_count::integer AS agents, o.hosts_count::integer AS hosts,
+       o.hosts_online::integer AS hosts_online, coalesce(o.last_activity, '0001-01-01Z')::timestamptz AS last_activity,
+       o.quota_bytes::bigint AS quota_bytes, o.files_bytes::bigint AS files_bytes, o.db_bytes::bigint AS db_bytes,
+       coalesce(o.invite_created_at, '0001-01-01Z')::timestamptz AS invite_created_at,
+       coalesce(o.invite_expires_at, '0001-01-01Z')::timestamptz AS invite_expires_at,
+       coalesce(o.invite_used, false)::boolean AS invite_used, coalesce(o.invite_revoked, false)::boolean AS invite_revoked
+FROM colony_operator_overview($1::uuid, $2::timestamptz) AS o
+`
+
+type OverviewParams struct {
+	OnlyWs      uuid.UUID
+	OnlineSince time.Time
+}
+
+type OverviewRow struct {
+	ID              uuid.UUID
+	Name            string
+	Slug            string
+	State           string
+	SuspendedAt     time.Time
+	SuspendedReason string
+	CreatedAt       time.Time
+	HasOwner        bool
+	Users           int32
+	Agents          int32
+	Hosts           int32
+	HostsOnline     int32
+	LastActivity    time.Time
+	QuotaBytes      int64
+	FilesBytes      int64
+	DbBytes         int64
+	InviteCreatedAt time.Time
+	InviteExpiresAt time.Time
+	InviteUsed      bool
+	InviteRevoked   bool
+}
+
+// The workspaces' account data and numbers, in the operator scope
+// (colony_operator_overview refuses any other). only_ws: one workspace, or
+// the nil UUID for all. A missing time is 0001-01-01 (sqlc cannot type a
+// nullable function column); the store turns it into nil.
+func (q *Queries) Overview(ctx context.Context, arg OverviewParams) ([]OverviewRow, error) {
+	rows, err := q.db.Query(ctx, overview, arg.OnlyWs, arg.OnlineSince)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OverviewRow
+	for rows.Next() {
+		var i OverviewRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.State,
+			&i.SuspendedAt,
+			&i.SuspendedReason,
+			&i.CreatedAt,
+			&i.HasOwner,
+			&i.Users,
+			&i.Agents,
+			&i.Hosts,
+			&i.HostsOnline,
+			&i.LastActivity,
+			&i.QuotaBytes,
+			&i.FilesBytes,
+			&i.DbBytes,
+			&i.InviteCreatedAt,
+			&i.InviteExpiresAt,
+			&i.InviteUsed,
+			&i.InviteRevoked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resealTOTP = `-- name: ResealTOTP :execrows
 UPDATE operator SET totp_key_id = $1, totp_nonce = $2, totp_ciphertext = $3
 WHERE id = $4

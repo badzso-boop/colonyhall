@@ -5,106 +5,62 @@ package server
 
 import (
 	"context"
-	"errors"
 
-	"colonyhall/internal/modules/audit"
 	"colonyhall/internal/modules/files"
 	"colonyhall/internal/modules/hosts"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/operator"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
-	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
 )
 
 // customers is the operator's view of the workspaces (round 51,
-// operator.Customers). It reads each workspace in its own narrowed scope
-// and returns account data and numbers only: no channel, message, file or
-// person names. The operator scope itself never sees a workspace's rows.
+// operator.Customers). Every read goes through operator.Overview in the
+// operator scope itself (Postgres: colony_operator_overview(), account data
+// and numbers only), so this code never switches system mode or a
+// workspace's scope to look (depguard keeps db/system out of this file).
+// The writes go through the identity module's narrow methods, each in the
+// one workspace it changes.
 type customers struct {
 	identity *identity.Service
-	idStore  identity.Store
-	hosts    hosts.Store
-	files    *files.Service
-	audit    audit.Store
+	overview operator.Overview
 	clock    clock.Clock
 	// closeWorkspace drops the suspended workspace's open sockets.
 	closeWorkspace func(id ids.ID)
 }
 
-func (c *customers) List(ctx context.Context) ([]operator.Customer, error) {
-	// The list of workspace ids is the one system-mode read.
-	list, err := c.idStore.ListWorkspaces(system.Context(ctx))
+// read returns the overview of one workspace (only) or all (ids.Nil), with
+// the storage's used bytes and state after round 54's rules.
+func (c *customers) read(ctx context.Context, only ids.ID) ([]operator.Customer, error) {
+	list, err := c.overview.Customers(ctx, only, c.clock.Now().Add(-hosts.OnlineWindow))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]operator.Customer, 0, len(list))
-	for _, w := range list {
-		cu, err := c.Get(ctx, w.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, cu)
+	for i := range list {
+		st := &list[i].Storage
+		u := files.Usage{QuotaBytes: st.QuotaBytes, FilesBytes: st.FilesBytes, DBBytes: st.DBBytes}
+		st.UsedBytes, st.State = u.Used(), string(u.State())
 	}
-	return out, nil
+	return list, nil
+}
+
+func (c *customers) List(ctx context.Context) ([]operator.Customer, error) {
+	return c.read(ctx, ids.Nil)
 }
 
 func (c *customers) Get(ctx context.Context, id ids.ID) (operator.Customer, error) {
-	ctx = db.WithWorkspace(ctx, id)
-	ws, err := c.idStore.WorkspaceByID(ctx, id)
+	if id == ids.Nil {
+		return operator.Customer{}, db.ErrNotFound
+	}
+	list, err := c.read(ctx, id)
 	if err != nil {
 		return operator.Customer{}, err
 	}
-	out := operator.Customer{ID: ws.ID, Name: ws.Name, Slug: ws.Slug, State: ws.State, SuspendedAt: ws.SuspendedAt,
-		SuspendedReason: ws.SuspendedReason, CreatedAt: ws.CreatedAt}
-	actors, err := c.idStore.ListActors(ctx, id)
-	if err != nil {
-		return operator.Customer{}, err
+	if len(list) != 1 {
+		return operator.Customer{}, db.ErrNotFound
 	}
-	for _, a := range actors {
-		switch a.Kind {
-		case identity.KindHuman:
-			out.Users++
-			if a.Role == identity.RoleOwner {
-				out.HasOwner = true
-			}
-		case identity.KindAgent:
-			out.Agents++
-		}
-	}
-	hs, err := c.hosts.ListHosts(ctx, id)
-	if err != nil {
-		return operator.Customer{}, err
-	}
-	now := c.clock.Now()
-	for _, h := range hs {
-		if h.State == hosts.StateRevoked {
-			continue
-		}
-		out.Hosts++
-		if h.LastSeenAt != nil && now.Sub(*h.LastSeenAt) <= hosts.OnlineWindow {
-			out.HostsOnline++
-		}
-	}
-	// Every event reaches the audit chain: its last entry is the last activity.
-	if last, err := c.audit.Last(ctx, id); err == nil {
-		at := last.At
-		out.LastActivity = &at
-	} else if !errors.Is(err, db.ErrNotFound) {
-		return operator.Customer{}, err
-	}
-	u, err := c.files.StorageState(ctx, id)
-	if err != nil {
-		return operator.Customer{}, err
-	}
-	out.Storage = operator.Storage{UsedBytes: u.Used(), QuotaBytes: u.QuotaBytes, FilesBytes: u.FilesBytes, DBBytes: u.DBBytes, State: string(u.State())}
-	if inv, err := c.identity.LatestInvite(ctx, id); err == nil {
-		out.Invite = &operator.InviteState{CreatedAt: inv.CreatedAt, ExpiresAt: inv.ExpiresAt, Used: inv.UsedAt != nil, Revoked: inv.RevokedAt != nil}
-	} else if !errors.Is(err, db.ErrNotFound) {
-		return operator.Customer{}, err
-	}
-	return out, nil
+	return list[0], nil
 }
 
 func (c *customers) Create(ctx context.Context, name, slug string) (operator.Customer, error) {

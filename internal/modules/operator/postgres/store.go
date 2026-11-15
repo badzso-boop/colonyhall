@@ -10,6 +10,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"colonyhall/internal/modules/operator"
@@ -205,4 +206,33 @@ func (s *Store) ListAudit(ctx context.Context, before time.Time, limit int) ([]o
 		out = append(out, e)
 	}
 	return out, nil
+}
+
+// Customers implements operator.Overview through colony_operator_overview(),
+// in the caller's (operator) scope.
+func (s *Store) Customers(ctx context.Context, only ids.ID, onlineSince time.Time) ([]operator.Customer, error) {
+	rows, err := s.q(ctx).Overview(ctx, sqlcgen.OverviewParams{OnlyWs: uuid.UUID(only), OnlineSince: onlineSince})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]operator.Customer, 0, len(rows))
+	for _, r := range rows {
+		c := operator.Customer{ID: ids.ID(r.ID), Name: r.Name, Slug: r.Slug, State: r.State, SuspendedAt: optTime(r.SuspendedAt),
+			SuspendedReason: r.SuspendedReason, CreatedAt: r.CreatedAt, HasOwner: r.HasOwner, Users: int(r.Users),
+			Agents: int(r.Agents), Hosts: int(r.Hosts), HostsOnline: int(r.HostsOnline), LastActivity: optTime(r.LastActivity),
+			Storage: operator.Storage{QuotaBytes: r.QuotaBytes, FilesBytes: r.FilesBytes, DBBytes: r.DbBytes}}
+		if r.InviteCreatedAt.Year() > 1 {
+			c.Invite = &operator.InviteState{CreatedAt: r.InviteCreatedAt, ExpiresAt: r.InviteExpiresAt, Used: r.InviteUsed, Revoked: r.InviteRevoked}
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// optTime: the query's 0001-01-01 stands for a missing time.
+func optTime(t time.Time) *time.Time {
+	if t.Year() <= 1 {
+		return nil
+	}
+	return &t
 }

@@ -55,9 +55,20 @@ type InviteLink struct {
 	ExpiresAt time.Time
 }
 
+// Overview reads the workspaces' account data and numbers without leaving
+// the operator scope: on Postgres through colony_operator_overview(), which
+// refuses every other scope and returns no content (docs/24, 3. pont). only
+// is one workspace, or ids.Nil for all; a host counts as online when seen
+// since onlineSince. Storage carries the stored numbers only: UsedBytes and
+// State follow round 54's rules, which the caller applies.
+type Overview interface {
+	Customers(ctx context.Context, only ids.ID, onlineSince time.Time) ([]Customer, error)
+}
+
 // Customers is the operator's view of the workspaces, implemented by the
-// composition root over the modules' APIs (each workspace read in its own
-// narrowed scope). The operator scope itself never sees workspace rows.
+// composition root: the reads through Overview, in the operator scope; the
+// writes (create, invite, suspend) through the identity module's narrow
+// methods, each in the one workspace it changes.
 type Customers interface {
 	List(ctx context.Context) ([]Customer, error)
 	// Get: db.ErrNotFound for an unknown workspace.
