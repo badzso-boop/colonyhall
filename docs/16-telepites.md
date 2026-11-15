@@ -4,6 +4,8 @@
 
 ## Röviden
 
+> **Még nincs kiadás (2026-11-15).** Az `install.sh`, a `colony setup` és a `colony upgrade` a `colony` programot és a szerver image-ét GitHub-kiadásból tölti le, ezért az első `v*` kiadástól működik. Addig forrásból lehet kipróbálni: `git clone …`, majd `make dev` (Docker kell; fejlesztői seeddel, `http://localhost:8080/app/`), lásd a `README.md` „Trying it from source” részét.
+
 ```sh
 gh release download -R badzso-boop/colonyhall -p install.sh -O install.sh   # amíg a repó privát (előtte: gh auth login)
 less install.sh

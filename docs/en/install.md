@@ -4,6 +4,8 @@ The installer's design and its decisions are in `docs/15-telepites-terv.md` (Hun
 
 ## In short
 
+> **No release has been published yet.** `install.sh`, `colony setup` and `colony upgrade` download the `colony` binary and the server image from a GitHub release; they work from the first `v*` release on. Until then, try it from source: [README → Trying it from source](../../README.md#trying-it-from-source).
+
 ```sh
 curl -fsSLO https://github.com/badzso-boop/colonyhall/releases/latest/download/install.sh
 less install.sh          # read it
