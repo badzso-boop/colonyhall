@@ -379,6 +379,24 @@ func (s *Service) SetQuota(ctx context.Context, by identity.Actor, quotaBytes in
 // is warned as for any other crossing (round 54). The change is in the
 // workspace's audit (workspace.plan_changed).
 func (s *Service) SetPlan(ctx context.Context, workspaceID ids.ID, plan *Plan, confirmOverQuota bool) (Usage, error) {
+	return s.setPlan(ctx, workspaceID, plan, confirmOverQuota, false)
+}
+
+// RefreshPlan writes a plan's new numbers into the workspace's copy, only
+// while the workspace is still on that plan (checked under the usage row's
+// lock): a plan edit never puts a workspace back on a plan it has left. It
+// reports whether it changed anything.
+func (s *Service) RefreshPlan(ctx context.Context, workspaceID ids.ID, plan Plan) (bool, error) {
+	u, err := s.setPlan(ctx, workspaceID, &plan, true, true)
+	if errors.Is(err, errNotOnPlan) {
+		return false, nil
+	}
+	return err == nil && u.Plan != nil, err
+}
+
+var errNotOnPlan = errors.New("the workspace is no longer on the plan")
+
+func (s *Service) setPlan(ctx context.Context, workspaceID ids.ID, plan *Plan, confirmOverQuota, onlyIfOn bool) (Usage, error) {
 	now := s.Clock.Now()
 	var u Usage
 	var seq int64
@@ -392,6 +410,9 @@ func (s *Service) SetPlan(ctx context.Context, workspaceID ids.ID, plan *Plan, c
 			return err
 		}
 		prevPlan := u.Plan
+		if onlyIfOn && (prevPlan == nil || prevPlan.ID != plan.ID) {
+			return errNotOnPlan
+		}
 		u.Plan = plan
 		if lim := u.Limit(); lim > 0 && u.Used() >= lim && !confirmOverQuota {
 			// Only a change that makes it full needs the confirmation.

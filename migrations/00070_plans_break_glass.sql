@@ -95,7 +95,9 @@ BEGIN
            (SELECT count(*) FROM host h WHERE h.workspace_id = w.id AND h.state <> 'revoked')::integer,
            (SELECT count(*) FROM host h WHERE h.workspace_id = w.id AND h.state <> 'revoked'
                    AND h.last_seen_at IS NOT NULL AND h.last_seen_at >= online_since)::integer,
-           (SELECT l.at FROM audit_log l WHERE l.workspace_id = w.id ORDER BY l.seq DESC LIMIT 1),
+           -- The operator's own break-glass entries are not the customer's activity.
+           (SELECT l.at FROM audit_log l WHERE l.workspace_id = w.id AND l.action NOT LIKE 'operator.break_glass_%'
+                   ORDER BY l.seq DESC LIMIT 1),
            coalesce(s.quota_bytes, 0), coalesce(s.files_bytes, 0), coalesce(s.db_bytes, 0),
            i.created_at, i.expires_at, i.used_at IS NOT NULL, i.revoked_at IS NOT NULL,
            s.plan_id, coalesce(s.plan_storage_bytes, 0),
@@ -148,6 +150,8 @@ BEGIN
     PERFORM set_config('colony.system', prev, true);
 END $$;
 -- +goose StatementEnd
+-- A break-glass session must not outlive its rules as an ordinary admin session.
+UPDATE session SET revoked_at = now() WHERE break_glass_id IS NOT NULL AND revoked_at IS NULL;
 ALTER TABLE session DROP COLUMN break_glass_id;
 DELETE FROM activity_item WHERE kind = 'operator_access';
 ALTER TABLE activity_item DROP CONSTRAINT activity_item_kind_check;

@@ -3911,7 +3911,7 @@ Type: string
 | `id` | string (uuid) | yes |  |
 | `open` | boolean | yes |  |
 | `opened_at` | string (date-time) | yes |  |
-| `operator_handle` | string | yes |  |
+| `operator_handle` | string | yes | The operator's display name (never the login handle) |
 | `reason` | string | yes |  |
 
 ### BreakGlassList
@@ -3943,7 +3943,7 @@ The session is the operator's read-only break-glass access (round 51b)
 | --- | --- | --- | --- |
 | `expires_at` | string (date-time) | yes |  |
 | `id` | string (uuid) | yes |  |
-| `operator_handle` | string | yes |  |
+| `operator_handle` | string | yes | The operator's display name (never the login handle) |
 
 ### Channel
 

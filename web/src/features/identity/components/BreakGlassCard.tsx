@@ -35,7 +35,7 @@ function Entry({ access: b, owner }: { access: BreakGlass; owner: boolean }) {
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-3 text-ui">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">@{b.operator_handle}</span>
+        <span className="font-semibold">{b.operator_handle}</span>
         {b.open ? <Badge tone="warning">{t("breakGlass.open")}</Badge> : <Badge>{t(`breakGlass.closedBy.${b.closed_by ?? "expired"}`)}</Badge>}
         {b.dev_mode ? <Badge tone="danger">{t("breakGlass.devMode")}</Badge> : null}
         {b.open && owner ? (

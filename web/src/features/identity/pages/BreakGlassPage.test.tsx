@@ -41,10 +41,10 @@ afterEach(() => {
 });
 
 test("the link opens the read-only session once and the app shows the banner (round 51b)", async () => {
-  const session = { actor, csrf_token: "c", break_glass: { id: "b1", expires_at: "2026-11-15T14:30:00Z", operator_handle: "ops" } };
+  const session = { actor, csrf_token: "c", break_glass: { id: "b1", expires_at: "2026-11-15T14:30:00Z", operator_handle: "Ops" } };
   const calls = setup("#tok123", (path) => (path.endsWith("/break-glass/redeem") || path.endsWith("/auth/session") ? json(session) : json({})));
   const banner = await screen.findByRole("status");
-  expect(banner.textContent).toContain("@ops");
+  expect(banner.textContent).toContain("(Ops)");
   expect(banner.textContent).toContain("csak olvasás");
   const redeems = calls.filter((c) => c.path.endsWith("/break-glass/redeem"));
   expect(redeems).toEqual([{ path: "/api/v1/break-glass/redeem", body: { token: "tok123" } }]);

@@ -54,9 +54,11 @@ const (
 
 // BreakGlass is one access.
 type BreakGlass struct {
-	ID               ids.ID
-	WorkspaceID      ids.ID
-	OperatorID       ids.ID
+	ID          ids.ID
+	WorkspaceID ids.ID
+	OperatorID  ids.ID
+	// OperatorHandle is the operator's display name (never the login
+	// handle, which the customer must not learn).
 	OperatorHandle   string
 	ActorID          ids.ID
 	Reason           string
@@ -185,7 +187,10 @@ func (s *Service) OpenBreakGlass(ctx context.Context, in OpenBreakGlassInput) (B
 func (s *Service) breakGlassActor(ctx context.Context, workspaceID ids.ID) (Actor, int64, error) {
 	if id, err := s.Store.BreakGlassActor(ctx, workspaceID); err == nil {
 		a, err := s.Store.ActorByID(ctx, id)
-		return a, 0, err
+		if err != nil || a.ArchivedAt == nil {
+			return a, 0, err
+		}
+		// The customer archived it: a new one (the archived stays archived).
 	} else if !errors.Is(err, db.ErrNotFound) {
 		return Actor{}, 0, err
 	}
@@ -354,15 +359,19 @@ func (s *Service) ExpireBreakGlass(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// One workspace's failure does not keep the others' records open (the
+	// sessions are refused anyway: every request checks the time).
 	n := 0
+	var errs []error
 	for _, b := range list {
 		wctx := db.WithWorkspace(ctx, b.WorkspaceID)
 		if err := s.closeBreakGlass(wctx, Actor{ID: b.ActorID, WorkspaceID: b.WorkspaceID}, b, BreakGlassClosedByExpiry); err != nil {
-			return n, err
+			errs = append(errs, fmt.Errorf("break-glass %s: %w", b.ID, err))
+			continue
 		}
 		n++
 	}
-	return n, nil
+	return n, errors.Join(errs...)
 }
 
 // IsBreakGlassActor reports whether the actor is a workspace's operator

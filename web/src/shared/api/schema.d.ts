@@ -6510,6 +6510,7 @@ export interface components {
         BreakGlass: {
             /** Format: uuid */
             id: string;
+            /** @description The operator's display name (never the login handle) */
             operator_handle: string;
             reason: string;
             dev_mode: boolean;
@@ -6542,6 +6543,7 @@ export interface components {
             id: string;
             /** Format: date-time */
             expires_at: string;
+            /** @description The operator's display name (never the login handle) */
             operator_handle: string;
         };
         CustomerList: {

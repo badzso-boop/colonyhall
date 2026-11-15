@@ -49,7 +49,7 @@
     "opening": "Üzemeltetői hozzáférés megnyitása…",
     "invalidTitle": "A link már nem érvényes",
     "gone": "Ez az üzemeltetői link lejárt vagy már használták (60 másodpercig, egyszer érvényes). Kérj újat az üzemeltetői felületen.",
-    "banner": "Üzemeltetői hozzáférés (@{{operator}}): csak olvasás, lejár {{until}}-kor. DM-ek és privát csatornák nem látszanak; minden megnyitott oldal az ügyfél auditnaplójába kerül.",
+    "banner": "Üzemeltetői hozzáférés ({{operator}}): csak olvasás, lejár {{until}}-kor. DM-ek és privát csatornák nem látszanak; minden megnyitott oldal az ügyfél auditnaplójába kerül.",
     "none": "Még nem volt üzemeltetői hozzáférés",
     "noneBody": "Ha az üzemeltető hibakereséshez belenéz a munkaterületbe, itt látszik: ki, miért és meddig. A tulajdonos azonnal lezárhatja.",
     "open": "Nyitva",

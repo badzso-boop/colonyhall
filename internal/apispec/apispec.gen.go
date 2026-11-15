@@ -2257,14 +2257,16 @@ type BreakGlass struct {
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
 
 	// ClosedBy operator, owner or expired
-	ClosedBy       *string            `json:"closed_by,omitempty"`
-	DevMode        bool               `json:"dev_mode"`
-	ExpiresAt      time.Time          `json:"expires_at"`
-	Id             openapi_types.UUID `json:"id"`
-	Open           bool               `json:"open"`
-	OpenedAt       time.Time          `json:"opened_at"`
-	OperatorHandle string             `json:"operator_handle"`
-	Reason         string             `json:"reason"`
+	ClosedBy  *string            `json:"closed_by,omitempty"`
+	DevMode   bool               `json:"dev_mode"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Open      bool               `json:"open"`
+	OpenedAt  time.Time          `json:"opened_at"`
+
+	// OperatorHandle The operator's display name (never the login handle)
+	OperatorHandle string `json:"operator_handle"`
+	Reason         string `json:"reason"`
 }
 
 // BreakGlassList defines model for BreakGlassList.
@@ -2292,9 +2294,11 @@ type BreakGlassRequest struct {
 
 // BreakGlassSession The session is the operator's read-only break-glass access (round 51b)
 type BreakGlassSession struct {
-	ExpiresAt      time.Time          `json:"expires_at"`
-	Id             openapi_types.UUID `json:"id"`
-	OperatorHandle string             `json:"operator_handle"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// OperatorHandle The operator's display name (never the login handle)
+	OperatorHandle string `json:"operator_handle"`
 }
 
 // Channel defines model for Channel.

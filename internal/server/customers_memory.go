@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"colonyhall/internal/modules/audit"
@@ -83,11 +85,17 @@ func (m *memoryOverview) Customers(ctx context.Context, only ids.ID, onlineSince
 				cu.HostsOnline++
 			}
 		}
-		if last, err := m.audit.Last(ctx, ws.ID); err == nil {
-			at := last.At
-			cu.LastActivity = &at
-		} else if !errors.Is(err, db.ErrNotFound) {
+		// The operator's own break-glass entries are not the customer's activity.
+		page, err := m.audit.Page(ctx, ws.ID, math.MaxInt64, 500)
+		if err != nil {
 			return nil, err
+		}
+		for _, e := range page {
+			if !strings.HasPrefix(e.Action, "operator.break_glass_") {
+				at := e.At
+				cu.LastActivity = &at
+				break
+			}
 		}
 		u, err := m.files.StorageState(ctx, ws.ID)
 		if err != nil {

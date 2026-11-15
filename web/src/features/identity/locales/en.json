@@ -49,7 +49,7 @@
     "opening": "Opening the operator's access…",
     "invalidTitle": "This link is no longer valid",
     "gone": "This operator link has expired or was used already (it works once, for 60 seconds). Ask for a new one in the operator console.",
-    "banner": "Operator access (@{{operator}}): read-only, until {{until}}. DMs and private channels are not shown; every page opened is in the customer's audit log.",
+    "banner": "Operator access ({{operator}}): read-only, until {{until}}. DMs and private channels are not shown; every page opened is in the customer's audit log.",
     "none": "No operator access yet",
     "noneBody": "When the operator looks into the workspace to debug something, it shows here: who, why and until when. The owner can close it at once.",
     "open": "Open",

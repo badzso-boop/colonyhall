@@ -90,6 +90,9 @@ type Customers interface {
 	// below the usage is ErrPlanOverQuota from the storage module unless
 	// confirmed (round 51b).
 	SetPlan(ctx context.Context, id ids.ID, plan *Plan, confirmOverQuota bool) (Customer, error)
+	// RefreshPlan writes an edited plan's numbers into the workspace, only
+	// while it is still on that plan; false when it is not.
+	RefreshPlan(ctx context.Context, id ids.ID, plan Plan) (bool, error)
 	// CheckPlan tells what the plan would mean for the workspace's storage.
 	CheckPlan(ctx context.Context, id ids.ID, plan Plan) (PlanCheck, error)
 }

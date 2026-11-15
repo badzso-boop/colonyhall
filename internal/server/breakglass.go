@@ -20,8 +20,15 @@ type breakGlass struct {
 }
 
 func (b breakGlass) OpenBreakGlass(ctx context.Context, workspaceID ids.ID, o operator.Operator, reason string, expiresAt time.Time, devMode bool) (operator.BreakGlassLink, error) {
+	// The customer sees the operator's display name, never the login
+	// handle: with the handle a customer could try (and lock out) the
+	// operator's login where admin.<domain> has no allowlist.
+	name := o.DisplayName
+	if name == "" {
+		name = "operator"
+	}
 	x, token, err := b.identity.OpenBreakGlass(ctx, identity.OpenBreakGlassInput{WorkspaceID: workspaceID, OperatorID: o.ID,
-		OperatorHandle: o.Handle, Reason: reason, ExpiresAt: expiresAt, DevMode: devMode})
+		OperatorHandle: name, Reason: reason, ExpiresAt: expiresAt, DevMode: devMode})
 	if err != nil {
 		return operator.BreakGlassLink{}, err
 	}

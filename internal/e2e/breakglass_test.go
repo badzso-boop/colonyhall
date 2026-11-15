@@ -137,8 +137,51 @@ func runBreakGlass(t *testing.T, change func(*server.Options)) {
 	if s := acme.client().do("POST", "/api/v1/break-glass/redeem", map[string]any{"token": token}, nil); s != http.StatusGone {
 		t.Fatalf("the link a second time: %d", s)
 	}
-	if s := bg.do("GET", "/api/v1/auth/session", nil, &info); s != http.StatusOK || info.BreakGlass == nil || info.BreakGlass.OperatorHandle != "ops" {
+	if s := bg.do("GET", "/api/v1/auth/session", nil, &info); s != http.StatusOK || info.BreakGlass == nil || info.BreakGlass.OperatorHandle != "Ops" {
 		t.Fatalf("session: %d %+v", s, info)
+	}
+
+	// The customer may make the operator actor a member of a private
+	// channel and of a group DM, and mention it there: the break-glass
+	// session still sees none of it (review of round 51b).
+	opID := info.Actor.Id.String()
+	if s := acme.do("POST", "/api/v1/channels/"+priv.ID+"/members", owner, map[string]any{"actor_id": opID, "can_write": true}, nil); s >= 300 {
+		t.Fatalf("add the operator actor to the private channel: %d", s)
+	}
+	root, _ := acme.send(owner, priv.ID, map[string]any{"body": "PRIVATE ROOT secret"})
+	acme.send(owner, priv.ID, map[string]any{"body": "PRIVATE REPLY @colonyhall-operator", "thread_root_id": root.ID})
+	var gdm idOnly
+	if s := acme.do("POST", "/api/v1/dms", owner, map[string]any{"actor_ids": []string{opID, acme.agentID()}}, &gdm); s >= 300 {
+		t.Fatalf("group dm with the operator actor: %d", s)
+	}
+	groot, _ := acme.send(owner, gdm.ID, map[string]any{"body": "GROUP DM ROOT secret"})
+	acme.send(owner, gdm.ID, map[string]any{"body": "GROUP DM REPLY @colonyhall-operator", "thread_root_id": groot.ID})
+	drain()
+	for _, path := range []string{"/api/v1/me/threads", "/api/v1/me/activity", "/api/v1/channels", "/api/v1/me/saved", "/api/v1/me/drafts"} {
+		res, body := bg.send("GET", path, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK || strings.Contains(string(body), "secret") || strings.Contains(string(body), "PRIVATE") ||
+			strings.Contains(string(body), "GROUP DM") || strings.Contains(string(body), priv.ID) || strings.Contains(string(body), gdm.ID) {
+			t.Fatalf("%s shows a private place the operator actor is a member of: %d %.300s", path, res.StatusCode, body)
+		}
+	}
+
+	// Every allowed route answers without a server error (on Postgres the
+	// connection is read-only: a GET that wrote would fail here).
+	for p := range identity.BreakGlassRoutes {
+		method, path, _ := strings.Cut(p, " ")
+		if method != http.MethodGet {
+			continue
+		}
+		path = strings.NewReplacer("{id}", general, "{fileId}", pubFile.Id.String(), "{agentId}", acme.agentID(), "{version}", "1").Replace(path)
+		if path == "/api/v1/messages/"+general+"/thread" {
+			continue // a channel id is not a message id: covered below
+		}
+		res, body := bg.send(method, path, nil)
+		_ = res.Body.Close()
+		if res.StatusCode >= 500 {
+			t.Fatalf("%s %s under break-glass: %d %.200s", method, path, res.StatusCode, body)
+		}
 	}
 
 	// What it sees: the public channel, its message and file.

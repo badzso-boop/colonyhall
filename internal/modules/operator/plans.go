@@ -198,12 +198,27 @@ func (s *Service) UpdatePlan(ctx context.Context, o Operator, id ids.ID, patch P
 	if err != nil {
 		return PlanWithUse{}, err
 	}
+	// Each workspace in its own transaction, and only while it is still on
+	// the plan; one that fails does not stop the others, and the operator
+	// hears which (saving the plan again retries them).
+	var failed []string
+	var errs []error
+	n := 0
 	for _, c := range on {
-		if _, err := s.Customers.SetPlan(ctx, c.ID, &p, true); err != nil {
-			return PlanWithUse{}, err
+		changed, err := s.Customers.RefreshPlan(ctx, c.ID, p)
+		if err != nil {
+			failed, errs = append(failed, c.Slug), append(errs, err)
+			continue
+		}
+		if changed {
+			n++
 		}
 	}
-	return PlanWithUse{Plan: p, Workspaces: len(on)}, nil
+	if len(failed) > 0 {
+		return PlanWithUse{Plan: p, Workspaces: n}, fmt.Errorf("the plan is saved, but %d workspace(s) did not get it yet (%s); save it again: %w",
+			len(failed), strings.Join(failed, ", "), errors.Join(errs...))
+	}
+	return PlanWithUse{Plan: p, Workspaces: n}, nil
 }
 
 // AssignPlan sets a workspace's plan (nil: none). A plan below the usage

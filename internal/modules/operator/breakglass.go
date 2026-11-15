@@ -77,8 +77,13 @@ func (s *Service) OpenBreakGlass(ctx context.Context, o Operator, workspaceID id
 	if err != nil {
 		return BreakGlassLink{}, err
 	}
-	return link, s.record(ctx, o, ActionBreakGlassOpen, workspaceID, map[string]any{"break_glass_id": link.BreakGlass.ID.String(),
-		"reason": reason, "minutes": minutes, "dev_mode": s.DevAccess}, remote)
+	if err := s.record(ctx, o, ActionBreakGlassOpen, workspaceID, map[string]any{"break_glass_id": link.BreakGlass.ID.String(),
+		"reason": reason, "minutes": minutes, "dev_mode": s.DevAccess}, remote); err != nil {
+		// No access stays open that the operator audit does not show: the
+		// link is never handed out, and the access is closed at once.
+		return BreakGlassLink{}, errors.Join(err, s.BreakGlass.CloseBreakGlass(ctx, workspaceID, link.BreakGlass.ID))
+	}
+	return link, nil
 }
 
 // ListBreakGlass lists a workspace's accesses, newest first.

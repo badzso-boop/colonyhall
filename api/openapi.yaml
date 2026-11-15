@@ -6313,7 +6313,7 @@ components:
       required: [id, operator_handle, reason, dev_mode, opened_at, expires_at, open]
       properties:
         id: { type: string, format: uuid }
-        operator_handle: { type: string }
+        operator_handle: { type: string, description: "The operator's display name (never the login handle)" }
         reason: { type: string }
         dev_mode: { type: boolean }
         opened_at: { type: string, format: date-time }
@@ -6345,7 +6345,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         expires_at: { type: string, format: date-time }
-        operator_handle: { type: string }
+        operator_handle: { type: string, description: "The operator's display name (never the login handle)" }
     CustomerList:
       type: object
       required: [customers]

@@ -73,6 +73,13 @@ func (c *customers) SetPlan(ctx context.Context, id ids.ID, plan *operator.Plan,
 	return c.Get(ctx, id)
 }
 
+// RefreshPlan writes an edited plan's numbers into one workspace, only while
+// it is still on that plan.
+func (c *customers) RefreshPlan(ctx context.Context, id ids.ID, plan operator.Plan) (bool, error) {
+	return c.files.RefreshPlan(db.WithWorkspace(ctx, id), id, files.Plan{ID: plan.ID, Name: plan.Name, StorageBytes: plan.StorageBytes,
+		CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes})
+}
+
 // CheckPlan tells, from the overview's numbers, what the plan would do.
 func (c *customers) CheckPlan(ctx context.Context, id ids.ID, plan operator.Plan) (operator.PlanCheck, error) {
 	cu, err := c.Get(ctx, id)
