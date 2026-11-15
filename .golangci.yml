@@ -21,6 +21,15 @@ linters:
           deny:
             - pkg: colonyhall/internal/platform/db/system
               desc: system mode is for background code only; narrow with db.WithWorkspace
+        operator-scope-is-the-operator-module:
+          # Round 51: the operator scope sees the platform tables (operators,
+          # sessions, invites, the operator audit). Only the operator module,
+          # the composition root, the CLI and the db package may switch it on
+          # (docs/24-hosztolt-ajanlat.md).
+          files: ["$all", "!$test", "!**/internal/modules/operator/**", "!**/internal/server/**", "!**/cmd/colonyhall/**", "!**/internal/platform/db/**"]
+          deny:
+            - pkg: colonyhall/internal/platform/db/opscope
+              desc: the operator scope belongs to the operator module
         platform-is-generic:
           files: ["**/internal/platform/**"]
           deny:

@@ -62,11 +62,33 @@ func Open(ctx context.Context, url string) (*Postgres, error) {
 	return &Postgres{Pool: pool}, nil
 }
 
+// ErrScopeChanged is returned when a nested InTx asks for another scope
+// than the transaction it would join: the connection keeps the outer
+// scope, so joining would silently run the inner work with it (a
+// db.WithWorkspace inside a system-mode transaction would not narrow).
+var ErrScopeChanged = errors.New("db: nested transaction with a different scope")
+
+// txScopeKey holds the scope a transaction was opened with.
+type txScopeKey struct{}
+
+// joinScope checks that ctx asks for the scope of the transaction it joins.
+func joinScope(ctx context.Context) error {
+	if have, ok := ctx.Value(txScopeKey{}).(Scope); ok && have != ScopeOf(ctx) {
+		return fmt.Errorf("%w: the transaction has %+v, the call asks for %+v", ErrScopeChanged, have, ScopeOf(ctx))
+	}
+	return nil
+}
+
 // InTx runs fn in a transaction, or joins the transaction already in ctx.
+// Joining needs the same scope (ErrScopeChanged otherwise).
 func (p *Postgres) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	if _, ok := ctx.Value(txKey{}).(pgx.Tx); ok {
+		if err := joinScope(ctx); err != nil {
+			return err
+		}
 		return fn(ctx)
 	}
+	ctx = context.WithValue(ctx, txScopeKey{}, ScopeOf(ctx))
 	tx, err := p.Pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("db: begin: %w", err)
@@ -105,11 +127,15 @@ type Memory struct {
 type memTxKey struct{}
 
 // InTx runs fn under the global lock, joining an outer InTx if present.
+// Like Postgres, joining needs the same scope (ErrScopeChanged otherwise).
 func (m *Memory) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	if ctx.Value(memTxKey{}) != nil {
+		if err := joinScope(ctx); err != nil {
+			return err
+		}
 		return fn(ctx)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return fn(context.WithValue(ctx, memTxKey{}, true))
+	return fn(context.WithValue(context.WithValue(ctx, txScopeKey{}, ScopeOf(ctx)), memTxKey{}, true))
 }

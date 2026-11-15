@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"colonyhall/internal/platform/db/opscope"
 	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
 )
@@ -19,6 +20,9 @@ import (
 type Scope struct {
 	Workspace ids.ID
 	System    bool
+	// Operator: the platform operator's scope (round 51); it sees the
+	// platform tables and no workspace.
+	Operator bool
 }
 
 type workspaceKey struct{}
@@ -27,29 +31,34 @@ type workspaceKey struct{}
 // Request paths call it once the caller is known; background loops call it
 // for each item they handle.
 func WithWorkspace(ctx context.Context, id ids.ID) context.Context {
-	return context.WithValue(system.Off(ctx), workspaceKey{}, id)
+	return context.WithValue(opscope.Off(system.Off(ctx)), workspaceKey{}, id)
 }
 
 // ScopeOf returns ctx's scope.
 func ScopeOf(ctx context.Context) Scope {
 	id, _ := ctx.Value(workspaceKey{}).(ids.ID)
-	sys := system.Is(ctx)
-	if sys {
-		id = ids.Nil
+	if system.Is(ctx) {
+		return Scope{System: true}
 	}
-	return Scope{Workspace: id, System: sys}
+	if opscope.Is(ctx) {
+		return Scope{Operator: true}
+	}
+	return Scope{Workspace: id}
 }
 
-// settings returns the values of colony.workspace_id and colony.system.
-func (s Scope) settings() (string, string) {
-	ws, sys := "", ""
+// settings returns the values of colony.workspace_id, colony.system and
+// colony.operator.
+func (s Scope) settings() (ws, sys, op string) {
 	if s.Workspace != ids.Nil {
 		ws = s.Workspace.String()
 	}
 	if s.System {
 		sys = "on"
 	}
-	return ws, sys
+	if s.Operator {
+		op = "on"
+	}
+	return ws, sys, op
 }
 
 const scopeDataKey = "colony.scope"
@@ -65,8 +74,8 @@ func applyScope(ctx context.Context, c *pgx.Conn) (bool, error) {
 	if have, ok := data[scopeDataKey].(Scope); ok && have == want {
 		return true, nil
 	}
-	ws, sys := want.settings()
-	if _, err := c.Exec(ctx, "SELECT set_config('colony.workspace_id', $1, false), set_config('colony.system', $2, false)", ws, sys); err != nil {
+	ws, sys, op := want.settings()
+	if _, err := c.Exec(ctx, "SELECT set_config('colony.workspace_id', $1, false), set_config('colony.system', $2, false), set_config('colony.operator', $3, false)", ws, sys, op); err != nil {
 		delete(data, scopeDataKey)
 		return false, err // destroy the connection: its settings are unknown
 	}
