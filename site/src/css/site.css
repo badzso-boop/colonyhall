@@ -376,6 +376,7 @@ main { padding: 0; }
 .install__step { font-weight: 600; color: var(--fg); font-size: 0.9375rem; }
 .install__step::before { content: counter(s) ". "; color: var(--accent-text); }
 .platforms { font-size: 0.9375rem; }
+.install__note { font-size: 0.9375rem; max-width: 60ch; }
 .term { margin: 0; background: var(--terminal-bg); color: var(--terminal-fg); border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px #2a2525, 0 20px 60px var(--glow); }
 .term__bar { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: #1c1919; font: 500 12px var(--font-mono); color: #a39a9a; }
 .term__bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a3333; }

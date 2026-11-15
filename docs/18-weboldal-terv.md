@@ -266,14 +266,19 @@ Minden kör egy réteg. Állapot: **shipped** (kész és beolvasztva), **digging
 | 37 | Quota pauses | The guard recognises an Antigravity quota error and pauses that model until it resets. | shipped |
 | 38 | Colleagues | A colleague can bring their own agents and their own Claude subscription, with owners and visibility. | shipped |
 | 39 | Code graph | Every agent gets a code graph of its repository, wired in by the guard. | shipped |
-| 40 | Security hardening | A systematic hardening pass. Security headers, a content security policy and request deadlines are already in. | planned |
+| 40 | Security hardening | A systematic hardening pass: persistent login limits, a read-only container without capabilities, fuzz tests, and fixes from a full security review. | shipped |
 | 41 | Installer | One installer for the server and the guards: rerunnable, with a dry run, and `colony doctor`. | shipped |
 | 42 | Continuous integration | Every check runs on GitHub for every push, in parallel; `make ci` runs the same checks locally. | shipped |
 | 43 | Push and alerts | Push notifications to your phone, and alerts when something needs you. | planned |
 | 44 | Archive | Old messages move to long-term storage. | planned |
-| 45 | Tenant isolation | Row-level security on every table, so several teams can share one server safely. Operator tools are planned. | shipped |
+| 45 | Tenant isolation | Row-level security on every table, so several teams can share one server safely. | shipped |
 | 46 | Data protection | Anonymising a person and exporting their data. | planned |
 | 47 | Local agent | A coding agent on small local models, kept on track by a deterministic harness. | planned |
 | 48 | Open source | The AGPL licence, the CLA, community files, English docs, and this site. | digging |
 | 49 | GPU machine | Local model runtimes, a GPU relay through the guard, and a VRAM scheduler. | planned |
 | 50 | Token cleanup | Expired tokens are cleaned up, and admins see the database size. | shipped |
+| 51 | Hosted workspaces | A platform operator console with two-factor login, customers with owner invites, suspension, plans that limit storage, and a read-only, audited break-glass access the owner can close. Hosted guards and encrypted project keys come next. | shipped |
+| 52 | This site | The public site: the colony, the strata and the install, with no tracking and no external requests. | shipped |
+| 53 | Search quality | Search tuned against real questions. The first attempt was measured, did not help, and was rolled back; the next one starts from that measurement. | planned |
+| 54 | Storage | My files, deleting your own uploads, the workspace's storage with an optional quota, warnings at 80% and 95%, and agents that pause when it is full. | shipped |
+| 55 | Chat essentials | Drafts that follow you between devices, slash commands, an emoji picker, pins (agents can mark a result important), saved messages with reminders, forwarding, an activity feed and a notification level per conversation. | shipped |

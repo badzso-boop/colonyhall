@@ -71,7 +71,7 @@
   "hall": {
     "kicker": "The hall",
     "title": "The hall",
-    "body": "Channels, threads and direct messages, the way a team chat works, except that half the members are agents. Mention an agent and the guard on its machine wakes it with the message. Its answer, and every step on the way, arrives in the same thread.",
+    "body": "Channels, threads and direct messages, the way a team chat works, except that half the members are agents. Mention an agent and the guard on its machine wakes it with the message. Its answer, and every step on the way, arrives in the same thread. Drafts follow you between devices; slash commands, pins, saved messages with reminders and an activity feed keep the day in order.",
     "thread": "Thread in #general",
     "handoff": "hands the task to"
   },
@@ -139,7 +139,8 @@
     "step3": "Run it",
     "platforms": "Linux · WSL2 · macOS",
     "guide": "The full install guide",
-    "terminalLabel": "A recorded install in a terminal, with an invented machine name"
+    "terminalLabel": "A recorded install in a terminal, with an invented machine name",
+    "notYet": "**The first release is on its way.** The installer downloads from a GitHub release, so it works from the first one on; until then, [try Colonyhall from source](link:fromSource) with Docker and `make dev`."
   },
   "terminal": {
     "title": "laptop: ~",
@@ -164,7 +165,7 @@
     "statusTitle": "Under active development.",
     "status": "Colonyhall runs every day on its author's machines, but it is young: things change between versions, and some things will break. If something does not work the way it should, [open an issue on GitHub](link:issues). Questions and ideas are welcome there too.",
     "visionTitle": "Where it is going",
-    "vision": "The goal is a place where a small team and its agents work together like colleagues: agents that can ask, hand off and report, on hardware you own, under rules you set, with a human able to see and stop everything. Next on the list: push notifications, a local coding agent on small models, and GPU-backed search.",
+    "vision": "The goal is a place where a small team and its agents work together like colleagues: agents that can ask, hand off and report, on hardware you own, under rules you set, with a human able to see and stop everything. Next on the list: push notifications, hosted guards for teams without their own machines, a local coding agent on small models, and GPU-backed search.",
     "plannedTitle": "Planned",
     "roundLabel": "Round",
     "state": {
@@ -342,7 +343,7 @@
       },
       "r40": {
         "name": "Security hardening",
-        "line": "A systematic hardening pass. Security headers, a content security policy and request deadlines are already in."
+        "line": "A systematic hardening pass: persistent login limits, a read-only container without capabilities, fuzz tests, and fixes from a full security review."
       },
       "r41": {
         "name": "Installer",
@@ -362,7 +363,7 @@
       },
       "r45": {
         "name": "Tenant isolation",
-        "line": "Row-level security on every table, so several teams can share one server safely. Operator tools are planned."
+        "line": "Row-level security on every table, so several teams can share one server safely."
       },
       "r46": {
         "name": "Data protection",
@@ -383,6 +384,26 @@
       "r50": {
         "name": "Token cleanup",
         "line": "Expired tokens are cleaned up, and admins see the database size."
+      },
+      "r51": {
+        "name": "Hosted workspaces",
+        "line": "A platform operator console with two-factor login, customers with owner invites, suspension, plans that limit storage, and a read-only, audited break-glass access the owner can close. Hosted guards and encrypted project keys come next."
+      },
+      "r52": {
+        "name": "This site",
+        "line": "The public site: the colony, the strata and the install, with no tracking and no external requests."
+      },
+      "r53": {
+        "name": "Search quality",
+        "line": "Search tuned against real questions. The first attempt was measured, did not help, and was rolled back; the next one starts from that measurement."
+      },
+      "r54": {
+        "name": "Storage",
+        "line": "My files, deleting your own uploads, the workspace's storage with an optional quota, warnings at 80% and 95%, and agents that pause when it is full."
+      },
+      "r55": {
+        "name": "Chat essentials",
+        "line": "Drafts that follow you between devices, slash commands, an emoji picker, pins (agents can mark a result important), saved messages with reminders, forwarding, an activity feed and a notification level per conversation."
       }
     }
   },

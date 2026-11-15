@@ -51,6 +51,7 @@ const links = {
   cla: `${repo}/blob/main/CLA.md`,
   releases: `${repo}/releases`,
   installScript: `${repo}/releases/latest/download/install.sh`,
+  fromSource: `${repo}#trying-it-from-source`,
 };
 
 // --- i18n: nested JSON, flattened to dotted keys
