@@ -3034,6 +3034,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/break-glass/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Multi-tenant mode only. Uses a break-glass handoff token (60 seconds, once) on the workspace's own host: opens the read-only session (sets the session cookie). 410 break_glass_invalid otherwise. */
+        post: operations["redeemBreakGlass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspace/break-glass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner and admins. The operator's break-glass accesses to this workspace, newest first (at most 50). */
+        get: operations["listBreakGlass"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspace/break-glass/{breakGlassId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Owner only. Closes the operator's access at once (its session ends); audited. */
+        delete: operations["closeBreakGlass"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operator/auth/login": {
         parameters: {
             query?: never;
@@ -3187,6 +3240,120 @@ export interface paths {
         put?: never;
         post: operations["restoreCustomer"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every plan, archived ones too. */
+        get: operations["listPlans"];
+        put?: never;
+        post: operations["createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/plans/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Changes the plan's name or numbers (every workspace on it gets them), or archives it (no new assignment; the workspaces keep it). A new storage below a workspace's usage needs confirm_over_quota (409 plan_over_quota otherwise). */
+        patch: operations["updatePlan"];
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the workspace's plan (plan_id absent: none). A plan below the current usage leaves the workspace full and its agents paused: 409 plan_over_quota unless confirm_over_quota. An archived plan cannot be assigned. */
+        put: operations["assignPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/plan-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /** @description What the plan would mean for the workspace's storage, before assigning it. */
+        get: operations["checkPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/break-glass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The workspace's break-glass accesses, newest first (at most 50). */
+        get: operations["listOperatorBreakGlass"];
+        put?: never;
+        /** @description Opens a read-only look into the workspace: public channels and their threads, agents, machines, runs (without their steps), settings; never DMs, private channels or search. reason: at least 20 characters (optional in development mode); minutes: at most 240 (720 in development mode). The answer's link (60 seconds, once) opens the session on the customer's host. The customer's audit records the opening and every read; the owners are notified and may close it. */
+        post: operations["openBreakGlass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/break-glass/{breakGlassId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Closes the access at once (its session ends). */
+        delete: operations["closeOperatorBreakGlass"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3422,6 +3589,7 @@ export interface components {
             actor: components["schemas"]["Actor"];
             /** @description Empty for bearer-token callers */
             csrf_token: string;
+            break_glass?: components["schemas"]["BreakGlassSession"];
         };
         SetPasswordRequest: {
             current_password?: string;
@@ -4353,7 +4521,7 @@ export interface components {
             deleted?: boolean;
         };
         /** @enum {string} */
-        ActivityKind: "mention" | "thread_reply" | "reaction" | "approval" | "question" | "important" | "reminder";
+        ActivityKind: "mention" | "thread_reply" | "reaction" | "approval" | "question" | "important" | "reminder" | "operator_access";
         ActivityItem: {
             /** Format: uuid */
             id: string;
@@ -5306,6 +5474,12 @@ export interface components {
              */
             db_measured_at?: string;
             state: components["schemas"]["StorageState"];
+            /**
+             * Format: int64
+             * @description The effective quota (round 51b): the plan's storage, or the owner's quota when lower; 0 is unlimited
+             */
+            limit_bytes: number;
+            plan?: components["schemas"]["WorkspacePlan"];
         };
         StorageQuotaRequest: {
             /**
@@ -6248,6 +6422,127 @@ export interface components {
              */
             last_activity_at?: string;
             storage: components["schemas"]["CustomerStorage"];
+            /**
+             * Format: uuid
+             * @description The workspace's plan (round 51b); absent without one
+             */
+            plan_id?: string;
+            /** @description A break-glass access is open (round 51b) */
+            break_glass_open: boolean;
+        };
+        Plan: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: int64 */
+            storage_bytes: number;
+            /** @description What a hosted guard will get (not enforced yet) */
+            cpu_cores: number;
+            /**
+             * Format: int64
+             * @description What a hosted guard will get (not enforced yet)
+             */
+            memory_bytes: number;
+            /** @description Workspaces on the plan */
+            workspaces: number;
+            /** Format: date-time */
+            archived_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlanList: {
+            plans: components["schemas"]["Plan"][];
+        };
+        PlanRequest: {
+            name: string;
+            /** Format: int64 */
+            storage_bytes: number;
+            cpu_cores: number;
+            /** Format: int64 */
+            memory_bytes: number;
+        };
+        PlanPatchRequest: {
+            name?: string;
+            /** Format: int64 */
+            storage_bytes?: number;
+            cpu_cores?: number;
+            /** Format: int64 */
+            memory_bytes?: number;
+            archived?: boolean;
+            /** @description Go ahead although a workspace on the plan would be full */
+            confirm_over_quota?: boolean;
+        };
+        AssignPlanRequest: {
+            /**
+             * Format: uuid
+             * @description Absent removes the plan
+             */
+            plan_id?: string;
+            confirm_over_quota?: boolean;
+        };
+        PlanCheck: {
+            /** Format: int64 */
+            used_bytes: number;
+            /**
+             * Format: int64
+             * @description The effective quota with the plan
+             */
+            new_quota_bytes: number;
+            fits: boolean;
+            state_after: components["schemas"]["StorageState"];
+        };
+        WorkspacePlan: {
+            name: string;
+            /** Format: int64 */
+            storage_bytes: number;
+            cpu_cores: number;
+            /** Format: int64 */
+            memory_bytes: number;
+        };
+        BreakGlassRequest: {
+            /** @description At least 20 characters (optional in development mode) */
+            reason?: string;
+            /** @description At most 240 (720 in development mode) */
+            minutes: number;
+        };
+        BreakGlass: {
+            /** Format: uuid */
+            id: string;
+            operator_handle: string;
+            reason: string;
+            dev_mode: boolean;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            open: boolean;
+            /** Format: date-time */
+            closed_at?: string;
+            /** @description operator, owner or expired */
+            closed_by?: string;
+        };
+        BreakGlassList: {
+            break_glass: components["schemas"]["BreakGlass"][];
+        };
+        BreakGlassOpened: {
+            break_glass: components["schemas"]["BreakGlass"];
+            /** @description The handoff link on the customer's host: 60 seconds, once */
+            url: string;
+            /** Format: date-time */
+            handoff_expires_at: string;
+        };
+        RedeemBreakGlassRequest: {
+            token: string;
+        };
+        /** @description The session is the operator's read-only break-glass access (round 51b) */
+        BreakGlassSession: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            expires_at: string;
+            operator_handle: string;
         };
         CustomerList: {
             customers: components["schemas"]["Customer"][];
@@ -11313,6 +11608,78 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    redeemBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemBreakGlassRequest"];
+            };
+        };
+        responses: {
+            /** @description The read-only session is open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakGlassList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    closeBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     operatorLogin: {
         parameters: {
             query?: never;
@@ -11552,6 +11919,218 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Customer"];
                 };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    assignPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    checkPlan: {
+        parameters: {
+            query: {
+                plan_id: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCheck"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOperatorBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakGlassList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    openBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakGlassRequest"];
+            };
+        };
+        responses: {
+            /** @description Opened */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakGlassOpened"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    closeOperatorBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

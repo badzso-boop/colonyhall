@@ -27,10 +27,10 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [files](#files) (18)
 - [git](#git) (4)
 - [hosts](#hosts) (20)
-- [identity](#identity) (19)
+- [identity](#identity) (22)
 - [leases](#leases) (2)
 - [notes](#notes) (1)
-- [operator](#operator) (12)
+- [operator](#operator) (20)
 - [planner](#planner) (11)
 - [previews](#previews) (4)
 - [question](#question) (2)
@@ -2219,6 +2219,20 @@ The current actor and, for cookie sessions, the CSRF token (e.g. after a page re
 | --- | --- |
 | 200 | OK: [SessionInfo](#sessioninfo) (`application/json`) |
 
+### `POST /break-glass/redeem`
+
+`redeemBreakGlass` · Auth: public
+
+Multi-tenant mode only. Uses a break-glass handoff token (60 seconds, once) on the workspace's own host: opens the read-only session (sets the session cookie). 410 break_glass_invalid otherwise.
+
+Request body (`application/json`, required): [RedeemBreakGlassRequest](#redeembreakglassrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | The read-only session is open: [SessionInfo](#sessioninfo) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 410 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `POST /invites/accept`
 
 `acceptInvite` · Auth: public
@@ -2305,6 +2319,33 @@ Public. The server's version, licence and where its source code can be downloade
 | Response | Body |
 | --- | --- |
 | 200 | OK: [VersionInfo](#versioninfo) (`application/json`) |
+
+### `GET /workspace/break-glass`
+
+`listBreakGlass` · Auth: signed in
+
+Owner and admins. The operator's break-glass accesses to this workspace, newest first (at most 50).
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [BreakGlassList](#breakglasslist) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /workspace/break-glass/{breakGlassId}`
+
+`closeBreakGlass` · Auth: signed in
+
+Owner only. Closes the operator's access at once (its session ends); audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `breakGlassId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Closed |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ## leases
 
@@ -2418,6 +2459,47 @@ Request body (`application/json`, required): [OperatorReauthRequest](#operatorre
 | 401 | Error: [Problem](#problem) (`application/problem+json`) |
 | 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
 
+### `GET /operator/plans`
+
+`listPlans` · Auth: signed in
+
+Every plan, archived ones too.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [PlanList](#planlist) (`application/json`) |
+
+### `POST /operator/plans`
+
+`createPlan` · Auth: signed in
+
+Request body (`application/json`, required): [PlanRequest](#planrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Created: [Plan](#plan) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PATCH /operator/plans/{planId}`
+
+`updatePlan` · Auth: signed in
+
+Changes the plan's name or numbers (every workspace on it gets them), or archives it (no new assignment; the workspaces keep it). A new storage below a workspace's usage needs confirm_over_quota (409 plan_over_quota otherwise).
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `planId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [PlanPatchRequest](#planpatchrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Plan](#plan) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `GET /operator/system/database`
 
 `getOperatorDatabase` · Auth: signed in
@@ -2465,6 +2547,56 @@ Request body (`application/json`, required): [CreateCustomerRequest](#createcust
 | 200 | OK: [Customer](#customer) (`application/json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
+### `GET /operator/workspaces/{workspaceId}/break-glass`
+
+`listOperatorBreakGlass` · Auth: signed in
+
+The workspace's break-glass accesses, newest first (at most 50).
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [BreakGlassList](#breakglasslist) (`application/json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /operator/workspaces/{workspaceId}/break-glass`
+
+`openBreakGlass` · Auth: signed in
+
+Opens a read-only look into the workspace: public channels and their threads, agents, machines, runs (without their steps), settings; never DMs, private channels or search. reason: at least 20 characters (optional in development mode); minutes: at most 240 (720 in development mode). The answer's link (60 seconds, once) opens the session on the customer's host. The customer's audit records the opening and every read; the owners are notified and may close it.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [BreakGlassRequest](#breakglassrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Opened: [BreakGlassOpened](#breakglassopened) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /operator/workspaces/{workspaceId}/break-glass/{breakGlassId}`
+
+`closeOperatorBreakGlass` · Auth: signed in
+
+Closes the access at once (its session ends).
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+| `breakGlassId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Closed |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `POST /operator/workspaces/{workspaceId}/invite`
 
 `inviteCustomerOwner` · Auth: signed in
@@ -2480,6 +2612,42 @@ A new owner invite; the open one is revoked. 409 has_owner when the workspace al
 | 200 | OK: [InviteLink](#invitelink) (`application/json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 | 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /operator/workspaces/{workspaceId}/plan`
+
+`assignPlan` · Auth: signed in
+
+Sets the workspace's plan (plan_id absent: none). A plan below the current usage leaves the workspace full and its agents paused: 409 plan_over_quota unless confirm_over_quota. An archived plan cannot be assigned.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [AssignPlanRequest](#assignplanrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Customer](#customer) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /operator/workspaces/{workspaceId}/plan-check`
+
+`checkPlan` · Auth: signed in
+
+What the plan would mean for the workspace's storage, before assigning it.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+| `plan_id` | query | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [PlanCheck](#plancheck) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /operator/workspaces/{workspaceId}/restore`
 
@@ -3309,7 +3477,7 @@ Any actor. List all revisions of a wiki page.
 | `emoji` | string |  |  |
 | `excerpt` | string |  | The message's text, cut to 200 characters (only while readable) |
 | `id` | string (uuid) | yes |  |
-| `kind` | [ActivityKind](#activitykind) | yes | One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`. |
+| `kind` | [ActivityKind](#activitykind) | yes | One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`, `operator_access`. |
 | `message_id` | string (uuid) |  |  |
 | `read` | boolean | yes |  |
 | `ref_id` | string (uuid) |  | The approval, question or saved item |
@@ -3317,7 +3485,7 @@ Any actor. List all revisions of a wiki page.
 
 ### ActivityKind
 
-One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`
+One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`, `operator_access`
 
 Type: string
 
@@ -3671,6 +3839,13 @@ One of: `pending`, `allowed`, `denied`, `expired`
 
 Type: string
 
+### AssignPlanRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `confirm_over_quota` | boolean |  |  |
+| `plan_id` | string (uuid) |  | Absent removes the plan |
+
 ### AssignRequest
 
 | Field | Type | Required | Description |
@@ -3724,6 +3899,51 @@ Type: string
 | `broken_at` | integer (int64) |  |  |
 | `checked` | integer | yes |  |
 | `ok` | boolean | yes |  |
+
+### BreakGlass
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `closed_at` | string (date-time) |  |  |
+| `closed_by` | string |  | operator, owner or expired |
+| `dev_mode` | boolean | yes |  |
+| `expires_at` | string (date-time) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `open` | boolean | yes |  |
+| `opened_at` | string (date-time) | yes |  |
+| `operator_handle` | string | yes |  |
+| `reason` | string | yes |  |
+
+### BreakGlassList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `break_glass` | [BreakGlass](#breakglass)[] | yes |  |
+
+### BreakGlassOpened
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `break_glass` | [BreakGlass](#breakglass) | yes |  |
+| `handoff_expires_at` | string (date-time) | yes |  |
+| `url` | string | yes | The handoff link on the customer's host: 60 seconds, once |
+
+### BreakGlassRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `minutes` | integer | yes | At most 240 (720 in development mode) |
+| `reason` | string |  | At least 20 characters (optional in development mode) |
+
+### BreakGlassSession
+
+The session is the operator's read-only break-glass access (round 51b)
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `expires_at` | string (date-time) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `operator_handle` | string | yes |  |
 
 ### Channel
 
@@ -4037,6 +4257,7 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `agents` | integer | yes | Agents (not archived) |
+| `break_glass_open` | boolean | yes | A break-glass access is open (round 51b) |
 | `created_at` | string (date-time) | yes |  |
 | `has_owner` | boolean | yes |  |
 | `hosts` | integer | yes |  |
@@ -4045,6 +4266,7 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `invite` | [CustomerInvite](#customerinvite) |  |  |
 | `last_activity_at` | string (date-time) |  | The workspace's newest event |
 | `name` | string | yes |  |
+| `plan_id` | string (uuid) |  | The workspace's plan (round 51b); absent without one |
 | `slug` | string | yes |  |
 | `state` | string | yes | One of: `active`, `suspended`. |
 | `storage` | [CustomerStorage](#customerstorage) | yes |  |
@@ -4270,7 +4492,7 @@ The recipient's feed changed (activity.created, activity.read); sent to them alo
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `item_id` | string (uuid) |  |  |
-| `kind` | [ActivityKind](#activitykind) |  | One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`. |
+| `kind` | [ActivityKind](#activitykind) |  | One of: `mention`, `thread_reply`, `reaction`, `approval`, `question`, `important`, `reminder`, `operator_access`. |
 | `marked` | integer |  |  |
 
 ### EventActorCreated
@@ -5213,6 +5435,55 @@ Type: string
 | `pinned_at` | string (date-time) | yes |  |
 | `pinned_by` | string (uuid) | yes |  |
 
+### Plan
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `archived_at` | string (date-time) |  |  |
+| `cpu_cores` | integer | yes | What a hosted guard will get (not enforced yet) |
+| `created_at` | string (date-time) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `memory_bytes` | integer (int64) | yes | What a hosted guard will get (not enforced yet) |
+| `name` | string | yes |  |
+| `storage_bytes` | integer (int64) | yes |  |
+| `updated_at` | string (date-time) | yes |  |
+| `workspaces` | integer | yes | Workspaces on the plan |
+
+### PlanCheck
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `fits` | boolean | yes |  |
+| `new_quota_bytes` | integer (int64) | yes | The effective quota with the plan |
+| `state_after` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
+| `used_bytes` | integer (int64) | yes |  |
+
+### PlanList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `plans` | [Plan](#plan)[] | yes |  |
+
+### PlanPatchRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `archived` | boolean |  |  |
+| `confirm_over_quota` | boolean |  | Go ahead although a workspace on the plan would be full |
+| `cpu_cores` | integer |  |  |
+| `memory_bytes` | integer (int64) |  |  |
+| `name` | string |  |  |
+| `storage_bytes` | integer (int64) |  |  |
+
+### PlanRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `cpu_cores` | integer | yes |  |
+| `memory_bytes` | integer (int64) | yes |  |
+| `name` | string | yes |  |
+| `storage_bytes` | integer (int64) | yes |  |
+
 ### PlannerAccess
 
 | Field | Type | Required | Description |
@@ -5396,6 +5667,12 @@ Agents only. The server builds the silent rate limit note text.
 | `actor_ids` | string (uuid)[] | yes |  |
 | `count` | integer | yes |  |
 | `emoji` | string | yes |  |
+
+### RedeemBreakGlassRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | yes |  |
 
 ### ReorderSidebarItemsRequest
 
@@ -5738,6 +6015,7 @@ Round 40: the login and release limits. In multi-tenant mode only the workspace'
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `actor` | [Actor](#actor) | yes |  |
+| `break_glass` | [BreakGlassSession](#breakglasssession) |  | The session is the operator's read-only break-glass access (round 51b) |
 | `csrf_token` | string | yes | Empty for bearer-token callers |
 
 ### SetClaudeLoginRequest
@@ -6171,6 +6449,15 @@ Type: string
 | --- | --- | --- | --- |
 | `revisions` | [WikiRevision](#wikirevision)[] | yes |  |
 
+### WorkspacePlan
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `cpu_cores` | integer | yes |  |
+| `memory_bytes` | integer (int64) | yes |  |
+| `name` | string | yes |  |
+| `storage_bytes` | integer (int64) | yes |  |
+
 ### WorkspaceStorage
 
 | Field | Type | Required | Description |
@@ -6178,7 +6465,9 @@ Type: string
 | `attachments_bytes` | integer (int64) | yes |  |
 | `chat_search_bytes` | integer (int64) | yes | Messages, events and the search index (part of the database estimate) |
 | `db_measured_at` | string (date-time) |  | The last hourly database estimate (absent before the first) |
+| `limit_bytes` | integer (int64) | yes | The effective quota (round 51b): the plan's storage, or the owner's quota when lower; 0 is unlimited |
 | `other_bytes` | integer (int64) | yes | The rest of the database share |
+| `plan` | [WorkspacePlan](#workspaceplan) |  |  |
 | `quota_bytes` | integer (int64) | yes | 0 is unlimited |
 | `state` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
 | `used_bytes` | integer (int64) | yes |  |

@@ -99,6 +99,12 @@ const (
 	ActionInviteIssued       = "workspace.invite_issued"
 	ActionWorkspaceSuspended = "workspace.suspended"
 	ActionWorkspaceRestored  = "workspace.restored"
+	// Round 51b.
+	ActionPlanCreated     = "plan.created"
+	ActionPlanUpdated     = "plan.updated"
+	ActionPlanAssigned    = "workspace.plan_assigned"
+	ActionBreakGlassOpen  = "workspace.break_glass_opened"
+	ActionBreakGlassClose = "workspace.break_glass_closed"
 )
 
 // BackupCode is a stored backup code: only its hash.

@@ -127,4 +127,32 @@ func testOperator(t *testing.T, b Backend) {
 	if page, _ := st.ListAudit(ctx, t0.Add(2*time.Minute), 10); len(page) != 2 || page[0].Payload["n"] != float64(1) {
 		t.Fatalf("audit page: %+v", page)
 	}
+
+	// Round 51b: plans; names are unique; the current ones first, by storage.
+	p1 := operator.Plan{ID: gen.New(), Name: "Nagy", StorageBytes: 50 << 30, CPUCores: 8, MemoryBytes: 8 << 30, CreatedAt: t0, UpdatedAt: t0}
+	p2 := operator.Plan{ID: gen.New(), Name: "Kicsi", StorageBytes: 15 << 30, CPUCores: 2, MemoryBytes: 2 << 30, CreatedAt: t0, UpdatedAt: t0}
+	must(t, st.CreatePlan(ctx, p1))
+	must(t, st.CreatePlan(ctx, p2))
+	if err := st.CreatePlan(ctx, operator.Plan{ID: gen.New(), Name: "Nagy", StorageBytes: 1, CPUCores: 1, MemoryBytes: 1, CreatedAt: t0, UpdatedAt: t0}); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("a taken plan name: %v", err)
+	}
+	if got, err := st.PlanByID(ctx, p1.ID); err != nil || got.Name != "Nagy" || got.CPUCores != 8 || got.MemoryBytes != 8<<30 || got.ArchivedAt != nil {
+		t.Fatalf("plan by id: %+v %v", got, err)
+	}
+	if _, err := st.PlanByID(ctx, gen.New()); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("unknown plan: %v", err)
+	}
+	if list, err := st.ListPlans(ctx); err != nil || len(list) != 2 || list[0].ID != p2.ID || list[1].ID != p1.ID {
+		t.Fatalf("plans by storage: %+v %v", list, err)
+	}
+	archived := t0.Add(time.Hour)
+	p2.ArchivedAt, p2.StorageBytes, p2.UpdatedAt = &archived, 20<<30, archived
+	must(t, st.UpdatePlan(ctx, p2))
+	if list, _ := st.ListPlans(ctx); len(list) != 2 || list[0].ID != p1.ID || list[1].ArchivedAt == nil || list[1].StorageBytes != 20<<30 {
+		t.Fatalf("an archived plan goes last: %+v", list)
+	}
+	p2.Name = "Nagy"
+	if err := st.UpdatePlan(ctx, p2); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("renaming to a taken name: %v", err)
+	}
 }

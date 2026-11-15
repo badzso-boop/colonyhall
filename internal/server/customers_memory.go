@@ -88,7 +88,10 @@ func (m *memoryOverview) Customers(ctx context.Context, only ids.ID, onlineSince
 		if err != nil {
 			return nil, err
 		}
-		cu.Storage = operator.Storage{QuotaBytes: u.QuotaBytes, FilesBytes: u.FilesBytes, DBBytes: u.DBBytes}
+		cu.Storage = operator.Storage{OwnerQuotaBytes: u.QuotaBytes, FilesBytes: u.FilesBytes, DBBytes: u.DBBytes}
+		if u.Plan != nil {
+			cu.PlanID, cu.Storage.PlanStorageBytes = u.Plan.ID, u.Plan.StorageBytes
+		}
 		if inv, err := m.identity.LatestInvite(ctx, ws.ID); err == nil {
 			cu.Invite = &operator.InviteState{CreatedAt: inv.CreatedAt, ExpiresAt: inv.ExpiresAt, Used: inv.UsedAt != nil, Revoked: inv.RevokedAt != nil}
 		} else if !errors.Is(err, db.ErrNotFound) {

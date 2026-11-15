@@ -636,7 +636,7 @@ func (q *Queries) LockFileContent(ctx context.Context, sha256 string) error {
 }
 
 const lockWorkspaceStorage = `-- name: LockWorkspaceStorage :one
-SELECT workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at FROM workspace_storage WHERE workspace_id = $1 FOR UPDATE
+SELECT workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at, plan_id, plan_name, plan_storage_bytes, plan_cpu_cores, plan_memory_bytes FROM workspace_storage WHERE workspace_id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockWorkspaceStorage(ctx context.Context, workspaceID uuid.UUID) (WorkspaceStorage, error) {
@@ -651,6 +651,11 @@ func (q *Queries) LockWorkspaceStorage(ctx context.Context, workspaceID uuid.UUI
 		&i.DbMeasuredAt,
 		&i.WarnedLevel,
 		&i.UpdatedAt,
+		&i.PlanID,
+		&i.PlanName,
+		&i.PlanStorageBytes,
+		&i.PlanCpuCores,
+		&i.PlanMemoryBytes,
 	)
 	return i, err
 }
@@ -716,10 +721,16 @@ func (q *Queries) RemovableFileContents(ctx context.Context, maxRows int32) ([]s
 }
 
 const saveWorkspaceStorage = `-- name: SaveWorkspaceStorage :exec
-INSERT INTO workspace_storage (workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO workspace_storage (workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at,
+    plan_id, plan_name, plan_storage_bytes, plan_cpu_cores, plan_memory_bytes)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 ON CONFLICT (workspace_id) DO UPDATE SET
     quota_bytes = EXCLUDED.quota_bytes,
+    plan_id = EXCLUDED.plan_id,
+    plan_name = EXCLUDED.plan_name,
+    plan_storage_bytes = EXCLUDED.plan_storage_bytes,
+    plan_cpu_cores = EXCLUDED.plan_cpu_cores,
+    plan_memory_bytes = EXCLUDED.plan_memory_bytes,
     files_bytes = EXCLUDED.files_bytes,
     db_bytes = EXCLUDED.db_bytes,
     chat_bytes = EXCLUDED.chat_bytes,
@@ -729,14 +740,19 @@ ON CONFLICT (workspace_id) DO UPDATE SET
 `
 
 type SaveWorkspaceStorageParams struct {
-	WorkspaceID  uuid.UUID
-	QuotaBytes   int64
-	FilesBytes   int64
-	DbBytes      int64
-	ChatBytes    int64
-	DbMeasuredAt *time.Time
-	WarnedLevel  int16
-	UpdatedAt    time.Time
+	WorkspaceID      uuid.UUID
+	QuotaBytes       int64
+	FilesBytes       int64
+	DbBytes          int64
+	ChatBytes        int64
+	DbMeasuredAt     *time.Time
+	WarnedLevel      int16
+	UpdatedAt        time.Time
+	PlanID           *uuid.UUID
+	PlanName         string
+	PlanStorageBytes int64
+	PlanCpuCores     int32
+	PlanMemoryBytes  int64
 }
 
 func (q *Queries) SaveWorkspaceStorage(ctx context.Context, arg SaveWorkspaceStorageParams) error {
@@ -749,6 +765,11 @@ func (q *Queries) SaveWorkspaceStorage(ctx context.Context, arg SaveWorkspaceSto
 		arg.DbMeasuredAt,
 		arg.WarnedLevel,
 		arg.UpdatedAt,
+		arg.PlanID,
+		arg.PlanName,
+		arg.PlanStorageBytes,
+		arg.PlanCpuCores,
+		arg.PlanMemoryBytes,
 	)
 	return err
 }
@@ -836,7 +857,7 @@ func (q *Queries) WorkspaceHasLiveContent(ctx context.Context, arg WorkspaceHasL
 }
 
 const workspaceStorage = `-- name: WorkspaceStorage :one
-SELECT workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at FROM workspace_storage WHERE workspace_id = $1
+SELECT workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at, plan_id, plan_name, plan_storage_bytes, plan_cpu_cores, plan_memory_bytes FROM workspace_storage WHERE workspace_id = $1
 `
 
 func (q *Queries) WorkspaceStorage(ctx context.Context, workspaceID uuid.UUID) (WorkspaceStorage, error) {
@@ -851,6 +872,11 @@ func (q *Queries) WorkspaceStorage(ctx context.Context, workspaceID uuid.UUID) (
 		&i.DbMeasuredAt,
 		&i.WarnedLevel,
 		&i.UpdatedAt,
+		&i.PlanID,
+		&i.PlanName,
+		&i.PlanStorageBytes,
+		&i.PlanCpuCores,
+		&i.PlanMemoryBytes,
 	)
 	return i, err
 }

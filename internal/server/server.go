@@ -758,7 +758,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		}
 		opSvc = &operator.Service{Store: opStore, Tx: tx, Keys: opt.SecretKeys, Limiter: idSvc, Clock: opt.Clock, IDs: opt.IDs,
 			DevAccess: opt.OperatorDevAccess,
-			Customers: &customers{identity: idSvc, overview: overview, clock: opt.Clock,
+			Customers: &customers{identity: idSvc, files: fiSvc, overview: overview, clock: opt.Clock,
 				closeWorkspace: func(id ids.ID) {
 					n, h := gw.CloseWorkspace(id), hostGw.CloseWorkspace(id)
 					opt.Logger.Info("workspace suspended: sockets closed", "workspace", id, "browsers_and_agents", n, "guards", h)

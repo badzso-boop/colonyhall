@@ -87,5 +87,23 @@ SELECT o.ws_id::uuid AS id, o.ws_name::text AS name, o.ws_slug::text AS slug, o.
        o.quota_bytes::bigint AS quota_bytes, o.files_bytes::bigint AS files_bytes, o.db_bytes::bigint AS db_bytes,
        coalesce(o.invite_created_at, '0001-01-01Z')::timestamptz AS invite_created_at,
        coalesce(o.invite_expires_at, '0001-01-01Z')::timestamptz AS invite_expires_at,
-       coalesce(o.invite_used, false)::boolean AS invite_used, coalesce(o.invite_revoked, false)::boolean AS invite_revoked
+       coalesce(o.invite_used, false)::boolean AS invite_used, coalesce(o.invite_revoked, false)::boolean AS invite_revoked,
+       coalesce(o.plan_id, '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS plan_id,
+       o.plan_storage_bytes::bigint AS plan_storage_bytes, o.break_glass_open::boolean AS break_glass_open
 FROM colony_operator_overview(sqlc.arg(only_ws)::uuid, sqlc.arg(online_since)::timestamptz) AS o;
+
+-- Round 51b: plans (operator scope).
+
+-- name: CreatePlan :exec
+INSERT INTO plan (id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+
+-- name: PlanByID :one
+SELECT * FROM plan WHERE id = $1;
+
+-- name: ListPlans :many
+SELECT * FROM plan ORDER BY archived_at IS NOT NULL, storage_bytes, name;
+
+-- name: UpdatePlan :exec
+UPDATE plan SET name = $2, storage_bytes = $3, cpu_cores = $4, memory_bytes = $5, archived_at = $6, updated_at = $7
+WHERE id = $1;

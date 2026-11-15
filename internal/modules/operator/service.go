@@ -491,17 +491,21 @@ func (s *Service) CleanupSessions(ctx context.Context) (int64, error) {
 // from the identity module.
 
 // ListCustomers lists every workspace without content.
+// Every Customers call runs in the operator scope: the reads stay in it
+// (Postgres refuses the overview anywhere else); the writes narrow to the
+// one workspace they change.
 func (s *Service) ListCustomers(ctx context.Context) ([]Customer, error) {
-	return s.Customers.List(ctx)
+	return s.Customers.List(scope(ctx))
 }
 
 // Customer returns one workspace without content.
 func (s *Service) Customer(ctx context.Context, id ids.ID) (Customer, error) {
-	return s.Customers.Get(ctx, id)
+	return s.Customers.Get(scope(ctx), id)
 }
 
 // CreateCustomer creates a workspace and its owner invite.
 func (s *Service) CreateCustomer(ctx context.Context, o Operator, name, slug, remote string) (Customer, InviteLink, error) {
+	ctx = scope(ctx)
 	c, err := s.Customers.Create(ctx, name, slug)
 	if err != nil {
 		return Customer{}, InviteLink{}, err
@@ -519,7 +523,7 @@ func (s *Service) CreateCustomer(ctx context.Context, o Operator, name, slug, re
 
 // Invite makes a new owner invite (the old one is revoked).
 func (s *Service) Invite(ctx context.Context, o Operator, id ids.ID, remote string) (InviteLink, error) {
-	link, err := s.Customers.Invite(ctx, id, o.ID)
+	link, err := s.Customers.Invite(scope(ctx), id, o.ID)
 	if err != nil {
 		return InviteLink{}, err
 	}
@@ -528,7 +532,7 @@ func (s *Service) Invite(ctx context.Context, o Operator, id ids.ID, remote stri
 
 // SetSuspended suspends (with a reason) or restores a workspace.
 func (s *Service) SetSuspended(ctx context.Context, o Operator, id ids.ID, suspend bool, reason, remote string) (Customer, error) {
-	c, err := s.Customers.SetSuspended(ctx, id, suspend, reason)
+	c, err := s.Customers.SetSuspended(scope(ctx), id, suspend, reason)
 	if err != nil {
 		return Customer{}, err
 	}

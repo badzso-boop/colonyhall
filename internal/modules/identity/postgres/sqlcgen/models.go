@@ -177,6 +177,23 @@ type AuthFailure struct {
 	ClearedAt   *time.Time
 }
 
+type BreakGlass struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	OperatorID       uuid.UUID
+	OperatorHandle   string
+	ActorID          uuid.UUID
+	Reason           string
+	DevMode          bool
+	OpenedAt         time.Time
+	ExpiresAt        time.Time
+	HandoffHash      []byte
+	HandoffExpiresAt time.Time
+	HandoffUsedAt    *time.Time
+	ClosedAt         *time.Time
+	ClosedBy         *string
+}
+
 type Channel struct {
 	ID                     uuid.UUID
 	WorkspaceID            uuid.UUID
@@ -564,6 +581,17 @@ type OperatorSession struct {
 	RevokedAt  *time.Time
 }
 
+type Plan struct {
+	ID           uuid.UUID
+	Name         string
+	StorageBytes int64
+	CpuCores     int32
+	MemoryBytes  int64
+	ArchivedAt   *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type PlannerAccess struct {
 	OwnerID      uuid.UUID
 	WorkspaceID  uuid.UUID
@@ -745,16 +773,17 @@ type SearchLog struct {
 }
 
 type Session struct {
-	ID          uuid.UUID
-	ActorID     uuid.UUID
-	TokenHash   []byte
-	CsrfToken   string
-	UserAgent   string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	RevokedAt   *time.Time
-	LastSeenAt  *time.Time
-	WorkspaceID uuid.UUID
+	ID           uuid.UUID
+	ActorID      uuid.UUID
+	TokenHash    []byte
+	CsrfToken    string
+	UserAgent    string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	RevokedAt    *time.Time
+	LastSeenAt   *time.Time
+	WorkspaceID  uuid.UUID
+	BreakGlassID *uuid.UUID
 }
 
 type SidebarItem struct {
@@ -874,12 +903,17 @@ type WorkspaceInvite struct {
 }
 
 type WorkspaceStorage struct {
-	WorkspaceID  uuid.UUID
-	QuotaBytes   int64
-	FilesBytes   int64
-	DbBytes      int64
-	ChatBytes    int64
-	DbMeasuredAt *time.Time
-	WarnedLevel  int16
-	UpdatedAt    time.Time
+	WorkspaceID      uuid.UUID
+	QuotaBytes       int64
+	FilesBytes       int64
+	DbBytes          int64
+	ChatBytes        int64
+	DbMeasuredAt     *time.Time
+	WarnedLevel      int16
+	UpdatedAt        time.Time
+	PlanID           *uuid.UUID
+	PlanName         string
+	PlanStorageBytes int64
+	PlanCpuCores     int32
+	PlanMemoryBytes  int64
 }

@@ -92,6 +92,38 @@ func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) 
 	return err
 }
 
+const createPlan = `-- name: CreatePlan :exec
+
+INSERT INTO plan (id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type CreatePlanParams struct {
+	ID           uuid.UUID
+	Name         string
+	StorageBytes int64
+	CpuCores     int32
+	MemoryBytes  int64
+	ArchivedAt   *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// Round 51b: plans (operator scope).
+func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) error {
+	_, err := q.db.Exec(ctx, createPlan,
+		arg.ID,
+		arg.Name,
+		arg.StorageBytes,
+		arg.CpuCores,
+		arg.MemoryBytes,
+		arg.ArchivedAt,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO operator_session (id, operator_id, token_hash, csrf_token, created_at, last_seen_at, expires_at, remote_addr, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -248,6 +280,39 @@ func (q *Queries) ListOperators(ctx context.Context) ([]Operator, error) {
 	return items, nil
 }
 
+const listPlans = `-- name: ListPlans :many
+SELECT id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at FROM plan ORDER BY archived_at IS NOT NULL, storage_bytes, name
+`
+
+func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
+	rows, err := q.db.Query(ctx, listPlans)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Plan
+	for rows.Next() {
+		var i Plan
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.StorageBytes,
+			&i.CpuCores,
+			&i.MemoryBytes,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const operatorByHandle = `-- name: OperatorByHandle :one
 SELECT id, handle, display_name, password_hash, totp_key_id, totp_nonce, totp_ciphertext, totp_last_step, state, created_at, activated_at, last_login_at FROM operator WHERE handle = $1
 `
@@ -305,7 +370,9 @@ SELECT o.ws_id::uuid AS id, o.ws_name::text AS name, o.ws_slug::text AS slug, o.
        o.quota_bytes::bigint AS quota_bytes, o.files_bytes::bigint AS files_bytes, o.db_bytes::bigint AS db_bytes,
        coalesce(o.invite_created_at, '0001-01-01Z')::timestamptz AS invite_created_at,
        coalesce(o.invite_expires_at, '0001-01-01Z')::timestamptz AS invite_expires_at,
-       coalesce(o.invite_used, false)::boolean AS invite_used, coalesce(o.invite_revoked, false)::boolean AS invite_revoked
+       coalesce(o.invite_used, false)::boolean AS invite_used, coalesce(o.invite_revoked, false)::boolean AS invite_revoked,
+       coalesce(o.plan_id, '00000000-0000-0000-0000-000000000000'::uuid)::uuid AS plan_id,
+       o.plan_storage_bytes::bigint AS plan_storage_bytes, o.break_glass_open::boolean AS break_glass_open
 FROM colony_operator_overview($1::uuid, $2::timestamptz) AS o
 `
 
@@ -315,26 +382,29 @@ type OverviewParams struct {
 }
 
 type OverviewRow struct {
-	ID              uuid.UUID
-	Name            string
-	Slug            string
-	State           string
-	SuspendedAt     time.Time
-	SuspendedReason string
-	CreatedAt       time.Time
-	HasOwner        bool
-	Users           int32
-	Agents          int32
-	Hosts           int32
-	HostsOnline     int32
-	LastActivity    time.Time
-	QuotaBytes      int64
-	FilesBytes      int64
-	DbBytes         int64
-	InviteCreatedAt time.Time
-	InviteExpiresAt time.Time
-	InviteUsed      bool
-	InviteRevoked   bool
+	ID               uuid.UUID
+	Name             string
+	Slug             string
+	State            string
+	SuspendedAt      time.Time
+	SuspendedReason  string
+	CreatedAt        time.Time
+	HasOwner         bool
+	Users            int32
+	Agents           int32
+	Hosts            int32
+	HostsOnline      int32
+	LastActivity     time.Time
+	QuotaBytes       int64
+	FilesBytes       int64
+	DbBytes          int64
+	InviteCreatedAt  time.Time
+	InviteExpiresAt  time.Time
+	InviteUsed       bool
+	InviteRevoked    bool
+	PlanID           uuid.UUID
+	PlanStorageBytes int64
+	BreakGlassOpen   bool
 }
 
 // The workspaces' account data and numbers, in the operator scope
@@ -371,6 +441,9 @@ func (q *Queries) Overview(ctx context.Context, arg OverviewParams) ([]OverviewR
 			&i.InviteExpiresAt,
 			&i.InviteUsed,
 			&i.InviteRevoked,
+			&i.PlanID,
+			&i.PlanStorageBytes,
+			&i.BreakGlassOpen,
 		); err != nil {
 			return nil, err
 		}
@@ -380,6 +453,26 @@ func (q *Queries) Overview(ctx context.Context, arg OverviewParams) ([]OverviewR
 		return nil, err
 	}
 	return items, nil
+}
+
+const planByID = `-- name: PlanByID :one
+SELECT id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at FROM plan WHERE id = $1
+`
+
+func (q *Queries) PlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
+	row := q.db.QueryRow(ctx, planByID, id)
+	var i Plan
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.StorageBytes,
+		&i.CpuCores,
+		&i.MemoryBytes,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const resealTOTP = `-- name: ResealTOTP :execrows
@@ -540,6 +633,34 @@ func (q *Queries) UnusedBackupCodes(ctx context.Context, operatorID uuid.UUID) (
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const updatePlan = `-- name: UpdatePlan :exec
+UPDATE plan SET name = $2, storage_bytes = $3, cpu_cores = $4, memory_bytes = $5, archived_at = $6, updated_at = $7
+WHERE id = $1
+`
+
+type UpdatePlanParams struct {
+	ID           uuid.UUID
+	Name         string
+	StorageBytes int64
+	CpuCores     int32
+	MemoryBytes  int64
+	ArchivedAt   *time.Time
+	UpdatedAt    time.Time
+}
+
+func (q *Queries) UpdatePlan(ctx context.Context, arg UpdatePlanParams) error {
+	_, err := q.db.Exec(ctx, updatePlan,
+		arg.ID,
+		arg.Name,
+		arg.StorageBytes,
+		arg.CpuCores,
+		arg.MemoryBytes,
+		arg.ArchivedAt,
+		arg.UpdatedAt,
+	)
+	return err
 }
 
 const useBackupCode = `-- name: UseBackupCode :execrows

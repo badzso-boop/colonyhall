@@ -17,7 +17,19 @@ const (
 	// the agents on it.
 	EventStorageStateChanged = "workspace.storage_state_changed"
 	EventStorageQuotaSet     = "workspace.storage_quota_set"
+	// EventPlanChanged: the operator set or removed the plan (round 51b).
+	EventPlanChanged = "workspace.plan_changed"
 )
+
+// PlanChangedPayload is the payload of workspace.plan_changed (empty
+// fields: the plan was removed).
+type PlanChangedPayload struct {
+	PlanID       string `json:"plan_id,omitempty"`
+	Name         string `json:"name,omitempty"`
+	StorageBytes int64  `json:"storage_bytes,omitempty"`
+	CPUCores     int    `json:"cpu_cores,omitempty"`
+	MemoryBytes  int64  `json:"memory_bytes,omitempty"`
+}
 
 // DeletedPayload is the payload of file.deleted: no name, no size.
 type DeletedPayload struct {

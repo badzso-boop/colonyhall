@@ -70,8 +70,8 @@ func (s *Service) storeNew(ctx context.Context, actorID ids.ID, n newFile) error
 		}
 		if !had {
 			// A copy of content the workspace already has adds nothing.
-			if u.QuotaBytes > 0 && live+f.Size+u.DBBytes > u.QuotaBytes {
-				return &FullError{Used: live + u.DBBytes, Quota: u.QuotaBytes}
+			if limit := u.Limit(); limit > 0 && live+f.Size+u.DBBytes > limit {
+				return &FullError{Used: live + u.DBBytes, Quota: limit}
 			}
 			live += f.Size
 		}
@@ -129,7 +129,7 @@ func (s *Service) saveUsage(ctx context.Context, u *Usage, actorID ids.ID, now t
 	var seq int64
 	if s.Events != nil {
 		ev, err := eventlog.NewEvent(s.IDs.New(), u.WorkspaceID, EventStorageStateChanged, actorID, ids.Nil, "workspace", u.WorkspaceID,
-			StorageStatePayload{State: string(stateOf(level)), PreviousState: string(stateOf(prev)), UsedBytes: u.Used(), QuotaBytes: u.QuotaBytes}, now)
+			StorageStatePayload{State: string(stateOf(level)), PreviousState: string(stateOf(prev)), UsedBytes: u.Used(), QuotaBytes: u.Limit()}, now)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -327,12 +327,22 @@ func (s *Service) SetQuota(ctx context.Context, by identity.Actor, quotaBytes in
 		return Usage{}, ErrInvalidQuota
 	}
 	now := s.Clock.Now()
+	// Round 51b: the owner may lower the plan's storage, never raise it.
+	checkPlan := func(u Usage) error {
+		if u.Plan != nil && u.Plan.StorageBytes > 0 && quotaBytes > u.Plan.StorageBytes {
+			return ErrQuotaAbovePlan
+		}
+		return nil
+	}
 	var u Usage
 	var seq int64
 	var warn *Usage
 	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
 		var err error
 		if u, err = s.Store.LockUsage(ctx, by.WorkspaceID, now); err != nil {
+			return err
+		}
+		if err := checkPlan(u); err != nil {
 			return err
 		}
 		u.QuotaBytes = quotaBytes
@@ -351,6 +361,62 @@ func (s *Service) SetQuota(ctx context.Context, by identity.Actor, quotaBytes in
 			seq = ev.Seq
 		}
 		sseq, w, err := s.saveUsage(ctx, &u, by.ID, now)
+		seq, warn = max(seq, sseq), w
+		return err
+	})
+	if err != nil {
+		return Usage{}, err
+	}
+	s.afterUsage(ctx, seq, warn)
+	return u, nil
+}
+
+// SetPlan sets or removes (nil) the workspace's plan (round 51b, the
+// operator; ctx is scoped to the workspace). When the plan's storage is
+// below the current usage the workspace would be full: without confirm
+// that is ErrPlanOverQuota and nothing changes; with it the plan is set,
+// the workspace is full (uploads refused, the guards pause) and the owner
+// is warned as for any other crossing (round 54). The change is in the
+// workspace's audit (workspace.plan_changed).
+func (s *Service) SetPlan(ctx context.Context, workspaceID ids.ID, plan *Plan, confirmOverQuota bool) (Usage, error) {
+	now := s.Clock.Now()
+	var u Usage
+	var seq int64
+	var warn *Usage
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if u, err = s.Store.LockUsage(ctx, workspaceID, now); err != nil {
+			return err
+		}
+		if u.FilesBytes, err = s.Store.LiveFilesBytes(ctx, workspaceID); err != nil {
+			return err
+		}
+		prevPlan := u.Plan
+		u.Plan = plan
+		if lim := u.Limit(); lim > 0 && u.Used() >= lim && !confirmOverQuota {
+			// Only a change that makes it full needs the confirmation.
+			before := u
+			before.Plan = prevPlan
+			if bl := before.Limit(); bl == 0 || before.Used() < bl {
+				return &OverQuotaError{Used: u.Used(), Quota: lim}
+			}
+		}
+		if s.Events != nil {
+			p := PlanChangedPayload{}
+			if plan != nil {
+				p = PlanChangedPayload{PlanID: plan.ID.String(), Name: plan.Name, StorageBytes: plan.StorageBytes,
+					CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes}
+			}
+			ev, err := eventlog.NewEvent(s.IDs.New(), workspaceID, EventPlanChanged, ids.Nil, ids.Nil, "workspace", workspaceID, p, now)
+			if err != nil {
+				return err
+			}
+			if err := s.Events.Append(ctx, &ev); err != nil {
+				return err
+			}
+			seq = ev.Seq
+		}
+		sseq, w, err := s.saveUsage(ctx, &u, ids.Nil, now)
 		seq, warn = max(seq, sseq), w
 		return err
 	})

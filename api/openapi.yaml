@@ -2845,6 +2845,45 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "410": { $ref: "#/components/responses/Problem" }
 
+  # Round 51b: the operator's break-glass access, seen from the customer.
+  /break-glass/redeem:
+    post:
+      operationId: redeemBreakGlass
+      tags: [identity]
+      security: []
+      description: "Multi-tenant mode only. Uses a break-glass handoff token (60 seconds, once) on the workspace's own host: opens the read-only session (sets the session cookie). 410 break_glass_invalid otherwise."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RedeemBreakGlassRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: The read-only session is open, content: { application/json: { schema: { $ref: "#/components/schemas/SessionInfo" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
+
+  /workspace/break-glass:
+    get:
+      operationId: listBreakGlass
+      tags: [identity]
+      description: "Owner and admins. The operator's break-glass accesses to this workspace, newest first (at most 50)."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BreakGlassList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /workspace/break-glass/{breakGlassId}:
+    parameters:
+      - { name: breakGlassId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: closeBreakGlass
+      tags: [identity]
+      description: Owner only. Closes the operator's access at once (its session ends); audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Closed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   # Round 51: the platform operator, only on admin.<base domain> in
   # multi-tenant mode. Not a workspace actor: its own cookie, 8 hours at
   # most, 30 minutes idle. Unsafe requests send the CSRF token in
@@ -2973,6 +3012,122 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  # Round 51b: plans (the operator edits them) and break-glass access.
+  /operator/plans:
+    get:
+      operationId: listPlans
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: Every plan, archived ones too.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlanList" } } } }
+    post:
+      operationId: createPlan
+      tags: [operator]
+      security: [{ operator: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PlanRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Plan" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /operator/plans/{planId}:
+    parameters:
+      - { name: planId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updatePlan
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: "Changes the plan's name or numbers (every workspace on it gets them), or archives it (no new assignment; the workspaces keep it). A new storage below a workspace's usage needs confirm_over_quota (409 plan_over_quota otherwise)."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PlanPatchRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Plan" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /operator/workspaces/{workspaceId}/plan:
+    parameters:
+      - { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: assignPlan
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: "Sets the workspace's plan (plan_id absent: none). A plan below the current usage leaves the workspace full and its agents paused: 409 plan_over_quota unless confirm_over_quota. An archived plan cannot be assigned."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssignPlanRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /operator/workspaces/{workspaceId}/plan-check:
+    parameters:
+      - { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: checkPlan
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: What the plan would mean for the workspace's storage, before assigning it.
+      parameters:
+        - { name: plan_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlanCheck" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /operator/workspaces/{workspaceId}/break-glass:
+    parameters:
+      - { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listOperatorBreakGlass
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: The workspace's break-glass accesses, newest first (at most 50).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BreakGlassList" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: openBreakGlass
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: "Opens a read-only look into the workspace: public channels and their threads, agents, machines, runs (without their steps), settings; never DMs, private channels or search. reason: at least 20 characters (optional in development mode); minutes: at most 240 (720 in development mode). The answer's link (60 seconds, once) opens the session on the customer's host. The customer's audit records the opening and every read; the owners are notified and may close it."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/BreakGlassRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Opened, content: { application/json: { schema: { $ref: "#/components/schemas/BreakGlassOpened" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /operator/workspaces/{workspaceId}/break-glass/{breakGlassId}:
+    parameters:
+      - { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: breakGlassId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: closeOperatorBreakGlass
+      tags: [operator]
+      security: [{ operator: [] }]
+      description: Closes the access at once (its session ends).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Closed }
         "404": { $ref: "#/components/responses/Problem" }
 
   /operator/audit:
@@ -3231,6 +3386,7 @@ components:
       properties:
         actor: { $ref: "#/components/schemas/Actor" }
         csrf_token: { type: string, description: Empty for bearer-token callers }
+        break_glass: { $ref: "#/components/schemas/BreakGlassSession" }
     SetPasswordRequest:
       type: object
       required: [new_password]
@@ -4140,7 +4296,7 @@ components:
         deleted: { type: boolean }
     ActivityKind:
       type: string
-      enum: [mention, thread_reply, reaction, approval, question, important, reminder]
+      enum: [mention, thread_reply, reaction, approval, question, important, reminder, operator_access]
     ActivityItem:
       type: object
       required: [id, kind, created_at, read, available]
@@ -4935,7 +5091,7 @@ components:
       enum: [ok, warning_80, warning_95, full]
     WorkspaceStorage:
       type: object
-      required: [quota_bytes, used_bytes, attachments_bytes, chat_search_bytes, other_bytes, state]
+      required: [quota_bytes, used_bytes, attachments_bytes, chat_search_bytes, other_bytes, state, limit_bytes]
       properties:
         quota_bytes: { type: integer, format: int64, description: 0 is unlimited }
         used_bytes: { type: integer, format: int64 }
@@ -4944,6 +5100,8 @@ components:
         other_bytes: { type: integer, format: int64, description: The rest of the database share }
         db_measured_at: { type: string, format: date-time, description: The last hourly database estimate (absent before the first) }
         state: { $ref: "#/components/schemas/StorageState" }
+        limit_bytes: { type: integer, format: int64, description: "The effective quota (round 51b): the plan's storage, or the owner's quota when lower; 0 is unlimited" }
+        plan: { $ref: "#/components/schemas/WorkspacePlan" }
     StorageQuotaRequest:
       type: object
       required: [quota_bytes]
@@ -6068,7 +6226,7 @@ components:
         state: { type: string, enum: [ok, warning_80, warning_95, full] }
     Customer:
       type: object
-      required: [id, name, slug, state, created_at, has_owner, users, agents, hosts, hosts_online, storage]
+      required: [id, name, slug, state, created_at, has_owner, users, agents, hosts, hosts_online, storage, break_glass_open]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -6085,6 +6243,109 @@ components:
         hosts_online: { type: integer, description: Seen in the last 90 seconds }
         last_activity_at: { type: string, format: date-time, description: The workspace's newest event }
         storage: { $ref: "#/components/schemas/CustomerStorage" }
+        plan_id: { type: string, format: uuid, description: The workspace's plan (round 51b); absent without one }
+        break_glass_open: { type: boolean, description: A break-glass access is open (round 51b) }
+    # Round 51b.
+    Plan:
+      type: object
+      required: [id, name, storage_bytes, cpu_cores, memory_bytes, workspaces, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        storage_bytes: { type: integer, format: int64 }
+        cpu_cores: { type: integer, description: What a hosted guard will get (not enforced yet) }
+        memory_bytes: { type: integer, format: int64, description: What a hosted guard will get (not enforced yet) }
+        workspaces: { type: integer, description: Workspaces on the plan }
+        archived_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PlanList:
+      type: object
+      required: [plans]
+      properties:
+        plans: { type: array, items: { $ref: "#/components/schemas/Plan" } }
+    PlanRequest:
+      type: object
+      required: [name, storage_bytes, cpu_cores, memory_bytes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        storage_bytes: { type: integer, format: int64, minimum: 1 }
+        cpu_cores: { type: integer, minimum: 1, maximum: 1024 }
+        memory_bytes: { type: integer, format: int64, minimum: 1 }
+    PlanPatchRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        storage_bytes: { type: integer, format: int64, minimum: 1 }
+        cpu_cores: { type: integer, minimum: 1, maximum: 1024 }
+        memory_bytes: { type: integer, format: int64, minimum: 1 }
+        archived: { type: boolean }
+        confirm_over_quota: { type: boolean, description: Go ahead although a workspace on the plan would be full }
+    AssignPlanRequest:
+      type: object
+      properties:
+        plan_id: { type: string, format: uuid, description: Absent removes the plan }
+        confirm_over_quota: { type: boolean }
+    PlanCheck:
+      type: object
+      required: [used_bytes, new_quota_bytes, fits, state_after]
+      properties:
+        used_bytes: { type: integer, format: int64 }
+        new_quota_bytes: { type: integer, format: int64, description: The effective quota with the plan }
+        fits: { type: boolean }
+        state_after: { $ref: "#/components/schemas/StorageState" }
+    WorkspacePlan:
+      type: object
+      required: [name, storage_bytes, cpu_cores, memory_bytes]
+      properties:
+        name: { type: string }
+        storage_bytes: { type: integer, format: int64 }
+        cpu_cores: { type: integer }
+        memory_bytes: { type: integer, format: int64 }
+    BreakGlassRequest:
+      type: object
+      required: [minutes]
+      properties:
+        reason: { type: string, maxLength: 500, description: At least 20 characters (optional in development mode) }
+        minutes: { type: integer, minimum: 1, maximum: 720, description: At most 240 (720 in development mode) }
+    BreakGlass:
+      type: object
+      required: [id, operator_handle, reason, dev_mode, opened_at, expires_at, open]
+      properties:
+        id: { type: string, format: uuid }
+        operator_handle: { type: string }
+        reason: { type: string }
+        dev_mode: { type: boolean }
+        opened_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        open: { type: boolean }
+        closed_at: { type: string, format: date-time }
+        closed_by: { type: string, description: "operator, owner or expired" }
+    BreakGlassList:
+      type: object
+      required: [break_glass]
+      properties:
+        break_glass: { type: array, items: { $ref: "#/components/schemas/BreakGlass" } }
+    BreakGlassOpened:
+      type: object
+      required: [break_glass, url, handoff_expires_at]
+      properties:
+        break_glass: { $ref: "#/components/schemas/BreakGlass" }
+        url: { type: string, description: "The handoff link on the customer's host: 60 seconds, once" }
+        handoff_expires_at: { type: string, format: date-time }
+    RedeemBreakGlassRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, maxLength: 200 }
+    BreakGlassSession:
+      type: object
+      required: [id, expires_at, operator_handle]
+      description: The session is the operator's read-only break-glass access (round 51b)
+      properties:
+        id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+        operator_handle: { type: string }
     CustomerList:
       type: object
       required: [customers]

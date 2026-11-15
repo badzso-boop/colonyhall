@@ -72,7 +72,7 @@ func (n *storageNotifier) send(ctx context.Context, workspaceID ids.ID, u files.
 // storageWarningText is the warning in the owner's language (Hungarian, like
 // the other server-written notes).
 func storageWarningText(u files.Usage) string {
-	used, quota := humanBytes(u.Used()), humanBytes(u.QuotaBytes)
+	used, quota := humanBytes(u.Used()), humanBytes(u.Limit())
 	if u.State() == files.StorageFull {
 		return fmt.Sprintf("⛔ A munkaterület tárhelye megtelt: %s / %s foglalt. Új fájlt nem lehet feltölteni, "+
 			"és az őrök nem ébresztik az agenteket, amíg nincs hely. Üzenetet továbbra is lehet írni. "+
@@ -111,7 +111,7 @@ func (s storageStates) HostStorage(ctx context.Context, workspaceID ids.ID) (hos
 	if err != nil {
 		return hosts.HostStorage{}, err
 	}
-	return hosts.HostStorage{State: string(u.State()), UsedBytes: u.Used(), QuotaBytes: u.QuotaBytes}, nil
+	return hosts.HostStorage{State: string(u.State()), UsedBytes: u.Used(), QuotaBytes: u.Limit()}, nil
 }
 
 // maintainStorage refreshes every workspace's database share and recounts

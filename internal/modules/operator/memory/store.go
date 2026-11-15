@@ -8,6 +8,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,11 +31,12 @@ type Store struct {
 	codes     []backupCode
 	sessions  map[ids.ID]operator.Session
 	audit     []operator.AuditEntry
+	plans     map[ids.ID]operator.Plan
 }
 
 // New returns an empty store.
 func New() *Store {
-	return &Store{operators: map[ids.ID]operator.Operator{}, sessions: map[ids.ID]operator.Session{}}
+	return &Store{operators: map[ids.ID]operator.Operator{}, sessions: map[ids.ID]operator.Session{}, plans: map[ids.ID]operator.Plan{}}
 }
 
 // CreateOperator stores an operator.
@@ -263,4 +265,67 @@ func (s *Store) ListAudit(_ context.Context, before time.Time, limit int) ([]ope
 		}
 	}
 	return out, nil
+}
+
+// CreatePlan stores a plan; db.ErrConflict when the name is taken.
+func (s *Store) CreatePlan(_ context.Context, p operator.Plan) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, x := range s.plans {
+		if x.Name == p.Name {
+			return db.ErrConflict
+		}
+	}
+	s.plans[p.ID] = p
+	return nil
+}
+
+// PlanByID reads a plan.
+func (s *Store) PlanByID(_ context.Context, id ids.ID) (operator.Plan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.plans[id]
+	if !ok {
+		return operator.Plan{}, db.ErrNotFound
+	}
+	return p, nil
+}
+
+// ListPlans lists every plan: the current ones first, by storage, by name.
+func (s *Store) ListPlans(_ context.Context) ([]operator.Plan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := slices.Collect(maps.Values(s.plans))
+	slices.SortFunc(out, func(a, b operator.Plan) int {
+		if (a.ArchivedAt != nil) != (b.ArchivedAt != nil) {
+			if a.ArchivedAt == nil {
+				return -1
+			}
+			return 1
+		}
+		if a.StorageBytes != b.StorageBytes {
+			if a.StorageBytes < b.StorageBytes {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	return out, nil
+}
+
+// UpdatePlan writes a plan; db.ErrConflict when the name is taken.
+func (s *Store) UpdatePlan(_ context.Context, p operator.Plan) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.plans[p.ID]; !ok {
+		return db.ErrNotFound
+	}
+	for _, x := range s.plans {
+		if x.Name == p.Name && x.ID != p.ID {
+			return db.ErrConflict
+		}
+	}
+	s.plans[p.ID] = p
+	return nil
 }

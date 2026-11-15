@@ -11,13 +11,14 @@ import (
 
 // Defines values for ActivityKind.
 const (
-	ActivityKindApproval    ActivityKind = "approval"
-	ActivityKindImportant   ActivityKind = "important"
-	ActivityKindMention     ActivityKind = "mention"
-	ActivityKindQuestion    ActivityKind = "question"
-	ActivityKindReaction    ActivityKind = "reaction"
-	ActivityKindReminder    ActivityKind = "reminder"
-	ActivityKindThreadReply ActivityKind = "thread_reply"
+	ActivityKindApproval       ActivityKind = "approval"
+	ActivityKindImportant      ActivityKind = "important"
+	ActivityKindMention        ActivityKind = "mention"
+	ActivityKindOperatorAccess ActivityKind = "operator_access"
+	ActivityKindQuestion       ActivityKind = "question"
+	ActivityKindReaction       ActivityKind = "reaction"
+	ActivityKindReminder       ActivityKind = "reminder"
+	ActivityKindThreadReply    ActivityKind = "thread_reply"
 )
 
 // Valid indicates whether the value is a known member of the ActivityKind enum.
@@ -28,6 +29,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindImportant:
 		return true
 	case ActivityKindMention:
+		return true
+	case ActivityKindOperatorAccess:
 		return true
 	case ActivityKindQuestion:
 		return true
@@ -2174,6 +2177,14 @@ type ApprovalRequest struct {
 // ApprovalState defines model for ApprovalState.
 type ApprovalState string
 
+// AssignPlanRequest defines model for AssignPlanRequest.
+type AssignPlanRequest struct {
+	ConfirmOverQuota *bool `json:"confirm_over_quota,omitempty"`
+
+	// PlanId Absent removes the plan
+	PlanId *openapi_types.UUID `json:"plan_id,omitempty"`
+}
+
 // AssignRequest defines model for AssignRequest.
 type AssignRequest struct {
 	AllowPreview     *bool                   `json:"allow_preview,omitempty"`
@@ -2239,6 +2250,51 @@ type AuditVerify struct {
 	BrokenAt *int64 `json:"broken_at,omitempty"`
 	Checked  int    `json:"checked"`
 	Ok       bool   `json:"ok"`
+}
+
+// BreakGlass defines model for BreakGlass.
+type BreakGlass struct {
+	ClosedAt *time.Time `json:"closed_at,omitempty"`
+
+	// ClosedBy operator, owner or expired
+	ClosedBy       *string            `json:"closed_by,omitempty"`
+	DevMode        bool               `json:"dev_mode"`
+	ExpiresAt      time.Time          `json:"expires_at"`
+	Id             openapi_types.UUID `json:"id"`
+	Open           bool               `json:"open"`
+	OpenedAt       time.Time          `json:"opened_at"`
+	OperatorHandle string             `json:"operator_handle"`
+	Reason         string             `json:"reason"`
+}
+
+// BreakGlassList defines model for BreakGlassList.
+type BreakGlassList struct {
+	BreakGlass []BreakGlass `json:"break_glass"`
+}
+
+// BreakGlassOpened defines model for BreakGlassOpened.
+type BreakGlassOpened struct {
+	BreakGlass       BreakGlass `json:"break_glass"`
+	HandoffExpiresAt time.Time  `json:"handoff_expires_at"`
+
+	// Url The handoff link on the customer's host: 60 seconds, once
+	Url string `json:"url"`
+}
+
+// BreakGlassRequest defines model for BreakGlassRequest.
+type BreakGlassRequest struct {
+	// Minutes At most 240 (720 in development mode)
+	Minutes int `json:"minutes"`
+
+	// Reason At least 20 characters (optional in development mode)
+	Reason *string `json:"reason,omitempty"`
+}
+
+// BreakGlassSession The session is the operator's read-only break-glass access (round 51b)
+type BreakGlassSession struct {
+	ExpiresAt      time.Time          `json:"expires_at"`
+	Id             openapi_types.UUID `json:"id"`
+	OperatorHandle string             `json:"operator_handle"`
 }
 
 // Channel defines model for Channel.
@@ -2572,10 +2628,13 @@ type CurrencySettings struct {
 // Customer defines model for Customer.
 type Customer struct {
 	// Agents Agents (not archived)
-	Agents    int       `json:"agents"`
-	CreatedAt time.Time `json:"created_at"`
-	HasOwner  bool      `json:"has_owner"`
-	Hosts     int       `json:"hosts"`
+	Agents int `json:"agents"`
+
+	// BreakGlassOpen A break-glass access is open (round 51b)
+	BreakGlassOpen bool      `json:"break_glass_open"`
+	CreatedAt      time.Time `json:"created_at"`
+	HasOwner       bool      `json:"has_owner"`
+	Hosts          int       `json:"hosts"`
 
 	// HostsOnline Seen in the last 90 seconds
 	HostsOnline int                `json:"hosts_online"`
@@ -2583,13 +2642,16 @@ type Customer struct {
 	Invite      *CustomerInvite    `json:"invite,omitempty"`
 
 	// LastActivityAt The workspace's newest event
-	LastActivityAt  *time.Time      `json:"last_activity_at,omitempty"`
-	Name            string          `json:"name"`
-	Slug            string          `json:"slug"`
-	State           CustomerState   `json:"state"`
-	Storage         CustomerStorage `json:"storage"`
-	SuspendedAt     *time.Time      `json:"suspended_at,omitempty"`
-	SuspendedReason *string         `json:"suspended_reason,omitempty"`
+	LastActivityAt *time.Time `json:"last_activity_at,omitempty"`
+	Name           string     `json:"name"`
+
+	// PlanId The workspace's plan (round 51b); absent without one
+	PlanId          *openapi_types.UUID `json:"plan_id,omitempty"`
+	Slug            string              `json:"slug"`
+	State           CustomerState       `json:"state"`
+	Storage         CustomerStorage     `json:"storage"`
+	SuspendedAt     *time.Time          `json:"suspended_at,omitempty"`
+	SuspendedReason *string             `json:"suspended_reason,omitempty"`
 
 	// Users People (not archived)
 	Users int `json:"users"`
@@ -3686,6 +3748,60 @@ type PinnedMessage struct {
 	PinnedBy openapi_types.UUID `json:"pinned_by"`
 }
 
+// Plan defines model for Plan.
+type Plan struct {
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// CpuCores What a hosted guard will get (not enforced yet)
+	CpuCores  int                `json:"cpu_cores"`
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// MemoryBytes What a hosted guard will get (not enforced yet)
+	MemoryBytes  int64     `json:"memory_bytes"`
+	Name         string    `json:"name"`
+	StorageBytes int64     `json:"storage_bytes"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	// Workspaces Workspaces on the plan
+	Workspaces int `json:"workspaces"`
+}
+
+// PlanCheck defines model for PlanCheck.
+type PlanCheck struct {
+	Fits bool `json:"fits"`
+
+	// NewQuotaBytes The effective quota with the plan
+	NewQuotaBytes int64        `json:"new_quota_bytes"`
+	StateAfter    StorageState `json:"state_after"`
+	UsedBytes     int64        `json:"used_bytes"`
+}
+
+// PlanList defines model for PlanList.
+type PlanList struct {
+	Plans []Plan `json:"plans"`
+}
+
+// PlanPatchRequest defines model for PlanPatchRequest.
+type PlanPatchRequest struct {
+	Archived *bool `json:"archived,omitempty"`
+
+	// ConfirmOverQuota Go ahead although a workspace on the plan would be full
+	ConfirmOverQuota *bool   `json:"confirm_over_quota,omitempty"`
+	CpuCores         *int    `json:"cpu_cores,omitempty"`
+	MemoryBytes      *int64  `json:"memory_bytes,omitempty"`
+	Name             *string `json:"name,omitempty"`
+	StorageBytes     *int64  `json:"storage_bytes,omitempty"`
+}
+
+// PlanRequest defines model for PlanRequest.
+type PlanRequest struct {
+	CpuCores     int    `json:"cpu_cores"`
+	MemoryBytes  int64  `json:"memory_bytes"`
+	Name         string `json:"name"`
+	StorageBytes int64  `json:"storage_bytes"`
+}
+
 // PlannerAccess defines model for PlannerAccess.
 type PlannerAccess struct {
 	CalAgentIds  []openapi_types.UUID `json:"cal_agent_ids"`
@@ -3864,6 +3980,11 @@ type ReactionSummary struct {
 	ActorIds []openapi_types.UUID `json:"actor_ids"`
 	Count    int                  `json:"count"`
 	Emoji    string               `json:"emoji"`
+}
+
+// RedeemBreakGlassRequest defines model for RedeemBreakGlassRequest.
+type RedeemBreakGlassRequest struct {
+	Token string `json:"token"`
 }
 
 // ReorderSidebarItemsRequest defines model for ReorderSidebarItemsRequest.
@@ -4256,6 +4377,9 @@ type SendResult struct {
 // SessionInfo defines model for SessionInfo.
 type SessionInfo struct {
 	Actor Actor `json:"actor"`
+
+	// BreakGlass The session is the operator's read-only break-glass access (round 51b)
+	BreakGlass *BreakGlassSession `json:"break_glass,omitempty"`
 
 	// CsrfToken Empty for bearer-token callers
 	CsrfToken string `json:"csrf_token"`
@@ -4726,6 +4850,14 @@ type WikiRevisionList struct {
 	Revisions []WikiRevision `json:"revisions"`
 }
 
+// WorkspacePlan defines model for WorkspacePlan.
+type WorkspacePlan struct {
+	CpuCores     int    `json:"cpu_cores"`
+	MemoryBytes  int64  `json:"memory_bytes"`
+	Name         string `json:"name"`
+	StorageBytes int64  `json:"storage_bytes"`
+}
+
 // WorkspaceStorage defines model for WorkspaceStorage.
 type WorkspaceStorage struct {
 	AttachmentsBytes int64 `json:"attachments_bytes"`
@@ -4736,8 +4868,12 @@ type WorkspaceStorage struct {
 	// DbMeasuredAt The last hourly database estimate (absent before the first)
 	DbMeasuredAt *time.Time `json:"db_measured_at,omitempty"`
 
+	// LimitBytes The effective quota (round 51b): the plan's storage, or the owner's quota when lower; 0 is unlimited
+	LimitBytes int64 `json:"limit_bytes"`
+
 	// OtherBytes The rest of the database share
-	OtherBytes int64 `json:"other_bytes"`
+	OtherBytes int64          `json:"other_bytes"`
+	Plan       *WorkspacePlan `json:"plan,omitempty"`
 
 	// QuotaBytes 0 is unlimited
 	QuotaBytes int64        `json:"quota_bytes"`
@@ -4927,6 +5063,11 @@ type ListOperatorAuditParams struct {
 	Limit  *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// CheckPlanParams defines parameters for CheckPlan.
+type CheckPlanParams struct {
+	PlanId openapi_types.UUID `form:"plan_id" json:"plan_id"`
+}
+
 // ListPlannerEventsParams defines parameters for ListPlannerEvents.
 type ListPlannerEventsParams struct {
 	From time.Time `form:"from" json:"from"`
@@ -5089,6 +5230,9 @@ type DecideApprovalJSONRequestBody = DecideApprovalRequest
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// RedeemBreakGlassJSONRequestBody defines body for RedeemBreakGlass for application/json ContentType.
+type RedeemBreakGlassJSONRequestBody = RedeemBreakGlassRequest
+
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
 
@@ -5194,8 +5338,20 @@ type OperatorLoginJSONRequestBody = OperatorLoginRequest
 // RenewOperatorBackupCodesJSONRequestBody defines body for RenewOperatorBackupCodes for application/json ContentType.
 type RenewOperatorBackupCodesJSONRequestBody = OperatorReauthRequest
 
+// CreatePlanJSONRequestBody defines body for CreatePlan for application/json ContentType.
+type CreatePlanJSONRequestBody = PlanRequest
+
+// UpdatePlanJSONRequestBody defines body for UpdatePlan for application/json ContentType.
+type UpdatePlanJSONRequestBody = PlanPatchRequest
+
 // CreateCustomerJSONRequestBody defines body for CreateCustomer for application/json ContentType.
 type CreateCustomerJSONRequestBody = CreateCustomerRequest
+
+// OpenBreakGlassJSONRequestBody defines body for OpenBreakGlass for application/json ContentType.
+type OpenBreakGlassJSONRequestBody = BreakGlassRequest
+
+// AssignPlanJSONRequestBody defines body for AssignPlan for application/json ContentType.
+type AssignPlanJSONRequestBody = AssignPlanRequest
 
 // SuspendCustomerJSONRequestBody defines body for SuspendCustomer for application/json ContentType.
 type SuspendCustomerJSONRequestBody = SuspendCustomerRequest

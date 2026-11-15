@@ -418,6 +418,10 @@ func (s *Store) UsageOf(_ context.Context, workspaceID ids.ID) (files.Usage, err
 func (s *Store) SaveUsage(_ context.Context, u files.Usage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if u.Plan != nil { // a copy: the caller keeps its pointer
+		p := *u.Plan
+		u.Plan = &p
+	}
 	s.usage[u.WorkspaceID] = u
 	return nil
 }

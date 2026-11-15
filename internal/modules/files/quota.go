@@ -48,6 +48,33 @@ type Usage struct {
 	// WarnedLevel is the level last announced (LevelNone, Level80, …).
 	WarnedLevel int
 	UpdatedAt   time.Time
+	// Plan is the operator's plan for the workspace (round 51b), a copy of
+	// its numbers; nil without a plan (only QuotaBytes counts, as before).
+	Plan *Plan
+}
+
+// Plan is what the workspace's plan gives (round 51b): the storage it
+// limits, and the CPU cores and memory a hosted guard will get (stored and
+// shown; not enforced yet).
+type Plan struct {
+	ID           ids.ID
+	Name         string
+	StorageBytes int64
+	CPUCores     int
+	MemoryBytes  int64
+}
+
+// Limit is the effective quota (round 51b): the plan's storage, or the
+// owner's own quota when that is lower and set; 0 is unlimited (no plan
+// and no quota).
+func (u Usage) Limit() int64 {
+	if u.Plan == nil || u.Plan.StorageBytes <= 0 {
+		return u.QuotaBytes
+	}
+	if u.QuotaBytes > 0 && u.QuotaBytes < u.Plan.StorageBytes {
+		return u.QuotaBytes
+	}
+	return u.Plan.StorageBytes
 }
 
 // Used is the total that counts towards the quota.
@@ -55,7 +82,7 @@ func (u Usage) Used() int64 { return u.FilesBytes + u.DBBytes }
 
 // Level is the warning level the usage is at: LevelFull when the quota is
 // reached, LevelNone without a quota.
-func (u Usage) Level() int { return levelOf(u.Used(), u.QuotaBytes) }
+func (u Usage) Level() int { return levelOf(u.Used(), u.Limit()) }
 
 func levelOf(used, quota int64) int {
 	if quota <= 0 {
@@ -144,7 +171,26 @@ var (
 	ErrNotAdmin = errors.New("only the owner and admins can see the storage usage")
 	// ErrInvalidQuota: a negative or absurd quota.
 	ErrInvalidQuota = errors.New("quota must be between 0 (unlimited) and 1 PiB")
+	// ErrQuotaAbovePlan: the owner's quota may lower the plan's storage,
+	// never raise it (round 51b).
+	ErrQuotaAbovePlan = errors.New("the quota cannot be above the workspace's plan")
+	// ErrPlanOverQuota: the plan would leave the workspace full; the
+	// operator must confirm it (round 51b).
+	ErrPlanOverQuota = errors.New("the plan is below the workspace's current usage")
 )
+
+// OverQuotaError is ErrPlanOverQuota with the numbers the operator sees.
+type OverQuotaError struct {
+	Used  int64
+	Quota int64
+}
+
+func (e *OverQuotaError) Error() string {
+	return fmt.Sprintf("The workspace uses %d bytes, the plan gives %d: it would be full and its agents would pause until it shrinks. Confirm to go ahead.", e.Used, e.Quota)
+}
+
+// Is makes errors.Is(err, ErrPlanOverQuota) true.
+func (e *OverQuotaError) Is(target error) bool { return target == ErrPlanOverQuota }
 
 // Uploader picks whose files "My files" lists.
 type Uploader string

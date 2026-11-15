@@ -29,6 +29,10 @@ type Customer struct {
 	HostsOnline  int
 	LastActivity *time.Time
 	Storage      Storage
+	// PlanID is the workspace's plan (round 51b); ids.Nil without one.
+	PlanID ids.ID
+	// BreakGlassOpen: an operator's break-glass access is open.
+	BreakGlassOpen bool
 }
 
 // InviteState is an invite without its token.
@@ -39,12 +43,16 @@ type InviteState struct {
 	Revoked   bool
 }
 
-// Storage is the workspace storage of round 54.
+// Storage is the workspace storage of round 54. QuotaBytes is the
+// effective quota (the plan's storage, or the owner's quota when lower);
+// OwnerQuotaBytes and PlanStorageBytes are its parts (0: none).
 type Storage struct {
-	UsedBytes  int64
-	QuotaBytes int64
-	FilesBytes int64
-	DBBytes    int64
+	UsedBytes        int64
+	QuotaBytes       int64
+	OwnerQuotaBytes  int64
+	PlanStorageBytes int64
+	FilesBytes       int64
+	DBBytes          int64
 	// State: ok, warning_80, warning_95, full.
 	State string
 }
@@ -78,4 +86,10 @@ type Customers interface {
 	// the workspace has an owner.
 	Invite(ctx context.Context, id, operatorID ids.ID) (InviteLink, error)
 	SetSuspended(ctx context.Context, id ids.ID, suspend bool, reason string) (Customer, error)
+	// SetPlan gives the workspace the plan's numbers (nil: no plan); a plan
+	// below the usage is ErrPlanOverQuota from the storage module unless
+	// confirmed (round 51b).
+	SetPlan(ctx context.Context, id ids.ID, plan *Plan, confirmOverQuota bool) (Customer, error)
+	// CheckPlan tells what the plan would mean for the workspace's storage.
+	CheckPlan(ctx context.Context, id ids.ID, plan Plan) (PlanCheck, error)
 }

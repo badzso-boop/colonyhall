@@ -979,7 +979,7 @@ func (q *Queries) RevokeTokenByHash(ctx context.Context, arg RevokeTokenByHashPa
 }
 
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, s.workspace_id, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
+SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, s.workspace_id, s.break_glass_id, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL
 `
@@ -1003,6 +1003,7 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 		&i.Session.RevokedAt,
 		&i.Session.LastSeenAt,
 		&i.Session.WorkspaceID,
+		&i.Session.BreakGlassID,
 		&i.Actor.ID,
 		&i.Actor.WorkspaceID,
 		&i.Actor.Kind,

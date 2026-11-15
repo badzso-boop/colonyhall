@@ -46,6 +46,13 @@ type Store interface {
 	// DeleteEndedSessions deletes sessions that ended before before.
 	DeleteEndedSessions(ctx context.Context, before time.Time) (int64, error)
 
+	// Plans (round 51b). CreatePlan and UpdatePlan: db.ErrConflict when
+	// the name is taken.
+	CreatePlan(ctx context.Context, p Plan) error
+	PlanByID(ctx context.Context, id ids.ID) (Plan, error)
+	ListPlans(ctx context.Context) ([]Plan, error)
+	UpdatePlan(ctx context.Context, p Plan) error
+
 	AppendAudit(ctx context.Context, e AuditEntry) error
 	// ListAudit returns entries newest first, before the given time (zero:
 	// from the newest).

@@ -220,7 +220,8 @@ func (s *Store) Customers(ctx context.Context, only ids.ID, onlineSince time.Tim
 		c := operator.Customer{ID: ids.ID(r.ID), Name: r.Name, Slug: r.Slug, State: r.State, SuspendedAt: optTime(r.SuspendedAt),
 			SuspendedReason: r.SuspendedReason, CreatedAt: r.CreatedAt, HasOwner: r.HasOwner, Users: int(r.Users),
 			Agents: int(r.Agents), Hosts: int(r.Hosts), HostsOnline: int(r.HostsOnline), LastActivity: optTime(r.LastActivity),
-			Storage: operator.Storage{QuotaBytes: r.QuotaBytes, FilesBytes: r.FilesBytes, DBBytes: r.DbBytes}}
+			Storage: operator.Storage{OwnerQuotaBytes: r.QuotaBytes, FilesBytes: r.FilesBytes, DBBytes: r.DbBytes, PlanStorageBytes: r.PlanStorageBytes},
+			PlanID:  r.PlanID, BreakGlassOpen: r.BreakGlassOpen}
 		if r.InviteCreatedAt.Year() > 1 {
 			c.Invite = &operator.InviteState{CreatedAt: r.InviteCreatedAt, ExpiresAt: r.InviteExpiresAt, Used: r.InviteUsed, Revoked: r.InviteRevoked}
 		}
@@ -235,4 +236,48 @@ func optTime(t time.Time) *time.Time {
 		return nil
 	}
 	return &t
+}
+
+// CreatePlan stores a plan; db.ErrConflict when the name is taken.
+func (s *Store) CreatePlan(ctx context.Context, p operator.Plan) error {
+	err := s.q(ctx).CreatePlan(ctx, sqlcgen.CreatePlanParams{ID: p.ID, Name: p.Name, StorageBytes: p.StorageBytes,
+		CpuCores: int32(p.CPUCores), MemoryBytes: p.MemoryBytes, ArchivedAt: p.ArchivedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})
+	if db.IsUniqueViolation(err) {
+		return db.ErrConflict
+	}
+	return err
+}
+
+// PlanByID reads a plan.
+func (s *Store) PlanByID(ctx context.Context, id ids.ID) (operator.Plan, error) {
+	r, err := notFound(s.q(ctx).PlanByID(ctx, id))
+	return planOf(r), err
+}
+
+// ListPlans lists every plan: the current ones first, by storage.
+func (s *Store) ListPlans(ctx context.Context) ([]operator.Plan, error) {
+	rows, err := s.q(ctx).ListPlans(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]operator.Plan, len(rows))
+	for i, r := range rows {
+		out[i] = planOf(r)
+	}
+	return out, nil
+}
+
+// UpdatePlan writes a plan; db.ErrConflict when the name is taken.
+func (s *Store) UpdatePlan(ctx context.Context, p operator.Plan) error {
+	err := s.q(ctx).UpdatePlan(ctx, sqlcgen.UpdatePlanParams{ID: p.ID, Name: p.Name, StorageBytes: p.StorageBytes,
+		CpuCores: int32(p.CPUCores), MemoryBytes: p.MemoryBytes, ArchivedAt: p.ArchivedAt, UpdatedAt: p.UpdatedAt})
+	if db.IsUniqueViolation(err) {
+		return db.ErrConflict
+	}
+	return err
+}
+
+func planOf(r sqlcgen.Plan) operator.Plan {
+	return operator.Plan{ID: r.ID, Name: r.Name, StorageBytes: r.StorageBytes, CPUCores: int(r.CpuCores), MemoryBytes: r.MemoryBytes,
+		ArchivedAt: r.ArchivedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }

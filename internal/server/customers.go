@@ -24,6 +24,7 @@ import (
 // one workspace it changes.
 type customers struct {
 	identity *identity.Service
+	files    *files.Service
 	overview operator.Overview
 	clock    clock.Clock
 	// closeWorkspace drops the suspended workspace's open sockets.
@@ -39,10 +40,49 @@ func (c *customers) read(ctx context.Context, only ids.ID) ([]operator.Customer,
 	}
 	for i := range list {
 		st := &list[i].Storage
-		u := files.Usage{QuotaBytes: st.QuotaBytes, FilesBytes: st.FilesBytes, DBBytes: st.DBBytes}
-		st.UsedBytes, st.State = u.Used(), string(u.State())
+		u := usageOf(*st)
+		st.UsedBytes, st.QuotaBytes, st.State = u.Used(), u.Limit(), string(u.State())
 	}
 	return list, nil
+}
+
+// usageOf rebuilds round 54's usage from the overview's numbers, so the
+// effective quota and the state follow the storage module's own rules.
+func usageOf(st operator.Storage) files.Usage {
+	u := files.Usage{QuotaBytes: st.OwnerQuotaBytes, FilesBytes: st.FilesBytes, DBBytes: st.DBBytes}
+	if st.PlanStorageBytes > 0 {
+		u.Plan = &files.Plan{StorageBytes: st.PlanStorageBytes}
+	}
+	return u
+}
+
+// SetPlan writes the plan's numbers into the workspace's storage (in that
+// workspace only), through the storage module, which keeps round 54's
+// states and warnings.
+func (c *customers) SetPlan(ctx context.Context, id ids.ID, plan *operator.Plan, confirmOverQuota bool) (operator.Customer, error) {
+	if _, err := c.Get(ctx, id); err != nil {
+		return operator.Customer{}, err
+	}
+	var p *files.Plan
+	if plan != nil {
+		p = &files.Plan{ID: plan.ID, Name: plan.Name, StorageBytes: plan.StorageBytes, CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes}
+	}
+	if _, err := c.files.SetPlan(db.WithWorkspace(ctx, id), id, p, confirmOverQuota); err != nil {
+		return operator.Customer{}, err
+	}
+	return c.Get(ctx, id)
+}
+
+// CheckPlan tells, from the overview's numbers, what the plan would do.
+func (c *customers) CheckPlan(ctx context.Context, id ids.ID, plan operator.Plan) (operator.PlanCheck, error) {
+	cu, err := c.Get(ctx, id)
+	if err != nil {
+		return operator.PlanCheck{}, err
+	}
+	u := usageOf(cu.Storage)
+	u.Plan = &files.Plan{StorageBytes: plan.StorageBytes}
+	lim := u.Limit()
+	return operator.PlanCheck{UsedBytes: u.Used(), NewQuotaBytes: lim, Fits: lim == 0 || u.Used() < lim, StateAfter: string(u.State())}, nil
 }
 
 func (c *customers) List(ctx context.Context) ([]operator.Customer, error) {

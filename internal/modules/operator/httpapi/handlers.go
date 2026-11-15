@@ -23,7 +23,10 @@ import (
 
 func init() {
 	httpx.RegisterStatus(http.StatusUnauthorized, operator.ErrBadCredentials, operator.ErrUnauthorized)
-	httpx.RegisterValidation(operator.ErrInvalidHandle)
+	httpx.RegisterValidation(operator.ErrInvalidHandle, operator.ErrInvalidPlan)
+	httpx.RegisterProblemType(http.StatusConflict, "plan_over_quota", operator.ErrPlanOverQuota)
+	httpx.RegisterProblemType(http.StatusConflict, "plan_archived", operator.ErrPlanArchived)
+	httpx.RegisterProblemType(http.StatusConflict, "plan_name_taken", operator.ErrPlanNameTaken)
 }
 
 // CookieName is the operator session cookie; HostCookieName over HTTPS
@@ -237,6 +240,98 @@ func Register(mux *http.ServeMux, svc *operator.Service, opt Options) {
 	mux.Handle("POST /api/v1/operator/workspaces/{workspaceId}/suspend", auth(suspend(true)))
 	mux.Handle("POST /api/v1/operator/workspaces/{workspaceId}/restore", auth(suspend(false)))
 
+	// Round 51b: plans.
+	mux.Handle("GET /api/v1/operator/plans", auth(func(w http.ResponseWriter, r *http.Request) {
+		list, err := svc.ListPlans(r.Context())
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := make([]apispec.Plan, 0, len(list))
+		for _, p := range list {
+			out = append(out, planToAPI(p))
+		}
+		httpx.JSON(w, http.StatusOK, apispec.PlanList{Plans: out})
+	}))
+
+	mux.Handle("POST /api/v1/operator/plans", auth(func(w http.ResponseWriter, r *http.Request) {
+		var in apispec.PlanRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		p, err := svc.CreatePlan(r.Context(), from(r).op, operator.Plan{Name: in.Name, StorageBytes: in.StorageBytes,
+			CPUCores: in.CpuCores, MemoryBytes: in.MemoryBytes}, remote(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, planToAPI(p))
+	}))
+
+	mux.Handle("PATCH /api/v1/operator/plans/{planId}", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, err := ids.Parse(r.PathValue("planId"))
+		if err != nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "planId must be a UUID"})
+			return
+		}
+		var in apispec.PlanPatchRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		p, err := svc.UpdatePlan(r.Context(), from(r).op, id, operator.PlanPatch{Name: in.Name, StorageBytes: in.StorageBytes,
+			CPUCores: in.CpuCores, MemoryBytes: in.MemoryBytes, Archived: in.Archived,
+			ConfirmOverQuota: in.ConfirmOverQuota != nil && *in.ConfirmOverQuota}, remote(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, planToAPI(p))
+	}))
+
+	mux.Handle("PUT /api/v1/operator/workspaces/{workspaceId}/plan", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := workspaceID(w, r)
+		if !ok {
+			return
+		}
+		var in apispec.AssignPlanRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		var planID *ids.ID
+		if in.PlanId != nil {
+			p := *in.PlanId
+			planID = &p
+		}
+		c, err := svc.AssignPlan(r.Context(), from(r).op, id, planID, in.ConfirmOverQuota != nil && *in.ConfirmOverQuota, remote(r))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, customerToAPI(c))
+	}))
+
+	mux.Handle("GET /api/v1/operator/workspaces/{workspaceId}/plan-check", auth(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := workspaceID(w, r)
+		if !ok {
+			return
+		}
+		planID, err := ids.Parse(r.URL.Query().Get("plan_id"))
+		if err != nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "plan_id must be a UUID"})
+			return
+		}
+		chk, err := svc.CheckPlan(r.Context(), id, planID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.PlanCheck{UsedBytes: chk.UsedBytes, NewQuotaBytes: chk.NewQuotaBytes, Fits: chk.Fits,
+			StateAfter: apispec.StorageState(chk.StateAfter)})
+	}))
+
 	mux.Handle("GET /api/v1/operator/audit", auth(func(w http.ResponseWriter, r *http.Request) {
 		var before time.Time
 		if v := r.URL.Query().Get("before"); v != "" {
@@ -326,8 +421,18 @@ func customerToAPI(c operator.Customer) apispec.Customer {
 	if c.SuspendedReason != "" {
 		out.SuspendedReason = &c.SuspendedReason
 	}
+	out.BreakGlassOpen = c.BreakGlassOpen
+	if c.PlanID != ids.Nil {
+		id := c.PlanID
+		out.PlanId = &id
+	}
 	if c.Invite != nil {
 		out.Invite = &apispec.CustomerInvite{CreatedAt: c.Invite.CreatedAt, ExpiresAt: c.Invite.ExpiresAt, Used: c.Invite.Used, Revoked: c.Invite.Revoked}
 	}
 	return out
+}
+
+func planToAPI(p operator.PlanWithUse) apispec.Plan {
+	return apispec.Plan{Id: p.ID, Name: p.Name, StorageBytes: p.StorageBytes, CpuCores: p.CPUCores, MemoryBytes: p.MemoryBytes,
+		Workspaces: p.Workspaces, ArchivedAt: p.ArchivedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}
 }
