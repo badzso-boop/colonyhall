@@ -41,6 +41,7 @@ import (
 //	colonyhall gitea-set -workspace W -url U     a workspace's own Gitea; token and webhook secret from stdin
 //	colonyhall secret-key [-id k1]               print a new COLONY_SECRET_KEYS entry
 //	colonyhall operator-create -handle H         a platform operator (multi-tenant mode); password from stdin, then the first TOTP code
+//	colonyhall operator-confirm -handle H -code C  activate an operator with the first TOTP code (when create had no terminal)
 //	colonyhall operator-reset-totp -handle H     a new TOTP secret (lost phone); sessions end, backup codes void
 //	colonyhall operator-disable -handle H        turn an operator off
 //	colonyhall rotate-secrets                    re-encrypt the stored secrets with the first COLONY_SECRET_KEYS key

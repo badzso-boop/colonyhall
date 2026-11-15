@@ -76,3 +76,31 @@ func TestOperatorCreateFromTheCommandLine(t *testing.T) {
 		t.Fatal("a disabled operator logged in")
 	}
 }
+
+// Without a terminal (docker compose exec -T) the code comes in a second step.
+func TestOperatorCreateThenConfirm(t *testing.T) {
+	k, _ := secretbox.NewKey("k1")
+	keys, _ := secretbox.Parse(k)
+	clk := clock.NewManual(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
+	app, err := server.New(context.Background(), server.Options{Store: "memory", Multitenant: true, BaseDomain: "example.test",
+		SecretKeys: keys, Clock: clk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Close)
+	var out bytes.Buffer
+	if err := runOperatorCmd(context.Background(), app.Operator, "operator-create", "ops", "", bufio.NewReader(strings.NewReader("a-long-enough-password\n")), &out); err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`secret: (\S+)`).FindStringSubmatch(out.String())
+	if m == nil || !strings.Contains(out.String(), "operator-confirm -handle ops") {
+		t.Fatalf("output: %s", out.String())
+	}
+	out.Reset()
+	if err := runOperatorCmd(context.Background(), app.Operator, "operator-confirm", "ops", "", bufio.NewReader(strings.NewReader(operator.CodeAt(m[1], clk.Now())+"\n")), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "@ops is active") {
+		t.Fatalf("confirm: %s", out.String())
+	}
+}

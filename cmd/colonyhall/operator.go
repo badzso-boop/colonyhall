@@ -47,6 +47,7 @@ func operatorCmd(cmd string, args []string, stdin io.Reader, out io.Writer) erro
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	handle := fs.String("handle", "", "the operator's handle")
 	name := fs.String("name", "", "the operator's display name (operator-create; default: the handle)")
+	code := fs.String("code", "", "the authenticator app's 6-digit code (operator-confirm)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -67,7 +68,11 @@ func operatorCmd(cmd string, args []string, stdin io.Reader, out io.Writer) erro
 		return err
 	}
 	defer app.Close()
-	return runOperatorCmd(context.Background(), app.Operator, cmd, *handle, *name, bufio.NewReader(stdin), out)
+	in := stdin
+	if *code != "" {
+		in = strings.NewReader(*code + "\n")
+	}
+	return runOperatorCmd(context.Background(), app.Operator, cmd, *handle, *name, bufio.NewReader(in), out)
 }
 
 func runOperatorCmd(ctx context.Context, svc *operator.Service, cmd, handle, name string, in *bufio.Reader, out io.Writer) error {
@@ -78,17 +83,10 @@ func runOperatorCmd(ctx context.Context, svc *operator.Service, cmd, handle, nam
 		}
 		return strings.TrimRight(s, "\r\n"), nil
 	}
-	confirm := func(en operator.Enrollment) error {
-		if _, err := fmt.Fprintf(out, "Add this to the authenticator app (shown once):\n  secret: %s\n  %s\nType the 6-digit code it shows: ", en.Secret, en.URI); err != nil {
-			return err
-		}
-		code, err := line()
-		if err != nil {
-			return err
-		}
+	activate := func(code string) error {
 		codes, err := svc.ConfirmTOTP(ctx, handle, code)
 		if err != nil {
-			return fmt.Errorf("%w (run %s again, or operator-reset-totp)", err, cmd)
+			return fmt.Errorf("%w (try operator-confirm again with a fresh code, or operator-reset-totp)", err)
 		}
 		var b strings.Builder
 		fmt.Fprintf(&b, "\n@%s is active. Backup codes (each works once; keep them offline, shown once):\n", handle)
@@ -97,6 +95,21 @@ func runOperatorCmd(ctx context.Context, svc *operator.Service, cmd, handle, nam
 		}
 		_, err = io.WriteString(out, b.String())
 		return err
+	}
+	confirm := func(en operator.Enrollment) error {
+		if _, err := fmt.Fprintf(out, "Add this to the authenticator app (shown once):\n  secret: %s\n  %s\nType the 6-digit code it shows: ", en.Secret, en.URI); err != nil {
+			return err
+		}
+		code, err := line()
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(code) == "" {
+			// No terminal (a pipe, docker exec -T): confirm in a second step.
+			_, err := fmt.Fprintf(out, "\nNo code read. Confirm with: colonyhall operator-confirm -handle %s -code <6 digits>\n", handle)
+			return err
+		}
+		return activate(code)
 	}
 	switch cmd {
 	case "operator-create":
@@ -115,6 +128,12 @@ func runOperatorCmd(ctx context.Context, svc *operator.Service, cmd, handle, nam
 			return err
 		}
 		return confirm(en)
+	case "operator-confirm":
+		code, err := line()
+		if err != nil {
+			return err
+		}
+		return activate(code)
 	case "operator-disable":
 		if err := svc.Disable(ctx, handle); err != nil {
 			return err

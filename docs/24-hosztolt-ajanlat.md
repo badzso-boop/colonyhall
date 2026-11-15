@@ -78,8 +78,8 @@ CREATE POLICY operator ON operator USING (colony_operator() OR colony_system())
 
 - `db.WithOperator(ctx)` állítja be (és a munkaterületet meg a rendszermódot kikapcsolja). Csak az `operator` modul `httpapi`-ja és a `cmd/colonyhall operator-*` parancsok hívhatják (depguard-szabály, mint a `system-mode-is-background-only`).
 - **Operátori hatókörben a munkaterületi táblák üresek** (a `tenant` szabály nem ismeri az operátort). Programhiba esetén sem szivárog tartalom az operátori felületre.
-- Az áttekintő számait egy szűk függvény adja (`colony_operator_overview()`, a 45. kör belépés előtti függvényeinek mintájára): csak akkor fut, ha `colony_operator()` igaz (különben hibát dob), és **csak számokat és állapotot** ad vissza munkaterületenként.
-- Belépés előtti keresés: a munkamenet-token → operátor a saját függvényén át (`colony_operator_session(hash)`), mert a munkamenet hitelesítése előtt még nincs hatókör.
+- Az áttekintő számait **a kompozíciós gyökér** adja (`operator.Customers` port, `internal/server/customers.go`): munkaterületenként szűkített hatókörben, a modulok API-ján át olvas, és csak számokat és fiókadatot ad vissza. *(Megvalósításkor módosítva: a tervezett `colony_operator_overview()` SQL-függvény a memóriás tárban nem működött volna, és a modulok határán is átnyúlt volna.)*
+- A munkamenet keresése nem kér külön függvényt: az operátori szolgáltatás minden hívása eleve operátori hatókörben fut (az `admin.` hoston más nem érhető el), és a munkamenet-tábla ott látszik. *(Megvalósításkor módosítva.)*
 
 ### 3.1 Az `InTx` hatókör-csapdája (51a)
 
@@ -89,7 +89,7 @@ Ma, ha egy futó tranzakción belül `db.WithWorkspace` más hatókört kér, a 
 
 ### 4.1 Fiók, belépés, munkamenet
 
-- **Az első (és ebben a körben minden) operátor parancssorból:** `colonyhall operator-create -handle ops`. A jelszó a stdin-ről jön; a parancs kiírja a TOTP-titkot és az `otpauth://` címet (a hitelesítő alkalmazásba), bekéri az első kódot, és csak helyes kód után aktiválja a fiókot; végül egyszer kiírja a 10 tartalék kódot. `operator-reset-totp` és `operator-disable` ugyanígy, parancssorból (a géphez fizikai hozzáférés a végső helyreállítás).
+- **Az első (és ebben a körben minden) operátor parancssorból:** `colonyhall operator-create -handle ops` (terminál nélkül, pl. `docker compose exec -T`, az első kód külön lépésben: `colonyhall operator-confirm -handle ops -code …`). A jelszó a stdin-ről jön; a parancs kiírja a TOTP-titkot és az `otpauth://` címet (a hitelesítő alkalmazásba), bekéri az első kódot, és csak helyes kód után aktiválja a fiókot; végül egyszer kiírja a 10 tartalék kódot. `operator-reset-totp` és `operator-disable` ugyanígy, parancssorból (a géphez fizikai hozzáférés a végső helyreállítás).
 - **Belépés egy lépésben:** `POST /api/v1/operator/auth/login {handle, password, code}`, ahol `code` a 6 jegyű TOTP vagy egy tartalék kód. Nincs félig belépett állapot, amit külön kellene kezelni. Hibánál egy egységes „hibás adatok” válasz (nem árulja el, melyik rész volt rossz), a korlátozó számol.
 - **TOTP:** RFC 6238, SHA-1, 6 jegy, 30 mp, ±1 lépés eltérés; egy lépés kódja csak egyszer fogadható el (`totp_last_step`). Saját, kb. 40 soros megvalósítás a standard könyvtárral, az RFC tesztvektoraival (nincs új függőség). A tartalék kód egyszer használható; elhasználásakor `operator_audit` bejegyzés, és a felület mutatja, hány maradt.
 - **Munkamenet:** `__Host-colony_operator` süti (HTTPS-en; HTTP-n `colony_operator`), csak az `admin.<domain>` címre, `SameSite=Strict`, `HttpOnly`. **8 óra abszolút, 30 perc tétlenség** után lejár. CSRF ugyanúgy, mint az ügyfél-PWA-ban (`X-CSRF-Token`). Az ügyfél sütije az admin címen, az operátoré az ügyfél címén nem érvényes (más név, más host).
@@ -99,14 +99,14 @@ Ma, ha egy futó tranzakción belül `db.WithWorkspace` más hatókört kér, a 
 
 - `POST /operator/workspaces {name, slug, plan_id?}` → a munkaterület (`active`, tulajdonos nélkül) + egy meghívó: `{invite_url: "https://acme.<domain>/app/invite#<token>", expires_at}`. A token 32 bájt véletlen, csak a hash-e tárolódik; a link **egyszer** látszik (az operátor adja át az ügyfélnek; e-mail még nincs). A token a `#` után van, így nem kerül a szervernaplókba és a `Referer`-be.
 - `POST /operator/workspaces/{id}/invite`: új link, a régi visszavonva (ha az első elveszett vagy lejárt). Csak amíg a munkaterületnek nincs tulajdonosa.
-- Az ügyfél oldalán (`acme.<domain>`): `GET /api/v1/invites/{token}` → `{workspace_name, expires_at}`; `POST /api/v1/invites/{token}/accept {handle, display_name, password}` → létrejön az `owner`, belép (munkamenet-süti), a meghívó `used_at`-et kap. Más aldomainen a token 404. Lejárt, felhasznált vagy visszavont token egységesen 410. A korlátozó a meghívótokenekre is számol (találgatás ellen).
+- Az ügyfél oldalán (`acme.<domain>`): `POST /api/v1/invites/lookup {token}` → `{workspace_name, expires_at}`; `POST /api/v1/invites/accept {token, handle, display_name, password}` → létrejön az `owner`, belép (munkamenet-süti), a meghívó `used_at`-et kap. A token a törzsben utazik, útvonalban soha (hozzáférési naplók). Más aldomainen, lejárt, felhasznált vagy visszavont token egységesen 410. *(Megvalósításkor módosítva: a token 256 bites véletlen, ezért a meghívókra nem került korlátozó.)*
 - A `colonyhall bootstrap` megmarad az önálló telepítésnek; többbérlős módban új munkaterület csak az operátortól jön.
 
 ### 4.3 Felfüggesztés és visszaállítás
 
 - `POST /operator/workspaces/{id}/suspend {reason}`, `POST …/restore`. Az indoklás csak az operátori naplóba és a `workspace.suspended_reason`-be kerül.
 - Felfüggesztve az API, az MCP, a WebSocket (`/ws/ui`, `/ws/host`), az őr (`/api/v1/host/*`, párosítás) ugyanazt a 404-et kapja, mint egy ismeretlen aldomain (a 45. kör `tenantHandler`-e ezt ma is tudja). **A böngésző** (HTML-t kérő `GET`, pl. `/app/…`) egy „A munkaterület szünetel, keresd az üzemeltetőt” oldalt kap (magyarul és angolul, az `Accept-Language` szerint; a szerver beágyazott, statikus oldala, mert a PWA API-hívásai ilyenkor 404-et kapnak). Az indoklás nem jelenik meg rajta. Új: a felfüggesztés eseménye (`workspace.suspended`) **lezárja a nyitott WebSocket-kapcsolatokat** (böngészők és őrök), mert azok a kérésenkénti ellenőrzést már nem futják újra.
-- A háttérmunka (ütemező, kérdések lejárata, naptárfrissítés, kézbesítés) a felfüggesztett munkaterületet kihagyja; az eseményfogyasztók az eseményeket feldolgozzák (az adat konzisztens marad), de agentnek nem kézbesítenek. Az adat megmarad, a visszaállítás után minden folytatódik.
+- Az ütemezett üzenetek várnak (az ütemező a felfüggesztett munkaterületeket kihagyja, így azok sorai a többit sem tartják fel). Az eseményfogyasztók a már bent lévő eseményeket feldolgozzák (az adat konzisztens marad); agenthez semmi nem jut el, mert az őr minden kérése elutasítva. A kérdések lejárata és a naptárfrissítés fut tovább (ártalmatlan, ügyfélnek nem látszik). Az adat megmarad, a visszaállítás után minden folytatódik. *(Megvalósításkor szűkítve: csak az ütemező hagyja ki.)* A böngésző oldala 403-as státusszal jön.
 - Az ügyfél gépén futó őr a 404-re leállítja az új futásokat (mint a visszavont géptokennél); a már futó futás befejeződik, de nem tud írni.
 
 ### 4.4 Fejlesztői mód
@@ -243,6 +243,8 @@ Ez a bérelt szerver kiválasztása után dől el; a homelab próbája külön l
 | 11 | Ügyfél törlése | Külön körben, **de az első valódi ügyfél előtt** (GDPR) |
 
 ## 16. Nyitott tételek
+
+- **51a kész (2026-11-15):** operátor, TOTP, munkamenet, ügyfél létrehozása meghívóval, felfüggesztés, `COLONY_ENV` és a fejlesztői mód tiltása élesben, áttekintő, adatbázis-kártya, operátori napló, `InTx`. Következik: **51b** (vészhozzáférés, csomagok).
 
 - **Ügyfél törlése (az első valódi ügyfél előtt kötelező, GDPR):** a `deleting` állapot megvan; kell hozzá az adatok, a fájlok és a mentésekből való kikerülés folyamata, az export a tulajdonosnak (22. terv 12. pont), és az adatfeldolgozási szerződés szerinti határidők (46. kör).
 - **A hosztolt őr elkülönítése** (11. pont): a bérelt szerver kiválasztása után.
