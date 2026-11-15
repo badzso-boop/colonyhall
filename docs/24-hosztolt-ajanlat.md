@@ -1,6 +1,6 @@
 # A hosztolt ajánlat: operátor, csomagok, titkosított kulcsok, projektek (51. kör): terv
 
-> Állapot: **terv a tervezési kapuhoz, 2026-11-15.** A 22. dokumentum (`22-tobbberlos-terv.md`) 1. fázisa (operátor) és 3. fázisának tárhelyrésze (csomagok), az 54. kör tárhelyére építve. A már eldöntött kérdéseket a 0. pont rögzíti; a még nyitottakat a 15. pont sorolja fel, mindegyiknél javaslattal.
+> Állapot: **elfogadott terv, 2026-11-15** (a kapu döntései a 15. pontban). A 22. dokumentum (`22-tobbberlos-terv.md`) 1. fázisa (operátor) és 3. fázisának tárhelyrésze (csomagok), az 54. kör tárhelyére építve. Az 51. kör az **51a** és **51b** részből áll; a titkok és a projektek (2.3, 9. pont) a hosztolt őrrel jönnek.
 
 ## 0. Ami már eldőlt (2026-11-15)
 
@@ -11,7 +11,7 @@
 | 3 | Hosztolt őr | **Később.** Az elkülönítés módja (Linux-felhasználó vagy konténer, lemezkvóta, hálózat) nyitott; itt csak a követelmények és a lehetőségek (11. pont) |
 | 4 | AI a hosztolt őrön | Csak API-kulcs, titkosítva tárolva, csak az adott munkaterület őre kapja meg; soha nem kerül chatbe vagy naplóba |
 | 5 | Projektek | GitHub-cím + kulcs (deploy key vagy hozzáférési token), titkosítva, soha nem látszik újra egészben; a tulajdonos és az adminok vehetnek fel és törölhetnek |
-| 6 | A megvalósítás bontása | Három rész, mindegyik külön commitsorozat, mindegyik után `make ci` és megállás átnézésre: **51a** operátor, **51b** vészhozzáférés és csomagok, **51c** kulcsok és projektek (vagy a hosztolt őrrel, lásd 12. pont) |
+| 6 | A megvalósítás bontása | Két rész, mindegyik külön commitsorozat, mindegyik után `make ci`, jelentés és megállás átnézésre: **51a** operátor, **51b** vészhozzáférés és csomagok. A kulcsok és a projektek a hosztolt őrrel jönnek (15. pont, 1.) |
 
 ## 1. Áttekintés
 
@@ -55,7 +55,7 @@ A belépési próbálkozások a meglévő korlátozót használják (40. kör) �
 
 A `workspace` bővítése: `plan_id` (NULL = nincs csomag: csak a tulajdonos 54. körös kerete él, mint ma).
 
-### 2.3 Titkok és projektek (51c, vagy a hosztolt őrrel)
+### 2.3 Titkok és projektek (a hosztolt őrrel)
 
 | Tábla | Oszlopok | Szabály |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ Ma, ha egy futó tranzakción belül `db.WithWorkspace` más hatókört kér, a 
 ### 4.3 Felfüggesztés és visszaállítás
 
 - `POST /operator/workspaces/{id}/suspend {reason}`, `POST …/restore`. Az indoklás csak az operátori naplóba és a `workspace.suspended_reason`-be kerül.
-- Felfüggesztve **minden** kérés (böngésző, REST-token, MCP, `/ws/ui`, `/ws/host`, `/api/v1/host/*`, párosítás) ugyanazt a 404-et kapja, mint egy ismeretlen aldomain (a 45. kör `tenantHandler`-e ezt ma is tudja). Új: a felfüggesztés eseménye (`workspace.suspended`) **lezárja a nyitott WebSocket-kapcsolatokat** (böngészők és őrök), mert azok a kérésenkénti ellenőrzést már nem futják újra.
+- Felfüggesztve az API, az MCP, a WebSocket (`/ws/ui`, `/ws/host`), az őr (`/api/v1/host/*`, párosítás) ugyanazt a 404-et kapja, mint egy ismeretlen aldomain (a 45. kör `tenantHandler`-e ezt ma is tudja). **A böngésző** (HTML-t kérő `GET`, pl. `/app/…`) egy „A munkaterület szünetel, keresd az üzemeltetőt” oldalt kap (magyarul és angolul, az `Accept-Language` szerint; a szerver beágyazott, statikus oldala, mert a PWA API-hívásai ilyenkor 404-et kapnak). Az indoklás nem jelenik meg rajta. Új: a felfüggesztés eseménye (`workspace.suspended`) **lezárja a nyitott WebSocket-kapcsolatokat** (böngészők és őrök), mert azok a kérésenkénti ellenőrzést már nem futják újra.
 - A háttérmunka (ütemező, kérdések lejárata, naptárfrissítés, kézbesítés) a felfüggesztett munkaterületet kihagyja; az eseményfogyasztók az eseményeket feldolgozzák (az adat konzisztens marad), de agentnek nem kézbesítenek. Az adat megmarad, a visszaállítás után minden folytatódik.
 - Az ügyfél gépén futó őr a 404-re leállítja az új futásokat (mint a visszavont géptokennél); a már futó futás befejeződik, de nem tud írni.
 
@@ -142,7 +142,8 @@ Már 51a-ban kell (a TOTP-titkokhoz), és ugyanez szolgálja majd a 2.3 titkait.
 
 ## 6. Vészhozzáférés (51b)
 
-- `POST /operator/workspaces/{id}/break-glass {reason (min. 20 karakter), minutes (≤ 240)}` → `break_glass` sor + egy **60 mp-es, egyszer használatos átadó link** (`https://acme.<domain>/app/break-glass#<token>`). Az ügyfél címén a link egy **csak olvasó munkamenetet** nyit egy munkaterületenkénti rendszer-actorral (`colonyhall-operator`, `EnsureSystemActor`, mint az 54. kör `colonyhall-storage`-e, jelszó és token nélkül), aki annyit lát, amennyit a tulajdonos.
+- `POST /operator/workspaces/{id}/break-glass {reason (min. 20 karakter), minutes (≤ 240)}` → `break_glass` sor + egy **60 mp-es, egyszer használatos átadó link** (`https://acme.<domain>/app/break-glass#<token>`). Az ügyfél címén a link egy **csak olvasó munkamenetet** nyit egy munkaterületenkénti rendszer-actorral (`colonyhall-operator`, `EnsureSystemActor`, mint az 54. kör `colonyhall-storage`-e, jelszó és token nélkül).
+- **Mit lát (döntés, 2026-11-15):** a nyilvános csatornákat és szálaikat, az agenteket, a gépeket, a futásokat és a beállításokat. **DM-eket és privát csatornákat nem**: sem az üzeneteiket, sem a fájljaikat, sem a keresési találataikat. A munkamenet a jogosultság-ellenőrzésben külön jelölést kap (nem elég a szerepkör, mert az admin a privát csatornákat is látja). Teszt: vészhozzáférési munkamenettel egy DM és egy privát csatorna üzenetei, fájljai és keresési találatai nem érhetők el. Ha később kell, bővítjük.
 - **Csak olvasás, két rétegben:**
   1. a köztes réteg minden nem `GET`/`HEAD` kérést (a kilépés kivételével) és minden WebSocket-küldést 403-mal utasít el (`type: read_only_access`);
   2. a munkamenet kontextusa `db.ReadOnly`-t kap, és a pool kapcsolatkiadáskor `default_transaction_read_only = on`-t állít: ha egy `GET` mégis írna (pl. olvasottság), a Postgres utasítja el.
@@ -167,7 +168,7 @@ Már 51a-ban kell (a TOTP-titkokhoz), és ugyanez szolgálja majd a 2.3 titkait.
 - **Kemény korlát** a lemezen is (11. pont), mert a jelentés késhet. Javaslat: a projektek kemény korlátja = a tényleges keret − (fájlok + adatbázis) a kiosztáskor, óránként frissítve, és sosem kisebb a már elfoglaltnál (különben a git félbeszakadt írásokkal sérülne); így a teli állapot a szokásos úton (szünet) áll be, a kemény korlát csak a túlfutást fogja meg.
 - Saját gépen futó őrnél a projektek nem számítanak bele (mint ma).
 
-## 9. Projektek és titkok: API és képernyők (51c vagy a hosztolt őrrel)
+## 9. Projektek és titkok: API és képernyők (a hosztolt őrrel)
 
 - **API (tulajdonos és adminok, emberek):**
   - `GET /workspace/secrets` (csak metaadat), `POST /workspace/secrets {kind, name, provider, value}` (a válaszban nincs `value`), `PUT /workspace/secrets/{id} {value}` (csere = forgatás), `DELETE /workspace/secrets/{id}`.
@@ -178,7 +179,7 @@ Már 51a-ban kell (a TOTP-titkokhoz), és ugyanez szolgálja majd a 2.3 titkait.
 
 ## 10. Képernyők (51a, 51b)
 
-- **Operátori PWA az `admin.<domain>`-en:** ugyanaz a csomag (`web/`), új funkciómodul `features/operator`; az `App` a hostnévből dönt (`admin.` → operátori útvonalak és keret, minden más → a mai). Oldalak: **Belépés** (név, jelszó, kód egy űrlapon), **Ügyfelek** (táblázat a 4.5 adataival; állapot- és tárhelyjelölés; „Új ügyfél” párbeszéd → a meghívólink másolható, egyszer), **Ügyfél részletei** (adatok, csomag + váltás az ellenőrzéssel, felfüggesztés/visszaállítás indoklással, új meghívó, 51b-től vészhozzáférés indoklással és időtartammal), **Csomagok** (szerkeszthető táblázat), **Rendszer** (az 50. kör adatbázis-kártyája), **Napló**, **Fiókom** (tartalék kódok száma, újragenerálás jelszóval + kóddal).
+- **Operátori PWA az `admin.<domain>`-en:** ugyanaz a csomag (`web/`), új funkciómodul `features/operator`; az `App` a hostnévből dönt (`admin.` → operátori útvonalak és keret, minden más → a mai). Az operátori oldalak **külön, lustán töltött darabban** vannak (`React.lazy` + dinamikus `import()`), így az ügyfelek felülete nem tölti be őket. Oldalak: **Belépés** (név, jelszó, kód egy űrlapon), **Ügyfelek** (táblázat a 4.5 adataival; állapot- és tárhelyjelölés; „Új ügyfél” párbeszéd → a meghívólink másolható, egyszer), **Ügyfél részletei** (adatok, csomag + váltás az ellenőrzéssel, felfüggesztés/visszaállítás indoklással, új meghívó, 51b-től vészhozzáférés indoklással és időtartammal), **Csomagok** (szerkeszthető táblázat), **Rendszer** (az 50. kör adatbázis-kártyája), **Napló**, **Fiókom** (tartalék kódok száma, újragenerálás jelszóval + kóddal).
 - **Ügyfél-PWA:** **Meghívó elfogadása** (`/app/invite`: munkaterület neve, név, felhasználónév, jelszó kétszer); a vészhozzáférés alatt felül egy nem zárható sáv („Üzemeltetői hozzáférés, csak olvasás, lejár: 14:30”), a szerkesztők letiltva; a tulajdonosnál értesítés és az auditban a bejegyzések; Beállítások → Tárhely kártyán a csomag.
 - Minden szöveg i18n-kulcs (hu, en), a `docs/08` rétegszabályai szerint.
 
@@ -201,7 +202,7 @@ Ez a bérelt szerver kiválasztása után dől el; a homelab próbája külön l
 | --- | --- | --- |
 | **51a** | `secretbox` és kulcskezelés; operátori táblák és hatókör (`colony.operator`, depguard); `operator-create`, `operator-reset-totp`, `operator-disable`; belépés jelszó + TOTP + tartalék kód, munkamenet; `admin.` útválasztás; ügyfél létrehozása meghívóval, meghívó elfogadása; felfüggesztés és visszaállítás (WebSocket-bontással, háttérmunka kihagyásával); `COLONY_ENV` és a fejlesztői mód tiltása élesben, sáv; operátori áttekintés és adatbázis-kártya; operátori napló; az `InTx` hatókör-csapdája; operátori PWA (belépés, ügyfelek, részletek, rendszer, napló, fiókom) és a meghívó oldala | A meghívóval új ügyfél be tud lépni; a 14. pont 51a-tesztjei zöldek; `make ci` |
 | **51b** | Vészhozzáférés (átadó link, csak olvasó munkamenet két rétegben, ügyfél-audit minden olvasásról, értesítés, lejárat, tulajdonosi zárás), fejlesztői módú megnyitás; `plan` tábla és operátori szerkesztése, hozzárendelés, tényleges keret, a tulajdonosi keret felső határa, kisebb csomag ellenőrzése és megerősítése; a csomag az ügyfél Beállításaiban | A vészhozzáférés látszik az ügyfél auditjában és értesítései között; a csomag kikényszeríti a tárhelyet; `make ci` |
-| **51c** | **Javaslat: a hosztolt őrrel együtt** (15. pont, 1. kérdés). Ha mégis most: `workspace_secret`, `workspace_project`, a 9. pont API-ja és képernyői, a deploy key generálása; a visszafejtő út nélkül | — |
+| Később | **Titkok és projektek** (2.3, 9. pont): a hosztolt őrrel együtt (15. pont, 1.) | — |
 | Hosztolt őr | Elkülönítés (11. pont), lemezkorlát, `projects_bytes`, a titkok kézbesítése a hosztolt gépnek, klónozás és worktree-k, a CPU/memória kikényszerítése | Később, a szerver kiválasztása után |
 
 ## 13. Migráció a meglévő munkaterületekre
@@ -225,16 +226,26 @@ Ez a bérelt szerver kiválasztása után dől el; a homelab próbája külön l
 - **PWA:** Vitest a funkciómodulra; az architektúra-teszt az új `features/operator`-ra is fut; képernyőképek memóriás szerverrel, kitalált adatokkal.
 - Minden szabályhoz egy teszt, ami nélküle elbukik.
 
-## 15. Döntések Norbinak (javaslattal)
+## 15. A kapu döntései (Norbi, 2026-11-15)
 
-1. **51c most vagy a hosztolt őrrel?** *Javaslat: a hosztolt őrrel.* Most semmi nem használná a kulcsokat és a projekteket: ügyfelek GitHub-kulcsait és API-kulcsait tárolnánk felhasználás nélkül (kockázat haszon nélkül), a kézbesítés és a klónozás az elkülönítés módjától függ, és végponttól végpontig nem tesztelhető. A titkosítás alapja (`secretbox`, kulcsforgatás) 51a-ban úgyis elkészül, így a hosztolt őr körében csak a táblák, az API és a képernyők kellenek. Ebben az esetben 51b után a kör kész.
-2. **Kisebb csomag a használat alá:** *javaslat: engedni kifejezett megerősítéssel, a munkaterület teli lesz* (7. pont); a másik lehetőség az elutasítás.
-3. **`COLONY_ENV` alapértéke:** *javaslat: a fejlesztői mód csak `COLONY_ENV=development` mellett engedett* (hiányzó érték = éles, biztonságos alapérték); a telepítő `production`-t ír.
-4. **Mit lát a vészhozzáférés?** *Javaslat: amit a tulajdonos (DM-ek is), csak olvasva, minden olvasás az ügyfél auditjában.* Szűkebb lehetőség: DM-ek és privát csatornák nélkül; ez a hibakeresést nehezíti, de kevesebbet mutat.
-5. **A tulajdonos lezárhatja-e a vészhozzáférést?** *Javaslat: igen* (az ügyfél adata, az ő döntése; az operátor újranyithatja, és az ismét látszik).
-6. **Felfüggesztett ügyfél válasza:** *javaslat: ugyanaz a 404, mint egy ismeretlen aldomainnél* (nem árulja el, hogy létezik); a másik lehetőség egy „A munkaterület szünetel, keresd az üzemeltetőt” oldal a böngészőnek.
-7. **További operátorok:** *javaslat: ebben a körben csak parancssorból* (`operator-create`); operátori meghívó a felületen később, ha egynél több ember üzemeltet.
-8. **Operátori felület:** *javaslat: ugyanaz a PWA-csomag az `admin.<domain>`-en, a hostnévből választott útvonalakkal* (egy build, közös design system; az operátori kód nem titok).
-9. **Projektkulcs (a hosztolt őr körére):** *javaslat: alapból általunk generált deploy key (a felület a nyilvános kulcsot mutatja), másodikként egy repóra szűkített token* (9. pont).
-10. **A hosztolt őr lemezkorlátja (később):** *javaslat: a tényleges keret mínusz a már elfoglalt egyéb tárhely, óránként frissítve* (8. pont), a fix rész helyett.
-11. **Ügyfél törlése:** a `deleting` állapot megvan, de a törlés (adatok, fájlok, mentés) *javaslat szerint külön kör* (GDPR-folyamattal, a 46. kör szerint).
+| # | Kérdés | Döntés |
+| --- | --- | --- |
+| 1 | Titkok és projektek | **A hosztolt őrrel együtt.** A kör 51b-vel kész. A titkosítás alapja (`secretbox`, kulcsforgatás) 51a-ban elkészül a TOTP-titkokhoz |
+| 2 | Kisebb csomag a használat alá | Kifejezett megerősítéssel engedve; a munkaterület megtelik, az agentek szünetelnek; megerősítés nélkül 409 (7. pont) |
+| 3 | `COLONY_ENV` | A fejlesztői mód csak `COLONY_ENV=development` mellett indul; hiányzó változó = éles; a telepítő `production`-t ír |
+| 4 | Mit lát a vészhozzáférés | Nyilvános csatornák, szálak, agentek, gépek, futások, beállítások, csak olvasva; **DM-ek és privát csatornák nélkül** (6. pont), teszttel |
+| 5 | A tulajdonos lezárhatja | Igen |
+| 6 | Felfüggesztett ügyfél | A böngésző „A munkaterület szünetel, keresd az üzemeltetőt” oldalt kap (hu, en); az API, az MCP, a WebSocket és az őr ugyanazt a 404-et, mint egy ismeretlen aldomain (4.3) |
+| 7 | További operátorok | Ebben a körben csak parancssorból |
+| 8 | Operátori felület | Ugyanaz a PWA az `admin.<domain>`-en, hostnév szerinti útvonalakkal; az operátori oldalak külön, lustán töltött darabban |
+| 9 | Projektkulcs (hosztolt őr) | Alapból általunk generált deploy key, a felület csak a nyilvános kulcsot mutatja; második út egy repóra szűkített token |
+| 10 | Lemezkorlát (hosztolt őr) | A tényleges keret mínusz a már elfoglalt egyéb tárhely, óránként frissítve (8. pont) |
+| 11 | Ügyfél törlése | Külön körben, **de az első valódi ügyfél előtt** (GDPR) |
+
+## 16. Nyitott tételek
+
+- **Ügyfél törlése (az első valódi ügyfél előtt kötelező, GDPR):** a `deleting` állapot megvan; kell hozzá az adatok, a fájlok és a mentésekből való kikerülés folyamata, az export a tulajdonosnak (22. terv 12. pont), és az adatfeldolgozási szerződés szerinti határidők (46. kör).
+- **A hosztolt őr elkülönítése** (11. pont): a bérelt szerver kiválasztása után.
+- **Titkok és projektek** (2.3, 5., 9. pont): a hosztolt őr körében.
+- **Operátori meghívó a felületen** (több operátor): később.
+- **A vészhozzáférés bővítése** DM-ekre és privát csatornákra: csak ha szükség lesz rá.
