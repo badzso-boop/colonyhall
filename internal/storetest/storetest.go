@@ -34,6 +34,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/lease"
 	"colonyhall/internal/modules/notes"
+	"colonyhall/internal/modules/operator"
 	"colonyhall/internal/modules/planner"
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
@@ -78,6 +79,7 @@ type Backend struct {
 	Drafts       draft.Store
 	Saved        saved.Store
 	Activity     activity.Store
+	Operator     operator.Store
 	// System puts a context in system mode (the background loops' scope);
 	// only test code may import db/system, so the caller supplies it.
 	System func(context.Context) context.Context
@@ -120,6 +122,9 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("saved", func(t *testing.T) { testSaved(t, newBackend(t)) })
 	t.Run("activity", func(t *testing.T) { testActivity(t, newBackend(t)) })
 	t.Run("emoji usage", func(t *testing.T) { testEmojiUsage(t, newBackend(t)) })
+	t.Run("operator", func(t *testing.T) { testOperator(t, newBackend(t)) })
+	t.Run("invites and suspension", func(t *testing.T) { testInvitesAndSuspension(t, newBackend(t)) })
+	t.Run("break-glass", func(t *testing.T) { testBreakGlass(t, newBackend(t)) })
 }
 
 var (
@@ -1141,12 +1146,19 @@ func testSchedule(t *testing.T, b Backend) {
 	other := sc
 	other.ID, other.NextRunAt, other.ThreadRootID = gen.New(), t0.Add(3*time.Hour), gen.New()
 	must(t, st.Create(ctx, other))
-	if due, _ := st.Due(ctx, t0, 10); len(due) != 0 {
+	if due, _ := st.Due(ctx, t0, 10, nil); len(due) != 0 {
 		t.Fatalf("nothing due yet: %+v", due)
 	}
-	due, err := st.Due(ctx, t0.Add(time.Hour), 10)
+	due, err := st.Due(ctx, t0.Add(time.Hour), 10, nil)
 	if err != nil || len(due) != 1 || due[0].ID != sc.ID {
 		t.Fatalf("Due: %+v %v", due, err)
+	}
+	// Round 51: a suspended workspace's schedules wait.
+	if due, err := st.Due(ctx, t0.Add(time.Hour), 10, []ids.ID{f.ws.ID}); err != nil || len(due) != 0 {
+		t.Fatalf("a skipped workspace's schedule is due: %+v %v", due, err)
+	}
+	if due, _ := st.Due(ctx, t0.Add(time.Hour), 10, []ids.ID{gen.New()}); len(due) != 1 {
+		t.Fatalf("another workspace's skip hid it: %+v", due)
 	}
 	next := at.Add(24 * time.Hour)
 	if ok, err := st.Claim(ctx, sc.ID, at, next, schedule.StateActive, at); err != nil || !ok {
@@ -1162,7 +1174,7 @@ func testSchedule(t *testing.T, b Backend) {
 		t.Fatalf("after claim: %+v %v", got, err)
 	}
 	must(t, st.SetState(ctx, other.ID, schedule.StateCanceled))
-	if due, _ := st.Due(ctx, t0.Add(10*time.Hour), 10); len(due) != 0 {
+	if due, _ := st.Due(ctx, t0.Add(10*time.Hour), 10, nil); len(due) != 0 {
 		t.Fatalf("canceled and future schedules are not due: %+v", due)
 	}
 	list, err := st.List(ctx, f.ws.ID)

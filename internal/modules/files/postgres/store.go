@@ -426,17 +426,28 @@ func (s *Store) UsageOf(ctx context.Context, workspaceID ids.ID) (files.Usage, e
 
 // SaveUsage writes the storage row.
 func (s *Store) SaveUsage(ctx context.Context, u files.Usage) error {
-	return s.q(ctx).SaveWorkspaceStorage(ctx, sqlcgen.SaveWorkspaceStorageParams{
+	p := sqlcgen.SaveWorkspaceStorageParams{
 		WorkspaceID: uuid.UUID(u.WorkspaceID), QuotaBytes: u.QuotaBytes, FilesBytes: u.FilesBytes,
 		DbBytes: u.DBBytes, ChatBytes: u.ChatBytes, DbMeasuredAt: u.DBMeasuredAt,
 		WarnedLevel: int16(u.WarnedLevel), UpdatedAt: u.UpdatedAt,
-	})
+	}
+	if u.Plan != nil {
+		id := uuid.UUID(u.Plan.ID)
+		p.PlanID, p.PlanName, p.PlanStorageBytes, p.PlanCpuCores, p.PlanMemoryBytes =
+			&id, u.Plan.Name, u.Plan.StorageBytes, int32(u.Plan.CPUCores), u.Plan.MemoryBytes
+	}
+	return s.q(ctx).SaveWorkspaceStorage(ctx, p)
 }
 
 func usageOf(r sqlcgen.WorkspaceStorage) files.Usage {
-	return files.Usage{WorkspaceID: ids.ID(r.WorkspaceID), QuotaBytes: r.QuotaBytes, FilesBytes: r.FilesBytes,
+	u := files.Usage{WorkspaceID: ids.ID(r.WorkspaceID), QuotaBytes: r.QuotaBytes, FilesBytes: r.FilesBytes,
 		DBBytes: r.DbBytes, ChatBytes: r.ChatBytes, DBMeasuredAt: r.DbMeasuredAt,
 		WarnedLevel: int(r.WarnedLevel), UpdatedAt: r.UpdatedAt}
+	if r.PlanID != nil {
+		u.Plan = &files.Plan{ID: ids.ID(*r.PlanID), Name: r.PlanName, StorageBytes: r.PlanStorageBytes,
+			CPUCores: int(r.PlanCpuCores), MemoryBytes: r.PlanMemoryBytes}
+	}
+	return u
 }
 
 // LockContent takes the content's advisory lock until the transaction ends.

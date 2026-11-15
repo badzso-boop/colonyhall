@@ -177,6 +177,23 @@ type AuthFailure struct {
 	ClearedAt   *time.Time
 }
 
+type BreakGlass struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	OperatorID       uuid.UUID
+	OperatorHandle   string
+	ActorID          uuid.UUID
+	Reason           string
+	DevMode          bool
+	OpenedAt         time.Time
+	ExpiresAt        time.Time
+	HandoffHash      []byte
+	HandoffExpiresAt time.Time
+	HandoffUsedAt    *time.Time
+	ClosedAt         *time.Time
+	ClosedBy         *string
+}
+
 type Channel struct {
 	ID                     uuid.UUID
 	WorkspaceID            uuid.UUID
@@ -518,6 +535,63 @@ type ModelPrice struct {
 	CreatedAt         time.Time
 }
 
+type Operator struct {
+	ID             uuid.UUID
+	Handle         string
+	DisplayName    string
+	PasswordHash   string
+	TotpKeyID      string
+	TotpNonce      []byte
+	TotpCiphertext []byte
+	TotpLastStep   int64
+	State          string
+	CreatedAt      time.Time
+	ActivatedAt    *time.Time
+	LastLoginAt    *time.Time
+}
+
+type OperatorAudit struct {
+	ID          uuid.UUID
+	OperatorID  *uuid.UUID
+	Action      string
+	WorkspaceID *uuid.UUID
+	Payload     []byte
+	RemoteAddr  string
+	CreatedAt   time.Time
+}
+
+type OperatorBackupCode struct {
+	ID         uuid.UUID
+	OperatorID uuid.UUID
+	CodeHash   []byte
+	CreatedAt  time.Time
+	UsedAt     *time.Time
+}
+
+type OperatorSession struct {
+	ID         uuid.UUID
+	OperatorID uuid.UUID
+	TokenHash  []byte
+	CsrfToken  string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	RemoteAddr string
+	UserAgent  string
+	RevokedAt  *time.Time
+}
+
+type Plan struct {
+	ID           uuid.UUID
+	Name         string
+	StorageBytes int64
+	CpuCores     int32
+	MemoryBytes  int64
+	ArchivedAt   *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type PlannerAccess struct {
 	OwnerID      uuid.UUID
 	WorkspaceID  uuid.UUID
@@ -699,16 +773,17 @@ type SearchLog struct {
 }
 
 type Session struct {
-	ID          uuid.UUID
-	ActorID     uuid.UUID
-	TokenHash   []byte
-	CsrfToken   string
-	UserAgent   string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	RevokedAt   *time.Time
-	LastSeenAt  *time.Time
-	WorkspaceID uuid.UUID
+	ID           uuid.UUID
+	ActorID      uuid.UUID
+	TokenHash    []byte
+	CsrfToken    string
+	UserAgent    string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	RevokedAt    *time.Time
+	LastSeenAt   *time.Time
+	WorkspaceID  uuid.UUID
+	BreakGlassID *uuid.UUID
 }
 
 type SidebarItem struct {
@@ -779,6 +854,8 @@ type Workspace struct {
 	EmergencyStopBy *uuid.UUID
 	Slug            string
 	State           string
+	SuspendedAt     *time.Time
+	SuspendedReason string
 }
 
 type WorkspaceCompactionSetting struct {
@@ -812,13 +889,31 @@ type WorkspaceGitea struct {
 	UpdatedAt     time.Time
 }
 
+type WorkspaceInvite struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	TokenHash         []byte
+	Role              string
+	CreatedByOperator *uuid.UUID
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+	UsedAt            *time.Time
+	UsedBy            *uuid.UUID
+	RevokedAt         *time.Time
+}
+
 type WorkspaceStorage struct {
-	WorkspaceID  uuid.UUID
-	QuotaBytes   int64
-	FilesBytes   int64
-	DbBytes      int64
-	ChatBytes    int64
-	DbMeasuredAt *time.Time
-	WarnedLevel  int16
-	UpdatedAt    time.Time
+	WorkspaceID      uuid.UUID
+	QuotaBytes       int64
+	FilesBytes       int64
+	DbBytes          int64
+	ChatBytes        int64
+	DbMeasuredAt     *time.Time
+	WarnedLevel      int16
+	UpdatedAt        time.Time
+	PlanID           *uuid.UUID
+	PlanName         string
+	PlanStorageBytes int64
+	PlanCpuCores     int32
+	PlanMemoryBytes  int64
 }

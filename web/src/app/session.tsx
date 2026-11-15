@@ -73,7 +73,9 @@ export function RequireSession({ children }: { children: ReactNode }) {
   const session = useSession();
   const location = useLocation();
   useUnauthorizedRedirect();
-  useLiveUpdates(session.isSuccess);
+  // Round 51b: the operator's read-only break-glass session has no socket
+  // (the server refuses it); the app shows what it loads, without live updates.
+  useLiveUpdates(session.isSuccess && !session.data.break_glass);
 
   if (session.isPending) return null;
   if (session.error) {

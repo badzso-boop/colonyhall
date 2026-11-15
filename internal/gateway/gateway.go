@@ -96,6 +96,24 @@ func (g *Gateway) ConnectionCounts() (humans, agents int) {
 	return humans, agents
 }
 
+// CloseWorkspace closes every connection of a workspace (round 51: the
+// operator suspended it); the tenant layer refuses the reconnect. It
+// returns how many it closed.
+func (g *Gateway) CloseWorkspace(workspaceID ids.ID) int {
+	g.mu.Lock()
+	var list []*connection
+	for c := range g.conns {
+		if c.actor.WorkspaceID == workspaceID {
+			list = append(list, c)
+		}
+	}
+	g.mu.Unlock()
+	for _, c := range list {
+		go func() { _ = c.ws.Close(websocket.StatusPolicyViolation, "workspace suspended") }()
+	}
+	return len(list)
+}
+
 // SetRevalidateEvery changes how often people's connections are re-checked.
 func (g *Gateway) SetRevalidateEvery(d time.Duration) { g.revalidate.Store(int64(d)) }
 
@@ -719,6 +737,9 @@ var personalEvents = map[string]bool{
 	saved.EventReminded:           true,
 	activity.EventCreated:         true,
 	activity.EventRead:            true,
+	// Round 51b: a break-glass read is for the audit, not a live stream
+	// (its actor, the operator's, has no socket).
+	identity.EventBreakGlassRead: true,
 }
 
 // visible decides whether the actor may see an event.

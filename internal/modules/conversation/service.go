@@ -48,6 +48,13 @@ type Service struct {
 	Compactions CompactionReader
 }
 
+// breakGlassSees: the operator's break-glass access (round 51b) sees the
+// public channels only, never a DM or a private channel; everyone else is
+// not limited here.
+func breakGlassSees(a identity.Actor, kind ChannelKind) bool {
+	return a.BreakGlass == nil || kind == KindPublic
+}
+
 func subject(a identity.Actor) policy.Subject {
 	return policy.Subject{IsAdmin: a.IsAdmin(), IsAgent: a.Kind == identity.KindAgent, Halted: a.Halted}
 }
@@ -851,7 +858,7 @@ func (s *Service) ListChannels(ctx context.Context, by identity.Actor, archived 
 	archived = archived && by.IsAdmin()
 	views := all[:0]
 	for _, v := range all {
-		if !v.Archived() || archived {
+		if (!v.Archived() || archived) && breakGlassSees(by, v.Kind) {
 			views = append(views, v)
 		}
 	}
@@ -1067,11 +1074,15 @@ func (s *Service) channelFor(ctx context.Context, workspaceID, channelID ids.ID)
 // CanRead implements Reader. Channels outside the actor's workspace are
 // never readable, not even by an admin.
 func (s *Service) CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error) {
-	if _, err := s.channelFor(ctx, by.WorkspaceID, channelID); err != nil {
+	c, err := s.channelFor(ctx, by.WorkspaceID, channelID)
+	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return false, nil
 		}
 		return false, err
+	}
+	if !breakGlassSees(by, c.Kind) {
+		return false, nil
 	}
 	mem, err := s.membership(ctx, channelID, by.ID)
 	if err != nil {

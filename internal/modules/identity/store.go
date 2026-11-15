@@ -68,8 +68,42 @@ type Store interface {
 	// SetWorkspaceSlug renames a workspace's subdomain; db.ErrConflict when
 	// another workspace has it, db.ErrNotFound when the workspace is gone.
 	SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error
-	// SetWorkspaceState suspends or reactivates a workspace.
-	SetWorkspaceState(ctx context.Context, id ids.ID, state string) error
+	// SetWorkspaceState suspends (with the reason and time) or reactivates
+	// a workspace.
+	SetWorkspaceState(ctx context.Context, id ids.ID, state, reason string, at *time.Time) error
+
+	// ListWorkspaces lists every workspace, oldest first (system mode: the
+	// operator's overview, round 51).
+	ListWorkspaces(ctx context.Context) ([]Workspace, error)
+
+	// Round 51: the owner's one-time invites.
+	CreateInvite(ctx context.Context, i Invite) error
+	// RevokeOpenInvites revokes the workspace's unused, unrevoked invites.
+	RevokeOpenInvites(ctx context.Context, workspaceID ids.ID, at time.Time) error
+	InviteByTokenHash(ctx context.Context, hash []byte) (Invite, error)
+	// UseInvite marks an open invite used; false when it was used,
+	// revoked or expired at at.
+	UseInvite(ctx context.Context, id ids.ID, at time.Time) (bool, error)
+	SetInviteUsedBy(ctx context.Context, id, actorID ids.ID) error
+	// LatestInvite is the workspace's newest invite (db.ErrNotFound: none).
+	LatestInvite(ctx context.Context, workspaceID ids.ID) (Invite, error)
+
+	// Break-glass access (round 51b).
+	CreateBreakGlass(ctx context.Context, b BreakGlass) error
+	BreakGlassByID(ctx context.Context, id ids.ID) (BreakGlass, error)
+	BreakGlassByHandoffHash(ctx context.Context, hash []byte) (BreakGlass, error)
+	// UseBreakGlassHandoff marks the handoff used; false when it was used,
+	// expired or the access is closed.
+	UseBreakGlassHandoff(ctx context.Context, id ids.ID, at time.Time) (bool, error)
+	// CloseBreakGlass closes an open access; false when it was closed.
+	CloseBreakGlass(ctx context.Context, id ids.ID, by string, at time.Time) (bool, error)
+	// ListBreakGlass lists the workspace's accesses, newest first.
+	ListBreakGlass(ctx context.Context, workspaceID ids.ID, limit int) ([]BreakGlass, error)
+	// OverdueBreakGlass lists the open accesses whose time is up (system mode).
+	OverdueBreakGlass(ctx context.Context, now time.Time) ([]BreakGlass, error)
+	// BreakGlassActor is the workspace's operator actor (db.ErrNotFound: none yet).
+	BreakGlassActor(ctx context.Context, workspaceID ids.ID) (ids.ID, error)
+	IsBreakGlassActor(ctx context.Context, actorID ids.ID) (bool, error)
 
 	// Credential returns the actor's password hash.
 	Credential(ctx context.Context, actorID ids.ID) (string, error)

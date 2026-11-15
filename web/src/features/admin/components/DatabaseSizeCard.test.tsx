@@ -3,7 +3,7 @@
 
 import { render, screen } from "@testing-library/react";
 import type { SystemStatus } from "../model";
-import { DatabaseSizeCard } from "./StatusPage";
+import { DatabaseSizeCard } from "../components/DatabaseSizeCard";
 
 type Database = SystemStatus["database"];
 const MB = 1024 * 1024;

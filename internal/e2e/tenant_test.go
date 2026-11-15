@@ -96,7 +96,7 @@ func TestTenantFromSubdomain(t *testing.T) {
 	}
 	// A suspended workspace looks like an unknown one.
 	ctx := context.Background()
-	if err := acme.app.Identity.Store.SetWorkspaceState(ctx, betaWorkspace(t, acme), identity.WorkspaceSuspended); err != nil {
+	if err := acme.app.Identity.Store.SetWorkspaceState(ctx, betaWorkspace(t, acme), identity.WorkspaceSuspended, "test", nil); err != nil {
 		t.Fatal(err)
 	}
 	if s, body := beta.raw("GET", "/api/v1/me", betaOwnerToken, nil); s != http.StatusNotFound || body != want {

@@ -21,6 +21,24 @@ linters:
           deny:
             - pkg: colonyhall/internal/platform/db/system
               desc: system mode is for background code only; narrow with db.WithWorkspace
+        operator-scope-is-the-operator-module:
+          # Round 51: the operator scope sees the platform tables (operators,
+          # sessions, invites, the operator audit). Only the operator module,
+          # the composition root, the CLI and the db package may switch it on
+          # (docs/24-hosztolt-ajanlat.md).
+          files: ["$all", "!$test", "!**/internal/modules/operator/**", "!**/internal/server/**", "!**/cmd/colonyhall/**", "!**/internal/platform/db/**", "!**/internal/storetest/**"]
+          deny:
+            - pkg: colonyhall/internal/platform/db/opscope
+              desc: the operator scope belongs to the operator module
+        operator-view-stays-in-operator-scope:
+          # Round 51: the operator's view of the workspaces reads through
+          # operator.Overview in the operator scope (colony_operator_overview,
+          # numbers only); it never switches system mode on to look
+          # (docs/24-hosztolt-ajanlat.md, 3. pont).
+          files: ["**/internal/server/customers.go"]
+          deny:
+            - pkg: colonyhall/internal/platform/db/system
+              desc: the operator's view reads in the operator scope; use operator.Overview
         platform-is-generic:
           files: ["**/internal/platform/**"]
           deny:
@@ -128,6 +146,9 @@ linters:
             - pkg: colonyhall/internal/modules/activity/postgres
             - pkg: colonyhall/internal/modules/activity/memory
             - pkg: colonyhall/internal/modules/activity/httpapi
+            - pkg: colonyhall/internal/modules/operator/postgres
+            - pkg: colonyhall/internal/modules/operator/memory
+            - pkg: colonyhall/internal/modules/operator/httpapi
             - pkg: colonyhall/internal/modules/planner/postgres
             - pkg: colonyhall/internal/modules/planner/memory
             - pkg: colonyhall/internal/modules/planner/httpapi

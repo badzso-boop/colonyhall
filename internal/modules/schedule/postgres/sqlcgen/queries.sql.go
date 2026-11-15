@@ -78,16 +78,20 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 }
 
 const dueSchedules = `-- name: DueSchedules :many
-SELECT id, workspace_id, created_by, channel_id, thread_root_id, body, cron, timezone, catch_up, state, next_run_at, last_run_at, last_message_id, last_error, run_count, created_at FROM schedule WHERE state = 'active' AND next_run_at <= $1 ORDER BY next_run_at, id LIMIT $2
+SELECT id, workspace_id, created_by, channel_id, thread_root_id, body, cron, timezone, catch_up, state, next_run_at, last_run_at, last_message_id, last_error, run_count, created_at FROM schedule WHERE state = 'active' AND next_run_at <= $1
+    AND NOT (workspace_id = ANY($2::uuid[]))
+ORDER BY next_run_at, id LIMIT $3
 `
 
 type DueSchedulesParams struct {
-	Now time.Time
-	Lim int32
+	Now  time.Time
+	Skip []uuid.UUID
+	Lim  int32
 }
 
+// Round 51: a suspended workspace's schedules wait (skip lists them).
 func (q *Queries) DueSchedules(ctx context.Context, arg DueSchedulesParams) ([]Schedule, error) {
-	rows, err := q.db.Query(ctx, dueSchedules, arg.Now, arg.Lim)
+	rows, err := q.db.Query(ctx, dueSchedules, arg.Now, arg.Skip, arg.Lim)
 	if err != nil {
 		return nil, err
 	}

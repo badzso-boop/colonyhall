@@ -34,7 +34,9 @@ export function StorageCard() {
       </StatusCard>
     );
   }
-  const pct = storagePercent(st.used_bytes, st.quota_bytes);
+  // Round 51b: the effective quota (the plan's, or the owner's when lower).
+  const limit = st.limit_bytes;
+  const pct = storagePercent(st.used_bytes, limit);
   return (
     <StatusCard title={t("status.storage.title")} tone={tones[st.state]}>
       <p className={cn("font-medium", st.state === "ok" ? "text-fg" : st.state === "full" ? "text-danger" : "text-warning")}>{t(`status.storage.state.${st.state}`)}</p>
@@ -52,18 +54,24 @@ export function StorageCard() {
       ) : null}
       <StatusRow
         label={t("status.storage.used")}
-        value={st.quota_bytes ? t("status.storage.ofQuota", { used: bytes(st.used_bytes), quota: bytes(st.quota_bytes), pct: Math.round(pct ?? 0) }) : bytes(st.used_bytes)}
+        value={limit ? t("status.storage.ofQuota", { used: bytes(st.used_bytes), quota: bytes(limit), pct: Math.round(pct ?? 0) }) : bytes(st.used_bytes)}
       />
+      {st.plan ? (
+        <StatusRow
+          label={t("status.storage.plan")}
+          value={t("status.storage.planValue", { name: st.plan.name, storage: bytes(st.plan.storage_bytes), cpu: st.plan.cpu_cores, memory: bytes(st.plan.memory_bytes) })}
+        />
+      ) : null}
       <StatusRow label={t("status.storage.attachments")} value={bytes(st.attachments_bytes)} />
       <StatusRow label={t("status.storage.chatSearch")} value={bytes(st.chat_search_bytes)} />
       <StatusRow label={t("status.storage.other")} value={bytes(st.other_bytes)} />
       <StatusRow label={t("status.storage.measured")} value={st.db_measured_at ? fullTime(st.db_measured_at, locale) : t("status.storage.notYet")} />
-      {owner ? <QuotaForm quota={st.quota_bytes} /> : <StatusRow label={t("status.storage.quota")} value={st.quota_bytes ? bytes(st.quota_bytes) : t("status.storage.unlimited")} />}
+      {owner ? <QuotaForm quota={st.quota_bytes} withPlan={!!st.plan} /> : <StatusRow label={t("status.storage.quota")} value={st.quota_bytes ? bytes(st.quota_bytes) : t("status.storage.unlimited")} />}
     </StatusCard>
   );
 }
 
-function QuotaForm({ quota }: { quota: number }) {
+function QuotaForm({ quota, withPlan }: { quota: number; withPlan: boolean }) {
   const { t } = useTranslation("admin");
   const set = useSetQuota();
   const [value, setValue] = useState(quota ? String(+(quota / 1024 ** 3).toFixed(2)) : "");
@@ -82,6 +90,7 @@ function QuotaForm({ quota }: { quota: number }) {
         {t("status.storage.save")}
       </Button>
       <span className="w-full text-meta text-fg-subtle">{t("status.storage.quotaHint")}</span>
+      {withPlan ? <span className="w-full text-meta text-fg-subtle">{t("status.storage.belowPlan")}</span> : null}
       {set.error ? <span className="w-full text-meta text-danger">{set.error.message}</span> : null}
     </form>
   );

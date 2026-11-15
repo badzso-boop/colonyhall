@@ -176,6 +176,30 @@ func testFileStorage(t *testing.T, b Backend) {
 		u.WarnedLevel != files.Level80 || u.DBMeasuredAt == nil || u.State() != files.StorageWarning80 {
 		t.Fatalf("saved usage: %+v %v", u, err)
 	}
+	// Round 51b: the plan's copy in the storage row, and the effective quota.
+	must(t, b.Tx.InTx(ctx, func(ctx context.Context) error {
+		u, err := b.Files.LockUsage(ctx, f.ws.ID, t0)
+		if err != nil {
+			return err
+		}
+		u.Plan = &files.Plan{ID: gen.New(), Name: "Közepes", StorageBytes: 700, CPUCores: 4, MemoryBytes: 4 << 30}
+		return b.Files.SaveUsage(ctx, u)
+	}))
+	if u, err := b.Files.UsageOf(ctx, f.ws.ID); err != nil || u.Plan == nil || u.Plan.Name != "Közepes" || u.Plan.StorageBytes != 700 ||
+		u.Plan.CPUCores != 4 || u.Plan.MemoryBytes != 4<<30 || u.QuotaBytes != 1000 || u.Limit() != 700 {
+		t.Fatalf("usage with a plan: %+v %v", u, err)
+	}
+	must(t, b.Tx.InTx(ctx, func(ctx context.Context) error {
+		u, err := b.Files.LockUsage(ctx, f.ws.ID, t0)
+		if err != nil {
+			return err
+		}
+		u.Plan = nil
+		return b.Files.SaveUsage(ctx, u)
+	}))
+	if u, err := b.Files.UsageOf(ctx, f.ws.ID); err != nil || u.Plan != nil || u.Limit() != 1000 {
+		t.Fatalf("usage after the plan is removed: %+v %v", u, err)
+	}
 	if u, err := b.Files.UsageOf(octx, other.ID); err != nil || u.QuotaBytes != 0 {
 		t.Fatalf("the other workspace's usage: %+v %v", u, err)
 	}

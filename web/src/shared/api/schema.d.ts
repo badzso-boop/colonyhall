@@ -3000,6 +3000,398 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/invites/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Public, multi-tenant mode only. The workspace an open owner invite is for. 410 invite_invalid for an unknown, used, revoked or expired token, or one of another subdomain. */
+        post: operations["lookupInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Public, multi-tenant mode only. Uses an open owner invite once: the owner is created with the password and logged in (sets the session cookie, like /auth/login). 410 invite_invalid when the invite is no longer open or the workspace has an owner. */
+        post: operations["acceptInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/break-glass/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Multi-tenant mode only. Uses a break-glass handoff token (60 seconds, once) on the workspace's own host: opens the read-only session (sets the session cookie). 410 break_glass_invalid otherwise. */
+        post: operations["redeemBreakGlass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspace/break-glass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner and admins. The operator's break-glass accesses to this workspace, newest first (at most 50). */
+        get: operations["listBreakGlass"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspace/break-glass/{breakGlassId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Owner only. Closes the operator's access at once (its session ends); audited. */
+        delete: operations["closeBreakGlass"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Password and a TOTP code (6 digits) or a backup code, in one request. Every failure is the same 401; counted like /auth/login (429 with Retry-After). */
+        post: operations["operatorLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operatorLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOperatorSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/me/backup-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description New backup codes (the old ones stop working), after the password and a fresh TOTP code. The codes are shown once. */
+        post: operations["renewOperatorBackupCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every workspace with its account data and numbers; no content (no channel, message, file or person names). */
+        get: operations["listCustomers"];
+        put?: never;
+        /** @description A new workspace without an owner, and its owner invite (7 days). The invite link is shown once. 409 slug_taken. */
+        post: operations["createCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCustomer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A new owner invite; the open one is revoked. 409 has_owner when the workspace already has an owner. */
+        post: operations["inviteCustomerOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Every request, guard and agent of the workspace is refused (the browser gets a "paused" page); the data stays. The reason stays in the operator audit. */
+        post: operations["suspendCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every plan, archived ones too. */
+        get: operations["listPlans"];
+        put?: never;
+        post: operations["createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/plans/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Changes the plan's name or numbers (every workspace on it gets them), or archives it (no new assignment; the workspaces keep it). A new storage below a workspace's usage needs confirm_over_quota (409 plan_over_quota otherwise). */
+        patch: operations["updatePlan"];
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the workspace's plan (plan_id absent: none). A plan below the current usage leaves the workspace full and its agents paused: 409 plan_over_quota unless confirm_over_quota. An archived plan cannot be assigned. */
+        put: operations["assignPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/plan-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /** @description What the plan would mean for the workspace's storage, before assigning it. */
+        get: operations["checkPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/break-glass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /** @description The workspace's break-glass accesses, newest first (at most 50). */
+        get: operations["listOperatorBreakGlass"];
+        put?: never;
+        /** @description Opens a read-only look into the workspace: public channels and their threads, agents, machines, runs (without their steps), settings; never DMs, private channels or search. reason: at least 20 characters (optional in development mode); minutes: at most 240 (720 in development mode). The answer's link (60 seconds, once) opens the session on the customer's host. The customer's audit records the opening and every read; the owners are notified and may close it. */
+        post: operations["openBreakGlass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/break-glass/{breakGlassId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Closes the access at once (its session ends). */
+        delete: operations["closeOperatorBreakGlass"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOperatorAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/system/database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The whole database's size, its largest tables and daily samples (round 50). In multi-tenant mode only the operator sees them. */
+        get: operations["getOperatorDatabase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3197,6 +3589,7 @@ export interface components {
             actor: components["schemas"]["Actor"];
             /** @description Empty for bearer-token callers */
             csrf_token: string;
+            break_glass?: components["schemas"]["BreakGlassSession"];
         };
         SetPasswordRequest: {
             current_password?: string;
@@ -3296,9 +3689,11 @@ export interface components {
                 ok: boolean;
                 /** Format: double */
                 latency_ms: number;
+                /** @description Round 51: multi-tenant mode; the whole database's size is the operator's to see, so size_bytes, tables and growth are absent. */
+                operator_only?: boolean;
                 /**
                  * Format: int64
-                 * @description The whole database (pg_database_size); absent on the memory store.
+                 * @description The whole database (pg_database_size); absent on the memory store, and in multi-tenant mode (round 51: only the operator sees the whole database).
                  */
                 size_bytes?: number;
                 /** @description The 10 largest tables, biggest first; absent on the memory store. */
@@ -3345,7 +3740,7 @@ export interface components {
         };
         StatusLockout: {
             /** @enum {string} */
-            scope: "login" | "emergency_clear" | "password" | "claude_login";
+            scope: "login" | "emergency_clear" | "password" | "claude_login" | "operator_login";
             handle: string;
             /** @description The client address; empty when unknown. */
             ip: string;
@@ -4126,7 +4521,7 @@ export interface components {
             deleted?: boolean;
         };
         /** @enum {string} */
-        ActivityKind: "mention" | "thread_reply" | "reaction" | "approval" | "question" | "important" | "reminder";
+        ActivityKind: "mention" | "thread_reply" | "reaction" | "approval" | "question" | "important" | "reminder" | "operator_access";
         ActivityItem: {
             /** Format: uuid */
             id: string;
@@ -5079,6 +5474,12 @@ export interface components {
              */
             db_measured_at?: string;
             state: components["schemas"]["StorageState"];
+            /**
+             * Format: int64
+             * @description The effective quota (round 51b): the plan's storage, or the owner's quota when lower; 0 is unlimited
+             */
+            limit_bytes: number;
+            plan?: components["schemas"]["WorkspacePlan"];
         };
         StorageQuotaRequest: {
             /**
@@ -5922,6 +6323,282 @@ export interface components {
         };
         DelegationGrantList: {
             grants: components["schemas"]["DelegationGrant"][];
+        };
+        InviteTokenRequest: {
+            token: string;
+        };
+        InviteInfo: {
+            workspace_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        AcceptInviteRequest: {
+            token: string;
+            handle: string;
+            display_name?: string;
+            password: string;
+        };
+        OperatorLoginRequest: {
+            handle: string;
+            password: string;
+            /** @description A 6-digit TOTP code or a backup code (XXXXX-XXXXX) */
+            code: string;
+        };
+        OperatorAccount: {
+            /** Format: uuid */
+            id: string;
+            handle: string;
+            display_name: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        OperatorSessionInfo: {
+            operator: components["schemas"]["OperatorAccount"];
+            csrf_token: string;
+            /**
+             * Format: date-time
+             * @description The session's absolute end (8 hours); it also ends after 30 idle minutes
+             */
+            expires_at: string;
+            /** @description COLONY_OPERATOR_DEV_ACCESS=1 (development only): every operator page says so */
+            dev_access: boolean;
+            backup_codes_left: number;
+        };
+        OperatorReauthRequest: {
+            password: string;
+            /** @description A fresh 6-digit TOTP code */
+            code: string;
+        };
+        OperatorBackupCodes: {
+            codes: string[];
+        };
+        CustomerInvite: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            used: boolean;
+            revoked: boolean;
+        };
+        CustomerStorage: {
+            /** Format: int64 */
+            used_bytes: number;
+            /**
+             * Format: int64
+             * @description 0 is unlimited
+             */
+            quota_bytes: number;
+            /** Format: int64 */
+            files_bytes: number;
+            /** Format: int64 */
+            db_bytes: number;
+            /** @enum {string} */
+            state: "ok" | "warning_80" | "warning_95" | "full";
+        };
+        Customer: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            /** @enum {string} */
+            state: "active" | "suspended";
+            /** Format: date-time */
+            suspended_at?: string;
+            suspended_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            has_owner: boolean;
+            invite?: components["schemas"]["CustomerInvite"];
+            /** @description People (not archived) */
+            users: number;
+            /** @description Agents (not archived) */
+            agents: number;
+            hosts: number;
+            /** @description Seen in the last 90 seconds */
+            hosts_online: number;
+            /**
+             * Format: date-time
+             * @description The workspace's newest event
+             */
+            last_activity_at?: string;
+            storage: components["schemas"]["CustomerStorage"];
+            /**
+             * Format: uuid
+             * @description The workspace's plan (round 51b); absent without one
+             */
+            plan_id?: string;
+            /** @description A break-glass access is open (round 51b) */
+            break_glass_open: boolean;
+        };
+        Plan: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: int64 */
+            storage_bytes: number;
+            /** @description What a hosted guard will get (not enforced yet) */
+            cpu_cores: number;
+            /**
+             * Format: int64
+             * @description What a hosted guard will get (not enforced yet)
+             */
+            memory_bytes: number;
+            /** @description Workspaces on the plan */
+            workspaces: number;
+            /** Format: date-time */
+            archived_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlanList: {
+            plans: components["schemas"]["Plan"][];
+        };
+        PlanRequest: {
+            name: string;
+            /** Format: int64 */
+            storage_bytes: number;
+            cpu_cores: number;
+            /** Format: int64 */
+            memory_bytes: number;
+        };
+        PlanPatchRequest: {
+            name?: string;
+            /** Format: int64 */
+            storage_bytes?: number;
+            cpu_cores?: number;
+            /** Format: int64 */
+            memory_bytes?: number;
+            archived?: boolean;
+            /** @description Go ahead although a workspace on the plan would be full */
+            confirm_over_quota?: boolean;
+        };
+        AssignPlanRequest: {
+            /**
+             * Format: uuid
+             * @description Absent removes the plan
+             */
+            plan_id?: string;
+            confirm_over_quota?: boolean;
+        };
+        PlanCheck: {
+            /** Format: int64 */
+            used_bytes: number;
+            /**
+             * Format: int64
+             * @description The effective quota with the plan
+             */
+            new_quota_bytes: number;
+            fits: boolean;
+            state_after: components["schemas"]["StorageState"];
+        };
+        WorkspacePlan: {
+            name: string;
+            /** Format: int64 */
+            storage_bytes: number;
+            cpu_cores: number;
+            /** Format: int64 */
+            memory_bytes: number;
+        };
+        BreakGlassRequest: {
+            /** @description At least 20 characters (optional in development mode) */
+            reason?: string;
+            /** @description At most 240 (720 in development mode) */
+            minutes: number;
+        };
+        BreakGlass: {
+            /** Format: uuid */
+            id: string;
+            /** @description The operator's display name (never the login handle) */
+            operator_handle: string;
+            reason: string;
+            dev_mode: boolean;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            open: boolean;
+            /** Format: date-time */
+            closed_at?: string;
+            /** @description operator, owner or expired */
+            closed_by?: string;
+        };
+        BreakGlassList: {
+            break_glass: components["schemas"]["BreakGlass"][];
+        };
+        BreakGlassOpened: {
+            break_glass: components["schemas"]["BreakGlass"];
+            /** @description The handoff link on the customer's host: 60 seconds, once */
+            url: string;
+            /** Format: date-time */
+            handoff_expires_at: string;
+        };
+        RedeemBreakGlassRequest: {
+            token: string;
+        };
+        /** @description The session is the operator's read-only break-glass access (round 51b) */
+        BreakGlassSession: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @description The operator's display name (never the login handle) */
+            operator_handle: string;
+        };
+        CustomerList: {
+            customers: components["schemas"]["Customer"][];
+        };
+        CreateCustomerRequest: {
+            name: string;
+            /** @description The subdomain: 3–40 lower-case letters, digits and single hyphens, not reserved */
+            slug: string;
+        };
+        InviteLink: {
+            /** @description https://<slug>.<domain>/app/invite#<token>; shown once */
+            url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        CreatedCustomer: {
+            customer: components["schemas"]["Customer"];
+            invite: components["schemas"]["InviteLink"];
+        };
+        SuspendCustomerRequest: {
+            reason: string;
+        };
+        OperatorAuditEntry: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Absent for a command run on the server
+             */
+            operator_id?: string;
+            action: string;
+            /** Format: uuid */
+            workspace_id?: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            remote_addr: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        OperatorAuditList: {
+            entries: components["schemas"]["OperatorAuditEntry"][];
+        };
+        OperatorDatabase: {
+            ok: boolean;
+            /** Format: double */
+            latency_ms: number;
+            /**
+             * Format: int64
+             * @description pg_database_size; absent on the memory store
+             */
+            size_bytes?: number;
+            tables?: components["schemas"]["StatusTableSize"][];
+            growth?: components["schemas"]["StatusSizeSample"][];
         };
     };
     responses: {
@@ -10876,6 +11553,634 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    lookupInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteInfo"];
+                };
+            };
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    acceptInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description The owner is logged in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    redeemBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemBreakGlassRequest"];
+            };
+        };
+        responses: {
+            /** @description The read-only session is open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakGlassList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    closeBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    operatorLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Logged in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSessionInfo"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    operatorLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out; the cookie is cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOperatorSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSessionInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    renewOperatorBackupCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReauthRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorBackupCodes"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCustomers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedCustomer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    inviteCustomerOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLink"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    suspendCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuspendCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    restoreCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    assignPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    checkPlan: {
+        parameters: {
+            query: {
+                plan_id: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCheck"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOperatorBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakGlassList"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    openBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakGlassRequest"];
+            };
+        };
+        responses: {
+            /** @description Opened */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakGlassOpened"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    closeOperatorBreakGlass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                breakGlassId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOperatorAudit: {
+        parameters: {
+            query?: {
+                /** @description Entries older than this (paging) */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorAuditList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOperatorDatabase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorDatabase"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };

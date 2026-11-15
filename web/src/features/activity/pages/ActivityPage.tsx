@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { AlarmClock, AtSign, Bell, CheckCheck, Flag, HelpCircle, MessageSquareReply, ShieldQuestion, SmilePlus } from "lucide-react";
+import { AlarmClock, AtSign, Bell, CheckCheck, Eye, Flag, HelpCircle, MessageSquareReply, ShieldQuestion, SmilePlus } from "lucide-react";
 import { useActors, useSession } from "@/features/identity";
 import { localeOf } from "@/shared/i18n";
 import { cn, plainText, relativeTime } from "@/shared/lib";
@@ -21,6 +21,7 @@ const kindIcon: Record<ActivityKind, typeof Bell> = {
   question: HelpCircle,
   important: Flag,
   reminder: AlarmClock,
+  operator_access: Eye,
 };
 
 function Row({ item }: { item: ActivityItem }) {
@@ -51,7 +52,7 @@ function Row({ item }: { item: ActivityItem }) {
           target && "hover:border-border-strong",
         )}
       >
-        <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", item.kind === "important" ? "text-warning" : "text-fg-subtle")} />
+        <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", item.kind === "important" || item.kind === "operator_access" ? "text-warning" : "text-fg-subtle")} />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline gap-x-2 text-meta text-fg-muted">
             <span className={cn("text-ui", !item.read && "font-semibold text-fg")}>{t(`kinds.${item.kind}`, { who, emoji: item.emoji ?? "" })}</span>
@@ -59,7 +60,7 @@ function Row({ item }: { item: ActivityItem }) {
             <span className="ml-auto text-fg-subtle">{relativeTime(item.created_at, now, locale)}</span>
           </span>
           {item.excerpt ? <span className="mt-1 line-clamp-2 block text-ui text-fg">{plainText(item.excerpt)}</span> : null}
-          {!item.available ? <span className="mt-1 block text-meta text-fg-subtle italic">{t("unavailable")}</span> : null}
+          {!item.available && item.kind !== "operator_access" ? <span className="mt-1 block text-meta text-fg-subtle italic">{t("unavailable")}</span> : null}
         </span>
         {!item.read ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-label={t("unread")} /> : null}
       </button>

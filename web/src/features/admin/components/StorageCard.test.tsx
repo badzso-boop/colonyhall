@@ -10,7 +10,7 @@ import { StorageCard } from "./StorageCard";
 const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
 const GB = 1024 ** 3;
 const st: Schemas["WorkspaceStorage"] = {
-  quota_bytes: 20 * GB, used_bytes: 19.2 * GB, attachments_bytes: 15 * GB, chat_search_bytes: 3 * GB, other_bytes: 1.2 * GB,
+  quota_bytes: 20 * GB, limit_bytes: 20 * GB, used_bytes: 19.2 * GB, attachments_bytes: 15 * GB, chat_search_bytes: 3 * GB, other_bytes: 1.2 * GB,
   db_measured_at: "2026-11-14T09:00:00Z", state: "warning_95",
 };
 
@@ -24,7 +24,7 @@ function show(role: "owner" | "admin") {
       if (path.endsWith("/workspace/storage/quota")) {
         const body = (await req.json()) as { quota_bytes: number };
         calls.push({ method: req.method, body });
-        return json({ ...st, quota_bytes: body.quota_bytes, state: "ok" });
+        return json({ ...st, quota_bytes: body.quota_bytes, limit_bytes: body.quota_bytes, state: "ok" });
       }
       if (path.endsWith("/workspace/storage")) return json(st);
       return json({});
@@ -77,4 +77,21 @@ test("quota field and percent", () => {
   expect(gbToBytes("1e3")).toBeNull();
   expect(storagePercent(5, 0)).toBeNull();
   expect(storagePercent(80, 100)).toBe(80);
+});
+
+test("a plan shows its numbers, and the owner learns the quota stays below it (round 51b)", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (req: Request) => {
+      if (new URL(req.url).pathname.endsWith("/auth/session")) return json({ actor: { id: "me", kind: "human", handle: "me", display_name: "Me", role: "owner", state: "active", created_at: "" } });
+      return json({ ...st, quota_bytes: 0, limit_bytes: 40 * GB, plan: { name: "Közepes", storage_bytes: 40 * GB, cpu_cores: 4, memory_bytes: 4 * GB } });
+    }),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <StorageCard />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("Közepes · 40 GB · 4 mag · 4 GB memória")).toBeTruthy();
+  expect(screen.getByText("A keretet a csomag tárhelye alá állíthatod, fölé nem.")).toBeTruthy();
 });

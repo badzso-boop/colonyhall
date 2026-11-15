@@ -155,7 +155,7 @@
 | Fázis | Tartalom | Kész, ha |
 |---|---|---|
 | **0. Elkülönítés** ✅ (45. kör) | `slug`, aldomain szerinti munkaterület, RLS minden táblán, ügyfélszétválasztási tesztek, `COLONY_MULTITENANT` kapcsoló; plusz: kapcsolható saját Gitea ügyfelenként, külön adatbázis-szerepkör az új telepítéseknél | A tesztkészlet zöld; az önálló telepítés változatlan |
-| **1. Operátor** | Operátori fiók 2FA-val, `admin.<domain>`, ügyfél létrehozása és felfüggesztése, meghívólink, fejlesztői mód kiírással, vészhozzáférés | Egy új ügyfél a meghívóval be tud lépni; a vészhozzáférés látszik az ügyfél auditjában |
+| **1. Operátor** (51a: kész, a vészhozzáférés 51b; `24-hosztolt-ajanlat.md`) | Operátori fiók 2FA-val, `admin.<domain>`, ügyfél létrehozása és felfüggesztése, meghívólink, fejlesztői mód kiírással, vészhozzáférés | Egy új ügyfél a meghívóval be tud lépni; a vészhozzáférés látszik az ügyfél auditjában |
 | **2. Több példány** | NOTIFY-busz, fogyasztók és ütemező advisory lockkal, őr-kapcsolatok táblája és célzott jelzések, közös korlátozó, objektumtár | A 13. pont próbái a homelabon |
 | **3. Korlátok és csomagok** | `plan`, `workspace_usage`, kikényszerítés, használati oldal | Túllépéskor elutasítás és esemény |
 | **4. Számlázás és regisztráció** | Fizetési szolgáltató, önálló regisztráció, e-mail | Könyvelővel egyeztetve |

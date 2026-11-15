@@ -6,6 +6,7 @@ package setup
 import (
 	"bufio"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"colonyhall/internal/platform/clientip"
 )
 
 // DefaultRepo is where the releases and the server image come from.
@@ -37,6 +40,16 @@ func imageFor(version string) string {
 		tag = version
 	}
 	return "ghcr.io/" + DefaultRepo + ":" + tag
+}
+
+// randomSecretKey is a COLONY_SECRET_KEYS entry: id:<base64 of 32 bytes>
+// (round 51; the same form as `colonyhall secret-key`).
+func randomSecretKey(id string) string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return id + ":" + base64.StdEncoding.EncodeToString(b)
 }
 
 func randomHex(n int) string {
@@ -135,6 +148,16 @@ services:
       # Several customers on one server, one subdomain each (docs/23-elkulonites.md); off by default.
       COLONY_MULTITENANT: ${COLONY_MULTITENANT:-0}
       COLONY_BASE_DOMAIN: ${COLONY_BASE_DOMAIN:-}
+      # Round 51 (docs/24-hosztolt-ajanlat.md): production unless set to
+      # development; the operator's developer access is refused in production.
+      # COLONY_SECRET_KEYS encrypts the secrets the server reads back (the
+      # operators' TOTP); required in multi-tenant mode. Or a file: _FILE.
+      COLONY_ENV: ${COLONY_ENV:-production}
+      COLONY_OPERATOR_DEV_ACCESS: ${COLONY_OPERATOR_DEV_ACCESS:-0}
+      COLONY_SECRET_KEYS: ${COLONY_SECRET_KEYS:-}
+      COLONY_SECRET_KEYS_FILE: ${COLONY_SECRET_KEYS_FILE:-}
+      # The addresses admin.<domain> (the operator) answers; empty: any.
+      COLONY_OPERATOR_ALLOWLIST: ${COLONY_OPERATOR_ALLOWLIST:-}
     volumes:
       - files:/data/files
     ports:
@@ -168,7 +191,8 @@ const serverHardening = `    read_only: true
 // installer's own values never have one, and the answers file's are
 // checked before they get here.
 func envFile(v map[string]string) string {
-	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
+	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "COLONY_ENV", "COLONY_SECRET_KEYS", "COLONY_OPERATOR_ALLOWLIST",
+		"POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
 	var b strings.Builder
 	b.WriteString("# Colonyhall server settings and secrets (colony setup). Keep it 0600 and back it up.\n")
 	for _, k := range keys {
@@ -314,6 +338,28 @@ func (e *Env) askServer() error {
 		}
 		a.AdminName = n
 	}
+	if a.OperatorAllowlist == "" {
+		// Round 51: who may reach the operator's console. Kept across
+		// re-runs; asked only in multi-tenant mode (a single workspace has
+		// no admin.<domain>), with Tailscale as the default when present.
+		a.OperatorAllowlist = env["COLONY_OPERATOR_ALLOWLIST"]
+		if a.OperatorAllowlist == "" && env["COLONY_MULTITENANT"] == "1" {
+			def := "-"
+			if _, ts := localAddrs(); ts != "" {
+				def = "100.64.0.0/10"
+			}
+			s, err := e.UI.Ask("srvOpAllow", def)
+			if err != nil {
+				return err
+			}
+			a.OperatorAllowlist = s
+		}
+	}
+	if v := strings.TrimSpace(a.OperatorAllowlist); v != "-" {
+		if _, err := clientip.ParseList(v); err != nil {
+			return fmt.Errorf("operator allowlist: %w", err)
+		}
+	}
 	if a.Backups == nil {
 		ok, err := e.UI.Confirm("srvBackups", true, e.backupDir())
 		if err != nil {
@@ -394,6 +440,19 @@ func (e *Env) serverEnv() (map[string]string, bool) {
 	if a.SecureCookies {
 		v["COLONY_SECURE_COOKIES"] = "1"
 	}
+	// Round 51: an installed server is production (the operator's
+	// developer access is refused), and it has a key for the secrets it
+	// encrypts, kept across re-runs.
+	v["COLONY_ENV"] = "production"
+	if allow := strings.TrimSpace(a.OperatorAllowlist); allow != "" && allow != "-" {
+		v["COLONY_OPERATOR_ALLOWLIST"] = strings.ReplaceAll(allow, " ", "")
+	}
+	key := old["COLONY_SECRET_KEYS"]
+	if key == "" {
+		key = randomSecretKey("k1")
+	}
+	e.Secret(key)
+	v["COLONY_SECRET_KEYS"] = key
 	ownDB := a.DatabaseURL == ""
 	if ownDB {
 		pw := old["POSTGRES_PASSWORD"]

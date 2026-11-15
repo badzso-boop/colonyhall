@@ -263,6 +263,13 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Actor, error
 	if err != nil {
 		return Actor{}, err
 	}
+	// Round 51b: the operator actor works only through a break-glass
+	// session; a token of it (there should be none) is refused.
+	if bg, err := s.Store.IsBreakGlassActor(ctx, a.ID); err != nil {
+		return Actor{}, err
+	} else if bg {
+		return Actor{}, ErrUnauthorized
+	}
 	// The last use is shown on the Tokens page; losing one is harmless.
 	now := s.Clock.Now()
 	_ = s.Store.TouchToken(ctx, HashSecret(secret), now, now.Add(-touchEvery))

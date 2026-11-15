@@ -84,7 +84,12 @@ func (d statusDeps) system(ctx context.Context, by identity.Actor) (apispec.Syst
 	begin := time.Now()
 	out.Database.Ok = d.Ready(ctx) == nil
 	out.Database.LatencyMs = float64(time.Since(begin).Microseconds()) / 1000
-	if err := d.databaseSize(ctx, &out); err != nil {
+	// Round 51: in multi-tenant mode the whole database is the operator's
+	// to see (GET /operator/system/database), not a customer admin's.
+	if d.Multitenant {
+		hidden := true
+		out.Database.OperatorOnly = &hidden
+	} else if err := d.databaseSize(ctx, &out); err != nil {
 		return out, err
 	}
 
@@ -200,4 +205,17 @@ func (d statusDeps) databaseSize(ctx context.Context, out *apispec.SystemStatus)
 	out.Database.Tables = &tables
 	out.Database.Growth = &growth
 	return nil
+}
+
+// operatorDatabase is round 50's database card for the operator (round 51).
+func operatorDatabase(ctx context.Context, ready func(context.Context) error, ds *dbstats.Service) (apispec.OperatorDatabase, error) {
+	begin := time.Now()
+	out := apispec.OperatorDatabase{Ok: ready(ctx) == nil}
+	out.LatencyMs = float64(time.Since(begin).Microseconds()) / 1000
+	var sys apispec.SystemStatus
+	if err := (statusDeps{DBStats: ds}).databaseSize(ctx, &sys); err != nil {
+		return out, err
+	}
+	out.SizeBytes, out.Tables, out.Growth = sys.Database.SizeBytes, sys.Database.Tables, sys.Database.Growth
+	return out, nil
 }

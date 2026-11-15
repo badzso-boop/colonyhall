@@ -214,6 +214,24 @@ func (s *Service) HandleEvent(ctx context.Context, e eventlog.Event) error {
 			return nil
 		}
 		return s.onQuestion(ctx, e, p)
+	case identity.EventBreakGlassOpened:
+		// Round 51b: every owner hears that the operator looks in.
+		var p identity.BreakGlassEvent
+		if json.Unmarshal(e.Payload, &p) != nil {
+			return nil
+		}
+		admins, err := s.Directory.Admins(ctx, e.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		for _, a := range admins {
+			if a.Role != identity.RoleOwner || a.Kind != identity.KindHuman {
+				continue
+			}
+			if err := s.add(ctx, e, KindOperatorAccess, a.ID, false, Item{ActorID: e.ActorID, RefID: parse(p.BreakGlassID)}); err != nil {
+				return err
+			}
+		}
 	case saved.EventReminded:
 		var p saved.Reminded
 		if json.Unmarshal(e.Payload, &p) != nil {

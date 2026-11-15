@@ -138,3 +138,7 @@ sql:
     schema: migrations
     queries: internal/modules/dbstats/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/dbstats/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/operator/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/operator/postgres/sqlcgen } }

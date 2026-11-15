@@ -97,10 +97,18 @@ func RequireAuth(auth identity.RequestAuthenticator, next http.Handler) http.Han
 			Error(w, r, identity.ErrUnauthorized)
 			return
 		}
-		a, sess, err := auth.AuthenticateSession(ctx, c.Value)
+		// Round 51b: this is the one place that accepts a break-glass
+		// session, because it enforces its rules right below.
+		a, sess, err := auth.AuthenticateSession(identity.AllowBreakGlass(ctx), c.Value)
 		if err != nil {
 			Error(w, r, err)
 			return
+		}
+		if a.BreakGlass != nil {
+			if ctx, err = breakGlass(ctx, auth, a, r); err != nil {
+				Error(w, r, err)
+				return
+			}
 		}
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
@@ -113,6 +121,28 @@ func RequireAuth(auth identity.RequestAuthenticator, next http.Handler) http.Han
 		ctx = context.WithValue(WithActor(ctx, a), sessionKey{}, sess)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// breakGlass enforces the operator's break-glass session (round 51b,
+// docs/24 6. pont): reads only, of the allowed routes only; every read is
+// recorded in the workspace's audit before it is served (no record, no
+// read); and the database connections of the request are read-only, so a
+// write that slipped through is refused by Postgres itself.
+func breakGlass(ctx context.Context, auth identity.RequestAuthenticator, a identity.Actor, r *http.Request) (context.Context, error) {
+	if !identity.BreakGlassRoutes[r.Pattern] {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+			return ctx, identity.ErrBreakGlassScope
+		}
+		return ctx, identity.ErrReadOnlyAccess
+	}
+	if r.Method == http.MethodPost { // the logout: nothing to record or narrow
+		return ctx, nil
+	}
+	if err := auth.RecordBreakGlassRead(ctx, a, r.Method, r.URL.Path); err != nil {
+		return ctx, err
+	}
+	return db.ReadOnly(ctx), nil
 }
 
 // JSON writes v with the given status.
@@ -147,6 +177,8 @@ type statusErr struct {
 // from their httpapi package.
 var statusErrors = []statusErr{
 	{identity.ErrForbidden, http.StatusForbidden, ""},
+	{identity.ErrReadOnlyAccess, http.StatusForbidden, "read_only_access"},
+	{identity.ErrBreakGlassScope, http.StatusForbidden, "break_glass_scope"},
 	{ErrCSRF, http.StatusForbidden, ""},
 }
 

@@ -3,11 +3,81 @@
 
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"colonyhall/internal/platform/secretbox"
+)
+
+func testKey(t *testing.T) string {
+	t.Helper()
+	k, err := secretbox.NewKey("k1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return k
+}
+
+// Round 51: the operator's developer access needs COLONY_ENV=development;
+// a missing COLONY_ENV counts as production.
+func TestOperatorDevAccessIsRefusedOutsideDevelopment(t *testing.T) {
+	t.Setenv("COLONY_STORE", "memory")
+	t.Setenv("COLONY_OPERATOR_DEV_ACCESS", "1")
+	for _, env := range []string{"", "production"} {
+		t.Setenv("COLONY_ENV", env)
+		if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "COLONY_OPERATOR_DEV_ACCESS") {
+			t.Fatalf("COLONY_ENV=%q: developer access must not start: %v", env, err)
+		}
+	}
+	t.Setenv("COLONY_ENV", "development")
+	if c, err := FromEnv(); err != nil || !c.OperatorDevAccess || c.Env != EnvDevelopment {
+		t.Fatalf("development: %+v %v", c, err)
+	}
+	t.Setenv("COLONY_ENV", "staging")
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("an unknown COLONY_ENV must not start")
+	}
+	t.Setenv("COLONY_ENV", "")
+	t.Setenv("COLONY_OPERATOR_DEV_ACCESS", "")
+	if c, err := FromEnv(); err != nil || c.Env != EnvProduction || c.OperatorDevAccess {
+		t.Fatalf("the default is production without developer access: %+v %v", c, err)
+	}
+}
+
+func TestSecretKeys(t *testing.T) {
+	t.Setenv("COLONY_STORE", "memory")
+	t.Setenv("COLONY_MULTITENANT", "1")
+	t.Setenv("COLONY_BASE_DOMAIN", "example.test")
+	t.Setenv("COLONY_SECRET_KEYS", "")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "COLONY_SECRET_KEYS") {
+		t.Fatalf("multi-tenant mode needs the secret keys: %v", err)
+	}
+	file := filepath.Join(t.TempDir(), "keys")
+	if err := os.WriteFile(file, []byte(testKey(t)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COLONY_SECRET_KEYS_FILE", file)
+	if c, err := FromEnv(); err != nil || c.SecretKeys == nil || c.SecretKeys.Active() != "k1" {
+		t.Fatalf("keys from a file: %+v %v", c, err)
+	}
+	t.Setenv("COLONY_SECRET_KEYS", testKey(t))
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("both the variable and the file must be refused")
+	}
+	t.Setenv("COLONY_SECRET_KEYS_FILE", "")
+	t.Setenv("COLONY_SECRET_KEYS", "k1:not-a-key")
+	if _, err := FromEnv(); err == nil || strings.Contains(err.Error(), "not-a-key") {
+		t.Fatalf("a bad key must be refused without echoing it: %v", err)
+	}
+}
 
 func TestMultitenantNeedsBaseDomain(t *testing.T) {
 	t.Setenv("COLONY_STORE", "memory")
 	t.Setenv("COLONY_MULTITENANT", "1")
+	t.Setenv("COLONY_SECRET_KEYS", testKey(t))
 	t.Setenv("COLONY_BASE_DOMAIN", "")
 	if _, err := FromEnv(); err == nil {
 		t.Fatal("multi-tenant mode without a base domain must not start")

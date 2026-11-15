@@ -41,6 +41,9 @@ type Service struct {
 	Tx           db.TxRunner
 	IDs          ids.Generator
 	Clock        clock.Clock
+	// Suspended lists the suspended workspaces, whose schedules wait
+	// (round 51); nil: none.
+	Suspended func(ctx context.Context) ([]ids.ID, error)
 }
 
 // CreateInput describes a scheduled message.
@@ -188,7 +191,14 @@ func (s *Service) Cancel(ctx context.Context, by identity.Actor, id ids.ID) erro
 // loops (or a retry) never post the same run twice.
 func (s *Service) RunDue(ctx context.Context) (int, error) {
 	now := s.Clock.Now()
-	due, err := s.Store.Due(ctx, now, 50)
+	var skip []ids.ID
+	if s.Suspended != nil {
+		var err error
+		if skip, err = s.Suspended(ctx); err != nil {
+			return 0, err
+		}
+	}
+	due, err := s.Store.Due(ctx, now, 50, skip)
 	if err != nil {
 		return 0, err
 	}

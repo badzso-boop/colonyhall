@@ -95,6 +95,21 @@ func (s *Service) MyThreads(ctx context.Context, by identity.Actor, after *Threa
 	if err != nil {
 		return ThreadPage{}, err
 	}
+	if by.BreakGlass != nil {
+		// Round 51b: the operator actor can be made a member of a private
+		// channel or a DM; its break-glass session still never sees them.
+		kept := list[:0]
+		for _, t := range list {
+			c, err := s.Store.ChannelByID(ctx, t.Root.ChannelID)
+			if err != nil {
+				return ThreadPage{}, err
+			}
+			if breakGlassSees(by, c.Kind) {
+				kept = append(kept, t)
+			}
+		}
+		list = kept
+	}
 	var page ThreadPage
 	if len(list) > limit {
 		list = list[:limit]
@@ -145,6 +160,9 @@ func (s *Service) MyThreads(ctx context.Context, by identity.Actor, after *Threa
 		list[i].LatestReplies = replies
 	}
 	page.Threads = list
+	if by.BreakGlass != nil {
+		return page, nil // the count would tell of private threads too
+	}
 	page.UnreadThreads, err = s.unreadThreads(ctx, by)
 	return page, err
 }

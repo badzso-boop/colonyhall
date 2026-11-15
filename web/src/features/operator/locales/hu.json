@@ -1,0 +1,173 @@
+{
+  "title": "Üzemeltetés",
+  "nav": {
+    "label": "Üzemeltetés",
+    "customers": "Ügyfelek",
+    "audit": "Napló",
+    "system": "Rendszer",
+    "account": "Fiókom",
+    "plans": "Csomagok"
+  },
+  "logout": "Kilépés",
+  "devAccess": "Fejlesztői mód: az üzemeltető minden adatot lát",
+  "done": "Kész",
+  "cancel": "Mégse",
+  "never": "Még soha",
+  "login": {
+    "title": "Üzemeltetői belépés",
+    "handle": "Felhasználónév",
+    "password": "Jelszó",
+    "code": "Kód",
+    "codeHelp": "A hitelesítő alkalmazás 6 jegyű kódja, vagy egy tartalék kód (XXXXX-XXXXX).",
+    "submit": "Belépés",
+    "failed": "Hibás felhasználónév, jelszó vagy kód.",
+    "locked": "Túl sok sikertelen próbálkozás; próbáld később.",
+    "error": "A belépés nem sikerült; próbáld újra."
+  },
+  "state": {
+    "active": "Aktív",
+    "suspended": "Felfüggesztve"
+  },
+  "invite": {
+    "owner": "Van tulajdonos",
+    "none": "Nincs meghívó",
+    "open": "Meghívó él",
+    "expired": "Meghívó lejárt",
+    "used": "Meghívó felhasználva",
+    "revoked": "Meghívó visszavonva",
+    "title": "Új meghívó: {{name}}",
+    "body": "Új, 7 napig érvényes meghívólink a tulajdonosnak. Az előző link érvényét veszti.",
+    "create": "Link létrehozása",
+    "handOver": "Add át a linket az ügyfél tulajdonosának. Egyszer használható, és {{expires}}-ig érvényes. Később nem jelenik meg újra."
+  },
+  "storage": {
+    "unlimited": "{{used}} (nincs keret)",
+    "ofQuota": "{{used}} / {{quota}} ({{pct}}%)",
+    "warning_80": "80% fölött",
+    "warning_95": "95% fölött",
+    "full": "Megtelt"
+  },
+  "create": {
+    "title": "Új ügyfél",
+    "doneTitle": "Létrejött: {{name}}",
+    "name": "Név",
+    "slug": "Aldomain",
+    "slugHelp": "3–40 karakter: kisbetű, szám és kötőjel. Ez lesz a cím eleje: <aldomain>.<domain>.",
+    "submit": "Létrehozás",
+    "slugTaken": "Ezt az aldomaint már használja egy másik ügyfél.",
+    "invalid": "Ellenőrizd a nevet és az aldomaint."
+  },
+  "customers": {
+    "title": "Ügyfelek",
+    "new": "Új ügyfél",
+    "empty": "Még nincs ügyfél.",
+    "name": "Ügyfél",
+    "slug": "Aldomain",
+    "state": "Állapot",
+    "owner": "Tulajdonos",
+    "users": "Felhasználók",
+    "agents": "Agentek",
+    "hosts": "Gépek",
+    "hostsValue": "{{online}} / {{total}} online",
+    "storage": "Tárhely",
+    "lastActivity": "Utolsó aktivitás",
+    "back": "Ügyfelek"
+  },
+  "detail": {
+    "suspendedNotice": "Felfüggesztve ({{when}}): minden kérés, gép és agent elutasítva, az adatok megmaradtak.",
+    "newInvite": "Új meghívó",
+    "suspend": "Felfüggesztés",
+    "restore": "Visszaállítás",
+    "inviteExpires": "Meghívó lejárata",
+    "created": "Létrehozva",
+    "reason": "A felfüggesztés oka"
+  },
+  "suspend": {
+    "title": "Felfüggesztés: {{name}}",
+    "body": "A munkaterület minden kérését, gépét és agentjét elutasítjuk, a nyitott kapcsolatok bezárulnak. Az adatok megmaradnak, a visszaállítás után minden folytatódik.",
+    "reason": "Indoklás",
+    "reasonHelp": "Csak az üzemeltetői naplóba kerül; az ügyfél nem látja."
+  },
+  "restore": {
+    "title": "Visszaállítás: {{name}}",
+    "body": "A munkaterület újra elérhető lesz, a gépek és az agentek folytatják a munkát."
+  },
+  "audit": {
+    "title": "Napló",
+    "empty": "Még nincs bejegyzés.",
+    "cli": "parancssorból",
+    "more": "Régebbiek"
+  },
+  "system": {
+    "title": "Rendszer"
+  },
+  "account": {
+    "title": "Fiókom",
+    "handle": "Felhasználónév",
+    "name": "Név",
+    "sessionEnds": "A munkamenet vége",
+    "sessionEndsValue": "legkésőbb {{when}} (30 perc tétlenség után előbb)",
+    "backupCodes": "Tartalék kódok",
+    "backupCodesLeft_one": "{{count}} maradt",
+    "backupCodesLeft_other": "{{count}} maradt",
+    "backupCodesLow": "Kevés tartalék kód maradt; készíts újakat.",
+    "renew": "Új tartalék kódok",
+    "renewSubmit": "Új kódok",
+    "renewBody": "A régi tartalék kódok érvényüket vesztik. Add meg a jelszavad és a hitelesítő alkalmazás kódját.",
+    "totp": "A hitelesítő alkalmazás kódja",
+    "totpHelp": "Elveszett telefon esetén a szerveren: colonyhall operator-reset-totp -handle <név>.",
+    "codesOnce": "Ezek a kódok most jelennek meg utoljára. Tárold őket a gépen kívül; mindegyik egyszer használható."
+  },
+  "plans": {
+    "title": "Csomagok",
+    "new": "Új csomag",
+    "empty": "Még nincs csomag.",
+    "body": "A csomag korlátozza a munkaterület tárhelyét. A CPU-magot és a memóriát most csak tároljuk és mutatjuk; a hosztolt őr fogja érvényesíteni. Egy csomag módosítása minden rajta lévő munkaterületre érvényes.",
+    "name": "Név",
+    "storage": "Tárhely",
+    "storageGb": "Tárhely (GB)",
+    "cpu": "CPU-mag",
+    "memory": "Memória",
+    "memoryGb": "Memória (GB)",
+    "workspaces": "Munkaterület",
+    "edit": "Szerkesztés",
+    "editTitle": "{{name}} szerkesztése",
+    "save": "Mentés",
+    "archive": "Archiválva (új ügyfélhez nem rendelhető; a meglévők megtartják)",
+    "archived": "archivált",
+    "computeHelp": "A számokat a szerverhez igazítsd: ennyit használhat egy munkaterület a hosztolt őrön.",
+    "confirmOverQuota": "Ezzel a munkaterület megtelik, és az agentjei szünetelnek, amíg a használat a keret alá nem csökken. Bejelölve mégis mentem."
+  },
+  "plan": {
+    "label": "Csomag",
+    "none": "Nincs (csak a tulajdonos kerete)",
+    "value": "{{name}} · {{storage}} · {{cpu}} mag",
+    "change": "Csomag",
+    "title": "{{name}} csomagja",
+    "assign": "Beállítás",
+    "fits": "Jelenlegi használat {{used}}, a keret {{quota}} lesz: belefér.",
+    "wouldFill": "Jelenlegi használat {{used}}, az új keret {{quota}}: a munkaterület megtelik, és az agentek szünetelnek, amíg a használat a keret alá nem csökken.",
+    "confirm": "Értem: a munkaterület megtelik, és a tulajdonos értesítést kap."
+  },
+  "breakGlass": {
+    "label": "Vészhozzáférés",
+    "open": "Vészhozzáférés",
+    "isOpen": "Nyitva",
+    "title": "Vészhozzáférés: {{name}}",
+    "body": "Csak olvasható betekintés hibakereséshez: nyilvános csatornák és szálak, agentek, gépek, futások (lépések nélkül), beállítások. DM-eket, privát csatornákat és keresést nem látsz. Az ügyfél auditnaplójába bekerül a megnyitás, az indoklás és minden megnyitott oldal; a tulajdonos értesítést kap, és bármikor lezárhatja.",
+    "reason": "Indoklás",
+    "reasonHelp": "Legalább 20 karakter; az ügyfél is látja.",
+    "reasonDev": "Fejlesztői módban nem kötelező.",
+    "minutes": "Időtartam (perc)",
+    "minutesHelp": "Legfeljebb {{max}} perc.",
+    "handOver": "A link {{until}}-ig, egyszer használható; az ügyfél címén nyitja meg a csak olvasható munkamenetet.",
+    "go": "Megnyitás új lapon",
+    "history": "Vészhozzáférések",
+    "close": "Lezárás",
+    "closedBy": {
+      "operator": "Lezárva",
+      "owner": "A tulajdonos lezárta",
+      "expired": "Lejárt"
+    }
+  }
+}

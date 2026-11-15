@@ -195,6 +195,14 @@ func (s *ctSuite) seed() {
 
 	acmeWS := acmeWorkspace(t, a)
 	s.seedShortLived(acmeWS)
+	// Round 51b: an operator's break-glass access to acme (its row and its
+	// operator actor are acme's).
+	bg, _, err := a.app.Identity.OpenBreakGlass(context.Background(), identity.OpenBreakGlassInput{WorkspaceID: acmeWS,
+		OperatorID: ids.V7{}.New(), OperatorHandle: "ops", Reason: acmeData + " break-glass reason", ExpiresAt: a.clock.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatalf("seed break-glass: %v", err)
+	}
+	s.obj["breakglass"] = bg.ID.String()
 
 	for _, id := range s.obj {
 		if _, err := ids.Parse(id); err == nil {
@@ -202,6 +210,7 @@ func (s *ctSuite) seed() {
 		}
 	}
 	s.acmeIDs = append(s.acmeIDs, acmeWS.String())
+	s.obj["workspace"] = acmeWS.String()
 
 	// beta: its owner, an agent and a machine of its own.
 	b := s.beta
@@ -378,6 +387,15 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 		return s.obj["grant"], true
 	case "previewId":
 		return s.obj["preview"], true
+	case "workspaceId":
+		// Round 51: the operator's routes (admin host only).
+		return s.obj["workspace"], true
+	case "breakGlassId":
+		// Round 51b: an operator's access to acme.
+		return s.obj["breakglass"], true
+	case "planId":
+		// Round 51b: plans are the operator's (admin host only); any id.
+		return ids.V7{}.New().String(), false
 	case "requestId":
 		// Relay requests live in memory for seconds: acme has none; an id
 		// that exists nowhere still has to be refused cleanly.
@@ -431,6 +449,18 @@ func (s *ctSuite) rest() int {
 		public := o.o.Security != nil && len(*o.o.Security) == 0
 		body, ctype := s.body(o.o)
 
+		// Round 51: the operator's API exists only on admin.<domain>; on a
+		// customer's subdomain it is not there, whatever the credential.
+		if strings.HasPrefix(o.path, "/operator/") {
+			for _, e := range []*env{s.beta, s.acme} {
+				st, resp := s.call(e, o.method, path, token, body, ctype)
+				s.checkLeak(o.o.OperationID+" on a customer host", path, body, resp)
+				if st != http.StatusNotFound && st != http.StatusMethodNotAllowed {
+					t.Errorf("%s %s (%s) on %s: %d, want 404 or 405", o.method, o.path, o.o.OperationID, e.host, st)
+				}
+			}
+			continue
+		}
 		// (a) On beta's own subdomain, with beta's credentials.
 		st, resp := s.call(s.beta, o.method, path, token, body, ctype)
 		s.checkLeak(o.o.OperationID, path, body, resp)

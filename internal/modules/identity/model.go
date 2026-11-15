@@ -51,6 +51,10 @@ type Workspace struct {
 	// halted (no writes, no wake-ups) until an admin clears it.
 	EmergencyStopAt *time.Time
 	EmergencyStopBy ids.ID
+	// SuspendedAt and SuspendedReason are set while the operator keeps the
+	// workspace suspended (round 51). The reason is for the operator only.
+	SuspendedAt     *time.Time
+	SuspendedReason string
 }
 
 // Actor states.
@@ -94,6 +98,10 @@ type Actor struct {
 	// stored: the actor is paused, or it is an agent while the workspace's
 	// emergency stop is on. Halted actors may read but not write.
 	Halted bool
+	// BreakGlass is computed for a request of the operator's break-glass
+	// session (round 51b), never stored: read-only, the allowed routes
+	// only, no DMs or private channels.
+	BreakGlass *BreakGlassAccess
 }
 
 // SeesAgent reports whether the actor may see an agent's details (overview,

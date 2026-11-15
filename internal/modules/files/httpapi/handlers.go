@@ -43,14 +43,17 @@ func init() {
 	// Round 54.
 	httpx.RegisterForbidden(files.ErrNotUploader, files.ErrNotOwner, files.ErrNotAdmin)
 	httpx.RegisterValidation(files.ErrInvalidQuota)
+	httpx.RegisterProblemType(http.StatusUnprocessableEntity, "quota_above_plan", files.ErrQuotaAbovePlan)
+	httpx.RegisterProblemType(http.StatusConflict, "plan_over_quota", files.ErrPlanOverQuota)
 	httpx.RegisterProblemType(http.StatusInsufficientStorage, "storage_full", files.ErrStorageFull)
 }
 
 // StorageToAPI converts a usage to the owner's view (never per person).
 func StorageToAPI(u files.Usage) apispec.WorkspaceStorage {
 	b := u.Breakdown()
-	return apispec.WorkspaceStorage{
+	out := apispec.WorkspaceStorage{
 		QuotaBytes:       u.QuotaBytes,
+		LimitBytes:       u.Limit(),
 		UsedBytes:        u.Used(),
 		AttachmentsBytes: b.Attachments,
 		ChatSearchBytes:  b.ChatSearch,
@@ -58,6 +61,10 @@ func StorageToAPI(u files.Usage) apispec.WorkspaceStorage {
 		DbMeasuredAt:     u.DBMeasuredAt,
 		State:            apispec.StorageState(u.State()),
 	}
+	if p := u.Plan; p != nil {
+		out.Plan = &apispec.WorkspacePlan{Name: p.Name, StorageBytes: p.StorageBytes, CpuCores: p.CPUCores, MemoryBytes: p.MemoryBytes}
+	}
+	return out
 }
 
 // A "My files" cursor is "<created_at, unix nanoseconds>_<file id>".

@@ -12,7 +12,7 @@ import { place, usePanes } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
 import { useActivityUnread } from "@/features/activity";
 import { AgentDialogs } from "@/features/agents";
-import { useSession } from "@/features/identity";
+import { BreakGlassBanner, useSession } from "@/features/identity";
 import { ScheduleBuilderHost } from "@/features/schedules";
 import { StorageBanner } from "@/features/files";
 import { BottomBar } from "./BottomBar";
@@ -98,6 +98,7 @@ export function Shell() {
       </a>
       <Header onToggleSidebar={toggle} />
       <ConnectionBar />
+      <BreakGlassBanner />
       <StorageBanner admin={admin} />
       <div className="relative flex min-h-0 flex-1">
         <aside

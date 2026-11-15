@@ -42,6 +42,7 @@ func uploadMultipart(t *testing.T, e *env, channelID, filename string, content [
 	}
 
 	req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/channels/"+channelID+"/files", &body)
+	req.Host = e.host // the workspace's subdomain in multi-tenant tests
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 

@@ -248,6 +248,69 @@ func (q *Queries) AuthFailures(ctx context.Context, arg AuthFailuresParams) ([]A
 	return items, nil
 }
 
+const breakGlassActor = `-- name: BreakGlassActor :one
+SELECT actor_id FROM break_glass WHERE workspace_id = $1 ORDER BY opened_at DESC LIMIT 1
+`
+
+func (q *Queries) BreakGlassActor(ctx context.Context, workspaceID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, breakGlassActor, workspaceID)
+	var actor_id uuid.UUID
+	err := row.Scan(&actor_id)
+	return actor_id, err
+}
+
+const breakGlassByHandoffHash = `-- name: BreakGlassByHandoffHash :one
+SELECT id, workspace_id, operator_id, operator_handle, actor_id, reason, dev_mode, opened_at, expires_at, handoff_hash, handoff_expires_at, handoff_used_at, closed_at, closed_by FROM break_glass WHERE handoff_hash = $1
+`
+
+func (q *Queries) BreakGlassByHandoffHash(ctx context.Context, handoffHash []byte) (BreakGlass, error) {
+	row := q.db.QueryRow(ctx, breakGlassByHandoffHash, handoffHash)
+	var i BreakGlass
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.OperatorID,
+		&i.OperatorHandle,
+		&i.ActorID,
+		&i.Reason,
+		&i.DevMode,
+		&i.OpenedAt,
+		&i.ExpiresAt,
+		&i.HandoffHash,
+		&i.HandoffExpiresAt,
+		&i.HandoffUsedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+	)
+	return i, err
+}
+
+const breakGlassByID = `-- name: BreakGlassByID :one
+SELECT id, workspace_id, operator_id, operator_handle, actor_id, reason, dev_mode, opened_at, expires_at, handoff_hash, handoff_expires_at, handoff_used_at, closed_at, closed_by FROM break_glass WHERE id = $1
+`
+
+func (q *Queries) BreakGlassByID(ctx context.Context, id uuid.UUID) (BreakGlass, error) {
+	row := q.db.QueryRow(ctx, breakGlassByID, id)
+	var i BreakGlass
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.OperatorID,
+		&i.OperatorHandle,
+		&i.ActorID,
+		&i.Reason,
+		&i.DevMode,
+		&i.OpenedAt,
+		&i.ExpiresAt,
+		&i.HandoffHash,
+		&i.HandoffExpiresAt,
+		&i.HandoffUsedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+	)
+	return i, err
+}
+
 const clearAuthFailures = `-- name: ClearAuthFailures :exec
 SELECT colony_clear_auth_failures($1::text, $2::text, $3::timestamptz)
 `
@@ -261,6 +324,25 @@ type ClearAuthFailuresParams struct {
 func (q *Queries) ClearAuthFailures(ctx context.Context, arg ClearAuthFailuresParams) error {
 	_, err := q.db.Exec(ctx, clearAuthFailures, arg.Scope, arg.Handle, arg.At)
 	return err
+}
+
+const closeBreakGlass = `-- name: CloseBreakGlass :execrows
+UPDATE break_glass SET closed_at = $1, closed_by = $2
+WHERE id = $3 AND closed_at IS NULL
+`
+
+type CloseBreakGlassParams struct {
+	At       *time.Time
+	ClosedBy *string
+	ID       uuid.UUID
+}
+
+func (q *Queries) CloseBreakGlass(ctx context.Context, arg CloseBreakGlassParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeBreakGlass, arg.At, arg.ClosedBy, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createActor = `-- name: CreateActor :exec
@@ -305,19 +387,89 @@ func (q *Queries) CreateActor(ctx context.Context, arg CreateActorParams) error 
 	return err
 }
 
+const createBreakGlass = `-- name: CreateBreakGlass :exec
+
+INSERT INTO break_glass (id, workspace_id, operator_id, operator_handle, actor_id, reason, dev_mode, opened_at, expires_at,
+    handoff_hash, handoff_expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+`
+
+type CreateBreakGlassParams struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	OperatorID       uuid.UUID
+	OperatorHandle   string
+	ActorID          uuid.UUID
+	Reason           string
+	DevMode          bool
+	OpenedAt         time.Time
+	ExpiresAt        time.Time
+	HandoffHash      []byte
+	HandoffExpiresAt time.Time
+}
+
+// Round 51b: break-glass access.
+func (q *Queries) CreateBreakGlass(ctx context.Context, arg CreateBreakGlassParams) error {
+	_, err := q.db.Exec(ctx, createBreakGlass,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.OperatorID,
+		arg.OperatorHandle,
+		arg.ActorID,
+		arg.Reason,
+		arg.DevMode,
+		arg.OpenedAt,
+		arg.ExpiresAt,
+		arg.HandoffHash,
+		arg.HandoffExpiresAt,
+	)
+	return err
+}
+
+const createInvite = `-- name: CreateInvite :exec
+
+INSERT INTO workspace_invite (id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $7, $5, $6)
+`
+
+type CreateInviteParams struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	TokenHash         []byte
+	Role              string
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+	CreatedByOperator *uuid.UUID
+}
+
+// Round 51: the owner's one-time invites (migration 00068).
+func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) error {
+	_, err := q.db.Exec(ctx, createInvite,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.TokenHash,
+		arg.Role,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.CreatedByOperator,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
-INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id)
-SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id FROM actor a WHERE a.id = $2
+INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id, break_glass_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id, $8 FROM actor a WHERE a.id = $2
 `
 
 type CreateSessionParams struct {
-	ID        uuid.UUID
-	ActorID   uuid.UUID
-	TokenHash []byte
-	CsrfToken string
-	UserAgent string
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	ID           uuid.UUID
+	ActorID      uuid.UUID
+	TokenHash    []byte
+	CsrfToken    string
+	UserAgent    string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	BreakGlassID *uuid.UUID
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
@@ -329,6 +481,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.UserAgent,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+		arg.BreakGlassID,
 	)
 	return err
 }
@@ -527,6 +680,61 @@ func (q *Queries) HandleWorkspaces(ctx context.Context, handle string) ([]Handle
 	return items, nil
 }
 
+const inviteByTokenHash = `-- name: InviteByTokenHash :one
+SELECT id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at, used_at, used_by, revoked_at FROM workspace_invite WHERE token_hash = $1
+`
+
+func (q *Queries) InviteByTokenHash(ctx context.Context, tokenHash []byte) (WorkspaceInvite, error) {
+	row := q.db.QueryRow(ctx, inviteByTokenHash, tokenHash)
+	var i WorkspaceInvite
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TokenHash,
+		&i.Role,
+		&i.CreatedByOperator,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.UsedBy,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const isBreakGlassActor = `-- name: IsBreakGlassActor :one
+SELECT EXISTS (SELECT 1 FROM break_glass WHERE actor_id = $1)
+`
+
+func (q *Queries) IsBreakGlassActor(ctx context.Context, actorID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, isBreakGlassActor, actorID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const latestInvite = `-- name: LatestInvite :one
+SELECT id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at, used_at, used_by, revoked_at FROM workspace_invite WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1
+`
+
+func (q *Queries) LatestInvite(ctx context.Context, workspaceID uuid.UUID) (WorkspaceInvite, error) {
+	row := q.db.QueryRow(ctx, latestInvite, workspaceID)
+	var i WorkspaceInvite
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TokenHash,
+		&i.Role,
+		&i.CreatedByOperator,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.UsedBy,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const listActors = `-- name: ListActors :many
 SELECT id, workspace_id, kind, handle, display_name, role, state, created_at, description, avatar_emoji, timezone, status_text, color, archived_at, archived_by, owner_id FROM actor WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY handle
 `
@@ -609,6 +817,50 @@ func (q *Queries) ListAllActors(ctx context.Context, workspaceID uuid.UUID) ([]A
 	return items, nil
 }
 
+const listBreakGlass = `-- name: ListBreakGlass :many
+SELECT id, workspace_id, operator_id, operator_handle, actor_id, reason, dev_mode, opened_at, expires_at, handoff_hash, handoff_expires_at, handoff_used_at, closed_at, closed_by FROM break_glass WHERE workspace_id = $1 ORDER BY opened_at DESC, id DESC LIMIT $2::int
+`
+
+type ListBreakGlassParams struct {
+	WorkspaceID uuid.UUID
+	MaxRows     int32
+}
+
+func (q *Queries) ListBreakGlass(ctx context.Context, arg ListBreakGlassParams) ([]BreakGlass, error) {
+	rows, err := q.db.Query(ctx, listBreakGlass, arg.WorkspaceID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BreakGlass
+	for rows.Next() {
+		var i BreakGlass
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.OperatorID,
+			&i.OperatorHandle,
+			&i.ActorID,
+			&i.Reason,
+			&i.DevMode,
+			&i.OpenedAt,
+			&i.ExpiresAt,
+			&i.HandoffHash,
+			&i.HandoffExpiresAt,
+			&i.HandoffUsedAt,
+			&i.ClosedAt,
+			&i.ClosedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTokens = `-- name: ListTokens :many
 SELECT id, actor_id, token_hash, label, created_at, revoked_at, host_id, expires_at, prefix, last_used_at, workspace_id FROM api_token WHERE actor_id = $1 ORDER BY created_at, id
 `
@@ -634,6 +886,79 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 			&i.Prefix,
 			&i.LastUsedAt,
 			&i.WorkspaceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaces = `-- name: ListWorkspaces :many
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state, suspended_at, suspended_reason FROM workspace ORDER BY created_at, id
+`
+
+func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
+	rows, err := q.db.Query(ctx, listWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Workspace
+	for rows.Next() {
+		var i Workspace
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.EmergencyStopAt,
+			&i.EmergencyStopBy,
+			&i.Slug,
+			&i.State,
+			&i.SuspendedAt,
+			&i.SuspendedReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const overdueBreakGlass = `-- name: OverdueBreakGlass :many
+SELECT id, workspace_id, operator_id, operator_handle, actor_id, reason, dev_mode, opened_at, expires_at, handoff_hash, handoff_expires_at, handoff_used_at, closed_at, closed_by FROM break_glass WHERE closed_at IS NULL AND expires_at <= $1 ORDER BY expires_at
+`
+
+func (q *Queries) OverdueBreakGlass(ctx context.Context, expiresAt time.Time) ([]BreakGlass, error) {
+	rows, err := q.db.Query(ctx, overdueBreakGlass, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BreakGlass
+	for rows.Next() {
+		var i BreakGlass
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.OperatorID,
+			&i.OperatorHandle,
+			&i.ActorID,
+			&i.Reason,
+			&i.DevMode,
+			&i.OpenedAt,
+			&i.ExpiresAt,
+			&i.HandoffHash,
+			&i.HandoffExpiresAt,
+			&i.HandoffUsedAt,
+			&i.ClosedAt,
+			&i.ClosedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -782,6 +1107,21 @@ func (q *Queries) RevokeHostTokens(ctx context.Context, arg RevokeHostTokensPara
 	return err
 }
 
+const revokeOpenInvites = `-- name: RevokeOpenInvites :exec
+UPDATE workspace_invite SET revoked_at = $1
+WHERE workspace_id = $2 AND used_at IS NULL AND revoked_at IS NULL
+`
+
+type RevokeOpenInvitesParams struct {
+	At          *time.Time
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) RevokeOpenInvites(ctx context.Context, arg RevokeOpenInvitesParams) error {
+	_, err := q.db.Exec(ctx, revokeOpenInvites, arg.At, arg.WorkspaceID)
+	return err
+}
+
 const revokeSession = `-- name: RevokeSession :exec
 UPDATE session SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL
 `
@@ -856,7 +1196,7 @@ func (q *Queries) RevokeTokenByHash(ctx context.Context, arg RevokeTokenByHashPa
 }
 
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, s.workspace_id, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
+SELECT s.id, s.actor_id, s.token_hash, s.csrf_token, s.user_agent, s.created_at, s.expires_at, s.revoked_at, s.last_seen_at, s.workspace_id, s.break_glass_id, a.id, a.workspace_id, a.kind, a.handle, a.display_name, a.role, a.state, a.created_at, a.description, a.avatar_emoji, a.timezone, a.status_text, a.color, a.archived_at, a.archived_by, a.owner_id
 FROM session s JOIN actor a ON a.id = s.actor_id
 WHERE s.token_hash = $1 AND s.revoked_at IS NULL
 `
@@ -880,6 +1220,7 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 		&i.Session.RevokedAt,
 		&i.Session.LastSeenAt,
 		&i.Session.WorkspaceID,
+		&i.Session.BreakGlassID,
 		&i.Actor.ID,
 		&i.Actor.WorkspaceID,
 		&i.Actor.Kind,
@@ -1022,6 +1363,20 @@ func (q *Queries) SetEmergencyStop(ctx context.Context, arg SetEmergencyStopPara
 	return err
 }
 
+const setInviteUsedBy = `-- name: SetInviteUsedBy :exec
+UPDATE workspace_invite SET used_by = $1 WHERE id = $2
+`
+
+type SetInviteUsedByParams struct {
+	ActorID *uuid.UUID
+	ID      uuid.UUID
+}
+
+func (q *Queries) SetInviteUsedBy(ctx context.Context, arg SetInviteUsedByParams) error {
+	_, err := q.db.Exec(ctx, setInviteUsedBy, arg.ActorID, arg.ID)
+	return err
+}
+
 const setWorkspaceSlug = `-- name: SetWorkspaceSlug :execrows
 UPDATE workspace SET slug = $1 WHERE id = $2
 `
@@ -1040,16 +1395,24 @@ func (q *Queries) SetWorkspaceSlug(ctx context.Context, arg SetWorkspaceSlugPara
 }
 
 const setWorkspaceState = `-- name: SetWorkspaceState :execrows
-UPDATE workspace SET state = $1 WHERE id = $2
+UPDATE workspace SET state = $1, suspended_reason = $2, suspended_at = $3
+WHERE id = $4
 `
 
 type SetWorkspaceStateParams struct {
-	State string
-	ID    uuid.UUID
+	State  string
+	Reason string
+	At     *time.Time
+	ID     uuid.UUID
 }
 
 func (q *Queries) SetWorkspaceState(ctx context.Context, arg SetWorkspaceStateParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setWorkspaceState, arg.State, arg.ID)
+	result, err := q.db.Exec(ctx, setWorkspaceState,
+		arg.State,
+		arg.Reason,
+		arg.At,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1185,8 +1548,45 @@ func (q *Queries) UpdateActorProfile(ctx context.Context, arg UpdateActorProfile
 	return err
 }
 
+const useBreakGlassHandoff = `-- name: UseBreakGlassHandoff :execrows
+UPDATE break_glass SET handoff_used_at = $1
+WHERE id = $2 AND handoff_used_at IS NULL AND closed_at IS NULL
+  AND handoff_expires_at > $1 AND expires_at > $1
+`
+
+type UseBreakGlassHandoffParams struct {
+	At *time.Time
+	ID uuid.UUID
+}
+
+func (q *Queries) UseBreakGlassHandoff(ctx context.Context, arg UseBreakGlassHandoffParams) (int64, error) {
+	result, err := q.db.Exec(ctx, useBreakGlassHandoff, arg.At, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const useInvite = `-- name: UseInvite :execrows
+UPDATE workspace_invite SET used_at = $1
+WHERE id = $2 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > $1
+`
+
+type UseInviteParams struct {
+	At *time.Time
+	ID uuid.UUID
+}
+
+func (q *Queries) UseInvite(ctx context.Context, arg UseInviteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, useInvite, arg.At, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const workspaceByID = `-- name: WorkspaceByID :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE id = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state, suspended_at, suspended_reason FROM workspace WHERE id = $1
 `
 
 func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error) {
@@ -1200,12 +1600,14 @@ func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, e
 		&i.EmergencyStopBy,
 		&i.Slug,
 		&i.State,
+		&i.SuspendedAt,
+		&i.SuspendedReason,
 	)
 	return i, err
 }
 
 const workspaceByName = `-- name: WorkspaceByName :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE name = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state, suspended_at, suspended_reason FROM workspace WHERE name = $1
 `
 
 func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, error) {
@@ -1219,6 +1621,8 @@ func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, 
 		&i.EmergencyStopBy,
 		&i.Slug,
 		&i.State,
+		&i.SuspendedAt,
+		&i.SuspendedReason,
 	)
 	return i, err
 }

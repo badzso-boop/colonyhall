@@ -225,10 +225,15 @@ func (s *Store) SetCredential(ctx context.Context, actorID ids.ID, hash string, 
 
 // CreateSession stores a session.
 func (s *Store) CreateSession(ctx context.Context, x identity.Session) error {
-	return s.q(ctx).CreateSession(ctx, sqlcgen.CreateSessionParams{
+	p := sqlcgen.CreateSessionParams{
 		ID: x.ID, ActorID: x.ActorID, TokenHash: x.TokenHash, CsrfToken: x.CSRFToken,
 		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt,
-	})
+	}
+	if x.BreakGlassID != ids.Nil {
+		id := x.BreakGlassID
+		p.BreakGlassID = &id
+	}
+	return s.q(ctx).CreateSession(ctx, p)
 }
 
 // SessionByTokenHash returns a non-revoked session and its actor.
@@ -241,8 +246,12 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (identity.S
 		return identity.Session{}, identity.Actor{}, err
 	}
 	x := r.Session
-	return identity.Session{ID: x.ID, ActorID: x.ActorID, TokenHash: x.TokenHash, CSRFToken: x.CsrfToken,
-		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt, LastSeenAt: x.LastSeenAt}, toActor(r.Actor), nil
+	sess := identity.Session{ID: x.ID, ActorID: x.ActorID, TokenHash: x.TokenHash, CSRFToken: x.CsrfToken,
+		UserAgent: x.UserAgent, CreatedAt: x.CreatedAt, ExpiresAt: x.ExpiresAt, LastSeenAt: x.LastSeenAt}
+	if x.BreakGlassID != nil {
+		sess.BreakGlassID = *x.BreakGlassID
+	}
+	return sess, toActor(r.Actor), nil
 }
 
 // RevokeSession ends a session.
@@ -256,7 +265,8 @@ func (s *Store) RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID
 }
 
 func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
-	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State, EmergencyStopAt: w.EmergencyStopAt}
+	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State, EmergencyStopAt: w.EmergencyStopAt,
+		SuspendedAt: w.SuspendedAt, SuspendedReason: w.SuspendedReason}
 	if w.EmergencyStopBy != nil {
 		out.EmergencyStopBy = *w.EmergencyStopBy
 	}
@@ -468,8 +478,8 @@ func (s *Store) RevokeTokenByHash(ctx context.Context, hash []byte, at time.Time
 }
 
 // SetWorkspaceState suspends or reactivates a workspace.
-func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state string) error {
-	n, err := s.q(ctx).SetWorkspaceState(ctx, sqlcgen.SetWorkspaceStateParams{ID: id, State: state})
+func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state, reason string, at *time.Time) error {
+	n, err := s.q(ctx).SetWorkspaceState(ctx, sqlcgen.SetWorkspaceStateParams{ID: id, State: state, Reason: reason, At: at})
 	if err == nil && n == 0 {
 		return db.ErrNotFound
 	}
@@ -496,4 +506,156 @@ func (s *Store) EmojiUsage(ctx context.Context, actorID ids.ID, limit int) (rece
 		return nil, nil, err
 	}
 	return recent, frequent, nil
+}
+
+// CreateInvite stores an invite.
+func (s *Store) CreateInvite(ctx context.Context, i identity.Invite) error {
+	var by *ids.ID
+	if i.CreatedByOperator != ids.Nil {
+		by = &i.CreatedByOperator
+	}
+	return s.q(ctx).CreateInvite(ctx, sqlcgen.CreateInviteParams{ID: i.ID, WorkspaceID: i.WorkspaceID, TokenHash: i.TokenHash,
+		Role: string(i.Role), CreatedByOperator: by, CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt})
+}
+
+// RevokeOpenInvites revokes the workspace's open invites.
+func (s *Store) RevokeOpenInvites(ctx context.Context, workspaceID ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeOpenInvites(ctx, sqlcgen.RevokeOpenInvitesParams{WorkspaceID: workspaceID, At: &at})
+}
+
+// InviteByTokenHash finds an invite by its token hash.
+func (s *Store) InviteByTokenHash(ctx context.Context, hash []byte) (identity.Invite, error) {
+	r, err := s.q(ctx).InviteByTokenHash(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Invite{}, db.ErrNotFound
+	}
+	return toInvite(r), err
+}
+
+// UseInvite marks an open invite used.
+func (s *Store) UseInvite(ctx context.Context, id ids.ID, at time.Time) (bool, error) {
+	n, err := s.q(ctx).UseInvite(ctx, sqlcgen.UseInviteParams{ID: id, At: &at})
+	return n == 1, err
+}
+
+// SetInviteUsedBy records the owner the invite created.
+func (s *Store) SetInviteUsedBy(ctx context.Context, id, actorID ids.ID) error {
+	return s.q(ctx).SetInviteUsedBy(ctx, sqlcgen.SetInviteUsedByParams{ID: id, ActorID: &actorID})
+}
+
+// LatestInvite is the workspace's newest invite.
+func (s *Store) LatestInvite(ctx context.Context, workspaceID ids.ID) (identity.Invite, error) {
+	r, err := s.q(ctx).LatestInvite(ctx, workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Invite{}, db.ErrNotFound
+	}
+	return toInvite(r), err
+}
+
+func toInvite(r sqlcgen.WorkspaceInvite) identity.Invite {
+	out := identity.Invite{ID: r.ID, WorkspaceID: r.WorkspaceID, TokenHash: r.TokenHash, Role: identity.Role(r.Role),
+		CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, UsedAt: r.UsedAt, RevokedAt: r.RevokedAt}
+	if r.CreatedByOperator != nil {
+		out.CreatedByOperator = *r.CreatedByOperator
+	}
+	if r.UsedBy != nil {
+		out.UsedBy = *r.UsedBy
+	}
+	return out
+}
+
+// ListWorkspaces lists every workspace (system mode).
+func (s *Store) ListWorkspaces(ctx context.Context) ([]identity.Workspace, error) {
+	list, err := s.q(ctx).ListWorkspaces(ctx)
+	out := make([]identity.Workspace, 0, len(list))
+	for _, w := range list {
+		out = append(out, toWorkspace(w))
+	}
+	return out, err
+}
+
+// Round 51b: break-glass access.
+
+// CreateBreakGlass stores an access.
+func (s *Store) CreateBreakGlass(ctx context.Context, b identity.BreakGlass) error {
+	return s.q(ctx).CreateBreakGlass(ctx, sqlcgen.CreateBreakGlassParams{ID: b.ID, WorkspaceID: b.WorkspaceID, OperatorID: b.OperatorID,
+		OperatorHandle: b.OperatorHandle, ActorID: b.ActorID, Reason: b.Reason, DevMode: b.DevMode, OpenedAt: b.OpenedAt,
+		ExpiresAt: b.ExpiresAt, HandoffHash: b.HandoffHash, HandoffExpiresAt: b.HandoffExpiresAt})
+}
+
+// BreakGlassByID reads an access.
+func (s *Store) BreakGlassByID(ctx context.Context, id ids.ID) (identity.BreakGlass, error) {
+	r, err := s.q(ctx).BreakGlassByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.BreakGlass{}, db.ErrNotFound
+	}
+	return toBreakGlass(r), err
+}
+
+// BreakGlassByHandoffHash finds an access by its handoff token.
+func (s *Store) BreakGlassByHandoffHash(ctx context.Context, hash []byte) (identity.BreakGlass, error) {
+	r, err := s.q(ctx).BreakGlassByHandoffHash(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.BreakGlass{}, db.ErrNotFound
+	}
+	return toBreakGlass(r), err
+}
+
+// UseBreakGlassHandoff marks the handoff used.
+func (s *Store) UseBreakGlassHandoff(ctx context.Context, id ids.ID, at time.Time) (bool, error) {
+	n, err := s.q(ctx).UseBreakGlassHandoff(ctx, sqlcgen.UseBreakGlassHandoffParams{ID: id, At: &at})
+	return n == 1, err
+}
+
+// CloseBreakGlass closes an open access.
+func (s *Store) CloseBreakGlass(ctx context.Context, id ids.ID, by string, at time.Time) (bool, error) {
+	n, err := s.q(ctx).CloseBreakGlass(ctx, sqlcgen.CloseBreakGlassParams{ID: id, ClosedBy: &by, At: &at})
+	return n == 1, err
+}
+
+// ListBreakGlass lists the workspace's accesses, newest first.
+func (s *Store) ListBreakGlass(ctx context.Context, workspaceID ids.ID, limit int) ([]identity.BreakGlass, error) {
+	rows, err := s.q(ctx).ListBreakGlass(ctx, sqlcgen.ListBreakGlassParams{WorkspaceID: workspaceID, MaxRows: int32(limit)})
+	return breakGlassList(rows, err)
+}
+
+// OverdueBreakGlass lists the open accesses whose time is up.
+func (s *Store) OverdueBreakGlass(ctx context.Context, now time.Time) ([]identity.BreakGlass, error) {
+	rows, err := s.q(ctx).OverdueBreakGlass(ctx, now)
+	return breakGlassList(rows, err)
+}
+
+// BreakGlassActor is the workspace's operator actor.
+func (s *Store) BreakGlassActor(ctx context.Context, workspaceID ids.ID) (ids.ID, error) {
+	id, err := s.q(ctx).BreakGlassActor(ctx, workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ids.Nil, db.ErrNotFound
+	}
+	return id, err
+}
+
+// IsBreakGlassActor reports whether the actor is an operator actor.
+func (s *Store) IsBreakGlassActor(ctx context.Context, actorID ids.ID) (bool, error) {
+	return s.q(ctx).IsBreakGlassActor(ctx, actorID)
+}
+
+func breakGlassList(rows []sqlcgen.BreakGlass, err error) ([]identity.BreakGlass, error) {
+	if err != nil {
+		return nil, err
+	}
+	out := make([]identity.BreakGlass, len(rows))
+	for i, r := range rows {
+		out[i] = toBreakGlass(r)
+	}
+	return out, nil
+}
+
+func toBreakGlass(r sqlcgen.BreakGlass) identity.BreakGlass {
+	b := identity.BreakGlass{ID: r.ID, WorkspaceID: r.WorkspaceID, OperatorID: r.OperatorID, OperatorHandle: r.OperatorHandle,
+		ActorID: r.ActorID, Reason: r.Reason, DevMode: r.DevMode, OpenedAt: r.OpenedAt, ExpiresAt: r.ExpiresAt,
+		HandoffHash: r.HandoffHash, HandoffExpiresAt: r.HandoffExpiresAt, HandoffUsedAt: r.HandoffUsedAt, ClosedAt: r.ClosedAt}
+	if r.ClosedBy != nil {
+		b.ClosedBy = *r.ClosedBy
+	}
+	return b
 }

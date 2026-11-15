@@ -100,6 +100,7 @@ var messages = map[string][2]string{
 	"srvAdminPass2":    {"The password again", "A jelszó még egyszer"},
 	"srvPassMismatch":  {"The two passwords differ, or it is shorter than 12 characters.", "A két jelszó eltér, vagy rövidebb 12 karakternél."},
 	"srvPassGenerated": {"The owner's generated password (shown only now, save it): %s", "A tulajdonos generált jelszava (csak most látszik, mentsd el): %s"},
+	"srvOpAllow":       {"Multi-tenant mode only: the addresses the operator's console (admin.<domain>) answers, IPs or CIDRs, comma-separated (- for any; not advised)", "Csak többbérlős módban: mely címekről érhető el az üzemeltetői felület (admin.<domain>), IP-k vagy CIDR-ek vesszővel (- = bárhonnan; nem ajánlott)"},
 	"srvBackups":       {"Back up the database and files every night into %s (14 days)?", "Mentsem minden éjjel az adatbázist és a fájlokat ide: %s (14 nap)?"},
 	"srvReady":         {"The server runs: %s", "A szerver fut: %s"},
 	"srvWaiting":       {"Waiting for the server to start…", "Várom, hogy a szerver elinduljon…"},

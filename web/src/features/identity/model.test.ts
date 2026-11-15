@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import type { Actor } from "./api";
-import { draftOf, localTime, profileChanges, profileErrors, safeNext, timeZoneOptions } from "./model";
+import { draftOf, inviteToken, localTime, profileChanges, profileErrors, safeNext, timeZoneOptions, validOwnerHandle } from "./model";
 
 test("safeNext keeps in-app paths and refuses everything else", () => {
   expect(safeNext("/c/123?thread=9")).toBe("/c/123?thread=9");
@@ -49,4 +49,13 @@ test("timeZoneOptions always holds the current zone", () => {
   expect(list).toContain("Etc/GMT+5");
   expect(list).toContain("Europe/Budapest");
   expect(new Set(list).size).toBe(list.length);
+});
+
+test("the invite token comes from the fragment; the owner's handle follows the server's rule", () => {
+  expect(inviteToken("#col_abc-123")).toBe("col_abc-123");
+  expect(inviteToken("")).toBe("");
+  expect(inviteToken("#")).toBe("");
+  expect(validOwnerHandle("gina")).toBe(true);
+  expect(validOwnerHandle("gina-k2")).toBe(true);
+  for (const bad of ["g", "-gina", "Gina", "gi na", "gina_k", "x".repeat(33)]) expect(validOwnerHandle(bad)).toBe(false);
 });

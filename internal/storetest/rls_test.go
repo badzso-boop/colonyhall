@@ -14,8 +14,12 @@ import (
 	convpg "colonyhall/internal/modules/conversation/postgres"
 	"colonyhall/internal/modules/identity"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/operator"
+	oppg "colonyhall/internal/modules/operator/postgres"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/db/opscope"
 	"colonyhall/internal/platform/db/system"
+	"colonyhall/internal/platform/secretbox"
 	"colonyhall/migrations"
 )
 
@@ -175,4 +179,100 @@ func TestPostgresRowLevelSecurity(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("a workspace scope sees %d unattributed failure rows", n)
 	}
+
+	// Round 51: the operator scope sees the operator tables and no
+	// workspace; a workspace scope does not see the operator tables.
+	op := opscope.Context(ctx)
+	ops := &oppg.Store{DB: pg}
+	o := operator.Operator{ID: gen.New(), Handle: "ops", DisplayName: "Ops", PasswordHash: "x",
+		TOTP: secretbox.Sealed{KeyID: "k1", Nonce: []byte("n"), Ciphertext: []byte("c")}, State: operator.StateActive, CreatedAt: t0}
+	if err := ops.CreateOperator(inA, o); err == nil {
+		t.Fatal("a workspace scope created an operator")
+	}
+	must(t, ops.CreateOperator(op, o))
+	if _, err := ops.OperatorByID(inA, o.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a workspace scope read an operator: %v", err)
+	}
+	if _, err := ops.OperatorByID(ctx, o.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("an unscoped read found an operator: %v", err)
+	}
+	if _, err := ops.OperatorByID(op, o.ID); err != nil {
+		t.Fatalf("the operator scope reads its table: %v", err)
+	}
+	if _, err := ids.ActorByID(op, alice.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("the operator scope read a workspace's actor: %v", err)
+	}
+	if _, err := ids.WorkspaceByID(op, a.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("the operator scope read a workspace row: %v", err)
+	}
+	for _, table := range []string{"message", "channel", "actor", "event", "file", "workspace_invite"} {
+		var n int
+		must(t, pg.Q(op).QueryRow(op, "SELECT count(*) FROM "+table).Scan(&n))
+		if n != 0 {
+			t.Fatalf("the operator scope sees %d rows of %s", n, table)
+		}
+	}
+
+	// Round 51: the operator's overview reads in the operator scope itself
+	// through colony_operator_overview(): the numbers are right although
+	// the scope sees no workspace rows, no other scope may call it, and it
+	// leaves no system mode behind on the connection.
+	var overview operator.Overview = ops
+	got, err := overview.Customers(op, a.ID, t0.Add(-time.Minute))
+	if err != nil || len(got) != 1 || got[0].ID != a.ID || got[0].Name != "acme" || got[0].Slug != "acme" ||
+		got[0].Users != 1 || !got[0].HasOwner || got[0].Agents != 0 || got[0].Hosts != 0 || got[0].Invite != nil {
+		t.Fatalf("overview of workspace A: %+v %v", got, err)
+	}
+	everyone := a.ID // the ids package name is taken by the store here
+	clear(everyone[:])
+	all, err := overview.Customers(op, everyone, t0.Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[[16]byte]bool{}
+	for _, c := range all {
+		seen[c.ID] = true
+	}
+	if !seen[a.ID] || !seen[b.ID] {
+		t.Fatalf("overview of every workspace misses A or B: %+v", all)
+	}
+	for name, c := range map[string]context.Context{"workspace": inA, "unscoped": ctx, "system": system.Context(ctx)} {
+		if _, err := overview.Customers(c, a.ID, t0); err == nil {
+			t.Fatalf("a %s scope ran the operator's overview", name)
+		}
+	}
+	var left int
+	must(t, pg.Q(op).QueryRow(op, "SELECT count(*) FROM actor").Scan(&left))
+	if left != 0 {
+		t.Fatalf("the overview left system mode on: the operator scope now sees %d actors", left)
+	}
+
+	// Round 51: a nested transaction with another scope fails instead of
+	// running with the outer one (system mode here would see workspace B).
+	err = pg.InTx(system.Context(ctx), func(ctx context.Context) error {
+		return pg.InTx(db.WithWorkspace(ctx, a.ID), func(ctx context.Context) error {
+			_, err := ids.ActorByID(ctx, bob.ID)
+			return err
+		})
+	})
+	if !errors.Is(err, db.ErrScopeChanged) {
+		t.Fatalf("a nested transaction with another scope: %v", err)
+	}
+
+	// Round 51b: a read-only context (the operator's break-glass session)
+	// gets connections on which Postgres itself refuses every write, in a
+	// transaction or not; reads work; the next plain user writes again.
+	ro := db.ReadOnly(inA)
+	if _, err := ids.ActorByID(ro, alice.ID); err != nil {
+		t.Fatalf("a read-only read: %v", err)
+	}
+	carol := identity.Actor{ID: gen.New(), WorkspaceID: a.ID, Kind: identity.KindHuman, Handle: "carol", DisplayName: "Carol",
+		Role: identity.RoleMember, State: "active", CreatedAt: t0}
+	if err := ids.CreateActor(ro, carol); err == nil {
+		t.Fatal("a read-only context wrote a row")
+	}
+	if err := pg.InTx(ro, func(ctx context.Context) error { return ids.CreateActor(ctx, carol) }); err == nil {
+		t.Fatal("a read-only transaction wrote a row")
+	}
+	must(t, ids.CreateActor(inA, carol))
 }

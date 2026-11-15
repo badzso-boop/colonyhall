@@ -141,6 +141,14 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 		if !ok {
 			return
 		}
+		// Round 51b: the operator's break-glass access sees that runs
+		// happened (agent, machine, time, tokens, cost), never where: no
+		// conversation filter, and no conversation, message or session ids
+		// (a DM's would tell who talks to which agent).
+		breakGlass := httpx.Actor(r).BreakGlass != nil
+		if breakGlass {
+			f.ChannelID = ids.Nil
+		}
 		list, next, err := svc.SearchRuns(r.Context(), httpx.Actor(r), f)
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -190,11 +198,15 @@ func Register(mux *http.ServeMux, svc *runs.Service, auth identity.RequestAuthen
 			if item.ReplyMessageID != ids.Nil {
 				ar.ReplyMessageId = &item.ReplyMessageID
 			}
-			if len(item.WebReads) > 0 {
+			if breakGlass {
+				ar.ChannelId, ar.ThreadRootId, ar.ReplyMessageId, ar.SessionId = nil, nil, nil, ""
+			}
+			// Round 51b: nor what it read or did (it may have been a DM).
+			if len(item.WebReads) > 0 && !breakGlass {
 				wr := item.WebReads
 				ar.WebReads = &wr
 			}
-			if len(item.Steps) > 0 {
+			if len(item.Steps) > 0 && !breakGlass {
 				stList := make([]apispec.AgentStep, len(item.Steps))
 				for i, s := range item.Steps {
 					as := apispec.AgentStep{

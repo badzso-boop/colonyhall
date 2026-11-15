@@ -26,6 +26,9 @@ type Session struct {
 	ExpiresAt time.Time
 	// LastSeenAt is when it last authenticated a request (a minute apart at most).
 	LastSeenAt *time.Time
+	// BreakGlassID: the session is the operator's read-only break-glass
+	// access (round 51b); ids.Nil for every other session.
+	BreakGlassID ids.ID
 }
 
 // SessionStat is one actor's login activity.
@@ -91,6 +94,12 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 		_, _ = VerifyPassword(in.Password, dummyHash)
 		return fail()
 	}
+	if bg, err := s.Store.IsBreakGlassActor(ctx, a.ID); err != nil {
+		return Actor{}, Session{}, "", err
+	} else if bg {
+		// Round 51b: the operator actor never logs in with a password.
+		return fail()
+	}
 	if err != nil {
 		return Actor{}, Session{}, "", err
 	}
@@ -103,23 +112,32 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 		return fail()
 	}
 	s.LimitSucceeded(ctx, LimitLogin, in.Handle)
-
-	secret, err := NewSecret()
+	sess, secret, err := s.openSession(ctx, a, in.UserAgent)
 	if err != nil {
 		return Actor{}, Session{}, "", err
+	}
+	return a, sess, secret, nil
+}
+
+// openSession starts a browser session for a and records the login. It
+// returns the session and the cookie secret (shown once).
+func (s *Service) openSession(ctx context.Context, a Actor, userAgent string) (Session, string, error) {
+	secret, err := NewSecret()
+	if err != nil {
+		return Session{}, "", err
 	}
 	csrf, err := NewSecret()
 	if err != nil {
-		return Actor{}, Session{}, "", err
+		return Session{}, "", err
 	}
 	now := s.Clock.Now()
 	sess := Session{ID: s.IDs.New(), ActorID: a.ID, TokenHash: HashSecret(secret), CSRFToken: csrf,
-		UserAgent: truncate(in.UserAgent, 256), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
+		UserAgent: truncate(userAgent, 256), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
 	if err := s.Store.CreateSession(ctx, sess); err != nil {
-		return Actor{}, Session{}, "", err
+		return Session{}, "", err
 	}
-	s.recordLogin(ctx, a, EventLogin, in.UserAgent)
-	return a, sess, secret, nil
+	s.recordLogin(ctx, a, EventLogin, userAgent)
+	return sess, secret, nil
 }
 
 // recordLogin writes a login event for the audit log. A failure to record
@@ -187,10 +205,19 @@ func (s *Service) AuthenticateSession(ctx context.Context, secret string) (Actor
 	if !s.Clock.Now().Before(sess.ExpiresAt) {
 		return Actor{}, Session{}, ErrUnauthorized
 	}
+	var bg *BreakGlassAccess
+	if sess.BreakGlassID != ids.Nil {
+		// Round 51b: only the request layer that enforces the break-glass
+		// rules accepts it, and only while the access is open.
+		if bg, err = s.breakGlassOf(ctx, sess); err != nil {
+			return Actor{}, Session{}, err
+		}
+	}
 	a, err = s.load(ctx, a)
 	if err != nil {
 		return Actor{}, Session{}, err
 	}
+	a.BreakGlass = bg
 	now := s.Clock.Now()
 	_ = s.Store.TouchSession(ctx, sess.ID, now, now.Add(-touchEvery))
 	return a, sess, nil
@@ -214,6 +241,12 @@ func (s *Service) SetPassword(ctx context.Context, by Actor, currentSession, tar
 		return db.ErrNotFound
 	}
 	if target.Kind != KindHuman {
+		return ErrForbidden
+	}
+	// Round 51b: the operator actor never gets a password.
+	if bg, err := s.Store.IsBreakGlassActor(ctx, target.ID); err != nil {
+		return err
+	} else if bg {
 		return ErrForbidden
 	}
 	switch {

@@ -39,6 +39,12 @@ import (
 //	colonyhall rag-eval -set FILE [-as HANDLE]   search quality: recall@k, MRR, nDCG, latency
 //	colonyhall set-slug -workspace W -slug S     rename a workspace's subdomain (multi-tenant mode)
 //	colonyhall gitea-set -workspace W -url U     a workspace's own Gitea; token and webhook secret from stdin
+//	colonyhall secret-key [-id k1]               print a new COLONY_SECRET_KEYS entry
+//	colonyhall operator-create -handle H         a platform operator (multi-tenant mode); password from stdin, then the first TOTP code
+//	colonyhall operator-confirm -handle H -code C  activate an operator with the first TOTP code (when create had no terminal)
+//	colonyhall operator-reset-totp -handle H     a new TOTP secret (lost phone); sessions end, backup codes void
+//	colonyhall operator-disable -handle H        turn an operator off
+//	colonyhall rotate-secrets                    re-encrypt the stored secrets with the first COLONY_SECRET_KEYS key
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -61,6 +67,10 @@ func main() {
 		err = setSlug(os.Args[2:])
 	case len(os.Args) > 1 && os.Args[1] == "gitea-set":
 		err = giteaSet(os.Args[2:], os.Stdin)
+	case len(os.Args) > 1 && os.Args[1] == "secret-key":
+		err = secretKey(os.Args[2:], os.Stdout)
+	case len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "operator-") || len(os.Args) > 1 && os.Args[1] == "rotate-secrets":
+		err = operatorCmd(os.Args[1], os.Args[2:], os.Stdin, os.Stderr)
 	default:
 		err = run(logger)
 	}
@@ -235,11 +245,17 @@ func run(logger *slog.Logger) error {
 		RerankURL:          cfg.RerankURL,
 		RerankTop:          cfg.RerankTop,
 		RerankTimeout:      cfg.RerankTimeout,
+		SecretKeys:         cfg.SecretKeys,
+		OperatorDevAccess:  cfg.OperatorDevAccess,
+		OperatorAllowlist:  cfg.OperatorAllowlist,
 	})
 	if err != nil {
 		return err
 	}
 	defer app.Close()
+	if cfg.OperatorDevAccess {
+		logger.Warn("operator developer access is on (COLONY_OPERATOR_DEV_ACCESS=1, COLONY_ENV=development): the operator can read every workspace; never in production")
+	}
 
 	if cfg.DevSeed {
 		if err := app.SeedDev(ctx); err != nil {

@@ -218,6 +218,10 @@
     "fajlok": {
       "title": "Files",
       "body": "The server's environment sets the upload limit; it cannot be changed here."
+    },
+    "uzemelteto": {
+      "title": "Operator access",
+      "body": "When the workspace runs on a hosting operator's server, the operator may look in to debug something: with a reason, for at most 4 hours, read-only. It never sees DMs, private channels or search; every page it opens is in the audit log, and the owner is notified. The owner can close it here at once."
     }
   },
   "users": {
@@ -427,7 +431,10 @@
         "warning_80": "Over 80%",
         "warning_95": "Over 95%",
         "full": "Full: uploads fail, agents are paused"
-      }
+      },
+      "plan": "Plan",
+      "planValue": "{{name}} · {{storage}} · {{cpu}} cores · {{memory}} memory",
+      "belowPlan": "You can set the quota below the plan's storage, not above it."
     }
   },
   "emergencyStop": {

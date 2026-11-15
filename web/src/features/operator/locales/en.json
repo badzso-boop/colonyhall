@@ -1,0 +1,173 @@
+{
+  "title": "Operations",
+  "nav": {
+    "label": "Operations",
+    "customers": "Customers",
+    "audit": "Audit",
+    "system": "System",
+    "account": "My account",
+    "plans": "Plans"
+  },
+  "logout": "Log out",
+  "devAccess": "Developer mode: the operator sees all data",
+  "done": "Done",
+  "cancel": "Cancel",
+  "never": "Never",
+  "login": {
+    "title": "Operator sign-in",
+    "handle": "Handle",
+    "password": "Password",
+    "code": "Code",
+    "codeHelp": "The 6-digit code from the authenticator app, or a backup code (XXXXX-XXXXX).",
+    "submit": "Sign in",
+    "failed": "Wrong handle, password or code.",
+    "locked": "Too many failed attempts; try again later.",
+    "error": "Sign-in failed; try again."
+  },
+  "state": {
+    "active": "Active",
+    "suspended": "Suspended"
+  },
+  "invite": {
+    "owner": "Has an owner",
+    "none": "No invite",
+    "open": "Invite open",
+    "expired": "Invite expired",
+    "used": "Invite used",
+    "revoked": "Invite revoked",
+    "title": "New invite: {{name}}",
+    "body": "A new invite link for the owner, valid for 7 days. The previous link stops working.",
+    "create": "Create link",
+    "handOver": "Give the link to the customer's owner. It works once, until {{expires}}. It is not shown again."
+  },
+  "storage": {
+    "unlimited": "{{used}} (no quota)",
+    "ofQuota": "{{used}} / {{quota}} ({{pct}}%)",
+    "warning_80": "Over 80%",
+    "warning_95": "Over 95%",
+    "full": "Full"
+  },
+  "create": {
+    "title": "New customer",
+    "doneTitle": "Created: {{name}}",
+    "name": "Name",
+    "slug": "Subdomain",
+    "slugHelp": "3–40 characters: lower-case letters, digits and hyphens. The address starts with it: <subdomain>.<domain>.",
+    "submit": "Create",
+    "slugTaken": "Another customer already uses this subdomain.",
+    "invalid": "Check the name and the subdomain."
+  },
+  "customers": {
+    "title": "Customers",
+    "new": "New customer",
+    "empty": "No customers yet.",
+    "name": "Customer",
+    "slug": "Subdomain",
+    "state": "State",
+    "owner": "Owner",
+    "users": "Users",
+    "agents": "Agents",
+    "hosts": "Machines",
+    "hostsValue": "{{online}} / {{total}} online",
+    "storage": "Storage",
+    "lastActivity": "Last activity",
+    "back": "Customers"
+  },
+  "detail": {
+    "suspendedNotice": "Suspended ({{when}}): every request, machine and agent is refused; the data is kept.",
+    "newInvite": "New invite",
+    "suspend": "Suspend",
+    "restore": "Restore",
+    "inviteExpires": "Invite expires",
+    "created": "Created",
+    "reason": "Reason for the suspension"
+  },
+  "suspend": {
+    "title": "Suspend: {{name}}",
+    "body": "Every request, machine and agent of the workspace is refused and open connections close. The data is kept; after a restore everything continues.",
+    "reason": "Reason",
+    "reasonHelp": "Goes to the operator audit only; the customer does not see it."
+  },
+  "restore": {
+    "title": "Restore: {{name}}",
+    "body": "The workspace becomes available again; its machines and agents carry on."
+  },
+  "audit": {
+    "title": "Audit",
+    "empty": "No entries yet.",
+    "cli": "from the command line",
+    "more": "Older"
+  },
+  "system": {
+    "title": "System"
+  },
+  "account": {
+    "title": "My account",
+    "handle": "Handle",
+    "name": "Name",
+    "sessionEnds": "Session ends",
+    "sessionEndsValue": "at {{when}} at the latest (sooner after 30 idle minutes)",
+    "backupCodes": "Backup codes",
+    "backupCodesLeft_one": "{{count}} left",
+    "backupCodesLeft_other": "{{count}} left",
+    "backupCodesLow": "Few backup codes left; make new ones.",
+    "renew": "New backup codes",
+    "renewSubmit": "New codes",
+    "renewBody": "The old backup codes stop working. Enter your password and the code from the authenticator app.",
+    "totp": "Authenticator app code",
+    "totpHelp": "Lost phone: on the server, colonyhall operator-reset-totp -handle <name>.",
+    "codesOnce": "These codes are shown now for the last time. Keep them off this computer; each works once."
+  },
+  "plans": {
+    "title": "Plans",
+    "new": "New plan",
+    "empty": "No plans yet.",
+    "body": "A plan limits a workspace's storage. The CPU cores and memory are only stored and shown for now; the hosted guard will enforce them. Editing a plan applies to every workspace on it.",
+    "name": "Name",
+    "storage": "Storage",
+    "storageGb": "Storage (GB)",
+    "cpu": "CPU cores",
+    "memory": "Memory",
+    "memoryGb": "Memory (GB)",
+    "workspaces": "Workspaces",
+    "edit": "Edit",
+    "editTitle": "Edit {{name}}",
+    "save": "Save",
+    "archive": "Archived (not for new customers; the current ones keep it)",
+    "archived": "archived",
+    "computeHelp": "Fit the numbers to the server: this is what a workspace may use on the hosted guard.",
+    "confirmOverQuota": "This fills the workspace and pauses its agents until the usage drops below the quota. Tick to save anyway."
+  },
+  "plan": {
+    "label": "Plan",
+    "none": "None (only the owner's quota)",
+    "value": "{{name}} · {{storage}} · {{cpu}} cores",
+    "change": "Plan",
+    "title": "Plan of {{name}}",
+    "assign": "Set",
+    "fits": "Current usage {{used}}, the quota will be {{quota}}: it fits.",
+    "wouldFill": "Current usage {{used}}, the new quota {{quota}}: the workspace will be full and its agents paused until the usage drops below it.",
+    "confirm": "Understood: the workspace will be full and the owner is notified."
+  },
+  "breakGlass": {
+    "label": "Break-glass access",
+    "open": "Break-glass access",
+    "isOpen": "Open",
+    "title": "Break-glass access: {{name}}",
+    "body": "A read-only look to debug something: public channels and threads, agents, machines, runs (without steps), settings. You never see DMs, private channels or search. The customer's audit log records the opening, the reason and every page you open; the owner is notified and may close it at any time.",
+    "reason": "Reason",
+    "reasonHelp": "At least 20 characters; the customer sees it too.",
+    "reasonDev": "Optional in development mode.",
+    "minutes": "Duration (minutes)",
+    "minutesHelp": "At most {{max}} minutes.",
+    "handOver": "The link works until {{until}}, once; it opens the read-only session on the customer's address.",
+    "go": "Open in a new tab",
+    "history": "Break-glass accesses",
+    "close": "Close",
+    "closedBy": {
+      "operator": "Closed",
+      "owner": "Closed by the owner",
+      "expired": "Expired"
+    }
+  }
+}

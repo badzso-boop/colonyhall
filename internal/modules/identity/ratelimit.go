@@ -28,6 +28,9 @@ const (
 	// LimitClaudeLogin counts every relayed Claude login (hosts module),
 	// not just failures: the guard, not the server, checks the token.
 	LimitClaudeLogin = "claude_login"
+	// LimitOperatorLogin counts the platform operator's failed logins
+	// (round 51); no workspace.
+	LimitOperatorLogin = "operator_login"
 )
 
 // LimitRule is how many counted attempts a handle and an IP may make in a
@@ -45,6 +48,7 @@ var LimitRules = map[string]LimitRule{
 	LimitEmergencyClear: {PerHandle: 5, PerIP: 20, Window: 15 * time.Minute},
 	LimitPassword:       {PerHandle: 5, PerIP: 20, Window: 15 * time.Minute},
 	LimitClaudeLogin:    {PerHandle: 5, PerIP: 20, Window: 10 * time.Minute},
+	LimitOperatorLogin:  {PerHandle: 5, PerIP: 20, Window: 15 * time.Minute},
 }
 
 // AuthFailureRetention is how long failure rows are kept (the status card

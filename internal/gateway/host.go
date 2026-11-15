@@ -54,9 +54,10 @@ func (g *HostGateway) Connections() int {
 }
 
 type hostConn struct {
-	ws      *websocket.Conn
-	hostID  ids.ID
-	writeMu sync.Mutex
+	ws          *websocket.Conn
+	hostID      ids.ID
+	workspaceID ids.ID
+	writeMu     sync.Mutex
 }
 
 // ServeHTTP upgrades the request and holds the connection until it closes.
@@ -84,7 +85,7 @@ func (g *HostGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx = db.WithWorkspace(ctx, host.WorkspaceID)
-	conn := &hostConn{ws: c, hostID: host.ID}
+	conn := &hostConn{ws: c, hostID: host.ID, workspaceID: host.WorkspaceID}
 	if err := conn.write(ctx, map[string]any{"type": "welcome", "protocol": Protocol, "host_id": host.ID.String()}); err != nil {
 		return
 	}
@@ -103,6 +104,23 @@ func (g *HostGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// CloseRead discards anything the guard sends and answers pings.
 	<-c.CloseRead(ctx).Done()
+}
+
+// CloseWorkspace closes every guard connection of a workspace (round 51:
+// the operator suspended it). It returns how many it closed.
+func (g *HostGateway) CloseWorkspace(workspaceID ids.ID) int {
+	g.mu.Lock()
+	var list []*hostConn
+	for c := range g.conns {
+		if c.workspaceID == workspaceID {
+			list = append(list, c)
+		}
+	}
+	g.mu.Unlock()
+	for _, c := range list {
+		go func() { _ = c.ws.Close(websocket.StatusPolicyViolation, "workspace suspended") }()
+	}
+	return len(list)
 }
 
 // Connected reports whether the host holds at least one connection.

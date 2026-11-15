@@ -33,6 +33,9 @@ type ServerAnswers struct {
 	AdminPassword string `yaml:"admin_password"`
 	Backups       *bool  `yaml:"backups"`
 	SecureCookies bool   `yaml:"secure_cookies"` // behind HTTPS
+	// OperatorAllowlist (round 51): the addresses admin.<domain> answers,
+	// IPs or CIDRs, comma-separated; "-" or empty in the file: any address.
+	OperatorAllowlist string `yaml:"operator_allowlist"`
 }
 
 // GuardAnswers configure the guard.

@@ -239,9 +239,13 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	if !strings.Contains(string(compYAML), "pgvector/pgvector:pg17") || strings.Contains(string(compYAML), env["POSTGRES_PASSWORD"]) {
 		t.Fatal("compose.yaml: its own Postgres, and no secret in it")
 	}
+	// Round 51: production, and a secret key in the operator's form.
+	if env["COLONY_ENV"] != "production" || !strings.HasPrefix(env["COLONY_SECRET_KEYS"], "k1:") || len(env["COLONY_SECRET_KEYS"]) != 3+44 {
+		t.Fatalf("COLONY_ENV and COLONY_SECRET_KEYS: %q %d", env["COLONY_ENV"], len(env["COLONY_SECRET_KEYS"]))
+	}
 	// Secrets never reach the log.
 	logRaw, _ := os.ReadFile(e.LogPath)
-	for _, s := range []string{env["POSTGRES_PASSWORD"], app, "correct-horse-battery"} {
+	for _, s := range []string{env["POSTGRES_PASSWORD"], app, "correct-horse-battery", env["COLONY_SECRET_KEYS"]} {
 		if strings.Contains(string(logRaw), s) || strings.Contains(out.String(), s) {
 			t.Fatalf("a secret is in the log or the output")
 		}
@@ -261,6 +265,8 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	}
 	if again := readEnv(envPath); again["POSTGRES_PASSWORD"] != pw || again["COLONY_APP_DB_PASSWORD"] != app {
 		t.Fatal("a re-run changed a database password")
+	} else if again["COLONY_SECRET_KEYS"] != env["COLONY_SECRET_KEYS"] {
+		t.Fatal("a re-run changed the secret key: the stored secrets would no longer open")
 	}
 	for _, l := range fr2.Lines() {
 		if strings.Contains(l, "bootstrap") {
@@ -746,5 +752,46 @@ func TestWriteFileIgnoresStaleNewFile(t *testing.T) {
 	}
 	if fi, _ := os.Stat(env); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+}
+
+// Round 51: the operator's allowlist comes from the answers file (or the
+// question in multi-tenant mode), is checked, reaches the .env, and stays
+// across re-runs; a single workspace is not asked.
+func TestServerOperatorAllowlist(t *testing.T) {
+	e, _, _ := testEnv(t, linux, "", true)
+	e.Answers.Server = ServerAnswers{Bind: "127.0.0.1", Port: 8080, AdminHandle: "a", AdminName: "A", OperatorAllowlist: "100.64.0.0/10, 192.0.2.7"}
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.serverEnv(); v["COLONY_OPERATOR_ALLOWLIST"] != "100.64.0.0/10,192.0.2.7" {
+		t.Fatalf("allowlist in the env: %q", v["COLONY_OPERATOR_ALLOWLIST"])
+	}
+	e.Answers.Server.OperatorAllowlist = "not-an-address"
+	if err := e.askServer(); err == nil {
+		t.Fatal("an invalid allowlist was accepted")
+	}
+	// "-": any address, nothing written.
+	e.Answers.Server.OperatorAllowlist = "-"
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.serverEnv(); v["COLONY_OPERATOR_ALLOWLIST"] != "" {
+		t.Fatalf("- wrote %q", v["COLONY_OPERATOR_ALLOWLIST"])
+	}
+	// A re-run keeps the value already in the .env.
+	dir := e.serverDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("COLONY_OPERATOR_ALLOWLIST=198.51.100.0/24\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.Answers.Server.OperatorAllowlist = ""
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.serverEnv(); v["COLONY_OPERATOR_ALLOWLIST"] != "198.51.100.0/24" {
+		t.Fatalf("a re-run lost the allowlist: %q", v["COLONY_OPERATOR_ALLOWLIST"])
 	}
 }

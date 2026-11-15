@@ -28,5 +28,39 @@
     "line": "Colonyhall {{version}} · {{license}}",
     "source": "Forráskód",
     "sourceHint": "A szerver forráskódja (AGPL-3.0, 13. pont)"
+  },
+  "invite": {
+    "invalidTitle": "A meghívó nem érvényes",
+    "gone": "Ez a meghívólink már nem érvényes (felhasználták, lejárt vagy újat kértek helyette). Kérj újat az üzemeltetőtől.",
+    "error": "A meghívót nem sikerült betölteni; próbáld újra.",
+    "title": "Meghívó: {{workspace}}",
+    "body": "Te leszel a munkaterület tulajdonosa. A link egyszer használható, {{expires}}-ig érvényes.",
+    "handle": "Felhasználónév",
+    "handleHelp": "2–32 karakter: kisbetű, szám és kötőjel.",
+    "name": "Megjelenített név (nem kötelező)",
+    "password": "Jelszó",
+    "passwordHelp": "Legalább {{min}} karakter.",
+    "again": "Jelszó még egyszer",
+    "mismatch": "A két jelszó nem egyezik.",
+    "handleTaken": "Ez a felhasználónév foglalt; válassz másikat.",
+    "submit": "Tulajdonos leszek"
+  },
+  "breakGlass": {
+    "opening": "Üzemeltetői hozzáférés megnyitása…",
+    "invalidTitle": "A link már nem érvényes",
+    "gone": "Ez az üzemeltetői link lejárt vagy már használták (60 másodpercig, egyszer érvényes). Kérj újat az üzemeltetői felületen.",
+    "banner": "Üzemeltetői hozzáférés ({{operator}}): csak olvasás, lejár {{until}}-kor. DM-ek és privát csatornák nem látszanak; minden megnyitott oldal az ügyfél auditnaplójába kerül.",
+    "none": "Még nem volt üzemeltetői hozzáférés",
+    "noneBody": "Ha az üzemeltető hibakereséshez belenéz a munkaterületbe, itt látszik: ki, miért és meddig. A tulajdonos azonnal lezárhatja.",
+    "open": "Nyitva",
+    "close": "Lezárás",
+    "devMode": "Fejlesztői mód",
+    "noReason": "(indoklás nélkül, fejlesztői módban)",
+    "when": "{{opened}} – {{until}}",
+    "closedBy": {
+      "operator": "Az üzemeltető lezárta",
+      "owner": "A tulajdonos lezárta",
+      "expired": "Lejárt"
+    }
   }
 }

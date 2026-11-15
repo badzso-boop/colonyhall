@@ -22,7 +22,7 @@ function show(st: Schemas["WorkspaceStorage"], admin = true) {
   return fetch;
 }
 
-const base = { quota_bytes: 10 * 1024 ** 3, attachments_bytes: 0, chat_search_bytes: 0, other_bytes: 0 };
+const base = { quota_bytes: 10 * 1024 ** 3, limit_bytes: 10 * 1024 ** 3, attachments_bytes: 0, chat_search_bytes: 0, other_bytes: 0 };
 
 afterEach(() => vi.unstubAllGlobals());
 

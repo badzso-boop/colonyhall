@@ -14,7 +14,9 @@ const layout = import.meta.glob<Record<string, unknown>>("../layout/locales/*.js
   import: "default",
   eager: true,
 });
-const features = import.meta.glob<Record<string, unknown>>("../features/*/locales/*.json", {
+// The operator console's texts (round 51) load with its own lazy chunk
+// (features/operator/texts.ts), so a workspace's app never carries them.
+const features = import.meta.glob<Record<string, unknown>>(["../features/*/locales/*.json", "!../features/operator/locales/*.json"], {
   import: "default",
   eager: true,
 });

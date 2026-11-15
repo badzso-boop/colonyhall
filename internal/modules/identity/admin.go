@@ -128,6 +128,11 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, actorID ids.ID, labe
 	if target.Kind == KindHuman && target.ID != by.ID && by.Role != RoleOwner {
 		return Token{}, "", ErrForbidden
 	}
+	// Round 51b: the operator actor gets no token: a token would skip every
+	// break-glass rule (read-only, the allowed routes, the audit of reads).
+	if err := s.refuseBreakGlassActor(ctx, target.ID); err != nil {
+		return Token{}, "", err
+	}
 	secret, err := NewSecret()
 	if err != nil {
 		return Token{}, "", err
@@ -203,6 +208,10 @@ func (s *Service) SetActorRole(ctx context.Context, by Actor, actorID ids.ID, ro
 	}
 	if target.Kind != KindHuman || target.ID == by.ID {
 		return ErrForbidden
+	}
+	// Round 51b: the operator actor's rank is fixed (what the owner sees).
+	if err := s.refuseBreakGlassActor(ctx, target.ID); err != nil {
+		return err
 	}
 	if target.Role == role {
 		return nil
