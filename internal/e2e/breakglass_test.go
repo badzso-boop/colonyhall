@@ -230,9 +230,17 @@ func runBreakGlass(t *testing.T, change func(*server.Options)) {
 		return opens == 1 && reads > 0
 	})
 
-	// The operator actor never gets a password.
-	if s := acme.do("PUT", "/api/v1/actors/"+info.Actor.Id.String()+"/password", owner, map[string]any{"new_password": "a-long-enough-password"}, nil); s != http.StatusForbidden {
+	// The operator actor never gets a password, a token or another rank:
+	// any of them would skip the break-glass rules.
+	opActor := info.Actor.Id.String()
+	if s := acme.do("PUT", "/api/v1/actors/"+opActor+"/password", owner, map[string]any{"new_password": "a-long-enough-password"}, nil); s != http.StatusForbidden {
 		t.Fatalf("a password for the operator actor: %d", s)
+	}
+	if s := acme.do("POST", "/api/v1/actors/"+opActor+"/tokens", owner, map[string]any{"label": "x"}, nil); s != http.StatusForbidden {
+		t.Fatalf("a token for the operator actor: %d", s)
+	}
+	if s := acme.do("PUT", "/api/v1/actors/"+opActor+"/role", owner, map[string]any{"role": "member"}, nil); s != http.StatusForbidden {
+		t.Fatalf("another rank for the operator actor: %d", s)
 	}
 
 	// The owner closes it: the session ends at once.

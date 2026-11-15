@@ -418,3 +418,16 @@ var BreakGlassRoutes = map[string]bool{
 	"GET /api/v1/settings/file-fetch":           true,
 	"GET /api/v1/workspace/storage":             true,
 }
+
+// refuseBreakGlassActor: the operator actor gets no credential and no other
+// rank (round 51b): only its break-glass sessions, under their rules.
+func (s *Service) refuseBreakGlassActor(ctx context.Context, actorID ids.ID) error {
+	bg, err := s.Store.IsBreakGlassActor(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if bg {
+		return ErrForbidden
+	}
+	return nil
+}
