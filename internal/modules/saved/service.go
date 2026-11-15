@@ -287,13 +287,15 @@ func MessageLink(m conversation.Message) string {
 	return fmt.Sprintf("[message:%s/%s]", m.ChannelID, m.ID)
 }
 
-// reminderBody is the system message of a due reminder. It names the
-// message only while the person can still read it.
+// reminderBody is the system message of a due reminder: the ⏰ mark (as
+// for a scheduled message), the person's note, and the message while the
+// person can still read it. No fixed word in any language: the body is
+// stored once and the PWA shows it in the person's own locale.
 func reminderBody(note string, m *conversation.Message) string {
 	var b strings.Builder
-	b.WriteString("⏰ Emlékeztető")
+	b.WriteString("⏰")
 	if note != "" {
-		b.WriteString(": ")
+		b.WriteString(" ")
 		b.WriteString(note)
 	}
 	if m != nil {

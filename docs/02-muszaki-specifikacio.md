@@ -1602,7 +1602,7 @@ Piszkozat, perjel-parancsok, emoji, kitűzés, mentés és emlékeztető, üzene
 ### Üzenet-műveletek és továbbítás (`00064_message_forward.sql`)
 
 - Menü és billentyűk a fókuszált üzeneten: `r` szál, `s` mentés, `l` link, `f` továbbítás, `p` kitűzés; emlékeztető és reakció a menüből. A link (`?msg=`, válasznál `?thread=` is) a beszélgetést az üzenetnél nyitja; akinek nincs hozzáférése, a szokásos „nem található” választ kapja.
-- `POST /messages/{id}/forward`, csak embernek: a forrásnak olvashatónak (különben 404), a célnak írhatónak kell lennie. Az új üzenet a továbbító megjegyzése (ez említhet), utána idézet szerzővel, hellyel, idővel és visszalinkkel.
+- `POST /messages/{id}/forward`, csak embernek: a forrásnak olvashatónak (különben 404), a célnak írhatónak kell lennie. Az új üzenet a továbbító megjegyzése (ez említhet), utána idézet szerzővel, hellyel, idővel és visszalinkkel. **A szerver által írt szövegben nincs rögzített nyelvű szó** (2026-11-15): a fejléc `↪ @szerző · #csatorna · idő` (DM-nél hely nélkül), az emlékeztető rendszerüzenete `⏰ megjegyzés` + link, ahogy az ütemezett üzenet is. Az üzenettörzs egyszer tárolódik, és minden nyelvű ember és az agentek is olvassák; a „Továbbítva” címkét a PWA a `forwarded_from_id` alapján a néző nyelvén írja ki.
 - **Említés-hatástalanítás:** az idézett szövegben a `conversation.DefuseMentions` zero-width space-t tesz az `@` és a chip-hivatkozások után, ahogy a git modul a webhook szövegével teszi, így a továbbítás soha nem ébreszt agentet véletlenül (fuzz-teszt). A `forwarded_from_id` csak annak látszik, aki a forrást olvashatja. Privát csatornából vagy DM-ből továbbítás előtt megerősítés kell. Csatolmány nem megy tovább.
 
 ### Szálválasz a csatornába is (`00063_also_in_channel.sql`)

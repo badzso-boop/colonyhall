@@ -37,6 +37,10 @@ func TestForwardDefusesQuotedMentions(t *testing.T) {
 	if strings.Contains(body, "@fake-agent") || !strings.Contains(body, "@\u200bfake-agent") || strings.Contains(body, "[approval:") {
 		t.Fatalf("quoted mentions and chips are not defused: %q", body)
 	}
+	// The header is language-neutral: author, place, time (no "Továbbítva").
+	if strings.Contains(body, "Továbbítva") || !strings.Contains(body, "↪ @\u200bnorbi · #general · ") {
+		t.Fatalf("forward header: %q", body)
+	}
 	if !strings.Contains(body, "> ") || !strings.Contains(body, "#general") || !strings.Contains(body, "[message:"+general+"/"+src.ID+"]") {
 		t.Fatalf("quote, place or link back missing: %q", body)
 	}
