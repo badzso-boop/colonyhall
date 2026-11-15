@@ -389,6 +389,53 @@ func (s *Service) ValidateAndAttach(ctx context.Context, by identity.Actor, chan
 	return nil
 }
 
+// CopyToMessage implements conversation.Attachments for a forward: each
+// live attachment of the source message that the caller may read (Get: the
+// source channel, and a human-only file only for whom it is meant) gets a
+// new row in the target channel, uploaded by the caller, with the same
+// content (stored once: a copy in the same workspace adds no usage), the
+// same human-only mark, and the same order. The rows are written through
+// storeNew in the caller's transaction, so the forward and its copies
+// commit together. An attachment the caller may not read is left out.
+func (s *Service) CopyToMessage(ctx context.Context, by identity.Actor, sourceMessageID, channelID, messageID ids.ID) error {
+	atts, err := s.Store.AttachmentsForMessage(ctx, sourceMessageID)
+	if err != nil {
+		return err
+	}
+	pos := 0
+	for _, a := range atts {
+		if a.Deleted {
+			continue
+		}
+		src, err := s.Get(ctx, by, a.ID)
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) || errors.Is(err, ErrGone) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		content, err := s.Storage.Open(ctx, src.SHA256)
+		if err != nil {
+			return err
+		}
+		f := File{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, UploadedBy: by.ID, ChannelID: channelID,
+			Name: src.Name, Mime: src.Mime, Size: src.Size, SHA256: src.SHA256, HumanOnly: src.HumanOnly,
+			CreatedAt: s.Clock.Now()}
+		at := pos
+		err = s.storeNew(ctx, by.ID, newFile{file: f, content: content,
+			extra: func(ctx context.Context) error { return s.Store.AttachToMessage(ctx, messageID, f.ID, at) },
+			evType: EventFileUploaded, evChannel: f.ChannelID, evAgg: f.ID,
+			evPayload: UploadedPayload{ID: f.ID.String(), WorkspaceID: f.WorkspaceID.String(), UploadedBy: f.UploadedBy.String(),
+				ChannelID: f.ChannelID.String(), Name: f.Name, Mime: f.Mime, Size: f.Size, SHA256: f.SHA256}})
+		_ = content.Close()
+		if err != nil {
+			return err
+		}
+		pos++
+	}
+	return nil
+}
+
 // AttachmentsForMessage loads attachments for a single message.
 func (s *Service) AttachmentsForMessage(ctx context.Context, messageID ids.ID) ([]Attachment, error) {
 	return s.Store.AttachmentsForMessage(ctx, messageID)

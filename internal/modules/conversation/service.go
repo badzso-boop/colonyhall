@@ -22,6 +22,11 @@ import (
 // Attachments handles file attachment validation and loading.
 type Attachments interface {
 	ValidateAndAttach(ctx context.Context, by identity.Actor, channelID ids.ID, messageID ids.ID, fileIDs []ids.ID) error
+	// CopyToMessage attaches copies of a source message's live attachments
+	// (those the caller may read) to a new message in another channel: a
+	// forward (round 55). The copies belong to the caller and the target
+	// channel; the content is shared, not stored again.
+	CopyToMessage(ctx context.Context, by identity.Actor, sourceMessageID, channelID, messageID ids.ID) error
 	AttachmentsForMessages(ctx context.Context, messageIDs []ids.ID) (map[ids.ID][]Attachment, error)
 }
 
@@ -423,6 +428,9 @@ type SendInput struct {
 	ClientMsgID  string
 	Body         string
 	FileIDs      []ids.ID
+	// CopyFilesFrom (a forward) copies that message's attachments to the
+	// new one; the caller has checked that it may read the source.
+	CopyFilesFrom ids.ID
 	// Elaborate lets an agent exceed AgentMaxBody; set only when someone
 	// asked for a detailed answer.
 	Elaborate bool
@@ -594,12 +602,17 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
 		}
-		if len(in.FileIDs) > 0 {
+		if len(in.FileIDs) > 0 || in.CopyFilesFrom != ids.Nil {
 			if s.Attachments == nil {
 				return errors.New("file attachments not supported")
 			}
 			if err := s.Attachments.ValidateAndAttach(ctx, by, c.ID, msg.ID, in.FileIDs); err != nil {
 				return err
+			}
+			if in.CopyFilesFrom != ids.Nil {
+				if err := s.Attachments.CopyToMessage(ctx, by, in.CopyFilesFrom, c.ID, msg.ID); err != nil {
+					return err
+				}
 			}
 			atts, err := s.Attachments.AttachmentsForMessages(ctx, []ids.ID{msg.ID})
 			if err != nil {

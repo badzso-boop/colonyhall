@@ -102,5 +102,5 @@ func (s *Service) ForwardMessage(ctx context.Context, by identity.Actor, sourceI
 	}
 	b.WriteString(link)
 	return s.SendMessage(ctx, by, SendInput{ChannelID: in.ChannelID, ThreadRootID: in.ThreadRootID, ClientMsgID: in.ClientMsgID,
-		Body: b.String(), ForwardedFromID: src.ID})
+		Body: b.String(), ForwardedFromID: src.ID, CopyFilesFrom: src.ID})
 }
