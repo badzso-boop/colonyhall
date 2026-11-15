@@ -9,7 +9,10 @@ SELECT * FROM schedule WHERE id = $1;
 SELECT * FROM schedule WHERE workspace_id = $1 ORDER BY next_run_at, id;
 
 -- name: DueSchedules :many
-SELECT * FROM schedule WHERE state = 'active' AND next_run_at <= sqlc.arg(now) ORDER BY next_run_at, id LIMIT sqlc.arg(lim);
+-- Round 51: a suspended workspace's schedules wait (skip lists them).
+SELECT * FROM schedule WHERE state = 'active' AND next_run_at <= sqlc.arg(now)
+    AND NOT (workspace_id = ANY(sqlc.arg(skip)::uuid[]))
+ORDER BY next_run_at, id LIMIT sqlc.arg(lim);
 
 -- name: ClaimSchedule :execrows
 UPDATE schedule SET next_run_at = sqlc.arg(next), state = sqlc.arg(state), last_run_at = sqlc.arg(at), run_count = run_count + 1

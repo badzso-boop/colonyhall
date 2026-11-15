@@ -3000,6 +3000,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/invites/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Public, multi-tenant mode only. The workspace an open owner invite is for. 410 invite_invalid for an unknown, used, revoked or expired token, or one of another subdomain. */
+        post: operations["lookupInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Public, multi-tenant mode only. Uses an open owner invite once: the owner is created with the password and logged in (sets the session cookie, like /auth/login). 410 invite_invalid when the invite is no longer open or the workspace has an owner. */
+        post: operations["acceptInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Password and a TOTP code (6 digits) or a backup code, in one request. Every failure is the same 401; counted like /auth/login (429 with Retry-After). */
+        post: operations["operatorLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operatorLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOperatorSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/me/backup-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description New backup codes (the old ones stop working), after the password and a fresh TOTP code. The codes are shown once. */
+        post: operations["renewOperatorBackupCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every workspace with its account data and numbers; no content (no channel, message, file or person names). */
+        get: operations["listCustomers"];
+        put?: never;
+        /** @description A new workspace without an owner, and its owner invite (7 days). The invite link is shown once. 409 slug_taken. */
+        post: operations["createCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCustomer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A new owner invite; the open one is revoked. 409 has_owner when the workspace already has an owner. */
+        post: operations["inviteCustomerOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Every request, guard and agent of the workspace is refused (the browser gets a "paused" page); the data stays. The reason stays in the operator audit. */
+        post: operations["suspendCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/workspaces/{workspaceId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOperatorAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operator/system/database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The whole database's size, its largest tables and daily samples (round 50). In multi-tenant mode only the operator sees them. */
+        get: operations["getOperatorDatabase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3298,7 +3523,7 @@ export interface components {
                 latency_ms: number;
                 /**
                  * Format: int64
-                 * @description The whole database (pg_database_size); absent on the memory store.
+                 * @description The whole database (pg_database_size); absent on the memory store, and in multi-tenant mode (round 51: only the operator sees the whole database).
                  */
                 size_bytes?: number;
                 /** @description The 10 largest tables, biggest first; absent on the memory store. */
@@ -3345,7 +3570,7 @@ export interface components {
         };
         StatusLockout: {
             /** @enum {string} */
-            scope: "login" | "emergency_clear" | "password" | "claude_login";
+            scope: "login" | "emergency_clear" | "password" | "claude_login" | "operator_login";
             handle: string;
             /** @description The client address; empty when unknown. */
             ip: string;
@@ -5922,6 +6147,159 @@ export interface components {
         };
         DelegationGrantList: {
             grants: components["schemas"]["DelegationGrant"][];
+        };
+        InviteTokenRequest: {
+            token: string;
+        };
+        InviteInfo: {
+            workspace_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        AcceptInviteRequest: {
+            token: string;
+            handle: string;
+            display_name?: string;
+            password: string;
+        };
+        OperatorLoginRequest: {
+            handle: string;
+            password: string;
+            /** @description A 6-digit TOTP code or a backup code (XXXXX-XXXXX) */
+            code: string;
+        };
+        OperatorAccount: {
+            /** Format: uuid */
+            id: string;
+            handle: string;
+            display_name: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        OperatorSessionInfo: {
+            operator: components["schemas"]["OperatorAccount"];
+            csrf_token: string;
+            /**
+             * Format: date-time
+             * @description The session's absolute end (8 hours); it also ends after 30 idle minutes
+             */
+            expires_at: string;
+            /** @description COLONY_OPERATOR_DEV_ACCESS=1 (development only): every operator page says so */
+            dev_access: boolean;
+            backup_codes_left: number;
+        };
+        OperatorReauthRequest: {
+            password: string;
+            /** @description A fresh 6-digit TOTP code */
+            code: string;
+        };
+        OperatorBackupCodes: {
+            codes: string[];
+        };
+        CustomerInvite: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            used: boolean;
+            revoked: boolean;
+        };
+        CustomerStorage: {
+            /** Format: int64 */
+            used_bytes: number;
+            /**
+             * Format: int64
+             * @description 0 is unlimited
+             */
+            quota_bytes: number;
+            /** Format: int64 */
+            files_bytes: number;
+            /** Format: int64 */
+            db_bytes: number;
+            /** @enum {string} */
+            state: "ok" | "warning_80" | "warning_95" | "full";
+        };
+        Customer: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            /** @enum {string} */
+            state: "active" | "suspended";
+            /** Format: date-time */
+            suspended_at?: string;
+            suspended_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            has_owner: boolean;
+            invite?: components["schemas"]["CustomerInvite"];
+            /** @description People (not archived) */
+            users: number;
+            /** @description Agents (not archived) */
+            agents: number;
+            hosts: number;
+            /** @description Seen in the last 90 seconds */
+            hosts_online: number;
+            /**
+             * Format: date-time
+             * @description The workspace's newest event
+             */
+            last_activity_at?: string;
+            storage: components["schemas"]["CustomerStorage"];
+        };
+        CustomerList: {
+            customers: components["schemas"]["Customer"][];
+        };
+        CreateCustomerRequest: {
+            name: string;
+            /** @description The subdomain: 3–40 lower-case letters, digits and single hyphens, not reserved */
+            slug: string;
+        };
+        InviteLink: {
+            /** @description https://<slug>.<domain>/app/invite#<token>; shown once */
+            url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        CreatedCustomer: {
+            customer: components["schemas"]["Customer"];
+            invite: components["schemas"]["InviteLink"];
+        };
+        SuspendCustomerRequest: {
+            reason: string;
+        };
+        OperatorAuditEntry: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Absent for a command run on the server
+             */
+            operator_id?: string;
+            action: string;
+            /** Format: uuid */
+            workspace_id?: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            remote_addr: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        OperatorAuditList: {
+            entries: components["schemas"]["OperatorAuditEntry"][];
+        };
+        OperatorDatabase: {
+            ok: boolean;
+            /** Format: double */
+            latency_ms: number;
+            /**
+             * Format: int64
+             * @description pg_database_size; absent on the memory store
+             */
+            size_bytes?: number;
+            tables?: components["schemas"]["StatusTableSize"][];
+            growth?: components["schemas"]["StatusSizeSample"][];
         };
     };
     responses: {
@@ -10876,6 +11254,350 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    lookupInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteInfo"];
+                };
+            };
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    acceptInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description The owner is logged in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfo"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    operatorLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Logged in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSessionInfo"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    operatorLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out; the cookie is cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOperatorSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSessionInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    renewOperatorBackupCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReauthRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorBackupCodes"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            429: components["responses"]["LockedOut"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCustomers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedCustomer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    inviteCustomerOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLink"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    suspendCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuspendCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    restoreCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOperatorAudit: {
+        parameters: {
+            query?: {
+                /** @description Entries older than this (paging) */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorAuditList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOperatorDatabase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorDatabase"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };

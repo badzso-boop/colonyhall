@@ -719,6 +719,40 @@ func (q *Queries) ListTokens(ctx context.Context, actorID uuid.UUID) ([]ApiToken
 	return items, nil
 }
 
+const listWorkspaces = `-- name: ListWorkspaces :many
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state, suspended_at, suspended_reason FROM workspace ORDER BY created_at, id
+`
+
+func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
+	rows, err := q.db.Query(ctx, listWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Workspace
+	for rows.Next() {
+		var i Workspace
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.EmergencyStopAt,
+			&i.EmergencyStopBy,
+			&i.Slug,
+			&i.State,
+			&i.SuspendedAt,
+			&i.SuspendedReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneEmojiUse = `-- name: PruneEmojiUse :exec
 DELETE FROM emoji_use WHERE actor_id = $1::uuid AND emoji IN (
     SELECT e.emoji FROM emoji_use e WHERE e.actor_id = $1::uuid

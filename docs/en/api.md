@@ -27,9 +27,10 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [files](#files) (18)
 - [git](#git) (4)
 - [hosts](#hosts) (20)
-- [identity](#identity) (17)
+- [identity](#identity) (19)
 - [leases](#leases) (2)
 - [notes](#notes) (1)
+- [operator](#operator) (12)
 - [planner](#planner) (11)
 - [previews](#previews) (4)
 - [question](#question) (2)
@@ -2218,6 +2219,34 @@ The current actor and, for cookie sessions, the CSRF token (e.g. after a page re
 | --- | --- |
 | 200 | OK: [SessionInfo](#sessioninfo) (`application/json`) |
 
+### `POST /invites/accept`
+
+`acceptInvite` · Auth: public
+
+Public, multi-tenant mode only. Uses an open owner invite once: the owner is created with the password and logged in (sets the session cookie, like /auth/login). 410 invite_invalid when the invite is no longer open or the workspace has an owner.
+
+Request body (`application/json`, required): [AcceptInviteRequest](#acceptinviterequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | The owner is logged in: [SessionInfo](#sessioninfo) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+| 410 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /invites/lookup`
+
+`lookupInvite` · Auth: public
+
+Public, multi-tenant mode only. The workspace an open owner invite is for. 410 invite_invalid for an unknown, used, revoked or expired token, or one of another subdomain.
+
+Request body (`application/json`, required): [InviteTokenRequest](#invitetokenrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [InviteInfo](#inviteinfo) (`application/json`) |
+| 410 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `GET /me`
 
 `getMe` · Auth: signed in
@@ -2329,6 +2358,159 @@ Read an agent's notebook entries (humans only, newest first, optional ?thread=).
 | --- | --- |
 | 200 | List of agent notes: [AgentNotesResponse](#agentnotesresponse) (`application/json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+## operator
+
+### `GET /operator/audit`
+
+`listOperatorAudit` · Auth: signed in
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `before` | query | string (date-time) |  | Entries older than this (paging) |
+| `limit` | query | integer |  |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK, newest first: [OperatorAuditList](#operatorauditlist) (`application/json`) |
+
+### `POST /operator/auth/login`
+
+`operatorLogin` · Auth: public
+
+Password and a TOTP code (6 digits) or a backup code, in one request. Every failure is the same 401; counted like /auth/login (429 with Retry-After).
+
+Request body (`application/json`, required): [OperatorLoginRequest](#operatorloginrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | Logged in: [OperatorSessionInfo](#operatorsessioninfo) (`application/json`) |
+| 401 | Error: [Problem](#problem) (`application/problem+json`) |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /operator/auth/logout`
+
+`operatorLogout` · Auth: signed in
+
+| Response | Body |
+| --- | --- |
+| 204 | Logged out; the cookie is cleared |
+
+### `GET /operator/auth/session`
+
+`getOperatorSession` · Auth: signed in
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [OperatorSessionInfo](#operatorsessioninfo) (`application/json`) |
+
+### `POST /operator/me/backup-codes`
+
+`renewOperatorBackupCodes` · Auth: signed in
+
+New backup codes (the old ones stop working), after the password and a fresh TOTP code. The codes are shown once.
+
+Request body (`application/json`, required): [OperatorReauthRequest](#operatorreauthrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [OperatorBackupCodes](#operatorbackupcodes) (`application/json`) |
+| 401 | Error: [Problem](#problem) (`application/problem+json`) |
+| 429 | Too many attempts (round 40); try again after Retry-After seconds.: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /operator/system/database`
+
+`getOperatorDatabase` · Auth: signed in
+
+The whole database's size, its largest tables and daily samples (round 50). In multi-tenant mode only the operator sees them.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [OperatorDatabase](#operatordatabase) (`application/json`) |
+
+### `GET /operator/workspaces`
+
+`listCustomers` · Auth: signed in
+
+Every workspace with its account data and numbers; no content (no channel, message, file or person names).
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [CustomerList](#customerlist) (`application/json`) |
+
+### `POST /operator/workspaces`
+
+`createCustomer` · Auth: signed in
+
+A new workspace without an owner, and its owner invite (7 days). The invite link is shown once. 409 slug_taken.
+
+Request body (`application/json`, required): [CreateCustomerRequest](#createcustomerrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Created: [CreatedCustomer](#createdcustomer) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /operator/workspaces/{workspaceId}`
+
+`getCustomer` · Auth: signed in
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Customer](#customer) (`application/json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /operator/workspaces/{workspaceId}/invite`
+
+`inviteCustomerOwner` · Auth: signed in
+
+A new owner invite; the open one is revoked. 409 has_owner when the workspace already has an owner.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [InviteLink](#invitelink) (`application/json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /operator/workspaces/{workspaceId}/restore`
+
+`restoreCustomer` · Auth: signed in
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Customer](#customer) (`application/json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /operator/workspaces/{workspaceId}/suspend`
+
+`suspendCustomer` · Auth: signed in
+
+Every request, guard and agent of the workspace is refused (the browser gets a "paused" page); the data stays. The reason stays in the operator audit.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [SuspendCustomerRequest](#suspendcustomerrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Customer](#customer) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ## planner
 
@@ -3082,6 +3264,15 @@ Any actor. List all revisions of a wiki page.
 
 ## Schemas
 
+### AcceptInviteRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `display_name` | string |  |  |
+| `handle` | string | yes |  |
+| `password` | string | yes |  |
+| `token` | string | yes |  |
+
 ### AckRequest
 
 | Field | Type | Required | Description |
@@ -3761,6 +3952,13 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `member_ids` | string (uuid)[] |  | Admins: initial members besides the creator |
 | `name` | string | yes |  |
 
+### CreateCustomerRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | yes |  |
+| `slug` | string | yes | The subdomain: 3–40 lower-case letters, digits and single hyphens, not reserved |
+
 ### CreateFileFetchRequest
 
 | Field | Type | Required | Description |
@@ -3820,12 +4018,64 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `host` | [HostAgent](#hostagent) |  |  |
 | `token` | string |  | API-key agents only; shown once |
 
+### CreatedCustomer
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customer` | [Customer](#customer) | yes |  |
+| `invite` | [InviteLink](#invitelink) | yes |  |
+
 ### CurrencySettings
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `updated_at` | string (date-time) |  |  |
 | `usd_huf` | number (double) |  |  |
+
+### Customer
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agents` | integer | yes | Agents (not archived) |
+| `created_at` | string (date-time) | yes |  |
+| `has_owner` | boolean | yes |  |
+| `hosts` | integer | yes |  |
+| `hosts_online` | integer | yes | Seen in the last 90 seconds |
+| `id` | string (uuid) | yes |  |
+| `invite` | [CustomerInvite](#customerinvite) |  |  |
+| `last_activity_at` | string (date-time) |  | The workspace's newest event |
+| `name` | string | yes |  |
+| `slug` | string | yes |  |
+| `state` | string | yes | One of: `active`, `suspended`. |
+| `storage` | [CustomerStorage](#customerstorage) | yes |  |
+| `suspended_at` | string (date-time) |  |  |
+| `suspended_reason` | string |  |  |
+| `users` | integer | yes | People (not archived) |
+
+### CustomerInvite
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `created_at` | string (date-time) | yes |  |
+| `expires_at` | string (date-time) | yes |  |
+| `revoked` | boolean | yes |  |
+| `used` | boolean | yes |  |
+
+### CustomerList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customers` | [Customer](#customer)[] | yes |  |
+
+### CustomerStorage
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `db_bytes` | integer (int64) | yes |  |
+| `files_bytes` | integer (int64) | yes |  |
+| `quota_bytes` | integer (int64) | yes | 0 is unlimited |
+| `state` | string | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
+| `used_bytes` | integer (int64) | yes |  |
 
 ### DayUsage
 
@@ -4571,6 +4821,26 @@ Type: string
 | `thread_root_id` | string (uuid) |  |  |
 | `via_grant` | boolean |  | Whether this delegated item was delivered via an active delegation grant |
 
+### InviteInfo
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `expires_at` | string (date-time) | yes |  |
+| `workspace_name` | string | yes |  |
+
+### InviteLink
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `expires_at` | string (date-time) | yes |  |
+| `url` | string | yes | https://<slug>.<domain>/app/invite#<token>; shown once |
+
+### InviteTokenRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | yes |  |
+
 ### IssueTokenRequest
 
 | Field | Type | Required | Description |
@@ -4779,6 +5049,74 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `actor_ids` | string (uuid)[] | yes |  |
+
+### OperatorAccount
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `display_name` | string | yes |  |
+| `handle` | string | yes |  |
+| `id` | string (uuid) | yes |  |
+| `last_login_at` | string (date-time) |  |  |
+
+### OperatorAuditEntry
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `action` | string | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `operator_id` | string (uuid) |  | Absent for a command run on the server |
+| `payload` | object | yes |  |
+| `remote_addr` | string | yes |  |
+| `workspace_id` | string (uuid) |  |  |
+
+### OperatorAuditList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entries` | [OperatorAuditEntry](#operatorauditentry)[] | yes |  |
+
+### OperatorBackupCodes
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `codes` | string[] | yes |  |
+
+### OperatorDatabase
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `growth` | [StatusSizeSample](#statussizesample)[] |  |  |
+| `latency_ms` | number (double) | yes |  |
+| `ok` | boolean | yes |  |
+| `size_bytes` | integer (int64) |  | pg_database_size; absent on the memory store |
+| `tables` | [StatusTableSize](#statustablesize)[] |  |  |
+
+### OperatorLoginRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code` | string | yes | A 6-digit TOTP code or a backup code (XXXXX-XXXXX) |
+| `handle` | string | yes |  |
+| `password` | string | yes |  |
+
+### OperatorReauthRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code` | string | yes | A fresh 6-digit TOTP code |
+| `password` | string | yes |  |
+
+### OperatorSessionInfo
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `backup_codes_left` | integer | yes |  |
+| `csrf_token` | string | yes |  |
+| `dev_access` | boolean | yes | COLONY_OPERATOR_DEV_ACCESS=1 (development only): every operator page says so |
+| `expires_at` | string (date-time) | yes | The session's absolute end (8 hours); it also ends after 30 idle minutes |
+| `operator` | [OperatorAccount](#operatoraccount) | yes |  |
 
 ### OverviewAssignment
 
@@ -5507,7 +5845,7 @@ Round 40: the login and release limits. In multi-tenant mode only the workspace'
 | `at` | string (date-time) | yes |  |
 | `handle` | string | yes |  |
 | `ip` | string | yes | The client address; empty when unknown. |
-| `scope` | string | yes | One of: `login`, `emergency_clear`, `password`, `claude_login`. |
+| `scope` | string | yes | One of: `login`, `emergency_clear`, `password`, `claude_login`, `operator_login`. |
 | `until` | string (date-time) | yes |  |
 
 ### StatusSizeSample
@@ -5536,6 +5874,12 @@ Round 40: the login and release limits. In multi-tenant mode only the workspace'
 One of: `ok`, `warning_80`, `warning_95`, `full`
 
 Type: string
+
+### SuspendCustomerRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `reason` | string | yes |  |
 
 ### SystemStatus
 

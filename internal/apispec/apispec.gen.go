@@ -480,6 +480,48 @@ func (e CreateScheduleRequestCatchUp) Valid() bool {
 	}
 }
 
+// Defines values for CustomerState.
+const (
+	CustomerStateActive    CustomerState = "active"
+	CustomerStateSuspended CustomerState = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the CustomerState enum.
+func (e CustomerState) Valid() bool {
+	switch e {
+	case CustomerStateActive:
+		return true
+	case CustomerStateSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CustomerStorageState.
+const (
+	CustomerStorageStateFull      CustomerStorageState = "full"
+	CustomerStorageStateOk        CustomerStorageState = "ok"
+	CustomerStorageStateWarning80 CustomerStorageState = "warning_80"
+	CustomerStorageStateWarning95 CustomerStorageState = "warning_95"
+)
+
+// Valid indicates whether the value is a known member of the CustomerStorageState enum.
+func (e CustomerStorageState) Valid() bool {
+	switch e {
+	case CustomerStorageStateFull:
+		return true
+	case CustomerStorageStateOk:
+		return true
+	case CustomerStorageStateWarning80:
+		return true
+	case CustomerStorageStateWarning95:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DelegationState.
 const (
 	DelegationStateApproved  DelegationState = "approved"
@@ -1424,6 +1466,7 @@ const (
 	ClaudeLogin    StatusLockoutScope = "claude_login"
 	EmergencyClear StatusLockoutScope = "emergency_clear"
 	Login          StatusLockoutScope = "login"
+	OperatorLogin  StatusLockoutScope = "operator_login"
 	Password       StatusLockoutScope = "password"
 )
 
@@ -1435,6 +1478,8 @@ func (e StatusLockoutScope) Valid() bool {
 	case EmergencyClear:
 		return true
 	case Login:
+		return true
+	case OperatorLogin:
 		return true
 	case Password:
 		return true
@@ -1702,6 +1747,14 @@ func (e ListWikiPagesParamsDeleted) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AcceptInviteRequest defines model for AcceptInviteRequest.
+type AcceptInviteRequest struct {
+	DisplayName *string `json:"display_name,omitempty"`
+	Handle      string  `json:"handle"`
+	Password    string  `json:"password"`
+	Token       string  `json:"token"`
 }
 
 // AckRequest defines model for AckRequest.
@@ -2432,6 +2485,14 @@ type CreateChannelRequest struct {
 	Name      string                `json:"name"`
 }
 
+// CreateCustomerRequest defines model for CreateCustomerRequest.
+type CreateCustomerRequest struct {
+	Name string `json:"name"`
+
+	// Slug The subdomain: 3–40 lower-case letters, digits and single hyphens, not reserved
+	Slug string `json:"slug"`
+}
+
 // CreateFileFetchRequest defines model for CreateFileFetchRequest.
 type CreateFileFetchRequest struct {
 	Path    string `json:"path"`
@@ -2496,11 +2557,73 @@ type CreatedAgent struct {
 	Token *string `json:"token,omitempty"`
 }
 
+// CreatedCustomer defines model for CreatedCustomer.
+type CreatedCustomer struct {
+	Customer Customer   `json:"customer"`
+	Invite   InviteLink `json:"invite"`
+}
+
 // CurrencySettings defines model for CurrencySettings.
 type CurrencySettings struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 	UsdHuf    *float64   `json:"usd_huf,omitempty"`
 }
+
+// Customer defines model for Customer.
+type Customer struct {
+	// Agents Agents (not archived)
+	Agents    int       `json:"agents"`
+	CreatedAt time.Time `json:"created_at"`
+	HasOwner  bool      `json:"has_owner"`
+	Hosts     int       `json:"hosts"`
+
+	// HostsOnline Seen in the last 90 seconds
+	HostsOnline int                `json:"hosts_online"`
+	Id          openapi_types.UUID `json:"id"`
+	Invite      *CustomerInvite    `json:"invite,omitempty"`
+
+	// LastActivityAt The workspace's newest event
+	LastActivityAt  *time.Time      `json:"last_activity_at,omitempty"`
+	Name            string          `json:"name"`
+	Slug            string          `json:"slug"`
+	State           CustomerState   `json:"state"`
+	Storage         CustomerStorage `json:"storage"`
+	SuspendedAt     *time.Time      `json:"suspended_at,omitempty"`
+	SuspendedReason *string         `json:"suspended_reason,omitempty"`
+
+	// Users People (not archived)
+	Users int `json:"users"`
+}
+
+// CustomerState defines model for Customer.State.
+type CustomerState string
+
+// CustomerInvite defines model for CustomerInvite.
+type CustomerInvite struct {
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Revoked   bool      `json:"revoked"`
+	Used      bool      `json:"used"`
+}
+
+// CustomerList defines model for CustomerList.
+type CustomerList struct {
+	Customers []Customer `json:"customers"`
+}
+
+// CustomerStorage defines model for CustomerStorage.
+type CustomerStorage struct {
+	DbBytes    int64 `json:"db_bytes"`
+	FilesBytes int64 `json:"files_bytes"`
+
+	// QuotaBytes 0 is unlimited
+	QuotaBytes int64                `json:"quota_bytes"`
+	State      CustomerStorageState `json:"state"`
+	UsedBytes  int64                `json:"used_bytes"`
+}
+
+// CustomerStorageState defines model for CustomerStorage.State.
+type CustomerStorageState string
 
 // DayUsage defines model for DayUsage.
 type DayUsage struct {
@@ -3159,6 +3282,25 @@ type InboxItem struct {
 // InboxItemAuthorKind Who caused the item
 type InboxItemAuthorKind string
 
+// InviteInfo defines model for InviteInfo.
+type InviteInfo struct {
+	ExpiresAt     time.Time `json:"expires_at"`
+	WorkspaceName string    `json:"workspace_name"`
+}
+
+// InviteLink defines model for InviteLink.
+type InviteLink struct {
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// Url https://<slug>.<domain>/app/invite#<token>; shown once
+	Url string `json:"url"`
+}
+
+// InviteTokenRequest defines model for InviteTokenRequest.
+type InviteTokenRequest struct {
+	Token string `json:"token"`
+}
+
 // IssueTokenRequest defines model for IssueTokenRequest.
 type IssueTokenRequest struct {
 	Label *string `json:"label,omitempty"`
@@ -3377,6 +3519,76 @@ type NotifyLevelRequest struct {
 // OpenDMRequest defines model for OpenDMRequest.
 type OpenDMRequest struct {
 	ActorIds []openapi_types.UUID `json:"actor_ids"`
+}
+
+// OperatorAccount defines model for OperatorAccount.
+type OperatorAccount struct {
+	DisplayName string             `json:"display_name"`
+	Handle      string             `json:"handle"`
+	Id          openapi_types.UUID `json:"id"`
+	LastLoginAt *time.Time         `json:"last_login_at,omitempty"`
+}
+
+// OperatorAuditEntry defines model for OperatorAuditEntry.
+type OperatorAuditEntry struct {
+	Action    string             `json:"action"`
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// OperatorId Absent for a command run on the server
+	OperatorId  *openapi_types.UUID    `json:"operator_id,omitempty"`
+	Payload     map[string]interface{} `json:"payload"`
+	RemoteAddr  string                 `json:"remote_addr"`
+	WorkspaceId *openapi_types.UUID    `json:"workspace_id,omitempty"`
+}
+
+// OperatorAuditList defines model for OperatorAuditList.
+type OperatorAuditList struct {
+	Entries []OperatorAuditEntry `json:"entries"`
+}
+
+// OperatorBackupCodes defines model for OperatorBackupCodes.
+type OperatorBackupCodes struct {
+	Codes []string `json:"codes"`
+}
+
+// OperatorDatabase defines model for OperatorDatabase.
+type OperatorDatabase struct {
+	Growth    *[]StatusSizeSample `json:"growth,omitempty"`
+	LatencyMs float64             `json:"latency_ms"`
+	Ok        bool                `json:"ok"`
+
+	// SizeBytes pg_database_size; absent on the memory store
+	SizeBytes *int64             `json:"size_bytes,omitempty"`
+	Tables    *[]StatusTableSize `json:"tables,omitempty"`
+}
+
+// OperatorLoginRequest defines model for OperatorLoginRequest.
+type OperatorLoginRequest struct {
+	// Code A 6-digit TOTP code or a backup code (XXXXX-XXXXX)
+	Code     string `json:"code"`
+	Handle   string `json:"handle"`
+	Password string `json:"password"`
+}
+
+// OperatorReauthRequest defines model for OperatorReauthRequest.
+type OperatorReauthRequest struct {
+	// Code A fresh 6-digit TOTP code
+	Code     string `json:"code"`
+	Password string `json:"password"`
+}
+
+// OperatorSessionInfo defines model for OperatorSessionInfo.
+type OperatorSessionInfo struct {
+	BackupCodesLeft int    `json:"backup_codes_left"`
+	CsrfToken       string `json:"csrf_token"`
+
+	// DevAccess COLONY_OPERATOR_DEV_ACCESS=1 (development only): every operator page says so
+	DevAccess bool `json:"dev_access"`
+
+	// ExpiresAt The session's absolute end (8 hours); it also ends after 30 idle minutes
+	ExpiresAt time.Time       `json:"expires_at"`
+	Operator  OperatorAccount `json:"operator"`
 }
 
 // OverviewAssignment defines model for OverviewAssignment.
@@ -4188,6 +4400,11 @@ type StorageQuotaRequest struct {
 // StorageState defines model for StorageState.
 type StorageState string
 
+// SuspendCustomerRequest defines model for SuspendCustomerRequest.
+type SuspendCustomerRequest struct {
+	Reason string `json:"reason"`
+}
+
 // SystemStatus defines model for SystemStatus.
 type SystemStatus struct {
 	Compaction struct {
@@ -4206,7 +4423,7 @@ type SystemStatus struct {
 		LatencyMs float64             `json:"latency_ms"`
 		Ok        bool                `json:"ok"`
 
-		// SizeBytes The whole database (pg_database_size); absent on the memory store.
+		// SizeBytes The whole database (pg_database_size); absent on the memory store, and in multi-tenant mode (round 51: only the operator sees the whole database).
 		SizeBytes *int64 `json:"size_bytes,omitempty"`
 
 		// Tables The 10 largest tables, biggest first; absent on the memory store.
@@ -4700,6 +4917,13 @@ type ListMyThreadsParams struct {
 	Unread *bool `form:"unread,omitempty" json:"unread,omitempty"`
 }
 
+// ListOperatorAuditParams defines parameters for ListOperatorAudit.
+type ListOperatorAuditParams struct {
+	// Before Entries older than this (paging)
+	Before *time.Time `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListPlannerEventsParams defines parameters for ListPlannerEvents.
 type ListPlannerEventsParams struct {
 	From time.Time `form:"from" json:"from"`
@@ -4934,6 +5158,12 @@ type SetHostOwnerJSONRequestBody = SetOwnerRequest
 // SetHostStateJSONRequestBody defines body for SetHostState for application/json ContentType.
 type SetHostStateJSONRequestBody = SetHostStateRequest
 
+// AcceptInviteJSONRequestBody defines body for AcceptInvite for application/json ContentType.
+type AcceptInviteJSONRequestBody = AcceptInviteRequest
+
+// LookupInviteJSONRequestBody defines body for LookupInvite for application/json ContentType.
+type LookupInviteJSONRequestBody = InviteTokenRequest
+
 // MarkActivityReadJSONRequestBody defines body for MarkActivityRead for application/json ContentType.
 type MarkActivityReadJSONRequestBody = MarkActivityReadRequest
 
@@ -4954,6 +5184,18 @@ type RequestFileFetchJSONRequestBody = CreateFileFetchRequest
 
 // ForwardMessageJSONRequestBody defines body for ForwardMessage for application/json ContentType.
 type ForwardMessageJSONRequestBody = ForwardRequest
+
+// OperatorLoginJSONRequestBody defines body for OperatorLogin for application/json ContentType.
+type OperatorLoginJSONRequestBody = OperatorLoginRequest
+
+// RenewOperatorBackupCodesJSONRequestBody defines body for RenewOperatorBackupCodes for application/json ContentType.
+type RenewOperatorBackupCodesJSONRequestBody = OperatorReauthRequest
+
+// CreateCustomerJSONRequestBody defines body for CreateCustomer for application/json ContentType.
+type CreateCustomerJSONRequestBody = CreateCustomerRequest
+
+// SuspendCustomerJSONRequestBody defines body for SuspendCustomer for application/json ContentType.
+type SuspendCustomerJSONRequestBody = SuspendCustomerRequest
 
 // PutPlannerAccessJSONRequestBody defines body for PutPlannerAccess for application/json ContentType.
 type PutPlannerAccessJSONRequestBody = PlannerAccess

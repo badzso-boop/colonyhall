@@ -17,7 +17,9 @@ type Store interface {
 	ByID(ctx context.Context, id ids.ID) (Schedule, error)
 	List(ctx context.Context, workspaceID ids.ID) ([]Schedule, error)
 	// Due lists active schedules whose next run is at or before now.
-	Due(ctx context.Context, now time.Time, limit int) ([]Schedule, error)
+	// Due lists the active schedules due at now, oldest first, except the
+	// skipped workspaces' (round 51: suspended).
+	Due(ctx context.Context, now time.Time, limit int, skip []ids.ID) ([]Schedule, error)
 	// Claim moves an active schedule from the run it was due for to its
 	// next run (or to done); false when someone else already did.
 	Claim(ctx context.Context, id ids.ID, dueAt time.Time, next time.Time, state string, at time.Time) (bool, error)

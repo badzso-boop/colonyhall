@@ -239,9 +239,13 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	if !strings.Contains(string(compYAML), "pgvector/pgvector:pg17") || strings.Contains(string(compYAML), env["POSTGRES_PASSWORD"]) {
 		t.Fatal("compose.yaml: its own Postgres, and no secret in it")
 	}
+	// Round 51: production, and a secret key in the operator's form.
+	if env["COLONY_ENV"] != "production" || !strings.HasPrefix(env["COLONY_SECRET_KEYS"], "k1:") || len(env["COLONY_SECRET_KEYS"]) != 3+44 {
+		t.Fatalf("COLONY_ENV and COLONY_SECRET_KEYS: %q %d", env["COLONY_ENV"], len(env["COLONY_SECRET_KEYS"]))
+	}
 	// Secrets never reach the log.
 	logRaw, _ := os.ReadFile(e.LogPath)
-	for _, s := range []string{env["POSTGRES_PASSWORD"], app, "correct-horse-battery"} {
+	for _, s := range []string{env["POSTGRES_PASSWORD"], app, "correct-horse-battery", env["COLONY_SECRET_KEYS"]} {
 		if strings.Contains(string(logRaw), s) || strings.Contains(out.String(), s) {
 			t.Fatalf("a secret is in the log or the output")
 		}
@@ -261,6 +265,8 @@ func TestServerInstallCommandsAndFiles(t *testing.T) {
 	}
 	if again := readEnv(envPath); again["POSTGRES_PASSWORD"] != pw || again["COLONY_APP_DB_PASSWORD"] != app {
 		t.Fatal("a re-run changed a database password")
+	} else if again["COLONY_SECRET_KEYS"] != env["COLONY_SECRET_KEYS"] {
+		t.Fatal("a re-run changed the secret key: the stored secrets would no longer open")
 	}
 	for _, l := range fr2.Lines() {
 		if strings.Contains(l, "bootstrap") {

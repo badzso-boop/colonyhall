@@ -78,9 +78,12 @@ func (s *Store) List(ctx context.Context, workspaceID ids.ID) ([]schedule.Schedu
 	return list(s.q(ctx).ListSchedules(ctx, workspaceID))
 }
 
-// Due lists active schedules due at now.
-func (s *Store) Due(ctx context.Context, now time.Time, limit int) ([]schedule.Schedule, error) {
-	return list(s.q(ctx).DueSchedules(ctx, sqlcgen.DueSchedulesParams{Now: now, Lim: int32(limit)}))
+// Due lists active schedules due at now, outside the skipped workspaces.
+func (s *Store) Due(ctx context.Context, now time.Time, limit int, skip []ids.ID) ([]schedule.Schedule, error) {
+	if skip == nil {
+		skip = []ids.ID{}
+	}
+	return list(s.q(ctx).DueSchedules(ctx, sqlcgen.DueSchedulesParams{Now: now, Lim: int32(limit), Skip: skip}))
 }
 
 // Claim moves a due run on, once.

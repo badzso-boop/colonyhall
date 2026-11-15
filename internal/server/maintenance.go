@@ -46,6 +46,15 @@ func (a *App) Maintain(ctx context.Context) {
 	} else if n > 0 {
 		a.logger.Info("deleted old login failures", "rows", n)
 	}
+	if a.Operator != nil {
+		if n, err := a.Operator.CleanupSessions(ctx); err != nil {
+			if ctx.Err() == nil {
+				a.logger.Warn("operator session cleanup failed", "err", err)
+			}
+		} else if n > 0 {
+			a.logger.Info("deleted ended operator sessions", "rows", n)
+		}
+	}
 	res, err := a.Identity.CleanupCredentials(ctx)
 	if err != nil {
 		if ctx.Err() == nil {

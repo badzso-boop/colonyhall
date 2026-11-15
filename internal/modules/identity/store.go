@@ -72,6 +72,10 @@ type Store interface {
 	// a workspace.
 	SetWorkspaceState(ctx context.Context, id ids.ID, state, reason string, at *time.Time) error
 
+	// ListWorkspaces lists every workspace, oldest first (system mode: the
+	// operator's overview, round 51).
+	ListWorkspaces(ctx context.Context) ([]Workspace, error)
+
 	// Round 51: the owner's one-time invites.
 	CreateInvite(ctx context.Context, i Invite) error
 	// RevokeOpenInvites revokes the workspace's unused, unrevoked invites.

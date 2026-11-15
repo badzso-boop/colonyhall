@@ -226,6 +226,9 @@ ORDER BY last_used_at DESC, emoji LIMIT sqlc.arg(lim)::int;
 SELECT emoji FROM emoji_use WHERE actor_id = sqlc.arg(actor_id)::uuid
 ORDER BY uses DESC, last_used_at DESC, emoji LIMIT sqlc.arg(lim)::int;
 
+-- name: ListWorkspaces :many
+SELECT * FROM workspace ORDER BY created_at, id;
+
 -- Round 51: the owner's one-time invites (migration 00068).
 
 -- name: CreateInvite :exec

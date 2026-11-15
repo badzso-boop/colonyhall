@@ -7,6 +7,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -68,12 +69,12 @@ func (s *Store) List(_ context.Context, workspaceID ids.ID) ([]schedule.Schedule
 }
 
 // Due lists active schedules due at now.
-func (s *Store) Due(_ context.Context, now time.Time, limit int) ([]schedule.Schedule, error) {
+func (s *Store) Due(_ context.Context, now time.Time, limit int, skip []ids.ID) ([]schedule.Schedule, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []schedule.Schedule
 	for _, sc := range s.all {
-		if sc.State == schedule.StateActive && !sc.NextRunAt.After(now) {
+		if sc.State == schedule.StateActive && !sc.NextRunAt.After(now) && !slices.Contains(skip, sc.WorkspaceID) {
 			out = append(out, sc)
 		}
 	}

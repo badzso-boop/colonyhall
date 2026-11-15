@@ -109,6 +109,10 @@ import (
 	notesmcp "colonyhall/internal/modules/notes/mcptools"
 	notesmem "colonyhall/internal/modules/notes/memory"
 	notespg "colonyhall/internal/modules/notes/postgres"
+	"colonyhall/internal/modules/operator"
+	ophttp "colonyhall/internal/modules/operator/httpapi"
+	opmem "colonyhall/internal/modules/operator/memory"
+	oppg "colonyhall/internal/modules/operator/postgres"
 	"colonyhall/internal/modules/planner"
 	plannerfetch "colonyhall/internal/modules/planner/fetch"
 	plannerhttp "colonyhall/internal/modules/planner/httpapi"
@@ -159,6 +163,7 @@ import (
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/secretbox"
 	"colonyhall/migrations"
 )
 
@@ -224,6 +229,11 @@ type Options struct {
 	// COLONY_LOGIN_ALLOWLIST); both empty by default.
 	TrustedProxies []netip.Prefix
 	LoginAllowlist []netip.Prefix
+	// Round 51: the platform operator (multi-tenant mode only), on
+	// admin.BaseDomain. SecretKeys encrypt the operators' TOTP secrets;
+	// OperatorDevAccess is COLONY_OPERATOR_DEV_ACCESS (development only).
+	SecretKeys        *secretbox.Keyring
+	OperatorDevAccess bool
 }
 
 // App is a wired-up Colonyhall server.
@@ -253,19 +263,21 @@ type App struct {
 	Compaction   *compaction.Service
 	Delegation   *delegation.Service
 	DBStats      *dbstats.Service
-	Runs         *runs.Service
-	Search       *search.Service
-	Indexer      *search.Indexer
-	Gateway      *gateway.Gateway
-	HostGateway  *gateway.HostGateway
-	HostFs       *hosts.FsRelay
-	HostLogin    *hosts.LoginRelay
-	logger       *slog.Logger
-	calRefresh   time.Duration
-	Consumers    []*eventlog.Consumer
-	Events       eventlog.Store
-	Bus          bus.Bus
-	close        func()
+	// Operator is the platform operator (round 51); nil in single-tenant mode.
+	Operator    *operator.Service
+	Runs        *runs.Service
+	Search      *search.Service
+	Indexer     *search.Indexer
+	Gateway     *gateway.Gateway
+	HostGateway *gateway.HostGateway
+	HostFs      *hosts.FsRelay
+	HostLogin   *hosts.LoginRelay
+	logger      *slog.Logger
+	calRefresh  time.Duration
+	Consumers   []*eventlog.Consumer
+	Events      eventlog.Store
+	Bus         bus.Bus
+	close       func()
 }
 
 // New builds the application. For Store=postgres it also applies migrations.
@@ -314,6 +326,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dgStore        delegation.Store
 		seStore        search.Store
 		dsStore        dbstats.Store
+		opStore        operator.Store
 	)
 	switch opt.Store {
 	case "memory":
@@ -343,6 +356,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dgStore = delegationmem.New()
 		seStore = searchmem.New()
 		dsStore = dbstatsmem.New()
+		opStore = opmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -391,6 +405,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		dgStore = &delegationpg.Store{DB: pg}
 		seStore = &searchpg.Store{DB: pg}
 		dsStore = &dbstatspg.Store{DB: pg}
+		opStore = &oppg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -716,8 +731,37 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Multitenant: opt.Multitenant, LoginAllowlist: opt.LoginAllowlist, TrustedProxies: len(opt.TrustedProxies) > 0})
 
 	handler := httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts)
+	var opSvc *operator.Service
 	if opt.Multitenant {
-		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler)
+		// Round 51: a suspended workspace's schedules wait (the loop runs
+		// in system mode, so the list covers every workspace).
+		scSvc.Suspended = func(ctx context.Context) ([]ids.ID, error) {
+			list, err := idStore.ListWorkspaces(ctx)
+			var out []ids.ID
+			for _, w := range list {
+				if w.State == identity.WorkspaceSuspended {
+					out = append(out, w.ID)
+				}
+			}
+			return out, err
+		}
+		// Round 51: the operator lives on admin.<base domain>, with its own
+		// routes only; the customers' API is not there.
+		opSvc = &operator.Service{Store: opStore, Tx: tx, Keys: opt.SecretKeys, Limiter: idSvc, Clock: opt.Clock, IDs: opt.IDs,
+			DevAccess: opt.OperatorDevAccess,
+			Customers: &customers{identity: idSvc, idStore: idStore, hosts: hoStore, files: fiSvc, audit: auStore, clock: opt.Clock,
+				closeWorkspace: func(id ids.ID) {
+					n, h := gw.CloseWorkspace(id), hostGw.CloseWorkspace(id)
+					opt.Logger.Info("workspace suspended: sockets closed", "workspace", id, "browsers_and_agents", n, "guards", h)
+				}}}
+		adminMux := http.NewServeMux()
+		ophttp.Register(adminMux, opSvc, ophttp.Options{SecureCookies: opt.SecureCookies,
+			Database: func(ctx context.Context) (apispec.OperatorDatabase, error) {
+				return operatorDatabase(ctx, ready, dsSvc)
+			}})
+		adminMux.Handle("GET /{$}", http.RedirectHandler("/app/", http.StatusFound))
+		admin := httpserver.NewWithTimeouts(adminMux, ready, opt.Logger, opt.HTTPTimeouts)
+		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler, admin)
 	}
 	// Outermost: everything after it (the tenant layer, the limits, the
 	// logs) sees the same client address (round 40).
@@ -749,6 +793,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Compaction:   cmSvc,
 		Delegation:   dgSvc,
 		DBStats:      dsSvc,
+		Operator:     opSvc,
 		Runs:         ruSvc,
 		Search:       seSvc,
 		Indexer:      seIdx,

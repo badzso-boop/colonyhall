@@ -554,3 +554,13 @@ func toInvite(r sqlcgen.WorkspaceInvite) identity.Invite {
 	}
 	return out
 }
+
+// ListWorkspaces lists every workspace (system mode).
+func (s *Store) ListWorkspaces(ctx context.Context) ([]identity.Workspace, error) {
+	list, err := s.q(ctx).ListWorkspaces(ctx)
+	out := make([]identity.Workspace, 0, len(list))
+	for _, w := range list {
+		out = append(out, toWorkspace(w))
+	}
+	return out, err
+}

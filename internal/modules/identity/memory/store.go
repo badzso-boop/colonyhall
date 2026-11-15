@@ -7,6 +7,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -695,4 +696,16 @@ func (s *Store) LatestInvite(_ context.Context, workspaceID ids.ID) (identity.In
 		return identity.Invite{}, db.ErrNotFound
 	}
 	return *out, nil
+}
+
+// ListWorkspaces lists every workspace, oldest first.
+func (s *Store) ListWorkspaces(_ context.Context) ([]identity.Workspace, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]identity.Workspace, 0, len(s.workspaces))
+	for _, w := range s.workspaces {
+		out = append(out, w)
+	}
+	slices.SortFunc(out, func(a, b identity.Workspace) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return out, nil
 }

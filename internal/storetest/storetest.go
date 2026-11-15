@@ -1145,12 +1145,19 @@ func testSchedule(t *testing.T, b Backend) {
 	other := sc
 	other.ID, other.NextRunAt, other.ThreadRootID = gen.New(), t0.Add(3*time.Hour), gen.New()
 	must(t, st.Create(ctx, other))
-	if due, _ := st.Due(ctx, t0, 10); len(due) != 0 {
+	if due, _ := st.Due(ctx, t0, 10, nil); len(due) != 0 {
 		t.Fatalf("nothing due yet: %+v", due)
 	}
-	due, err := st.Due(ctx, t0.Add(time.Hour), 10)
+	due, err := st.Due(ctx, t0.Add(time.Hour), 10, nil)
 	if err != nil || len(due) != 1 || due[0].ID != sc.ID {
 		t.Fatalf("Due: %+v %v", due, err)
+	}
+	// Round 51: a suspended workspace's schedules wait.
+	if due, err := st.Due(ctx, t0.Add(time.Hour), 10, []ids.ID{f.ws.ID}); err != nil || len(due) != 0 {
+		t.Fatalf("a skipped workspace's schedule is due: %+v %v", due, err)
+	}
+	if due, _ := st.Due(ctx, t0.Add(time.Hour), 10, []ids.ID{gen.New()}); len(due) != 1 {
+		t.Fatalf("another workspace's skip hid it: %+v", due)
 	}
 	next := at.Add(24 * time.Hour)
 	if ok, err := st.Claim(ctx, sc.ID, at, next, schedule.StateActive, at); err != nil || !ok {
@@ -1166,7 +1173,7 @@ func testSchedule(t *testing.T, b Backend) {
 		t.Fatalf("after claim: %+v %v", got, err)
 	}
 	must(t, st.SetState(ctx, other.ID, schedule.StateCanceled))
-	if due, _ := st.Due(ctx, t0.Add(10*time.Hour), 10); len(due) != 0 {
+	if due, _ := st.Due(ctx, t0.Add(10*time.Hour), 10, nil); len(due) != 0 {
 		t.Fatalf("canceled and future schedules are not due: %+v", due)
 	}
 	list, err := st.List(ctx, f.ws.ID)
