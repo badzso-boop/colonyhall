@@ -423,7 +423,7 @@ func (s *Service) CopyToMessage(ctx context.Context, by identity.Actor, sourceMe
 			CreatedAt: s.Clock.Now()}
 		at := pos
 		err = s.storeNew(ctx, by.ID, newFile{file: f, content: content,
-			extra: func(ctx context.Context) error { return s.Store.AttachToMessage(ctx, messageID, f.ID, at) },
+			extra:  func(ctx context.Context) error { return s.Store.AttachToMessage(ctx, messageID, f.ID, at) },
 			evType: EventFileUploaded, evChannel: f.ChannelID, evAgg: f.ID,
 			evPayload: UploadedPayload{ID: f.ID.String(), WorkspaceID: f.WorkspaceID.String(), UploadedBy: f.UploadedBy.String(),
 				ChannelID: f.ChannelID.String(), Name: f.Name, Mime: f.Mime, Size: f.Size, SHA256: f.SHA256}})

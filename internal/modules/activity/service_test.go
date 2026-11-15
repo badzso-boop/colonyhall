@@ -9,11 +9,25 @@ import (
 	"time"
 
 	"colonyhall/internal/modules/activity"
-	actmem "colonyhall/internal/modules/activity/memory"
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/ids"
 )
+
+// pageStore returns its items as the page, newest first as stored; the
+// other Store methods are not used by List.
+type pageStore struct {
+	activity.Store
+	items []activity.Item
+}
+
+func (s *pageStore) List(context.Context, ids.ID, ids.ID, activity.Query) ([]activity.Item, error) {
+	return s.items, nil
+}
+
+func (s *pageStore) CountUnread(context.Context, ids.ID, ids.ID) (int, error) {
+	return len(s.items), nil
+}
 
 // countingConversation answers from maps and counts the calls the feed
 // makes; the other methods are not used by List.
@@ -54,7 +68,7 @@ func TestListLooksUpEachConversationOnceAndBatchesMessages(t *testing.T) {
 	ws, me := gen.New(), gen.New()
 	open1, open2, closed := gen.New(), gen.New(), gen.New()
 	conv := &countingConversation{readable: map[ids.ID]bool{open1: true, open2: true}}
-	store := actmem.New()
+	store := &pageStore{}
 	svc := &activity.Service{Store: store, Conversation: conv}
 	ctx := context.Background()
 	t0 := time.Date(2026, 11, 15, 8, 0, 0, 0, time.UTC)
@@ -65,15 +79,11 @@ func TestListLooksUpEachConversationOnceAndBatchesMessages(t *testing.T) {
 		it := activity.Item{ID: gen.New(), WorkspaceID: ws, RecipientID: me, Kind: activity.KindMention,
 			ChannelID: ch, MessageID: gen.New(), SourceSeq: int64(i + 1), CreatedAt: t0.Add(time.Duration(i) * time.Minute)}
 		msgOf[it.ID] = it.MessageID
-		if _, err := store.Insert(ctx, it); err != nil {
-			t.Fatal(err)
-		}
+		store.items = append(store.items, it)
 	}
 	// One item with no conversation at all (e.g. a reminder of a lost place).
-	if _, err := store.Insert(ctx, activity.Item{ID: gen.New(), WorkspaceID: ws, RecipientID: me, Kind: activity.KindMention,
-		SourceSeq: 99, CreatedAt: t0.Add(time.Hour)}); err != nil {
-		t.Fatal(err)
-	}
+	store.items = append(store.items, activity.Item{ID: gen.New(), WorkspaceID: ws, RecipientID: me, Kind: activity.KindMention,
+		SourceSeq: 99, CreatedAt: t0.Add(time.Hour)})
 
 	views, _, _, err := svc.List(ctx, identity.Actor{ID: me, WorkspaceID: ws, Kind: identity.KindHuman}, activity.Query{})
 	if err != nil {
@@ -87,8 +97,8 @@ func TestListLooksUpEachConversationOnceAndBatchesMessages(t *testing.T) {
 			conv.canRead, conv.channel, conv.message, conv.batches)
 	}
 	for _, v := range views {
-		switch {
-		case v.ChannelID == ids.Nil || v.ChannelID == closed:
+		switch v.ChannelID {
+		case ids.Nil, closed:
 			// A lost (or no) conversation: only the kind and the time.
 			if v.Channel != nil || v.Message != nil {
 				t.Fatalf("item %v in an unreadable place shows %+v %+v", v.ID, v.Channel, v.Message)
