@@ -305,6 +305,36 @@ func (q *Queries) CreateActor(ctx context.Context, arg CreateActorParams) error 
 	return err
 }
 
+const createInvite = `-- name: CreateInvite :exec
+
+INSERT INTO workspace_invite (id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $7, $5, $6)
+`
+
+type CreateInviteParams struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	TokenHash         []byte
+	Role              string
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+	CreatedByOperator *uuid.UUID
+}
+
+// Round 51: the owner's one-time invites (migration 00068).
+func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) error {
+	_, err := q.db.Exec(ctx, createInvite,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.TokenHash,
+		arg.Role,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.CreatedByOperator,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO session (id, actor_id, token_hash, csrf_token, user_agent, created_at, expires_at, workspace_id)
 SELECT $1, $2, $3, $4, $5, $6, $7, a.workspace_id FROM actor a WHERE a.id = $2
@@ -525,6 +555,50 @@ func (q *Queries) HandleWorkspaces(ctx context.Context, handle string) ([]Handle
 		return nil, err
 	}
 	return items, nil
+}
+
+const inviteByTokenHash = `-- name: InviteByTokenHash :one
+SELECT id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at, used_at, used_by, revoked_at FROM workspace_invite WHERE token_hash = $1
+`
+
+func (q *Queries) InviteByTokenHash(ctx context.Context, tokenHash []byte) (WorkspaceInvite, error) {
+	row := q.db.QueryRow(ctx, inviteByTokenHash, tokenHash)
+	var i WorkspaceInvite
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TokenHash,
+		&i.Role,
+		&i.CreatedByOperator,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.UsedBy,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const latestInvite = `-- name: LatestInvite :one
+SELECT id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at, used_at, used_by, revoked_at FROM workspace_invite WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1
+`
+
+func (q *Queries) LatestInvite(ctx context.Context, workspaceID uuid.UUID) (WorkspaceInvite, error) {
+	row := q.db.QueryRow(ctx, latestInvite, workspaceID)
+	var i WorkspaceInvite
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TokenHash,
+		&i.Role,
+		&i.CreatedByOperator,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.UsedBy,
+		&i.RevokedAt,
+	)
+	return i, err
 }
 
 const listActors = `-- name: ListActors :many
@@ -782,6 +856,21 @@ func (q *Queries) RevokeHostTokens(ctx context.Context, arg RevokeHostTokensPara
 	return err
 }
 
+const revokeOpenInvites = `-- name: RevokeOpenInvites :exec
+UPDATE workspace_invite SET revoked_at = $1
+WHERE workspace_id = $2 AND used_at IS NULL AND revoked_at IS NULL
+`
+
+type RevokeOpenInvitesParams struct {
+	At          *time.Time
+	WorkspaceID uuid.UUID
+}
+
+func (q *Queries) RevokeOpenInvites(ctx context.Context, arg RevokeOpenInvitesParams) error {
+	_, err := q.db.Exec(ctx, revokeOpenInvites, arg.At, arg.WorkspaceID)
+	return err
+}
+
 const revokeSession = `-- name: RevokeSession :exec
 UPDATE session SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL
 `
@@ -1022,6 +1111,20 @@ func (q *Queries) SetEmergencyStop(ctx context.Context, arg SetEmergencyStopPara
 	return err
 }
 
+const setInviteUsedBy = `-- name: SetInviteUsedBy :exec
+UPDATE workspace_invite SET used_by = $1 WHERE id = $2
+`
+
+type SetInviteUsedByParams struct {
+	ActorID *uuid.UUID
+	ID      uuid.UUID
+}
+
+func (q *Queries) SetInviteUsedBy(ctx context.Context, arg SetInviteUsedByParams) error {
+	_, err := q.db.Exec(ctx, setInviteUsedBy, arg.ActorID, arg.ID)
+	return err
+}
+
 const setWorkspaceSlug = `-- name: SetWorkspaceSlug :execrows
 UPDATE workspace SET slug = $1 WHERE id = $2
 `
@@ -1040,16 +1143,24 @@ func (q *Queries) SetWorkspaceSlug(ctx context.Context, arg SetWorkspaceSlugPara
 }
 
 const setWorkspaceState = `-- name: SetWorkspaceState :execrows
-UPDATE workspace SET state = $1 WHERE id = $2
+UPDATE workspace SET state = $1, suspended_reason = $2, suspended_at = $3
+WHERE id = $4
 `
 
 type SetWorkspaceStateParams struct {
-	State string
-	ID    uuid.UUID
+	State  string
+	Reason string
+	At     *time.Time
+	ID     uuid.UUID
 }
 
 func (q *Queries) SetWorkspaceState(ctx context.Context, arg SetWorkspaceStateParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setWorkspaceState, arg.State, arg.ID)
+	result, err := q.db.Exec(ctx, setWorkspaceState,
+		arg.State,
+		arg.Reason,
+		arg.At,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1185,8 +1296,26 @@ func (q *Queries) UpdateActorProfile(ctx context.Context, arg UpdateActorProfile
 	return err
 }
 
+const useInvite = `-- name: UseInvite :execrows
+UPDATE workspace_invite SET used_at = $1
+WHERE id = $2 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > $1
+`
+
+type UseInviteParams struct {
+	At *time.Time
+	ID uuid.UUID
+}
+
+func (q *Queries) UseInvite(ctx context.Context, arg UseInviteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, useInvite, arg.At, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const workspaceByID = `-- name: WorkspaceByID :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE id = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state, suspended_at, suspended_reason FROM workspace WHERE id = $1
 `
 
 func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error) {
@@ -1200,12 +1329,14 @@ func (q *Queries) WorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, e
 		&i.EmergencyStopBy,
 		&i.Slug,
 		&i.State,
+		&i.SuspendedAt,
+		&i.SuspendedReason,
 	)
 	return i, err
 }
 
 const workspaceByName = `-- name: WorkspaceByName :one
-SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state FROM workspace WHERE name = $1
+SELECT id, name, created_at, emergency_stop_at, emergency_stop_by, slug, state, suspended_at, suspended_reason FROM workspace WHERE name = $1
 `
 
 func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, error) {
@@ -1219,6 +1350,8 @@ func (q *Queries) WorkspaceByName(ctx context.Context, name string) (Workspace, 
 		&i.EmergencyStopBy,
 		&i.Slug,
 		&i.State,
+		&i.SuspendedAt,
+		&i.SuspendedReason,
 	)
 	return i, err
 }

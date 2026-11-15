@@ -51,6 +51,10 @@ type Workspace struct {
 	// halted (no writes, no wake-ups) until an admin clears it.
 	EmergencyStopAt *time.Time
 	EmergencyStopBy ids.ID
+	// SuspendedAt and SuspendedReason are set while the operator keeps the
+	// workspace suspended (round 51). The reason is for the operator only.
+	SuspendedAt     *time.Time
+	SuspendedReason string
 }
 
 // Actor states.

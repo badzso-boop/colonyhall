@@ -518,6 +518,52 @@ type ModelPrice struct {
 	CreatedAt         time.Time
 }
 
+type Operator struct {
+	ID             uuid.UUID
+	Handle         string
+	DisplayName    string
+	PasswordHash   string
+	TotpKeyID      string
+	TotpNonce      []byte
+	TotpCiphertext []byte
+	TotpLastStep   int64
+	State          string
+	CreatedAt      time.Time
+	ActivatedAt    *time.Time
+	LastLoginAt    *time.Time
+}
+
+type OperatorAudit struct {
+	ID          uuid.UUID
+	OperatorID  *uuid.UUID
+	Action      string
+	WorkspaceID *uuid.UUID
+	Payload     []byte
+	RemoteAddr  string
+	CreatedAt   time.Time
+}
+
+type OperatorBackupCode struct {
+	ID         uuid.UUID
+	OperatorID uuid.UUID
+	CodeHash   []byte
+	CreatedAt  time.Time
+	UsedAt     *time.Time
+}
+
+type OperatorSession struct {
+	ID         uuid.UUID
+	OperatorID uuid.UUID
+	TokenHash  []byte
+	CsrfToken  string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	RemoteAddr string
+	UserAgent  string
+	RevokedAt  *time.Time
+}
+
 type PlannerAccess struct {
 	OwnerID      uuid.UUID
 	WorkspaceID  uuid.UUID
@@ -779,6 +825,8 @@ type Workspace struct {
 	EmergencyStopBy *uuid.UUID
 	Slug            string
 	State           string
+	SuspendedAt     *time.Time
+	SuspendedReason string
 }
 
 type WorkspaceCompactionSetting struct {
@@ -810,6 +858,19 @@ type WorkspaceGitea struct {
 	Token         string
 	WebhookSecret string
 	UpdatedAt     time.Time
+}
+
+type WorkspaceInvite struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	TokenHash         []byte
+	Role              string
+	CreatedByOperator *uuid.UUID
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+	UsedAt            *time.Time
+	UsedBy            *uuid.UUID
+	RevokedAt         *time.Time
 }
 
 type WorkspaceStorage struct {

@@ -14,8 +14,12 @@ import (
 	convpg "colonyhall/internal/modules/conversation/postgres"
 	"colonyhall/internal/modules/identity"
 	idpg "colonyhall/internal/modules/identity/postgres"
+	"colonyhall/internal/modules/operator"
+	oppg "colonyhall/internal/modules/operator/postgres"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/db/opscope"
 	"colonyhall/internal/platform/db/system"
+	"colonyhall/internal/platform/secretbox"
 	"colonyhall/migrations"
 )
 
@@ -174,5 +178,50 @@ func TestPostgresRowLevelSecurity(t *testing.T) {
 	}))
 	if n != 0 {
 		t.Fatalf("a workspace scope sees %d unattributed failure rows", n)
+	}
+
+	// Round 51: the operator scope sees the operator tables and no
+	// workspace; a workspace scope does not see the operator tables.
+	op := opscope.Context(ctx)
+	ops := &oppg.Store{DB: pg}
+	o := operator.Operator{ID: gen.New(), Handle: "ops", DisplayName: "Ops", PasswordHash: "x",
+		TOTP: secretbox.Sealed{KeyID: "k1", Nonce: []byte("n"), Ciphertext: []byte("c")}, State: operator.StateActive, CreatedAt: t0}
+	if err := ops.CreateOperator(inA, o); err == nil {
+		t.Fatal("a workspace scope created an operator")
+	}
+	must(t, ops.CreateOperator(op, o))
+	if _, err := ops.OperatorByID(inA, o.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a workspace scope read an operator: %v", err)
+	}
+	if _, err := ops.OperatorByID(ctx, o.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("an unscoped read found an operator: %v", err)
+	}
+	if _, err := ops.OperatorByID(op, o.ID); err != nil {
+		t.Fatalf("the operator scope reads its table: %v", err)
+	}
+	if _, err := ids.ActorByID(op, alice.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("the operator scope read a workspace's actor: %v", err)
+	}
+	if _, err := ids.WorkspaceByID(op, a.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("the operator scope read a workspace row: %v", err)
+	}
+	for _, table := range []string{"message", "channel", "actor", "event", "file", "workspace_invite"} {
+		var n int
+		must(t, pg.Q(op).QueryRow(op, "SELECT count(*) FROM "+table).Scan(&n))
+		if n != 0 {
+			t.Fatalf("the operator scope sees %d rows of %s", n, table)
+		}
+	}
+
+	// Round 51: a nested transaction with another scope fails instead of
+	// running with the outer one (system mode here would see workspace B).
+	err = pg.InTx(system.Context(ctx), func(ctx context.Context) error {
+		return pg.InTx(db.WithWorkspace(ctx, a.ID), func(ctx context.Context) error {
+			_, err := ids.ActorByID(ctx, bob.ID)
+			return err
+		})
+	})
+	if !errors.Is(err, db.ErrScopeChanged) {
+		t.Fatalf("a nested transaction with another scope: %v", err)
 	}
 }

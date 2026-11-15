@@ -103,23 +103,32 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Actor, Session, str
 		return fail()
 	}
 	s.LimitSucceeded(ctx, LimitLogin, in.Handle)
-
-	secret, err := NewSecret()
+	sess, secret, err := s.openSession(ctx, a, in.UserAgent)
 	if err != nil {
 		return Actor{}, Session{}, "", err
+	}
+	return a, sess, secret, nil
+}
+
+// openSession starts a browser session for a and records the login. It
+// returns the session and the cookie secret (shown once).
+func (s *Service) openSession(ctx context.Context, a Actor, userAgent string) (Session, string, error) {
+	secret, err := NewSecret()
+	if err != nil {
+		return Session{}, "", err
 	}
 	csrf, err := NewSecret()
 	if err != nil {
-		return Actor{}, Session{}, "", err
+		return Session{}, "", err
 	}
 	now := s.Clock.Now()
 	sess := Session{ID: s.IDs.New(), ActorID: a.ID, TokenHash: HashSecret(secret), CSRFToken: csrf,
-		UserAgent: truncate(in.UserAgent, 256), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
+		UserAgent: truncate(userAgent, 256), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
 	if err := s.Store.CreateSession(ctx, sess); err != nil {
-		return Actor{}, Session{}, "", err
+		return Session{}, "", err
 	}
-	s.recordLogin(ctx, a, EventLogin, in.UserAgent)
-	return a, sess, secret, nil
+	s.recordLogin(ctx, a, EventLogin, userAgent)
+	return sess, secret, nil
 }
 
 // recordLogin writes a login event for the audit log. A failure to record

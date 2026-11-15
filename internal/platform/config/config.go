@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"colonyhall/internal/platform/clientip"
+	"colonyhall/internal/platform/secretbox"
 )
 
 // Config is the runtime configuration of the server.
@@ -74,7 +75,24 @@ type Config struct {
 	// LoginAllowlist are the addresses never locked out by the login and
 	// release limits (COLONY_LOGIN_ALLOWLIST, IPs or CIDRs; round 40).
 	LoginAllowlist []netip.Prefix
+	// Env is "production" (the default, also when COLONY_ENV is unset) or
+	// "development" (round 51).
+	Env string
+	// OperatorDevAccess (COLONY_OPERATOR_DEV_ACCESS=1) lets the operator
+	// open any workspace without a reason or the 4-hour limit, with a
+	// banner on every page. Refused unless Env is "development".
+	OperatorDevAccess bool
+	// SecretKeys encrypt the secrets the server reads back (round 51):
+	// COLONY_SECRET_KEYS, or the file COLONY_SECRET_KEYS_FILE names.
+	// Required in multi-tenant mode. Nil when unset.
+	SecretKeys *secretbox.Keyring
 }
+
+// Environments.
+const (
+	EnvProduction  = "production"
+	EnvDevelopment = "development"
+)
 
 // FromEnv reads the configuration from COLONY_* environment variables.
 func FromEnv() (Config, error) {
@@ -114,7 +132,14 @@ func FromEnv() (Config, error) {
 		}
 		rerankTimeout = d
 	}
+	keys, err := secretKeys()
+	if err != nil {
+		return Config{}, err
+	}
 	c := Config{
+		Env:                getenv("COLONY_ENV", EnvProduction),
+		OperatorDevAccess:  os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
+		SecretKeys:         keys,
 		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
 		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
 		RerankTop:          rerankTop,
@@ -141,6 +166,15 @@ func FromEnv() (Config, error) {
 	if c.Multitenant && c.BaseDomain == "" {
 		return c, fmt.Errorf("config: COLONY_BASE_DOMAIN is required when COLONY_MULTITENANT=1")
 	}
+	if c.Env != EnvProduction && c.Env != EnvDevelopment {
+		return c, fmt.Errorf("config: COLONY_ENV must be %q or %q, got %q", EnvProduction, EnvDevelopment, c.Env)
+	}
+	if c.OperatorDevAccess && c.Env != EnvDevelopment {
+		return c, fmt.Errorf("config: COLONY_OPERATOR_DEV_ACCESS=1 lets the operator read every workspace; it needs COLONY_ENV=development and is refused in production")
+	}
+	if c.Multitenant && c.SecretKeys == nil {
+		return c, fmt.Errorf("config: COLONY_SECRET_KEYS (or COLONY_SECRET_KEYS_FILE) is required when COLONY_MULTITENANT=1; create one with `colonyhall secret-key`")
+	}
 	if u, err := url.Parse(c.SourceURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return c, fmt.Errorf("config: COLONY_SOURCE_URL must be an http(s) address, got %q", c.SourceURL)
 	}
@@ -162,6 +196,29 @@ func FromEnv() (Config, error) {
 // DefaultSourceURL is the upstream repository, the source of an unmodified
 // build.
 const DefaultSourceURL = "https://github.com/badzso-boop/colonyhall"
+
+// secretKeys reads COLONY_SECRET_KEYS or the file COLONY_SECRET_KEYS_FILE.
+func secretKeys() (*secretbox.Keyring, error) {
+	v, file := os.Getenv("COLONY_SECRET_KEYS"), os.Getenv("COLONY_SECRET_KEYS_FILE")
+	if v != "" && file != "" {
+		return nil, fmt.Errorf("config: set COLONY_SECRET_KEYS or COLONY_SECRET_KEYS_FILE, not both")
+	}
+	if file != "" {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("config: COLONY_SECRET_KEYS_FILE: %w", err)
+		}
+		v = strings.TrimSpace(string(b))
+	}
+	if v == "" {
+		return nil, nil
+	}
+	k, err := secretbox.Parse(v)
+	if err != nil {
+		return nil, fmt.Errorf("config: COLONY_SECRET_KEYS: %w", err)
+	}
+	return k, nil
+}
 
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {

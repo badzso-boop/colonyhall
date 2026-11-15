@@ -68,8 +68,21 @@ type Store interface {
 	// SetWorkspaceSlug renames a workspace's subdomain; db.ErrConflict when
 	// another workspace has it, db.ErrNotFound when the workspace is gone.
 	SetWorkspaceSlug(ctx context.Context, id ids.ID, slug string) error
-	// SetWorkspaceState suspends or reactivates a workspace.
-	SetWorkspaceState(ctx context.Context, id ids.ID, state string) error
+	// SetWorkspaceState suspends (with the reason and time) or reactivates
+	// a workspace.
+	SetWorkspaceState(ctx context.Context, id ids.ID, state, reason string, at *time.Time) error
+
+	// Round 51: the owner's one-time invites.
+	CreateInvite(ctx context.Context, i Invite) error
+	// RevokeOpenInvites revokes the workspace's unused, unrevoked invites.
+	RevokeOpenInvites(ctx context.Context, workspaceID ids.ID, at time.Time) error
+	InviteByTokenHash(ctx context.Context, hash []byte) (Invite, error)
+	// UseInvite marks an open invite used; false when it was used,
+	// revoked or expired at at.
+	UseInvite(ctx context.Context, id ids.ID, at time.Time) (bool, error)
+	SetInviteUsedBy(ctx context.Context, id, actorID ids.ID) error
+	// LatestInvite is the workspace's newest invite (db.ErrNotFound: none).
+	LatestInvite(ctx context.Context, workspaceID ids.ID) (Invite, error)
 
 	// Credential returns the actor's password hash.
 	Credential(ctx context.Context, actorID ids.ID) (string, error)

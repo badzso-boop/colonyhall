@@ -34,6 +34,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/lease"
 	"colonyhall/internal/modules/notes"
+	"colonyhall/internal/modules/operator"
 	"colonyhall/internal/modules/planner"
 	"colonyhall/internal/modules/preview"
 	"colonyhall/internal/modules/question"
@@ -78,6 +79,7 @@ type Backend struct {
 	Drafts       draft.Store
 	Saved        saved.Store
 	Activity     activity.Store
+	Operator     operator.Store
 	// System puts a context in system mode (the background loops' scope);
 	// only test code may import db/system, so the caller supplies it.
 	System func(context.Context) context.Context
@@ -120,6 +122,8 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("saved", func(t *testing.T) { testSaved(t, newBackend(t)) })
 	t.Run("activity", func(t *testing.T) { testActivity(t, newBackend(t)) })
 	t.Run("emoji usage", func(t *testing.T) { testEmojiUsage(t, newBackend(t)) })
+	t.Run("operator", func(t *testing.T) { testOperator(t, newBackend(t)) })
+	t.Run("invites and suspension", func(t *testing.T) { testInvitesAndSuspension(t, newBackend(t)) })
 }
 
 var (

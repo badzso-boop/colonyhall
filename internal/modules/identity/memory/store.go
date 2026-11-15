@@ -28,6 +28,7 @@ type Store struct {
 	revoked    map[ids.ID]time.Time           // session id → when it was revoked
 	failures   []authFailure                  // login and release limits (round 40)
 	emoji      map[ids.ID]map[string]emojiUse // actor → emoji → use (round 55)
+	invites    []identity.Invite              // round 51
 }
 
 // New returns an empty store.
@@ -602,14 +603,96 @@ func (s *Store) RevokeTokenByHash(_ context.Context, hash []byte, at time.Time) 
 }
 
 // SetWorkspaceState suspends or reactivates a workspace.
-func (s *Store) SetWorkspaceState(_ context.Context, id ids.ID, state string) error {
+func (s *Store) SetWorkspaceState(_ context.Context, id ids.ID, state, reason string, at *time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	w, ok := s.workspaces[id]
 	if !ok {
 		return db.ErrNotFound
 	}
-	w.State = state
+	w.State, w.SuspendedReason, w.SuspendedAt = state, reason, at
 	s.workspaces[id] = w
 	return nil
+}
+
+// CreateInvite stores an invite.
+func (s *Store) CreateInvite(_ context.Context, i identity.Invite) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, x := range s.invites {
+		if string(x.TokenHash) == string(i.TokenHash) {
+			return db.ErrConflict
+		}
+	}
+	s.invites = append(s.invites, i)
+	return nil
+}
+
+// RevokeOpenInvites revokes the workspace's open invites.
+func (s *Store) RevokeOpenInvites(_ context.Context, workspaceID ids.ID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, x := range s.invites {
+		if x.WorkspaceID == workspaceID && x.UsedAt == nil && x.RevokedAt == nil {
+			s.invites[k].RevokedAt = &at
+		}
+	}
+	return nil
+}
+
+// InviteByTokenHash finds an invite by its token hash.
+func (s *Store) InviteByTokenHash(_ context.Context, hash []byte) (identity.Invite, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, x := range s.invites {
+		if string(x.TokenHash) == string(hash) {
+			return x, nil
+		}
+	}
+	return identity.Invite{}, db.ErrNotFound
+}
+
+// UseInvite marks an open invite used.
+func (s *Store) UseInvite(_ context.Context, id ids.ID, at time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, x := range s.invites {
+		if x.ID == id {
+			if !x.Open(at) {
+				return false, nil
+			}
+			s.invites[k].UsedAt = &at
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// SetInviteUsedBy records the owner the invite created.
+func (s *Store) SetInviteUsedBy(_ context.Context, id, actorID ids.ID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, x := range s.invites {
+		if x.ID == id {
+			s.invites[k].UsedBy = actorID
+			return nil
+		}
+	}
+	return db.ErrNotFound
+}
+
+// LatestInvite is the workspace's newest invite.
+func (s *Store) LatestInvite(_ context.Context, workspaceID ids.ID) (identity.Invite, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out *identity.Invite
+	for k, x := range s.invites {
+		if x.WorkspaceID == workspaceID && (out == nil || !x.CreatedAt.Before(out.CreatedAt)) {
+			out = &s.invites[k]
+		}
+	}
+	if out == nil {
+		return identity.Invite{}, db.ErrNotFound
+	}
+	return *out, nil
 }

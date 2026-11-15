@@ -256,7 +256,8 @@ func (s *Store) RevokeSessionsForActor(ctx context.Context, actorID, keep ids.ID
 }
 
 func toWorkspace(w sqlcgen.Workspace) identity.Workspace {
-	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State, EmergencyStopAt: w.EmergencyStopAt}
+	out := identity.Workspace{ID: w.ID, Name: w.Name, CreatedAt: w.CreatedAt, Slug: w.Slug, State: w.State, EmergencyStopAt: w.EmergencyStopAt,
+		SuspendedAt: w.SuspendedAt, SuspendedReason: w.SuspendedReason}
 	if w.EmergencyStopBy != nil {
 		out.EmergencyStopBy = *w.EmergencyStopBy
 	}
@@ -468,8 +469,8 @@ func (s *Store) RevokeTokenByHash(ctx context.Context, hash []byte, at time.Time
 }
 
 // SetWorkspaceState suspends or reactivates a workspace.
-func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state string) error {
-	n, err := s.q(ctx).SetWorkspaceState(ctx, sqlcgen.SetWorkspaceStateParams{ID: id, State: state})
+func (s *Store) SetWorkspaceState(ctx context.Context, id ids.ID, state, reason string, at *time.Time) error {
+	n, err := s.q(ctx).SetWorkspaceState(ctx, sqlcgen.SetWorkspaceStateParams{ID: id, State: state, Reason: reason, At: at})
 	if err == nil && n == 0 {
 		return db.ErrNotFound
 	}
@@ -496,4 +497,60 @@ func (s *Store) EmojiUsage(ctx context.Context, actorID ids.ID, limit int) (rece
 		return nil, nil, err
 	}
 	return recent, frequent, nil
+}
+
+// CreateInvite stores an invite.
+func (s *Store) CreateInvite(ctx context.Context, i identity.Invite) error {
+	var by *ids.ID
+	if i.CreatedByOperator != ids.Nil {
+		by = &i.CreatedByOperator
+	}
+	return s.q(ctx).CreateInvite(ctx, sqlcgen.CreateInviteParams{ID: i.ID, WorkspaceID: i.WorkspaceID, TokenHash: i.TokenHash,
+		Role: string(i.Role), CreatedByOperator: by, CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt})
+}
+
+// RevokeOpenInvites revokes the workspace's open invites.
+func (s *Store) RevokeOpenInvites(ctx context.Context, workspaceID ids.ID, at time.Time) error {
+	return s.q(ctx).RevokeOpenInvites(ctx, sqlcgen.RevokeOpenInvitesParams{WorkspaceID: workspaceID, At: &at})
+}
+
+// InviteByTokenHash finds an invite by its token hash.
+func (s *Store) InviteByTokenHash(ctx context.Context, hash []byte) (identity.Invite, error) {
+	r, err := s.q(ctx).InviteByTokenHash(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Invite{}, db.ErrNotFound
+	}
+	return toInvite(r), err
+}
+
+// UseInvite marks an open invite used.
+func (s *Store) UseInvite(ctx context.Context, id ids.ID, at time.Time) (bool, error) {
+	n, err := s.q(ctx).UseInvite(ctx, sqlcgen.UseInviteParams{ID: id, At: &at})
+	return n == 1, err
+}
+
+// SetInviteUsedBy records the owner the invite created.
+func (s *Store) SetInviteUsedBy(ctx context.Context, id, actorID ids.ID) error {
+	return s.q(ctx).SetInviteUsedBy(ctx, sqlcgen.SetInviteUsedByParams{ID: id, ActorID: &actorID})
+}
+
+// LatestInvite is the workspace's newest invite.
+func (s *Store) LatestInvite(ctx context.Context, workspaceID ids.ID) (identity.Invite, error) {
+	r, err := s.q(ctx).LatestInvite(ctx, workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.Invite{}, db.ErrNotFound
+	}
+	return toInvite(r), err
+}
+
+func toInvite(r sqlcgen.WorkspaceInvite) identity.Invite {
+	out := identity.Invite{ID: r.ID, WorkspaceID: r.WorkspaceID, TokenHash: r.TokenHash, Role: identity.Role(r.Role),
+		CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, UsedAt: r.UsedAt, RevokedAt: r.RevokedAt}
+	if r.CreatedByOperator != nil {
+		out.CreatedByOperator = *r.CreatedByOperator
+	}
+	if r.UsedBy != nil {
+		out.UsedBy = *r.UsedBy
+	}
+	return out
 }

@@ -168,7 +168,8 @@ UPDATE api_token SET revoked_at = coalesce(revoked_at, sqlc.arg(at)::timestamptz
 WHERE token_hash = sqlc.arg(token_hash) RETURNING *;
 
 -- name: SetWorkspaceState :execrows
-UPDATE workspace SET state = sqlc.arg(state) WHERE id = sqlc.arg(id);
+UPDATE workspace SET state = sqlc.arg(state), suspended_reason = sqlc.arg(reason), suspended_at = sqlc.narg(at)
+WHERE id = sqlc.arg(id);
 
 -- Round 40: durable login and release limits (migration 00056). The pre-auth
 -- paths go through the narrow functions; the lockout list runs in the
@@ -224,3 +225,26 @@ ORDER BY last_used_at DESC, emoji LIMIT sqlc.arg(lim)::int;
 -- name: FrequentEmoji :many
 SELECT emoji FROM emoji_use WHERE actor_id = sqlc.arg(actor_id)::uuid
 ORDER BY uses DESC, last_used_at DESC, emoji LIMIT sqlc.arg(lim)::int;
+
+-- Round 51: the owner's one-time invites (migration 00068).
+
+-- name: CreateInvite :exec
+INSERT INTO workspace_invite (id, workspace_id, token_hash, role, created_by_operator, created_at, expires_at)
+VALUES ($1, $2, $3, $4, sqlc.narg(created_by_operator), $5, $6);
+
+-- name: RevokeOpenInvites :exec
+UPDATE workspace_invite SET revoked_at = sqlc.arg(at)
+WHERE workspace_id = sqlc.arg(workspace_id) AND used_at IS NULL AND revoked_at IS NULL;
+
+-- name: InviteByTokenHash :one
+SELECT * FROM workspace_invite WHERE token_hash = $1;
+
+-- name: UseInvite :execrows
+UPDATE workspace_invite SET used_at = sqlc.arg(at)
+WHERE id = sqlc.arg(id) AND used_at IS NULL AND revoked_at IS NULL AND expires_at > sqlc.arg(at);
+
+-- name: SetInviteUsedBy :exec
+UPDATE workspace_invite SET used_by = sqlc.arg(actor_id) WHERE id = sqlc.arg(id);
+
+-- name: LatestInvite :one
+SELECT * FROM workspace_invite WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1;
