@@ -53,7 +53,7 @@ A belépési próbálkozások a meglévő korlátozót használják (40. kör) �
 | `plan` | `id`, `name`, `storage_bytes` (> 0), `cpu_cores` (numeric, pl. 2), `memory_bytes`, `archived_at`, `created_at`, `updated_at` | **O** írás; olvasás: **O**, vagy a munkaterület a **saját** csomagját (`id = (SELECT plan_id FROM workspace WHERE id = colony_ws())`) |
 | `break_glass` | `id`, `workspace_id`, `operator_id`, `reason`, `opened_at`, `expires_at` (≤ 4 óra), `closed_at`, `closed_by` (`operator`, `expired`, `owner`), `dev_mode` (bool) | **W** + **O** |
 
-A `workspace` bővítése: `plan_id` (NULL = nincs csomag: csak a tulajdonos 54. körös kerete él, mint ma).
+A `workspace` bővítése: `plan_id` (NULL = nincs csomag: csak a tulajdonos 54. körös kerete él, mint ma). *(Megvalósításkor módosítva, `00070`: a csomag a `workspace_storage` sorába kerül — `plan_id`, `plan_name`, `plan_storage_bytes`, `plan_cpu_cores`, `plan_memory_bytes` másolatként —, így a `files` modul a munkaterületen belül, a platformtábla olvasása nélkül számolja a tényleges keretet; a `plan` tábla csak operátori RLS-t kap. A csomag szerkesztése a rajta lévő munkaterületek másolatát is frissíti. A `break_glass` sor `actor_id`-t, átadó-hash-t és lejáratot is tárol, a `session` pedig `break_glass_id`-t.)*
 
 ### 2.3 Titkok és projektek (a hosztolt őrrel)
 
@@ -153,6 +153,8 @@ Már 51a-ban kell (a TOTP-titkokhoz), és ugyanez szolgálja majd a 2.3 titkait.
 - **Magától zárul:** a munkamenet érvényessége a `break_glass.expires_at`; minden kérés újraellenőrzi, hogy a sor nyitott-e; a karbantartó ciklus a lejártakat `expired`-dal zárja, a nyitott WebSocketet bontja. **A tulajdonos is lezárhatja** (`DELETE /workspace/break-glass/{id}`), javaslat: igen (15. pont, 5. kérdés).
 - Fejlesztői módban ugyanez indoklás nélkül, a „Fejlesztői mód” sávval; az ügyfél auditjában ilyenkor is megjelenik (`dev_mode: true`).
 
+- **Megvalósítás (2026-11-15):** a kérésréteg (`httpx.RequireAuth`) az egyetlen hely, ami vészhozzáférési munkamenetet elfogad (`identity.AllowBreakGlass`); a WebSocket, az MCP és a bearer token elutasítja. **Engedélylista** (`identity.BreakGlassRoutes`, a regisztrált minta szerint, így egy új útvonal zárva marad, amíg fel nem veszik): a munkamenet, a saját (üres) listák, felhasználók, Rendszerállapot, csatornák, üzenetek, szál, kitűzések, fájlok, gépek, futások, költség, agent-utasítások és szabályok, beállítások, tárhely; a futásoknál a lépések és az olvasott URL-ek kimaradnak. Minden más olvasás 403 `break_glass_scope`, minden írás 403 `read_only_access` (kivéve a kilépést). Az olvasás a kiszolgálás **előtt** kerül az auditba (`operator.break_glass_read`: módszer és útvonal, lekérdezés és tartalom nélkül); ha nem írható, a kérés elbukik. A DM-et és a privát csatornát a `conversation.CanRead` és a csatornalista szűri, így a fájlok, a szál és a kitűzések is. A WebSocketen az „olvasott” események nem mennek ki (személyes eseményként a gateway-ben). Az operátor-actor (`colonyhall-operator`, admin rangú ember) nem kaphat jelszót, tokent vagy más rangot, és tokennel sem hitelesíthet. A lejárat kérésenként érvényes; a karbantartás (óránként) a sort is lezárja. Tesztek: `TestBreakGlass` és `TestPostgresBreakGlass` (a szerződés minden írási és nem engedélyezett olvasási útvonala a munkamenettel), `TestPostgresRowLevelSecurity` (csak olvasható kapcsolat), `storetest` (`break-glass`).
+
 ## 7. Csomagok (51b)
 
 - **Az operátor szerkeszti:** `GET/POST /operator/plans`, `PATCH /operator/plans/{id}` (név, tárhely, CPU, memória), archiválás (használatban lévő csomag nem törölhető; az archivált nem rendelhető új ügyfélhez).
@@ -161,7 +163,7 @@ Már 51a-ban kell (a TOTP-titkokhoz), és ugyanez szolgálja majd a 2.3 titkait.
 - **Kisebb csomagra váltás:** a felület előbb lekéri `GET /operator/workspaces/{id}/plan-check?plan_id=…` → `{used_bytes, new_quota_bytes, fits, level_after}`, és mutatja: „Jelenlegi használat 18,2 GB, az új csomag 15 GB: a munkaterület **megtelik**, az agentek szünetelnek, amíg a használat 15 GB alá nem csökken.”
   - **Javaslat: engedni, kifejezett megerősítéssel** (`confirm_over_quota: true`), és a munkaterület „teli” állapotba kerül; a tulajdonos megkapja az 54. kör DM-jét. Indok: a visszautasítás az operátort arra kényszerítené, hogy a drágább csomagon tartsa az ügyfelet, vagy maga töröljön ügyféladatot (amit nem tehet); a teli állapot adatvesztés nélkül, érthetően jelzi a helyzetet, és az ügyfél maga dönt, mit töröl. Megerősítés nélkül a kérés 409 (`plan_over_quota`).
 - **CPU és memória:** csak tárolva és mutatva (operátori lista, az ügyfél Beállítások → Tárhely kártyája: „Csomag: Közepes · 20 GB · 4 mag · 4 GB memória”). A hosztolt őr fogja kikényszeríteni (systemd slice vagy konténerkorlát).
-- Ügyféloldalon: `GET /workspace/plan` (tulajdonos és adminok).
+- Ügyféloldalon: `GET /workspace/plan` (tulajdonos és adminok). *(Megvalósításkor módosítva: a csomag a `GET /workspace/storage` válaszában jön — `plan` és a tényleges keret, `limit_bytes` —, a Tárhely kártya ezt mutatja; külön végpont nem kell.)*
 
 ## 8. A tárhely és a hosztolt őr projektjei (a hosztolt őrrel)
 
