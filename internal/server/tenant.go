@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"colonyhall/internal/modules/identity"
@@ -29,7 +30,7 @@ import (
 // own routes only). A browser asking a suspended workspace for a page gets
 // a "paused" page; every API, WebSocket, MCP and guard call still gets the
 // same 404 as an unknown slug.
-func tenantHandler(base string, secureCookies bool, workspaces identity.Store, next, admin http.Handler) http.Handler {
+func tenantHandler(base string, secureCookies bool, workspaces identity.Store, next, admin http.Handler, adminAllow []netip.Prefix) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := strings.ToLower(r.Host)
 		if h, _, err := net.SplitHostPort(host); err == nil {
@@ -46,6 +47,13 @@ func tenantHandler(base string, secureCookies bool, workspaces identity.Store, n
 			return
 		}
 		if host == "admin."+base && admin != nil {
+			// Only from the operator's addresses (COLONY_OPERATOR_ALLOWLIST):
+			// elsewhere the host does not exist, and nobody can lock the
+			// operator out with failed logins.
+			if len(adminAllow) > 0 && !clientip.Contains(adminAllow, clientip.From(r.Context())) {
+				noTenant(w)
+				return
+			}
 			// The operator's API, its app and the health checks; anything
 			// else (the customers' API, sockets, MCP) is not here.
 			p := r.URL.Path

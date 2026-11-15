@@ -247,6 +247,7 @@ func run(logger *slog.Logger) error {
 		RerankTimeout:      cfg.RerankTimeout,
 		SecretKeys:         cfg.SecretKeys,
 		OperatorDevAccess:  cfg.OperatorDevAccess,
+		OperatorAllowlist:  cfg.OperatorAllowlist,
 	})
 	if err != nil {
 		return err

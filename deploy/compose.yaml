@@ -59,6 +59,8 @@ services:
       COLONY_OPERATOR_DEV_ACCESS: ${COLONY_OPERATOR_DEV_ACCESS:-0}
       COLONY_SECRET_KEYS: ${COLONY_SECRET_KEYS:-}
       COLONY_SECRET_KEYS_FILE: ${COLONY_SECRET_KEYS_FILE:-}
+      # The addresses admin.<domain> (the operator) answers; empty: any.
+      COLONY_OPERATOR_ALLOWLIST: ${COLONY_OPERATOR_ALLOWLIST:-}
       # Round 40: reverse proxies whose X-Forwarded-For is believed, and the
       # addresses never locked out by the login limits (IPs or CIDRs, comma-separated).
       COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}

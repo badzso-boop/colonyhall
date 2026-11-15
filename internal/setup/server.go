@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"colonyhall/internal/platform/clientip"
 )
 
 // DefaultRepo is where the releases and the server image come from.
@@ -154,6 +156,8 @@ services:
       COLONY_OPERATOR_DEV_ACCESS: ${COLONY_OPERATOR_DEV_ACCESS:-0}
       COLONY_SECRET_KEYS: ${COLONY_SECRET_KEYS:-}
       COLONY_SECRET_KEYS_FILE: ${COLONY_SECRET_KEYS_FILE:-}
+      # The addresses admin.<domain> (the operator) answers; empty: any.
+      COLONY_OPERATOR_ALLOWLIST: ${COLONY_OPERATOR_ALLOWLIST:-}
     volumes:
       - files:/data/files
     ports:
@@ -187,7 +191,7 @@ const serverHardening = `    read_only: true
 // installer's own values never have one, and the answers file's are
 // checked before they get here.
 func envFile(v map[string]string) string {
-	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "COLONY_ENV", "COLONY_SECRET_KEYS",
+	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "COLONY_ENV", "COLONY_SECRET_KEYS", "COLONY_OPERATOR_ALLOWLIST",
 		"POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
 	var b strings.Builder
 	b.WriteString("# Colonyhall server settings and secrets (colony setup). Keep it 0600 and back it up.\n")
@@ -334,6 +338,28 @@ func (e *Env) askServer() error {
 		}
 		a.AdminName = n
 	}
+	if a.OperatorAllowlist == "" {
+		// Round 51: who may reach the operator's console. Kept across
+		// re-runs; asked only in multi-tenant mode (a single workspace has
+		// no admin.<domain>), with Tailscale as the default when present.
+		a.OperatorAllowlist = env["COLONY_OPERATOR_ALLOWLIST"]
+		if a.OperatorAllowlist == "" && env["COLONY_MULTITENANT"] == "1" {
+			def := "-"
+			if _, ts := localAddrs(); ts != "" {
+				def = "100.64.0.0/10"
+			}
+			s, err := e.UI.Ask("srvOpAllow", def)
+			if err != nil {
+				return err
+			}
+			a.OperatorAllowlist = s
+		}
+	}
+	if v := strings.TrimSpace(a.OperatorAllowlist); v != "-" {
+		if _, err := clientip.ParseList(v); err != nil {
+			return fmt.Errorf("operator allowlist: %w", err)
+		}
+	}
 	if a.Backups == nil {
 		ok, err := e.UI.Confirm("srvBackups", true, e.backupDir())
 		if err != nil {
@@ -418,6 +444,9 @@ func (e *Env) serverEnv() (map[string]string, bool) {
 	// developer access is refused), and it has a key for the secrets it
 	// encrypts, kept across re-runs.
 	v["COLONY_ENV"] = "production"
+	if allow := strings.TrimSpace(a.OperatorAllowlist); allow != "" && allow != "-" {
+		v["COLONY_OPERATOR_ALLOWLIST"] = strings.ReplaceAll(allow, " ", "")
+	}
 	key := old["COLONY_SECRET_KEYS"]
 	if key == "" {
 		key = randomSecretKey("k1")

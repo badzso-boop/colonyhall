@@ -754,3 +754,44 @@ func TestWriteFileIgnoresStaleNewFile(t *testing.T) {
 		t.Fatalf("mode %v", fi.Mode().Perm())
 	}
 }
+
+// Round 51: the operator's allowlist comes from the answers file (or the
+// question in multi-tenant mode), is checked, reaches the .env, and stays
+// across re-runs; a single workspace is not asked.
+func TestServerOperatorAllowlist(t *testing.T) {
+	e, _, _ := testEnv(t, linux, "", true)
+	e.Answers.Server = ServerAnswers{Bind: "127.0.0.1", Port: 8080, AdminHandle: "a", AdminName: "A", OperatorAllowlist: "100.64.0.0/10, 192.0.2.7"}
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.serverEnv(); v["COLONY_OPERATOR_ALLOWLIST"] != "100.64.0.0/10,192.0.2.7" {
+		t.Fatalf("allowlist in the env: %q", v["COLONY_OPERATOR_ALLOWLIST"])
+	}
+	e.Answers.Server.OperatorAllowlist = "not-an-address"
+	if err := e.askServer(); err == nil {
+		t.Fatal("an invalid allowlist was accepted")
+	}
+	// "-": any address, nothing written.
+	e.Answers.Server.OperatorAllowlist = "-"
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.serverEnv(); v["COLONY_OPERATOR_ALLOWLIST"] != "" {
+		t.Fatalf("- wrote %q", v["COLONY_OPERATOR_ALLOWLIST"])
+	}
+	// A re-run keeps the value already in the .env.
+	dir := e.serverDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("COLONY_OPERATOR_ALLOWLIST=198.51.100.0/24\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.Answers.Server.OperatorAllowlist = ""
+	if err := e.askServer(); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.serverEnv(); v["COLONY_OPERATOR_ALLOWLIST"] != "198.51.100.0/24" {
+		t.Fatalf("a re-run lost the allowlist: %q", v["COLONY_OPERATOR_ALLOWLIST"])
+	}
+}

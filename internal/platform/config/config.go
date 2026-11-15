@@ -82,6 +82,10 @@ type Config struct {
 	// open any workspace without a reason or the 4-hour limit, with a
 	// banner on every page. Refused unless Env is "development".
 	OperatorDevAccess bool
+	// OperatorAllowlist are the addresses admin.<domain> answers (round 51,
+	// COLONY_OPERATOR_ALLOWLIST, IPs or CIDRs); every other address gets the
+	// unknown-host 404. Empty: any address (the docs advise against it).
+	OperatorAllowlist []netip.Prefix
 	// SecretKeys encrypt the secrets the server reads back (round 51):
 	// COLONY_SECRET_KEYS, or the file COLONY_SECRET_KEYS_FILE names.
 	// Required in multi-tenant mode. Nil when unset.
@@ -136,10 +140,15 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	opAllow, err := clientip.ParseList(os.Getenv("COLONY_OPERATOR_ALLOWLIST"))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: COLONY_OPERATOR_ALLOWLIST: %w", err)
+	}
 	c := Config{
 		Env:                getenv("COLONY_ENV", EnvProduction),
 		OperatorDevAccess:  os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
 		SecretKeys:         keys,
+		OperatorAllowlist:  opAllow,
 		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
 		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
 		RerankTop:          rerankTop,

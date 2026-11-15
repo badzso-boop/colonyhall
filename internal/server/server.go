@@ -234,6 +234,8 @@ type Options struct {
 	// OperatorDevAccess is COLONY_OPERATOR_DEV_ACCESS (development only).
 	SecretKeys        *secretbox.Keyring
 	OperatorDevAccess bool
+	// OperatorAllowlist: the addresses admin.<domain> answers; empty: any.
+	OperatorAllowlist []netip.Prefix
 }
 
 // App is a wired-up Colonyhall server.
@@ -761,7 +763,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			}})
 		adminMux.Handle("GET /{$}", http.RedirectHandler("/app/", http.StatusFound))
 		admin := httpserver.NewWithTimeouts(adminMux, ready, opt.Logger, opt.HTTPTimeouts)
-		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler, admin)
+		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler, admin, opt.OperatorAllowlist)
 	}
 	// Outermost: everything after it (the tenant layer, the limits, the
 	// logs) sees the same client address (round 40).
