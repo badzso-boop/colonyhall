@@ -27,6 +27,7 @@ const ConsumerName = "activity"
 type Conversation interface {
 	ChannelByID(ctx context.Context, id ids.ID) (conversation.Channel, error)
 	MessageByID(ctx context.Context, id ids.ID) (conversation.Message, error)
+	MessagesByIDs(ctx context.Context, idList []ids.ID) ([]conversation.Message, error)
 	MemberIDs(ctx context.Context, channelID ids.ID) ([]ids.ID, error)
 	ThreadAuthorIDs(ctx context.Context, rootID ids.ID) ([]ids.ID, error)
 	CanRead(ctx context.Context, by identity.Actor, channelID ids.ID) (bool, error)
@@ -84,27 +85,53 @@ func (s *Service) List(ctx context.Context, by identity.Actor, q Query) ([]View,
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	readable := map[ids.ID]bool{}
+	// One look per conversation (access, then the channel) and one batch
+	// for the messages, not two queries per item: the page is at most
+	// MaxPageSize items, but they mostly come from a few conversations.
+	type place struct {
+		ok      bool
+		channel *conversation.Channel
+	}
+	places := map[ids.ID]place{}
+	var msgIDs []ids.ID
+	for _, it := range items {
+		if it.ChannelID == ids.Nil {
+			continue
+		}
+		p, seen := places[it.ChannelID]
+		if !seen {
+			if p.ok, err = s.Conversation.CanRead(ctx, by, it.ChannelID); err != nil {
+				return nil, 0, nil, err
+			}
+			if p.ok {
+				if c, err := s.Conversation.ChannelByID(ctx, it.ChannelID); err == nil {
+					p.channel = &c
+				}
+			}
+			places[it.ChannelID] = p
+		}
+		if p.ok && it.MessageID != ids.Nil {
+			msgIDs = append(msgIDs, it.MessageID)
+		}
+	}
+	msgs := map[ids.ID]*conversation.Message{}
+	if len(msgIDs) > 0 {
+		list, err := s.Conversation.MessagesByIDs(ctx, msgIDs)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		for i := range list {
+			msgs[list[i].ID] = &list[i]
+		}
+	}
 	out := make([]View, 0, len(items))
 	for _, it := range items {
 		v := View{Item: it}
-		if it.ChannelID != ids.Nil {
-			ok, seen := readable[it.ChannelID]
-			if !seen {
-				if ok, err = s.Conversation.CanRead(ctx, by, it.ChannelID); err != nil {
-					return nil, 0, nil, err
-				}
-				readable[it.ChannelID] = ok
-			}
-			if ok {
-				if c, err := s.Conversation.ChannelByID(ctx, it.ChannelID); err == nil {
-					v.Channel = &c
-				}
-				if it.MessageID != ids.Nil {
-					if m, err := s.Conversation.MessageByID(ctx, it.MessageID); err == nil {
-						v.Message = &m
-					}
-				}
+		// A lost conversation's item shows nothing but its kind and time.
+		if p := places[it.ChannelID]; it.ChannelID != ids.Nil && p.ok {
+			v.Channel = p.channel
+			if it.MessageID != ids.Nil {
+				v.Message = msgs[it.MessageID]
 			}
 		}
 		out = append(out, v)

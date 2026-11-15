@@ -69,9 +69,13 @@ func (s *Service) ForwardMessage(ctx context.Context, by identity.Actor, sourceI
 	if a, err := s.Directory.ActorByID(ctx, src.AuthorID); err == nil {
 		author = a.Handle
 	}
-	place := "közvetlen üzenet"
+	// The header names no word in any language (the body is stored once
+	// and read by people of any locale and by agents; the PWA labels it
+	// "forwarded" from forwarded_from_id): the author, the place (a DM has
+	// none to name) and the time.
+	place := ""
 	if srcCh.Kind != KindDM {
-		place = "#" + srcCh.Name
+		place = " · #" + srcCh.Name
 	}
 	loc := time.UTC
 	if l, err := time.LoadLocation(by.Timezone); err == nil && by.Timezone != "" {
@@ -86,7 +90,7 @@ func (s *Service) ForwardMessage(ctx context.Context, by identity.Actor, sourceI
 		b.WriteString(c)
 		b.WriteString("\n\n")
 	}
-	fmt.Fprintf(&b, "↪ Továbbítva: @\u200b%s · %s · %s\n", author, place, src.CreatedAt.In(loc).Format("2006-01-02 15:04"))
+	fmt.Fprintf(&b, "↪ @\u200b%s%s · %s\n", author, place, src.CreatedAt.In(loc).Format("2006-01-02 15:04"))
 	for _, line := range strings.Split(DefuseMentions(quoted), "\n") {
 		b.WriteString("> ")
 		b.WriteString(line)
@@ -98,5 +102,5 @@ func (s *Service) ForwardMessage(ctx context.Context, by identity.Actor, sourceI
 	}
 	b.WriteString(link)
 	return s.SendMessage(ctx, by, SendInput{ChannelID: in.ChannelID, ThreadRootID: in.ThreadRootID, ClientMsgID: in.ClientMsgID,
-		Body: b.String(), ForwardedFromID: src.ID})
+		Body: b.String(), ForwardedFromID: src.ID, CopyFilesFrom: src.ID})
 }
