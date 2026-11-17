@@ -297,11 +297,13 @@ Hamis külső MCP-szerver (go-sdk, `httptest`) és hamis HTTP API (Jira, GIF) a 
 | **56c** | Rutinok (cron, esemény, webhook; agentes és agent nélküli), bővítménybotok, interaktív blokkok és akciók, PWA-megjelenítés | A Jira-példa végig működik egy hamis Jira ellen; egy gombnyomás eljut a küldő agentig |
 | **56d** | Az Építő sablon, meta-eszközök, próbafuttatás, jóváhagyási képernyő a manifest változásával, építési napló, export/import; ha marad hely: megbízott építő | A hamis agent mint Építő létrehozza, teszteli és (emberi jóváhagyás után) élesíti a GIF-példát |
 
-### 13.15 A kapu kérdései Norbinak
+### 13.15 A kapu döntései (Norbi, 2026-11-17)
 
-1. **Ki írja a bővítmények kimenetét?** Bővítményenként saját bot (`@x-gif`) — **javaslat** — vagy egy közös `@muhely`.
-2. **Belső címek saját telepítésen:** `COLONY_EGRESS_ALLOW` (az üzemeltető engedhet LAN/Tailscale-címet, pl. a homelab Giteát; alapból üres; többbérlős módban tilos) — **javaslat** — vagy soha.
-3. **A titok nem jut be a JS-kódba** (a szerver teszi rá a kérésre, `auth: "<kapcsolat>"`), a 2.3-ban írt `secrets.get` helyett — **javaslat**: így.
-4. **QuickJS-könyvtár:** `fastschema/qjs` (WASM, `wazero`, fiatal; saját port mögött, rögzített verzióval) — **javaslat** —, vagy a QuickJS saját WASM-buildje és saját host-réteg (lassabb munka, kevesebb külső függés).
-5. **Havi híváskeret a csomagban** (`ext_calls_month`, NULL = korlátlan) — **javaslat**: igen, most.
-6. **A korlátszámok** (13.4: 64 MB, 10 mp, 256 KB, 4/16 párhuzamos, 5/10 hiba) — **javaslat**: így, később a csomagból állíthatóan.
+| # | Kérdés | Döntés |
+| --- | --- | --- |
+| 1 | Ki írja a bővítmények kimenetét | **Minden bővítmény saját botot kap**, nyomon követhetően; **a bot nevét a létrehozáskor adják meg** (alapérték `x-<slug>`, a mag neveivel és a meglévő actorokkal nem ütközhet; később nem változik, hogy a nyom megmaradjon) |
+| 2 | Belső címek saját telepítésen | **Igen:** `COLONY_EGRESS_ALLOW` (alapból üres, többbérlős módban tilos). Norbi ötlete: a bővítmény-„piactér” később **Giteában** él (bővítményenként egy repó, a csomag fájlokként); az export formátuma ezért egy repóba tehető mappaszerkezet (`manifest.yaml`, `src/`, `BUILDLOG.md`), nem egyetlen JSON. A piactér maga nem ennek a körnek a része |
+| 3 | Titok a JS-ben | **Nem jut be**: a szerver teszi rá a kérésre (`auth: "<kapcsolat>"`) |
+| 4 | QuickJS-könyvtár | `fastschema/qjs` **saját port mögött** (`extrunner.Engine`), rögzített verzióval; **a fejlődését követjük**: a `task.md`-ben ismétlődő tétel, és a `make vuln` mellé egy `make deps-watch`, ami kiírja, van-e újabb verzió |
+| 5 | Havi híváskeret | `ext_calls_month` a csomagban; **NULL = korlátlan** (az alapérték, mint a tárhelynél) |
+| 6 | Korlátszámok | A 13.4 értékei az alapértékek, finomhangolás később. **A szerver tulajdonosa állítja** a meglévő módszerrel: környezeti változók a szerver `.env`-jében (mint a `COLONY_MAX_UPLOAD_MB`): `COLONY_EXT_MEMORY_MB` (64), `COLONY_EXT_TIMEOUT` (10s), `COLONY_EXT_OUTPUT_KB` (256), `COLONY_EXT_HOST_CALLS` (50), `COLONY_EXT_CONCURRENCY_WORKSPACE` (4), `COLONY_EXT_CONCURRENCY_TOTAL` (16), `COLONY_EXT_DISABLE_AFTER` (`5/10/10m`: egymást követő hibák / hibák / ablak). Többbérlős módban a csomag felülírhatja (később, a csomagtábla oszlopaival); a Rendszerállapot oldal mutatja az érvényes értékeket |
