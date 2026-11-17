@@ -261,6 +261,11 @@ func (s *Service) host(ctx context.Context, rc runCtx, kind string, payload json
 		if s.Core == nil || strings.Contains(in.Tool, "__") {
 			return nil, fmt.Errorf("unknown Colonyhall tool %q", in.Tool)
 		}
+		// A core tool that changes something is a write: a tool declared
+		// read may not use it (its call had no approval for that).
+		if risk := CoreToolRisk(in.Tool); riskRank(risk) > riskRank(rc.tool.Risk) {
+			return nil, fmt.Errorf("colony.%s changes something: declare this tool's risk as write", in.Tool)
+		}
 		text, err := s.Core(ctx, rc.caller, in.Tool, in.Input)
 		if err != nil {
 			return nil, err

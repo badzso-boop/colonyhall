@@ -361,6 +361,11 @@ func DiffVersions(live *Version, v Version) Diff {
 	return d
 }
 
+func diffEmpty(d Diff) bool {
+	return !d.CodeChanged && len(d.NewConnectors) == 0 && len(d.NewEgress) == 0 && len(d.NewStore) == 0 &&
+		len(d.NewTools) == 0 && len(d.RaisedRisks) == 0
+}
+
 func sameRequest(a, b *HTTPRequest) bool {
 	x, _ := json.Marshal(a)
 	y, _ := json.Marshal(b)
@@ -369,3 +374,18 @@ func sameRequest(a, b *HTTPRequest) bool {
 
 // ExtensionGatewayName is an extension tool's name in the gateway.
 func ExtensionGatewayName(slug, tool string) string { return GatewayPrefix + slug + "__" + tool }
+
+// coreReadTools are Colonyhall's own tools that change nothing (the rest
+// count as write for ctx.colony; security review of round 56b).
+var coreReadTools = map[string]bool{"agents": true, "calendar_read": true, "channel_info": true, "decision_list": true,
+	"download": true, "git_status": true, "inbox": true, "note_get": true, "planner_read": true, "read": true, "search": true,
+	"wiki_index": true, "wiki_read": true}
+
+// CoreToolRisk is the risk of a Colonyhall tool called from an
+// extension's code.
+func CoreToolRisk(tool string) string {
+	if coreReadTools[tool] {
+		return RiskRead
+	}
+	return RiskWrite
+}

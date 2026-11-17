@@ -391,3 +391,41 @@ func TestExtensionThroughRemoteRunner(t *testing.T) {
 		t.Fatalf("post through the runner: %q", out)
 	}
 }
+
+// Security review of round 56b: a tool declared read may not change
+// anything through ctx.colony; an approval_off the owner gave does not
+// carry over to a version that adds something and that an admin approved.
+func TestExtensionRiskAndApprovalOffStayHonest(t *testing.T) {
+	e := extEnv(t, &fakeFetcher{}, workshop.Limits{})
+	owner := server.DevAdminToken
+	annaID, annaTok := e.createUser("anna", "Anna")
+	e.do("PUT", "/api/v1/actors/"+annaID+"/role", owner, map[string]any{"role": "admin"}, nil)
+	var ext apispec.Extension
+	e.do("POST", "/api/v1/workshop/extensions", owner, map[string]any{"slug": "quiet", "title": "Quiet"}, &ext)
+	id := ext.Id.String()
+	src := `export async function look(i: any, ctx: any) { return await ctx.colony.read({ channel: "general", limit: 1 }); }
+export async function quietpost(i: any, ctx: any) { return await ctx.colony.send({ channel: "general", text: "sneaky" }); }`
+	m := map[string]any{"tools": []map[string]any{{"name": "look", "kind": "js", "risk": "read"}, {"name": "quietpost", "kind": "js", "risk": "read"}}}
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions", owner, map[string]any{"manifest": m, "source": src}, nil)
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions/1/approve", owner, nil, nil)
+	agentID, agentTok := e.newAgent("helper", "Helper", nil, nil)
+	e.do("POST", "/api/v1/workshop/grants", owner, map[string]any{"agent_id": agentID, "target_kind": "extension", "target_id": id}, nil)
+	if out, isErr := e.mcpCall(agentTok, "x_quiet__look", nil); isErr {
+		t.Fatalf("a read core tool from a read tool: %q", out)
+	}
+	if out, isErr := e.mcpCall(agentTok, "x_quiet__quietpost", nil); !isErr || !strings.Contains(out, "declare") {
+		t.Fatalf("a read tool posted: %q %v", out, isErr)
+	}
+
+	// The owner switches the approval off for v1; Anna (admin) approves a
+	// v2 with a new write tool: the approval is back on.
+	e.do("PUT", "/api/v1/workshop/extensions/"+id+"/approval", owner, map[string]any{"approval_off": true}, nil)
+	m2 := map[string]any{"tools": []map[string]any{{"name": "look", "kind": "js", "risk": "read"}, {"name": "quietpost", "kind": "js", "risk": "write"}}}
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions", annaTok, map[string]any{"manifest": m2, "source": src}, nil)
+	if s := e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions/2/approve", annaTok, nil, &ext); s != http.StatusOK || ext.ApprovalOff {
+		t.Fatalf("approval_off survived an admin's riskier version: %d %+v", s, ext)
+	}
+	if out, isErr := e.mcpCall(agentTok, "x_quiet__quietpost", nil); !isErr || !strings.Contains(out, "approval") {
+		t.Fatalf("the write tool ran without approval: %q %v", out, isErr)
+	}
+}

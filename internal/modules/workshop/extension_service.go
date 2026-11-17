@@ -254,6 +254,12 @@ func (s *Service) ApproveVersion(ctx context.Context, by identity.Actor, id ids.
 			return err
 		}
 		e.LiveVersion, e.State, e.DisabledReason, e.UpdatedAt = version, StateLive, "", now
+		// The owner switched the approval off for what was live then; a
+		// version that adds anything (tools, risks, connectors, hosts, code)
+		// approved by someone else gets the approval back (security review).
+		if e.ApprovalOff && by.Role != identity.RoleOwner && !diffEmpty(diff) {
+			e.ApprovalOff = false
+		}
 		if err := s.Store.UpdateExtension(ctx, e); err != nil {
 			return err
 		}
@@ -293,6 +299,9 @@ func (s *Service) Rollback(ctx context.Context, by identity.Actor, id ids.ID, ve
 		}
 		if !ok {
 			return ErrNotApproved
+		}
+		if e.ApprovalOff && by.Role != identity.RoleOwner && e.LiveVersion != version {
+			e.ApprovalOff = false // see ApproveVersion
 		}
 		e.LiveVersion, e.State, e.DisabledReason, e.UpdatedAt = version, StateLive, "", s.Clock.Now()
 		if err := s.Store.UpdateExtension(ctx, e); err != nil {

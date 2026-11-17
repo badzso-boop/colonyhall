@@ -56,6 +56,7 @@ func (f *fakeRemote) CallTool(_ context.Context, ep workshop.Endpoint, name stri
 type fakeApprovals struct {
 	state   string
 	created []approval.CreateInput
+	onWait  func()
 }
 
 func (f *fakeApprovals) CreateRequest(_ context.Context, _ identity.Actor, in approval.CreateInput) (approval.ApprovalRequest, error) {
@@ -64,6 +65,9 @@ func (f *fakeApprovals) CreateRequest(_ context.Context, _ identity.Actor, in ap
 }
 
 func (f *fakeApprovals) WaitForDecision(_ context.Context, req approval.ApprovalRequest, _ func(context.Context) (identity.Actor, error)) (approval.ApprovalRequest, error) {
+	if f.onWait != nil {
+		f.onWait()
+	}
 	req.State = f.state
 	return req, nil
 }
@@ -480,5 +484,25 @@ func TestMonthlyCallBudget(t *testing.T) {
 	e.clock.Advance(31 * 24 * time.Hour)
 	if _, err := e.svc.Call(e.ctx, workshop.CallInput{Name: "jira__search", Current: e.current(e.agent)}); err != nil {
 		t.Fatalf("next month: %v", err)
+	}
+}
+
+// The approval is for what was granted when it was asked: a grant revoked
+// while a person decided means no call (security review of round 56b).
+func TestGrantRevokedDuringApproval(t *testing.T) {
+	e := newSvcEnv(t, true)
+	c := e.connector(t)
+	g, err := e.svc.AddGrant(e.ctx, e.admin, e.agent.ID, workshop.TargetConnector, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.appr.onWait = func() {
+		if err := e.svc.RevokeGrant(e.ctx, e.admin, g.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = e.svc.Call(e.ctx, workshop.CallInput{Name: "jira__create_issue", ChannelID: ids.V7{}.New(), Current: e.current(e.agent)})
+	if !errors.Is(err, workshop.ErrNoGrant) || len(e.remote.calls) != 0 {
+		t.Fatalf("call after the grant went: %v calls=%v", err, e.remote.calls)
 	}
 }

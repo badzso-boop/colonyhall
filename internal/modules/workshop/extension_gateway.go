@@ -114,6 +114,20 @@ func (s *Service) callExtension(ctx context.Context, caller identity.Actor, in C
 			}
 			return Result{Text: "The call was not approved (" + decided.State + "). Do not retry it unless a person asks you to.", IsError: true}, nil
 		}
+		// The wait may have taken minutes: the approval is for what was
+		// live and granted then (security review of round 56b).
+		now, err := s.Store.GetExtension(ctx, caller.WorkspaceID, e.ID)
+		if err != nil || now.State != StateLive || now.LiveVersion != e.LiveVersion || !s.granted(ctx, caller, TargetExtension, e.ID) ||
+			s.checkMaintainer(ctx, now) != nil {
+			call.Error = "changed while waiting for the approval"
+			s.logDenied(ctx, call, start)
+			return Result{}, ErrNotLive
+		}
+		if fresh, err := in.Current(ctx); err != nil || fresh.Halted || fresh.State != identity.StateActive {
+			call.Error = "halted while waiting for the approval"
+			s.logDenied(ctx, call, start)
+			return Result{}, identity.ErrHalted
+		}
 	}
 	res, _, err := s.runTool(ctx, runCtx{ext: e, version: v, tool: mt, caller: caller, input: in.Args})
 	if err == nil {

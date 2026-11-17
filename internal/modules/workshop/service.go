@@ -833,6 +833,16 @@ func (s *Service) Call(ctx context.Context, in CallInput) (Result, error) {
 			logCall(OutcomeDenied, decided.State, 0)
 			return Result{Text: "The call was not approved (" + decided.State + "). Do not retry it unless a person asks you to.", IsError: true}, nil
 		}
+		// Re-check after the wait: the grant and the connector may have
+		// gone, the agent may have been stopped (security review).
+		if _, err := s.Store.GetConnector(ctx, caller.WorkspaceID, c.ID); err != nil || !s.granted(ctx, caller, TargetConnector, c.ID) {
+			logCall(OutcomeDenied, "changed while waiting for the approval", 0)
+			return Result{}, ErrNoGrant
+		}
+		if fresh, err := in.Current(ctx); err != nil || fresh.Halted || fresh.State != identity.StateActive {
+			logCall(OutcomeDenied, "halted while waiting for the approval", 0)
+			return Result{}, identity.ErrHalted
+		}
 	}
 
 	ep, err := s.endpoint(ctx, c)
