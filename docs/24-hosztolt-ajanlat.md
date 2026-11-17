@@ -206,7 +206,7 @@ Ez a bérelt szerver kiválasztása után dől el; a homelab próbája külön l
 | **51a** | `secretbox` és kulcskezelés; operátori táblák és hatókör (`colony.operator`, depguard); `operator-create`, `operator-reset-totp`, `operator-disable`; belépés jelszó + TOTP + tartalék kód, munkamenet; `admin.` útválasztás; ügyfél létrehozása meghívóval, meghívó elfogadása; felfüggesztés és visszaállítás (WebSocket-bontással, háttérmunka kihagyásával); `COLONY_ENV` és a fejlesztői mód tiltása élesben, sáv; operátori áttekintés és adatbázis-kártya; operátori napló; az `InTx` hatókör-csapdája; operátori PWA (belépés, ügyfelek, részletek, rendszer, napló, fiókom) és a meghívó oldala | A meghívóval új ügyfél be tud lépni; a 14. pont 51a-tesztjei zöldek; `make ci` |
 | **51b** | Vészhozzáférés (átadó link, csak olvasó munkamenet két rétegben, ügyfél-audit minden olvasásról, értesítés, lejárat, tulajdonosi zárás), fejlesztői módú megnyitás; `plan` tábla és operátori szerkesztése, hozzárendelés, tényleges keret, a tulajdonosi keret felső határa, kisebb csomag ellenőrzése és megerősítése; a csomag az ügyfél Beállításaiban | A vészhozzáférés látszik az ügyfél auditjában és értesítései között; a csomag kikényszeríti a tárhelyet; `make ci` |
 | Később | **Titkok és projektek** (2.3, 9. pont): a hosztolt őrrel együtt (15. pont, 1.) | — |
-| Hosztolt őr | Elkülönítés (11. pont), lemezkorlát, `projects_bytes`, a titkok kézbesítése a hosztolt gépnek, klónozás és worktree-k, a CPU/memória kikényszerítése | Később, a szerver kiválasztása után |
+| Hosztolt őr (51c) | Elkülönítés (11. pont), az önfejlesztés agentes részei (Építő, agentes rutinok, stdio-s MCP-szerverek; 25. dokumentum), lemezkorlát, `projects_bytes`, a titkok kézbesítése a hosztolt gépnek, klónozás és worktree-k, a CPU/memória kikényszerítése | Később, a szerver kiválasztása után |
 
 ## 13. Migráció a meglévő munkaterületekre
 
@@ -252,5 +252,6 @@ Ez a bérelt szerver kiválasztása után dől el; a homelab próbája külön l
 - **Ügyfél törlése (az első valódi ügyfél előtt kötelező, GDPR):** a `deleting` állapot megvan; kell hozzá az adatok, a fájlok és a mentésekből való kikerülés folyamata, az export a tulajdonosnak (22. terv 12. pont), és az adatfeldolgozási szerződés szerinti határidők (46. kör).
 - **A hosztolt őr elkülönítése** (11. pont): a bérelt szerver kiválasztása után.
 - **Titkok és projektek** (2.3, 5., 9. pont): a hosztolt őr körében.
+- **51c: a hosztolt őr futtatja a hosztolt ügyfelek Építő- és rutinagentjeit** (Norbi, 2026-11-17; `25-onfejlesztes-terv.md`). A hosztolt ügyfélnek nincs saját őre, ezért az önfejlesztés agentes részei (az Építő, az agentes rutinok, a stdio-s MCP-szerverek) a szerveren futó hosztolt őrön, sandboxban futnak, **az ügyfél saját API-kulcsával** (2.3). A szerveroldali részek (MCP-átjáró, kapcsolatok, deklaratív és JS-eszközök, agent nélküli rutinok) őr nélkül is működnek.
 - **Operátori meghívó a felületen** (több operátor): később.
 - **A vészhozzáférés bővítése** DM-ekre és privát csatornákra: csak ha szükség lesz rá.
