@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,15 +31,21 @@ type Client struct {
 	Version string
 }
 
+// withHeader puts the connector's authentication on requests to the
+// endpoint's own scheme and host only: a redirect elsewhere never carries
+// the secret.
 type withHeader struct {
 	header map[string]string
+	origin string // scheme://host of the endpoint
 	next   http.RoundTripper
 }
 
 func (w withHeader) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
-	for k, v := range w.header {
-		r.Header.Set(k, v)
+	if strings.EqualFold(r.URL.Scheme+"://"+r.URL.Host, w.origin) {
+		for k, v := range w.header {
+			r.Header.Set(k, v)
+		}
 	}
 	return w.next.RoundTrip(r)
 }
@@ -52,7 +59,11 @@ func (c *Client) connect(ctx context.Context, ep workshop.Endpoint) (*mcp.Client
 	if next == nil {
 		next = http.DefaultTransport
 	}
-	hc := &http.Client{Transport: withHeader{header: ep.Header, next: next}, Timeout: base.Timeout,
+	u, err := url.Parse(ep.URL)
+	if err != nil {
+		return nil, errors.New("invalid connector address")
+	}
+	hc := &http.Client{Transport: withHeader{header: ep.Header, origin: u.Scheme + "://" + u.Host, next: next}, Timeout: base.Timeout,
 		CheckRedirect: base.CheckRedirect}
 	client := mcp.NewClient(&mcp.Implementation{Name: "colonyhall-gateway", Version: c.Version}, nil)
 	return client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: ep.URL, HTTPClient: hc, MaxRetries: -1}, nil)

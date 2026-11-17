@@ -19,9 +19,9 @@ import (
 )
 
 func init() {
-	httpx.RegisterForbidden(workshop.ErrForbidden, secrets.ErrForbidden)
+	httpx.RegisterForbidden(workshop.ErrForbidden, workshop.ErrOwnerOnly, secrets.ErrForbidden)
 	httpx.RegisterValidation(workshop.ErrBadSlug, workshop.ErrBadTitle, workshop.ErrBadKind, workshop.ErrBadAuth,
-		workshop.ErrBadHeader, workshop.ErrSecretNeeded, workshop.ErrBadRisk, workshop.ErrNotAgent,
+		workshop.ErrBadHeader, workshop.ErrSecretNeeded, workshop.ErrSecretAgain, workshop.ErrBadRisk, workshop.ErrNotAgent,
 		secrets.ErrNoKeys, secrets.ErrBadValue, secrets.ErrBadName, secrets.ErrBadKind)
 	httpx.RegisterStatus(http.StatusNotFound, workshop.ErrNotFound, workshop.ErrUnknownTool, secrets.ErrNotFound)
 	httpx.RegisterStatus(http.StatusConflict, workshop.ErrSlugTaken)

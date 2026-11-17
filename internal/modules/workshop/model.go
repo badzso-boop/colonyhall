@@ -88,6 +88,8 @@ var (
 	ErrNotAgent     = errors.New("grants are given to agents")
 	ErrUnknownTool  = errors.New("unknown tool")
 	ErrNoGrant      = errors.New("this agent may not use this tool")
+	ErrOwnerOnly    = errors.New("only the owner may lower a tool's risk: it skips the approval")
+	ErrSecretAgain  = errors.New("the address points to another server: give the secret again")
 	ErrNoChannel    = errors.New("this tool needs approval, but the call is not in a conversation (missing X-Colonyhall-Channel)")
 )
 

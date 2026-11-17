@@ -92,3 +92,34 @@ func TestInternalAddressRefused(t *testing.T) {
 		t.Fatalf("the server saw %d requests", len(*seen))
 	}
 }
+
+// A redirect to another host never carries the connector's secret.
+func TestSecretNotSentAcrossRedirect(t *testing.T) {
+	var got []string
+	var mu sync.Mutex
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		got = append(got, r.Header.Get("Authorization"))
+		mu.Unlock()
+	}))
+	t.Cleanup(other.Close)
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer s3cret" {
+			t.Errorf("the endpoint itself did not get the secret")
+		}
+		http.Redirect(w, r, other.URL+"/elsewhere", http.StatusFound)
+	}))
+	t.Cleanup(first.Close)
+	c := &http.Client{Transport: withHeader{header: map[string]string{"Authorization": "Bearer s3cret"},
+		origin: "http://" + first.Listener.Addr().String(), next: http.DefaultTransport}}
+	res, err := c.Get(first.URL + "/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 || got[0] != "" {
+		t.Fatalf("the other host saw %q", got)
+	}
+}

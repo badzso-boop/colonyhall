@@ -422,3 +422,39 @@ func TestRotateWorkspaceSecrets(t *testing.T) {
 		t.Fatalf("after dropping the old key: %q %v", v, err)
 	}
 }
+
+// Lowering a tool's risk skips the approval like switching it off: only
+// the owner may (security review of round 56a). Raising is for admins too.
+func TestLoweringRiskIsOwnerOnly(t *testing.T) {
+	e := newSvcEnv(t, true)
+	c := e.connector(t)
+	if _, err := e.svc.SetRisk(e.ctx, e.admin, c.ID, "create_issue", workshop.RiskRead); !errors.Is(err, workshop.ErrOwnerOnly) {
+		t.Fatalf("an admin lowered the risk: %v", err)
+	}
+	if _, err := e.svc.SetRisk(e.ctx, e.admin, c.ID, "search", workshop.RiskExternal); err != nil {
+		t.Fatalf("an admin raises a risk: %v", err)
+	}
+	// Removing the raise lowers it again: owner only.
+	if _, err := e.svc.SetRisk(e.ctx, e.admin, c.ID, "search", ""); !errors.Is(err, workshop.ErrOwnerOnly) {
+		t.Fatalf("an admin removed a raise: %v", err)
+	}
+	if _, err := e.svc.SetRisk(e.ctx, e.owner, c.ID, "create_issue", workshop.RiskRead); err != nil {
+		t.Fatalf("the owner lowers a risk: %v", err)
+	}
+}
+
+// A new server address needs the secret again: the stored one is never
+// sent to another host (security review of round 56a).
+func TestNewOriginNeedsTheSecretAgain(t *testing.T) {
+	e := newSvcEnv(t, true)
+	c := e.connector(t)
+	if _, err := e.svc.UpdateConnector(e.ctx, e.admin, c.ID, workshop.ConnectorInput{BaseURL: str("https://evil.example.net/mcp")}); !errors.Is(err, workshop.ErrSecretAgain) {
+		t.Fatalf("moved to another host with the old secret: %v", err)
+	}
+	if _, err := e.svc.UpdateConnector(e.ctx, e.admin, c.ID, workshop.ConnectorInput{BaseURL: str("https://mcp.example.com/v2/mcp")}); err != nil {
+		t.Fatalf("a new path on the same host: %v", err)
+	}
+	if _, err := e.svc.UpdateConnector(e.ctx, e.admin, c.ID, workshop.ConnectorInput{BaseURL: str("https://other.example.com/mcp"), Secret: str("tok-other-1234567890")}); err != nil {
+		t.Fatalf("another host with a new secret: %v", err)
+	}
+}

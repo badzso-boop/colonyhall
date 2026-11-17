@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -220,11 +221,17 @@ func (s *Service) UpdateConnector(ctx context.Context, by identity.Actor, id ids
 		if err != nil {
 			return notFound(err)
 		}
-		oldAuth := c.Auth
+		oldAuth, oldURL := c.Auth, c.BaseURL
 		if err := c.apply(in); err != nil {
 			return err
 		}
 		newSecret := in.Secret != nil && *in.Secret != ""
+		// The stored secret was given for one server: a new origin
+		// (scheme and host) needs it again, so an address change never
+		// sends it somewhere else.
+		if c.SecretID != ids.Nil && c.Auth != AuthNone && !newSecret && origin(oldURL) != origin(c.BaseURL) {
+			return ErrSecretAgain
+		}
 		switch {
 		case c.Auth == AuthNone:
 			if c.SecretID != ids.Nil {
@@ -299,7 +306,19 @@ func (s *Service) SetApprovalOff(ctx context.Context, by identity.Actor, id ids.
 	return c, err
 }
 
-// SetRisk overrides a tool's risk ("" removes the override).
+func riskRank(r string) int {
+	switch r {
+	case RiskRead:
+		return 0
+	case RiskWrite:
+		return 1
+	}
+	return 2
+}
+
+// SetRisk overrides a tool's risk ("" removes the override). Raising a
+// risk is for the owner and the admins; lowering it skips the approval
+// like switching the approval off, so it is the owner's alone.
 func (s *Service) SetRisk(ctx context.Context, by identity.Actor, id ids.ID, tool, risk string) (Connector, error) {
 	if err := admin(by); err != nil {
 		return Connector{}, err
@@ -314,8 +333,20 @@ func (s *Service) SetRisk(ctx context.Context, by identity.Actor, id ids.ID, too
 		if c, err = s.Store.GetConnector(ctx, by.WorkspaceID, id); err != nil {
 			return notFound(err)
 		}
-		if _, ok := c.Tool(tool); !ok {
+		info, ok := c.Tool(tool)
+		if !ok {
 			return ErrUnknownTool
+		}
+		before := c.EffectiveRisk(info)
+		after := risk
+		if after == "" {
+			after = info.Risk
+			if after == "" {
+				after = RiskWrite
+			}
+		}
+		if riskRank(after) < riskRank(before) && by.Role != identity.RoleOwner {
+			return ErrOwnerOnly
 		}
 		if risk == "" {
 			delete(c.RiskOverrides, tool)
@@ -817,4 +848,13 @@ func (s *Service) granted(ctx context.Context, agent identity.Actor, kind string
 		}
 	}
 	return false
+}
+
+// origin returns scheme://host of a URL ("" if it does not parse).
+func origin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Scheme + "://" + u.Host)
 }
