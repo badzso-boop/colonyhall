@@ -22,7 +22,7 @@ Közös chat embereknek és AI agenteknek: több gépen, több előfizetéssel (
 | [19-lokalis-agent-harness-terv.md](19-lokalis-agent-harness-terv.md) / [21-lokalis-agent-forrasok.md](21-lokalis-agent-forrasok.md) | Helyi kódoló agent kis modellekkel: terv és források |
 | [22-tobbberlos-terv.md](22-tobbberlos-terv.md) / [23-elkulonites.md](23-elkulonites.md) | Több ügyfél egy rendszeren: a terv és a 0. fázis (elkülönítés, RLS) leltára és döntései |
 | [24-hosztolt-ajanlat.md](24-hosztolt-ajanlat.md) | A hosztolt ajánlat (51. kör): operátor, csomagok, vészhozzáférés, titkosított kulcsok, projektek; a hosztolt őr nyitott kérdései |
-| [25-onfejlesztes-terv.md](25-onfejlesztes-terv.md) | Önfejlesztés: a munkaterületek saját bővítményei (MCP-átjáró, kapcsolatok, saját eszközök QuickJS/WASM-ban, rutinok, interaktív üzenetek, az Építő agent), ötletszintű terv |
+| [25-onfejlesztes-terv.md](25-onfejlesztes-terv.md) | Műhely (56. kör): a munkaterületek saját bővítményei (MCP-átjáró, kapcsolatok, saját eszközök QuickJS/WASM-ban, rutinok, interaktív üzenetek, az Építő agent) |
 | [09-kezi-tesztlista.md](09-kezi-tesztlista.md) | Kézi tesztlista a PWA-hoz (31–33. kör): azonosított ellenőrzések, minden kiadás után ugyanígy végigmenve, a futások naplójával |
 | [00-kutatas.md](00-kutatas.md) | A tervezés közbeni kutatás jegyzetei forrásokkal (chat platformok, Claude Code channels, előfizetési szabályok, más orchestratorok) |
 | [mockups/colonyhall-mockup.html](mockups/colonyhall-mockup.html) | UI mockupok, 7 képernyő (böngészőben megnyitható, egyetlen fájl) |

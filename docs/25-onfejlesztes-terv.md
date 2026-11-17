@@ -1,6 +1,6 @@
-# Önfejlesztés: a felhasználók saját bővítményei (terv, ötletszint)
+# Műhely: a felhasználók saját bővítményei (56. kör): terv
 
-> Állapot: **ötletszintű terv, 2026-11-17.** Norbi döntései a 0. pontban; a többi javaslat, a megvalósítás előtt tervezési kapu kell (a nyitott kérdések a 12. pontban). Kapcsolódik: a 24. dokumentum (hosztolt ajánlat, **51c**: a hosztolt őr futtatja a hosztolt ügyfelek Építő- és rutinagentjeit), a 02. dokumentum MCP-eszközei.
+> Állapot: **elfogadott irány, 2026-11-17: az 56. kör, az 51c előtt.** Norbi döntései a 0. pontban; a kapu kérdései eldőltek (12. pont), a részletek (pontos korlátok, végpontok) a kör promptjába kerülnek. Kapcsolódik: a 24. dokumentum (hosztolt ajánlat, **51c**: a hosztolt őr futtatja a hosztolt ügyfelek Építő- és rutinagentjeit), a 02. dokumentum MCP-eszközei.
 
 ## 0. Ami már eldőlt (Norbi, 2026-11-15 – 11-17)
 
@@ -11,6 +11,11 @@
 | 3 | Saját eszközök futtatása | **Teljes:** deklaratív HTTP-eszköz **és** kód (JS/TS QuickJS-en, WASM-ban, `wazero`) is, már az első változatban |
 | 4 | Hol fut az Építő és a rutinok agentje | Saját telepítésen a felhasználó őrén. **Hosztolt ügyfélnél** (nincs saját őre) **a szerveren futó hosztolt őrön** — ez az **51c** része (24. dokumentum) |
 | 5 | Tokenek | **Az ügyfél saját API-kulcsa fizeti** (a 24. dokumentum titkosított AI-kulcsai) |
+| 7 | Ki hozhat létre bővítményt | **A tulajdonos és az adminok.** A tagok használhatják az engedélyezett bővítményeket |
+| 8 | Író és kifelé küldő hívások | **Alapból jóváhagyást kérnek.** A tulajdonos bővítményenként kikapcsolhatja („ha valaki bátor”); a kikapcsolás auditba kerül |
+| 9 | A menü neve | **Műhely** (angolul: Workshop) |
+| 10 | A JS-futtató | **Rögtön külön szerepkörben** (`ext-runner`, külön folyamat), hogy egy hibája vagy túlterhelése ne érintse a szervert |
+| 11 | Körszám és sorrend | **56. kör, az 51c előtt** |
 | 6 | Út a forráskódig | Akinek jók a bővítményei, Norbi felajánlhatja neki, hogy PR-t nyisson a GitHubon a fő projektbe (megbízott építő, 7. pont) |
 
 ## 1. A kép
@@ -49,7 +54,7 @@ A felhasználó vagy az agentje hozza létre és szerkeszti. Két fajta, ugyanaz
 - **Deklaratív HTTP-eszköz:** bemeneti JSON-séma, kéréssablon (metódus, útvonal, fejlécek, törzs; a titok csak hivatkozással), válasz-leképezés (JSON-útvonalak, tömörítés a modellnek). Nem fut benne idegen kód.
 - **Kód (JS/TS):** QuickJS `wazero`-ban (WASM, tisztán Go, nincs cgo). A TS-t mentéskor fordítjuk JS-re. Korlátok hívásonként: memória (pl. 64 MB), futásidő (pl. 10 mp, üzemanyag/megszakítás), kimenet mérete; munkaterületenként párhuzamos hívások száma (a csomagból). **Csak a host-függvényeket látja:** `fetch` (csak a manifestben bejelentett címekre, a szerveren át), `secrets.get` (csak a saját, bejelentett titkai), `store.*` (2.6), `colony.*` (a mag eszközei a létrehozó jogaival), `log`. Nincs fájlrendszer, nincs folyamat, nincs nyers socket.
 
-A kód futtatása a szerveren történik, így hosztolt ügyfélnél sem kell hozzá őr. Ha a terhelés vagy a hibák elkülönítése megkívánja, később külön szerepkörbe tehető (`ext-runner`, a meglévő api/gateway/worker/scheduler mintájára).
+A kód **külön szerepkörben** fut (`ext-runner`, döntés: 0. pont, 10.): ugyanaz a bináris, külön folyamat (Compose-ban külön szolgáltatás ugyanabból az image-ből, saját CPU- és memóriakorláttal), a szerverrel belső, hitelesített csatornán beszél. Hosztolt ügyfélnél sem kell hozzá őr. Ha az `ext-runner` nem fut, a saját kódos eszközök hibát adnak („a futtató nem érhető el”), minden más működik. A telepítő és a `deploy/compose.yaml` felveszi a szolgáltatást. Ez az első szerepkör a `COLONY_ROLE=all` mellett: a szerepkör-választás csak erre a folyamatra kell.
 
 ### 2.4 Rutinok (automatizálás)
 **Indító** (cron, Colonyhall-esemény, bejövő webhook saját titkos URL-lel) + **agent** (prompt, engedélyezett eszközök) + **kimenet** (csatorna, DM, szál). Kétféle futás:
@@ -64,8 +69,8 @@ Az agent vagy egy eszköz **blokkokat** küldhet: szöveg, gombok, választó, �
 ### 2.6 Bővítmény-adattár
 Bővítményenként és munkaterületenként JSON-gyűjtemények (dokumentum = kulcs + JSON), egyszerű lekérdezéssel, a munkaterület tárhelykeretébe számolva. Saját adatbázissémát a bővítmény nem kap.
 
-### 2.7 Az Építő (az „Önfejlesztés” menü)
-Beépített rendszeragent, minden munkaterületen egy. Meta-eszközei: `connector_create`, `tool_create`, `tool_update`, `tool_test`, `routine_create`, `channel_create`, `extension_publish`, `extension_rollback`. A felhasználó beszélget vele („szeretnék minden reggel Jira-összefoglalót”); az Építő visszakérdez, összerakja, próbafuttat egy próbacsatornába, megmutatja a kért jogokat, és **a jóváhagyás után** élesít. Az ügyfél saját API-kulcsával fut (0. pont, 5.). Saját telepítésen a felhasználó választja ki, melyik őrön és klienssel; hosztolt ügyfélnél a hosztolt őrön (51c).
+### 2.7 Az Építő (a Műhely menü)
+Beépített rendszeragent, minden munkaterületen egy; a **Műhely** menüpontból érhető el, csak a tulajdonosnak és az adminoknak. Meta-eszközei: `connector_create`, `tool_create`, `tool_update`, `tool_test`, `routine_create`, `channel_create`, `extension_publish`, `extension_rollback`. A felhasználó beszélget vele („szeretnék minden reggel Jira-összefoglalót”); az Építő visszakérdez, összerakja, próbafuttat egy próbacsatornába, megmutatja a kért jogokat, és **a jóváhagyás után** élesít. Az ügyfél saját API-kulcsával fut (0. pont, 5.). Saját telepítésen a felhasználó választja ki, melyik őrön és klienssel; hosztolt ügyfélnél a hosztolt őrön (51c).
 
 ## 3. Bővítmény = manifest + részek
 
@@ -105,7 +110,7 @@ A v1 bővítési API verziózott és visszafelé kompatibilis; szerződésteszte
 
 ## 6. Biztonság
 
-- **Prompt injection:** a kapcsolatokból jövő tartalom (Jira-jegy, levél) adat, nem utasítás (11. szabály). Az eszközök kockázati jelölése: `read`, `write`, `external` (adat kifelé). A `write` és `external` hívás alapból jóváhagyást kér az agentes futásban; a tulajdonos bővítményenként kikapcsolhatja (a szabadság megmarad, csak tudatosan).
+- **Prompt injection:** a kapcsolatokból jövő tartalom (Jira-jegy, levél) adat, nem utasítás (11. szabály). Az eszközök kockázati jelölése: `read`, `write`, `external` (adat kifelé). A `write` és `external` hívás alapból jóváhagyást kér az agentes futásban; a tulajdonos bővítményenként kikapcsolhatja (a szabadság megmarad, csak tudatosan; a kikapcsolás auditba kerül).
 - **Hálózat:** a kód csak a szerveren át, csak a bejelentett címekre ér ki; belső címek (LAN, Tailscale, a szerver szolgáltatásai, metaadat-címek) tiltva, mint a `web_read`-nél. Ez megtartja az adatvédelmi ígéretet: a szerver csak oda kapcsolódik, amit a munkaterület bejelentett.
 - **Erőforrás:** hívásonkénti memória- és időkorlát, munkaterületenkénti párhuzamosság és havi hívásszám a csomagból.
 - **Titkok:** csak hivatkozással; naplóba, chatbe, a modellnek soha.
@@ -127,15 +132,15 @@ A v1 bővítési API verziózott és visszafelé kompatibilis; szerződésteszte
 
 ## 9. Fázisok (javaslat)
 
-| Fázis | Tartalom |
+| Rész (56. kör) | Tartalom |
 | --- | --- |
-| **A** | MCP-átjáró: a mag eszközeinek kiegészítése (ember = agent elv), kapcsolatok, titkok (`workspace_secret` a 24. dokumentumból, előrehozva), agentenkénti engedélyek, kockázati jelölés, hívásnapló |
-| **B** | Saját eszközök: deklaratív HTTP és QuickJS/WASM futtató a host-függvényekkel, adattár, manifest, verziók, jóváhagyás, önvédelem |
-| **C** | Rutinok (cron, esemény, webhook; agentes és agent nélküli) és interaktív üzenetek |
-| **D** | Az Építő és az „Önfejlesztés” menü, építési napló a wikiben, export/import |
+| **56a** | MCP-átjáró: a mag eszközeinek kiegészítése (ember = agent elv), kapcsolatok, titkok (`workspace_secret` a 24. dokumentumból, előrehozva), agentenkénti engedélyek, kockázati jelölés, hívásnapló |
+| **56b** | Saját eszközök: deklaratív HTTP és QuickJS/WASM futtató az `ext-runner` szerepkörben a host-függvényekkel, adattár, manifest, verziók, jóváhagyás, önvédelem |
+| **56c** | Rutinok (cron, esemény, webhook; agentes és agent nélküli) és interaktív üzenetek |
+| **56d** | Az Építő és a **Műhely** menü, építési napló a wikiben, export/import |
 | Később | iframe-widgetek, katalógus, megbízott építő és „Javaslom a magba”; hosztolt ügyfélnél az agentes részek az 51c-vel |
 
-Az A–D saját telepítésen önmagában működik; a hosztolt ügyfelek agentes részeihez az 51c kell.
+Az 56a–d saját telepítésen önmagában működik; a hosztolt ügyfelek agentes részeihez az 51c kell.
 
 ## 10. Példák
 
@@ -151,10 +156,6 @@ Az A–D saját telepítésen önmagában működik; a hosztolt ügyfelek agente
 - `web_read` (őr) → a hálózati tiltólista mintája.
 - `wiki` → építési napló; `audit` → hívásnapló és jóváhagyások.
 
-## 12. Nyitott kérdések (a kapuhoz)
+## 12. A kapu döntései (Norbi, 2026-11-17)
 
-1. Ki hozhat létre bővítményt: minden tag, vagy csak tulajdonos/admin (a tagok csak javasolhatnak)?
-2. A `write`/`external` hívások jóváhagyása: alapból be (javaslat), és ki kapcsolhatja ki?
-3. A menü neve a felületen: „Önfejlesztés”, „Bővítmények” vagy „Műhely”?
-4. A JS-futtató a szerver folyamatában (egyszerűbb) vagy rögtön külön szerepkörben (erősebb hibaelkülönítés)?
-5. A körszám és a sorrend az 51c-hez képest (az A–D önmagában is mehet).
+Mind eldőlt (0. pont, 7–11.): bővítményt a tulajdonos és az adminok hoznak létre; az író és kifelé küldő hívások alapból jóváhagyást kérnek, bővítményenként kikapcsolható; a menü neve **Műhely**; a JS-futtató rögtön külön szerepkörben (`ext-runner`); **56. kör, az 51c előtt**. A pontos korlátok (memória, idő, hívásszám), a végpontok és a táblák a kör promptjában.
