@@ -20,6 +20,7 @@ import { useRetract, useSetPin, useToggleReaction, type Message } from "../api";
 import { isRateLimitNote, REACTIONS, terminalNotice } from "../messageParts";
 import { ForwardDialog } from "./ForwardDialog";
 import { LinkCards } from "./LinkCards";
+import { MessageBlocks } from "./MessageBlocks";
 import { ProfileTrigger } from "./ProfilePopover";
 
 const LONG_CHARS = 1500;
@@ -292,6 +293,7 @@ export const MessageItem = memo(function MessageItem({ message: m, actors, handl
           </div>
         ) : null}
         {m.link_cards?.length && !retracted ? <LinkCards cards={m.link_cards} /> : null}
+        {m.blocks?.length && !retracted ? <MessageBlocks messageId={m.id} blocks={m.blocks} body={m.body} canAct={viewer.human} /> : null}
         {viewer.human && fromAgent && !retracted ? <DelegationActions message={m} admin={viewer.admin} /> : null}
         {summary && m.thread_root_id && m.also_in_channel && onOpenThread ? (
           <button type="button" onClick={() => onOpenThread(m.thread_root_id!)} className="mt-1 inline-flex items-center gap-1 text-meta text-accent-text hover:underline">

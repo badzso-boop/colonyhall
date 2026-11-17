@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -74,6 +75,10 @@ var actionIDRe = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
 func short(s string, n int) bool { return s != "" && utf8.RuneCountInString(s) <= n }
 
+// label: a button's or an option's text goes into a person's reply when
+// clicked, so it may not mention anyone (security review of round 56c).
+func label(s string, n int) bool { return short(s, n) && !strings.ContainsAny(s, "@\n\r") }
+
 // ParseBlocks validates and normalizes blocks; nil or empty input is no
 // blocks.
 func ParseBlocks(raw json.RawMessage) ([]Block, error) {
@@ -101,7 +106,7 @@ func ParseBlocks(raw json.RawMessage) ([]Block, error) {
 				return nil, ErrBadBlocks
 			}
 			for _, x := range b.Buttons {
-				if !actionIDRe.MatchString(x.ActionID) || !short(x.Label, 40) || ids[x.ActionID] ||
+				if !actionIDRe.MatchString(x.ActionID) || !label(x.Label, 40) || ids[x.ActionID] ||
 					(x.Style != "" && x.Style != "primary" && x.Style != "danger") {
 					return nil, ErrBadBlocks
 				}
@@ -114,7 +119,7 @@ func ParseBlocks(raw json.RawMessage) ([]Block, error) {
 				return nil, ErrBadBlocks
 			}
 			for _, o := range b.Options {
-				if !short(o.Value, 200) || !short(o.Label, 80) {
+				if !label(o.Value, 200) || !label(o.Label, 80) {
 					return nil, ErrBadBlocks
 				}
 			}

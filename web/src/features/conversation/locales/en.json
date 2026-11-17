@@ -362,5 +362,11 @@
     "unmuted": "Unmuted.",
     "status": "Status set.",
     "statusCleared": "Status cleared."
+  },
+  "blocks": {
+    "sent": "Sent: {{label}}",
+    "choose": "Choose…",
+    "send": "Send",
+    "done": "Your answer: {{label}}"
   }
 }

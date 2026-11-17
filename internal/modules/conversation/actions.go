@@ -33,6 +33,11 @@ func (s *Service) RecordAction(ctx context.Context, by identity.Actor, messageID
 		if ok, err := s.CanRead(ctx, by, m.ChannelID); err != nil || !ok {
 			return db.ErrNotFound
 		}
+		// A click answers in the conversation: it needs the right to write
+		// there (security review of round 56c).
+		if ok, err := s.CanWrite(ctx, by, m.ChannelID); err != nil || !ok {
+			return ErrForbidden
+		}
 		l, ok := FindAction(m.Blocks, actionID, value)
 		if !ok {
 			return ErrUnknownAction

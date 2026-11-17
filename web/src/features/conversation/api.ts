@@ -457,3 +457,11 @@ export function useForward() {
       unwrap(await api.POST("/messages/{messageId}/forward", { params: { path: { messageId } }, body })),
   });
 }
+
+/** Round 56c: a click or a choice on an interactive message. */
+export function useMessageAction() {
+  return useMutation({
+    mutationFn: async ({ messageId, actionId, value }: { messageId: string; actionId: string; value?: string }) =>
+      unwrap(await api.POST("/messages/{messageId}/actions", { params: { path: { messageId } }, body: { action_id: actionId, ...(value ? { value } : {}) } })),
+  });
+}

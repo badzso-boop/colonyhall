@@ -293,3 +293,74 @@ func TestClickReachesTheAgent(t *testing.T) {
 		return strings.Contains(out, "A B")
 	})
 }
+
+// Security review of round 56c: a webhook address dies with its routine
+// and with a switched-off extension; a click needs the right to write.
+func TestRoutineWebhookRevokedAndClickNeedsWrite(t *testing.T) {
+	e := extEnv(t, &fakeFetcher{}, workshop.Limits{})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = e.app.Run(ctx) }()
+	admin := server.DevAdminToken
+	var ch struct {
+		ID string `json:"id"`
+	}
+	e.do("POST", "/api/v1/channels", admin, map[string]any{"name": "napi-feladatok"}, &ch)
+	e.do("POST", "/api/v1/workshop/connectors", admin, map[string]any{"slug": "jira", "title": "Jira", "kind": "http",
+		"base_url": "https://jira.example.com", "auth": "bearer", "secret": testExtSecret}, nil)
+	var ext apispec.Extension
+	e.do("POST", "/api/v1/workshop/extensions", admin, map[string]any{"slug": "jira", "title": "Napi Jira"}, &ext)
+	id := ext.Id.String()
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions", admin, map[string]any{"manifest": jiraRoutineManifest(), "source": jiraRoutineSource}, nil)
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions/1/approve", admin, nil, nil)
+	var hook apispec.RoutineWebhook
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/routines/invoice/webhook", admin, nil, &hook)
+	post := func() int {
+		res, err := http.Post(e.srv.URL+hook.Path, "application/json", strings.NewReader(`{"invoice":"1"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+	if s := post(); s != http.StatusAccepted {
+		t.Fatalf("webhook: %d", s)
+	}
+	work(t, e)
+	// A read-only member may see the interactive message, not click it.
+	var poll *chMsg
+	for _, m := range e.messagesIn(ch.ID) {
+		if len(m.Blocks) > 0 {
+			poll = &m
+		}
+	}
+	if poll == nil {
+		t.Fatal("no interactive message")
+	}
+	readerID, readerTok := e.createUser("olvaso", "Olvasó")
+	e.do("POST", "/api/v1/channels/"+ch.ID+"/members", admin, map[string]any{"actor_ids": []string{readerID}, "can_write": false}, nil)
+	if s := e.do("POST", "/api/v1/messages/"+poll.ID+"/actions", readerTok, map[string]any{"action_id": "ok"}, nil); s != http.StatusForbidden {
+		t.Fatalf("a read-only member clicked: %d", s)
+	}
+
+	// A version without the webhook routine revokes its address.
+	m := jiraRoutineManifest()
+	rs := m["routines"].([]map[string]any)
+	m["routines"] = []map[string]any{rs[0]}
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions", admin, map[string]any{"manifest": m, "source": jiraRoutineSource}, nil)
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/versions/2/approve", admin, nil, nil)
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/rollback", admin, map[string]any{"version": 1}, nil)
+	if s := post(); s != http.StatusNotFound {
+		t.Fatalf("the old address after the routine was removed: %d", s)
+	}
+	// A new address works until the extension is switched off.
+	e.do("POST", "/api/v1/workshop/extensions/"+id+"/routines/invoice/webhook", admin, nil, &hook)
+	if s := post(); s != http.StatusAccepted {
+		t.Fatalf("new address: %d", s)
+	}
+	e.do("PUT", "/api/v1/workshop/extensions/"+id+"/enabled", admin, map[string]any{"enabled": false}, nil)
+	e.do("PUT", "/api/v1/workshop/extensions/"+id+"/enabled", admin, map[string]any{"enabled": true}, nil)
+	if s := post(); s != http.StatusNotFound {
+		t.Fatalf("the address after switching off: %d", s)
+	}
+}

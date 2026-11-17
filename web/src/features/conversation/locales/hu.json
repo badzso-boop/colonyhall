@@ -362,5 +362,11 @@
     "unmuted": "Némítás feloldva.",
     "status": "Állapot beállítva.",
     "statusCleared": "Állapot törölve."
+  },
+  "blocks": {
+    "sent": "Elküldve: {{label}}",
+    "choose": "Válassz…",
+    "send": "Küldés",
+    "done": "Válaszod: {{label}}"
   }
 }

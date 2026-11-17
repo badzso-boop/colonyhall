@@ -90,8 +90,33 @@ func (s *Service) syncRoutines(ctx context.Context, by identity.Actor, e Extensi
 		return err
 	}
 	for _, st := range sts {
-		if _, ok := v.Manifest.Routine(st.Routine); !ok && st.NextRunAt != nil {
+		r, ok := v.Manifest.Routine(st.Routine)
+		if !ok && st.NextRunAt != nil {
 			if err := s.Store.SetRoutineNext(ctx, e.WorkspaceID, st.ID, nil, st.LastRunAt); err != nil {
+				return err
+			}
+		}
+		// A webhook's address belongs to the routine it was made for: gone
+		// or no longer a webhook, the address stops working.
+		if (!ok || r.Trigger.Kind() != TriggerWebhook) && len(st.WebhookTokenHash) > 0 {
+			if err := s.Store.SetRoutineWebhook(ctx, e.WorkspaceID, st.ID, nil); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// clearWebhooks revokes every webhook address of an extension (switched
+// off or deleted).
+func (s *Service) clearWebhooks(ctx context.Context, e Extension) error {
+	sts, err := s.Store.ListRoutineStates(ctx, e.WorkspaceID, e.ID)
+	if err != nil {
+		return err
+	}
+	for _, st := range sts {
+		if len(st.WebhookTokenHash) > 0 {
+			if err := s.Store.SetRoutineWebhook(ctx, e.WorkspaceID, st.ID, nil); err != nil {
 				return err
 			}
 		}
@@ -433,6 +458,11 @@ func (s *Service) onMessage(ctx context.Context, workspaceID ids.ID, p conversat
 			if mt == nil || mt.Channel != ch.Name || (mt.Contains != "" && !strings.Contains(strings.ToLower(p.Body), strings.ToLower(mt.Contains))) {
 				continue
 			}
+			// Only where its bot was put by an approval (a channel renamed
+			// to the same name later is not watched; security review).
+			if !s.Channels.IsMember(ctx, ch.ID, e.BotID) {
+				continue
+			}
 			if err := s.queue(ctx, e, r.Name, TriggerMessage, triggerData{Kind: TriggerMessage, MessageID: p.MessageID,
 				ThreadRootID: p.ThreadRootID, ChannelID: p.ChannelID, Channel: "#" + ch.Name, Author: handle, Text: clip(p.Body, 8000)}); err != nil {
 				return err
@@ -488,7 +518,7 @@ func (s *Service) onAction(ctx context.Context, workspaceID ids.ID, p conversati
 		thread, _ = ids.Parse(p.MessageID)
 	}
 	_, err = s.Channels.SendMessage(ctx, actor, conversation.SendInput{ChannelID: chID, ThreadRootID: thread,
-		Body: "@" + author.Handle + " ▶ " + p.Label})
+		Body: "@" + author.Handle + " ▶ " + strings.ReplaceAll(p.Label, "@", "")})
 	return err
 }
 

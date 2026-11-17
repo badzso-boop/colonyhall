@@ -352,6 +352,9 @@ func (s *Service) SetEnabled(ctx context.Context, by identity.Actor, id ids.ID, 
 			}
 		} else {
 			e.State, e.DisabledReason = StateDisabled, "@"+by.Handle
+			if err := s.clearWebhooks(ctx, e); err != nil {
+				return err
+			}
 		}
 		e.UpdatedAt = s.Clock.Now()
 		if err := s.Store.UpdateExtension(ctx, e); err != nil {
@@ -440,6 +443,9 @@ func (s *Service) DeleteExtension(ctx context.Context, by identity.Actor, id ids
 		}
 		now := s.Clock.Now()
 		if err := s.Store.RevokeGrantsForTarget(ctx, by.WorkspaceID, TargetExtension, e.ID, now); err != nil {
+			return err
+		}
+		if err := s.clearWebhooks(ctx, e); err != nil {
 			return err
 		}
 		if _, err := s.Bots.ArchiveAgent(ctx, by, e.BotID); err != nil && !errors.Is(err, db.ErrNotFound) {

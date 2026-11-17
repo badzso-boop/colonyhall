@@ -34,6 +34,8 @@ func TestParseBlocks(t *testing.T) {
 		`[{"type":"buttons","buttons":[{"action_id":"x","label":"1"},{"action_id":"x","label":"2"}]}]`,
 		`[{"type":"table","columns":["a"],"rows":[["1","2"]]}]`,
 		`[{"type":"text","text":""}]`,
+		`[{"type":"buttons","buttons":[{"action_id":"x","label":"@other wake up"}]}]`,
+		`[{"type":"select","action_id":"s","options":[{"value":"@x","label":"x"}]}]`,
 		`{"type":"text"}`,
 		`[` + strings.Repeat(`{"type":"text","text":"x"},`, 10) + `{"type":"text","text":"x"}]`,
 	} {
