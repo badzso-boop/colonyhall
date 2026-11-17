@@ -95,8 +95,8 @@ FROM colony_operator_overview(sqlc.arg(only_ws)::uuid, sqlc.arg(online_since)::t
 -- Round 51b: plans (operator scope).
 
 -- name: CreatePlan :exec
-INSERT INTO plan (id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+INSERT INTO plan (id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at, ext_calls_month)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- name: PlanByID :one
 SELECT * FROM plan WHERE id = $1;
@@ -105,5 +105,6 @@ SELECT * FROM plan WHERE id = $1;
 SELECT * FROM plan ORDER BY archived_at IS NOT NULL, storage_bytes, name;
 
 -- name: UpdatePlan :exec
-UPDATE plan SET name = $2, storage_bytes = $3, cpu_cores = $4, memory_bytes = $5, archived_at = $6, updated_at = $7
+UPDATE plan SET name = $2, storage_bytes = $3, cpu_cores = $4, memory_bytes = $5, archived_at = $6, updated_at = $7,
+    ext_calls_month = $8
 WHERE id = $1;

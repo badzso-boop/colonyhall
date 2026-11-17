@@ -12,6 +12,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const countCallsSince = `-- name: CountCallsSince :one
+SELECT count(*) FROM tool_call WHERE workspace_id = $1 AND started_at >= $2 AND outcome <> 'denied'
+`
+
+type CountCallsSinceParams struct {
+	WorkspaceID uuid.UUID
+	StartedAt   time.Time
+}
+
+func (q *Queries) CountCallsSince(ctx context.Context, arg CountCallsSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCallsSince, arg.WorkspaceID, arg.StartedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteConnector = `-- name: DeleteConnector :execrows
 UPDATE connector SET deleted_at = $3, updated_at = $3 WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL
 `
@@ -24,6 +40,45 @@ type DeleteConnectorParams struct {
 
 func (q *Queries) DeleteConnector(ctx context.Context, arg DeleteConnectorParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteConnector, arg.WorkspaceID, arg.ID, arg.DeletedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteDoc = `-- name: DeleteDoc :exec
+DELETE FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2 AND collection = $3 AND doc_id = $4
+`
+
+type DeleteDocParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Collection  string
+	DocID       string
+}
+
+func (q *Queries) DeleteDoc(ctx context.Context, arg DeleteDocParams) error {
+	_, err := q.db.Exec(ctx, deleteDoc,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Collection,
+		arg.DocID,
+	)
+	return err
+}
+
+const deleteExtension = `-- name: DeleteExtension :execrows
+UPDATE extension SET deleted_at = $3, updated_at = $3, state = 'disabled' WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type DeleteExtensionParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	DeletedAt   *time.Time
+}
+
+func (q *Queries) DeleteExtension(ctx context.Context, arg DeleteExtensionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExtension, arg.WorkspaceID, arg.ID, arg.DeletedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -66,6 +121,98 @@ func (q *Queries) GetConnector(ctx context.Context, arg GetConnectorParams) (Con
 	return i, err
 }
 
+const getDoc = `-- name: GetDoc :one
+SELECT workspace_id, extension_id, collection, doc_id, data, size_bytes, updated_at FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2 AND collection = $3 AND doc_id = $4
+`
+
+type GetDocParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Collection  string
+	DocID       string
+}
+
+func (q *Queries) GetDoc(ctx context.Context, arg GetDocParams) (ExtStoreDoc, error) {
+	row := q.db.QueryRow(ctx, getDoc,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Collection,
+		arg.DocID,
+	)
+	var i ExtStoreDoc
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ExtensionID,
+		&i.Collection,
+		&i.DocID,
+		&i.Data,
+		&i.SizeBytes,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getExtension = `-- name: GetExtension :one
+SELECT id, workspace_id, slug, title, description, maintainer_id, bot_id, state, live_version, approval_off, disabled_reason, consecutive_errors, recent_errors, created_at, updated_at, deleted_at FROM extension WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type GetExtensionParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+}
+
+func (q *Queries) GetExtension(ctx context.Context, arg GetExtensionParams) (Extension, error) {
+	row := q.db.QueryRow(ctx, getExtension, arg.WorkspaceID, arg.ID)
+	var i Extension
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Slug,
+		&i.Title,
+		&i.Description,
+		&i.MaintainerID,
+		&i.BotID,
+		&i.State,
+		&i.LiveVersion,
+		&i.ApprovalOff,
+		&i.DisabledReason,
+		&i.ConsecutiveErrors,
+		&i.RecentErrors,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getVersion = `-- name: GetVersion :one
+SELECT id, workspace_id, extension_id, version, manifest, source, bundle, bundle_sha256, created_by, created_at FROM extension_version WHERE workspace_id = $1 AND extension_id = $2 AND version = $3
+`
+
+type GetVersionParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Version     int32
+}
+
+func (q *Queries) GetVersion(ctx context.Context, arg GetVersionParams) (ExtensionVersion, error) {
+	row := q.db.QueryRow(ctx, getVersion, arg.WorkspaceID, arg.ExtensionID, arg.Version)
+	var i ExtensionVersion
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ExtensionID,
+		&i.Version,
+		&i.Manifest,
+		&i.Source,
+		&i.Bundle,
+		&i.BundleSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const grantsForAgent = `-- name: GrantsForAgent :many
 SELECT id, workspace_id, agent_id, target_kind, target_id, granted_by, created_at, revoked_at FROM agent_tool_grant WHERE workspace_id = $1 AND agent_id = $2 AND revoked_at IS NULL ORDER BY created_at, id
 `
@@ -102,6 +249,34 @@ func (q *Queries) GrantsForAgent(ctx context.Context, arg GrantsForAgentParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertApproval = `-- name: InsertApproval :exec
+INSERT INTO extension_approval (id, workspace_id, extension_id, version, decided_by, diff, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+`
+
+type InsertApprovalParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Version     int32
+	DecidedBy   uuid.UUID
+	Diff        []byte
+	CreatedAt   time.Time
+}
+
+func (q *Queries) InsertApproval(ctx context.Context, arg InsertApprovalParams) error {
+	_, err := q.db.Exec(ctx, insertApproval,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Version,
+		arg.DecidedBy,
+		arg.Diff,
+		arg.CreatedAt,
+	)
+	return err
 }
 
 const insertConnector = `-- name: InsertConnector :exec
@@ -147,6 +322,47 @@ func (q *Queries) InsertConnector(ctx context.Context, arg InsertConnectorParams
 		arg.State,
 		arg.LastError,
 		arg.CreatedBy,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const insertExtension = `-- name: InsertExtension :exec
+INSERT INTO extension (id, workspace_id, slug, title, description, maintainer_id, bot_id, state, live_version, approval_off,
+                       disabled_reason, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+`
+
+type InsertExtensionParams struct {
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	Slug           string
+	Title          string
+	Description    string
+	MaintainerID   uuid.UUID
+	BotID          uuid.UUID
+	State          string
+	LiveVersion    *int32
+	ApprovalOff    bool
+	DisabledReason string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) InsertExtension(ctx context.Context, arg InsertExtensionParams) error {
+	_, err := q.db.Exec(ctx, insertExtension,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Slug,
+		arg.Title,
+		arg.Description,
+		arg.MaintainerID,
+		arg.BotID,
+		arg.State,
+		arg.LiveVersion,
+		arg.ApprovalOff,
+		arg.DisabledReason,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -224,6 +440,77 @@ func (q *Queries) InsertToolCall(ctx context.Context, arg InsertToolCallParams) 
 	return err
 }
 
+const insertVersion = `-- name: InsertVersion :exec
+INSERT INTO extension_version (id, workspace_id, extension_id, version, manifest, source, bundle, bundle_sha256, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertVersionParams struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ExtensionID  uuid.UUID
+	Version      int32
+	Manifest     []byte
+	Source       string
+	Bundle       string
+	BundleSha256 string
+	CreatedBy    uuid.UUID
+	CreatedAt    time.Time
+}
+
+func (q *Queries) InsertVersion(ctx context.Context, arg InsertVersionParams) error {
+	_, err := q.db.Exec(ctx, insertVersion,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Version,
+		arg.Manifest,
+		arg.Source,
+		arg.Bundle,
+		arg.BundleSha256,
+		arg.CreatedBy,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const listApprovals = `-- name: ListApprovals :many
+SELECT id, workspace_id, extension_id, version, decided_by, diff, created_at FROM extension_approval WHERE workspace_id = $1 AND extension_id = $2 ORDER BY created_at DESC, id DESC
+`
+
+type ListApprovalsParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+}
+
+func (q *Queries) ListApprovals(ctx context.Context, arg ListApprovalsParams) ([]ExtensionApproval, error) {
+	rows, err := q.db.Query(ctx, listApprovals, arg.WorkspaceID, arg.ExtensionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExtensionApproval
+	for rows.Next() {
+		var i ExtensionApproval
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Version,
+			&i.DecidedBy,
+			&i.Diff,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConnectors = `-- name: ListConnectors :many
 SELECT id, workspace_id, slug, title, kind, base_url, auth, header_name, secret_id, approval_off, risk_overrides, tools_cache, tools_cached_at, state, last_error, created_by, created_at, updated_at, deleted_at FROM connector WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY slug
 `
@@ -254,6 +541,94 @@ func (q *Queries) ListConnectors(ctx context.Context, workspaceID uuid.UUID) ([]
 			&i.State,
 			&i.LastError,
 			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDocs = `-- name: ListDocs :many
+SELECT workspace_id, extension_id, collection, doc_id, data, size_bytes, updated_at FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2 AND collection = $3 AND doc_id > $4
+ORDER BY doc_id LIMIT $5
+`
+
+type ListDocsParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Collection  string
+	DocID       string
+	Limit       int32
+}
+
+func (q *Queries) ListDocs(ctx context.Context, arg ListDocsParams) ([]ExtStoreDoc, error) {
+	rows, err := q.db.Query(ctx, listDocs,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Collection,
+		arg.DocID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExtStoreDoc
+	for rows.Next() {
+		var i ExtStoreDoc
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Collection,
+			&i.DocID,
+			&i.Data,
+			&i.SizeBytes,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExtensions = `-- name: ListExtensions :many
+SELECT id, workspace_id, slug, title, description, maintainer_id, bot_id, state, live_version, approval_off, disabled_reason, consecutive_errors, recent_errors, created_at, updated_at, deleted_at FROM extension WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY slug
+`
+
+func (q *Queries) ListExtensions(ctx context.Context, workspaceID uuid.UUID) ([]Extension, error) {
+	rows, err := q.db.Query(ctx, listExtensions, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Extension
+	for rows.Next() {
+		var i Extension
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.MaintainerID,
+			&i.BotID,
+			&i.State,
+			&i.LiveVersion,
+			&i.ApprovalOff,
+			&i.DisabledReason,
+			&i.ConsecutiveErrors,
+			&i.RecentErrors,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -357,6 +732,86 @@ func (q *Queries) ListToolCalls(ctx context.Context, arg ListToolCallsParams) ([
 	return items, nil
 }
 
+const listVersions = `-- name: ListVersions :many
+SELECT id, workspace_id, extension_id, version, manifest, bundle_sha256, created_by, created_at
+FROM extension_version WHERE workspace_id = $1 AND extension_id = $2 ORDER BY version DESC
+`
+
+type ListVersionsParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+}
+
+type ListVersionsRow struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ExtensionID  uuid.UUID
+	Version      int32
+	Manifest     []byte
+	BundleSha256 string
+	CreatedBy    uuid.UUID
+	CreatedAt    time.Time
+}
+
+func (q *Queries) ListVersions(ctx context.Context, arg ListVersionsParams) ([]ListVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listVersions, arg.WorkspaceID, arg.ExtensionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVersionsRow
+	for rows.Next() {
+		var i ListVersionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Version,
+			&i.Manifest,
+			&i.BundleSha256,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const putDoc = `-- name: PutDoc :exec
+INSERT INTO ext_store_doc (workspace_id, extension_id, collection, doc_id, data, size_bytes, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (extension_id, collection, doc_id) DO UPDATE SET data = EXCLUDED.data, size_bytes = EXCLUDED.size_bytes,
+    updated_at = EXCLUDED.updated_at
+`
+
+type PutDocParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Collection  string
+	DocID       string
+	Data        []byte
+	SizeBytes   int32
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) PutDoc(ctx context.Context, arg PutDocParams) error {
+	_, err := q.db.Exec(ctx, putDoc,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Collection,
+		arg.DocID,
+		arg.Data,
+		arg.SizeBytes,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const revokeGrant = `-- name: RevokeGrant :execrows
 UPDATE agent_tool_grant SET revoked_at = $3 WHERE workspace_id = $1 AND id = $2 AND revoked_at IS NULL
 `
@@ -426,6 +881,53 @@ func (q *Queries) SetConnectorTools(ctx context.Context, arg SetConnectorToolsPa
 	return result.RowsAffected(), nil
 }
 
+const setExtensionErrors = `-- name: SetExtensionErrors :execrows
+UPDATE extension SET consecutive_errors = $3, recent_errors = $4
+WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type SetExtensionErrorsParams struct {
+	WorkspaceID       uuid.UUID
+	ID                uuid.UUID
+	ConsecutiveErrors int32
+	RecentErrors      []byte
+}
+
+func (q *Queries) SetExtensionErrors(ctx context.Context, arg SetExtensionErrorsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setExtensionErrors,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.ConsecutiveErrors,
+		arg.RecentErrors,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const storeUsage = `-- name: StoreUsage :one
+SELECT count(*)::integer AS docs, COALESCE(sum(size_bytes), 0)::integer AS bytes
+FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2
+`
+
+type StoreUsageParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+}
+
+type StoreUsageRow struct {
+	Docs  int32
+	Bytes int32
+}
+
+func (q *Queries) StoreUsage(ctx context.Context, arg StoreUsageParams) (StoreUsageRow, error) {
+	row := q.db.QueryRow(ctx, storeUsage, arg.WorkspaceID, arg.ExtensionID)
+	var i StoreUsageRow
+	err := row.Scan(&i.Docs, &i.Bytes)
+	return i, err
+}
+
 const updateConnector = `-- name: UpdateConnector :execrows
 UPDATE connector SET title = $3, base_url = $4, auth = $5, header_name = $6, secret_id = $7, approval_off = $8,
                      risk_overrides = $9, updated_at = $10
@@ -456,6 +958,44 @@ func (q *Queries) UpdateConnector(ctx context.Context, arg UpdateConnectorParams
 		arg.SecretID,
 		arg.ApprovalOff,
 		arg.RiskOverrides,
+		arg.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateExtension = `-- name: UpdateExtension :execrows
+UPDATE extension SET title = $3, description = $4, state = $5, live_version = $6, approval_off = $7, disabled_reason = $8,
+                     maintainer_id = $9, updated_at = $10
+WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type UpdateExtensionParams struct {
+	WorkspaceID    uuid.UUID
+	ID             uuid.UUID
+	Title          string
+	Description    string
+	State          string
+	LiveVersion    *int32
+	ApprovalOff    bool
+	DisabledReason string
+	MaintainerID   uuid.UUID
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) UpdateExtension(ctx context.Context, arg UpdateExtensionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateExtension,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.State,
+		arg.LiveVersion,
+		arg.ApprovalOff,
+		arg.DisabledReason,
+		arg.MaintainerID,
 		arg.UpdatedAt,
 	)
 	if err != nil {

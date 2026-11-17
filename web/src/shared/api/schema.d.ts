@@ -888,6 +888,212 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workshop/extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner and admins (round 56b). The workspace's extensions with their versions (without code). */
+        get: operations["listExtensions"];
+        put?: never;
+        /**
+         * @description Owner and admins. Adds an extension (a draft) and its bot: an agent
+         *     without a machine, named here (default x-<slug>), that writes the
+         *     extension's messages and makes its calls traceable. Audited.
+         */
+        post: operations["createExtension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Owner and admins. */
+        get: operations["getExtension"];
+        put?: never;
+        post?: never;
+        /** @description Owner and admins. Grants revoked, the bot archived; versions and calls stay in the log. Audited. */
+        delete: operations["deleteExtension"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Owner and admins. A new version: the manifest (tools, connectors,
+         *     egress hosts, store collections) and, for js tools, the TypeScript
+         *     or JavaScript source, compiled here. It is not live until approved;
+         *     the answer shows what it adds compared with the live version.
+         */
+        post: operations["addExtensionVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        /** @description Owner and admins. The version with its manifest, source and what it adds compared with the live one. */
+        get: operations["getExtensionVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/versions/{version}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner and admins. Makes the version live; the approval and what it added are recorded. Audited. */
+        post: operations["approveExtensionVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/versions/{version}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Owner and admins. Runs one tool of the version (approved or not) as
+         *     the extension's bot. A real call that a person started: no approval
+         *     is asked; it is logged as a test.
+         */
+        post: operations["testExtensionTool"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner and admins. Makes an earlier approved version live again. Audited. */
+        post: operations["rollbackExtension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Owner and admins. Switches the extension off, or on again with its live version. Audited. */
+        put: operations["setExtensionEnabled"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Owner only. Switches off (or on) the approval of the extension's write and external tools. Audited. */
+        put: operations["setExtensionApproval"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/take-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner and admins. Becomes the extension's maintainer (its former maintainer is no longer an admin). Audited. */
+        post: operations["takeOverExtension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workshop/grants": {
         parameters: {
             query?: never;
@@ -5766,7 +5972,7 @@ export interface components {
             /** Format: uuid */
             agent_id: string;
             /** @enum {string} */
-            target_kind: "connector" | "workshop";
+            target_kind: "connector" | "extension" | "workshop";
             /** Format: uuid */
             target_id?: string;
         };
@@ -5794,6 +6000,110 @@ export interface components {
         };
         ToolCallList: {
             calls: components["schemas"]["ToolCallEntry"][];
+        };
+        ExtensionToolSummary: {
+            name: string;
+            /** @enum {string} */
+            kind: "http" | "js";
+            risk: components["schemas"]["ToolRisk"];
+            description?: string;
+        };
+        ExtensionVersionSummary: {
+            version: number;
+            approved: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+            tools: components["schemas"]["ExtensionToolSummary"][];
+        };
+        Extension: {
+            /** Format: uuid */
+            id: string;
+            /** @description Its tools are x_<slug>__<tool> in the gateway */
+            slug: string;
+            title: string;
+            description: string;
+            /** Format: uuid */
+            bot_id: string;
+            bot_handle?: string;
+            maintainer_handle?: string;
+            /** @enum {string} */
+            state: "draft" | "live" | "disabled";
+            live_version?: number;
+            approval_off: boolean;
+            disabled_reason?: string;
+            versions: components["schemas"]["ExtensionVersionSummary"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ExtensionList: {
+            extensions: components["schemas"]["Extension"][];
+            /** @description The code runner is configured (COLONY_EXT_RUNNER_URL): js tools can run */
+            runner_available: boolean;
+        };
+        CreateExtensionRequest: {
+            slug: string;
+            title: string;
+            description?: string;
+            /** @description The bot's handle; default x-<slug> */
+            bot_handle?: string;
+            /** @description The bot's display name; default the title */
+            bot_name?: string;
+        };
+        /**
+         * @description docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind
+         *     http or js, risk, input schema; js: fn; http: request with connector,
+         *     method, path, query, headers, body, and output with pick and
+         *     max_items), connectors, egress hosts and store collections.
+         */
+        ExtensionManifest: {
+            [key: string]: unknown;
+        };
+        ExtensionDiff: {
+            new_connectors?: string[];
+            new_egress?: string[];
+            new_store?: string[];
+            new_tools?: string[];
+            raised_risks?: {
+                [key: string]: string;
+            };
+            code_changed: boolean;
+        };
+        AddExtensionVersionRequest: {
+            manifest: components["schemas"]["ExtensionManifest"];
+            /** @description The js tools' TypeScript or JavaScript (one module; its exports are the tools) */
+            source?: string;
+        };
+        ExtensionVersion: {
+            version: number;
+            manifest: components["schemas"]["ExtensionManifest"];
+            source: string;
+            approved: boolean;
+            diff: components["schemas"]["ExtensionDiff"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+        };
+        TestExtensionToolRequest: {
+            tool: string;
+            input?: {
+                [key: string]: unknown;
+            };
+        };
+        ExtensionTestResult: {
+            output: string;
+            is_error: boolean;
+            logs: string[];
+        };
+        RollbackExtensionRequest: {
+            version: number;
+        };
+        ExtensionEnabledRequest: {
+            enabled: boolean;
         };
         HostStorage: {
             state: components["schemas"]["StorageState"];
@@ -6750,6 +7060,8 @@ export interface components {
              * @description What a hosted guard will get (not enforced yet)
              */
             memory_bytes: number;
+            /** @description The Workshop's monthly call budget (round 56b); 0 is unlimited */
+            ext_calls_month?: number;
             /** @description Workspaces on the plan */
             workspaces: number;
             /** Format: date-time */
@@ -6769,6 +7081,8 @@ export interface components {
             cpu_cores: number;
             /** Format: int64 */
             memory_bytes: number;
+            /** @description The Workshop's monthly call budget; 0 or absent: unlimited */
+            ext_calls_month?: number;
         };
         PlanPatchRequest: {
             name?: string;
@@ -6777,6 +7091,8 @@ export interface components {
             cpu_cores?: number;
             /** Format: int64 */
             memory_bytes?: number;
+            /** @description 0 is unlimited */
+            ext_calls_month?: number;
             archived?: boolean;
             /** @description Go ahead although a workspace on the plan would be full */
             confirm_over_quota?: boolean;
@@ -6807,6 +7123,8 @@ export interface components {
             cpu_cores: number;
             /** Format: int64 */
             memory_bytes: number;
+            /** @description The Workshop's monthly call budget; absent or 0: unlimited */
+            ext_calls_month?: number;
         };
         BreakGlassRequest: {
             /** @description At least 20 characters (optional in development mode) */
@@ -8367,6 +8685,331 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listExtensions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExtensionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    addExtensionVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddExtensionVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionVersion"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getExtensionVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionVersion"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    approveExtensionVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    testExtensionTool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestExtensionToolRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionTestResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    rollbackExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollbackExtensionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setExtensionEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtensionEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setExtensionApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    takeOverExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

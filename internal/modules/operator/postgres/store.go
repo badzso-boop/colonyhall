@@ -241,7 +241,8 @@ func optTime(t time.Time) *time.Time {
 // CreatePlan stores a plan; db.ErrConflict when the name is taken.
 func (s *Store) CreatePlan(ctx context.Context, p operator.Plan) error {
 	err := s.q(ctx).CreatePlan(ctx, sqlcgen.CreatePlanParams{ID: p.ID, Name: p.Name, StorageBytes: p.StorageBytes,
-		CpuCores: int32(p.CPUCores), MemoryBytes: p.MemoryBytes, ArchivedAt: p.ArchivedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})
+		CpuCores: int32(p.CPUCores), MemoryBytes: p.MemoryBytes, ArchivedAt: p.ArchivedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		ExtCallsMonth: optCalls(p.ExtCallsMonth)})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
 	}
@@ -270,7 +271,8 @@ func (s *Store) ListPlans(ctx context.Context) ([]operator.Plan, error) {
 // UpdatePlan writes a plan; db.ErrConflict when the name is taken.
 func (s *Store) UpdatePlan(ctx context.Context, p operator.Plan) error {
 	err := s.q(ctx).UpdatePlan(ctx, sqlcgen.UpdatePlanParams{ID: p.ID, Name: p.Name, StorageBytes: p.StorageBytes,
-		CpuCores: int32(p.CPUCores), MemoryBytes: p.MemoryBytes, ArchivedAt: p.ArchivedAt, UpdatedAt: p.UpdatedAt})
+		CpuCores: int32(p.CPUCores), MemoryBytes: p.MemoryBytes, ArchivedAt: p.ArchivedAt, UpdatedAt: p.UpdatedAt,
+		ExtCallsMonth: optCalls(p.ExtCallsMonth)})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
 	}
@@ -278,6 +280,19 @@ func (s *Store) UpdatePlan(ctx context.Context, p operator.Plan) error {
 }
 
 func planOf(r sqlcgen.Plan) operator.Plan {
-	return operator.Plan{ID: r.ID, Name: r.Name, StorageBytes: r.StorageBytes, CPUCores: int(r.CpuCores), MemoryBytes: r.MemoryBytes,
+	p := operator.Plan{ID: r.ID, Name: r.Name, StorageBytes: r.StorageBytes, CPUCores: int(r.CpuCores), MemoryBytes: r.MemoryBytes,
 		ArchivedAt: r.ArchivedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	if r.ExtCallsMonth != nil {
+		p.ExtCallsMonth = int(*r.ExtCallsMonth)
+	}
+	return p
+}
+
+// optCalls stores 0 (unlimited) as NULL.
+func optCalls(n int) *int32 {
+	if n <= 0 {
+		return nil
+	}
+	v := int32(n)
+	return &v
 }

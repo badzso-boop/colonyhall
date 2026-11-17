@@ -153,3 +153,97 @@ func sameJSON(a []byte, b string) bool {
 	}
 	return reflect.DeepEqual(x, y)
 }
+
+// testExtensions: extensions (unique live slug, update, error counters,
+// soft delete), immutable versions, approvals, the store, the call count.
+func testExtensions(t *testing.T, b Backend) {
+	f := setup(t, b)
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
+	st := b.Workshop
+	e := workshop.Extension{ID: gen.New(), WorkspaceID: f.ws.ID, Slug: "hello", Title: "Hello", MaintainerID: f.human.ID,
+		BotID: f.agent.ID, State: workshop.StateDraft, CreatedAt: t0, UpdatedAt: t0}
+	must(t, st.InsertExtension(ctx, e))
+	dup := e
+	dup.ID = gen.New()
+	if err := st.InsertExtension(ctx, dup); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("duplicate slug: %v", err)
+	}
+	m := workshop.Manifest{Store: []string{"visits"}, Tools: []workshop.ManifestTool{{Name: "greet", Kind: workshop.ToolJS, Risk: workshop.RiskRead,
+		Input: json.RawMessage(`{"type":"object"}`), Fn: "greet"}}}
+	v := workshop.Version{ID: gen.New(), WorkspaceID: f.ws.ID, ExtensionID: e.ID, Version: 1, Manifest: m, Source: "src",
+		Bundle: "bundle", BundleSHA256: "abc", CreatedBy: f.human.ID, CreatedAt: t0}
+	must(t, st.InsertVersion(ctx, v))
+	if err := st.InsertVersion(ctx, v); !errors.Is(err, db.ErrConflict) {
+		t.Fatalf("same version twice: %v", err)
+	}
+	v2 := v
+	v2.ID, v2.Version, v2.CreatedAt = gen.New(), 2, t0.Add(time.Minute)
+	must(t, st.InsertVersion(ctx, v2))
+	got, err := st.GetVersion(ctx, f.ws.ID, e.ID, 1)
+	must(t, err)
+	if got.Source != "src" || got.Bundle != "bundle" || len(got.Manifest.Tools) != 1 || got.Manifest.Tools[0].Fn != "greet" {
+		t.Fatalf("version: %+v", got)
+	}
+	list, err := st.ListVersions(ctx, f.ws.ID, e.ID)
+	must(t, err)
+	if len(list) != 2 || list[0].Version != 2 || list[0].Bundle != "" || list[0].Source != "" {
+		t.Fatalf("versions (newest first, without code): %+v", list)
+	}
+	must(t, st.InsertApproval(ctx, workshop.Approval{ID: gen.New(), WorkspaceID: f.ws.ID, ExtensionID: e.ID, Version: 1,
+		DecidedBy: f.human.ID, Diff: workshop.Diff{NewStore: []string{"visits"}, CodeChanged: true}, CreatedAt: t0}))
+	as, err := st.ListApprovals(ctx, f.ws.ID, e.ID)
+	must(t, err)
+	if len(as) != 1 || as[0].Diff.NewStore[0] != "visits" {
+		t.Fatalf("approvals: %+v", as)
+	}
+	e.State, e.LiveVersion, e.ApprovalOff, e.UpdatedAt = workshop.StateLive, 1, true, t0.Add(time.Hour)
+	must(t, st.UpdateExtension(ctx, e))
+	must(t, st.SetExtensionErrors(ctx, f.ws.ID, e.ID, 3, []time.Time{t0, t0.Add(time.Second)}))
+	ge, err := st.GetExtension(ctx, f.ws.ID, e.ID)
+	must(t, err)
+	if ge.State != workshop.StateLive || ge.LiveVersion != 1 || !ge.ApprovalOff || ge.ConsecutiveErrors != 3 || len(ge.RecentErrors) != 2 {
+		t.Fatalf("extension: %+v", ge)
+	}
+
+	doc := func(id, data string) workshop.StoreDoc {
+		return workshop.StoreDoc{WorkspaceID: f.ws.ID, ExtensionID: e.ID, Collection: "visits", DocID: id, Data: json.RawMessage(data),
+			SizeBytes: len(data), UpdatedAt: t0}
+	}
+	must(t, st.PutDoc(ctx, doc("b", `{"n":1}`)))
+	must(t, st.PutDoc(ctx, doc("a", `{"n":2}`)))
+	must(t, st.PutDoc(ctx, doc("b", `{"n":10}`)))
+	d, err := st.GetDoc(ctx, f.ws.ID, e.ID, "visits", "b")
+	must(t, err)
+	if !sameJSON(d.Data, `{"n":10}`) {
+		t.Fatalf("doc: %s", d.Data)
+	}
+	ds, err := st.ListDocs(ctx, f.ws.ID, e.ID, "visits", "a", 10)
+	must(t, err)
+	if len(ds) != 1 || ds[0].DocID != "b" {
+		t.Fatalf("list after a: %+v", ds)
+	}
+	n, size, err := st.StoreUsage(ctx, f.ws.ID, e.ID)
+	must(t, err)
+	if n != 2 || size != len(`{"n":10}`)+len(`{"n":2}`) {
+		t.Fatalf("usage: %d %d", n, size)
+	}
+	must(t, st.DeleteDoc(ctx, f.ws.ID, e.ID, "visits", "a"))
+	if _, err := st.GetDoc(ctx, f.ws.ID, e.ID, "visits", "a"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("deleted doc: %v", err)
+	}
+
+	for i, outcome := range []string{workshop.OutcomeOK, workshop.OutcomeDenied, workshop.OutcomeError} {
+		must(t, st.InsertToolCall(ctx, workshop.ToolCall{ID: gen.New(), WorkspaceID: f.ws.ID, ActorID: f.agent.ID,
+			TargetKind: workshop.TargetExtension, TargetID: e.ID, Tool: "greet", Risk: workshop.RiskRead,
+			StartedAt: t0.Add(time.Duration(i) * time.Minute), Outcome: outcome}))
+	}
+	if c, err := st.CountCallsSince(ctx, f.ws.ID, t0); err != nil || c != 2 {
+		t.Fatalf("calls since (denied ones do not count): %d %v", c, err)
+	}
+
+	must(t, st.DeleteExtension(ctx, f.ws.ID, e.ID, t0.Add(2*time.Hour)))
+	if _, err := st.GetExtension(ctx, f.ws.ID, e.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("deleted extension: %v", err)
+	}
+	must(t, st.InsertExtension(ctx, dup)) // the slug is free again
+}

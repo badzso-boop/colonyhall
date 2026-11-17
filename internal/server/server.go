@@ -24,6 +24,7 @@ import (
 	"colonyhall/internal/eventlog"
 	evmem "colonyhall/internal/eventlog/memory"
 	evpg "colonyhall/internal/eventlog/postgres"
+	"colonyhall/internal/extrunner"
 	"colonyhall/internal/gateway"
 	"colonyhall/internal/httpserver"
 	"colonyhall/internal/httpx"
@@ -160,6 +161,7 @@ import (
 	wikimem "colonyhall/internal/modules/wiki/memory"
 	wikipg "colonyhall/internal/modules/wiki/postgres"
 	"colonyhall/internal/modules/workshop"
+	"colonyhall/internal/modules/workshop/compile"
 	workshophttp "colonyhall/internal/modules/workshop/httpapi"
 	"colonyhall/internal/modules/workshop/mcpremote"
 	workshopmcp "colonyhall/internal/modules/workshop/mcptools"
@@ -251,6 +253,12 @@ type Options struct {
 	// WorkshopRemote replaces the MCP client of the connectors (tests).
 	EgressPolicy   egress.Policy
 	WorkshopRemote workshop.Remote
+	// Round 56b: ExtEngine runs the extensions' code tools (the ext-runner
+	// client; nil: no code tools); ExtLimits are COLONY_EXT_*.
+	// WorkshopFetcher replaces the extensions' outbound HTTP (tests).
+	ExtEngine       extrunner.Engine
+	ExtLimits       workshop.Limits
+	WorkshopFetcher workshop.Fetcher
 }
 
 // App is a wired-up Colonyhall server.
@@ -671,10 +679,23 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	if remote == nil {
 		remote = &mcpremote.Client{Policy: opt.EgressPolicy, Version: Version}
 	}
+	fetcher := opt.WorkshopFetcher
+	if fetcher == nil {
+		fetcher = &mcpremote.Fetcher{Policy: opt.EgressPolicy}
+	}
 	wsSvc := &workshop.Service{Store: wsStore, Secrets: secSvc, Remote: remote, Approvals: apSvc, Directory: idSvc,
-		Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
+		Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger,
+		Engine: opt.ExtEngine, Compiler: compile.Esbuild{}, Fetcher: fetcher, Bots: idSvc, Limits: opt.ExtLimits,
+		Budget: func(ctx context.Context, workspaceID ids.ID) (*int, error) {
+			u, err := fiSvc.StorageState(ctx, workspaceID)
+			if err != nil || u.Plan == nil || u.Plan.ExtCallsMonth <= 0 {
+				return nil, err
+			}
+			n := u.Plan.ExtCallsMonth
+			return &n, nil
+		}}
 	workshophttp.Register(mux, wsSvc, idSvc)
-	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
+	registerCore := func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
 		convmcp.Register(s, cvSvc, idSvc, current, r)
@@ -690,6 +711,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		leasesmcp.Register(s, lsSvc, current)
 		searchmcp.Register(s, seSvc, current)
 		hostsmcp.Register(s, hoSvc, idSvc, current)
+	}
+	// ctx.colony in an extension's code: Colonyhall's own tools as the
+	// calling actor, through an in-memory MCP session, so every check of a
+	// tool applies exactly as for an agent (round 56b).
+	wsSvc.Core = workshopmcp.CoreCaller(Version, registerCore)
+	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
+		registerCore(s, actor, r)
+		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		workshopmcp.Register(s, wsSvc, actor, current, r, opt.Logger)
 	}, func(ctx context.Context, actor identity.Actor) (string, error) {
 		text, err := rlSvc.InstructionsForActor(ctx, actor)

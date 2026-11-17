@@ -25,9 +25,12 @@ type Plan struct {
 	StorageBytes int64
 	CPUCores     int
 	MemoryBytes  int64
-	ArchivedAt   *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// ExtCallsMonth is the Workshop's monthly call budget (round 56b);
+	// 0 is unlimited.
+	ExtCallsMonth int
+	ArchivedAt    *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // PlanPatch changes a plan; nil fields stay.
@@ -36,7 +39,9 @@ type PlanPatch struct {
 	StorageBytes *int64
 	CPUCores     *int
 	MemoryBytes  *int64
-	Archived     *bool
+	// ExtCallsMonth: 0 is unlimited.
+	ExtCallsMonth *int
+	Archived      *bool
 	// ConfirmOverQuota: go ahead although a workspace on the plan would be
 	// full with the new storage.
 	ConfirmOverQuota bool
@@ -69,7 +74,8 @@ var (
 func validPlan(p Plan) error {
 	n := utf8.RuneCountInString(p.Name)
 	if strings.TrimSpace(p.Name) == "" || n > 60 || p.StorageBytes <= 0 || p.StorageBytes > MaxPlanBytes ||
-		p.CPUCores <= 0 || p.CPUCores > MaxCPUCores || p.MemoryBytes <= 0 || p.MemoryBytes > MaxPlanBytes {
+		p.CPUCores <= 0 || p.CPUCores > MaxCPUCores || p.MemoryBytes <= 0 || p.MemoryBytes > MaxPlanBytes ||
+		p.ExtCallsMonth < 0 || p.ExtCallsMonth > 100_000_000 {
 		return ErrInvalidPlan
 	}
 	return nil
@@ -119,7 +125,7 @@ func (s *Service) CreatePlan(ctx context.Context, o Operator, in Plan, remote st
 	ctx = scope(ctx)
 	now := s.Clock.Now()
 	p := Plan{ID: s.IDs.New(), Name: strings.TrimSpace(in.Name), StorageBytes: in.StorageBytes, CPUCores: in.CPUCores,
-		MemoryBytes: in.MemoryBytes, CreatedAt: now, UpdatedAt: now}
+		MemoryBytes: in.MemoryBytes, ExtCallsMonth: in.ExtCallsMonth, CreatedAt: now, UpdatedAt: now}
 	if err := validPlan(p); err != nil {
 		return PlanWithUse{}, err
 	}
@@ -155,6 +161,9 @@ func (s *Service) UpdatePlan(ctx context.Context, o Operator, id ids.ID, patch P
 	}
 	if patch.MemoryBytes != nil {
 		p.MemoryBytes = *patch.MemoryBytes
+	}
+	if patch.ExtCallsMonth != nil {
+		p.ExtCallsMonth = *patch.ExtCallsMonth
 	}
 	if patch.Archived != nil {
 		p.ArchivedAt = nil
@@ -280,5 +289,5 @@ var ErrPlanOverQuota = errors.New("the plan is below a workspace's current usage
 
 func planPayload(p Plan) map[string]any {
 	return map[string]any{"plan_id": p.ID.String(), "name": p.Name, "storage_bytes": p.StorageBytes,
-		"cpu_cores": p.CPUCores, "memory_bytes": p.MemoryBytes, "archived": p.ArchivedAt != nil}
+		"cpu_cores": p.CPUCores, "memory_bytes": p.MemoryBytes, "ext_calls_month": p.ExtCallsMonth, "archived": p.ArchivedAt != nil}
 }

@@ -211,6 +211,15 @@ func (s *ctSuite) seed() {
 	must(a.do("POST", "/api/v1/workshop/grants", owner, map[string]any{"agent_id": s.obj["agent"], "target_kind": "connector",
 		"target_id": s.obj["connector"]}, &created), http.StatusOK, "tool grant")
 	s.obj["toolGrant"] = created.ID
+	// Round 56b: an extension with an approved http tool on that connector.
+	must(a.do("POST", "/api/v1/workshop/extensions", owner, map[string]any{"slug": "acmeext", "title": acmeData + " extension",
+		"bot_handle": acmeRef + "-extbot"}, &created), http.StatusCreated, "extension")
+	s.obj["extension"] = created.ID
+	must(a.do("POST", "/api/v1/workshop/extensions/"+created.ID+"/versions", owner, map[string]any{"manifest": map[string]any{
+		"description": acmeData + " manifest", "connectors": []string{"acmeconn"}, "store": []string{"notes"},
+		"tools": []map[string]any{{"name": "search", "kind": "http", "risk": "read", "description": acmeData + " tool",
+			"request": map[string]any{"connector": "acmeconn", "method": "GET", "path": "/x"}}}}}, nil), http.StatusCreated, "extension version")
+	must(a.do("POST", "/api/v1/workshop/extensions/"+created.ID+"/versions/1/approve", owner, nil, nil), http.StatusOK, "extension approval")
 
 	for _, id := range s.obj {
 		if _, err := ids.Parse(id); err == nil {
@@ -396,6 +405,9 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 			return s.obj["toolGrant"], true
 		}
 		return s.obj["grant"], true
+	case "extensionId":
+		// Round 56b: acme's extension.
+		return s.obj["extension"], true
 	case "connectorId":
 		// Round 56a: acme's Workshop connector.
 		return s.obj["connector"], true

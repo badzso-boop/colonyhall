@@ -414,6 +414,58 @@ type Event struct {
 	At            time.Time
 }
 
+type ExtStoreDoc struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Collection  string
+	DocID       string
+	Data        []byte
+	SizeBytes   int32
+	UpdatedAt   time.Time
+}
+
+type Extension struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	Slug              string
+	Title             string
+	Description       string
+	MaintainerID      uuid.UUID
+	BotID             uuid.UUID
+	State             string
+	LiveVersion       *int32
+	ApprovalOff       bool
+	DisabledReason    string
+	ConsecutiveErrors int32
+	RecentErrors      []byte
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         *time.Time
+}
+
+type ExtensionApproval struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Version     int32
+	DecidedBy   uuid.UUID
+	Diff        []byte
+	CreatedAt   time.Time
+}
+
+type ExtensionVersion struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	ExtensionID  uuid.UUID
+	Version      int32
+	Manifest     []byte
+	Source       string
+	Bundle       string
+	BundleSha256 string
+	CreatedBy    uuid.UUID
+	CreatedAt    time.Time
+}
+
 type File struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.UUID
@@ -615,14 +667,15 @@ type OperatorSession struct {
 }
 
 type Plan struct {
-	ID           uuid.UUID
-	Name         string
-	StorageBytes int64
-	CpuCores     int32
-	MemoryBytes  int64
-	ArchivedAt   *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID            uuid.UUID
+	Name          string
+	StorageBytes  int64
+	CpuCores      int32
+	MemoryBytes   int64
+	ArchivedAt    *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	ExtCallsMonth *int32
 }
 
 type PlannerAccess struct {
@@ -969,17 +1022,18 @@ type WorkspaceSecret struct {
 }
 
 type WorkspaceStorage struct {
-	WorkspaceID      uuid.UUID
-	QuotaBytes       int64
-	FilesBytes       int64
-	DbBytes          int64
-	ChatBytes        int64
-	DbMeasuredAt     *time.Time
-	WarnedLevel      int16
-	UpdatedAt        time.Time
-	PlanID           *uuid.UUID
-	PlanName         string
-	PlanStorageBytes int64
-	PlanCpuCores     int32
-	PlanMemoryBytes  int64
+	WorkspaceID       uuid.UUID
+	QuotaBytes        int64
+	FilesBytes        int64
+	DbBytes           int64
+	ChatBytes         int64
+	DbMeasuredAt      *time.Time
+	WarnedLevel       int16
+	UpdatedAt         time.Time
+	PlanID            *uuid.UUID
+	PlanName          string
+	PlanStorageBytes  int64
+	PlanCpuCores      int32
+	PlanMemoryBytes   int64
+	PlanExtCallsMonth *int32
 }

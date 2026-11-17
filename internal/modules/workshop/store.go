@@ -32,4 +32,30 @@ type Store interface {
 	// ListToolCalls returns the newest calls first, before the given time
 	// (nil: from now), optionally of one target.
 	ListToolCalls(ctx context.Context, workspaceID ids.ID, targetID *ids.ID, before *time.Time, limit int) ([]ToolCall, error)
+	// CountCallsSince counts the calls that ran (not the denied ones) since t.
+	CountCallsSince(ctx context.Context, workspaceID ids.ID, since time.Time) (int, error)
+
+	InsertExtension(ctx context.Context, e Extension) error
+	// UpdateExtension writes title, description, state, live version,
+	// approval_off and the disabled reason.
+	UpdateExtension(ctx context.Context, e Extension) error
+	SetExtensionErrors(ctx context.Context, workspaceID, id ids.ID, consecutive int, recent []time.Time) error
+	GetExtension(ctx context.Context, workspaceID, id ids.ID) (Extension, error)
+	ListExtensions(ctx context.Context, workspaceID ids.ID) ([]Extension, error)
+	DeleteExtension(ctx context.Context, workspaceID, id ids.ID, at time.Time) error
+
+	InsertVersion(ctx context.Context, v Version) error
+	GetVersion(ctx context.Context, workspaceID, extensionID ids.ID, version int) (Version, error)
+	// ListVersions returns the versions newest first, without source and bundle.
+	ListVersions(ctx context.Context, workspaceID, extensionID ids.ID) ([]Version, error)
+	InsertApproval(ctx context.Context, a Approval) error
+	ListApprovals(ctx context.Context, workspaceID, extensionID ids.ID) ([]Approval, error)
+
+	GetDoc(ctx context.Context, workspaceID, extensionID ids.ID, collection, docID string) (StoreDoc, error)
+	PutDoc(ctx context.Context, d StoreDoc) error
+	DeleteDoc(ctx context.Context, workspaceID, extensionID ids.ID, collection, docID string) error
+	// ListDocs returns a collection's documents by id, after the given id.
+	ListDocs(ctx context.Context, workspaceID, extensionID ids.ID, collection, after string, limit int) ([]StoreDoc, error)
+	// StoreUsage returns the number of documents and their bytes.
+	StoreUsage(ctx context.Context, workspaceID, extensionID ids.ID) (int, int, error)
 }

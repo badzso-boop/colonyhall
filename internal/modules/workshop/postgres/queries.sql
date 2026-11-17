@@ -50,3 +50,67 @@ WHERE workspace_id = $1
   AND (sqlc.narg('before')::timestamptz IS NULL OR started_at < sqlc.narg('before'))
 ORDER BY started_at DESC, id DESC
 LIMIT $2;
+
+-- name: CountCallsSince :one
+SELECT count(*) FROM tool_call WHERE workspace_id = $1 AND started_at >= $2 AND outcome <> 'denied';
+
+-- name: InsertExtension :exec
+INSERT INTO extension (id, workspace_id, slug, title, description, maintainer_id, bot_id, state, live_version, approval_off,
+                       disabled_reason, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
+
+-- name: UpdateExtension :execrows
+UPDATE extension SET title = $3, description = $4, state = $5, live_version = $6, approval_off = $7, disabled_reason = $8,
+                     maintainer_id = $9, updated_at = $10
+WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL;
+
+-- name: SetExtensionErrors :execrows
+UPDATE extension SET consecutive_errors = $3, recent_errors = $4
+WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL;
+
+-- name: GetExtension :one
+SELECT * FROM extension WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL;
+
+-- name: ListExtensions :many
+SELECT * FROM extension WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY slug;
+
+-- name: DeleteExtension :execrows
+UPDATE extension SET deleted_at = $3, updated_at = $3, state = 'disabled' WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL;
+
+-- name: InsertVersion :exec
+INSERT INTO extension_version (id, workspace_id, extension_id, version, manifest, source, bundle, bundle_sha256, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+
+-- name: GetVersion :one
+SELECT * FROM extension_version WHERE workspace_id = $1 AND extension_id = $2 AND version = $3;
+
+-- name: ListVersions :many
+SELECT id, workspace_id, extension_id, version, manifest, bundle_sha256, created_by, created_at
+FROM extension_version WHERE workspace_id = $1 AND extension_id = $2 ORDER BY version DESC;
+
+-- name: InsertApproval :exec
+INSERT INTO extension_approval (id, workspace_id, extension_id, version, decided_by, diff, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
+
+-- name: ListApprovals :many
+SELECT * FROM extension_approval WHERE workspace_id = $1 AND extension_id = $2 ORDER BY created_at DESC, id DESC;
+
+-- name: GetDoc :one
+SELECT * FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2 AND collection = $3 AND doc_id = $4;
+
+-- name: PutDoc :exec
+INSERT INTO ext_store_doc (workspace_id, extension_id, collection, doc_id, data, size_bytes, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (extension_id, collection, doc_id) DO UPDATE SET data = EXCLUDED.data, size_bytes = EXCLUDED.size_bytes,
+    updated_at = EXCLUDED.updated_at;
+
+-- name: DeleteDoc :exec
+DELETE FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2 AND collection = $3 AND doc_id = $4;
+
+-- name: ListDocs :many
+SELECT * FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2 AND collection = $3 AND doc_id > $4
+ORDER BY doc_id LIMIT $5;
+
+-- name: StoreUsage :one
+SELECT count(*)::integer AS docs, COALESCE(sum(size_bytes), 0)::integer AS bytes
+FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2;

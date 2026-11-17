@@ -94,19 +94,20 @@ func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) 
 
 const createPlan = `-- name: CreatePlan :exec
 
-INSERT INTO plan (id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO plan (id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at, ext_calls_month)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type CreatePlanParams struct {
-	ID           uuid.UUID
-	Name         string
-	StorageBytes int64
-	CpuCores     int32
-	MemoryBytes  int64
-	ArchivedAt   *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID            uuid.UUID
+	Name          string
+	StorageBytes  int64
+	CpuCores      int32
+	MemoryBytes   int64
+	ArchivedAt    *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	ExtCallsMonth *int32
 }
 
 // Round 51b: plans (operator scope).
@@ -120,6 +121,7 @@ func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) error {
 		arg.ArchivedAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.ExtCallsMonth,
 	)
 	return err
 }
@@ -281,7 +283,7 @@ func (q *Queries) ListOperators(ctx context.Context) ([]Operator, error) {
 }
 
 const listPlans = `-- name: ListPlans :many
-SELECT id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at FROM plan ORDER BY archived_at IS NOT NULL, storage_bytes, name
+SELECT id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at, ext_calls_month FROM plan ORDER BY archived_at IS NOT NULL, storage_bytes, name
 `
 
 func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
@@ -302,6 +304,7 @@ func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
 			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExtCallsMonth,
 		); err != nil {
 			return nil, err
 		}
@@ -456,7 +459,7 @@ func (q *Queries) Overview(ctx context.Context, arg OverviewParams) ([]OverviewR
 }
 
 const planByID = `-- name: PlanByID :one
-SELECT id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at FROM plan WHERE id = $1
+SELECT id, name, storage_bytes, cpu_cores, memory_bytes, archived_at, created_at, updated_at, ext_calls_month FROM plan WHERE id = $1
 `
 
 func (q *Queries) PlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
@@ -471,6 +474,7 @@ func (q *Queries) PlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExtCallsMonth,
 	)
 	return i, err
 }
@@ -636,18 +640,20 @@ func (q *Queries) UnusedBackupCodes(ctx context.Context, operatorID uuid.UUID) (
 }
 
 const updatePlan = `-- name: UpdatePlan :exec
-UPDATE plan SET name = $2, storage_bytes = $3, cpu_cores = $4, memory_bytes = $5, archived_at = $6, updated_at = $7
+UPDATE plan SET name = $2, storage_bytes = $3, cpu_cores = $4, memory_bytes = $5, archived_at = $6, updated_at = $7,
+    ext_calls_month = $8
 WHERE id = $1
 `
 
 type UpdatePlanParams struct {
-	ID           uuid.UUID
-	Name         string
-	StorageBytes int64
-	CpuCores     int32
-	MemoryBytes  int64
-	ArchivedAt   *time.Time
-	UpdatedAt    time.Time
+	ID            uuid.UUID
+	Name          string
+	StorageBytes  int64
+	CpuCores      int32
+	MemoryBytes   int64
+	ArchivedAt    *time.Time
+	UpdatedAt     time.Time
+	ExtCallsMonth *int32
 }
 
 func (q *Queries) UpdatePlan(ctx context.Context, arg UpdatePlanParams) error {
@@ -659,6 +665,7 @@ func (q *Queries) UpdatePlan(ctx context.Context, arg UpdatePlanParams) error {
 		arg.MemoryBytes,
 		arg.ArchivedAt,
 		arg.UpdatedAt,
+		arg.ExtCallsMonth,
 	)
 	return err
 }

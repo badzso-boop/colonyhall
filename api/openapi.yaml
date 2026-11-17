@@ -802,6 +802,187 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /workshop/extensions:
+    get:
+      operationId: listExtensions
+      tags: [workshop]
+      description: Owner and admins (round 56b). The workspace's extensions with their versions (without code).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExtensionList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createExtension
+      tags: [workshop]
+      description: |
+        Owner and admins. Adds an extension (a draft) and its bot: an agent
+        without a machine, named here (default x-<slug>), that writes the
+        extension's messages and makes its calls traceable. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateExtensionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getExtension
+      tags: [workshop]
+      description: Owner and admins.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteExtension
+      tags: [workshop]
+      description: Owner and admins. Grants revoked, the bot archived; versions and calls stay in the log. Audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/versions:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: addExtensionVersion
+      tags: [workshop]
+      description: |
+        Owner and admins. A new version: the manifest (tools, connectors,
+        egress hosts, store collections) and, for js tools, the TypeScript
+        or JavaScript source, compiled here. It is not live until approved;
+        the answer shows what it adds compared with the live version.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AddExtensionVersionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ExtensionVersion" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/versions/{version}:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getExtensionVersion
+      tags: [workshop]
+      description: Owner and admins. The version with its manifest, source and what it adds compared with the live one.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExtensionVersion" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/versions/{version}/approve:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      operationId: approveExtensionVersion
+      tags: [workshop]
+      description: Owner and admins. Makes the version live; the approval and what it added are recorded. Audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/versions/{version}/test:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      operationId: testExtensionTool
+      tags: [workshop]
+      description: |
+        Owner and admins. Runs one tool of the version (approved or not) as
+        the extension's bot. A real call that a person started: no approval
+        is asked; it is logged as a test.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TestExtensionToolRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExtensionTestResult" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/rollback:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: rollbackExtension
+      tags: [workshop]
+      description: Owner and admins. Makes an earlier approved version live again. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RollbackExtensionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/enabled:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setExtensionEnabled
+      tags: [workshop]
+      description: Owner and admins. Switches the extension off, or on again with its live version. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ExtensionEnabledRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/approval:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setExtensionApproval
+      tags: [workshop]
+      description: Owner only. Switches off (or on) the approval of the extension's write and external tools. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorApprovalRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/take-over:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: takeOverExtension
+      tags: [workshop]
+      description: Owner and admins. Becomes the extension's maintainer (its former maintainer is no longer an admin). Audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /workshop/grants:
     get:
       operationId: listToolGrants
@@ -5373,7 +5554,7 @@ components:
       required: [agent_id, target_kind]
       properties:
         agent_id: { type: string, format: uuid }
-        target_kind: { type: string, enum: [connector, workshop] }
+        target_kind: { type: string, enum: [connector, extension, workshop] }
         target_id: { type: string, format: uuid }
     ToolCallEntry:
       type: object
@@ -5397,6 +5578,114 @@ components:
       required: [calls]
       properties:
         calls: { type: array, items: { $ref: "#/components/schemas/ToolCallEntry" } }
+    ExtensionToolSummary:
+      type: object
+      required: [name, kind, risk]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [http, js] }
+        risk: { $ref: "#/components/schemas/ToolRisk" }
+        description: { type: string }
+    ExtensionVersionSummary:
+      type: object
+      required: [version, approved, created_at, created_by, tools]
+      properties:
+        version: { type: integer }
+        approved: { type: boolean }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string, format: uuid }
+        tools: { type: array, items: { $ref: "#/components/schemas/ExtensionToolSummary" } }
+    Extension:
+      type: object
+      required: [id, slug, title, description, bot_id, state, approval_off, versions, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, description: "Its tools are x_<slug>__<tool> in the gateway" }
+        title: { type: string }
+        description: { type: string }
+        bot_id: { type: string, format: uuid }
+        bot_handle: { type: string }
+        maintainer_handle: { type: string }
+        state: { type: string, enum: [draft, live, disabled] }
+        live_version: { type: integer }
+        approval_off: { type: boolean }
+        disabled_reason: { type: string }
+        versions: { type: array, items: { $ref: "#/components/schemas/ExtensionVersionSummary" } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ExtensionList:
+      type: object
+      required: [extensions, runner_available]
+      properties:
+        extensions: { type: array, items: { $ref: "#/components/schemas/Extension" } }
+        runner_available: { type: boolean, description: "The code runner is configured (COLONY_EXT_RUNNER_URL): js tools can run" }
+    CreateExtensionRequest:
+      type: object
+      required: [slug, title]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{1,15}$" }
+        title: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 2000 }
+        bot_handle: { type: string, maxLength: 40, description: "The bot's handle; default x-<slug>" }
+        bot_name: { type: string, maxLength: 80, description: "The bot's display name; default the title" }
+    ExtensionManifest:
+      type: object
+      description: |
+        docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind
+        http or js, risk, input schema; js: fn; http: request with connector,
+        method, path, query, headers, body, and output with pick and
+        max_items), connectors, egress hosts and store collections.
+      additionalProperties: true
+    ExtensionDiff:
+      type: object
+      required: [code_changed]
+      properties:
+        new_connectors: { type: array, items: { type: string } }
+        new_egress: { type: array, items: { type: string } }
+        new_store: { type: array, items: { type: string } }
+        new_tools: { type: array, items: { type: string } }
+        raised_risks: { type: object, additionalProperties: { type: string } }
+        code_changed: { type: boolean }
+    AddExtensionVersionRequest:
+      type: object
+      required: [manifest]
+      properties:
+        manifest: { $ref: "#/components/schemas/ExtensionManifest" }
+        source: { type: string, maxLength: 262144, description: The js tools' TypeScript or JavaScript (one module; its exports are the tools) }
+    ExtensionVersion:
+      type: object
+      required: [version, manifest, source, approved, diff, created_at, created_by]
+      properties:
+        version: { type: integer }
+        manifest: { $ref: "#/components/schemas/ExtensionManifest" }
+        source: { type: string }
+        approved: { type: boolean }
+        diff: { $ref: "#/components/schemas/ExtensionDiff" }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string, format: uuid }
+    TestExtensionToolRequest:
+      type: object
+      required: [tool]
+      properties:
+        tool: { type: string, maxLength: 24 }
+        input: { type: object, additionalProperties: true }
+    ExtensionTestResult:
+      type: object
+      required: [output, is_error, logs]
+      properties:
+        output: { type: string }
+        is_error: { type: boolean }
+        logs: { type: array, items: { type: string } }
+    RollbackExtensionRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+    ExtensionEnabledRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
     HostStorage:
       type: object
       required: [state]
@@ -6545,6 +6834,7 @@ components:
         storage_bytes: { type: integer, format: int64 }
         cpu_cores: { type: integer, description: What a hosted guard will get (not enforced yet) }
         memory_bytes: { type: integer, format: int64, description: What a hosted guard will get (not enforced yet) }
+        ext_calls_month: { type: integer, minimum: 0, description: "The Workshop's monthly call budget (round 56b); 0 is unlimited" }
         workspaces: { type: integer, description: Workspaces on the plan }
         archived_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
@@ -6562,6 +6852,7 @@ components:
         storage_bytes: { type: integer, format: int64, minimum: 1 }
         cpu_cores: { type: integer, minimum: 1, maximum: 1024 }
         memory_bytes: { type: integer, format: int64, minimum: 1 }
+        ext_calls_month: { type: integer, minimum: 0, maximum: 100000000, description: "The Workshop's monthly call budget; 0 or absent: unlimited" }
     PlanPatchRequest:
       type: object
       properties:
@@ -6569,6 +6860,7 @@ components:
         storage_bytes: { type: integer, format: int64, minimum: 1 }
         cpu_cores: { type: integer, minimum: 1, maximum: 1024 }
         memory_bytes: { type: integer, format: int64, minimum: 1 }
+        ext_calls_month: { type: integer, minimum: 0, maximum: 100000000, description: 0 is unlimited }
         archived: { type: boolean }
         confirm_over_quota: { type: boolean, description: Go ahead although a workspace on the plan would be full }
     AssignPlanRequest:
@@ -6592,6 +6884,7 @@ components:
         storage_bytes: { type: integer, format: int64 }
         cpu_cores: { type: integer }
         memory_bytes: { type: integer, format: int64 }
+        ext_calls_month: { type: integer, description: "The Workshop's monthly call budget; absent or 0: unlimited" }
     BreakGlassRequest:
       type: object
       required: [minutes]

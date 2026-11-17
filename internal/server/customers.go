@@ -65,7 +65,8 @@ func (c *customers) SetPlan(ctx context.Context, id ids.ID, plan *operator.Plan,
 	}
 	var p *files.Plan
 	if plan != nil {
-		p = &files.Plan{ID: plan.ID, Name: plan.Name, StorageBytes: plan.StorageBytes, CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes}
+		p = &files.Plan{ID: plan.ID, Name: plan.Name, StorageBytes: plan.StorageBytes, CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes,
+			ExtCallsMonth: plan.ExtCallsMonth}
 	}
 	if _, err := c.files.SetPlan(db.WithWorkspace(ctx, id), id, p, confirmOverQuota); err != nil {
 		return operator.Customer{}, err
@@ -77,7 +78,7 @@ func (c *customers) SetPlan(ctx context.Context, id ids.ID, plan *operator.Plan,
 // it is still on that plan.
 func (c *customers) RefreshPlan(ctx context.Context, id ids.ID, plan operator.Plan) (bool, error) {
 	return c.files.RefreshPlan(db.WithWorkspace(ctx, id), id, files.Plan{ID: plan.ID, Name: plan.Name, StorageBytes: plan.StorageBytes,
-		CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes})
+		CPUCores: plan.CPUCores, MemoryBytes: plan.MemoryBytes, ExtCallsMonth: plan.ExtCallsMonth})
 }
 
 // CheckPlan tells, from the overview's numbers, what the plan would do.

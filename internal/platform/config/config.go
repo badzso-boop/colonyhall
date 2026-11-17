@@ -95,6 +95,91 @@ type Config struct {
 	// reach (round 56a, COLONY_EGRESS_ALLOW: CIDRs, addresses and host
 	// names). Empty: public https only. Refused in multi-tenant mode.
 	EgressAllow egress.Policy
+	// Ext is the Workshop's code runner (round 56b): its address and token
+	// on the server, its own settings in the ext-runner role, and the
+	// limits of a call (COLONY_EXT_*; the server's owner tunes them).
+	Ext Ext
+}
+
+// Ext configures the Workshop's code runner.
+type Ext struct {
+	RunnerURL   string // COLONY_EXT_RUNNER_URL (server): empty = no code tools
+	RunnerToken string // COLONY_EXT_RUNNER_TOKEN (both): shared secret, at least 32 characters
+	HostAddr    string // COLONY_EXT_HOST_ADDR (server): the internal listener the runner calls back, default :8096
+	RunnerAddr  string // COLONY_EXT_RUNNER_ADDR (runner): default :8095
+	ServerURL   string // COLONY_EXT_SERVER_URL (runner): the server's internal listener, e.g. http://server:8096
+
+	MemoryMB             int           // COLONY_EXT_MEMORY_MB (64)
+	Timeout              time.Duration // COLONY_EXT_TIMEOUT (10s)
+	OutputKB             int           // COLONY_EXT_OUTPUT_KB (256)
+	HostCalls            int           // COLONY_EXT_HOST_CALLS (50)
+	ConcurrencyWorkspace int           // COLONY_EXT_CONCURRENCY_WORKSPACE (4)
+	ConcurrencyTotal     int           // COLONY_EXT_CONCURRENCY_TOTAL (16)
+	// COLONY_EXT_DISABLE_AFTER "5/10/10m": an extension is switched off
+	// after this many failed calls in a row, or this many in the window.
+	DisableConsecutive int
+	DisableErrors      int
+	DisableWindow      time.Duration
+}
+
+// RoleExtRunner runs only the Workshop's code runner (round 56b).
+const RoleExtRunner = "ext-runner"
+
+func extFromEnv() (Ext, error) {
+	e := Ext{RunnerURL: os.Getenv("COLONY_EXT_RUNNER_URL"), RunnerToken: os.Getenv("COLONY_EXT_RUNNER_TOKEN"),
+		HostAddr: getenv("COLONY_EXT_HOST_ADDR", ":8096"), RunnerAddr: getenv("COLONY_EXT_RUNNER_ADDR", ":8095"),
+		ServerURL: os.Getenv("COLONY_EXT_SERVER_URL")}
+	ints := []struct {
+		key      string
+		dst      *int
+		def, max int
+	}{
+		{"COLONY_EXT_MEMORY_MB", &e.MemoryMB, 64, 1024},
+		{"COLONY_EXT_OUTPUT_KB", &e.OutputKB, 256, 4096},
+		{"COLONY_EXT_HOST_CALLS", &e.HostCalls, 50, 1000},
+		{"COLONY_EXT_CONCURRENCY_WORKSPACE", &e.ConcurrencyWorkspace, 4, 256},
+		{"COLONY_EXT_CONCURRENCY_TOTAL", &e.ConcurrencyTotal, 16, 1024},
+	}
+	for _, x := range ints {
+		*x.dst = x.def
+		if v := os.Getenv(x.key); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 1 || n > x.max {
+				return e, fmt.Errorf("config: %s must be 1–%d, got %q", x.key, x.max, v)
+			}
+			*x.dst = n
+		}
+	}
+	e.Timeout = 10 * time.Second
+	if v := os.Getenv("COLONY_EXT_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 100*time.Millisecond || d > 5*time.Minute {
+			return e, fmt.Errorf("config: COLONY_EXT_TIMEOUT must be a duration between 100ms and 5m, got %q", v)
+		}
+		e.Timeout = d
+	}
+	e.DisableConsecutive, e.DisableErrors, e.DisableWindow = 5, 10, 10*time.Minute
+	if v := os.Getenv("COLONY_EXT_DISABLE_AFTER"); v != "" {
+		parts := strings.Split(v, "/")
+		var a, b int
+		var w time.Duration
+		var err error
+		if len(parts) == 3 {
+			if a, err = strconv.Atoi(parts[0]); err == nil {
+				if b, err = strconv.Atoi(parts[1]); err == nil {
+					w, err = time.ParseDuration(parts[2])
+				}
+			}
+		}
+		if len(parts) != 3 || err != nil || a < 1 || b < 1 || w < time.Minute {
+			return e, fmt.Errorf("config: COLONY_EXT_DISABLE_AFTER must look like 5/10/10m, got %q", v)
+		}
+		e.DisableConsecutive, e.DisableErrors, e.DisableWindow = a, b, w
+	}
+	if (e.RunnerURL != "" || os.Getenv("COLONY_ROLE") == RoleExtRunner) && len(e.RunnerToken) < 32 {
+		return e, fmt.Errorf("config: COLONY_EXT_RUNNER_TOKEN must be at least 32 characters when the code runner is used")
+	}
+	return e, nil
 }
 
 // Environments.
@@ -145,6 +230,10 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	ext, err := extFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
 	egressAllow, err := egress.ParsePolicy(os.Getenv("COLONY_EGRESS_ALLOW"))
 	if err != nil {
 		return Config{}, fmt.Errorf("config: COLONY_EGRESS_ALLOW: %w", err)
@@ -158,6 +247,7 @@ func FromEnv() (Config, error) {
 		OperatorDevAccess:  os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
 		SecretKeys:         keys,
 		EgressAllow:        egressAllow,
+		Ext:                ext,
 		OperatorAllowlist:  opAllow,
 		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
 		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
@@ -200,8 +290,17 @@ func FromEnv() (Config, error) {
 	if u, err := url.Parse(c.SourceURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return c, fmt.Errorf("config: COLONY_SOURCE_URL must be an http(s) address, got %q", c.SourceURL)
 	}
-	if c.Role != "all" {
-		return c, fmt.Errorf("config: COLONY_ROLE=%q is not supported yet; use \"all\"", c.Role)
+	switch c.Role {
+	case "all":
+	case RoleExtRunner:
+		// The code runner needs no database: only the server's internal
+		// address and the shared token (round 56b).
+		if c.Ext.ServerURL == "" {
+			return c, fmt.Errorf("config: COLONY_EXT_SERVER_URL is required when COLONY_ROLE=ext-runner")
+		}
+		return c, nil
+	default:
+		return c, fmt.Errorf("config: COLONY_ROLE=%q is not supported; use \"all\" or \"ext-runner\"", c.Role)
 	}
 	switch c.Store {
 	case "memory":

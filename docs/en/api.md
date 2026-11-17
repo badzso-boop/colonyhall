@@ -40,7 +40,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [search](#search) (1)
 - [sidebar](#sidebar) (8)
 - [wiki](#wiki) (8)
-- [workshop](#workshop) (12)
+- [workshop](#workshop) (24)
 - [Schemas](#schemas)
 
 ## activity
@@ -3595,6 +3595,216 @@ Request body (`application/json`, required): [ToolRiskRequest](#toolriskrequest)
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
+### `GET /workshop/extensions`
+
+`listExtensions` · Auth: signed in
+
+Owner and admins (round 56b). The workspace's extensions with their versions (without code).
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ExtensionList](#extensionlist) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions`
+
+`createExtension` · Auth: signed in
+
+Owner and admins. Adds an extension (a draft) and its bot: an agent
+without a machine, named here (default x-<slug>), that writes the
+extension's messages and makes its calls traceable. Audited.
+
+Request body (`application/json`, required): [CreateExtensionRequest](#createextensionrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Created: [Extension](#extension) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /workshop/extensions/{extensionId}`
+
+`deleteExtension` · Auth: signed in
+
+Owner and admins. Grants revoked, the bot archived; versions and calls stay in the log. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Removed |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/extensions/{extensionId}`
+
+`getExtension` · Auth: signed in
+
+Owner and admins.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Extension](#extension) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /workshop/extensions/{extensionId}/approval`
+
+`setExtensionApproval` · Auth: signed in
+
+Owner only. Switches off (or on) the approval of the extension's write and external tools. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [ConnectorApprovalRequest](#connectorapprovalrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Extension](#extension) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /workshop/extensions/{extensionId}/enabled`
+
+`setExtensionEnabled` · Auth: signed in
+
+Owner and admins. Switches the extension off, or on again with its live version. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [ExtensionEnabledRequest](#extensionenabledrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Extension](#extension) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions/{extensionId}/rollback`
+
+`rollbackExtension` · Auth: signed in
+
+Owner and admins. Makes an earlier approved version live again. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [RollbackExtensionRequest](#rollbackextensionrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Extension](#extension) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions/{extensionId}/take-over`
+
+`takeOverExtension` · Auth: signed in
+
+Owner and admins. Becomes the extension's maintainer (its former maintainer is no longer an admin). Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Extension](#extension) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions/{extensionId}/versions`
+
+`addExtensionVersion` · Auth: signed in
+
+Owner and admins. A new version: the manifest (tools, connectors,
+egress hosts, store collections) and, for js tools, the TypeScript
+or JavaScript source, compiled here. It is not live until approved;
+the answer shows what it adds compared with the live version.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [AddExtensionVersionRequest](#addextensionversionrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Created: [ExtensionVersion](#extensionversion) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/extensions/{extensionId}/versions/{version}`
+
+`getExtensionVersion` · Auth: signed in
+
+Owner and admins. The version with its manifest, source and what it adds compared with the live one.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+| `version` | path | integer | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ExtensionVersion](#extensionversion) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions/{extensionId}/versions/{version}/approve`
+
+`approveExtensionVersion` · Auth: signed in
+
+Owner and admins. Makes the version live; the approval and what it added are recorded. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+| `version` | path | integer | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Extension](#extension) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions/{extensionId}/versions/{version}/test`
+
+`testExtensionTool` · Auth: signed in
+
+Owner and admins. Runs one tool of the version (approved or not) as
+the extension's bot. A real call that a person started: no approval
+is asked; it is logged as a test.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+| `version` | path | integer | yes |  |
+
+Request body (`application/json`, required): [TestExtensionToolRequest](#testextensiontoolrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ExtensionTestResult](#extensiontestresult) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `GET /workshop/grants`
 
 `listToolGrants` · Auth: signed in
@@ -3738,6 +3948,13 @@ Type: string
 | --- | --- | --- | --- |
 | `actors` | [Actor](#actor)[] | yes |  |
 
+### AddExtensionVersionRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `manifest` | [ExtensionManifest](#extensionmanifest) | yes | docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind http or js, risk, input schema; js: fn; http: request with connector, method, path, query, headers, body, and output with pick and max_items), connectors, egress hosts and store collections. |
+| `source` | string |  | The js tools' TypeScript or JavaScript (one module; its exports are the tools) |
+
 ### AddMemberRequest
 
 | Field | Type | Required | Description |
@@ -3771,7 +3988,7 @@ Type: string
 | --- | --- | --- | --- |
 | `agent_id` | string (uuid) | yes |  |
 | `target_id` | string (uuid) |  |  |
-| `target_kind` | string | yes | One of: `connector`, `workshop`. |
+| `target_kind` | string | yes | One of: `connector`, `extension`, `workshop`. |
 
 ### AdminStatus
 
@@ -4451,6 +4668,16 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `name` | string | yes |  |
 | `slug` | string | yes | The subdomain: 3–40 lower-case letters, digits and single hyphens, not reserved |
 
+### CreateExtensionRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `bot_handle` | string |  | The bot's handle; default x-<slug> |
+| `bot_name` | string |  | The bot's display name; default the title |
+| `description` | string |  |  |
+| `slug` | string | yes |  |
+| `title` | string | yes |  |
+
 ### CreateFileFetchRequest
 
 | Field | Type | Required | Description |
@@ -4960,6 +5187,95 @@ Sent to the item's owner alone; ids only.
 | `quota_bytes` | integer (int64) | yes |  |
 | `state` | [StorageState](#storagestate) | yes | One of: `ok`, `warning_80`, `warning_95`, `full`. |
 | `used_bytes` | integer (int64) | yes |  |
+
+### Extension
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `approval_off` | boolean | yes |  |
+| `bot_handle` | string |  |  |
+| `bot_id` | string (uuid) | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `description` | string | yes |  |
+| `disabled_reason` | string |  |  |
+| `id` | string (uuid) | yes |  |
+| `live_version` | integer |  |  |
+| `maintainer_handle` | string |  |  |
+| `slug` | string | yes | Its tools are x_<slug>__<tool> in the gateway |
+| `state` | string | yes | One of: `draft`, `live`, `disabled`. |
+| `title` | string | yes |  |
+| `updated_at` | string (date-time) | yes |  |
+| `versions` | [ExtensionVersionSummary](#extensionversionsummary)[] | yes |  |
+
+### ExtensionDiff
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code_changed` | boolean | yes |  |
+| `new_connectors` | string[] |  |  |
+| `new_egress` | string[] |  |  |
+| `new_store` | string[] |  |  |
+| `new_tools` | string[] |  |  |
+| `raised_risks` | object |  |  |
+
+### ExtensionEnabledRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | yes |  |
+
+### ExtensionList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `extensions` | [Extension](#extension)[] | yes |  |
+| `runner_available` | boolean | yes | The code runner is configured (COLONY_EXT_RUNNER_URL): js tools can run |
+
+### ExtensionManifest
+
+docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind
+http or js, risk, input schema; js: fn; http: request with connector,
+method, path, query, headers, body, and output with pick and
+max_items), connectors, egress hosts and store collections.
+
+### ExtensionTestResult
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `is_error` | boolean | yes |  |
+| `logs` | string[] | yes |  |
+| `output` | string | yes |  |
+
+### ExtensionToolSummary
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `description` | string |  |  |
+| `kind` | string | yes | One of: `http`, `js`. |
+| `name` | string | yes |  |
+| `risk` | [ToolRisk](#toolrisk) | yes | One of: `read`, `write`, `external`. |
+
+### ExtensionVersion
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `approved` | boolean | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `created_by` | string (uuid) | yes |  |
+| `diff` | [ExtensionDiff](#extensiondiff) | yes |  |
+| `manifest` | [ExtensionManifest](#extensionmanifest) | yes | docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind http or js, risk, input schema; js: fn; http: request with connector, method, path, query, headers, body, and output with pick and max_items), connectors, egress hosts and store collections. |
+| `source` | string | yes |  |
+| `version` | integer | yes |  |
+
+### ExtensionVersionSummary
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `approved` | boolean | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `created_by` | string (uuid) | yes |  |
+| `tools` | [ExtensionToolSummary](#extensiontoolsummary)[] | yes |  |
+| `version` | integer | yes |  |
 
 ### FailFileFetchRequest
 
@@ -5714,6 +6030,7 @@ Type: string
 | `archived_at` | string (date-time) |  |  |
 | `cpu_cores` | integer | yes | What a hosted guard will get (not enforced yet) |
 | `created_at` | string (date-time) | yes |  |
+| `ext_calls_month` | integer |  | The Workshop's monthly call budget (round 56b); 0 is unlimited |
 | `id` | string (uuid) | yes |  |
 | `memory_bytes` | integer (int64) | yes | What a hosted guard will get (not enforced yet) |
 | `name` | string | yes |  |
@@ -5743,6 +6060,7 @@ Type: string
 | `archived` | boolean |  |  |
 | `confirm_over_quota` | boolean |  | Go ahead although a workspace on the plan would be full |
 | `cpu_cores` | integer |  |  |
+| `ext_calls_month` | integer |  | 0 is unlimited |
 | `memory_bytes` | integer (int64) |  |  |
 | `name` | string |  |  |
 | `storage_bytes` | integer (int64) |  |  |
@@ -5752,6 +6070,7 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `cpu_cores` | integer | yes |  |
+| `ext_calls_month` | integer |  | The Workshop's monthly call budget; 0 or absent: unlimited |
 | `memory_bytes` | integer (int64) | yes |  |
 | `name` | string | yes |  |
 | `storage_bytes` | integer (int64) | yes |  |
@@ -6006,6 +6325,12 @@ The note text is fixed by the server; agents cannot post free text silently.
 One of: `owner`, `admin`, `member`, `observer`
 
 Type: string
+
+### RollbackExtensionRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `version` | integer | yes |  |
 
 ### Run
 
@@ -6475,6 +6800,13 @@ Type: string
 | `status` | string | yes | One of: `running`, `finished`, `killed`, `error`. |
 | `thread_root_id` | string (uuid), nullable |  |  |
 
+### TestExtensionToolRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `input` | object |  |  |
+| `tool` | string | yes |  |
+
 ### Thread
 
 | Field | Type | Required | Description |
@@ -6791,6 +7123,7 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `cpu_cores` | integer | yes |  |
+| `ext_calls_month` | integer |  | The Workshop's monthly call budget; absent or 0: unlimited |
 | `memory_bytes` | integer (int64) | yes |  |
 | `name` | string | yes |  |
 | `storage_bytes` | integer (int64) | yes |  |

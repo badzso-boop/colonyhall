@@ -66,6 +66,10 @@ services:
       # addresses never locked out by the login limits (IPs or CIDRs, comma-separated).
       COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
       COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
+      # Round 56b: the Workshop's code runner (the ext-runner service below;
+      # a fixed development token).
+      COLONY_EXT_RUNNER_URL: http://ext-runner:8095
+      COLONY_EXT_RUNNER_TOKEN: dev-ext-runner-token-do-not-use-in-production
     volumes:
       - filesdata:/data/files
     ports:
@@ -74,6 +78,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # Round 56b: the Workshop's code runner (COLONY_ROLE=ext-runner).
+  ext-runner:
+    restart: unless-stopped
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g
+    pids_limit: 64
+    environment:
+      COLONY_ROLE: ext-runner
+      COLONY_EXT_RUNNER_TOKEN: dev-ext-runner-token-do-not-use-in-production
+      COLONY_EXT_SERVER_URL: http://server:8096
 
 volumes:
   pgdata:

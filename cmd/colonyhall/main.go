@@ -23,7 +23,9 @@ import (
 	"syscall"
 	"time"
 
+	"colonyhall/internal/extrunner"
 	"colonyhall/internal/modules/git"
+	"colonyhall/internal/modules/workshop"
 	"colonyhall/internal/platform/config"
 	"colonyhall/internal/platform/db/system"
 	"colonyhall/internal/server"
@@ -223,6 +225,18 @@ func run(logger *slog.Logger) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if cfg.Role == config.RoleExtRunner {
+		return runExtRunner(ctx, cfg, logger)
+	}
+	// Round 56b: the Workshop's code tools run in the ext-runner role; the
+	// server sends jobs there and answers their host calls on an internal
+	// listener (never the public one).
+	var extEngine extrunner.Engine
+	var extHosts *extrunner.Hosts
+	if cfg.Ext.RunnerURL != "" {
+		extHosts = &extrunner.Hosts{}
+		extEngine = &extrunner.Client{URL: cfg.Ext.RunnerURL, Token: cfg.Ext.RunnerToken, Hosts: extHosts}
+	}
 
 	app, err := server.New(ctx, server.Options{
 		Store:              cfg.Store,
@@ -249,6 +263,8 @@ func run(logger *slog.Logger) error {
 		OperatorDevAccess:  cfg.OperatorDevAccess,
 		OperatorAllowlist:  cfg.OperatorAllowlist,
 		EgressPolicy:       cfg.EgressAllow,
+		ExtEngine:          extEngine,
+		ExtLimits:          workshopLimits(cfg.Ext),
 	})
 	if err != nil {
 		return err
@@ -276,8 +292,14 @@ func run(logger *slog.Logger) error {
 	// spare the WebSockets and the MCP stream); the server bounds the rest.
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: app.Handler, ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() { errCh <- srv.ListenAndServe() }()
+	var hostSrv *http.Server
+	if extHosts != nil {
+		hostSrv = &http.Server{Addr: cfg.Ext.HostAddr, Handler: extHosts.Handler(), ReadHeaderTimeout: 10 * time.Second}
+		go func() { errCh <- hostSrv.ListenAndServe() }()
+		logger.Info("workshop code runner", "runner", cfg.Ext.RunnerURL, "host_listener", cfg.Ext.HostAddr)
+	}
 	logger.Info("colonyhall listening", "addr", cfg.HTTPAddr, "store", cfg.Store, "version", server.Version)
 
 	select {
@@ -290,6 +312,9 @@ func run(logger *slog.Logger) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	logger.Info("shutting down")
+	if hostSrv != nil {
+		_ = hostSrv.Shutdown(shutdownCtx)
+	}
 	return srv.Shutdown(shutdownCtx)
 }
 
@@ -307,4 +332,32 @@ func ensureTempDir() error {
 		return fmt.Errorf("TMPDIR %s: %w", dir, err)
 	}
 	return nil
+}
+
+// runExtRunner is the ext-runner role (round 56b): it runs the Workshop's
+// code tools and nothing else; no database, no secrets.
+func runExtRunner(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	srv := &http.Server{Addr: cfg.Ext.RunnerAddr, ReadHeaderTimeout: 10 * time.Second,
+		Handler: (&extrunner.Server{Engine: &extrunner.QJS{MemoryMB: cfg.Ext.MemoryMB, Slots: cfg.Ext.ConcurrencyTotal},
+			Token: cfg.Ext.RunnerToken, HostURL: cfg.Ext.ServerURL, Logger: logger}).Handler()}
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe() }()
+	logger.Info("colonyhall ext-runner listening", "addr", cfg.Ext.RunnerAddr, "memory_mb", cfg.Ext.MemoryMB,
+		"concurrency", cfg.Ext.ConcurrencyTotal, "version", server.Version)
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+	case <-ctx.Done():
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
+}
+
+func workshopLimits(e config.Ext) workshop.Limits {
+	return workshop.Limits{Run: extrunner.Limits{Timeout: e.Timeout, OutputBytes: e.OutputKB * 1024, HostCalls: e.HostCalls},
+		ConcurrencyWorkspace: e.ConcurrencyWorkspace, DisableConsecutive: e.DisableConsecutive,
+		DisableErrors: e.DisableErrors, DisableWindow: e.DisableWindow}
 }

@@ -66,6 +66,7 @@ func (e ActorKind) Valid() bool {
 // Defines values for AddToolGrantRequestTargetKind.
 const (
 	AddToolGrantRequestTargetKindConnector AddToolGrantRequestTargetKind = "connector"
+	AddToolGrantRequestTargetKindExtension AddToolGrantRequestTargetKind = "extension"
 	AddToolGrantRequestTargetKindWorkshop  AddToolGrantRequestTargetKind = "workshop"
 )
 
@@ -73,6 +74,8 @@ const (
 func (e AddToolGrantRequestTargetKind) Valid() bool {
 	switch e {
 	case AddToolGrantRequestTargetKindConnector:
+		return true
+	case AddToolGrantRequestTargetKindExtension:
 		return true
 	case AddToolGrantRequestTargetKindWorkshop:
 		return true
@@ -690,6 +693,45 @@ func (e DoctorCheckStatus) Valid() bool {
 	case DoctorCheckStatusOk:
 		return true
 	case DoctorCheckStatusWarn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExtensionState.
+const (
+	ExtensionStateDisabled ExtensionState = "disabled"
+	ExtensionStateDraft    ExtensionState = "draft"
+	ExtensionStateLive     ExtensionState = "live"
+)
+
+// Valid indicates whether the value is a known member of the ExtensionState enum.
+func (e ExtensionState) Valid() bool {
+	switch e {
+	case ExtensionStateDisabled:
+		return true
+	case ExtensionStateDraft:
+		return true
+	case ExtensionStateLive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExtensionToolSummaryKind.
+const (
+	ExtensionToolSummaryKindHttp ExtensionToolSummaryKind = "http"
+	ExtensionToolSummaryKindJs   ExtensionToolSummaryKind = "js"
+)
+
+// Valid indicates whether the value is a known member of the ExtensionToolSummaryKind enum.
+func (e ExtensionToolSummaryKind) Valid() bool {
+	switch e {
+	case ExtensionToolSummaryKindHttp:
+		return true
+	case ExtensionToolSummaryKindJs:
 		return true
 	default:
 		return false
@@ -2109,6 +2151,18 @@ type ActorList struct {
 	Actors []Actor `json:"actors"`
 }
 
+// AddExtensionVersionRequest defines model for AddExtensionVersionRequest.
+type AddExtensionVersionRequest struct {
+	// Manifest docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind
+	// http or js, risk, input schema; js: fn; http: request with connector,
+	// method, path, query, headers, body, and output with pick and
+	// max_items), connectors, egress hosts and store collections.
+	Manifest ExtensionManifest `json:"manifest"`
+
+	// Source The js tools' TypeScript or JavaScript (one module; its exports are the tools)
+	Source *string `json:"source,omitempty"`
+}
+
 // AddMemberRequest defines model for AddMemberRequest.
 type AddMemberRequest struct {
 	ActorId  *openapi_types.UUID   `json:"actor_id,omitempty"`
@@ -2896,6 +2950,18 @@ type CreateCustomerRequest struct {
 	Slug string `json:"slug"`
 }
 
+// CreateExtensionRequest defines model for CreateExtensionRequest.
+type CreateExtensionRequest struct {
+	// BotHandle The bot's handle; default x-<slug>
+	BotHandle *string `json:"bot_handle,omitempty"`
+
+	// BotName The bot's display name; default the title
+	BotName     *string `json:"bot_name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Slug        string  `json:"slug"`
+	Title       string  `json:"title"`
+}
+
 // CreateFileFetchRequest defines model for CreateFileFetchRequest.
 type CreateFileFetchRequest struct {
 	Path    string `json:"path"`
@@ -3231,6 +3297,101 @@ type EventAttachment struct {
 	Mime    string             `json:"mime"`
 	Name    string             `json:"name"`
 	Size    int64              `json:"size"`
+}
+
+// Extension defines model for Extension.
+type Extension struct {
+	ApprovalOff      bool               `json:"approval_off"`
+	BotHandle        *string            `json:"bot_handle,omitempty"`
+	BotId            openapi_types.UUID `json:"bot_id"`
+	CreatedAt        time.Time          `json:"created_at"`
+	Description      string             `json:"description"`
+	DisabledReason   *string            `json:"disabled_reason,omitempty"`
+	Id               openapi_types.UUID `json:"id"`
+	LiveVersion      *int               `json:"live_version,omitempty"`
+	MaintainerHandle *string            `json:"maintainer_handle,omitempty"`
+
+	// Slug Its tools are x_<slug>__<tool> in the gateway
+	Slug      string                    `json:"slug"`
+	State     ExtensionState            `json:"state"`
+	Title     string                    `json:"title"`
+	UpdatedAt time.Time                 `json:"updated_at"`
+	Versions  []ExtensionVersionSummary `json:"versions"`
+}
+
+// ExtensionState defines model for Extension.State.
+type ExtensionState string
+
+// ExtensionDiff defines model for ExtensionDiff.
+type ExtensionDiff struct {
+	CodeChanged   bool               `json:"code_changed"`
+	NewConnectors *[]string          `json:"new_connectors,omitempty"`
+	NewEgress     *[]string          `json:"new_egress,omitempty"`
+	NewStore      *[]string          `json:"new_store,omitempty"`
+	NewTools      *[]string          `json:"new_tools,omitempty"`
+	RaisedRisks   *map[string]string `json:"raised_risks,omitempty"`
+}
+
+// ExtensionEnabledRequest defines model for ExtensionEnabledRequest.
+type ExtensionEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ExtensionList defines model for ExtensionList.
+type ExtensionList struct {
+	Extensions []Extension `json:"extensions"`
+
+	// RunnerAvailable The code runner is configured (COLONY_EXT_RUNNER_URL): js tools can run
+	RunnerAvailable bool `json:"runner_available"`
+}
+
+// ExtensionManifest docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind
+// http or js, risk, input schema; js: fn; http: request with connector,
+// method, path, query, headers, body, and output with pick and
+// max_items), connectors, egress hosts and store collections.
+type ExtensionManifest map[string]interface{}
+
+// ExtensionTestResult defines model for ExtensionTestResult.
+type ExtensionTestResult struct {
+	IsError bool     `json:"is_error"`
+	Logs    []string `json:"logs"`
+	Output  string   `json:"output"`
+}
+
+// ExtensionToolSummary defines model for ExtensionToolSummary.
+type ExtensionToolSummary struct {
+	Description *string                  `json:"description,omitempty"`
+	Kind        ExtensionToolSummaryKind `json:"kind"`
+	Name        string                   `json:"name"`
+	Risk        ToolRisk                 `json:"risk"`
+}
+
+// ExtensionToolSummaryKind defines model for ExtensionToolSummary.Kind.
+type ExtensionToolSummaryKind string
+
+// ExtensionVersion defines model for ExtensionVersion.
+type ExtensionVersion struct {
+	Approved  bool               `json:"approved"`
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy openapi_types.UUID `json:"created_by"`
+	Diff      ExtensionDiff      `json:"diff"`
+
+	// Manifest docs/25-onfejlesztes-terv.md 13.4: tools (name, description, kind
+	// http or js, risk, input schema; js: fn; http: request with connector,
+	// method, path, query, headers, body, and output with pick and
+	// max_items), connectors, egress hosts and store collections.
+	Manifest ExtensionManifest `json:"manifest"`
+	Source   string            `json:"source"`
+	Version  int               `json:"version"`
+}
+
+// ExtensionVersionSummary defines model for ExtensionVersionSummary.
+type ExtensionVersionSummary struct {
+	Approved  bool                   `json:"approved"`
+	CreatedAt time.Time              `json:"created_at"`
+	CreatedBy openapi_types.UUID     `json:"created_by"`
+	Tools     []ExtensionToolSummary `json:"tools"`
+	Version   int                    `json:"version"`
 }
 
 // FailFileFetchRequest defines model for FailFileFetchRequest.
@@ -4100,9 +4261,12 @@ type Plan struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 
 	// CpuCores What a hosted guard will get (not enforced yet)
-	CpuCores  int                `json:"cpu_cores"`
-	CreatedAt time.Time          `json:"created_at"`
-	Id        openapi_types.UUID `json:"id"`
+	CpuCores  int       `json:"cpu_cores"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// ExtCallsMonth The Workshop's monthly call budget (round 56b); 0 is unlimited
+	ExtCallsMonth *int               `json:"ext_calls_month,omitempty"`
+	Id            openapi_types.UUID `json:"id"`
 
 	// MemoryBytes What a hosted guard will get (not enforced yet)
 	MemoryBytes  int64     `json:"memory_bytes"`
@@ -4134,19 +4298,25 @@ type PlanPatchRequest struct {
 	Archived *bool `json:"archived,omitempty"`
 
 	// ConfirmOverQuota Go ahead although a workspace on the plan would be full
-	ConfirmOverQuota *bool   `json:"confirm_over_quota,omitempty"`
-	CpuCores         *int    `json:"cpu_cores,omitempty"`
-	MemoryBytes      *int64  `json:"memory_bytes,omitempty"`
-	Name             *string `json:"name,omitempty"`
-	StorageBytes     *int64  `json:"storage_bytes,omitempty"`
+	ConfirmOverQuota *bool `json:"confirm_over_quota,omitempty"`
+	CpuCores         *int  `json:"cpu_cores,omitempty"`
+
+	// ExtCallsMonth 0 is unlimited
+	ExtCallsMonth *int    `json:"ext_calls_month,omitempty"`
+	MemoryBytes   *int64  `json:"memory_bytes,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	StorageBytes  *int64  `json:"storage_bytes,omitempty"`
 }
 
 // PlanRequest defines model for PlanRequest.
 type PlanRequest struct {
-	CpuCores     int    `json:"cpu_cores"`
-	MemoryBytes  int64  `json:"memory_bytes"`
-	Name         string `json:"name"`
-	StorageBytes int64  `json:"storage_bytes"`
+	CpuCores int `json:"cpu_cores"`
+
+	// ExtCallsMonth The Workshop's monthly call budget; 0 or absent: unlimited
+	ExtCallsMonth *int   `json:"ext_calls_month,omitempty"`
+	MemoryBytes   int64  `json:"memory_bytes"`
+	Name          string `json:"name"`
+	StorageBytes  int64  `json:"storage_bytes"`
 }
 
 // PlannerAccess defines model for PlannerAccess.
@@ -4400,6 +4570,11 @@ type RetractNoteRequest struct {
 
 // Role defines model for Role.
 type Role string
+
+// RollbackExtensionRequest defines model for RollbackExtensionRequest.
+type RollbackExtensionRequest struct {
+	Version int `json:"version"`
+}
 
 // Run defines model for Run.
 type Run struct {
@@ -4948,6 +5123,12 @@ type TerminalSummary struct {
 // TerminalSummaryStatus defines model for TerminalSummary.Status.
 type TerminalSummaryStatus string
 
+// TestExtensionToolRequest defines model for TestExtensionToolRequest.
+type TestExtensionToolRequest struct {
+	Input *map[string]interface{} `json:"input,omitempty"`
+	Tool  string                  `json:"tool"`
+}
+
 // Thread defines model for Thread.
 type Thread struct {
 	Replies []Message `json:"replies"`
@@ -5273,10 +5454,13 @@ type WikiRevisionList struct {
 
 // WorkspacePlan defines model for WorkspacePlan.
 type WorkspacePlan struct {
-	CpuCores     int    `json:"cpu_cores"`
-	MemoryBytes  int64  `json:"memory_bytes"`
-	Name         string `json:"name"`
-	StorageBytes int64  `json:"storage_bytes"`
+	CpuCores int `json:"cpu_cores"`
+
+	// ExtCallsMonth The Workshop's monthly call budget; absent or 0: unlimited
+	ExtCallsMonth *int   `json:"ext_calls_month,omitempty"`
+	MemoryBytes   int64  `json:"memory_bytes"`
+	Name          string `json:"name"`
+	StorageBytes  int64  `json:"storage_bytes"`
 }
 
 // WorkspaceStorage defines model for WorkspaceStorage.
@@ -5855,6 +6039,24 @@ type SetConnectorApprovalJSONRequestBody = ConnectorApprovalRequest
 
 // SetConnectorToolRiskJSONRequestBody defines body for SetConnectorToolRisk for application/json ContentType.
 type SetConnectorToolRiskJSONRequestBody = ToolRiskRequest
+
+// CreateExtensionJSONRequestBody defines body for CreateExtension for application/json ContentType.
+type CreateExtensionJSONRequestBody = CreateExtensionRequest
+
+// SetExtensionApprovalJSONRequestBody defines body for SetExtensionApproval for application/json ContentType.
+type SetExtensionApprovalJSONRequestBody = ConnectorApprovalRequest
+
+// SetExtensionEnabledJSONRequestBody defines body for SetExtensionEnabled for application/json ContentType.
+type SetExtensionEnabledJSONRequestBody = ExtensionEnabledRequest
+
+// RollbackExtensionJSONRequestBody defines body for RollbackExtension for application/json ContentType.
+type RollbackExtensionJSONRequestBody = RollbackExtensionRequest
+
+// AddExtensionVersionJSONRequestBody defines body for AddExtensionVersion for application/json ContentType.
+type AddExtensionVersionJSONRequestBody = AddExtensionVersionRequest
+
+// TestExtensionToolJSONRequestBody defines body for TestExtensionTool for application/json ContentType.
+type TestExtensionToolJSONRequestBody = TestExtensionToolRequest
 
 // AddToolGrantJSONRequestBody defines body for AddToolGrant for application/json ContentType.
 type AddToolGrantJSONRequestBody = AddToolGrantRequest

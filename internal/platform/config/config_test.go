@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"colonyhall/internal/platform/secretbox"
 )
@@ -152,5 +153,44 @@ func TestEgressAllow(t *testing.T) {
 	t.Setenv("COLONY_SECRET_KEYS", testKey(t))
 	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "COLONY_EGRESS_ALLOW") {
 		t.Fatalf("multi-tenant with an allow list: %v", err)
+	}
+}
+
+func TestExtRunnerSettings(t *testing.T) {
+	t.Setenv("COLONY_STORE", "memory")
+	c, err := FromEnv()
+	if err != nil || c.Ext.MemoryMB != 64 || c.Ext.Timeout != 10*time.Second || c.Ext.DisableConsecutive != 5 || c.Ext.DisableWindow != 10*time.Minute {
+		t.Fatalf("defaults: %+v %v", c.Ext, err)
+	}
+	t.Setenv("COLONY_EXT_MEMORY_MB", "128")
+	t.Setenv("COLONY_EXT_TIMEOUT", "30s")
+	t.Setenv("COLONY_EXT_DISABLE_AFTER", "3/6/5m")
+	if c, err = FromEnv(); err != nil || c.Ext.MemoryMB != 128 || c.Ext.Timeout != 30*time.Second || c.Ext.DisableErrors != 6 {
+		t.Fatalf("set: %+v %v", c.Ext, err)
+	}
+	for k, v := range map[string]string{"COLONY_EXT_MEMORY_MB": "0", "COLONY_EXT_TIMEOUT": "1h", "COLONY_EXT_DISABLE_AFTER": "5/10"} {
+		t.Run(k, func(t *testing.T) {
+			t.Setenv(k, v)
+			if _, err := FromEnv(); err == nil {
+				t.Fatalf("%s=%s accepted", k, v)
+			}
+		})
+	}
+	// A runner URL needs a long token.
+	t.Setenv("COLONY_EXT_RUNNER_URL", "http://ext-runner:8095")
+	t.Setenv("COLONY_EXT_RUNNER_TOKEN", "short")
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("a short runner token accepted")
+	}
+	// The runner role needs no database, only the server's address.
+	t.Setenv("COLONY_EXT_RUNNER_TOKEN", strings.Repeat("x", 40))
+	t.Setenv("COLONY_ROLE", "ext-runner")
+	t.Setenv("COLONY_STORE", "postgres")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "COLONY_EXT_SERVER_URL") {
+		t.Fatalf("runner without the server's address: %v", err)
+	}
+	t.Setenv("COLONY_EXT_SERVER_URL", "http://server:8096")
+	if c, err := FromEnv(); err != nil || c.Role != RoleExtRunner {
+		t.Fatalf("runner role: %+v %v", c.Role, err)
 	}
 }

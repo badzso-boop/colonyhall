@@ -12,10 +12,12 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
 	"colonyhall/internal/eventlog"
+	"colonyhall/internal/extrunner"
 	"colonyhall/internal/modules/approval"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/secrets"
@@ -66,6 +68,21 @@ type Service struct {
 	IDs    ids.Generator
 	Clock  clock.Clock
 	Logger *slog.Logger
+
+	// Round 56b: the extensions. Engine runs code tools (nil: no runner);
+	// Compiler builds them; Fetcher is their outbound HTTP; Bots creates
+	// their bots; Core calls Colonyhall's own tools; Budget is the plan's
+	// monthly call budget; Limits are COLONY_EXT_*.
+	Engine   extrunner.Engine
+	Compiler Compiler
+	Fetcher  Fetcher
+	Bots     Bots
+	Core     CoreTool
+	Budget   CallBudget
+	Limits   Limits
+
+	slotsMu sync.Mutex
+	slots   map[ids.ID]chan struct{}
 }
 
 func admin(by identity.Actor) error {
@@ -550,6 +567,10 @@ func (s *Service) AddGrant(ctx context.Context, by identity.Actor, agentID ids.I
 		if _, err := s.Store.GetConnector(ctx, by.WorkspaceID, targetID); err != nil {
 			return Grant{}, notFound(err)
 		}
+	case TargetExtension:
+		if _, err := s.Store.GetExtension(ctx, by.WorkspaceID, targetID); err != nil {
+			return Grant{}, notFound(err)
+		}
 	case TargetWorkshop:
 		targetID = ids.Nil
 	default:
@@ -646,6 +667,13 @@ func (s *Service) ListGrants(ctx context.Context, by identity.Actor) ([]GrantVie
 	for _, c := range cs {
 		names[c.ID] = c.Slug
 	}
+	es, err := s.Store.ListExtensions(ctx, by.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range es {
+		names[e.ID] = e.Slug
+	}
 	out := make([]GrantView, 0, len(gs))
 	for _, g := range gs {
 		v := GrantView{Grant: g, TargetName: names[g.TargetID]}
@@ -691,6 +719,10 @@ func (s *Service) ToolsFor(ctx context.Context, agent identity.Actor) ([]Gateway
 	}
 	var out []GatewayTool
 	for _, g := range gs {
+		if g.TargetKind == TargetExtension {
+			out = append(out, s.extensionTools(ctx, agent, g.TargetID)...)
+			continue
+		}
 		if g.TargetKind != TargetConnector {
 			continue
 		}
@@ -739,9 +771,20 @@ func (s *Service) Call(ctx context.Context, in CallInput) (Result, error) {
 	if caller.Halted || caller.State != identity.StateActive {
 		return Result{}, identity.ErrHalted
 	}
+	if strings.HasPrefix(in.Name, GatewayPrefix) {
+		return s.callExtension(ctx, caller, in)
+	}
 	slug, tool, ok := SplitGatewayName(in.Name)
 	if !ok {
 		return Result{}, ErrUnknownTool
+	}
+	release, err := s.acquire(caller.WorkspaceID)
+	if err != nil {
+		return Result{}, err
+	}
+	defer release()
+	if err := s.checkBudget(ctx, caller.WorkspaceID); err != nil {
+		return Result{}, err
 	}
 	c, err := s.connectorBySlug(ctx, caller.WorkspaceID, slug)
 	if err != nil {
@@ -809,13 +852,7 @@ func (s *Service) Call(ctx context.Context, in CallInput) (Result, error) {
 		return Result{}, fmt.Errorf("%s: %s", in.Name, errText(err))
 	}
 	size := len(res.Text)
-	if size > MaxResult {
-		cut := MaxResult
-		for cut > 0 && !utf8.RuneStart(res.Text[cut]) {
-			cut--
-		}
-		res.Text = res.Text[:cut] + fmt.Sprintf("\n… +%d bytes cut", size-cut)
-	}
+	res = cutResult(res)
 	outcome := OutcomeOK
 	if res.IsError {
 		outcome = OutcomeError
@@ -857,4 +894,18 @@ func origin(raw string) string {
 		return ""
 	}
 	return strings.ToLower(u.Scheme + "://" + u.Host)
+}
+
+// cutResult keeps a tool's answer within what the model gets.
+func cutResult(res Result) Result {
+	size := len(res.Text)
+	if size <= MaxResult {
+		return res
+	}
+	cut := MaxResult
+	for cut > 0 && !utf8.RuneStart(res.Text[cut]) {
+		cut--
+	}
+	res.Text = res.Text[:cut] + fmt.Sprintf("\n… +%d bytes cut", size-cut)
+	return res
 }

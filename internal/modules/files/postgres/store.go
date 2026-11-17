@@ -435,6 +435,10 @@ func (s *Store) SaveUsage(ctx context.Context, u files.Usage) error {
 		id := uuid.UUID(u.Plan.ID)
 		p.PlanID, p.PlanName, p.PlanStorageBytes, p.PlanCpuCores, p.PlanMemoryBytes =
 			&id, u.Plan.Name, u.Plan.StorageBytes, int32(u.Plan.CPUCores), u.Plan.MemoryBytes
+		if u.Plan.ExtCallsMonth > 0 {
+			n := int32(u.Plan.ExtCallsMonth)
+			p.PlanExtCallsMonth = &n
+		}
 	}
 	return s.q(ctx).SaveWorkspaceStorage(ctx, p)
 }
@@ -446,6 +450,9 @@ func usageOf(r sqlcgen.WorkspaceStorage) files.Usage {
 	if r.PlanID != nil {
 		u.Plan = &files.Plan{ID: ids.ID(*r.PlanID), Name: r.PlanName, StorageBytes: r.PlanStorageBytes,
 			CPUCores: int(r.PlanCpuCores), MemoryBytes: r.PlanMemoryBytes}
+		if r.PlanExtCallsMonth != nil {
+			u.Plan.ExtCallsMonth = int(*r.PlanExtCallsMonth)
+		}
 	}
 	return u
 }

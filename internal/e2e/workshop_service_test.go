@@ -458,3 +458,27 @@ func TestNewOriginNeedsTheSecretAgain(t *testing.T) {
 		t.Fatalf("another host with a new secret: %v", err)
 	}
 }
+
+// The plan's monthly budget counts the calls that ran this month.
+func TestMonthlyCallBudget(t *testing.T) {
+	e := newSvcEnv(t, true)
+	c := e.connector(t)
+	if _, err := e.svc.AddGrant(e.ctx, e.admin, e.agent.ID, workshop.TargetConnector, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	budget := 2
+	e.svc.Budget = func(context.Context, ids.ID) (*int, error) { return &budget, nil }
+	for i := 0; i < 2; i++ {
+		if _, err := e.svc.Call(e.ctx, workshop.CallInput{Name: "jira__search", Current: e.current(e.agent)}); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	if _, err := e.svc.Call(e.ctx, workshop.CallInput{Name: "jira__search", Current: e.current(e.agent)}); !errors.Is(err, workshop.ErrBudget) {
+		t.Fatalf("third call: %v", err)
+	}
+	// A new month starts the count again.
+	e.clock.Advance(31 * 24 * time.Hour)
+	if _, err := e.svc.Call(e.ctx, workshop.CallInput{Name: "jira__search", Current: e.current(e.agent)}); err != nil {
+		t.Fatalf("next month: %v", err)
+	}
+}

@@ -163,10 +163,48 @@ services:
       # a Gitea on the LAN); empty: public https only. Refused in
       # multi-tenant mode.
       COLONY_EGRESS_ALLOW: ${COLONY_EGRESS_ALLOW:-}
+      # Round 56b (docs/25-onfejlesztes-terv.md 13.5): the Workshop's code
+      # runner. The server sends jobs to COLONY_EXT_RUNNER_URL and answers
+      # their host calls on COLONY_EXT_HOST_ADDR (internal network only);
+      # the token is shared with the ext-runner service. Empty URL: no code
+      # tools (the rest of the Workshop works). The limits of a call are
+      # the server owner's (defaults in .env.prod.example).
+      COLONY_EXT_RUNNER_URL: ${COLONY_EXT_RUNNER_URL:-}
+      COLONY_EXT_RUNNER_TOKEN: ${COLONY_EXT_RUNNER_TOKEN:-}
+      COLONY_EXT_HOST_ADDR: ${COLONY_EXT_HOST_ADDR:-:8096}
+      COLONY_EXT_TIMEOUT: ${COLONY_EXT_TIMEOUT:-10s}
+      COLONY_EXT_OUTPUT_KB: ${COLONY_EXT_OUTPUT_KB:-256}
+      COLONY_EXT_HOST_CALLS: ${COLONY_EXT_HOST_CALLS:-50}
+      COLONY_EXT_CONCURRENCY_WORKSPACE: ${COLONY_EXT_CONCURRENCY_WORKSPACE:-4}
+      COLONY_EXT_DISABLE_AFTER: ${COLONY_EXT_DISABLE_AFTER:-5/10/10m}
     volumes:
       - files:/data/files
     ports:
       - "${COLONY_BIND:-127.0.0.1}:${COLONY_PORT:-8080}:8080"
+
+  # Round 56b: the Workshop's code runner (COLONY_ROLE=ext-runner): the same
+  # image, its own process, no database, no secrets, no published port; it
+  # only talks to the server on the internal network. In the "workshop"
+  # profile (COMPOSE_PROFILES=workshop in .env), which the installer turns on.
+  ext-runner:
+    image: ${COLONY_IMAGE:?missing in .env}
+    restart: unless-stopped
+    profiles: [workshop]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${COLONY_EXT_MEM_LIMIT:-1g}
+    cpus: ${COLONY_EXT_CPUS:-2}
+    pids_limit: 64
+    environment:
+      COLONY_ROLE: ext-runner
+      COLONY_EXT_RUNNER_TOKEN: ${COLONY_EXT_RUNNER_TOKEN:-}
+      COLONY_EXT_SERVER_URL: http://server:8096
+      COLONY_EXT_RUNNER_ADDR: ":8095"
+      COLONY_EXT_MEMORY_MB: ${COLONY_EXT_MEMORY_MB:-64}
+      COLONY_EXT_CONCURRENCY_TOTAL: ${COLONY_EXT_CONCURRENCY_TOTAL:-16}
 
 volumes:
 `)
@@ -197,6 +235,7 @@ const serverHardening = `    read_only: true
 // checked before they get here.
 func envFile(v map[string]string) string {
 	keys := []string{"COLONY_IMAGE", "COLONY_BIND", "COLONY_PORT", "COLONY_SECURE_COOKIES", "COLONY_ENV", "COLONY_SECRET_KEYS", "COLONY_OPERATOR_ALLOWLIST",
+		"COMPOSE_PROFILES", "COLONY_EXT_RUNNER_URL", "COLONY_EXT_RUNNER_TOKEN",
 		"POSTGRES_PASSWORD", "COLONY_APP_DB_PASSWORD", "COLONY_DATABASE_URL"}
 	var b strings.Builder
 	b.WriteString("# Colonyhall server settings and secrets (colony setup). Keep it 0600 and back it up.\n")
@@ -458,6 +497,15 @@ func (e *Env) serverEnv() (map[string]string, bool) {
 	}
 	e.Secret(key)
 	v["COLONY_SECRET_KEYS"] = key
+	// Round 56b: the Workshop's code runner, with a token kept across re-runs.
+	runnerToken := old["COLONY_EXT_RUNNER_TOKEN"]
+	if len(runnerToken) < 32 {
+		runnerToken = randomHex(24)
+	}
+	e.Secret(runnerToken)
+	v["COLONY_EXT_RUNNER_TOKEN"] = runnerToken
+	v["COLONY_EXT_RUNNER_URL"] = "http://ext-runner:8095"
+	v["COMPOSE_PROFILES"] = "workshop"
 	ownDB := a.DatabaseURL == ""
 	if ownDB {
 		pw := old["POSTGRES_PASSWORD"]

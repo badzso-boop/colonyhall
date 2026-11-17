@@ -12,7 +12,27 @@ const (
 	EventRiskOverridden     = "workshop.risk_overridden"
 	EventGrantAdded         = "workshop.grant_added"
 	EventGrantRevoked       = "workshop.grant_revoked"
+
+	EventExtensionCreated  = "workshop.extension_created"
+	EventVersionAdded      = "workshop.version_added"
+	EventVersionApproved   = "workshop.version_approved"
+	EventRolledBack        = "workshop.rolled_back"
+	EventExtensionEnabled  = "workshop.extension_enabled"
+	EventExtensionDisabled = "workshop.extension_disabled"
+	EventTakenOver         = "workshop.taken_over"
+	EventExtensionDeleted  = "workshop.extension_deleted"
 )
+
+// ExtensionChanged is the payload of the extension events.
+type ExtensionChanged struct {
+	ExtensionID string `json:"extension_id"`
+	Slug        string `json:"slug"`
+	BotID       string `json:"bot_id,omitempty"`
+	Version     int    `json:"version,omitempty"`
+	// Diff is what an approved version added.
+	Diff   *Diff  `json:"diff,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
 
 // ConnectorChanged is the payload of the connector events.
 type ConnectorChanged struct {

@@ -146,8 +146,8 @@ SELECT * FROM workspace_storage WHERE workspace_id = $1;
 
 -- name: SaveWorkspaceStorage :exec
 INSERT INTO workspace_storage (workspace_id, quota_bytes, files_bytes, db_bytes, chat_bytes, db_measured_at, warned_level, updated_at,
-    plan_id, plan_name, plan_storage_bytes, plan_cpu_cores, plan_memory_bytes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    plan_id, plan_name, plan_storage_bytes, plan_cpu_cores, plan_memory_bytes, plan_ext_calls_month)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (workspace_id) DO UPDATE SET
     quota_bytes = EXCLUDED.quota_bytes,
     plan_id = EXCLUDED.plan_id,
@@ -155,6 +155,7 @@ ON CONFLICT (workspace_id) DO UPDATE SET
     plan_storage_bytes = EXCLUDED.plan_storage_bytes,
     plan_cpu_cores = EXCLUDED.plan_cpu_cores,
     plan_memory_bytes = EXCLUDED.plan_memory_bytes,
+    plan_ext_calls_month = EXCLUDED.plan_ext_calls_month,
     files_bytes = EXCLUDED.files_bytes,
     db_bytes = EXCLUDED.db_bytes,
     chat_bytes = EXCLUDED.chat_bytes,

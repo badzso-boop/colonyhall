@@ -63,6 +63,9 @@ func StorageToAPI(u files.Usage) apispec.WorkspaceStorage {
 	}
 	if p := u.Plan; p != nil {
 		out.Plan = &apispec.WorkspacePlan{Name: p.Name, StorageBytes: p.StorageBytes, CpuCores: p.CPUCores, MemoryBytes: p.MemoryBytes}
+		if p.ExtCallsMonth > 0 {
+			out.Plan.ExtCallsMonth = httpx.Ptr(p.ExtCallsMonth)
+		}
 	}
 	return out
 }

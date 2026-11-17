@@ -21,11 +21,16 @@ type Store struct {
 	connectors map[ids.ID]workshop.Connector
 	grants     map[ids.ID]workshop.Grant
 	calls      []workshop.ToolCall
+	exts       map[ids.ID]workshop.Extension
+	versions   map[ids.ID][]workshop.Version // by extension
+	approvals  []workshop.Approval
+	docs       map[string]workshop.StoreDoc // extension/collection/doc
 }
 
 // New returns an empty store.
 func New() *Store {
-	return &Store{connectors: map[ids.ID]workshop.Connector{}, grants: map[ids.ID]workshop.Grant{}}
+	return &Store{connectors: map[ids.ID]workshop.Connector{}, grants: map[ids.ID]workshop.Grant{},
+		exts: map[ids.ID]workshop.Extension{}, versions: map[ids.ID][]workshop.Version{}, docs: map[string]workshop.StoreDoc{}}
 }
 
 func copyConnector(c workshop.Connector) workshop.Connector {

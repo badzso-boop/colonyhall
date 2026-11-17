@@ -57,7 +57,8 @@ func runOperatorPlans(t *testing.T, change func(*server.Options)) {
 	}
 
 	var big, small apispec.Plan
-	if s := op.do("POST", "/api/v1/operator/plans", map[string]any{"name": "Közepes", "storage_bytes": 10_000, "cpu_cores": 4, "memory_bytes": 4 << 30}, &big); s != http.StatusCreated {
+	if s := op.do("POST", "/api/v1/operator/plans", map[string]any{"name": "Közepes", "storage_bytes": 10_000, "cpu_cores": 4, "memory_bytes": 4 << 30, "ext_calls_month": 5000}, &big); s != http.StatusCreated ||
+		big.ExtCallsMonth == nil || *big.ExtCallsMonth != 5000 {
 		t.Fatalf("create plan: %d", s)
 	}
 	if s := op.do("POST", "/api/v1/operator/plans", map[string]any{"name": "Közepes", "storage_bytes": 1, "cpu_cores": 1, "memory_bytes": 1}, nil); s != http.StatusConflict {
@@ -78,7 +79,8 @@ func runOperatorPlans(t *testing.T, change func(*server.Options)) {
 	}
 	var st apispec.WorkspaceStorage
 	if s := acme.do("GET", "/api/v1/workspace/storage", owner, nil, &st); s != http.StatusOK || st.Plan == nil ||
-		st.Plan.Name != "Közepes" || st.Plan.CpuCores != 4 || st.LimitBytes != 10_000 || st.QuotaBytes != 0 {
+		st.Plan.Name != "Közepes" || st.Plan.CpuCores != 4 || st.LimitBytes != 10_000 || st.QuotaBytes != 0 ||
+		st.Plan.ExtCallsMonth == nil || *st.Plan.ExtCallsMonth != 5000 {
 		t.Fatalf("the owner's storage with a plan: %d %+v %+v", s, st, st.Plan)
 	}
 	// The owner may lower it, never raise it.

@@ -70,6 +70,20 @@ services:
       # addresses never locked out by the login limits (IPs or CIDRs, comma-separated).
       COLONY_TRUSTED_PROXIES: ${COLONY_TRUSTED_PROXIES:-}
       COLONY_LOGIN_ALLOWLIST: ${COLONY_LOGIN_ALLOWLIST:-}
+      # Round 56b (docs/25-onfejlesztes-terv.md 13.5): the Workshop's code
+      # runner. The server sends jobs to COLONY_EXT_RUNNER_URL and answers
+      # their host calls on COLONY_EXT_HOST_ADDR (internal network only);
+      # the token is shared with the ext-runner service. Empty URL: no code
+      # tools (the rest of the Workshop works). The limits of a call are
+      # the server owner's (defaults in .env.prod.example).
+      COLONY_EXT_RUNNER_URL: ${COLONY_EXT_RUNNER_URL:-}
+      COLONY_EXT_RUNNER_TOKEN: ${COLONY_EXT_RUNNER_TOKEN:-}
+      COLONY_EXT_HOST_ADDR: ${COLONY_EXT_HOST_ADDR:-:8096}
+      COLONY_EXT_TIMEOUT: ${COLONY_EXT_TIMEOUT:-10s}
+      COLONY_EXT_OUTPUT_KB: ${COLONY_EXT_OUTPUT_KB:-256}
+      COLONY_EXT_HOST_CALLS: ${COLONY_EXT_HOST_CALLS:-50}
+      COLONY_EXT_CONCURRENCY_WORKSPACE: ${COLONY_EXT_CONCURRENCY_WORKSPACE:-4}
+      COLONY_EXT_DISABLE_AFTER: ${COLONY_EXT_DISABLE_AFTER:-5/10/10m}
     volumes:
       - files:/data/files
     ports:
@@ -78,6 +92,34 @@ services:
     networks:
       - default
       - shared-db-net
+
+  # Round 56b: the Workshop's code runner (COLONY_ROLE=ext-runner): the same
+  # image, its own process, no database, no secrets, no published port; it
+  # only talks to the server on the internal network. In the "workshop"
+  # profile (COMPOSE_PROFILES=workshop in .env), which the installer turns on.
+  ext-runner:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    profiles: [workshop]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${COLONY_EXT_MEM_LIMIT:-1g}
+    cpus: ${COLONY_EXT_CPUS:-2}
+    pids_limit: 64
+    environment:
+      COLONY_ROLE: ext-runner
+      COLONY_EXT_RUNNER_TOKEN: ${COLONY_EXT_RUNNER_TOKEN:-}
+      COLONY_EXT_SERVER_URL: http://server:8096
+      COLONY_EXT_RUNNER_ADDR: ":8095"
+      COLONY_EXT_MEMORY_MB: ${COLONY_EXT_MEMORY_MB:-64}
+      COLONY_EXT_CONCURRENCY_TOTAL: ${COLONY_EXT_CONCURRENCY_TOTAL:-16}
+    networks:
+      - default
 
 volumes:
   files:

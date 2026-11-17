@@ -131,6 +131,7 @@ func Run(t *testing.T, newBackend func(t *testing.T) Backend) {
 	t.Run("break-glass", func(t *testing.T) { testBreakGlass(t, newBackend(t)) })
 	t.Run("secrets", func(t *testing.T) { testSecrets(t, newBackend(t)) })
 	t.Run("workshop", func(t *testing.T) { testWorkshop(t, newBackend(t)) })
+	t.Run("extensions", func(t *testing.T) { testExtensions(t, newBackend(t)) })
 }
 
 var (

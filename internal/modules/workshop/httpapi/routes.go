@@ -6,6 +6,7 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -101,6 +102,8 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 		}
 		return svc.GetConnector(r.Context(), httpx.Actor(r), c.ID)
 	}
+
+	registerExtensions(mux, svc, wrap)
 
 	mux.Handle("GET /api/v1/workshop/connectors", wrap(func(w http.ResponseWriter, r *http.Request) {
 		vs, err := svc.ListConnectors(r.Context(), httpx.Actor(r))
@@ -301,3 +304,5 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 		httpx.JSON(w, http.StatusOK, out)
 	}))
 }
+
+func errorsIs(err, target error) bool { return errors.Is(err, target) }

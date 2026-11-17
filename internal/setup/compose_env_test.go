@@ -16,7 +16,7 @@ import (
 // do not pass through.
 var composeEnvExceptions = map[string]string{
 	"COLONY_DEV_SEED":         "development only",
-	"COLONY_ROLE":             "only the default (all) works today",
+	"COLONY_ROLE":             "the ext-runner service sets it; the server runs the default (all)",
 	"COLONY_CALENDAR_REFRESH": "tuning; the default is fine",
 }
 

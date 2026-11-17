@@ -62,6 +62,9 @@ type Plan struct {
 	StorageBytes int64
 	CPUCores     int
 	MemoryBytes  int64
+	// ExtCallsMonth is the Workshop's monthly call budget (round 56b); 0
+	// is unlimited.
+	ExtCallsMonth int
 }
 
 // Limit is the effective quota (round 51b): the plan's storage, or the

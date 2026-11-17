@@ -261,7 +261,7 @@ func Register(mux *http.ServeMux, svc *operator.Service, opt Options) {
 			return
 		}
 		p, err := svc.CreatePlan(r.Context(), from(r).op, operator.Plan{Name: in.Name, StorageBytes: in.StorageBytes,
-			CPUCores: in.CpuCores, MemoryBytes: in.MemoryBytes}, remote(r))
+			CPUCores: in.CpuCores, MemoryBytes: in.MemoryBytes, ExtCallsMonth: httpx.Deref(in.ExtCallsMonth, 0)}, remote(r))
 		if err != nil {
 			httpx.Error(w, r, err)
 			return
@@ -281,7 +281,7 @@ func Register(mux *http.ServeMux, svc *operator.Service, opt Options) {
 			return
 		}
 		p, err := svc.UpdatePlan(r.Context(), from(r).op, id, operator.PlanPatch{Name: in.Name, StorageBytes: in.StorageBytes,
-			CPUCores: in.CpuCores, MemoryBytes: in.MemoryBytes, Archived: in.Archived,
+			CPUCores: in.CpuCores, MemoryBytes: in.MemoryBytes, ExtCallsMonth: in.ExtCallsMonth, Archived: in.Archived,
 			ConfirmOverQuota: in.ConfirmOverQuota != nil && *in.ConfirmOverQuota}, remote(r))
 		if err != nil {
 			httpx.Error(w, r, err)
@@ -508,5 +508,5 @@ func customerToAPI(c operator.Customer) apispec.Customer {
 
 func planToAPI(p operator.PlanWithUse) apispec.Plan {
 	return apispec.Plan{Id: p.ID, Name: p.Name, StorageBytes: p.StorageBytes, CpuCores: p.CPUCores, MemoryBytes: p.MemoryBytes,
-		Workspaces: p.Workspaces, ArchivedAt: p.ArchivedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}
+		ExtCallsMonth: httpx.Ptr(p.ExtCallsMonth), Workspaces: p.Workspaces, ArchivedAt: p.ArchivedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}
 }
