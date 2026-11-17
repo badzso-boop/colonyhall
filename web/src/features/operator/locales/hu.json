@@ -136,7 +136,11 @@
     "archive": "Archiválva (új ügyfélhez nem rendelhető; a meglévők megtartják)",
     "archived": "archivált",
     "computeHelp": "A számokat a szerverhez igazítsd: ennyit használhat egy munkaterület a hosztolt őrön.",
-    "confirmOverQuota": "Ezzel a munkaterület megtelik, és az agentjei szünetelnek, amíg a használat a keret alá nem csökken. Bejelölve mégis mentem."
+    "confirmOverQuota": "Ezzel a munkaterület megtelik, és az agentjei szünetelnek, amíg a használat a keret alá nem csökken. Bejelölve mégis mentem.",
+    "calls": "Műhely-hívás/hó",
+    "callsMonth": "Műhely-hívások havonta",
+    "callsHelp": "A Műhely kapcsolatainak és bővítményeinek hívásai egy hónapban; üres vagy 0: korlátlan.",
+    "unlimited": "korlátlan"
   },
   "plan": {
     "label": "Csomag",

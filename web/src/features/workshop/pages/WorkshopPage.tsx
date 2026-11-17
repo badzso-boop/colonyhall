@@ -15,6 +15,7 @@ import {
 } from "@/shared/ui";
 import { CallsTab } from "../components/CallsTab";
 import { ConnectorsTab } from "../components/ConnectorsTab";
+import { ExtensionsTab } from "../components/ExtensionsTab";
 import { GrantsTab } from "../components/GrantsTab";
 
 /** Műhely (/workshop, round 56): connectors, grants and the call log; owner and admins. */
@@ -22,7 +23,7 @@ export default function WorkshopPage() {
   const { t } = useTranslation("workshop");
   const session = useSession();
   const role = session.data?.actor.role;
-  const [tab, setTab] = useLocalStorage("workshop.tab", "connectors");
+  const [tab, setTab] = useLocalStorage("workshop.tab", "extensions");
   const icon = <Hammer className="size-5" />;
   if (!session.isSuccess) return <div className="flex-1" />;
   if (role !== "owner" && role !== "admin") {
@@ -41,10 +42,14 @@ export default function WorkshopPage() {
           <p className="text-ui text-fg-muted">{t("intro")}</p>
           <Tabs value={tab} onValueChange={setTab}>
             <TabList label={t("title")}>
+              <Tab value="extensions">{t("tabs.extensions")}</Tab>
               <Tab value="connectors">{t("tabs.connectors")}</Tab>
               <Tab value="grants">{t("tabs.grants")}</Tab>
               <Tab value="calls">{t("tabs.calls")}</Tab>
             </TabList>
+            <TabPanel value="extensions" className="pt-4">
+              <ExtensionsTab owner={role === "owner"} />
+            </TabPanel>
             <TabPanel value="connectors" className="pt-4">
               <ConnectorsTab owner={role === "owner"} />
             </TabPanel>

@@ -2,7 +2,14 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import { describe, expect, it } from "vitest";
-import { slugFrom, validSlug, validURL } from "./model";
+import {
+  diffIsEmpty,
+  manifestTemplate,
+  parseObject,
+  slugFrom,
+  validSlug,
+  validURL,
+} from "./model";
 
 describe("workshop model", () => {
   it("validates short names like the server", () => {
@@ -24,5 +31,21 @@ describe("workshop model", () => {
     expect(validURL("ftp://x.example.com")).toBe(false);
     expect(validURL("https://user:pw@x.example.com")).toBe(false);
     expect(validURL("nope")).toBe(false);
+  });
+});
+
+describe("extension helpers", () => {
+  it("parses only JSON objects", () => {
+    expect(parseObject('{"a":1}')).toEqual({ a: 1 });
+    expect(parseObject("[1]")).toBeNull();
+    expect(parseObject("nope")).toBeNull();
+    expect(parseObject(manifestTemplate)).not.toBeNull();
+  });
+  it("tells an empty diff", () => {
+    expect(diffIsEmpty({ code_changed: false })).toBe(true);
+    expect(
+      diffIsEmpty({ code_changed: false, new_egress: ["x.example.com"] }),
+    ).toBe(false);
+    expect(diffIsEmpty({ code_changed: true })).toBe(false);
   });
 });

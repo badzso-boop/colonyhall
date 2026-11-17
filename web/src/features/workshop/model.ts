@@ -35,3 +35,57 @@ export function validURL(s: string): boolean {
     return false;
   }
 }
+
+/** A starting manifest for a new extension (one code tool). */
+export const manifestTemplate = `{
+  "egress": [],
+  "store": [],
+  "tools": [
+    {
+      "name": "hello",
+      "kind": "js",
+      "risk": "read",
+      "description": "Greets someone",
+      "input": { "type": "object", "properties": { "name": { "type": "string" } } }
+    }
+  ]
+}`;
+
+/** A starting source for the template's tool. */
+export const sourceTemplate = `// Every exported function is a tool; ctx has fetch, store, colony, call and log.
+export async function hello(input: { name?: string }, ctx: any) {
+  ctx.log("hello", input.name);
+  return "Hello " + (input.name ?? "world");
+}
+`;
+
+/** Parses a JSON object from a text field; null when it is not one. */
+export function parseObject(text: string): Record<string, unknown> | null {
+  try {
+    const v: unknown = JSON.parse(text);
+    return v && typeof v === "object" && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a diff adds anything a person should look at. */
+export function diffIsEmpty(d: {
+  new_connectors?: string[];
+  new_egress?: string[];
+  new_store?: string[];
+  new_tools?: string[];
+  raised_risks?: Record<string, string>;
+  code_changed: boolean;
+}): boolean {
+  return (
+    !d.code_changed &&
+    !d.new_connectors?.length &&
+    !d.new_egress?.length &&
+    !d.new_store?.length &&
+    !d.new_tools?.length &&
+    !Object.keys(d.raised_risks ?? {}).length
+  );
+}

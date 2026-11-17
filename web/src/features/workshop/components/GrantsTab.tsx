@@ -12,13 +12,20 @@ import {
   Skeleton,
   toast,
 } from "@/shared/ui";
-import { useAddGrant, useConnectors, useGrants, useRevokeGrant } from "../api";
+import {
+  useAddGrant,
+  useConnectors,
+  useExtensions,
+  useGrants,
+  useRevokeGrant,
+} from "../api";
 
 /** Which agent may use which connector. */
 export function GrantsTab() {
   const { t } = useTranslation("workshop");
   const actors = useActors();
   const connectors = useConnectors();
+  const extensions = useExtensions();
   const grants = useGrants();
   const add = useAddGrant();
   const revoke = useRevokeGrant();
@@ -36,6 +43,7 @@ export function GrantsTab() {
     .filter((a) => a.kind === "agent" && !a.archived_at)
     .sort((a, b) => a.handle.localeCompare(b.handle));
   const conns = connectors.data.connectors;
+  const exts = extensions.data?.extensions ?? [];
   const fail = (e: Error) => toast(e.message, { tone: "danger" });
   return (
     <div className="flex flex-col gap-3">
@@ -43,7 +51,7 @@ export function GrantsTab() {
       {agents.length === 0 ? (
         <Notice tone="info">{t("grants.noAgents")}</Notice>
       ) : null}
-      {conns.length === 0 ? (
+      {conns.length === 0 && exts.length === 0 ? (
         <Notice tone="info">{t("grants.noConnectors")}</Notice>
       ) : null}
       <form
@@ -51,8 +59,12 @@ export function GrantsTab() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!agent || !target) return;
+          const [kind, id] = target.split(":") as [
+            "connector" | "extension",
+            string,
+          ];
           add.mutate(
-            { agent_id: agent, target_kind: "connector", target_id: target },
+            { agent_id: agent, target_kind: kind, target_id: id },
             { onError: fail },
           );
         }}
@@ -72,11 +84,22 @@ export function GrantsTab() {
           <span className="font-medium">{t("grants.target")}</span>
           <Select value={target} onChange={(e) => setTarget(e.target.value)}>
             <option value="" />
-            {conns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title} ({c.slug})
-              </option>
-            ))}
+            {exts.length ? (
+              <optgroup label={t("tabs.extensions")}>
+                {exts.map((x) => (
+                  <option key={x.id} value={`extension:${x.id}`}>
+                    {x.title} (x_{x.slug})
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            <optgroup label={t("tabs.connectors")}>
+              {conns.map((c) => (
+                <option key={c.id} value={`connector:${c.id}`}>
+                  {c.title} ({c.slug})
+                </option>
+              ))}
+            </optgroup>
           </Select>
         </label>
         <Button

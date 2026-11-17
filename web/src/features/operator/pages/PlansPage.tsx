@@ -45,6 +45,7 @@ export default function PlansPage() {
                 <th scope="col" className="px-2 py-1.5 text-right font-medium">{t("plans.storage")}</th>
                 <th scope="col" className="px-2 py-1.5 text-right font-medium">{t("plans.cpu")}</th>
                 <th scope="col" className="px-2 py-1.5 text-right font-medium">{t("plans.memory")}</th>
+                <th scope="col" className="px-2 py-1.5 text-right font-medium">{t("plans.calls")}</th>
                 <th scope="col" className="px-2 py-1.5 text-right font-medium">{t("plans.workspaces")}</th>
                 <th scope="col" className="px-2 py-1.5"><span className="sr-only">{t("plans.edit")}</span></th>
               </tr>
@@ -58,6 +59,7 @@ export default function PlansPage() {
                   <td className="tabular px-2 text-right">{formatBytes(p.storage_bytes, locale)}</td>
                   <td className="tabular px-2 text-right">{p.cpu_cores}</td>
                   <td className="tabular px-2 text-right">{formatBytes(p.memory_bytes, locale)}</td>
+                  <td className="tabular px-2 text-right">{p.ext_calls_month ? p.ext_calls_month.toLocaleString(locale) : t("plans.unlimited")}</td>
                   <td className="tabular px-2 text-right">{p.workspaces}</td>
                   <td className="px-2 text-right">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
@@ -83,18 +85,21 @@ function PlanDialog({ plan, onClose }: { plan: Plan | null; onClose: () => void 
   const [storage, setStorage] = useState(plan ? bytesToGb(plan.storage_bytes) : "");
   const [cpu, setCpu] = useState(plan ? String(plan.cpu_cores) : "");
   const [memory, setMemory] = useState(plan ? bytesToGb(plan.memory_bytes) : "");
+  const [calls, setCalls] = useState(plan?.ext_calls_month ? String(plan.ext_calls_month) : "");
   const [archived, setArchived] = useState(!!plan?.archived_at);
   const [confirm, setConfirm] = useState(false);
   const storageBytes = gbToBytes(storage);
   const memoryBytes = gbToBytes(memory);
   const cores = parseCores(cpu);
-  const ready = name.trim() !== "" && storageBytes !== null && memoryBytes !== null && cores !== null;
+  // Round 56b: the Workshop's monthly call budget; empty or 0 is unlimited.
+  const callsN = calls.trim() === "" ? 0 : /^\d{1,9}$/.test(calls.trim()) ? Number(calls.trim()) : null;
+  const ready = name.trim() !== "" && storageBytes !== null && memoryBytes !== null && cores !== null && callsN !== null;
   const mutation = plan ? update : create;
   const overQuota = mutation.error instanceof ApiError && mutation.error.status === 409 && mutation.error.problem?.type === "plan_over_quota";
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!ready) return;
-    const body = { name: name.trim(), storage_bytes: storageBytes, cpu_cores: cores, memory_bytes: memoryBytes };
+    const body = { name: name.trim(), storage_bytes: storageBytes, cpu_cores: cores, memory_bytes: memoryBytes, ext_calls_month: callsN ?? 0 };
     if (plan) update.mutate({ ...body, archived, confirm_over_quota: confirm }, { onSuccess: onClose });
     else create.mutate(body, { onSuccess: onClose });
   };
@@ -128,6 +133,11 @@ function PlanDialog({ plan, onClose }: { plan: Plan | null; onClose: () => void 
           </label>
         </div>
         <p className="text-meta text-fg-subtle">{t("plans.computeHelp")}</p>
+        <label className="flex flex-col gap-1">
+          <span className="font-medium">{t("plans.callsMonth")}</span>
+          <Input inputMode="numeric" value={calls} placeholder={t("plans.unlimited")} aria-invalid={callsN === null} onChange={(e) => setCalls(e.target.value)} />
+          <span className="text-meta text-fg-subtle">{t("plans.callsHelp")}</span>
+        </label>
         {plan ? (
           <label className="flex items-center gap-2">
             <Checkbox checked={archived} onCheckedChange={(v) => setArchived(v === true)} />

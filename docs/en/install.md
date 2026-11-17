@@ -49,6 +49,12 @@ sh install.sh            # downloads and verifies colony, then starts `colony se
 - **Secrets** (the connector's token, header or password) are stored encrypted with `COLONY_SECRET_KEYS` (the installer writes one; without it only connectors without a secret can be added) and are never shown again or given to the agents: the server puts them on its own requests. `colonyhall rotate-secrets` re-encrypts them after a key rotation.
 - **Outbound addresses:** connectors reach public https addresses only. To reach something on your own network (e.g. a Gitea on the LAN), list it in `.env`: `COLONY_EGRESS_ALLOW=192.168.1.10,gitea.lan` (CIDRs, addresses or host names; plain http is then allowed to them). Refused in multi-tenant mode. Plan and the parts still to come (own tools, routines, the Builder agent): `docs/25-onfejlesztes-terv.md` (Hungarian).
 
+### The Workshop's code runner (round 56b)
+
+- **Extensions** (Workshop → Extensions): tools of your own for the agents: a declarative HTTP call to a connector, or JavaScript/TypeScript code. Every extension has its own bot (named when you create it), immutable versions, and goes live only when a person approves a version after seeing what it adds (connectors, outbound hosts, store collections, tools, risks, code).
+- **The code runs in the `ext-runner` service**: the same image with `COLONY_ROLE=ext-runner`, its own process, no database, no secrets, no published port, a read-only root. Each call gets a fresh QuickJS runtime in WebAssembly with a memory cap, a time limit, an empty temporary file system and only the host calls the server answers. The installer turns it on (`COMPOSE_PROFILES=workshop`, `COLONY_EXT_RUNNER_URL`, a generated `COLONY_EXT_RUNNER_TOKEN`); with `deploy/compose.yaml` set the three yourself (`deploy/.env.prod.example`). Without it only the HTTP tools run.
+- **Limits** (the server owner's): `COLONY_EXT_MEMORY_MB` (64), `COLONY_EXT_TIMEOUT` (10s), `COLONY_EXT_OUTPUT_KB` (256), `COLONY_EXT_HOST_CALLS` (50), `COLONY_EXT_CONCURRENCY_WORKSPACE` (4), `COLONY_EXT_CONCURRENCY_TOTAL` (16), `COLONY_EXT_DISABLE_AFTER` (`5/10/10m`: an extension switches itself off after 5 failed calls in a row or 10 in 10 minutes). In multi-tenant mode a plan may also set a monthly call budget.
+
 ### Several customers on one server (multi-tenant mode)
 
 Off by default. When on, every workspace has its own subdomain (`<slug>.<base domain>`). Details: `docs/02-muszaki-specifikacio.md` and `docs/23-elkulonites.md` (Hungarian).

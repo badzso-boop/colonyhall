@@ -3,6 +3,7 @@
   "intro": "Itt bővítheted a munkaterületet: külső MCP-szervereket és API-kat köthetsz be, és megadhatod, melyik agent használhatja őket. A titkok titkosítva tárolódnak, az agentek soha nem látják őket.",
   "notFound": "Ezt az oldalt a tulajdonos és az adminok látják.",
   "tabs": {
+    "extensions": "Bővítmények",
     "connectors": "Kapcsolatok",
     "grants": "Engedélyek",
     "calls": "Hívásnapló"
@@ -12,8 +13,15 @@
     "empty": "Még nincs kapcsolat",
     "emptyBody": "Köss be egy MCP-szervert (pl. Jira, GitHub), és az engedélyezett agentjeid használhatják az eszközeit.",
     "noKeys": "A szerveren nincs titkosítási kulcs (COLONY_SECRET_KEYS), ezért titkot igénylő kapcsolatot most nem lehet felvenni. Kérd meg a szerver tulajdonosát, hogy állítsa be.",
-    "kind": { "mcp": "MCP-szerver", "http": "HTTP API" },
-    "state": { "new": "új", "ok": "rendben", "error": "hiba" },
+    "kind": {
+      "mcp": "MCP-szerver",
+      "http": "HTTP API"
+    },
+    "state": {
+      "new": "új",
+      "ok": "rendben",
+      "error": "hiba"
+    },
     "secret": "Titok: …{{hint}}",
     "secretSet": "Titok beállítva",
     "approvalOff": "Jóváhagyás kikapcsolva",
@@ -28,7 +36,11 @@
     "deleteTitle": "Törlöd a(z) {{name}} kapcsolatot?",
     "deleteBody": "A titka és minden engedély hozzá törlődik; az agentek többé nem érik el az eszközeit. A hívásnapló megmarad.",
     "fetched": "Eszközlista: {{when}}",
-    "risk": { "read": "olvas", "write": "ír", "external": "kifelé küld" },
+    "risk": {
+      "read": "olvas",
+      "write": "ír",
+      "external": "kifelé küld"
+    },
     "riskLabel": "Kockázat",
     "overridden": "felülírva",
     "riskHint": "Az író és kifelé küldő eszközök hívása jóváhagyást kér. Kockázatot csökkenteni csak a tulajdonos tud."
@@ -61,12 +73,12 @@
   "grants": {
     "intro": "Egy agent csak azokat a kapcsolatokat látja, amelyekre engedélyt kapott.",
     "agent": "Agent",
-    "target": "Kapcsolat",
+    "target": "Mire",
     "add": "Engedélyezés",
     "empty": "Még nincs engedély",
     "revoke": "Visszavonás",
     "noAgents": "Nincs agent a munkaterületen.",
-    "noConnectors": "Előbb vegyél fel egy kapcsolatot."
+    "noConnectors": "Előbb vegyél fel egy kapcsolatot vagy bővítményt."
   },
   "calls": {
     "intro": "Ki, melyik eszközt, mikor hívta, mennyi ideig tartott és mi lett az eredménye. A hívások tartalma nem kerül ide.",
@@ -87,5 +99,68 @@
       "limit": "keret"
     }
   },
-  "close": "Bezárás"
+  "close": "Bezárás",
+  "extensions": {
+    "new": "Új bővítmény",
+    "empty": "Még nincs bővítmény",
+    "emptyBody": "Egy bővítmény saját eszközöket ad az agenteknek: HTTP-hívást egy kapcsolatra, vagy saját JavaScript/TypeScript kódot. Minden bővítmény saját botot kap, így nyomon követhető, mit csinál.",
+    "noRunner": "A szerveren nincs kódfuttató (COLONY_EXT_RUNNER_URL), ezért a JavaScript-eszközök most nem futnak; a HTTP-eszközök igen.",
+    "state": {
+      "draft": "vázlat",
+      "live": "él",
+      "disabled": "kikapcsolva"
+    },
+    "bot": "Bot: @{{handle}}",
+    "maintainer": "Karbantartó: @{{handle}}",
+    "live": "Élő verzió: v{{version}}",
+    "disabledReason": "Kikapcsolva: {{reason}}",
+    "enabled": "Bekapcsolva",
+    "approvalLabel": "Író és kifelé küldő eszközök jóváhagyás nélkül",
+    "approvalHint": "Csak a tulajdonos kapcsolhatja ki.",
+    "versions": "Verziók",
+    "approved": "jóváhagyva",
+    "newVersion": "Új verzió",
+    "open": "Megnyitás",
+    "approve": "Jóváhagyás és élesítés",
+    "rollback": "Visszaállás erre",
+    "test": "Teszt",
+    "takeOver": "Átveszem",
+    "takeOverHint": "Ha a karbantartó már nem admin, a bővítmény nem fut, amíg valaki át nem veszi.",
+    "delete": "Törlés",
+    "deleteTitle": "Törlöd a(z) {{name}} bővítményt?",
+    "deleteBody": "Az engedélyek visszavonódnak, a botja archiválódik. A verziók és a hívásnapló megmaradnak.",
+    "createTitle": "Új bővítmény",
+    "title": "Név",
+    "slug": "Rövid név",
+    "slugHint": "Az eszközök neve az agenteknél: x_{{slug}}__eszköz.",
+    "description": "Leírás",
+    "botHandle": "A bot neve",
+    "botHandleHint": "A bővítmény ezen a néven ír és hív; később nem változik. Alapból x-{{slug}}.",
+    "create": "Létrehozás",
+    "cancel": "Mégse",
+    "close": "Bezárás",
+    "editorTitle": "{{name}}: új verzió",
+    "manifest": "Manifest (JSON)",
+    "manifestHint": "Eszközök (name, kind: js vagy http, risk, input), kapcsolatok, kifelé engedett hosztok (egress), adattár-gyűjtemények (store). Leírás: docs/25, 13.4.",
+    "manifestBad": "A manifest nem érvényes JSON-objektum.",
+    "source": "Forrás (TypeScript vagy JavaScript)",
+    "sourceHint": "Minden exportált függvény egy eszköz: (input, ctx). A ctx: fetch, store, colony, call, log.",
+    "save": "Verzió mentése",
+    "saved": "Elmentve: v{{version}}. Élesítés előtt nézd meg, mit ad hozzá, és teszteld.",
+    "versionTitle": "{{name}} v{{version}}",
+    "diff": "Amit hozzáad az élő verzióhoz képest",
+    "diffNone": "Semmi újat nem kér.",
+    "diffCode": "A kód vagy a kérések változtak.",
+    "diffConnectors": "Új kapcsolatok: {{list}}",
+    "diffEgress": "Új kifelé engedett hosztok: {{list}}",
+    "diffStore": "Új adattár-gyűjtemények: {{list}}",
+    "diffTools": "Új eszközök: {{list}}",
+    "diffRisks": "Emelt kockázat: {{list}}",
+    "tool": "Eszköz",
+    "input": "Bemenet (JSON)",
+    "run": "Futtatás",
+    "output": "Eredmény",
+    "logs": "Napló",
+    "testHint": "A teszt valódi hívás a bővítmény botjaként; jóváhagyást nem kér, a hívásnaplóba tesztként kerül."
+  }
 }

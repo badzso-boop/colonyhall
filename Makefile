@@ -7,7 +7,7 @@ TEST_DB ?= postgres://colony:colony@localhost:5433/colony_test?sslmode=disable
 DOCKER_UID := $(shell docker info -f '{{range .SecurityOptions}}{{.}} {{end}}' 2>/dev/null | grep -q rootless && echo 0:0 || echo $$(id -u):$$(id -g))
 SQLC     = docker run --rm -u $(DOCKER_UID) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.31.1
 
-.PHONY: help dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
+.PHONY: help deps-watch dev down logs run-mem fake-agent test test-web test-pg lint vet fmt build gen gen-check web release-local shellcheck test-install \
         test-unit test-e2e test-race test-devpage web-typecheck web-lint web-vitest vuln actionlint docker-image ci ci-quick ci-selftest privacy
 
 help:            ## List targets
@@ -121,6 +121,9 @@ privacy:         ## No secrets (gitleaks), no private infrastructure details, an
 vuln:            ## Known vulnerabilities: govulncheck and npm audit (needs network)
 	$(GOVULNCHECK) ./...
 	npm --prefix web audit --omit=dev
+
+deps-watch:      ## Newer versions of the Workshop runner's young dependencies (round 56b; needs network). Update internal/extrunner/qjs.wasm with qjs
+	$(GO) list -m -u github.com/fastschema/qjs github.com/tetratelabs/wazero github.com/evanw/esbuild
 
 docker-image:    ## Build the server image without pushing it (CI job docker-image)
 	docker build -f deploy/Dockerfile -t colonyhall:ci .

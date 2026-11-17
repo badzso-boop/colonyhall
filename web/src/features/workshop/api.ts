@@ -158,3 +158,166 @@ export function useToolCalls(targetId: string, enabled = true) {
       ).calls,
   });
 }
+
+export type Extension = Schemas["Extension"];
+export type ExtensionVersion = Schemas["ExtensionVersion"];
+export type ExtensionDiff = Schemas["ExtensionDiff"];
+
+export const extensionKeys = {
+  list: ["workshop", "extensions"] as const,
+  version: (id: string, v: number) =>
+    ["workshop", "extensions", id, v] as const,
+};
+
+export function useExtensions(enabled = true) {
+  return useQuery({
+    queryKey: extensionKeys.list,
+    enabled,
+    queryFn: async () => unwrap(await api.GET("/workshop/extensions")),
+  });
+}
+
+export function useExtensionVersion(
+  id: string,
+  version: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: extensionKeys.version(id, version),
+    enabled: enabled && version > 0,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/workshop/extensions/{extensionId}/versions/{version}", {
+          params: { path: { extensionId: id, version } },
+        }),
+      ),
+  });
+}
+
+export function useCreateExtension() {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (body: Schemas["CreateExtensionRequest"]) =>
+      unwrap(await api.POST("/workshop/extensions", { body })),
+    onSuccess: done,
+  });
+}
+
+export function useAddVersion(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (body: Schemas["AddExtensionVersionRequest"]) =>
+      unwrap(
+        await api.POST("/workshop/extensions/{extensionId}/versions", {
+          params: { path: { extensionId: id } },
+          body,
+        }),
+      ),
+    onSuccess: done,
+  });
+}
+
+export function useApproveVersion(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (version: number) =>
+      unwrap(
+        await api.POST(
+          "/workshop/extensions/{extensionId}/versions/{version}/approve",
+          { params: { path: { extensionId: id, version } } },
+        ),
+      ),
+    onSuccess: done,
+  });
+}
+
+export function useTestTool(id: string) {
+  return useMutation({
+    mutationFn: async ({
+      version,
+      tool,
+      input,
+    }: {
+      version: number;
+      tool: string;
+      input: Record<string, unknown>;
+    }) =>
+      unwrap(
+        await api.POST(
+          "/workshop/extensions/{extensionId}/versions/{version}/test",
+          {
+            params: { path: { extensionId: id, version } },
+            body: { tool, input },
+          },
+        ),
+      ),
+  });
+}
+
+export function useRollback(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (version: number) =>
+      unwrap(
+        await api.POST("/workshop/extensions/{extensionId}/rollback", {
+          params: { path: { extensionId: id } },
+          body: { version },
+        }),
+      ),
+    onSuccess: done,
+  });
+}
+
+export function useSetExtensionEnabled(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (enabled: boolean) =>
+      unwrap(
+        await api.PUT("/workshop/extensions/{extensionId}/enabled", {
+          params: { path: { extensionId: id } },
+          body: { enabled },
+        }),
+      ),
+    onSuccess: done,
+  });
+}
+
+export function useSetExtensionApprovalOff(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (off: boolean) =>
+      unwrap(
+        await api.PUT("/workshop/extensions/{extensionId}/approval", {
+          params: { path: { extensionId: id } },
+          body: { approval_off: off },
+        }),
+      ),
+    onSuccess: done,
+  });
+}
+
+export function useTakeOver(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async () =>
+      unwrap(
+        await api.POST("/workshop/extensions/{extensionId}/take-over", {
+          params: { path: { extensionId: id } },
+        }),
+      ),
+    onSuccess: done,
+  });
+}
+
+export function useDeleteExtension() {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.DELETE("/workshop/extensions/{extensionId}", {
+          params: { path: { extensionId: id } },
+        }),
+      ),
+    onSuccess: done,
+  });
+}

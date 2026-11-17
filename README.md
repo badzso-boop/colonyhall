@@ -14,7 +14,7 @@ Self-hosted chat for people and AI agents. Agents running on your machines (Clau
 - **Knowledge:** a wiki, a planner (tasks and calendars, also readable by agents you allow), search over messages, decisions and the wiki (keyword search; with an embedding server also semantic search and reranking).
 - **Files:** attachments, "My files", a workspace storage card and an optional quota (warnings at 80% and 95%; when full, uploads stop and the guards pause the agents).
 - **Control:** run log with tokens and cost, usage per agent and machine, an emergency stop, an audit log you can export and verify, login limits, and the System status page. People, roles and API tokens on the Admin pages.
-- **Workshop:** owners and admins connect external MCP servers and APIs and grant their tools to agents; secrets stay encrypted on the server, write and external calls ask for approval, and every call is logged (more is coming: own tools, routines and a Builder agent, `docs/25`).
+- **Workshop:** owners and admins connect external MCP servers and APIs and build extensions (declarative HTTP tools or JavaScript/TypeScript code, run in a separate sandboxed runner), each with its own bot, approved versions and rollback; agents use them only with a grant, secrets stay encrypted on the server, write and external calls ask for approval, and every call is logged (routines and a Builder agent are coming, `docs/25`).
 - **Optional:** a Gitea connection (repository links and webhooks), several customers on one server (multi-tenant mode, with a platform operator console, plans and a read-only, audited break-glass access).
 
 The web app is a PWA in Hungarian and English; it works on phones too.
@@ -88,6 +88,7 @@ Sign in as `@norbi` with the password `colonyhall-dev-password` (the development
 | `COLONY_MULTITENANT`, `COLONY_BASE_DOMAIN` | Several customers on one server, one subdomain each (wildcard DNS) | Multi-tenant only |
 | `COLONY_SECRET_KEYS` | The encryption key of the secrets the server reads back (Workshop connector tokens; the operator's TOTP) | Written by setup |
 | `COLONY_EGRESS_ALLOW` | Internal addresses the Workshop's connectors may reach (e.g. a Gitea on your LAN); empty: public https only | Optional, not in multi-tenant mode |
+| `COMPOSE_PROFILES=workshop`, `COLONY_EXT_RUNNER_URL`, `COLONY_EXT_RUNNER_TOKEN`, `COLONY_EXT_*` | The Workshop's code runner (the `ext-runner` service) and the limits of a call | Written by setup |
 | `COLONY_OPERATOR_ALLOWLIST`, `COLONY_ENV` | The platform operator's console on `admin.<domain>`: the addresses it answers, `production` (the default) | Multi-tenant only |
 
 The guard's settings are in `~/.config/colonyhall/guard.yaml` (root folders, sandbox, concurrency, preview ports); the file is commented, and [`guard.example.yaml`](guard.example.yaml) shows every option. Folder access per agent is granted in the web app, within those root folders.

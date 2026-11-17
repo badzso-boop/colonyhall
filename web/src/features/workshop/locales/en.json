@@ -3,6 +3,7 @@
   "intro": "Extend the workspace here: connect external MCP servers and APIs, and choose which agent may use them. Secrets are stored encrypted; agents never see them.",
   "notFound": "The owner and the admins see this page.",
   "tabs": {
+    "extensions": "Extensions",
     "connectors": "Connectors",
     "grants": "Grants",
     "calls": "Call log"
@@ -12,8 +13,15 @@
     "empty": "No connectors yet",
     "emptyBody": "Connect an MCP server (e.g. Jira, GitHub), and the agents you allow can use its tools.",
     "noKeys": "The server has no encryption key (COLONY_SECRET_KEYS), so connectors that need a secret cannot be added now. Ask the server's owner to set it.",
-    "kind": { "mcp": "MCP server", "http": "HTTP API" },
-    "state": { "new": "new", "ok": "ok", "error": "error" },
+    "kind": {
+      "mcp": "MCP server",
+      "http": "HTTP API"
+    },
+    "state": {
+      "new": "new",
+      "ok": "ok",
+      "error": "error"
+    },
     "secret": "Secret: …{{hint}}",
     "secretSet": "Secret set",
     "approvalOff": "Approval off",
@@ -28,7 +36,11 @@
     "deleteTitle": "Delete the connector {{name}}?",
     "deleteBody": "Its secret and every grant to it are deleted; agents no longer reach its tools. The call log stays.",
     "fetched": "Tool list: {{when}}",
-    "risk": { "read": "reads", "write": "writes", "external": "sends out" },
+    "risk": {
+      "read": "reads",
+      "write": "writes",
+      "external": "sends out"
+    },
     "riskLabel": "Risk",
     "overridden": "overridden",
     "riskHint": "Calls of tools that write or send data out ask for approval. Only the owner can lower a risk."
@@ -61,12 +73,12 @@
   "grants": {
     "intro": "An agent sees only the connectors it has a grant for.",
     "agent": "Agent",
-    "target": "Connector",
+    "target": "What",
     "add": "Grant",
     "empty": "No grants yet",
     "revoke": "Revoke",
     "noAgents": "There are no agents in the workspace.",
-    "noConnectors": "Add a connector first."
+    "noConnectors": "Add a connector or an extension first."
   },
   "calls": {
     "intro": "Who called which tool, when, how long it took and how it ended. The calls' content is never kept here.",
@@ -87,5 +99,68 @@
       "limit": "limit"
     }
   },
-  "close": "Close"
+  "close": "Close",
+  "extensions": {
+    "new": "New extension",
+    "empty": "No extensions yet",
+    "emptyBody": "An extension gives agents tools of your own: an HTTP call to a connector, or your own JavaScript/TypeScript code. Every extension gets its own bot, so what it does stays traceable.",
+    "noRunner": "The server has no code runner (COLONY_EXT_RUNNER_URL), so JavaScript tools do not run now; HTTP tools do.",
+    "state": {
+      "draft": "draft",
+      "live": "live",
+      "disabled": "off"
+    },
+    "bot": "Bot: @{{handle}}",
+    "maintainer": "Maintainer: @{{handle}}",
+    "live": "Live version: v{{version}}",
+    "disabledReason": "Switched off: {{reason}}",
+    "enabled": "On",
+    "approvalLabel": "Write and external tools without approval",
+    "approvalHint": "Only the owner can switch it off.",
+    "versions": "Versions",
+    "approved": "approved",
+    "newVersion": "New version",
+    "open": "Open",
+    "approve": "Approve and go live",
+    "rollback": "Roll back to this",
+    "test": "Test",
+    "takeOver": "Take over",
+    "takeOverHint": "When the maintainer is no longer an admin, the extension does not run until someone takes it over.",
+    "delete": "Delete",
+    "deleteTitle": "Delete the extension {{name}}?",
+    "deleteBody": "Its grants are revoked and its bot archived. The versions and the call log stay.",
+    "createTitle": "New extension",
+    "title": "Name",
+    "slug": "Short name",
+    "slugHint": "Agents see its tools as x_{{slug}}__tool.",
+    "description": "Description",
+    "botHandle": "The bot's name",
+    "botHandleHint": "The extension writes and calls under this name; it does not change later. Default x-{{slug}}.",
+    "create": "Create",
+    "cancel": "Cancel",
+    "close": "Close",
+    "editorTitle": "{{name}}: new version",
+    "manifest": "Manifest (JSON)",
+    "manifestHint": "Tools (name, kind: js or http, risk, input), connectors, allowed outbound hosts (egress), store collections. See docs/25, 13.4.",
+    "manifestBad": "The manifest is not a valid JSON object.",
+    "source": "Source (TypeScript or JavaScript)",
+    "sourceHint": "Every exported function is a tool: (input, ctx). ctx has fetch, store, colony, call, log.",
+    "save": "Save version",
+    "saved": "Saved: v{{version}}. Before it goes live, look at what it adds and test it.",
+    "versionTitle": "{{name}} v{{version}}",
+    "diff": "What it adds compared with the live version",
+    "diffNone": "It asks for nothing new.",
+    "diffCode": "The code or the requests changed.",
+    "diffConnectors": "New connectors: {{list}}",
+    "diffEgress": "New outbound hosts: {{list}}",
+    "diffStore": "New store collections: {{list}}",
+    "diffTools": "New tools: {{list}}",
+    "diffRisks": "Raised risk: {{list}}",
+    "tool": "Tool",
+    "input": "Input (JSON)",
+    "run": "Run",
+    "output": "Result",
+    "logs": "Log",
+    "testHint": "A test is a real call as the extension's bot; it asks no approval and is logged as a test."
+  }
 }

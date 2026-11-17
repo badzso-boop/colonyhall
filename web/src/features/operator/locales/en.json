@@ -136,7 +136,11 @@
     "archive": "Archived (not for new customers; the current ones keep it)",
     "archived": "archived",
     "computeHelp": "Fit the numbers to the server: this is what a workspace may use on the hosted guard.",
-    "confirmOverQuota": "This fills the workspace and pauses its agents until the usage drops below the quota. Tick to save anyway."
+    "confirmOverQuota": "This fills the workspace and pauses its agents until the usage drops below the quota. Tick to save anyway.",
+    "calls": "Workshop calls/month",
+    "callsMonth": "Workshop calls a month",
+    "callsHelp": "Calls of the Workshop's connectors and extensions in a month; empty or 0: unlimited.",
+    "unlimited": "unlimited"
   },
   "plan": {
     "label": "Plan",

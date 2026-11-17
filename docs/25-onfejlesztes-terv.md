@@ -320,3 +320,20 @@ Hamis külső MCP-szerver (go-sdk, `httptest`) és hamis HTTP API (Jira, GIF) a 
 - **stdio-s MCP-szerver** nincs (13.3): saját telepítésen az őrön futó saját MCP-szerverek a teljes hozzáférésű agenteknél ma is működnek; a hosztolt változat az 51c.
 - **Biztonsági átnézés után** (`f24f540`): kockázatot csökkenteni csak a tulajdonos tud (mint a jóváhagyás kikapcsolását; admin csak emelhet); ha a kapcsolat címe más szerverre (scheme + host) mutat, a titkot újra meg kell adni; a titok átirányításkor csak a kapcsolat saját hosztjára megy.
 - A kapcsolat hibája az agentnek eszközhibaként (nem protokollhibaként) megy, hogy el tudja olvasni; jóváhagyás beszélgetés nélkül (`X-Colonyhall-Channel` hiányzik) nem kérhető, ilyenkor a hívás elutasítva.
+
+### 14.2 56b: bővítmények és a kódfuttató (2026-11-17)
+
+**Kész:** migráció `00072` (`extension`, `extension_version`, `extension_approval`, `ext_store_doc`; a csomag `ext_calls_month` mezője és másolata), `internal/extrunner` (QuickJS WASM-ban `wazero`-n, a `fastschema/qjs` v0.0.6 az `extrunner.Engine` mögött; a `qjs.wasm` a repóban, az ellenőrzőösszege tesztben rögzítve), az `ext-runner` szerepkör (`COLONY_ROLE=ext-runner`, HTTP-protokoll hívásonkénti host-tokennel, a szerver belső figyelője `COLONY_EXT_HOST_ADDR`), `workshop/compile` (esbuild Go-könyvtár: TS → IIFE, importok tiltva), a bővítmények életútja (létrehozás bottal, verzió, jóváhagyás eltérés-listával, visszaállás, ki/bekapcsolás, átvétel, törlés), deklaratív HTTP-eszközök (`{{input.x}}`, kimenet-leképezés), JS-eszközök host-függvényekkel (`fetch`, `store`, `colony`, `call`, `log`), önvédelem, havi híváskeret, `COLONY_EXT_*` korlátok, Compose `ext-runner` szolgáltatás a `workshop` profilban (a telepítő bekapcsolja, tokent generál), PWA: Műhely → **Bővítmények** fül, az operátor csomagszerkesztőjében a havi híváskeret.
+
+**Mérések és döntések megvalósítás közben:**
+- **Memória:** a QuickJS saját memóriakorlátja (`JS_SetMemoryLimit`) egy tömbökből álló tömböt nem állított meg (az időkorlátig futott), és a WASM-memória alapból 4 GB-ig nőhet. Ezért a futtató a `qjs.wasm` memóriaszakaszába kemény felső határt ír (`capMemory`), amit a `wazero` kényszerít ki: a malloc elbukik, a szkript „out of memory”-t kap. A határ folyamatonként rögzített (`COLONY_EXT_MEMORY_MB`).
+- **Fájlrendszer:** a `qjs` a munkakönyvtárat gyökérként felcsatolja, és a `qjs:std`/`qjs:os` modulok elérhetők; ezért minden hívás egy friss, üres ideiglenes könyvtárat kap, amit utána töröl (teszt: `/etc/passwd` és a környezet nem olvasható, állapot nem marad meg a hívások közt). A konténer gyökere csak olvasható.
+- **A titok nem jut be a JS-be** (13.15/3.): `ctx.fetch(url, {auth: "<kapcsolat>"})` esetén a szerver teszi rá a hitelesítést, és csak a kapcsolat saját címére; egyébként csak a manifest `egress` hosztjaira mehet kérés.
+- **`ctx.colony` a hívó jogaival** fut, egy memórián belüli MCP-munkamenetben ugyanazokkal az eszközökkel és ellenőrzésekkel, amit az agent kap (a Műhely eszközei nélkül). Ami változtat (pl. `send`), az írónak számít: „olvas” kockázatú eszköz nem hívhatja.
+- **Beágyazott hívás** (`ctx.call`): a belső eszköz kockázata nem lehet nagyobb a külsőénél (a külső jóváhagyása csak annyit fed le); legfeljebb 3 szint.
+- **A karbantartó jogai:** ha a karbantartó már nem élő tulajdonos/admin, a bővítmény nem fut, amíg egy admin át nem veszi (`take-over`).
+- **Tesztfuttatás:** a felületről egy verzió bármely eszköze futtatható a bővítmény botjaként (jóváhagyás nélkül, mert ember indította; a hívásnaplóban tesztként).
+
+**Biztonsági átnézés után** (`12eac36`): az „olvas” eszköz nem hívhat író mag-eszközt; a tulajdonos `approval_off`-ja nem öröklődik egy olyan új verzióra, amit nem a tulajdonos élesített és ami újat ad; a jóváhagyásra várás után a hívás újraellenőrzi az engedélyt, az élő verziót, a karbantartót és az agentet (a kapcsolatoknál is).
+
+**Hátra (56c–d):** rutinok és interaktív üzenetek; az Építő és a Műhely meta-eszközei (köztük a csatorna létrehozása agentnek, 14.1).

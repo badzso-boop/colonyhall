@@ -45,6 +45,12 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 - **Titkok** (a kapcsolat tokenje, fejléce vagy jelszava) a `COLONY_SECRET_KEYS`-szel titkosítva tárolódnak (a telepítő ír egyet; nélküle csak titok nélküli kapcsolat vehető fel), többé nem látszanak, és az agentek sem kapják meg: a szerver teszi rá a saját kéréseire. Kulcsforgatás után a `colonyhall rotate-secrets` ezeket is újratitkosítja.
 - **Kimenő címek:** a kapcsolatok csak nyilvános https-címeket érnek el. Ha a saját hálózatodon lévő szolgáltatás kell (pl. a LAN-on futó Gitea), sorold fel a `.env`-ben: `COLONY_EGRESS_ALLOW=192.168.1.10,gitea.lan` (CIDR-ek, címek vagy hosztnevek; ezekre sima http is mehet). Többbérlős módban tilos. A terv és a hátralévő részek (saját eszközök, rutinok, az Építő agent): `docs/25-onfejlesztes-terv.md`.
 
+### A Műhely kódfuttatója (56b. kör)
+
+- **Bővítmények** (Műhely → Bővítmények): saját eszközök az agenteknek: deklaratív HTTP-hívás egy kapcsolatra, vagy JavaScript/TypeScript kód. Minden bővítmény saját botot kap (a nevét létrehozáskor adod meg), a verziói nem változnak, és csak akkor él, ha egy ember jóváhagy egy verziót, miután látta, mit ad hozzá (kapcsolatok, kifelé engedett hosztok, adattár-gyűjtemények, eszközök, kockázatok, kód).
+- **A kód az `ext-runner` szolgáltatásban fut**: ugyanaz az image `COLONY_ROLE=ext-runner`-rel, külön folyamat, adatbázis, titok és nyitott port nélkül, csak olvasható gyökérrel. Minden hívás friss QuickJS-futtatót kap WebAssemblyben, memóriahatárral, időkorláttal, üres ideiglenes fájlrendszerrel, és csak azokkal a host-hívásokkal, amiket a szerver megválaszol. A telepítő bekapcsolja (`COMPOSE_PROFILES=workshop`, `COLONY_EXT_RUNNER_URL`, generált `COLONY_EXT_RUNNER_TOKEN`); a `deploy/compose.yaml`-nál ezt a hármat neked kell beállítani (`deploy/.env.prod.example`). Nélküle csak a HTTP-eszközök futnak.
+- **Korlátok** (a szerver tulajdonosáé): `COLONY_EXT_MEMORY_MB` (64), `COLONY_EXT_TIMEOUT` (10s), `COLONY_EXT_OUTPUT_KB` (256), `COLONY_EXT_HOST_CALLS` (50), `COLONY_EXT_CONCURRENCY_WORKSPACE` (4), `COLONY_EXT_CONCURRENCY_TOTAL` (16), `COLONY_EXT_DISABLE_AFTER` (`5/10/10m`: 5 egymást követő vagy 10 percen belül 10 sikertelen hívás után a bővítmény magától kikapcsol). Többbérlős módban a csomag havi híváskeretet is adhat.
+
 ### Több ügyfél egy szerveren (többbérlős mód)
 
 Alapból kikapcsolva. Bekapcsolva minden munkaterület a saját aldomainjén érhető el (`<slug>.<alapdomain>`); részletek: `docs/02-muszaki-specifikacio.md`, „Többbérlős működés”, és `docs/23-elkulonites.md`.
