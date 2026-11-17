@@ -587,6 +587,17 @@ type Message struct {
 	Important        bool
 	AlsoInChannel    bool
 	ForwardedFromID  *uuid.UUID
+	Blocks           []byte
+}
+
+type MessageAction struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	MessageID   uuid.UUID
+	ActorID     uuid.UUID
+	ActionID    string
+	Value       string
+	CreatedAt   time.Time
 }
 
 type MessageFile struct {
@@ -775,6 +786,30 @@ type Reaction struct {
 	CreatedAt   time.Time
 	RemovedAt   *time.Time
 	WorkspaceID uuid.UUID
+}
+
+type RoutineRun struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Routine     string
+	Trigger     string
+	Input       []byte
+	State       string
+	Error       string
+	CreatedAt   time.Time
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+}
+
+type RoutineState struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	ExtensionID      uuid.UUID
+	Routine          string
+	NextRunAt        *time.Time
+	LastRunAt        *time.Time
+	WebhookTokenHash []byte
 }
 
 type RunError struct {

@@ -7,6 +7,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -155,12 +156,26 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
 		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
 		AnswersMessageID: nullID(m.AnswersMessageID), Important: m.Important, AlsoInChannel: m.AlsoInChannel,
-		ForwardedFromID: nullID(m.ForwardedFromID),
+		ForwardedFromID: nullID(m.ForwardedFromID), Blocks: blocksJSON(m.Blocks),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
 	}
 	return err
+}
+
+func blocksJSON(b []conversation.Block) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	out, _ := json.Marshal(b)
+	return out
+}
+
+// InsertAction implements conversation.Store.
+func (s *Store) InsertAction(ctx context.Context, a conversation.Action) error {
+	return s.q(ctx).InsertMessageAction(ctx, sqlcgen.InsertMessageActionParams{ID: a.ID, WorkspaceID: a.WorkspaceID,
+		MessageID: a.MessageID, ActorID: a.ActorID, ActionID: a.ActionID, Value: a.Value, CreatedAt: a.CreatedAt})
 }
 
 // MessageByID loads a message.
@@ -247,6 +262,9 @@ func toMessage(r sqlcgen.Message) conversation.Message {
 	}
 	if r.ForwardedFromID != nil {
 		m.ForwardedFromID = *r.ForwardedFromID
+	}
+	if len(r.Blocks) > 0 {
+		_ = json.Unmarshal(r.Blocks, &m.Blocks)
 	}
 	return m
 }

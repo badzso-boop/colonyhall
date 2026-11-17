@@ -16,6 +16,8 @@ type Store interface {
 	CreateChannel(ctx context.Context, c Channel) error
 	ChannelByID(ctx context.Context, id ids.ID) (Channel, error)
 	ChannelByName(ctx context.Context, workspaceID ids.ID, name string) (Channel, error)
+	// InsertAction records a click on an interactive message (round 56c).
+	InsertAction(ctx context.Context, a Action) error
 	// ChannelsForActor lists channels the actor belongs to; all=true lists
 	// every channel in the workspace (for admins), marking membership.
 	ChannelsForActor(ctx context.Context, workspaceID, actorID ids.ID, all bool) ([]ChannelView, error)

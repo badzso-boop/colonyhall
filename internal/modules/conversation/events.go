@@ -23,7 +23,23 @@ const (
 	EventMessageRetracted = "message.retracted"
 	EventReactionAdded    = "reaction.added"
 	EventReactionRemove   = "reaction.removed"
+	// EventMessageAction: a person clicked a button or chose an option of
+	// an interactive message (round 56c).
+	EventMessageAction = "message.action"
 )
+
+// MessageAction is the payload of EventMessageAction.
+type MessageAction struct {
+	ActionRecordID  string `json:"action_record_id"`
+	MessageID       string `json:"message_id"`
+	ChannelID       string `json:"channel_id"`
+	ThreadRootID    string `json:"thread_root_id,omitempty"`
+	MessageAuthorID string `json:"message_author_id"`
+	ActorID         string `json:"actor_id"`
+	ActionID        string `json:"action_id"`
+	Value           string `json:"value,omitempty"`
+	Label           string `json:"label"`
+}
 
 // ReactionEvent is the payload of the reaction events.
 type ReactionEvent struct {
@@ -100,8 +116,10 @@ type MessageCreated struct {
 	Silent         bool         `json:"silent,omitempty"`
 	Attachments    []Attachment `json:"attachments,omitempty"`
 	Important      bool         `json:"important,omitempty"`
-	AlsoInChannel  bool         `json:"also_in_channel,omitempty"`
-	CreatedAt      time.Time    `json:"created_at"`
+	// Blocks: an interactive message (round 56c).
+	Blocks        []Block   `json:"blocks,omitempty"`
+	AlsoInChannel bool      `json:"also_in_channel,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // MessageRetracted is the payload of EventMessageRetracted.

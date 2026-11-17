@@ -52,8 +52,12 @@ ORDER BY joined_at ASC;
 -- name: InsertMessage :exec
 INSERT INTO message (id, workspace_id, channel_id, thread_root_id, author_id, client_msg_id, kind, body,
                      mentions, reply_count, last_reply_at, created_at, origin_channel_id, origin_thread_id,
-                     answers_message_id, important, also_in_channel, forwarded_from_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18);
+                     answers_message_id, important, also_in_channel, forwarded_from_id, blocks)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);
+
+-- name: InsertMessageAction :exec
+INSERT INTO message_action (id, workspace_id, message_id, actor_id, action_id, value, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: LatestTopLevelMessageByAuthor :one
 SELECT * FROM message

@@ -29,6 +29,15 @@ type Store struct {
 	mutes    map[memberKey]conversation.Mute
 	reads    map[memberKey]time.Time // (thread root, actor) -> last read
 	pins     []conversation.Pin
+	actions  []conversation.Action
+}
+
+// InsertAction implements conversation.Store.
+func (s *Store) InsertAction(_ context.Context, a conversation.Action) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.actions = append(s.actions, a)
+	return nil
 }
 
 type reactKey struct {

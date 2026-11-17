@@ -459,6 +459,9 @@ type SendInput struct {
 	Important bool
 	// AlsoInChannel shows a thread reply in the channel too (round 55).
 	AlsoInChannel bool
+	// Blocks make it interactive (round 56c, agents and extension bots);
+	// already validated with ParseBlocks. An empty body gets their text.
+	Blocks []Block
 	// ForwardedFromID is set by ForwardMessage only (checked there).
 	ForwardedFromID ids.ID
 }
@@ -477,6 +480,12 @@ type SendResult struct {
 func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInput) (SendResult, error) {
 	if by.Halted {
 		return SendResult{}, identity.ErrHalted
+	}
+	if len(in.Blocks) > 0 && strings.TrimSpace(in.Body) == "" {
+		in.Body = BlocksText(in.Blocks)
+	}
+	if len(in.Blocks) > 0 && by.Kind != identity.KindAgent {
+		return SendResult{}, ErrBadBlocks
 	}
 	body, err := ValidateBody(in.Body)
 	if err != nil {
@@ -604,7 +613,7 @@ func (s *Service) SendMessage(ctx context.Context, by identity.Actor, in SendInp
 			Mentions: mentions, CreatedAt: now,
 			OriginChannelID: originChannelID, OriginThreadID: originThreadID,
 			AnswersMessageID: answersID, Important: in.Important, AlsoInChannel: in.AlsoInChannel,
-			ForwardedFromID: in.ForwardedFromID,
+			ForwardedFromID: in.ForwardedFromID, Blocks: in.Blocks,
 		}
 		if err := s.Store.InsertMessage(ctx, msg); err != nil {
 			return err
@@ -837,6 +846,7 @@ func MessageCreatedPayload(m Message) MessageCreated {
 		Attachments:   m.Attachments,
 		Important:     m.Important,
 		AlsoInChannel: m.AlsoInChannel,
+		Blocks:        m.Blocks,
 	}
 	if m.ThreadRootID != ids.Nil {
 		p.ThreadRootID = m.ThreadRootID.String()

@@ -210,6 +210,8 @@ type Message struct {
 	// (round 55, part G). Delivery is unchanged: channel agents wake only
 	// when mentioned.
 	AlsoInChannel bool
+	// Blocks make it an interactive message (round 56c); nil: plain.
+	Blocks []Block
 	// ForwardedFromID is the message a forward quotes (round 55, part F);
 	// cleared on reads for viewers who cannot read the source.
 	ForwardedFromID  ids.ID
