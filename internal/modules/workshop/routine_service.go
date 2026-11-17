@@ -35,6 +35,7 @@ type Channels interface {
 	IsMember(ctx context.Context, channelID, actorID ids.ID) bool
 	SendMessage(ctx context.Context, by identity.Actor, in conversation.SendInput) (conversation.SendResult, error)
 	ChannelByID(ctx context.Context, id ids.ID) (conversation.Channel, error)
+	CreateChannel(ctx context.Context, by identity.Actor, name, description string, kind conversation.ChannelKind) (conversation.Channel, error)
 }
 
 // Errors of the routines.

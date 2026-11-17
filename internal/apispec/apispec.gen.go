@@ -3436,6 +3436,21 @@ type Extension struct {
 // ExtensionState defines model for Extension.State.
 type ExtensionState string
 
+// ExtensionBundle defines model for ExtensionBundle.
+type ExtensionBundle struct {
+	Description *string   `json:"description,omitempty"`
+	ExportedAt  time.Time `json:"exported_at"`
+
+	// Files Path → content
+	Files map[string]string `json:"files"`
+
+	// Format colonyhall-extension/1
+	Format  string `json:"format"`
+	Slug    string `json:"slug"`
+	Title   string `json:"title"`
+	Version int    `json:"version"`
+}
+
 // ExtensionDiff defines model for ExtensionDiff.
 type ExtensionDiff struct {
 	CodeChanged   bool      `json:"code_changed"`
@@ -3931,6 +3946,15 @@ type HostStorage struct {
 
 // Hue A colour of the fixed machine and agent palette (round 33); the client maps it to theme tokens.
 type Hue string
+
+// ImportExtensionRequest defines model for ImportExtensionRequest.
+type ImportExtensionRequest struct {
+	BotHandle *string         `json:"bot_handle,omitempty"`
+	Bundle    ExtensionBundle `json:"bundle"`
+
+	// Slug Another short name than the bundle's
+	Slug *string `json:"slug,omitempty"`
+}
 
 // Inbox defines model for Inbox.
 type Inbox struct {
@@ -5969,6 +5993,11 @@ type ListToolCallsParams struct {
 	Limit  *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ExportExtensionParams defines parameters for ExportExtension.
+type ExportExtensionParams struct {
+	Version *int `form:"version,omitempty" json:"version,omitempty"`
+}
+
 // CreateActorJSONRequestBody defines body for CreateActor for application/json ContentType.
 type CreateActorJSONRequestBody = CreateActorRequest
 
@@ -6266,6 +6295,9 @@ type SetConnectorToolRiskJSONRequestBody = ToolRiskRequest
 
 // CreateExtensionJSONRequestBody defines body for CreateExtension for application/json ContentType.
 type CreateExtensionJSONRequestBody = CreateExtensionRequest
+
+// ImportExtensionJSONRequestBody defines body for ImportExtension for application/json ContentType.
+type ImportExtensionJSONRequestBody = ImportExtensionRequest
 
 // SetExtensionApprovalJSONRequestBody defines body for SetExtensionApproval for application/json ContentType.
 type SetExtensionApprovalJSONRequestBody = ConnectorApprovalRequest

@@ -695,6 +695,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			return &n, nil
 		}}
 	wsSvc.Channels = cvSvc
+	wsSvc.Wiki = wiSvc
 	consumers = append(consumers, &eventlog.Consumer{Name: workshop.ConsumerName, Store: events, Tx: tx, Bus: b,
 		Handle: wsSvc.HandleEvent, Logger: opt.Logger})
 	workshophttp.Register(mux, wsSvc, idSvc)
@@ -723,6 +724,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		registerCore(s, actor, r)
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		workshopmcp.Register(s, wsSvc, actor, current, r, opt.Logger)
+		workshopmcp.RegisterBuilder(s, wsSvc, actor, current, r)
 	}, func(ctx context.Context, actor identity.Actor) (string, error) {
 		text, err := rlSvc.InstructionsForActor(ctx, actor)
 		if err != nil || actor.Kind != identity.KindAgent {

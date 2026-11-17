@@ -82,6 +82,8 @@ type Service struct {
 	Limits   Limits
 	// Channels: the routines' posts and the bots' channels (round 56c).
 	Channels Channels
+	// Wiki: the extensions' build logs (round 56d).
+	Wiki Wiki
 
 	slotsMu sync.Mutex
 	slots   map[ids.ID]chan struct{}

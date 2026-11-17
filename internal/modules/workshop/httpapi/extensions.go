@@ -297,3 +297,58 @@ func registerExtensions(mux *http.ServeMux, svc *workshop.Service, wrap func(htt
 		reply(w, r, id, err, http.StatusOK)
 	}))
 }
+
+func registerBundles(mux *http.ServeMux, svc *workshop.Service, wrap func(http.HandlerFunc) http.Handler) {
+	mux.Handle("GET /api/v1/workshop/extensions/{extensionId}/export", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "extensionId")
+		if !ok {
+			return
+		}
+		version := 0
+		if v := r.URL.Query().Get("version"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 1 {
+				httpx.Error(w, r, &httpx.BadRequest{Detail: "version must be a positive integer"})
+				return
+			}
+			version = n
+		}
+		b, err := svc.Export(r.Context(), httpx.Actor(r), id, version)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out := apispec.ExtensionBundle{Format: b.Format, Slug: b.Slug, Title: b.Title, Version: b.Version, ExportedAt: b.ExportedAt, Files: b.Files}
+		if b.Description != "" {
+			out.Description = httpx.Ptr(b.Description)
+		}
+		httpx.JSON(w, http.StatusOK, out)
+	}))
+
+	mux.Handle("POST /api/v1/workshop/extensions/import", wrap(func(w http.ResponseWriter, r *http.Request) {
+		var req apispec.ImportExtensionRequest
+		if err := httpx.Decode(r, &req); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		b := workshop.Bundle{Format: req.Bundle.Format, Slug: req.Bundle.Slug, Title: req.Bundle.Title, Version: req.Bundle.Version,
+			Description: httpx.Deref(req.Bundle.Description, ""), Files: req.Bundle.Files}
+		e, _, _, err := svc.Import(r.Context(), httpx.Actor(r), workshop.ImportInput{Bundle: b, Slug: httpx.Deref(req.Slug, ""),
+			BotHandle: httpx.Deref(req.BotHandle, "")})
+		if err != nil && e.ID == ids.Nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		if err != nil {
+			// The extension exists, its version did not pass: say why.
+			httpx.Error(w, r, err)
+			return
+		}
+		v, err := svc.GetExtension(r.Context(), httpx.Actor(r), e.ID)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, extToAPI(v))
+	}))
+}

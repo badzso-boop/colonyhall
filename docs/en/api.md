@@ -40,7 +40,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [search](#search) (1)
 - [sidebar](#sidebar) (8)
 - [wiki](#wiki) (8)
-- [workshop](#workshop) (27)
+- [workshop](#workshop) (29)
 - [Schemas](#schemas)
 
 ## activity
@@ -3670,6 +3670,23 @@ Request body (`application/json`, required): [CreateExtensionRequest](#createext
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 409 | Error: [Problem](#problem) (`application/problem+json`) |
 
+### `POST /workshop/extensions/import`
+
+`importExtension` · Auth: signed in
+
+Owner and admins. Creates an extension from an exported bundle; its
+version 1 is a draft a person approves as any other. The connectors
+it names must exist here.
+
+Request body (`application/json`, required): [ImportExtensionRequest](#importextensionrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Created: [Extension](#extension) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `DELETE /workshop/extensions/{extensionId}`
 
 `deleteExtension` · Auth: signed in
@@ -3736,6 +3753,25 @@ Request body (`application/json`, required): [ExtensionEnabledRequest](#extensio
 | --- | --- |
 | 200 | OK: [Extension](#extension) (`application/json`) |
 | 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/extensions/{extensionId}/export`
+
+`exportExtension` · Auth: signed in
+
+Owner and admins (round 56d). A version (the live one by default, else
+the newest) as files: manifest.json, src/extension.ts and BUILDLOG.md;
+never a secret. A folder a Gitea repository can hold.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+| `version` | query | integer |  |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ExtensionBundle](#extensionbundle) (`application/json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
@@ -5289,6 +5325,18 @@ Sent to the item's owner alone; ids only.
 | `updated_at` | string (date-time) | yes |  |
 | `versions` | [ExtensionVersionSummary](#extensionversionsummary)[] | yes |  |
 
+### ExtensionBundle
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `description` | string |  |  |
+| `exported_at` | string (date-time) | yes |  |
+| `files` | object | yes | Path → content |
+| `format` | string | yes | colonyhall-extension/1 |
+| `slug` | string | yes |  |
+| `title` | string | yes |  |
+| `version` | integer | yes |  |
+
 ### ExtensionDiff
 
 | Field | Type | Required | Description |
@@ -5685,6 +5733,14 @@ A colour of the fixed machine and agent palette (round 33); the client maps it t
 One of: `red`, `orange`, `amber`, `lime`, `green`, `teal`, `cyan`, `blue`, `violet`, `pink`
 
 Type: string
+
+### ImportExtensionRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `bot_handle` | string |  |  |
+| `bundle` | [ExtensionBundle](#extensionbundle) | yes |  |
+| `slug` | string |  | Another short name than the bundle's |
 
 ### Inbox
 

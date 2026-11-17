@@ -137,6 +137,9 @@ func (s *Service) extension(ctx context.Context, by identity.Actor, id ids.ID) (
 type VersionInput struct {
 	Manifest Manifest
 	Source   string
+	// Via is the Builder agent that wrote it (round 56d): the version's
+	// author, for the trace.
+	Via ids.ID
 }
 
 // AddVersion stores a new version (it does not go live until approved).
@@ -165,6 +168,9 @@ func (s *Service) AddVersion(ctx context.Context, by identity.Actor, id ids.ID, 
 		return Version{}, Diff{}, err
 	}
 	v := Version{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, ExtensionID: e.ID, Manifest: m, CreatedBy: by.ID, CreatedAt: s.Clock.Now()}
+	if in.Via != ids.Nil {
+		v.CreatedBy = in.Via
+	}
 	if m.HasJS() {
 		if strings.TrimSpace(in.Source) == "" {
 			return Version{}, Diff{}, fmt.Errorf("%w: a js tool needs the source", ErrBadManifest)
@@ -206,6 +212,7 @@ func (s *Service) AddVersion(ctx context.Context, by identity.Actor, id ids.ID, 
 		return Version{}, Diff{}, err
 	}
 	s.notify(seq)
+	s.writeBuildLog(ctx, e)
 	return v, diff, nil
 }
 
@@ -277,6 +284,7 @@ func (s *Service) ApproveVersion(ctx context.Context, by identity.Actor, id ids.
 		return Extension{}, Diff{}, err
 	}
 	s.notify(seq)
+	s.writeBuildLog(ctx, e)
 	return e, diff, nil
 }
 
@@ -327,6 +335,7 @@ func (s *Service) Rollback(ctx context.Context, by identity.Actor, id ids.ID, ve
 		return Extension{}, err
 	}
 	s.notify(seq)
+	s.writeBuildLog(ctx, e)
 	return e, nil
 }
 

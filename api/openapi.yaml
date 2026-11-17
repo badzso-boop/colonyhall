@@ -1024,6 +1024,42 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
 
+  /workshop/extensions/{extensionId}/export:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: exportExtension
+      tags: [workshop]
+      description: |
+        Owner and admins (round 56d). A version (the live one by default, else
+        the newest) as files: manifest.json, src/extension.ts and BUILDLOG.md;
+        never a secret. A folder a Gitea repository can hold.
+      parameters:
+        - { name: version, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExtensionBundle" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/import:
+    post:
+      operationId: importExtension
+      tags: [workshop]
+      description: |
+        Owner and admins. Creates an extension from an exported bundle; its
+        version 1 is a draft a person approves as any other. The connectors
+        it names must exist here.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ImportExtensionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Extension" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /workshop/extensions/{extensionId}/take-over:
     parameters:
       - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -5796,6 +5832,24 @@ components:
       required: [path]
       properties:
         path: { type: string, description: "The webhook's path on this server (POST); shown once" }
+    ExtensionBundle:
+      type: object
+      required: [format, slug, title, version, exported_at, files]
+      properties:
+        format: { type: string, description: colonyhall-extension/1 }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        version: { type: integer }
+        exported_at: { type: string, format: date-time }
+        files: { type: object, additionalProperties: { type: string }, description: "Path → content" }
+    ImportExtensionRequest:
+      type: object
+      required: [bundle]
+      properties:
+        bundle: { $ref: "#/components/schemas/ExtensionBundle" }
+        slug: { type: string, description: Another short name than the bundle's }
+        bot_handle: { type: string, maxLength: 40 }
     ExtensionEnabledRequest:
       type: object
       required: [enabled]

@@ -1143,6 +1143,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workshop/extensions/{extensionId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description Owner and admins (round 56d). A version (the live one by default, else
+         *     the newest) as files: manifest.json, src/extension.ts and BUILDLOG.md;
+         *     never a secret. A folder a Gitea repository can hold.
+         */
+        get: operations["exportExtension"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Owner and admins. Creates an extension from an exported bundle; its
+         *     version 1 is a draft a person approves as any other. The connectors
+         *     it names must exist here.
+         */
+        post: operations["importExtension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workshop/extensions/{extensionId}/take-over": {
         parameters: {
             query?: never;
@@ -6238,6 +6282,26 @@ export interface components {
             /** @description The webhook's path on this server (POST); shown once */
             path: string;
         };
+        ExtensionBundle: {
+            /** @description colonyhall-extension/1 */
+            format: string;
+            slug: string;
+            title: string;
+            description?: string;
+            version: number;
+            /** Format: date-time */
+            exported_at: string;
+            /** @description Path → content */
+            files: {
+                [key: string]: string;
+            };
+        };
+        ImportExtensionRequest: {
+            bundle: components["schemas"]["ExtensionBundle"];
+            /** @description Another short name than the bundle's */
+            slug?: string;
+            bot_handle?: string;
+        };
         ExtensionEnabledRequest: {
             enabled: boolean;
         };
@@ -9236,6 +9300,61 @@ export interface operations {
             };
             404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportExtension: {
+        parameters: {
+            query?: {
+                version?: number;
+            };
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionBundle"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    importExtension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportExtensionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extension"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
