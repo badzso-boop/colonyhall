@@ -1221,6 +1221,48 @@ func (e MessageKind) Valid() bool {
 	}
 }
 
+// Defines values for MessageBlockButtonsStyle.
+const (
+	Danger  MessageBlockButtonsStyle = "danger"
+	Primary MessageBlockButtonsStyle = "primary"
+)
+
+// Valid indicates whether the value is a known member of the MessageBlockButtonsStyle enum.
+func (e MessageBlockButtonsStyle) Valid() bool {
+	switch e {
+	case Danger:
+		return true
+	case Primary:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageBlockType.
+const (
+	MessageBlockTypeButtons MessageBlockType = "buttons"
+	MessageBlockTypeSelect  MessageBlockType = "select"
+	MessageBlockTypeTable   MessageBlockType = "table"
+	MessageBlockTypeText    MessageBlockType = "text"
+)
+
+// Valid indicates whether the value is a known member of the MessageBlockType enum.
+func (e MessageBlockType) Valid() bool {
+	switch e {
+	case MessageBlockTypeButtons:
+		return true
+	case MessageBlockTypeSelect:
+		return true
+	case MessageBlockTypeTable:
+		return true
+	case MessageBlockTypeText:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotifyLevel.
 const (
 	NotifyLevelAll      NotifyLevel = "all"
@@ -1422,6 +1464,78 @@ func (e Role) Valid() bool {
 	case Observer:
 		return true
 	case Owner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoutineInfoTrigger.
+const (
+	RoutineInfoTriggerAction  RoutineInfoTrigger = "action"
+	RoutineInfoTriggerCron    RoutineInfoTrigger = "cron"
+	RoutineInfoTriggerMessage RoutineInfoTrigger = "message"
+	RoutineInfoTriggerWebhook RoutineInfoTrigger = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the RoutineInfoTrigger enum.
+func (e RoutineInfoTrigger) Valid() bool {
+	switch e {
+	case RoutineInfoTriggerAction:
+		return true
+	case RoutineInfoTriggerCron:
+		return true
+	case RoutineInfoTriggerMessage:
+		return true
+	case RoutineInfoTriggerWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoutineRunInfoState.
+const (
+	RoutineRunInfoStateDone    RoutineRunInfoState = "done"
+	RoutineRunInfoStateFailed  RoutineRunInfoState = "failed"
+	RoutineRunInfoStatePending RoutineRunInfoState = "pending"
+	RoutineRunInfoStateRunning RoutineRunInfoState = "running"
+)
+
+// Valid indicates whether the value is a known member of the RoutineRunInfoState enum.
+func (e RoutineRunInfoState) Valid() bool {
+	switch e {
+	case RoutineRunInfoStateDone:
+		return true
+	case RoutineRunInfoStateFailed:
+		return true
+	case RoutineRunInfoStatePending:
+		return true
+	case RoutineRunInfoStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoutineRunInfoTrigger.
+const (
+	RoutineRunInfoTriggerAction  RoutineRunInfoTrigger = "action"
+	RoutineRunInfoTriggerCron    RoutineRunInfoTrigger = "cron"
+	RoutineRunInfoTriggerMessage RoutineRunInfoTrigger = "message"
+	RoutineRunInfoTriggerWebhook RoutineRunInfoTrigger = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the RoutineRunInfoTrigger enum.
+func (e RoutineRunInfoTrigger) Valid() bool {
+	switch e {
+	case RoutineRunInfoTriggerAction:
+		return true
+	case RoutineRunInfoTriggerCron:
+		return true
+	case RoutineRunInfoTriggerMessage:
+		return true
+	case RoutineRunInfoTriggerWebhook:
 		return true
 	default:
 		return false
@@ -3324,12 +3438,15 @@ type ExtensionState string
 
 // ExtensionDiff defines model for ExtensionDiff.
 type ExtensionDiff struct {
-	CodeChanged   bool               `json:"code_changed"`
-	NewConnectors *[]string          `json:"new_connectors,omitempty"`
-	NewEgress     *[]string          `json:"new_egress,omitempty"`
-	NewStore      *[]string          `json:"new_store,omitempty"`
-	NewTools      *[]string          `json:"new_tools,omitempty"`
-	RaisedRisks   *map[string]string `json:"raised_risks,omitempty"`
+	CodeChanged   bool      `json:"code_changed"`
+	NewConnectors *[]string `json:"new_connectors,omitempty"`
+	NewEgress     *[]string `json:"new_egress,omitempty"`
+
+	// NewRoutines New or changed routines
+	NewRoutines *[]string          `json:"new_routines,omitempty"`
+	NewStore    *[]string          `json:"new_store,omitempty"`
+	NewTools    *[]string          `json:"new_tools,omitempty"`
+	RaisedRisks *map[string]string `json:"raised_risks,omitempty"`
 }
 
 // ExtensionEnabledRequest defines model for ExtensionEnabledRequest.
@@ -3940,9 +4057,12 @@ type Message struct {
 	AlsoInChannel *bool `json:"also_in_channel,omitempty"`
 
 	// Answers Set on an agent's answer posted in its origin thread: the DM reply it answers
-	Answers      *MessageAnswers     `json:"answers,omitempty"`
-	Attachments  *[]FileAttachment   `json:"attachments,omitempty"`
-	AuthorId     openapi_types.UUID  `json:"author_id"`
+	Answers     *MessageAnswers    `json:"answers,omitempty"`
+	Attachments *[]FileAttachment  `json:"attachments,omitempty"`
+	AuthorId    openapi_types.UUID `json:"author_id"`
+
+	// Blocks An interactive message (round 56c): text, buttons, a select or a table next to the body
+	Blocks       *[]MessageBlock     `json:"blocks,omitempty"`
 	Body         string              `json:"body"`
 	ChannelId    openapi_types.UUID  `json:"channel_id"`
 	ClientMsgId  *string             `json:"client_msg_id,omitempty"`
@@ -3976,12 +4096,51 @@ type Message struct {
 // MessageKind defines model for Message.Kind.
 type MessageKind string
 
+// MessageActionRequest defines model for MessageActionRequest.
+type MessageActionRequest struct {
+	ActionId string `json:"action_id"`
+
+	// Value The chosen option of a select
+	Value *string `json:"value,omitempty"`
+}
+
+// MessageActionResult defines model for MessageActionResult.
+type MessageActionResult struct {
+	Id    openapi_types.UUID `json:"id"`
+	Label string             `json:"label"`
+}
+
 // MessageAnswers Set on an agent's answer posted in its origin thread: the DM reply it answers
 type MessageAnswers struct {
 	AuthorId  openapi_types.UUID `json:"author_id"`
 	ChannelId openapi_types.UUID `json:"channel_id"`
 	MessageId openapi_types.UUID `json:"message_id"`
 }
+
+// MessageBlock defines model for MessageBlock.
+type MessageBlock struct {
+	ActionId *string `json:"action_id,omitempty"`
+	Buttons  *[]struct {
+		ActionId string                    `json:"action_id"`
+		Label    string                    `json:"label"`
+		Style    *MessageBlockButtonsStyle `json:"style,omitempty"`
+	} `json:"buttons,omitempty"`
+	Columns *[]string `json:"columns,omitempty"`
+	Options *[]struct {
+		Label string `json:"label"`
+		Value string `json:"value"`
+	} `json:"options,omitempty"`
+	Placeholder *string          `json:"placeholder,omitempty"`
+	Rows        *[][]string      `json:"rows,omitempty"`
+	Text        *string          `json:"text,omitempty"`
+	Type        MessageBlockType `json:"type"`
+}
+
+// MessageBlockButtonsStyle defines model for MessageBlock.Buttons.Style.
+type MessageBlockButtonsStyle string
+
+// MessageBlockType defines model for MessageBlock.Type.
+type MessageBlockType string
 
 // MessageList defines model for MessageList.
 type MessageList struct {
@@ -4574,6 +4733,56 @@ type Role string
 // RollbackExtensionRequest defines model for RollbackExtensionRequest.
 type RollbackExtensionRequest struct {
 	Version int `json:"version"`
+}
+
+// RoutineInfo defines model for RoutineInfo.
+type RoutineInfo struct {
+	Action *string `json:"action,omitempty"`
+	Agent  *string `json:"agent,omitempty"`
+
+	// Channel The message trigger's channel
+	Channel    *string            `json:"channel,omitempty"`
+	Cron       *string            `json:"cron,omitempty"`
+	HasWebhook bool               `json:"has_webhook"`
+	LastRunAt  *time.Time         `json:"last_run_at,omitempty"`
+	Name       string             `json:"name"`
+	NextRunAt  *time.Time         `json:"next_run_at,omitempty"`
+	Output     *string            `json:"output,omitempty"`
+	Timezone   *string            `json:"timezone,omitempty"`
+	Tool       *string            `json:"tool,omitempty"`
+	Trigger    RoutineInfoTrigger `json:"trigger"`
+}
+
+// RoutineInfoTrigger defines model for RoutineInfo.Trigger.
+type RoutineInfoTrigger string
+
+// RoutineList defines model for RoutineList.
+type RoutineList struct {
+	Routines []RoutineInfo    `json:"routines"`
+	Runs     []RoutineRunInfo `json:"runs"`
+}
+
+// RoutineRunInfo defines model for RoutineRunInfo.
+type RoutineRunInfo struct {
+	CreatedAt  time.Time             `json:"created_at"`
+	Error      *string               `json:"error,omitempty"`
+	FinishedAt *time.Time            `json:"finished_at,omitempty"`
+	Id         openapi_types.UUID    `json:"id"`
+	Routine    string                `json:"routine"`
+	State      RoutineRunInfoState   `json:"state"`
+	Trigger    RoutineRunInfoTrigger `json:"trigger"`
+}
+
+// RoutineRunInfoState defines model for RoutineRunInfo.State.
+type RoutineRunInfoState string
+
+// RoutineRunInfoTrigger defines model for RoutineRunInfo.Trigger.
+type RoutineRunInfoTrigger string
+
+// RoutineWebhook defines model for RoutineWebhook.
+type RoutineWebhook struct {
+	// Path The webhook's path on this server (POST); shown once
+	Path string `json:"path"`
 }
 
 // Run defines model for Run.
@@ -5596,6 +5805,12 @@ type ListDelegationsParams struct {
 // ListDelegationsParamsState defines parameters for ListDelegations.
 type ListDelegationsParamsState string
 
+// ReceiveRoutineWebhookJSONBody defines parameters for ReceiveRoutineWebhook.
+type ReceiveRoutineWebhookJSONBody map[string]interface{}
+
+// ReceiveRoutineWebhookTextBody defines parameters for ReceiveRoutineWebhook.
+type ReceiveRoutineWebhookTextBody = string
+
 // ListActiveLeasesParams defines parameters for ListActiveLeases.
 type ListActiveLeasesParams struct {
 	State *ListActiveLeasesParamsState `form:"state,omitempty" json:"state,omitempty"`
@@ -5890,6 +6105,12 @@ type OpenDMJSONRequestBody = OpenDMRequest
 // SetGitMappingJSONRequestBody defines body for SetGitMapping for application/json ContentType.
 type SetGitMappingJSONRequestBody = SetGitRepoMappingRequest
 
+// ReceiveRoutineWebhookJSONRequestBody defines body for ReceiveRoutineWebhook for application/json ContentType.
+type ReceiveRoutineWebhookJSONRequestBody ReceiveRoutineWebhookJSONBody
+
+// ReceiveRoutineWebhookTextRequestBody defines body for ReceiveRoutineWebhook for text/plain ContentType.
+type ReceiveRoutineWebhookTextRequestBody = ReceiveRoutineWebhookTextBody
+
 // PostHostClaudeLoginResultJSONRequestBody defines body for PostHostClaudeLoginResult for application/json ContentType.
 type PostHostClaudeLoginResultJSONRequestBody = HostClaudeLoginResult
 
@@ -5940,6 +6161,9 @@ type SaveItemJSONRequestBody = SaveItemRequest
 
 // UpdateSavedJSONRequestBody defines body for UpdateSaved for application/json ContentType.
 type UpdateSavedJSONRequestBody = UpdateSavedRequest
+
+// MessageActionJSONRequestBody defines body for MessageAction for application/json ContentType.
+type MessageActionJSONRequestBody = MessageActionRequest
 
 // RequestFileFetchJSONRequestBody defines body for RequestFileFetch for application/json ContentType.
 type RequestFileFetchJSONRequestBody = CreateFileFetchRequest

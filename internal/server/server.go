@@ -694,6 +694,9 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			n := u.Plan.ExtCallsMonth
 			return &n, nil
 		}}
+	wsSvc.Channels = cvSvc
+	consumers = append(consumers, &eventlog.Consumer{Name: workshop.ConsumerName, Store: events, Tx: tx, Bus: b,
+		Handle: wsSvc.HandleEvent, Logger: opt.Logger})
 	workshophttp.Register(mux, wsSvc, idSvc)
 	registerCore := func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
@@ -951,6 +954,12 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		a.maintenanceLoop(ctx, maintenanceInterval)
+	}()
+	// Round 56c: the Workshop's routines (cron ticks and the run queue).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.Workshop.RoutineLoop(ctx, 5*time.Second)
 	}()
 	for _, c := range a.Consumers {
 		wg.Add(1)

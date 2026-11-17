@@ -5,6 +5,7 @@ package conversation
 
 import (
 	"context"
+	"strings"
 
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/db"
@@ -55,4 +56,23 @@ func (s *Service) RecordAction(ctx context.Context, by identity.Actor, messageID
 	}
 	s.Bus.Notify(seq)
 	return a, label, nil
+}
+
+// ChannelIDByName finds a live channel by name for an admin (the Workshop
+// puts an extension's bot into its routines' channels, round 56c).
+func (s *Service) ChannelIDByName(ctx context.Context, by identity.Actor, name string) (ids.ID, error) {
+	if !by.IsAdmin() || by.Kind != identity.KindHuman {
+		return ids.Nil, ErrForbidden
+	}
+	c, err := s.Store.ChannelByName(ctx, by.WorkspaceID, strings.TrimPrefix(strings.TrimSpace(name), "#"))
+	if err != nil || c.ArchivedAt != nil || c.Kind == KindDM {
+		return ids.Nil, db.ErrNotFound
+	}
+	return c.ID, nil
+}
+
+// IsMember reports whether an actor is a member of a channel.
+func (s *Service) IsMember(ctx context.Context, channelID, actorID ids.ID) bool {
+	_, err := s.Store.Member(ctx, channelID, actorID)
+	return err == nil
 }

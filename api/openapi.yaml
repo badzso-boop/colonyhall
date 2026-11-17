@@ -970,6 +970,60 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /workshop/extensions/{extensionId}/routines:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listExtensionRoutines
+      tags: [workshop]
+      description: Owner and admins (round 56c). The live version's routines with their schedule, and the latest runs.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RoutineList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/extensions/{extensionId}/routines/{routine}/webhook:
+    parameters:
+      - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: routine, in: path, required: true, schema: { type: string, maxLength: 24 } }
+    post:
+      operationId: createRoutineWebhook
+      tags: [workshop]
+      description: |
+        Owner and admins. A new secret address for a webhook routine (the
+        old one stops working). Shown once; only its hash is kept. Audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RoutineWebhook" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /hooks/ext/{workspaceId}/{routineId}/{token}:
+    parameters:
+      - { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: routineId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: token, in: path, required: true, schema: { type: string, maxLength: 128 } }
+    post:
+      operationId: receiveRoutineWebhook
+      tags: [workshop]
+      security: []
+      description: |
+        No login: the secret address is the credential (round 56c). Queues
+        the routine with the body (at most 256 KB; JSON or text) as data,
+        never as instructions. 202 when queued; every failure is the same
+        404.
+      requestBody:
+        content:
+          application/json: { schema: { type: object, additionalProperties: true } }
+          text/plain: { schema: { type: string } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "202": { description: Queued }
+        "404": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+
   /workshop/extensions/{extensionId}/take-over:
     parameters:
       - { name: extensionId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1235,6 +1289,27 @@ paths:
       responses:
         default: { $ref: "#/components/responses/Problem" }
         "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /messages/{messageId}/actions:
+    parameters:
+      - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: messageAction
+      tags: [conversation]
+      description: |
+        Humans (round 56c). A click on a button or a choice in a select of an
+        interactive message the caller can read. A click on an agent's
+        message replies in its thread and wakes the agent; on an
+        extension's bot's message it runs the extension's action routine.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MessageActionRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MessageActionResult" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
@@ -4198,6 +4273,7 @@ components:
         pinned: { type: boolean, description: Pinned in its conversation now }
         important: { type: boolean, description: "An agent sent it marked important (a result, a decision, something a person must act on)" }
         also_in_channel: { type: boolean, description: "A thread reply also shown in the channel's main stream" }
+        blocks: { type: array, items: { $ref: "#/components/schemas/MessageBlock" }, description: "An interactive message (round 56c): text, buttons, a select or a table next to the body" }
         forwarded_from_id: { type: string, format: uuid, description: "The message this forward quotes; set only for viewers who can read it" }
     ForwardRequest:
       type: object
@@ -5644,6 +5720,7 @@ components:
         new_egress: { type: array, items: { type: string } }
         new_store: { type: array, items: { type: string } }
         new_tools: { type: array, items: { type: string } }
+        new_routines: { type: array, items: { type: string }, description: New or changed routines }
         raised_risks: { type: object, additionalProperties: { type: string } }
         code_changed: { type: boolean }
     AddExtensionVersionRequest:
@@ -5681,11 +5758,88 @@ components:
       required: [version]
       properties:
         version: { type: integer, minimum: 1 }
+    RoutineInfo:
+      type: object
+      required: [name, trigger, has_webhook]
+      properties:
+        name: { type: string }
+        trigger: { type: string, enum: [cron, message, webhook, action] }
+        cron: { type: string }
+        timezone: { type: string }
+        channel: { type: string, description: The message trigger's channel }
+        action: { type: string }
+        tool: { type: string }
+        agent: { type: string }
+        output: { type: string }
+        next_run_at: { type: string, format: date-time }
+        last_run_at: { type: string, format: date-time }
+        has_webhook: { type: boolean }
+    RoutineRunInfo:
+      type: object
+      required: [id, routine, trigger, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        routine: { type: string }
+        trigger: { type: string, enum: [cron, message, webhook, action] }
+        state: { type: string, enum: [pending, running, done, failed] }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    RoutineList:
+      type: object
+      required: [routines, runs]
+      properties:
+        routines: { type: array, items: { $ref: "#/components/schemas/RoutineInfo" } }
+        runs: { type: array, items: { $ref: "#/components/schemas/RoutineRunInfo" } }
+    RoutineWebhook:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, description: "The webhook's path on this server (POST); shown once" }
     ExtensionEnabledRequest:
       type: object
       required: [enabled]
       properties:
         enabled: { type: boolean }
+    MessageBlock:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [text, buttons, select, table] }
+        text: { type: string }
+        buttons:
+          type: array
+          items:
+            type: object
+            required: [action_id, label]
+            properties:
+              action_id: { type: string }
+              label: { type: string }
+              style: { type: string, enum: [primary, danger] }
+        action_id: { type: string }
+        placeholder: { type: string }
+        options:
+          type: array
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value: { type: string }
+              label: { type: string }
+        columns: { type: array, items: { type: string } }
+        rows: { type: array, items: { type: array, items: { type: string } } }
+    MessageActionRequest:
+      type: object
+      required: [action_id]
+      properties:
+        action_id: { type: string, maxLength: 64 }
+        value: { type: string, maxLength: 200, description: The chosen option of a select }
+    MessageActionResult:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
     HostStorage:
       type: object
       required: [state]

@@ -21,6 +21,7 @@ const (
 	EventExtensionDisabled = "workshop.extension_disabled"
 	EventTakenOver         = "workshop.taken_over"
 	EventExtensionDeleted  = "workshop.extension_deleted"
+	EventWebhookCreated    = "workshop.webhook_created"
 )
 
 // ExtensionChanged is the payload of the extension events.

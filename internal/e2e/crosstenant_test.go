@@ -218,8 +218,17 @@ func (s *ctSuite) seed() {
 	must(a.do("POST", "/api/v1/workshop/extensions/"+created.ID+"/versions", owner, map[string]any{"manifest": map[string]any{
 		"description": acmeData + " manifest", "connectors": []string{"acmeconn"}, "store": []string{"notes"},
 		"tools": []map[string]any{{"name": "search", "kind": "http", "risk": "read", "description": acmeData + " tool",
-			"request": map[string]any{"connector": "acmeconn", "method": "GET", "path": "/x"}}}}}, nil), http.StatusCreated, "extension version")
+			"request": map[string]any{"connector": "acmeconn", "method": "GET", "path": "/x"}}},
+		"routines": []map[string]any{{"name": "hook", "trigger": map[string]any{"webhook": true}, "tool": "search",
+			"output": acmeRef + "-room"}}}}, nil), http.StatusCreated, "extension version")
 	must(a.do("POST", "/api/v1/workshop/extensions/"+created.ID+"/versions/1/approve", owner, nil, nil), http.StatusOK, "extension approval")
+	// Round 56c: its webhook routine's secret address.
+	var hook struct {
+		Path string `json:"path"`
+	}
+	must(a.do("POST", "/api/v1/workshop/extensions/"+created.ID+"/routines/hook/webhook", owner, nil, &hook), http.StatusOK, "routine webhook")
+	parts := strings.Split(hook.Path, "/")
+	s.obj["routineState"], s.obj["webhookToken"] = parts[len(parts)-2], parts[len(parts)-1]
 
 	for _, id := range s.obj {
 		if _, err := ids.Parse(id); err == nil {
@@ -408,6 +417,14 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 	case "extensionId":
 		// Round 56b: acme's extension.
 		return s.obj["extension"], true
+	case "routine":
+		return "hook", false
+	case "routineId":
+		// Round 56c: acme's webhook routine.
+		return s.obj["routineState"], true
+	case "token":
+		// acme's real webhook token: beta must still get nothing.
+		return s.obj["webhookToken"], false
 	case "connectorId":
 		// Round 56a: acme's Workshop connector.
 		return s.obj["connector"], true

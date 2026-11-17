@@ -114,3 +114,38 @@ ORDER BY doc_id LIMIT $5;
 -- name: StoreUsage :one
 SELECT count(*)::integer AS docs, COALESCE(sum(size_bytes), 0)::integer AS bytes
 FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2;
+
+-- name: UpsertRoutineState :exec
+INSERT INTO routine_state (id, workspace_id, extension_id, routine, next_run_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (extension_id, routine) DO UPDATE SET next_run_at = EXCLUDED.next_run_at;
+
+-- name: ListRoutineStates :many
+SELECT * FROM routine_state WHERE workspace_id = $1 AND extension_id = $2 ORDER BY routine;
+
+-- name: GetRoutineState :one
+SELECT * FROM routine_state WHERE workspace_id = $1 AND id = $2;
+
+-- name: SetRoutineNext :exec
+UPDATE routine_state SET next_run_at = $3, last_run_at = $4 WHERE workspace_id = $1 AND id = $2;
+
+-- name: SetRoutineWebhook :exec
+UPDATE routine_state SET webhook_token_hash = $3 WHERE workspace_id = $1 AND id = $2;
+
+-- name: DueRoutines :many
+SELECT * FROM routine_state WHERE next_run_at IS NOT NULL AND next_run_at <= $1 ORDER BY next_run_at LIMIT $2;
+
+-- name: InsertRoutineRun :exec
+INSERT INTO routine_run (id, workspace_id, extension_id, routine, trigger, input, state, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7);
+
+-- name: ClaimRoutineRuns :many
+UPDATE routine_run SET state = 'running', started_at = $1
+WHERE id IN (SELECT id FROM routine_run WHERE state = 'pending' ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+RETURNING *;
+
+-- name: FinishRoutineRun :exec
+UPDATE routine_run SET state = $3, error = $4, finished_at = $5 WHERE workspace_id = $1 AND id = $2;
+
+-- name: ListRoutineRuns :many
+SELECT * FROM routine_run WHERE workspace_id = $1 AND extension_id = $2 ORDER BY created_at DESC LIMIT $3;

@@ -58,4 +58,19 @@ type Store interface {
 	ListDocs(ctx context.Context, workspaceID, extensionID ids.ID, collection, after string, limit int) ([]StoreDoc, error)
 	// StoreUsage returns the number of documents and their bytes.
 	StoreUsage(ctx context.Context, workspaceID, extensionID ids.ID) (int, int, error)
+
+	// Routines (round 56c).
+	UpsertRoutineState(ctx context.Context, st RoutineState) error
+	ListRoutineStates(ctx context.Context, workspaceID, extensionID ids.ID) ([]RoutineState, error)
+	GetRoutineState(ctx context.Context, workspaceID, id ids.ID) (RoutineState, error)
+	SetRoutineNext(ctx context.Context, workspaceID, id ids.ID, next, last *time.Time) error
+	SetRoutineWebhook(ctx context.Context, workspaceID, id ids.ID, hash []byte) error
+	// DueRoutines lists the routines due across workspaces (system scope).
+	DueRoutines(ctx context.Context, now time.Time, limit int) ([]RoutineState, error)
+	InsertRoutineRun(ctx context.Context, r RoutineRun) error
+	// ClaimRoutineRuns marks pending runs running and returns them
+	// (system scope; each once).
+	ClaimRoutineRuns(ctx context.Context, now time.Time, limit int) ([]RoutineRun, error)
+	FinishRoutineRun(ctx context.Context, workspaceID, id ids.ID, state, errText string, at time.Time) error
+	ListRoutineRuns(ctx context.Context, workspaceID, extensionID ids.ID, limit int) ([]RoutineRun, error)
 }

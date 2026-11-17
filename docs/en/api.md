@@ -19,7 +19,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [agents](#agents) (12)
 - [approval](#approval) (2)
 - [compaction](#compaction) (10)
-- [conversation](#conversation) (32)
+- [conversation](#conversation) (33)
 - [decisions](#decisions) (1)
 - [delegation](#delegation) (5)
 - [delivery](#delivery) (2)
@@ -40,7 +40,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [search](#search) (1)
 - [sidebar](#sidebar) (8)
 - [wiki](#wiki) (8)
-- [workshop](#workshop) (24)
+- [workshop](#workshop) (27)
 - [Schemas](#schemas)
 
 ## activity
@@ -1032,6 +1032,28 @@ Humans. Marks every thread of the caller with unread replies as read.
 | --- | --- |
 | 200 | OK: [MarkedCount](#markedcount) (`application/json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /messages/{messageId}/actions`
+
+`messageAction` · Auth: signed in
+
+Humans (round 56c). A click on a button or a choice in a select of an
+interactive message the caller can read. A click on an agent's
+message replies in its thread and wakes the agent; on an
+extension's bot's message it runs the extension's action routine.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `messageId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [MessageActionRequest](#messageactionrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [MessageActionResult](#messageactionresult) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
 
 ### `POST /messages/{messageId}/forward`
 
@@ -3433,6 +3455,31 @@ Any actor. List all revisions of a wiki page.
 
 ## workshop
 
+### `POST /hooks/ext/{workspaceId}/{routineId}/{token}`
+
+`receiveRoutineWebhook` · Auth: public
+
+No login: the secret address is the credential (round 56c). Queues
+the routine with the body (at most 256 KB; JSON or text) as data,
+never as instructions. 202 when queued; every failure is the same
+404.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `workspaceId` | path | string (uuid) | yes |  |
+| `routineId` | path | string (uuid) | yes |  |
+| `token` | path | string | yes |  |
+
+Request body (`application/json`): object
+
+Request body (`text/plain`): string
+
+| Response | Body |
+| --- | --- |
+| 202 | Queued |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+| 413 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ### `GET /workshop/calls`
 
 `listToolCalls` · Auth: signed in
@@ -3707,6 +3754,41 @@ Request body (`application/json`, required): [RollbackExtensionRequest](#rollbac
 | Response | Body |
 | --- | --- |
 | 200 | OK: [Extension](#extension) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/extensions/{extensionId}/routines`
+
+`listExtensionRoutines` · Auth: signed in
+
+Owner and admins (round 56c). The live version's routines with their schedule, and the latest runs.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [RoutineList](#routinelist) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/extensions/{extensionId}/routines/{routine}/webhook`
+
+`createRoutineWebhook` · Auth: signed in
+
+Owner and admins. A new secret address for a webhook routine (the
+old one stops working). Shown once; only its hash is kept. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `extensionId` | path | string (uuid) | yes |  |
+| `routine` | path | string | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [RoutineWebhook](#routinewebhook) (`application/json`) |
 | 400 | Error: [Problem](#problem) (`application/problem+json`) |
 | 403 | Error: [Problem](#problem) (`application/problem+json`) |
 | 404 | Error: [Problem](#problem) (`application/problem+json`) |
@@ -5214,6 +5296,7 @@ Sent to the item's owner alone; ids only.
 | `code_changed` | boolean | yes |  |
 | `new_connectors` | string[] |  |  |
 | `new_egress` | string[] |  |  |
+| `new_routines` | string[] |  | New or changed routines |
 | `new_store` | string[] |  |  |
 | `new_tools` | string[] |  |  |
 | `raised_risks` | object |  |  |
@@ -5724,6 +5807,7 @@ Type: string
 | `answers` | [MessageAnswers](#messageanswers) |  | Set on an agent's answer posted in its origin thread: the DM reply it answers |
 | `attachments` | [FileAttachment](#fileattachment)[] |  |  |
 | `author_id` | string (uuid) | yes |  |
+| `blocks` | [MessageBlock](#messageblock)[] |  | An interactive message (round 56c): text, buttons, a select or a table next to the body |
 | `body` | string | yes |  |
 | `channel_id` | string (uuid) | yes |  |
 | `client_msg_id` | string |  |  |
@@ -5745,6 +5829,20 @@ Type: string
 | `reply_participant_ids` | string (uuid)[] |  | Up to 3 authors of the replies, the most recent replier first (thread roots only). |
 | `thread_root_id` | string (uuid) |  |  |
 
+### MessageActionRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `action_id` | string | yes |  |
+| `value` | string |  | The chosen option of a select |
+
+### MessageActionResult
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes |  |
+| `label` | string | yes |  |
+
 ### MessageAnswers
 
 Set on an agent's answer posted in its origin thread: the DM reply it answers
@@ -5754,6 +5852,19 @@ Set on an agent's answer posted in its origin thread: the DM reply it answers
 | `author_id` | string (uuid) | yes |  |
 | `channel_id` | string (uuid) | yes |  |
 | `message_id` | string (uuid) | yes |  |
+
+### MessageBlock
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `action_id` | string |  |  |
+| `buttons` | object[] |  |  |
+| `columns` | string[] |  |  |
+| `options` | object[] |  |  |
+| `placeholder` | string |  |  |
+| `rows` | string[][] |  |  |
+| `text` | string |  |  |
+| `type` | string | yes | One of: `text`, `buttons`, `select`, `table`. |
 
 ### MessageList
 
@@ -6331,6 +6442,48 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `version` | integer | yes |  |
+
+### RoutineInfo
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `action` | string |  |  |
+| `agent` | string |  |  |
+| `channel` | string |  | The message trigger's channel |
+| `cron` | string |  |  |
+| `has_webhook` | boolean | yes |  |
+| `last_run_at` | string (date-time) |  |  |
+| `name` | string | yes |  |
+| `next_run_at` | string (date-time) |  |  |
+| `output` | string |  |  |
+| `timezone` | string |  |  |
+| `tool` | string |  |  |
+| `trigger` | string | yes | One of: `cron`, `message`, `webhook`, `action`. |
+
+### RoutineList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routines` | [RoutineInfo](#routineinfo)[] | yes |  |
+| `runs` | [RoutineRunInfo](#routineruninfo)[] | yes |  |
+
+### RoutineRunInfo
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `created_at` | string (date-time) | yes |  |
+| `error` | string |  |  |
+| `finished_at` | string (date-time) |  |  |
+| `id` | string (uuid) | yes |  |
+| `routine` | string | yes |  |
+| `state` | string | yes | One of: `pending`, `running`, `done`, `failed`. |
+| `trigger` | string | yes | One of: `cron`, `message`, `webhook`, `action`. |
+
+### RoutineWebhook
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `path` | string | yes | The webhook's path on this server (POST); shown once |
 
 ### Run
 

@@ -12,6 +12,49 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimRoutineRuns = `-- name: ClaimRoutineRuns :many
+UPDATE routine_run SET state = 'running', started_at = $1
+WHERE id IN (SELECT id FROM routine_run WHERE state = 'pending' ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+RETURNING id, workspace_id, extension_id, routine, trigger, input, state, error, created_at, started_at, finished_at
+`
+
+type ClaimRoutineRunsParams struct {
+	StartedAt *time.Time
+	Limit     int32
+}
+
+func (q *Queries) ClaimRoutineRuns(ctx context.Context, arg ClaimRoutineRunsParams) ([]RoutineRun, error) {
+	rows, err := q.db.Query(ctx, claimRoutineRuns, arg.StartedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoutineRun
+	for rows.Next() {
+		var i RoutineRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Routine,
+			&i.Trigger,
+			&i.Input,
+			&i.State,
+			&i.Error,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCallsSince = `-- name: CountCallsSince :one
 SELECT count(*) FROM tool_call WHERE workspace_id = $1 AND started_at >= $2 AND outcome <> 'denied'
 `
@@ -83,6 +126,66 @@ func (q *Queries) DeleteExtension(ctx context.Context, arg DeleteExtensionParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const dueRoutines = `-- name: DueRoutines :many
+SELECT id, workspace_id, extension_id, routine, next_run_at, last_run_at, webhook_token_hash FROM routine_state WHERE next_run_at IS NOT NULL AND next_run_at <= $1 ORDER BY next_run_at LIMIT $2
+`
+
+type DueRoutinesParams struct {
+	NextRunAt *time.Time
+	Limit     int32
+}
+
+func (q *Queries) DueRoutines(ctx context.Context, arg DueRoutinesParams) ([]RoutineState, error) {
+	rows, err := q.db.Query(ctx, dueRoutines, arg.NextRunAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoutineState
+	for rows.Next() {
+		var i RoutineState
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Routine,
+			&i.NextRunAt,
+			&i.LastRunAt,
+			&i.WebhookTokenHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const finishRoutineRun = `-- name: FinishRoutineRun :exec
+UPDATE routine_run SET state = $3, error = $4, finished_at = $5 WHERE workspace_id = $1 AND id = $2
+`
+
+type FinishRoutineRunParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	State       string
+	Error       string
+	FinishedAt  *time.Time
+}
+
+func (q *Queries) FinishRoutineRun(ctx context.Context, arg FinishRoutineRunParams) error {
+	_, err := q.db.Exec(ctx, finishRoutineRun,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.State,
+		arg.Error,
+		arg.FinishedAt,
+	)
+	return err
 }
 
 const getConnector = `-- name: GetConnector :one
@@ -181,6 +284,30 @@ func (q *Queries) GetExtension(ctx context.Context, arg GetExtensionParams) (Ext
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getRoutineState = `-- name: GetRoutineState :one
+SELECT id, workspace_id, extension_id, routine, next_run_at, last_run_at, webhook_token_hash FROM routine_state WHERE workspace_id = $1 AND id = $2
+`
+
+type GetRoutineStateParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+}
+
+func (q *Queries) GetRoutineState(ctx context.Context, arg GetRoutineStateParams) (RoutineState, error) {
+	row := q.db.QueryRow(ctx, getRoutineState, arg.WorkspaceID, arg.ID)
+	var i RoutineState
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ExtensionID,
+		&i.Routine,
+		&i.NextRunAt,
+		&i.LastRunAt,
+		&i.WebhookTokenHash,
 	)
 	return i, err
 }
@@ -392,6 +519,34 @@ func (q *Queries) InsertGrant(ctx context.Context, arg InsertGrantParams) error 
 		arg.TargetKind,
 		arg.TargetID,
 		arg.GrantedBy,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertRoutineRun = `-- name: InsertRoutineRun :exec
+INSERT INTO routine_run (id, workspace_id, extension_id, routine, trigger, input, state, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
+`
+
+type InsertRoutineRunParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Routine     string
+	Trigger     string
+	Input       []byte
+	CreatedAt   time.Time
+}
+
+func (q *Queries) InsertRoutineRun(ctx context.Context, arg InsertRoutineRunParams) error {
+	_, err := q.db.Exec(ctx, insertRoutineRun,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Routine,
+		arg.Trigger,
+		arg.Input,
 		arg.CreatedAt,
 	)
 	return err
@@ -676,6 +831,85 @@ func (q *Queries) ListGrants(ctx context.Context, workspaceID uuid.UUID) ([]Agen
 	return items, nil
 }
 
+const listRoutineRuns = `-- name: ListRoutineRuns :many
+SELECT id, workspace_id, extension_id, routine, trigger, input, state, error, created_at, started_at, finished_at FROM routine_run WHERE workspace_id = $1 AND extension_id = $2 ORDER BY created_at DESC LIMIT $3
+`
+
+type ListRoutineRunsParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Limit       int32
+}
+
+func (q *Queries) ListRoutineRuns(ctx context.Context, arg ListRoutineRunsParams) ([]RoutineRun, error) {
+	rows, err := q.db.Query(ctx, listRoutineRuns, arg.WorkspaceID, arg.ExtensionID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoutineRun
+	for rows.Next() {
+		var i RoutineRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Routine,
+			&i.Trigger,
+			&i.Input,
+			&i.State,
+			&i.Error,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoutineStates = `-- name: ListRoutineStates :many
+SELECT id, workspace_id, extension_id, routine, next_run_at, last_run_at, webhook_token_hash FROM routine_state WHERE workspace_id = $1 AND extension_id = $2 ORDER BY routine
+`
+
+type ListRoutineStatesParams struct {
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+}
+
+func (q *Queries) ListRoutineStates(ctx context.Context, arg ListRoutineStatesParams) ([]RoutineState, error) {
+	rows, err := q.db.Query(ctx, listRoutineStates, arg.WorkspaceID, arg.ExtensionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoutineState
+	for rows.Next() {
+		var i RoutineState
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExtensionID,
+			&i.Routine,
+			&i.NextRunAt,
+			&i.LastRunAt,
+			&i.WebhookTokenHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listToolCalls = `-- name: ListToolCalls :many
 SELECT id, workspace_id, actor_id, target_kind, target_id, tool, risk, approval_id, started_at, duration_ms, in_bytes, out_bytes, outcome, error FROM tool_call
 WHERE workspace_id = $1
@@ -906,6 +1140,42 @@ func (q *Queries) SetExtensionErrors(ctx context.Context, arg SetExtensionErrors
 	return result.RowsAffected(), nil
 }
 
+const setRoutineNext = `-- name: SetRoutineNext :exec
+UPDATE routine_state SET next_run_at = $3, last_run_at = $4 WHERE workspace_id = $1 AND id = $2
+`
+
+type SetRoutineNextParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	NextRunAt   *time.Time
+	LastRunAt   *time.Time
+}
+
+func (q *Queries) SetRoutineNext(ctx context.Context, arg SetRoutineNextParams) error {
+	_, err := q.db.Exec(ctx, setRoutineNext,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.NextRunAt,
+		arg.LastRunAt,
+	)
+	return err
+}
+
+const setRoutineWebhook = `-- name: SetRoutineWebhook :exec
+UPDATE routine_state SET webhook_token_hash = $3 WHERE workspace_id = $1 AND id = $2
+`
+
+type SetRoutineWebhookParams struct {
+	WorkspaceID      uuid.UUID
+	ID               uuid.UUID
+	WebhookTokenHash []byte
+}
+
+func (q *Queries) SetRoutineWebhook(ctx context.Context, arg SetRoutineWebhookParams) error {
+	_, err := q.db.Exec(ctx, setRoutineWebhook, arg.WorkspaceID, arg.ID, arg.WebhookTokenHash)
+	return err
+}
+
 const storeUsage = `-- name: StoreUsage :one
 SELECT count(*)::integer AS docs, COALESCE(sum(size_bytes), 0)::integer AS bytes
 FROM ext_store_doc WHERE workspace_id = $1 AND extension_id = $2
@@ -1002,4 +1272,29 @@ func (q *Queries) UpdateExtension(ctx context.Context, arg UpdateExtensionParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const upsertRoutineState = `-- name: UpsertRoutineState :exec
+INSERT INTO routine_state (id, workspace_id, extension_id, routine, next_run_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (extension_id, routine) DO UPDATE SET next_run_at = EXCLUDED.next_run_at
+`
+
+type UpsertRoutineStateParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ExtensionID uuid.UUID
+	Routine     string
+	NextRunAt   *time.Time
+}
+
+func (q *Queries) UpsertRoutineState(ctx context.Context, arg UpsertRoutineStateParams) error {
+	_, err := q.db.Exec(ctx, upsertRoutineState,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.ExtensionID,
+		arg.Routine,
+		arg.NextRunAt,
+	)
+	return err
 }

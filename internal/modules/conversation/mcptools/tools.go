@@ -6,6 +6,7 @@ package mcptools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,13 +22,14 @@ import (
 
 // SendInput is the input of the send tool.
 type SendInput struct {
-	Channel     string   `json:"channel" jsonschema:"channel name (general or #general), or @handle for a direct message"`
-	Text        string   `json:"text" jsonschema:"message text; keep it short (agents: max 600 characters)"`
-	Thread      string   `json:"thread,omitempty" jsonschema:"thread root message id to reply in a thread"`
-	ClientMsgID string   `json:"client_msg_id,omitempty" jsonschema:"optional idempotency key; resending with the same key does not duplicate"`
-	Files       []string `json:"files,omitempty" jsonschema:"optional file IDs to attach to the message"`
-	Elaborate   bool     `json:"elaborate,omitempty" jsonschema:"allow a long answer; set only when someone asked you to elaborate"`
-	Important   bool     `json:"important,omitempty" jsonschema:"mark and pin it: only for a result, a decision, or something a person must act on (at most 5 a day per conversation)"`
+	Channel     string               `json:"channel" jsonschema:"channel name (general or #general), or @handle for a direct message"`
+	Text        string               `json:"text" jsonschema:"message text; keep it short (agents: max 600 characters)"`
+	Thread      string               `json:"thread,omitempty" jsonschema:"thread root message id to reply in a thread"`
+	ClientMsgID string               `json:"client_msg_id,omitempty" jsonschema:"optional idempotency key; resending with the same key does not duplicate"`
+	Files       []string             `json:"files,omitempty" jsonschema:"optional file IDs to attach to the message"`
+	Elaborate   bool                 `json:"elaborate,omitempty" jsonschema:"allow a long answer; set only when someone asked you to elaborate"`
+	Important   bool                 `json:"important,omitempty" jsonschema:"mark and pin it: only for a result, a decision, or something a person must act on (at most 5 a day per conversation)"`
+	Blocks      []conversation.Block `json:"blocks,omitempty" jsonschema:"optional interactive blocks: {type:text,text}, {type:buttons,buttons:[{action_id,label,style?}]} (max 5), {type:select,action_id,options:[{value,label}]}, {type:table,columns,rows}; a click comes back to you as a thread reply"`
 }
 
 // PinInput is the input of the pin tool.
@@ -103,7 +105,15 @@ func Register(s *mcp.Server, svc *conversation.Service, dir identity.Directory, 
 				}
 			}
 		}
+		var blocks []conversation.Block
+		if len(in.Blocks) > 0 {
+			raw, _ := json.Marshal(in.Blocks)
+			if blocks, err = conversation.ParseBlocks(raw); err != nil {
+				return nil, nil, err
+			}
+		}
 		res, err := svc.SendMessage(ctx, actor, conversation.SendInput{
+			Blocks:    blocks,
 			ChannelID: ch.ID, ThreadRootID: root, ClientMsgID: in.ClientMsgID, Body: in.Text, Elaborate: in.Elaborate,
 			FileIDs: fileIDs, OriginChannelID: origChanID, OriginThreadID: origThreadID, Important: in.Important,
 		})

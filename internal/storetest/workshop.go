@@ -247,3 +247,57 @@ func testExtensions(t *testing.T, b Backend) {
 	}
 	must(t, st.InsertExtension(ctx, dup)) // the slug is free again
 }
+
+// testRoutines: routine state (upsert keeps one row per routine, due,
+// webhook hash) and the run queue (claimed once, finished).
+func testRoutines(t *testing.T, b Backend) {
+	f := setup(t, b)
+	ctx := db.WithWorkspace(context.Background(), f.ws.ID)
+	st := b.Workshop
+	e := workshop.Extension{ID: gen.New(), WorkspaceID: f.ws.ID, Slug: "rt", Title: "Rt", MaintainerID: f.human.ID,
+		BotID: f.agent.ID, State: workshop.StateLive, CreatedAt: t0, UpdatedAt: t0}
+	must(t, st.InsertExtension(ctx, e))
+	next := t0.Add(time.Hour)
+	rs := workshop.RoutineState{ID: gen.New(), WorkspaceID: f.ws.ID, ExtensionID: e.ID, Routine: "daily", NextRunAt: &next}
+	must(t, st.UpsertRoutineState(ctx, rs))
+	later := t0.Add(2 * time.Hour)
+	must(t, st.UpsertRoutineState(ctx, workshop.RoutineState{ID: gen.New(), WorkspaceID: f.ws.ID, ExtensionID: e.ID, Routine: "daily", NextRunAt: &later}))
+	list, err := st.ListRoutineStates(ctx, f.ws.ID, e.ID)
+	must(t, err)
+	if len(list) != 1 || list[0].ID != rs.ID || !list[0].NextRunAt.Equal(later) {
+		t.Fatalf("upsert: %+v", list)
+	}
+	sys := b.System(ctx)
+	if due, _ := st.DueRoutines(sys, t0, 10); len(due) != 0 {
+		t.Fatalf("due too early: %+v", due)
+	}
+	due, err := st.DueRoutines(sys, later, 10)
+	must(t, err)
+	if len(due) != 1 {
+		t.Fatalf("due: %+v", due)
+	}
+	must(t, st.SetRoutineNext(ctx, f.ws.ID, rs.ID, nil, &later))
+	must(t, st.SetRoutineWebhook(ctx, f.ws.ID, rs.ID, []byte{1, 2, 3}))
+	got, err := st.GetRoutineState(ctx, f.ws.ID, rs.ID)
+	must(t, err)
+	if got.NextRunAt != nil || got.LastRunAt == nil || len(got.WebhookTokenHash) != 3 {
+		t.Fatalf("state: %+v", got)
+	}
+	run := workshop.RoutineRun{ID: gen.New(), WorkspaceID: f.ws.ID, ExtensionID: e.ID, Routine: "daily", Trigger: workshop.TriggerCron,
+		Input: json.RawMessage(`{"kind":"cron"}`), CreatedAt: t0}
+	must(t, st.InsertRoutineRun(ctx, run))
+	claimed, err := st.ClaimRoutineRuns(sys, t0, 10)
+	must(t, err)
+	if len(claimed) != 1 || claimed[0].State != workshop.RunRunning {
+		t.Fatalf("claim: %+v", claimed)
+	}
+	if again, _ := st.ClaimRoutineRuns(sys, t0, 10); len(again) != 0 {
+		t.Fatalf("claimed twice: %+v", again)
+	}
+	must(t, st.FinishRoutineRun(ctx, f.ws.ID, run.ID, workshop.RunFailed, "boom", t0.Add(time.Minute)))
+	runs, err := st.ListRoutineRuns(ctx, f.ws.ID, e.ID, 10)
+	must(t, err)
+	if len(runs) != 1 || runs[0].State != workshop.RunFailed || runs[0].Error != "boom" || runs[0].FinishedAt == nil {
+		t.Fatalf("runs: %+v", runs)
+	}
+}

@@ -133,6 +133,8 @@ type Manifest struct {
 	Egress      []string       `json:"egress,omitempty"`
 	Store       []string       `json:"store,omitempty"`
 	Tools       []ManifestTool `json:"tools"`
+	// Routines (round 56c): a trigger and a tool or an agent.
+	Routines []Routine `json:"routines,omitempty"`
 }
 
 // ManifestTool is one tool of a manifest.
@@ -286,6 +288,14 @@ func (m *Manifest) Normalize(connectors map[string]Connector) error {
 	return nil
 }
 
+// The routines are checked after the tools (they name them).
+func (m *Manifest) normalize(connectors map[string]Connector) error {
+	if err := m.Normalize(connectors); err != nil {
+		return err
+	}
+	return m.normalizeRoutines()
+}
+
 // HasJS reports whether the manifest has a code tool.
 func (m Manifest) HasJS() bool {
 	for _, t := range m.Tools {
@@ -313,6 +323,7 @@ type Diff struct {
 	NewEgress     []string          `json:"new_egress,omitempty"`
 	NewStore      []string          `json:"new_store,omitempty"`
 	NewTools      []string          `json:"new_tools,omitempty"`
+	NewRoutines   []string          `json:"new_routines,omitempty"`
 	RaisedRisks   map[string]string `json:"raised_risks,omitempty"`
 	CodeChanged   bool              `json:"code_changed"`
 }
@@ -358,12 +369,20 @@ func DiffVersions(live *Version, v Version) Diff {
 		}
 	}
 	sort.Strings(d.NewTools)
+	for _, r := range v.Manifest.Routines {
+		or, ok := old.Routine(r.Name)
+		a, _ := json.Marshal(r)
+		b, _ := json.Marshal(or)
+		if !ok || string(a) != string(b) {
+			d.NewRoutines = append(d.NewRoutines, r.Name)
+		}
+	}
 	return d
 }
 
 func diffEmpty(d Diff) bool {
 	return !d.CodeChanged && len(d.NewConnectors) == 0 && len(d.NewEgress) == 0 && len(d.NewStore) == 0 &&
-		len(d.NewTools) == 0 && len(d.RaisedRisks) == 0
+		len(d.NewTools) == 0 && len(d.RaisedRisks) == 0 && len(d.NewRoutines) == 0
 }
 
 func sameRequest(a, b *HTTPRequest) bool {

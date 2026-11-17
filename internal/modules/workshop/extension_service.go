@@ -161,7 +161,7 @@ func (s *Service) AddVersion(ctx context.Context, by identity.Actor, id ids.ID, 
 		conns[c.Slug] = c
 	}
 	m := in.Manifest
-	if err := m.Normalize(conns); err != nil {
+	if err := m.normalize(conns); err != nil {
 		return Version{}, Diff{}, err
 	}
 	v := Version{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, ExtensionID: e.ID, Manifest: m, CreatedBy: by.ID, CreatedAt: s.Clock.Now()}
@@ -260,6 +260,9 @@ func (s *Service) ApproveVersion(ctx context.Context, by identity.Actor, id ids.
 		if e.ApprovalOff && by.Role != identity.RoleOwner && !diffEmpty(diff) {
 			e.ApprovalOff = false
 		}
+		if err := s.syncRoutines(ctx, by, e, v); err != nil {
+			return err
+		}
 		if err := s.Store.UpdateExtension(ctx, e); err != nil {
 			return err
 		}
@@ -302,6 +305,13 @@ func (s *Service) Rollback(ctx context.Context, by identity.Actor, id ids.ID, ve
 		}
 		if e.ApprovalOff && by.Role != identity.RoleOwner && e.LiveVersion != version {
 			e.ApprovalOff = false // see ApproveVersion
+		}
+		v, err := s.Store.GetVersion(ctx, by.WorkspaceID, e.ID, version)
+		if err != nil {
+			return ErrVersionNotFound
+		}
+		if err := s.syncRoutines(ctx, by, e, v); err != nil {
+			return err
 		}
 		e.LiveVersion, e.State, e.DisabledReason, e.UpdatedAt = version, StateLive, "", s.Clock.Now()
 		if err := s.Store.UpdateExtension(ctx, e); err != nil {

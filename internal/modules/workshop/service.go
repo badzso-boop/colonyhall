@@ -80,6 +80,8 @@ type Service struct {
 	Core     CoreTool
 	Budget   CallBudget
 	Limits   Limits
+	// Channels: the routines' posts and the bots' channels (round 56c).
+	Channels Channels
 
 	slotsMu sync.Mutex
 	slots   map[ids.ID]chan struct{}

@@ -1075,6 +1075,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workshop/extensions/{extensionId}/routines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Owner and admins (round 56c). The live version's routines with their schedule, and the latest runs. */
+        get: operations["listExtensionRoutines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/extensions/{extensionId}/routines/{routine}/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                routine: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Owner and admins. A new secret address for a webhook routine (the
+         *     old one stops working). Shown once; only its hash is kept. Audited.
+         */
+        post: operations["createRoutineWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hooks/ext/{workspaceId}/{routineId}/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                routineId: string;
+                token: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description No login: the secret address is the credential (round 56c). Queues
+         *     the routine with the body (at most 256 KB; JSON or text) as data,
+         *     never as instructions. 202 when queued; every failure is the same
+         *     404.
+         */
+        post: operations["receiveRoutineWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workshop/extensions/{extensionId}/take-over": {
         parameters: {
             query?: never;
@@ -1335,6 +1403,30 @@ export interface paths {
         head?: never;
         /** @description Humans, their own items. Mark done or not done; set or clear the reminder. */
         patch: operations["updateSaved"];
+        trace?: never;
+    };
+    "/messages/{messageId}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Humans (round 56c). A click on a button or a choice in a select of an
+         *     interactive message the caller can read. A click on an agent's
+         *     message replies in its thread and wakes the agent; on an
+         *     extension's bot's message it runs the extension's action routine.
+         */
+        post: operations["messageAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/messages/{messageId}/forward": {
@@ -4425,6 +4517,8 @@ export interface components {
             important?: boolean;
             /** @description A thread reply also shown in the channel's main stream */
             also_in_channel?: boolean;
+            /** @description An interactive message (round 56c): text, buttons, a select or a table next to the body */
+            blocks?: components["schemas"]["MessageBlock"][];
             /**
              * Format: uuid
              * @description The message this forward quotes; set only for viewers who can read it
@@ -6067,6 +6161,8 @@ export interface components {
             new_egress?: string[];
             new_store?: string[];
             new_tools?: string[];
+            /** @description New or changed routines */
+            new_routines?: string[];
             raised_risks?: {
                 [key: string]: string;
             };
@@ -6102,8 +6198,77 @@ export interface components {
         RollbackExtensionRequest: {
             version: number;
         };
+        RoutineInfo: {
+            name: string;
+            /** @enum {string} */
+            trigger: "cron" | "message" | "webhook" | "action";
+            cron?: string;
+            timezone?: string;
+            /** @description The message trigger's channel */
+            channel?: string;
+            action?: string;
+            tool?: string;
+            agent?: string;
+            output?: string;
+            /** Format: date-time */
+            next_run_at?: string;
+            /** Format: date-time */
+            last_run_at?: string;
+            has_webhook: boolean;
+        };
+        RoutineRunInfo: {
+            /** Format: uuid */
+            id: string;
+            routine: string;
+            /** @enum {string} */
+            trigger: "cron" | "message" | "webhook" | "action";
+            /** @enum {string} */
+            state: "pending" | "running" | "done" | "failed";
+            error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
+        RoutineList: {
+            routines: components["schemas"]["RoutineInfo"][];
+            runs: components["schemas"]["RoutineRunInfo"][];
+        };
+        RoutineWebhook: {
+            /** @description The webhook's path on this server (POST); shown once */
+            path: string;
+        };
         ExtensionEnabledRequest: {
             enabled: boolean;
+        };
+        MessageBlock: {
+            /** @enum {string} */
+            type: "text" | "buttons" | "select" | "table";
+            text?: string;
+            buttons?: {
+                action_id: string;
+                label: string;
+                /** @enum {string} */
+                style?: "primary" | "danger";
+            }[];
+            action_id?: string;
+            placeholder?: string;
+            options?: {
+                value: string;
+                label: string;
+            }[];
+            columns?: string[];
+            rows?: string[][];
+        };
+        MessageActionRequest: {
+            action_id: string;
+            /** @description The chosen option of a select */
+            value?: string;
+        };
+        MessageActionResult: {
+            /** Format: uuid */
+            id: string;
+            label: string;
         };
         HostStorage: {
             state: components["schemas"]["StorageState"];
@@ -8990,6 +9155,90 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listExtensionRoutines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutineList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createRoutineWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extensionId: string;
+                routine: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutineWebhook"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    receiveRoutineWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                routineId: string;
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     takeOverExtension: {
         parameters: {
             query?: never;
@@ -9468,6 +9717,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavedItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    messageAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageActionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageActionResult"];
                 };
             };
             400: components["responses"]["Problem"];

@@ -66,6 +66,9 @@ func diffToAPI(d workshop.Diff) apispec.ExtensionDiff {
 	if len(d.NewTools) > 0 {
 		out.NewTools = &d.NewTools
 	}
+	if len(d.NewRoutines) > 0 {
+		out.NewRoutines = &d.NewRoutines
+	}
 	if len(d.RaisedRisks) > 0 {
 		out.RaisedRisks = &d.RaisedRisks
 	}

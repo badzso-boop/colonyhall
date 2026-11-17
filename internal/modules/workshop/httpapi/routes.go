@@ -104,6 +104,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}
 
 	registerExtensions(mux, svc, wrap)
+	registerRoutines(mux, svc, wrap)
 
 	mux.Handle("GET /api/v1/workshop/connectors", wrap(func(w http.ResponseWriter, r *http.Request) {
 		vs, err := svc.ListConnectors(r.Context(), httpx.Actor(r))

@@ -25,6 +25,8 @@ type Store struct {
 	versions   map[ids.ID][]workshop.Version // by extension
 	approvals  []workshop.Approval
 	docs       map[string]workshop.StoreDoc // extension/collection/doc
+	states     []workshop.RoutineState
+	runs       []workshop.RoutineRun
 }
 
 // New returns an empty store.

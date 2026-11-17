@@ -6,6 +6,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -31,6 +32,7 @@ func init() {
 	httpx.RegisterStatus(http.StatusConflict, conversation.ErrLastAdmin, conversation.ErrDMUnchangeable)
 	httpx.RegisterProblemType(http.StatusConflict, "channel_locked", conversation.ErrChannelLocked)
 	httpx.RegisterProblemType(http.StatusConflict, "channel_archived", conversation.ErrChannelArchived)
+	httpx.RegisterValidation(conversation.ErrBadBlocks, conversation.ErrUnknownAction)
 	httpx.RegisterValidation(conversation.ErrNothingToUpdate, conversation.ErrBadMuteUntil, conversation.ErrBadChannelKind)
 	httpx.RegisterStatus(http.StatusNotFound, conversation.ErrMemberNotFound)
 	httpx.RegisterValidation(conversation.ErrPinRetracted, conversation.ErrImportantHumans, conversation.ErrBadNotifyLevel, conversation.ErrAlsoNeedsThread, conversation.ErrForwardRetracted)
@@ -74,6 +76,13 @@ func MessageToAPI(m conversation.Message) apispec.Message {
 	}
 	if m.Important {
 		out.Important = httpx.Ptr(true)
+	}
+	if len(m.Blocks) > 0 {
+		var bs []apispec.MessageBlock
+		raw, _ := json.Marshal(m.Blocks)
+		if json.Unmarshal(raw, &bs) == nil {
+			out.Blocks = &bs
+		}
 	}
 	if m.AlsoInChannel {
 		out.AlsoInChannel = httpx.Ptr(true)
@@ -793,6 +802,25 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}
+	mux.Handle("POST /api/v1/messages/{id}/actions", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, err := ids.Parse(r.PathValue("id"))
+		if err != nil {
+			httpx.Error(w, r, &httpx.BadRequest{Detail: "messageId must be a UUID"})
+			return
+		}
+		var in apispec.MessageActionRequest
+		if err := httpx.Decode(r, &in); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		a, label, err := svc.RecordAction(r.Context(), httpx.Actor(r), id, in.ActionId, httpx.Deref(in.Value, ""))
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, apispec.MessageActionResult{Id: a.ID, Label: label})
+	}))
+
 	mux.Handle("POST /api/v1/messages/{id}/forward", wrap(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r, "id")
 		if !ok {
