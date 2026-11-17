@@ -875,7 +875,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Owner and admins. Overrides a tool's risk; an empty risk removes the override. Audited. */
+        /**
+         * @description Owner and admins may raise a tool's risk; lowering it (which skips
+         *     the approval, like switching the approval off) is the owner's alone
+         *     (403 for an admin). An empty risk removes the override. Audited.
+         */
         put: operations["setConnectorToolRisk"];
         post?: never;
         delete?: never;

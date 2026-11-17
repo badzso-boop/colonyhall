@@ -3577,7 +3577,9 @@ Owner and admins. Fetches an MCP connector's tool list again.
 
 `setConnectorToolRisk` · Auth: signed in
 
-Owner and admins. Overrides a tool's risk; an empty risk removes the override. Audited.
+Owner and admins may raise a tool's risk; lowering it (which skips
+the approval, like switching the approval off) is the owner's alone
+(403 for an admin). An empty risk removes the override. Audited.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |

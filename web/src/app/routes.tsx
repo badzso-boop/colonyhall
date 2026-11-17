@@ -2,10 +2,21 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import { Route, Routes } from "react-router";
-import { AuditPage, RunsPage, SettingsPage, StatusPage, TokensPage, UsersPage } from "@/features/admin";
+import {
+  AuditPage,
+  RunsPage,
+  SettingsPage,
+  StatusPage,
+  TokensPage,
+  UsersPage,
+} from "@/features/admin";
 import { ActivityPage } from "@/features/activity";
 import { AgentsPage } from "@/features/agents";
-import { ConversationPage, DraftsPage, ThreadsPage } from "@/features/conversation";
+import {
+  ConversationPage,
+  DraftsPage,
+  ThreadsPage,
+} from "@/features/conversation";
 import { DecisionsPage } from "@/features/decisions";
 import { DesignPage } from "@/features/design";
 import { MyFilesPage } from "@/features/files";
@@ -19,6 +30,7 @@ import { SchedulesPage } from "@/features/schedules";
 import { SearchPage } from "@/features/search";
 import { WikiIndexPage, WikiTopicPage } from "@/features/wiki";
 import { CalendarPage, TasksPage } from "@/features/planner";
+import { WorkshopPage } from "@/features/workshop";
 import { Shell } from "@/layout";
 import { Home } from "./Home";
 import { RequireSession } from "./session";
@@ -58,6 +70,7 @@ export function AppRoutes() {
         <Route path="decisions" element={<DecisionsPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="hosts" element={<HostsPage />} />
+        <Route path="workshop" element={<WorkshopPage />} />
         <Route path="hosts/:hostId" element={<HostsPage />} />
         <Route path="admin/runs" element={<RunsPage />} />
         <Route path="admin/settings" element={<SettingsPage />} />

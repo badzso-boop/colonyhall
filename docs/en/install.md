@@ -43,6 +43,12 @@ sh install.sh            # downloads and verifies colony, then starts `colony se
 - **Quota:** the owner sets it there in GB; empty or 0 is unlimited (the default, so an upgrade changes nothing). Above 80% and 95% the owner gets a DM from the "Colonyhall" system account, and the owner and admins see a banner under the header. When it is full, uploads fail with a clear error and the guards do not wake the agents until there is room; messages still work. Make room by deleting files (everyone their own) or by raising the quota.
 - **Upgrade:** migration `00067` adds two columns and two indexes to `file` and the `workspace_storage` table. The usage is computed by the first hourly maintenance (it also runs at start-up); until then the card shows no database share.
 
+### The Workshop: connectors to MCP servers and APIs (round 56a)
+
+- **Workshop** in the sidebar (owner and admins): connect an external MCP server (e.g. Jira, GitHub) or an HTTP API, and grant agents its tools. An agent sees a connector's tools as `<short name>__<tool>` next to Colonyhall's own tools only after a grant. Calls of tools that write or send data out ask a person through the approval card (the owner can switch that off per connector); the call log shows who called what, without the content.
+- **Secrets** (the connector's token, header or password) are stored encrypted with `COLONY_SECRET_KEYS` (the installer writes one; without it only connectors without a secret can be added) and are never shown again or given to the agents: the server puts them on its own requests. `colonyhall rotate-secrets` re-encrypts them after a key rotation.
+- **Outbound addresses:** connectors reach public https addresses only. To reach something on your own network (e.g. a Gitea on the LAN), list it in `.env`: `COLONY_EGRESS_ALLOW=192.168.1.10,gitea.lan` (CIDRs, addresses or host names; plain http is then allowed to them). Refused in multi-tenant mode. Plan and the parts still to come (own tools, routines, the Builder agent): `docs/25-onfejlesztes-terv.md` (Hungarian).
+
 ### Several customers on one server (multi-tenant mode)
 
 Off by default. When on, every workspace has its own subdomain (`<slug>.<base domain>`). Details: `docs/02-muszaki-specifikacio.md` and `docs/23-elkulonites.md` (Hungarian).

@@ -307,3 +307,16 @@ Hamis külső MCP-szerver (go-sdk, `httptest`) és hamis HTTP API (Jira, GIF) a 
 | 4 | QuickJS-könyvtár | `fastschema/qjs` **saját port mögött** (`extrunner.Engine`), rögzített verzióval; **a fejlődését követjük**: a `task.md`-ben ismétlődő tétel, és a `make vuln` mellé egy `make deps-watch`, ami kiírja, van-e újabb verzió |
 | 5 | Havi híváskeret | `ext_calls_month` a csomagban; **NULL = korlátlan** (az alapérték, mint a tárhelynél) |
 | 6 | Korlátszámok | A 13.4 értékei az alapértékek, finomhangolás később. **A szerver tulajdonosa állítja** a meglévő módszerrel: környezeti változók a szerver `.env`-jében (mint a `COLONY_MAX_UPLOAD_MB`): `COLONY_EXT_MEMORY_MB` (64), `COLONY_EXT_TIMEOUT` (10s), `COLONY_EXT_OUTPUT_KB` (256), `COLONY_EXT_HOST_CALLS` (50), `COLONY_EXT_CONCURRENCY_WORKSPACE` (4), `COLONY_EXT_CONCURRENCY_TOTAL` (16), `COLONY_EXT_DISABLE_AFTER` (`5/10/10m`: egymást követő hibák / hibák / ablak). Többbérlős módban a csomag felülírhatja (később, a csomagtábla oszlopaival); a Rendszerállapot oldal mutatja az érvényes értékeket |
+
+## 14. Megvalósítás
+
+### 14.1 56a: MCP-átjáró és kapcsolatok (2026-11-17)
+
+**Kész:** `internal/platform/egress` (13.7), `internal/modules/secrets` (titkosított titkok, `rotate-secrets` minden szerveren), `internal/modules/workshop` (kapcsolatok, engedélyek, kockázat, jóváhagyás, hívásnapló, `mcpremote` a külső MCP-szerverekhez), az átjáró a `/mcp`-n (`<kapcsolat>__<eszköz>`, csak engedéllyel), REST (`/api/v1/workshop/*`), migráció `00071`, a PWA **Műhely** oldala (Kapcsolatok, Engedélyek, Hívásnapló), `COLONY_EGRESS_ALLOW`.
+
+**Eltérések és pontosítások a 13. ponthoz képest:**
+- **Csatorna létrehozása és tagkezelés agentnek** (13.3, „ember = agent”): ma a mag szándékosan tiltja (`policy.CanCreateChannel`, `CanManageMembers`). Ezt az 56a nem lazítja; az Építő meta-eszközeként jön az **56d**-ben, a `workshop` engedélyhez és a tulajdonos/admin gazdához kötve.
+- **A csomag havi híváskerete** (`ext_calls_month`, 13.15/5.) az **56b**-be került, a futtató korlátaival együtt (a csomagtábla és az operátori felület egyszerre változik).
+- **stdio-s MCP-szerver** nincs (13.3): saját telepítésen az őrön futó saját MCP-szerverek a teljes hozzáférésű agenteknél ma is működnek; a hosztolt változat az 51c.
+- **Biztonsági átnézés után** (`f24f540`): kockázatot csökkenteni csak a tulajdonos tud (mint a jóváhagyás kikapcsolását; admin csak emelhet); ha a kapcsolat címe más szerverre (scheme + host) mutat, a titkot újra meg kell adni; a titok átirányításkor csak a kapcsolat saját hosztjára megy.
+- A kapcsolat hibája az agentnek eszközhibaként (nem protokollhibaként) megy, hogy el tudja olvasni; jóváhagyás beszélgetés nélkül (`X-Colonyhall-Channel` hiányzik) nem kérhető, ilyenkor a hívás elutasítva.

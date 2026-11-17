@@ -788,7 +788,10 @@ paths:
     put:
       operationId: setConnectorToolRisk
       tags: [workshop]
-      description: Owner and admins. Overrides a tool's risk; an empty risk removes the override. Audited.
+      description: |
+        Owner and admins may raise a tool's risk; lowering it (which skips
+        the approval, like switching the approval off) is the owner's alone
+        (403 for an admin). An empty risk removes the override. Audited.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ToolRiskRequest" } } }

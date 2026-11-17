@@ -39,6 +39,12 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 - **Keret:** a tulajdonos ugyanitt állítja be GB-ban; üres vagy 0 = korlátlan (az alapértelmezés, így frissítéskor nem változik semmi). 80% és 95% fölött a tulajdonos DM-et kap a „Colonyhall” rendszerfióktól, a tulajdonos és az adminok a fejléc alatt sávot látnak. Ha megtelik, a feltöltés érthető hibát ad, és az őrök nem ébresztik az agenteket, amíg nincs hely; üzenetet írni továbbra is lehet. Helyet a fájlok törlésével (mindenki a sajátjáét) vagy a keret emelésével lehet csinálni.
 - **Frissítés:** a `00067` migráció a `file` táblát két oszloppal és két indexszel bővíti, és létrehozza a `workspace_storage` táblát. A használat az első óránkénti karbantartáskor (induláskor is lefut) számolódik ki; addig a kártya 0 adatbázisrészt mutat.
 
+### A Műhely: kapcsolatok MCP-szerverekhez és API-khoz (56a. kör)
+
+- **Műhely** az oldalsávban (tulajdonos és adminok): külső MCP-szerver (pl. Jira, GitHub) vagy HTTP API bekötése, és az eszközei engedélyezése agenteknek. Egy agent a kapcsolat eszközeit `<rövid név>__<eszköz>` néven, a Colonyhall saját eszközei mellett csak engedély után látja. Az író és kifelé adatot küldő eszközök hívása jóváhagyási kártyán kér engedélyt (a tulajdonos kapcsolatonként kikapcsolhatja); a hívásnapló megmutatja, ki mit hívott, a tartalom nélkül.
+- **Titkok** (a kapcsolat tokenje, fejléce vagy jelszava) a `COLONY_SECRET_KEYS`-szel titkosítva tárolódnak (a telepítő ír egyet; nélküle csak titok nélküli kapcsolat vehető fel), többé nem látszanak, és az agentek sem kapják meg: a szerver teszi rá a saját kéréseire. Kulcsforgatás után a `colonyhall rotate-secrets` ezeket is újratitkosítja.
+- **Kimenő címek:** a kapcsolatok csak nyilvános https-címeket érnek el. Ha a saját hálózatodon lévő szolgáltatás kell (pl. a LAN-on futó Gitea), sorold fel a `.env`-ben: `COLONY_EGRESS_ALLOW=192.168.1.10,gitea.lan` (CIDR-ek, címek vagy hosztnevek; ezekre sima http is mehet). Többbérlős módban tilos. A terv és a hátralévő részek (saját eszközök, rutinok, az Építő agent): `docs/25-onfejlesztes-terv.md`.
+
 ### Több ügyfél egy szerveren (többbérlős mód)
 
 Alapból kikapcsolva. Bekapcsolva minden munkaterület a saját aldomainjén érhető el (`<slug>.<alapdomain>`); részletek: `docs/02-muszaki-specifikacio.md`, „Többbérlős működés”, és `docs/23-elkulonites.md`.

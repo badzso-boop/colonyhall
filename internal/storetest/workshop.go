@@ -6,7 +6,9 @@ package storetest
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -84,7 +86,7 @@ func testWorkshop(t *testing.T, b Backend) {
 	got, err := st.GetConnector(ctx, f.ws.ID, c.ID)
 	must(t, err)
 	if got.Title != "Jira Cloud" || !got.ApprovalOff || got.RiskOverrides["search"] != "external" || got.State != "ok" ||
-		len(got.Tools) != 1 || got.Tools[0].Name != "search" || string(got.Tools[0].InputSchema) != `{"type":"object"}` ||
+		len(got.Tools) != 1 || got.Tools[0].Name != "search" || !sameJSON(got.Tools[0].InputSchema, `{"type":"object"}`) ||
 		got.ToolsCachedAt == nil {
 		t.Fatalf("get: %+v", got)
 	}
@@ -141,4 +143,13 @@ func testWorkshop(t *testing.T, b Backend) {
 	if len(older) != 1 || !older[0].StartedAt.Equal(t0) {
 		t.Fatalf("older calls: %+v", older)
 	}
+}
+
+// sameJSON compares JSON by value (Postgres jsonb reformats it).
+func sameJSON(a []byte, b string) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal([]byte(b), &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
 }
