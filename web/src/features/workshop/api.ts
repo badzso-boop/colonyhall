@@ -321,3 +321,30 @@ export function useDeleteExtension() {
     onSuccess: done,
   });
 }
+
+export function useRoutines(id: string, enabled = true) {
+  return useQuery({
+    queryKey: ["workshop", "extensions", id, "routines"] as const,
+    enabled,
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/workshop/extensions/{extensionId}/routines", {
+          params: { path: { extensionId: id } },
+        }),
+      ),
+  });
+}
+
+export function useCreateWebhook(id: string) {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (routine: string) =>
+      unwrap(
+        await api.POST(
+          "/workshop/extensions/{extensionId}/routines/{routine}/webhook",
+          { params: { path: { extensionId: id, routine } } },
+        ),
+      ),
+    onSuccess: done,
+  });
+}

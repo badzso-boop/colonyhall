@@ -337,3 +337,27 @@ Hamis külső MCP-szerver (go-sdk, `httptest`) és hamis HTTP API (Jira, GIF) a 
 **Biztonsági átnézés után** (`12eac36`): az „olvas” eszköz nem hívhat író mag-eszközt; a tulajdonos `approval_off`-ja nem öröklődik egy olyan új verzióra, amit nem a tulajdonos élesített és ami újat ad; a jóváhagyásra várás után a hívás újraellenőrzi az engedélyt, az élő verziót, a karbantartót és az agentet (a kapcsolatoknál is).
 
 **Hátra (56c–d):** rutinok és interaktív üzenetek; az Építő és a Műhely meta-eszközei (köztük a csatorna létrehozása agentnek, 14.1).
+
+### 14.3 56c: rutinok és interaktív üzenetek (2026-11-17)
+
+**Kész:** migráció `00073` (`message.blocks`, `message_action`, `routine_state`, `routine_run`), a manifest `routines` mezője, az ütemező és a futtatósor (`RoutineLoop`, 5 mp; a futás tranzakción kívül, a hívás szokott útján: hely, keret, jóváhagyás, napló, önvédelem), a `workshop` eseményfogyasztó (üzenet és gombnyomás), a webhook (`POST /api/v1/hooks/ext/{munkaterület}/{rutin}/{token}`), interaktív blokkok (`text`, `buttons`, `select`, `table`) az agentek `send` eszközében és a botok kimenetében, `POST /api/v1/messages/{id}/actions`, a PWA-ban a blokkok megjelenítése és a Műhelyben a rutinok (következő futás, webhook-cím, utolsó futások).
+
+**Rutin a manifestben:**
+
+```json
+{"name": "daily", "trigger": {"cron": "0 8 * * 1-5", "timezone": "Europe/Budapest"}, "tool": "mine", "output": "napi-feladatok"}
+{"name": "standup", "trigger": {"cron": "30 8 * * 1-5"}, "agent": "helper", "prompt": "Foglald össze…", "output": "napi-feladatok"}
+{"name": "invoice", "trigger": {"webhook": true}, "tool": "poll", "output": "penzugy"}
+{"name": "asked", "trigger": {"message": {"channel": "napi-feladatok", "contains": "jira?"}}, "tool": "mine"}
+{"name": "clicked", "trigger": {"action": "ok"}, "tool": "thanks"}
+```
+
+- **Eszközös rutin:** az eszköz a bővítmény botjaként fut; a bemenete a rutin `input`-ja és egy `trigger` mező (mi indította: üzenet szövege és szerzője, a webhook törzse adatként, a gomb azonosítója és a kattintó). A válaszát a bot írja ki; egy `{"text", "blocks"}` objektumból interaktív üzenet lesz. Üzenet- és gombnyomás-indítónál kimeneti csatorna nélkül a kiváltó szálban válaszol.
+- **Agentes rutin:** a bot a kimeneti csatornában megszólítja az agentet a prompttal (az indító adatai kódblokkban, adatként). A „ki adhat feladatot kinek” szabálya a botra is vonatkozik (a bot agent).
+- **Élesítéskor** a rutinok ütemezése frissül, és a bot (a jóváhagyó admin nevében) bekerül a kimeneti és a figyelt csatornákba; ha egy csatorna nem létezik, a jóváhagyás hibát ad. Egy új vagy változott rutin megjelenik a jóváhagyás előtti eltérés-listában.
+- **Webhook:** a cím a Műhelyben kérhető, egyszer látszik, csak hash-elve tárolódik; új cím kérésekor a régi megszűnik. A cím a munkaterületet is tartalmazza, így a kérés rendszermód nélkül szűkít; minden hiba ugyanaz a 404; a törzs legfeljebb 256 KB.
+- **Gombnyomás:** csak ember, és csak írási joggal a beszélgetésben. Egy agent üzenetén a kattintó nevében válasz megy a szálba, ami megszólítja az agentet (így az a szokott úton ébred); egy bővítmény botjának üzenetén a bővítmény gombnyomás-rutinja fut.
+
+**Biztonsági átnézés után** (`2c440ed`): gomb- és opciócímkében nem lehet `@` (a kattintás senki mást nem szólíthat meg); üzenet-rutin csak ott figyel, ahova a bot jóváhagyással bekerült; a webhook-cím megszűnik a rutinnal, és a bővítmény kikapcsolásával vagy törlésével; a gombnyomáshoz írási jog kell.
+
+**Hátra (56d):** az Építő és a Műhely meta-eszközei (köztük a csatorna létrehozása agentnek, 14.1), az építési napló a wikiben, export/import.

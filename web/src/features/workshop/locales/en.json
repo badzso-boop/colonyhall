@@ -161,6 +161,27 @@
     "run": "Run",
     "output": "Result",
     "logs": "Log",
-    "testHint": "A test is a real call as the extension's bot; it asks no approval and is logged as a test."
+    "testHint": "A test is a real call as the extension's bot; it asks no approval and is logged as a test.",
+    "diffRoutines": "New or changed routines: {{list}}"
+  },
+  "routines": {
+    "title_one": "{{count}} routine",
+    "title_other": "{{count}} routines",
+    "trigger": {
+      "cron": "scheduled",
+      "message": "on a message",
+      "webhook": "webhook",
+      "action": "on a click"
+    },
+    "next": "Next: {{when}}",
+    "webhook": "Webhook address",
+    "newWebhook": "New webhook address",
+    "webhookOnce": "The {{routine}} routine's webhook address (shown only now; the old one stopped working):",
+    "state": {
+      "pending": "waiting",
+      "running": "running",
+      "done": "done",
+      "failed": "failed"
+    }
   }
 }

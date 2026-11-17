@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import { useState } from "react";
+import { RoutinesPanel } from "./RoutinesPanel";
 import { useTranslation } from "react-i18next";
 import { Plus, Puzzle, Trash2 } from "lucide-react";
 import { fullTime } from "@/shared/lib";
@@ -235,6 +236,7 @@ function ExtensionCard({ x, owner }: { x: Extension; owner: boolean }) {
         </details>
       ) : null}
 
+      {x.live_version ? <RoutinesPanel id={x.id} /> : null}
       {editing ? (
         <VersionEditor
           x={x}
@@ -481,6 +483,11 @@ function DiffView({ diff }: { diff: ExtensionDiff }) {
       ) : null}
       {diff.new_store?.length ? (
         <li>{t("extensions.diffStore", { list: list(diff.new_store) })}</li>
+      ) : null}
+      {diff.new_routines?.length ? (
+        <li>
+          {t("extensions.diffRoutines", { list: list(diff.new_routines) })}
+        </li>
       ) : null}
       {diff.new_tools?.length ? (
         <li>{t("extensions.diffTools", { list: list(diff.new_tools) })}</li>

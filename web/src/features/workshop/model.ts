@@ -77,6 +77,7 @@ export function diffIsEmpty(d: {
   new_egress?: string[];
   new_store?: string[];
   new_tools?: string[];
+  new_routines?: string[];
   raised_risks?: Record<string, string>;
   code_changed: boolean;
 }): boolean {
@@ -86,6 +87,7 @@ export function diffIsEmpty(d: {
     !d.new_egress?.length &&
     !d.new_store?.length &&
     !d.new_tools?.length &&
+    !d.new_routines?.length &&
     !Object.keys(d.raised_risks ?? {}).length
   );
 }

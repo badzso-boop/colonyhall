@@ -161,6 +161,27 @@
     "run": "Futtatás",
     "output": "Eredmény",
     "logs": "Napló",
-    "testHint": "A teszt valódi hívás a bővítmény botjaként; jóváhagyást nem kér, a hívásnaplóba tesztként kerül."
+    "testHint": "A teszt valódi hívás a bővítmény botjaként; jóváhagyást nem kér, a hívásnaplóba tesztként kerül.",
+    "diffRoutines": "Új vagy változott rutinok: {{list}}"
+  },
+  "routines": {
+    "title_one": "{{count}} rutin",
+    "title_other": "{{count}} rutin",
+    "trigger": {
+      "cron": "időzített",
+      "message": "üzenetre",
+      "webhook": "webhook",
+      "action": "gombnyomásra"
+    },
+    "next": "Következő: {{when}}",
+    "webhook": "Webhook-cím",
+    "newWebhook": "Új webhook-cím",
+    "webhookOnce": "A(z) {{routine}} rutin webhook-címe (csak most látszik; a régi megszűnt):",
+    "state": {
+      "pending": "vár",
+      "running": "fut",
+      "done": "kész",
+      "failed": "hiba"
+    }
   }
 }
