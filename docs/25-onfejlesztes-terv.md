@@ -159,3 +159,149 @@ Az 56a–d saját telepítésen önmagában működik; a hosztolt ügyfelek agen
 ## 12. A kapu döntései (Norbi, 2026-11-17)
 
 Mind eldőlt (0. pont, 7–11.): bővítményt a tulajdonos és az adminok hoznak létre; az író és kifelé küldő hívások alapból jóváhagyást kérnek, bővítményenként kikapcsolható; a menü neve **Műhely**; a JS-futtató rögtön külön szerepkörben (`ext-runner`); **56. kör, az 51c előtt**. A pontos korlátok (memória, idő, hívásszám), a végpontok és a táblák a kör promptjában.
+
+## 13. Részletes terv (az 56. kör kapuja, 2026-11-17)
+
+Ez a pont a fentieket teszi megépíthetővé. Ahol eltér a 2–9. ponttól, ez az érvényes (az eltérés indoka mellette).
+
+### 13.1 Modulok
+
+| Modul | Felelősség |
+| --- | --- |
+| `internal/modules/secrets` (új) | `workspace_secret`: titkosított titkok (`secretbox`), csak hivatkozással; a 24. dokumentum 2.3 táblája, előrehozva. Az 51c projektkulcsai és AI-kulcsai is ezt használják |
+| `internal/modules/workshop` (új) | Kapcsolatok, bővítmények és verzióik, eszközök, rutinok, adattár, engedélyek, hívásnapló, a gateway eszközlistája és hívásirányítása |
+| `internal/extrunner` (új) | Az `ext-runner` szerepkör: QuickJS WASM-ban, `wazero`-val; adatbázis és titok nélkül |
+| `internal/platform/egress` (új) | Kimenő HTTP csak publikus címekre (a `planner/fetch.Safe` mintája kiemelve és általánosítva: DNS-rebinding ellen tárcsázáskor ellenőrzött IP, minden átirányítás újraellenőrizve, méret- és időkorlát) |
+| `conversation` (bővül) | Interaktív blokkok az üzenetben, `message_action` |
+| `internal/mcpserver` (bővül) | A munkaterület eszközeinek regisztrálása a mag eszközei mellé |
+
+### 13.2 Adatmodell (migráció `00071`; minden tábla `workspace_id`, `ENABLE` + `FORCE RLS`, `tenant` szabály)
+
+| Tábla | Lényeges oszlopok | Megjegyzés |
+| --- | --- | --- |
+| `workspace_secret` | a 24. dokumentum 2.3 szerint; a `kind` bővül: `connector_token`, `connector_header`, `connector_basic` | Soha nem olvasható vissza egészben; `hint` = utolsó 4 karakter |
+| `connector` | `id`, `slug` (`[a-z][a-z0-9_]{1,15}`, egyedi az élők közt), `title`, `kind` (`mcp`, `http`), `base_url` (csak `https`, kivéve a 13.7 engedélylistáját), `auth` (`none`, `bearer`, `header`, `basic`), `header_name`, `secret_id`, `state` (`ok`, `error`), `last_error_id`, `tools_cache` (jsonb: az MCP-szerver eszközlistája, kockázattal), `tools_cached_at`, `created_by`, `created_at`, `deleted_at` | |
+| `extension` | `id`, `slug` (`[a-z][a-z0-9_]{1,15}`), `title`, `maintainer_id` (a létrehozó; tulajdonos vagy admin), `bot_id` (13.9), `state` (`draft`, `live`, `disabled`, `suspended`), `live_version`, `approval_off` (bool; a tulajdonos kapcsolja, auditálva), `disabled_reason`, `error_window` (jsonb: utolsó hibák), `created_at`, `updated_at`, `deleted_at` | Mutálható állapotsor |
+| `extension_version` | `id`, `extension_id`, `version` (1, 2, …), `manifest` (jsonb), `source` (TS/JS forrás), `bundle` (a lefordított JS), `bundle_sha256`, `created_by` (ember vagy agent), `test_result` (jsonb), `approved_by`, `approved_at`, `created_at` | **Append-only** (4. szabály); a jóváhagyás egy külön `extension_approval` sor, nem módosítás |
+| `extension_approval` | `id`, `version_id`, `decided_by`, `decision`, `diff` (jsonb: új jog, új cím, új titok, új kapcsolat), `created_at` | Append-only |
+| `agent_tool_grant` | `agent_id`, `target_kind` (`connector`, `extension`, `workshop`), `target_id`, `granted_by`, `created_at`, `revoked_at` | Alapból egy agent csak a mag eszközeit látja (mint ma) |
+| `ext_store_doc` | `extension_id`, `collection`, `doc_id`, `data` (jsonb), `size_bytes`, `updated_at` | Mutálható; a tárhelykeretbe számít (új fajta: `extensions`) |
+| `routine_state` | `extension_id`, `routine` (név a manifestből), `next_run_at`, `last_run_at`, `last_error_id`, `webhook_token_hash`, `run_count` | A manifest a forrás, ez csak az állapot |
+| `tool_call` | `id`, `actor_id` (hívó agent vagy a bővítmény botja), `target_kind`, `target_id`, `tool`, `risk`, `approval_id`, `started_at`, `duration_ms`, `in_bytes`, `out_bytes`, `outcome` (`ok`, `error`, `denied`, `timeout`, `limit`), `error_id` | **Append-only**; tartalom nélkül. Havonta összesítve a csomag híváskeretéhez |
+| `message_action` | `id`, `message_id`, `actor_id`, `action_id`, `value` (jsonb, max 4 KB), `created_at` | Append-only |
+
+A `message` táblában új oszlop: `blocks` (jsonb, max 16 KB, NULL = sima üzenet); a szöveges `body` mindig marad (értesítés, keresés, a fejlesztői oldal és az agentek ezt olvassák). A `plan` és a `workspace_storage` másolata új oszlopot kap: `ext_calls_month` (NULL = korlátlan).
+
+### 13.3 Az MCP-átjáró
+
+- **Nevek.** A mag eszközei a mai nevükön maradnak (`send`, `read`, …), és **soha nem tartalmaznak `__`-t**: ez a névtér a magé. Kapcsolat eszköze: `<kapcsolat>__<eszköz>` (pl. `jira__search`); bővítményé: `x_<bővítmény>__<eszköz>` (pl. `x_gif__search`). Hossz: a kliens előtagjával (`mcp__colonyhall__`) együtt legfeljebb 64 karakter (a Claude API korlátja), ezért a slug legfeljebb 16, az eszköznév legfeljebb 24 karakter. *(Eltérés a 2.1-től: `.` helyett `__`, mert a Claude API eszközneve nem tartalmazhat pontot.)*
+- **Regisztrálás.** A `/mcp` munkamenet indulásakor a mag eszközei mellé bekerül minden kapcsolat- és bővítményeszköz, **amire az agentnek engedélye van** (`agent_tool_grant`) és ami él. Egy agentfutás egy munkamenet, így a lista a futás elején friss; változáskor a go-sdk `tools/list_changed` értesítést küld a nyitott munkamenetekbe.
+- **Hívás.** Minden kapcsolat- és bővítményhívás egy úton megy (`workshop.Service.Call`): a hívó friss állapota (vészleállítás, szünet, felfüggesztés → elutasítás) → az engedély újraellenőrzése → a kockázat → jóváhagyás, ha kell (13.6) → a havi keret → végrehajtás időkorláttal → `tool_call` sor → a válasz tömörítve (max 32 KB a modellnek, a végén „+N bájt levágva”).
+- **Külső MCP.** A szerver MCP-kliensként (go-sdk, streamable HTTP) kapcsolódik a kapcsolat címéhez, a titkot fejlécként a szerver teszi rá az `egress` kliensen át. Az eszközlista 10 percig gyorsítótárazott, a Műhelyben frissíthető. A kockázat a szerver annotációiból jön (`readOnlyHint` → `read`, `openWorldHint` → `external`, különben `write`); hiányzó annotáció = `write`; az admin eszközönként felülírhatja (auditálva).
+- **stdio-s MCP** csak őrön: ebben a körben **nem építjük** (az őrön a felhasználó saját MCP-szerverei ma is működnek a teljes hozzáférésű agenteknél; a hosztolt változat 51c).
+- **„Ember = agent” hiányzó mag-eszközök:** `channel_create`, `channel_members` (hozzáadás/eltávolítás, a REST jogaival), `wiki_write`, `task_create`/`task_update` a tervezőben (ha még nincs), `pin`; a Műhely meta-eszközei (13.10). Mind a REST-végpontok szolgáltatásfüggvényeit hívja, ugyanazzal a jogellenőrzéssel.
+
+### 13.4 Saját eszközök
+
+**Deklaratív HTTP-eszköz** (a manifestben):
+
+```yaml
+tools:
+  - name: my_issues
+    kind: http
+    connector: jira            # a kapcsolat adja az alap-URL-t és a titkot
+    risk: read
+    input: {type: object, properties: {user: {type: string}}, required: [user]}
+    request:
+      method: GET
+      path: /rest/api/3/search
+      query: {jql: "assignee = \"{{input.user}}\" AND statusCategory != Done"}
+    output:
+      pick: {key: "issues[].key", summary: "issues[].fields.summary"}
+      max_items: 20
+```
+
+A sablon csak `{{input.x}}` helyettesítést ismer (URL-ben kódolva, JSON-törzsben JSON-ként), más kódot nem. A kimenet egy egyszerű JSON-útvonal-részhalmaz.
+
+**Kódeszköz:** `kind: js`, a forrás TS vagy JS. Mentéskor a szerver **esbuild-del** (Go-könyvtár, Node nélkül) egy fájlba fordítja (`bundle`), importok nélkül. Az eszköz egy exportált függvény: `export async function my_issues(input, ctx) { … }`.
+
+**Host-függvények** (`ctx`):
+
+| Függvény | Mit tud |
+| --- | --- |
+| `ctx.fetch(url, {method, headers, body, auth})` | Csak a manifest `egress` címeire, a szerver `egress` kliensén át. **`auth: "jira"`**: a szerver a kapcsolat titkát teszi a kérésre. *(Eltérés a 2.3-tól: nincs `secrets.get`; a titok soha nem jut be a JS-be, így a kód sem szivárogtathatja.)* |
+| `ctx.store.get/put/delete/list(collection, …)` | A bővítmény saját adattára (13.2) |
+| `ctx.colony.<eszköz>(input)` | A mag MCP-eszközei, **a hívó jogaival, de csak ha a karbantartó is megtehetné** (a kettő metszete; agent nélküli rutinban a bővítmény botjával) |
+| `ctx.call(<eszköz>, input)` | Egy kapcsolat vagy a bővítmény másik eszköze (ugyanazon az úton, mint az átjáró) |
+| `ctx.log(...)` | A futás naplójába (embernek, a Műhelyben) |
+
+**Korlátok (javaslat):** hívásonként 64 MB memória, 10 mp falióra (megszakítással), 256 KB kimenet, 50 host-hívás, `fetch` válasz 5 MB; munkaterületenként 4 párhuzamos hívás, a futtatón összesen 16; havi hívásszám a csomagból (`ext_calls_month`). Önvédelem: 5 egymást követő hiba vagy 10 hiba 10 percen belül → `disabled`, értesítés a karbantartónak.
+
+### 13.5 Az `ext-runner`
+
+- **Ugyanaz a bináris**, `COLONY_ROLE=ext-runner` (a `config` csak ezt engedi az `all` mellett). Nincs adatbázis-kapcsolata, nincs titkosítási kulcsa, nem lát fájlt; csak a szerver felé beszél.
+- **Protokoll:** a szerver `POST http://ext-runner:8095/v1/run` (belső Compose-hálózat), fejlécben `COLONY_EXT_RUNNER_TOKEN` (a telepítő generálja; mindkét folyamat megkapja). Kérés: `call_id`, a `bundle`, a függvény neve, a bemenet, a korlátok, egy **hívásonkénti host-token**. A futtató a host-függvényeket a szerver belső végpontján hívja vissza: `POST /internal/ext/host` a host-tokennel (csak a hívás idejére érvényes, a szerveren a hívás munkaterületéhez és hívójához kötve; csak a belső hálózaton, a nyilvános útválasztóban nincs). Megszakítás: a szerver bontja a kérést → a futtató a `wazero` kontextusával leállítja a modult.
+- **Elkülönítés:** WASM-sandbox (nincs fájlrendszer, hálózat, óra a host-függvényeken kívül), friss modulpéldány hívásonként, külön folyamat; Compose-ban `read_only`, `cap_drop: ALL`, `no-new-privileges`, `mem_limit` 1 GB, `cpus` 2, csak a belső hálózat.
+- **Ha nem fut** (vagy `COLONY_EXT_RUNNER_URL` üres): a JS-eszközök hibája „a kódfuttató nem érhető el”; a deklaratív eszközök, a kapcsolatok és minden más megy. A `/readyz` nem bukik el miatta; a Rendszerállapot oldal mutatja.
+- **Telepítés:** `deploy/compose.yaml`, `compose.dev.yaml` és a telepítő compose-a új `ext-runner` szolgáltatást kap ugyanabból az image-ből; `colony setup --server` generálja a tokent. Tesztekben a futtató folyamaton belül indul ugyanazon az interfészen (`httptest`).
+- **Könyvtár:** `github.com/fastschema/qjs` (QuickJS-NG WASM-ra fordítva, `wazero`-n fut; MIT). Fiatal (v0.0.x), ezért egy saját port (`extrunner.Engine`) mögött, hogy cserélhető legyen; a verziója rögzítve.
+
+### 13.6 Jóváhagyás
+
+- A `write` és `external` kockázatú kapcsolat- és bővítményhívás **alapból jóváhagyást kér**: a meglévő `approval` modul (`CreateRequest` + `WaitForDecision`, a jóváhagyási kártya a beszélgetésben, 10 perc). A kártyán: bővítmény, eszköz, kockázat, a bemenet (max 8000 karakter, ahogy ma).
+- Ki dönthet: a hívó agent tulajdonosa, vagy admin (a mai szabály).
+- **Agent nélküli rutin** `write`/`external` hívása: a jóváhagyási kártya a rutin kimeneti beszélgetésébe kerül, a futás addig vár (legfeljebb 10 perc, utána `timeout`).
+- **`approval_off`:** a tulajdonos bővítményenként vagy kapcsolatonként kikapcsolhatja; auditálva, a Műhelyben jól látható jelzéssel. A mag eszközei (`send` stb.) nem kérnek jóváhagyást (mint ma).
+
+### 13.7 Kimenő forgalom (`egress`)
+
+Csak `https`, csak publikus IP (a `planner.PublicIP` szabálya: nincs loopback, magáncím, link-local, CGNAT/Tailscale, metaadat-cím, a szerver saját címei), tárcsázáskor ellenőrizve (DNS-rebinding ellen), minden átirányítás újra; kódeszköznél ráadásul csak a manifest `egress` hosztjaira. **Saját telepítésen** a szerver üzemeltetője engedhet belső címeket: `COLONY_EGRESS_ALLOW` (CIDR-ek és hosztok vesszővel, alapból üres); **többbérlős módban ez tiltott** (indításkor hiba).
+
+### 13.8 Rutinok
+
+- **Indítók:** `cron` (a `schedule` modul elemzője és a karbantartó ciklus, időzónával, a kihagyott futások `once`/`skip` szabályával); `event` (ebben a körben: `message` egy csatornában szűrővel — szerző-fajta, minta —, és `action`: kattintás a bővítmény üzenetén); `webhook` (`POST /api/v1/hooks/ext/{routineId}/{token}`, a token csak hash-elve tárolva, a törzs max 256 KB, adatként kerül tovább, 11. szabály).
+- **Agentes futás:** a rutin a kimeneti beszélgetésbe üzenetet ír **a bővítmény botjának nevében** (13.9), megemlítve az agentet, a prompttal; az agent a mai úton ébred (őr, kézbesítés). A „ki adhat feladatot kinek” szabály a botra is érvényes: teljes hozzáférésű agentnek csak a jóváhagyási úton.
+- **Agent nélküli futás:** egy eszköz fut közvetlenül; a kimenete (szöveg vagy blokkok) a bot nevében megy ki.
+- A mai `/schedule` és `/cron` **változatlanul működik** (a saját táblájával); később átköltöztethető, ebben a körben nem.
+
+### 13.9 A bővítmény botja (aki a kimenetet írja)
+
+**Javaslat:** minden bővítmény kap egy saját bot-actort (`@x-gif`, fajtája `agent`, gép nélkül, így soha nem ébred; a karbantartó a tulajdonosa). Ő írja a rutinok és az agent nélküli eszközök üzeneteit, ő a csatornák tagja, a jogai ≤ a karbantartóé. Előny: látszik, melyik bővítmény írt, csatornánként szabályozható, megemlíthető, kikapcsoláskor némul. (Alternatíva: egy közös `@muhely` actor a munkaterületen — egyszerűbb, de nem látszik, ki írt.)
+
+### 13.10 Az Építő
+
+- **Nem rendszeractor**, hanem egy rendes agent, amit a tulajdonos vagy admin a Műhelyből hoz létre egy előre kitöltött varázslóval („Építő” sablon: leírás, profil, ajánlott sandboxos mód; a gépet, klienst és modellt ő választja). Így a 8. szabály (változatlan konfiguráció) érintetlen.
+- **Meta-eszközök** (`workshop` engedéllyel, csak ha az agent tulajdonosa tulajdonos vagy admin): `workshop_list`, `connector_create` (titok nélkül: a titkot az ember adja meg a felületen; az eszköz egy „add meg a titkot” linket ad), `extension_draft` (manifest + forrás → új verzió), `extension_test` (próbafuttatás egy próbacsatornába, mellékhatással járó hívások jelölve), `extension_publish` (**jóváhagyási kérelem** a karbantartónak; élesíteni csak ember tud), `extension_rollback`, `channel_create`.
+- **Építési napló:** minden verzió után a `wiki`-ben a `Műhely/<slug>` oldal frissül (mit csinál, miért, ki kérte, melyik agent építette, jogok, verziók és tesztek, hibák).
+- **Export/import:** egy JSON-csomag (manifest, forrás, bundle, a napló), titkok nélkül; importálva vázlat lesz.
+- A „megbízott építő” és a „Javaslom a magba” gomb: ha marad hely az 56d-ben.
+
+### 13.11 Interaktív üzenetek
+
+Blokkok: `text` (markdown), `buttons` (max 5, `action_id`, `label`, `style`), `select` (opciók), `form` (mezők: szöveg, szám, választó; max 10), `table` (max 20 sor), `image` (csak a Colonyhall tárában lévő `file_id`, külső kép soha). Az agent a `send` eszköz új `blocks` paraméterével küldheti, a bővítmény a kimenetével. Kattintás: `POST /api/v1/messages/{id}/actions` (csak aki olvashatja a beszélgetést; a gomb szűkíthet `allowed` listával) → `message_action` sor + `conversation.MessageActionTaken` esemény → ha a küldő agent, az inboxába adatként kerül (és felébred); ha bővítménybot, az `action` indítójú rutin fut. A PWA megjeleníti; a fejlesztői oldal a `body` szöveget mutatja.
+
+### 13.12 Többbérlős mód, vészhozzáférés, felfüggesztés
+
+Minden új tábla RLS alatt; a gateway és a host-végpont a hívó munkaterületének hatókörében fut; a futtató munkaterület-azonosítót csak a host-tokenen át „lát”. Felfüggesztett munkaterület: minden hívás és rutin áll (a mai hitelesítés). A vészhozzáférés a Műhelyt csak olvasva látja, titkot és a hívásnapló bemeneteit soha (azok nincsenek is tárolva). A cross-tenant e2e készlet lefedi az összes új végpontot és paramétert.
+
+### 13.13 Tesztek
+
+Hamis külső MCP-szerver (go-sdk, `httptest`) és hamis HTTP API (Jira, GIF) a tesztekben; a hamis agent forgatókönyvei az Építőhöz és az agentes rutinokhoz; **ellenséges JS-eszközök** (végtelen ciklus, memóriabomba, nagy kimenet, nem bejelentett cím, belső cím DNS-rebindinggel, más munkaterület adattára, a host-token újrahasználata a hívás után) — mindegyik egy teszt, ami nélküle elbukna; a futtató leállítása alatt a szerver működik; cross-tenant: kapcsolat, bővítmény, adattár, webhook, akció.
+
+### 13.14 A részek
+
+| Rész | Tartalom | Kész, ha |
+| --- | --- | --- |
+| **56a** | `secrets`, `egress`, `workshop` (kapcsolatok, engedélyek, hívásnapló), átjáró a `/mcp`-n, külső MCP és HTTP-kapcsolat, kockázat és jóváhagyás, `approval_off`, „ember = agent” eszközök, Műhely: Kapcsolatok, Engedélyek, Hívásnapló | Egy agent a titkot nem látva hív egy hamis külső MCP-eszközt; a `write` hívás jóváhagyásra vár; más munkaterület nem éri el |
+| **56b** | Bővítmények, verziók, manifest, deklaratív HTTP-eszköz, `ext-runner` (QuickJS/WASM, host-függvények, korlátok), adattár, életút, önvédelem, Compose és telepítő; Műhely: Bővítmények | Egy JS-eszköz a korlátain belül fut; minden ellenséges eszköz megáll; a futtató nélkül a szerver működik |
+| **56c** | Rutinok (cron, esemény, webhook; agentes és agent nélküli), bővítménybotok, interaktív blokkok és akciók, PWA-megjelenítés | A Jira-példa végig működik egy hamis Jira ellen; egy gombnyomás eljut a küldő agentig |
+| **56d** | Az Építő sablon, meta-eszközök, próbafuttatás, jóváhagyási képernyő a manifest változásával, építési napló, export/import; ha marad hely: megbízott építő | A hamis agent mint Építő létrehozza, teszteli és (emberi jóváhagyás után) élesíti a GIF-példát |
+
+### 13.15 A kapu kérdései Norbinak
+
+1. **Ki írja a bővítmények kimenetét?** Bővítményenként saját bot (`@x-gif`) — **javaslat** — vagy egy közös `@muhely`.
+2. **Belső címek saját telepítésen:** `COLONY_EGRESS_ALLOW` (az üzemeltető engedhet LAN/Tailscale-címet, pl. a homelab Giteát; alapból üres; többbérlős módban tilos) — **javaslat** — vagy soha.
+3. **A titok nem jut be a JS-kódba** (a szerver teszi rá a kérésre, `auth: "<kapcsolat>"`), a 2.3-ban írt `secrets.get` helyett — **javaslat**: így.
+4. **QuickJS-könyvtár:** `fastschema/qjs` (WASM, `wazero`, fiatal; saját port mögött, rögzített verzióval) — **javaslat** —, vagy a QuickJS saját WASM-buildje és saját host-réteg (lassabb munka, kevesebb külső függés).
+5. **Havi híváskeret a csomagban** (`ext_calls_month`, NULL = korlátlan) — **javaslat**: igen, most.
+6. **A korlátszámok** (13.4: 64 MB, 10 mp, 256 KB, 4/16 párhuzamos, 5/10 hiba) — **javaslat**: így, később a csomagból állíthatóan.
