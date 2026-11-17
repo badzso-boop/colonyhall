@@ -680,6 +680,180 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /workshop/connectors:
+    get:
+      operationId: listConnectors
+      tags: [workshop]
+      description: |
+        Owner and admins (round 56a, the Workshop). The workspace's
+        connectors to external MCP servers and HTTP APIs, with their tools
+        and the risk of each. A secret is shown only by its last 4
+        characters.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createConnector
+      tags: [workshop]
+      description: |
+        Owner and admins. Adds a connector; the secret is stored encrypted
+        (COLONY_SECRET_KEYS, else 400) and never returned. An MCP
+        connector's tools are fetched at once; a failed fetch leaves the
+        connector in the error state (refresh later). Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateConnectorRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /workshop/connectors/{connectorId}:
+    parameters:
+      - { name: connectorId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getConnector
+      tags: [workshop]
+      description: Owner and admins.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateConnector
+      tags: [workshop]
+      description: |
+        Owner and admins. Changes the title, address, authentication or
+        secret (absent fields stay). A new address or secret fetches the
+        tools again. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateConnectorRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteConnector
+      tags: [workshop]
+      description: Owner and admins. Removes the connector, its secret and every grant to it. Audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/connectors/{connectorId}/refresh:
+    parameters:
+      - { name: connectorId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: refreshConnector
+      tags: [workshop]
+      description: Owner and admins. Fetches an MCP connector's tool list again.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/connectors/{connectorId}/approval:
+    parameters:
+      - { name: connectorId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setConnectorApproval
+      tags: [workshop]
+      description: |
+        Owner only (decision 2026-11-17). Switches off (or on again) the
+        human approval of this connector's write and external calls.
+        Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorApprovalRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/connectors/{connectorId}/tools/{tool}/risk:
+    parameters:
+      - { name: connectorId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: tool, in: path, required: true, schema: { type: string, maxLength: 24 } }
+    put:
+      operationId: setConnectorToolRisk
+      tags: [workshop]
+      description: Owner and admins. Overrides a tool's risk; an empty risk removes the override. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ToolRiskRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/grants:
+    get:
+      operationId: listToolGrants
+      tags: [workshop]
+      description: Owner and admins. Which agent may use which connector (or the Workshop's tools).
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ToolGrantList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addToolGrant
+      tags: [workshop]
+      description: |
+        Owner and admins. Lets an agent of the workspace use a connector.
+        Granting twice returns the existing grant. Audited.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AddToolGrantRequest" } } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ToolGrant" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/grants/{grantId}:
+    parameters:
+      - { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: revokeToolGrant
+      tags: [workshop]
+      description: Owner and admins. Audited.
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "204": { description: Revoked }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /workshop/calls:
+    get:
+      operationId: listToolCalls
+      tags: [workshop]
+      description: |
+        Owner and admins. The call log, newest first: who called which tool,
+        how long, how big, the outcome. Never the input or the output.
+      parameters:
+        - { name: target_id, in: query, schema: { type: string, format: uuid }, description: Only this connector's calls }
+        - { name: before, in: query, schema: { type: string, format: date-time }, description: started_at of the last call of the previous page }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ToolCallList" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /me/threads:
     get:
       operationId: listMyThreads
@@ -5107,6 +5281,119 @@ components:
       required: [quota_bytes]
       properties:
         quota_bytes: { type: integer, format: int64, minimum: 0, description: 0 is unlimited }
+    ToolRisk:
+      type: string
+      enum: [read, write, external]
+    ConnectorTool:
+      type: object
+      required: [name, description, risk, effective_risk]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        risk: { $ref: "#/components/schemas/ToolRisk" }
+        effective_risk: { $ref: "#/components/schemas/ToolRisk" }
+        overridden: { type: boolean }
+    Connector:
+      type: object
+      required: [id, slug, title, kind, base_url, auth, approval_off, state, tools, has_secret, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, description: "Short name; its tools are <slug>__<tool> in the gateway" }
+        title: { type: string }
+        kind: { type: string, enum: [mcp, http] }
+        base_url: { type: string }
+        auth: { type: string, enum: [none, bearer, header, basic] }
+        header_name: { type: string }
+        has_secret: { type: boolean }
+        secret_hint: { type: string, description: The last 4 characters of a long secret }
+        approval_off: { type: boolean, description: "Write and external calls run without a human's approval (owner's choice)" }
+        state: { type: string, enum: [new, ok, error] }
+        last_error: { type: string }
+        tools: { type: array, items: { $ref: "#/components/schemas/ConnectorTool" } }
+        tools_cached_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ConnectorList:
+      type: object
+      required: [connectors, secrets_available]
+      properties:
+        connectors: { type: array, items: { $ref: "#/components/schemas/Connector" } }
+        secrets_available: { type: boolean, description: "The server has COLONY_SECRET_KEYS: connectors may carry a secret" }
+    CreateConnectorRequest:
+      type: object
+      required: [slug, title, kind, base_url]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9_]{1,15}$" }
+        title: { type: string, minLength: 1, maxLength: 80 }
+        kind: { type: string, enum: [mcp, http] }
+        base_url: { type: string, maxLength: 500 }
+        auth: { type: string, enum: [none, bearer, header, basic], default: none }
+        header_name: { type: string, maxLength: 64 }
+        secret: { type: string, maxLength: 8192, description: "Write-only; for basic: user:password" }
+    UpdateConnectorRequest:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 80 }
+        base_url: { type: string, maxLength: 500 }
+        auth: { type: string, enum: [none, bearer, header, basic] }
+        header_name: { type: string, maxLength: 64 }
+        secret: { type: string, maxLength: 8192, description: Write-only; a new value replaces the old }
+    ConnectorApprovalRequest:
+      type: object
+      required: [approval_off]
+      properties:
+        approval_off: { type: boolean }
+    ToolRiskRequest:
+      type: object
+      required: [risk]
+      properties:
+        risk: { type: string, enum: ["", read, write, external], description: Empty removes the override }
+    ToolGrant:
+      type: object
+      required: [id, agent_id, target_kind, granted_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        agent_handle: { type: string }
+        target_kind: { type: string, enum: [connector, extension, workshop] }
+        target_id: { type: string, format: uuid }
+        target_name: { type: string }
+        granted_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    ToolGrantList:
+      type: object
+      required: [grants]
+      properties:
+        grants: { type: array, items: { $ref: "#/components/schemas/ToolGrant" } }
+    AddToolGrantRequest:
+      type: object
+      required: [agent_id, target_kind]
+      properties:
+        agent_id: { type: string, format: uuid }
+        target_kind: { type: string, enum: [connector, workshop] }
+        target_id: { type: string, format: uuid }
+    ToolCallEntry:
+      type: object
+      required: [id, actor_id, target_kind, target_id, tool, risk, started_at, duration_ms, in_bytes, out_bytes, outcome]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        target_kind: { type: string, enum: [connector, extension] }
+        target_id: { type: string, format: uuid }
+        tool: { type: string }
+        risk: { $ref: "#/components/schemas/ToolRisk" }
+        approval_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        duration_ms: { type: integer }
+        in_bytes: { type: integer }
+        out_bytes: { type: integer }
+        outcome: { type: string, enum: [ok, error, denied, timeout, limit] }
+        error: { type: string }
+    ToolCallList:
+      type: object
+      required: [calls]
+      properties:
+        calls: { type: array, items: { $ref: "#/components/schemas/ToolCallEntry" } }
     HostStorage:
       type: object
       required: [state]

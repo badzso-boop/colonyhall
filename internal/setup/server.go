@@ -158,6 +158,11 @@ services:
       COLONY_SECRET_KEYS_FILE: ${COLONY_SECRET_KEYS_FILE:-}
       # The addresses admin.<domain> (the operator) answers; empty: any.
       COLONY_OPERATOR_ALLOWLIST: ${COLONY_OPERATOR_ALLOWLIST:-}
+      # Round 56a (docs/25-onfejlesztes-terv.md 13.7): internal addresses the
+      # Workshop's connectors may reach (CIDRs, addresses, host names, e.g.
+      # a Gitea on the LAN); empty: public https only. Refused in
+      # multi-tenant mode.
+      COLONY_EGRESS_ALLOW: ${COLONY_EGRESS_ALLOW:-}
     volumes:
       - files:/data/files
     ports:

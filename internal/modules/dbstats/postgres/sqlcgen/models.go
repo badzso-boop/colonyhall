@@ -123,6 +123,17 @@ type AgentRun struct {
 	InstructionsVersion *int32
 }
 
+type AgentToolGrant struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	AgentID     uuid.UUID
+	TargetKind  string
+	TargetID    *uuid.UUID
+	GrantedBy   uuid.UUID
+	CreatedAt   time.Time
+	RevokedAt   *time.Time
+}
+
 type ApiToken struct {
 	ID          uuid.UUID
 	ActorID     uuid.UUID
@@ -260,6 +271,28 @@ type CompactionUnit struct {
 	MessagesSince     int32
 	LastCompactionID  *uuid.UUID
 	UpdatedAt         time.Time
+}
+
+type Connector struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Slug          string
+	Title         string
+	Kind          string
+	BaseUrl       string
+	Auth          string
+	HeaderName    string
+	SecretID      *uuid.UUID
+	ApprovalOff   bool
+	RiskOverrides []byte
+	ToolsCache    []byte
+	ToolsCachedAt *time.Time
+	State         string
+	LastError     string
+	CreatedBy     uuid.UUID
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     *time.Time
 }
 
 type ConsumerOffset struct {
@@ -825,6 +858,23 @@ type ThreadRead struct {
 	WorkspaceID  uuid.UUID
 }
 
+type ToolCall struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ActorID     uuid.UUID
+	TargetKind  string
+	TargetID    uuid.UUID
+	Tool        string
+	Risk        string
+	ApprovalID  *uuid.UUID
+	StartedAt   time.Time
+	DurationMs  int32
+	InBytes     int32
+	OutBytes    int32
+	Outcome     string
+	Error       string
+}
+
 type WikiPage struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -900,6 +950,22 @@ type WorkspaceInvite struct {
 	UsedAt            *time.Time
 	UsedBy            *uuid.UUID
 	RevokedAt         *time.Time
+}
+
+type WorkspaceSecret struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Kind        string
+	Name        string
+	Provider    string
+	KeyID       string
+	Nonce       []byte
+	Ciphertext  []byte
+	Hint        string
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+	RotatedAt   *time.Time
+	DeletedAt   *time.Time
 }
 
 type WorkspaceStorage struct {

@@ -769,6 +769,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workshop/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Owner and admins (round 56a, the Workshop). The workspace's
+         *     connectors to external MCP servers and HTTP APIs, with their tools
+         *     and the risk of each. A secret is shown only by its last 4
+         *     characters.
+         */
+        get: operations["listConnectors"];
+        put?: never;
+        /**
+         * @description Owner and admins. Adds a connector; the secret is stored encrypted
+         *     (COLONY_SECRET_KEYS, else 400) and never returned. An MCP
+         *     connector's tools are fetched at once; a failed fetch leaves the
+         *     connector in the error state (refresh later). Audited.
+         */
+        post: operations["createConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/connectors/{connectorId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Owner and admins. */
+        get: operations["getConnector"];
+        put?: never;
+        post?: never;
+        /** @description Owner and admins. Removes the connector, its secret and every grant to it. Audited. */
+        delete: operations["deleteConnector"];
+        options?: never;
+        head?: never;
+        /**
+         * @description Owner and admins. Changes the title, address, authentication or
+         *     secret (absent fields stay). A new address or secret fetches the
+         *     tools again. Audited.
+         */
+        patch: operations["updateConnector"];
+        trace?: never;
+    };
+    "/workshop/connectors/{connectorId}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner and admins. Fetches an MCP connector's tool list again. */
+        post: operations["refreshConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/connectors/{connectorId}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Owner only (decision 2026-11-17). Switches off (or on again) the
+         *     human approval of this connector's write and external calls.
+         *     Audited.
+         */
+        put: operations["setConnectorApproval"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/connectors/{connectorId}/tools/{tool}/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Owner and admins. Overrides a tool's risk; an empty risk removes the override. Audited. */
+        put: operations["setConnectorToolRisk"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner and admins. Which agent may use which connector (or the Workshop's tools). */
+        get: operations["listToolGrants"];
+        put?: never;
+        /**
+         * @description Owner and admins. Lets an agent of the workspace use a connector.
+         *     Granting twice returns the existing grant. Audited.
+         */
+        post: operations["addToolGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grantId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Owner and admins. Audited. */
+        delete: operations["revokeToolGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workshop/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Owner and admins. The call log, newest first: who called which tool,
+         *     how long, how big, the outcome. Never the input or the output.
+         */
+        get: operations["listToolCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/threads": {
         parameters: {
             query?: never;
@@ -5488,6 +5663,134 @@ export interface components {
              */
             quota_bytes: number;
         };
+        /** @enum {string} */
+        ToolRisk: "read" | "write" | "external";
+        ConnectorTool: {
+            name: string;
+            description: string;
+            risk: components["schemas"]["ToolRisk"];
+            effective_risk: components["schemas"]["ToolRisk"];
+            overridden?: boolean;
+        };
+        Connector: {
+            /** Format: uuid */
+            id: string;
+            /** @description Short name; its tools are <slug>__<tool> in the gateway */
+            slug: string;
+            title: string;
+            /** @enum {string} */
+            kind: "mcp" | "http";
+            base_url: string;
+            /** @enum {string} */
+            auth: "none" | "bearer" | "header" | "basic";
+            header_name?: string;
+            has_secret: boolean;
+            /** @description The last 4 characters of a long secret */
+            secret_hint?: string;
+            /** @description Write and external calls run without a human's approval (owner's choice) */
+            approval_off: boolean;
+            /** @enum {string} */
+            state: "new" | "ok" | "error";
+            last_error?: string;
+            tools: components["schemas"]["ConnectorTool"][];
+            /** Format: date-time */
+            tools_cached_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ConnectorList: {
+            connectors: components["schemas"]["Connector"][];
+            /** @description The server has COLONY_SECRET_KEYS: connectors may carry a secret */
+            secrets_available: boolean;
+        };
+        CreateConnectorRequest: {
+            slug: string;
+            title: string;
+            /** @enum {string} */
+            kind: "mcp" | "http";
+            base_url: string;
+            /**
+             * @default none
+             * @enum {string}
+             */
+            auth: "none" | "bearer" | "header" | "basic";
+            header_name?: string;
+            /** @description Write-only; for basic: user:password */
+            secret?: string;
+        };
+        UpdateConnectorRequest: {
+            title?: string;
+            base_url?: string;
+            /** @enum {string} */
+            auth?: "none" | "bearer" | "header" | "basic";
+            header_name?: string;
+            /** @description Write-only; a new value replaces the old */
+            secret?: string;
+        };
+        ConnectorApprovalRequest: {
+            approval_off: boolean;
+        };
+        ToolRiskRequest: {
+            /**
+             * @description Empty removes the override
+             * @enum {string}
+             */
+            risk: "" | "read" | "write" | "external";
+        };
+        ToolGrant: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            agent_id: string;
+            agent_handle?: string;
+            /** @enum {string} */
+            target_kind: "connector" | "extension" | "workshop";
+            /** Format: uuid */
+            target_id?: string;
+            target_name?: string;
+            /** Format: uuid */
+            granted_by: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ToolGrantList: {
+            grants: components["schemas"]["ToolGrant"][];
+        };
+        AddToolGrantRequest: {
+            /** Format: uuid */
+            agent_id: string;
+            /** @enum {string} */
+            target_kind: "connector" | "workshop";
+            /** Format: uuid */
+            target_id?: string;
+        };
+        ToolCallEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** @enum {string} */
+            target_kind: "connector" | "extension";
+            /** Format: uuid */
+            target_id: string;
+            tool: string;
+            risk: components["schemas"]["ToolRisk"];
+            /** Format: uuid */
+            approval_id?: string;
+            /** Format: date-time */
+            started_at: string;
+            duration_ms: number;
+            in_bytes: number;
+            out_bytes: number;
+            /** @enum {string} */
+            outcome: "ok" | "error" | "denied" | "timeout" | "limit";
+            error?: string;
+        };
+        ToolCallList: {
+            calls: components["schemas"]["ToolCallEntry"][];
+        };
         HostStorage: {
             state: components["schemas"]["StorageState"];
             /** Format: int64 */
@@ -7845,6 +8148,321 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceStorage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listConnectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConnectorRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConnectorRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    refreshConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setConnectorApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setConnectorToolRisk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolRiskRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listToolGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolGrantList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    addToolGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddToolGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolGrant"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeToolGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listToolCalls: {
+        parameters: {
+            query?: {
+                /** @description Only this connector's calls */
+                target_id?: string;
+                /** @description started_at of the last call of the previous page */
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCallList"];
                 };
             };
             400: components["responses"]["Problem"];

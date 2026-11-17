@@ -40,6 +40,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [search](#search) (1)
 - [sidebar](#sidebar) (8)
 - [wiki](#wiki) (8)
+- [workshop](#workshop) (12)
 - [Schemas](#schemas)
 
 ## activity
@@ -3430,6 +3431,211 @@ Any actor. List all revisions of a wiki page.
 | --- | --- |
 | 200 | Revisions: [WikiRevisionList](#wikirevisionlist) (`application/json`) |
 
+## workshop
+
+### `GET /workshop/calls`
+
+`listToolCalls` · Auth: signed in
+
+Owner and admins. The call log, newest first: who called which tool,
+how long, how big, the outcome. Never the input or the output.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `target_id` | query | string (uuid) |  | Only this connector's calls |
+| `before` | query | string (date-time) |  | started_at of the last call of the previous page |
+| `limit` | query | integer |  |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ToolCallList](#toolcalllist) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/connectors`
+
+`listConnectors` · Auth: signed in
+
+Owner and admins (round 56a, the Workshop). The workspace's
+connectors to external MCP servers and HTTP APIs, with their tools
+and the risk of each. A secret is shown only by its last 4
+characters.
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ConnectorList](#connectorlist) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/connectors`
+
+`createConnector` · Auth: signed in
+
+Owner and admins. Adds a connector; the secret is stored encrypted
+(COLONY_SECRET_KEYS, else 400) and never returned. An MCP
+connector's tools are fetched at once; a failed fetch leaves the
+connector in the error state (refresh later). Audited.
+
+Request body (`application/json`, required): [CreateConnectorRequest](#createconnectorrequest)
+
+| Response | Body |
+| --- | --- |
+| 201 | Created: [Connector](#connector) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 409 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /workshop/connectors/{connectorId}`
+
+`deleteConnector` · Auth: signed in
+
+Owner and admins. Removes the connector, its secret and every grant to it. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `connectorId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Removed |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/connectors/{connectorId}`
+
+`getConnector` · Auth: signed in
+
+Owner and admins.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `connectorId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Connector](#connector) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PATCH /workshop/connectors/{connectorId}`
+
+`updateConnector` · Auth: signed in
+
+Owner and admins. Changes the title, address, authentication or
+secret (absent fields stay). A new address or secret fetches the
+tools again. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `connectorId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [UpdateConnectorRequest](#updateconnectorrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Connector](#connector) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /workshop/connectors/{connectorId}/approval`
+
+`setConnectorApproval` · Auth: signed in
+
+Owner only (decision 2026-11-17). Switches off (or on again) the
+human approval of this connector's write and external calls.
+Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `connectorId` | path | string (uuid) | yes |  |
+
+Request body (`application/json`, required): [ConnectorApprovalRequest](#connectorapprovalrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Connector](#connector) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/connectors/{connectorId}/refresh`
+
+`refreshConnector` · Auth: signed in
+
+Owner and admins. Fetches an MCP connector's tool list again.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `connectorId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Connector](#connector) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `PUT /workshop/connectors/{connectorId}/tools/{tool}/risk`
+
+`setConnectorToolRisk` · Auth: signed in
+
+Owner and admins. Overrides a tool's risk; an empty risk removes the override. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `connectorId` | path | string (uuid) | yes |  |
+| `tool` | path | string | yes |  |
+
+Request body (`application/json`, required): [ToolRiskRequest](#toolriskrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [Connector](#connector) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `GET /workshop/grants`
+
+`listToolGrants` · Auth: signed in
+
+Owner and admins. Which agent may use which connector (or the Workshop's tools).
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ToolGrantList](#toolgrantlist) (`application/json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `POST /workshop/grants`
+
+`addToolGrant` · Auth: signed in
+
+Owner and admins. Lets an agent of the workspace use a connector.
+Granting twice returns the existing grant. Audited.
+
+Request body (`application/json`, required): [AddToolGrantRequest](#addtoolgrantrequest)
+
+| Response | Body |
+| --- | --- |
+| 200 | OK: [ToolGrant](#toolgrant) (`application/json`) |
+| 400 | Error: [Problem](#problem) (`application/problem+json`) |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
+### `DELETE /workshop/grants/{grantId}`
+
+`revokeToolGrant` · Auth: signed in
+
+Owner and admins. Audited.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `grantId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 204 | Revoked |
+| 403 | Error: [Problem](#problem) (`application/problem+json`) |
+| 404 | Error: [Problem](#problem) (`application/problem+json`) |
+
 ## Schemas
 
 ### AcceptInviteRequest
@@ -3556,6 +3762,14 @@ Type: string
 | `model` | string | yes |  |
 | `output_per_mtok` | number (double) | yes |  |
 | `valid_from` | string (date-time) |  |  |
+
+### AddToolGrantRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agent_id` | string (uuid) | yes |  |
+| `target_id` | string (uuid) |  |  |
+| `target_kind` | string | yes | One of: `connector`, `workshop`. |
 
 ### AdminStatus
 
@@ -4109,6 +4323,50 @@ Round 39: CodeGraph on the machine. The guard indexes the agents' git repositori
 | `thread_root_id` | string (uuid), nullable |  |  |
 | `threshold_tokens` | integer | yes |  |
 
+### Connector
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `approval_off` | boolean | yes | Write and external calls run without a human's approval (owner's choice) |
+| `auth` | string | yes | One of: `none`, `bearer`, `header`, `basic`. |
+| `base_url` | string | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `has_secret` | boolean | yes |  |
+| `header_name` | string |  |  |
+| `id` | string (uuid) | yes |  |
+| `kind` | string | yes | One of: `mcp`, `http`. |
+| `last_error` | string |  |  |
+| `secret_hint` | string |  | The last 4 characters of a long secret |
+| `slug` | string | yes | Short name; its tools are <slug>__<tool> in the gateway |
+| `state` | string | yes | One of: `new`, `ok`, `error`. |
+| `title` | string | yes |  |
+| `tools` | [ConnectorTool](#connectortool)[] | yes |  |
+| `tools_cached_at` | string (date-time) |  |  |
+| `updated_at` | string (date-time) | yes |  |
+
+### ConnectorApprovalRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `approval_off` | boolean | yes |  |
+
+### ConnectorList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `connectors` | [Connector](#connector)[] | yes |  |
+| `secrets_available` | boolean | yes | The server has COLONY_SECRET_KEYS: connectors may carry a secret |
+
+### ConnectorTool
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `description` | string | yes |  |
+| `effective_risk` | [ToolRisk](#toolrisk) | yes | One of: `read`, `write`, `external`. |
+| `name` | string | yes |  |
+| `overridden` | boolean |  |  |
+| `risk` | [ToolRisk](#toolrisk) | yes | One of: `read`, `write`, `external`. |
+
 ### ContextMessage
 
 | Field | Type | Required | Description |
@@ -4171,6 +4429,18 @@ kind is public (the default) or private; dm is refused with 400, DMs come from P
 | `kind` | [ChannelKind](#channelkind) |  | One of: `public`, `private`, `dm`. |
 | `member_ids` | string (uuid)[] |  | Admins: initial members besides the creator |
 | `name` | string | yes |  |
+
+### CreateConnectorRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `auth` | string |  | One of: `none`, `bearer`, `header`, `basic`. |
+| `base_url` | string | yes |  |
+| `header_name` | string |  |  |
+| `kind` | string | yes | One of: `mcp`, `http`. |
+| `secret` | string |  | Write-only; for basic: user:password |
+| `slug` | string | yes |  |
+| `title` | string | yes |  |
 
 ### CreateCustomerRequest
 
@@ -6228,6 +6498,61 @@ Type: string
 | --- | --- | --- | --- |
 | `tokens` | [Token](#token)[] | yes |  |
 
+### ToolCallEntry
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `actor_id` | string (uuid) | yes |  |
+| `approval_id` | string (uuid) |  |  |
+| `duration_ms` | integer | yes |  |
+| `error` | string |  |  |
+| `id` | string (uuid) | yes |  |
+| `in_bytes` | integer | yes |  |
+| `out_bytes` | integer | yes |  |
+| `outcome` | string | yes | One of: `ok`, `error`, `denied`, `timeout`, `limit`. |
+| `risk` | [ToolRisk](#toolrisk) | yes | One of: `read`, `write`, `external`. |
+| `started_at` | string (date-time) | yes |  |
+| `target_id` | string (uuid) | yes |  |
+| `target_kind` | string | yes | One of: `connector`, `extension`. |
+| `tool` | string | yes |  |
+
+### ToolCallList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `calls` | [ToolCallEntry](#toolcallentry)[] | yes |  |
+
+### ToolGrant
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agent_handle` | string |  |  |
+| `agent_id` | string (uuid) | yes |  |
+| `created_at` | string (date-time) | yes |  |
+| `granted_by` | string (uuid) | yes |  |
+| `id` | string (uuid) | yes |  |
+| `target_id` | string (uuid) |  |  |
+| `target_kind` | string | yes | One of: `connector`, `extension`, `workshop`. |
+| `target_name` | string |  |  |
+
+### ToolGrantList
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `grants` | [ToolGrant](#toolgrant)[] | yes |  |
+
+### ToolRisk
+
+One of: `read`, `write`, `external`
+
+Type: string
+
+### ToolRiskRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `risk` | string | yes | Empty removes the override One of: ``, `read`, `write`, `external`. |
+
 ### UpdateActorProfileRequest
 
 | Field | Type | Required | Description |
@@ -6270,6 +6595,16 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `markdown` | string | yes |  |
+
+### UpdateConnectorRequest
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `auth` | string |  | One of: `none`, `bearer`, `header`, `basic`. |
+| `base_url` | string |  |  |
+| `header_name` | string |  |  |
+| `secret` | string |  | Write-only; a new value replaces the old |
+| `title` | string |  |  |
 
 ### UpdateDelegationSettingsRequest
 

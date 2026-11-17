@@ -32,10 +32,14 @@ import (
 	previewpg "colonyhall/internal/modules/preview/postgres"
 	savedmem "colonyhall/internal/modules/saved/memory"
 	savedpg "colonyhall/internal/modules/saved/postgres"
+	secretsmem "colonyhall/internal/modules/secrets/memory"
+	secretspg "colonyhall/internal/modules/secrets/postgres"
 	sidebarmem "colonyhall/internal/modules/sidebar/memory"
 	sidebarpg "colonyhall/internal/modules/sidebar/postgres"
 	wikimem "colonyhall/internal/modules/wiki/memory"
 	wikipg "colonyhall/internal/modules/wiki/postgres"
+	workshopmem "colonyhall/internal/modules/workshop/memory"
+	workshoppg "colonyhall/internal/modules/workshop/postgres"
 	"context"
 	"os"
 	"testing"
@@ -78,7 +82,7 @@ func TestMemory(t *testing.T) {
 			Runs: runmem.New(), Schedule: schedmem.New(), Approval: appmem.New(), Wiki: wikimem.New(),
 			Question: qmem.New(), Files: filesmem.NewStore(), Git: gitmem.New(), Preview: previewmem.New(),
 			AgentRules: rulesmem.New(), Notes: notesmem.New(), Agents: agentsmem.New(), Planner: plannermem.New(), Decisions: decisionsmem.New(), Leases: leasesmem.New(),
-			Sidebar: sidebarmem.New(), Compaction: compmem.NewStore(), Delegation: delegationmem.New(), Search: searchmem.New(), DBStats: dbstatsmem.New(), Drafts: draftmem.New(), Saved: savedmem.New(), Activity: activitymem.New(), Operator: opmem.New(), System: system.Context}
+			Sidebar: sidebarmem.New(), Compaction: compmem.NewStore(), Delegation: delegationmem.New(), Search: searchmem.New(), DBStats: dbstatsmem.New(), Drafts: draftmem.New(), Saved: savedmem.New(), Activity: activitymem.New(), Operator: opmem.New(), Secrets: secretsmem.New(), Workshop: workshopmem.New(), System: system.Context}
 	})
 }
 
@@ -102,7 +106,7 @@ func TestPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	Run(t, func(t *testing.T) Backend {
-		_, err := pg.Pool.Exec(ctx, `TRUNCATE plan, break_glass, operator_audit, operator_session, operator_backup_code, operator, workspace_invite, workspace_storage, emoji_use, activity_item, saved_item, message_pin, draft, auth_failure, search_chunk_text, search_log, db_size_sample, workspace_gitea, model_price, workspace_currency, agent_instructions, planner_calendar_event, planner_calendar, planner_access, planner_task, terminal_event, delegation, compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
+		_, err := pg.Pool.Exec(ctx, `TRUNCATE tool_call, agent_tool_grant, connector, workspace_secret, plan, break_glass, operator_audit, operator_session, operator_backup_code, operator, workspace_invite, workspace_storage, emoji_use, activity_item, saved_item, message_pin, draft, auth_failure, search_chunk_text, search_log, db_size_sample, workspace_gitea, model_price, workspace_currency, agent_instructions, planner_calendar_event, planner_calendar, planner_access, planner_task, terminal_event, delegation, compaction_unit, compaction, workspace_compaction_settings, sidebar_item, sidebar_section, lease, decision, agent_note, agent_rules, preview, git_webhook_delivery, git_repo_channel, git_link, question, message_file, file, approval_request, agent_run, wiki_revision, wiki_page, audit_log, schedule, run_error, folder_grant, agent_host, host_pairing_code, host, reaction, delivery, consumer_offset, event, message, channel_member,
 			channel, session, credential, api_token, actor, workspace RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Fatal(err)
@@ -112,6 +116,6 @@ func TestPostgres(t *testing.T) {
 			Hosts: &hostpg.Store{DB: pg}, Runs: &runpg.Store{DB: pg}, Schedule: &schedpg.Store{DB: pg},
 			Approval: &apppg.Store{DB: pg}, Wiki: &wikipg.Store{DB: pg}, Question: &qpg.Store{DB: pg}, Files: &filespg.Store{DB: pg}, Git: &gitpg.Store{DB: pg}, Preview: &previewpg.Store{DB: pg},
 			AgentRules: &rulespg.Store{DB: pg}, Notes: &notespg.Store{DB: pg}, Agents: &agentspg.Store{DB: pg}, Planner: &plannerpg.Store{DB: pg}, Decisions: &decisionspg.Store{DB: pg}, Leases: &leasespg.Store{DB: pg},
-			Sidebar: &sidebarpg.Store{DB: pg}, Compaction: &comppg.Store{DB: pg}, Delegation: &delegationpg.Store{DB: pg}, Search: &searchpg.Store{DB: pg}, DBStats: &dbstatspg.Store{DB: pg}, Drafts: &draftpg.Store{DB: pg}, Saved: &savedpg.Store{DB: pg}, Activity: &activitypg.Store{DB: pg}, Operator: &oppg.Store{DB: pg}, System: system.Context}
+			Sidebar: &sidebarpg.Store{DB: pg}, Compaction: &comppg.Store{DB: pg}, Delegation: &delegationpg.Store{DB: pg}, Search: &searchpg.Store{DB: pg}, DBStats: &dbstatspg.Store{DB: pg}, Drafts: &draftpg.Store{DB: pg}, Saved: &savedpg.Store{DB: pg}, Activity: &activitypg.Store{DB: pg}, Operator: &oppg.Store{DB: pg}, Secrets: &secretspg.Store{DB: pg}, Workshop: &workshoppg.Store{DB: pg}, System: system.Context}
 	})
 }

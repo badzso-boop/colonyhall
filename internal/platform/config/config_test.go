@@ -133,3 +133,24 @@ func TestLoginAllowlistAndTrustedProxies(t *testing.T) {
 		t.Fatal("a bad prefix must fail the start")
 	}
 }
+
+func TestEgressAllow(t *testing.T) {
+	t.Setenv("COLONY_STORE", "memory")
+	t.Setenv("COLONY_EGRESS_ALLOW", "192.168.1.0/24, gitea.lan")
+	c, err := FromEnv()
+	if err != nil || len(c.EgressAllow.Prefixes) != 1 || len(c.EgressAllow.Hosts) != 1 {
+		t.Fatalf("single-tenant allow list: %+v %v", c.EgressAllow, err)
+	}
+	t.Setenv("COLONY_EGRESS_ALLOW", "not a host/")
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("a bad entry must be refused")
+	}
+	// Multi-tenant: internal addresses would be open to every customer.
+	t.Setenv("COLONY_EGRESS_ALLOW", "10.0.0.0/8")
+	t.Setenv("COLONY_MULTITENANT", "1")
+	t.Setenv("COLONY_BASE_DOMAIN", "example.test")
+	t.Setenv("COLONY_SECRET_KEYS", testKey(t))
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "COLONY_EGRESS_ALLOW") {
+		t.Fatalf("multi-tenant with an allow list: %v", err)
+	}
+}

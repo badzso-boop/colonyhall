@@ -147,6 +147,9 @@ import (
 	searchmcp "colonyhall/internal/modules/search/mcptools"
 	searchmem "colonyhall/internal/modules/search/memory"
 	searchpg "colonyhall/internal/modules/search/postgres"
+	"colonyhall/internal/modules/secrets"
+	secretsmem "colonyhall/internal/modules/secrets/memory"
+	secretspg "colonyhall/internal/modules/secrets/postgres"
 	"colonyhall/internal/modules/sidebar"
 	sidebarhttp "colonyhall/internal/modules/sidebar/httpapi"
 	sidebarmem "colonyhall/internal/modules/sidebar/memory"
@@ -156,12 +159,19 @@ import (
 	wikimcp "colonyhall/internal/modules/wiki/mcptools"
 	wikimem "colonyhall/internal/modules/wiki/memory"
 	wikipg "colonyhall/internal/modules/wiki/postgres"
+	"colonyhall/internal/modules/workshop"
+	workshophttp "colonyhall/internal/modules/workshop/httpapi"
+	"colonyhall/internal/modules/workshop/mcpremote"
+	workshopmcp "colonyhall/internal/modules/workshop/mcptools"
+	workshopmem "colonyhall/internal/modules/workshop/memory"
+	workshoppg "colonyhall/internal/modules/workshop/postgres"
 	"colonyhall/internal/platform/bus"
 	"colonyhall/internal/platform/clientip"
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/config"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/db/system"
+	"colonyhall/internal/platform/egress"
 	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/platform/secretbox"
 	"colonyhall/migrations"
@@ -236,6 +246,11 @@ type Options struct {
 	OperatorDevAccess bool
 	// OperatorAllowlist: the addresses admin.<domain> answers; empty: any.
 	OperatorAllowlist []netip.Prefix
+	// Round 56a: the Workshop. EgressPolicy is COLONY_EGRESS_ALLOW (internal
+	// addresses connectors may reach; empty: public https only).
+	// WorkshopRemote replaces the MCP client of the connectors (tests).
+	EgressPolicy   egress.Policy
+	WorkshopRemote workshop.Remote
 }
 
 // App is a wired-up Colonyhall server.
@@ -257,6 +272,8 @@ type App struct {
 	Notes        *notes.Service
 	Drafts       *draft.Service
 	Saved        *saved.Service
+	Workshop     *workshop.Service
+	Secrets      *secrets.Service
 	Activity     *activity.Service
 	Planner      *planner.Service
 	Decisions    *decision.Service
@@ -318,6 +335,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		ntStore        notes.Store
 		drStore        draft.Store
 		svStore        saved.Store
+		secStore       secrets.Store
+		wsStore        workshop.Store
 		acStore        activity.Store
 		agStore        agents.Store
 		plStore        planner.Store
@@ -359,6 +378,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		seStore = searchmem.New()
 		dsStore = dbstatsmem.New()
 		opStore = opmem.New()
+		secStore = secretsmem.New()
+		wsStore = workshopmem.New()
 	case "postgres":
 		pg, err := db.Open(ctx, opt.DatabaseURL)
 		if err != nil {
@@ -408,6 +429,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		seStore = &searchpg.Store{DB: pg}
 		dsStore = &dbstatspg.Store{DB: pg}
 		opStore = &oppg.Store{DB: pg}
+		secStore = &secretspg.Store{DB: pg}
+		wsStore = &workshoppg.Store{DB: pg}
 		ready = func(ctx context.Context) error { return pg.Pool.Ping(ctx) }
 		closeAll = pg.Pool.Close
 	default:
@@ -643,6 +666,14 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	compactionhttp.Register(mux, cmSvc, idSvc)
 	delegationhttp.Register(mux, dgSvc, idSvc)
 	searchhttp.Register(mux, seSvc, idSvc)
+	secSvc := &secrets.Service{Store: secStore, Keys: opt.SecretKeys, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
+	remote := opt.WorkshopRemote
+	if remote == nil {
+		remote = &mcpremote.Client{Policy: opt.EgressPolicy, Version: Version}
+	}
+	wsSvc := &workshop.Service{Store: wsStore, Secrets: secSvc, Remote: remote, Approvals: apSvc, Directory: idSvc,
+		Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock, Logger: opt.Logger}
+	workshophttp.Register(mux, wsSvc, idSvc)
 	mcpHandler := mcpserver.Handler(idSvc, Version, func(s *mcp.Server, actor identity.Actor, r *http.Request) {
 		current := func(ctx context.Context) (identity.Actor, error) { return idSvc.Current(ctx, actor.ID) }
 		delmcp.Register(s, dlSvc, current)
@@ -659,6 +690,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		leasesmcp.Register(s, lsSvc, current)
 		searchmcp.Register(s, seSvc, current)
 		hostsmcp.Register(s, hoSvc, idSvc, current)
+		workshopmcp.Register(s, wsSvc, actor, current, r, opt.Logger)
 	}, func(ctx context.Context, actor identity.Actor) (string, error) {
 		text, err := rlSvc.InstructionsForActor(ctx, actor)
 		if err != nil || actor.Kind != identity.KindAgent {
@@ -779,6 +811,8 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		Handler:      handler,
 		Identity:     idSvc,
 		Conversation: cvSvc,
+		Workshop:     wsSvc,
+		Secrets:      secSvc,
 		Delivery:     dlSvc,
 		Audit:        auSvc,
 		Hosts:        hoSvc,

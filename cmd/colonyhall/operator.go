@@ -58,16 +58,30 @@ func operatorCmd(cmd string, args []string, stdin io.Reader, out io.Writer) erro
 	if err != nil {
 		return err
 	}
-	if !cfg.Multitenant {
+	if !cfg.Multitenant && cmd != "rotate-secrets" {
 		return operator.ErrNotMultitenant
 	}
 	ctx := system.Context(context.Background()) // a server command
 	app, err := server.New(ctx, server.Options{Store: cfg.Store, DatabaseURL: cfg.DatabaseURL, FilesDir: cfg.FilesDir,
-		MaxUploadMB: cfg.MaxUploadMB, Multitenant: true, BaseDomain: cfg.BaseDomain, SecretKeys: cfg.SecretKeys})
+		MaxUploadMB: cfg.MaxUploadMB, Multitenant: cfg.Multitenant, BaseDomain: cfg.BaseDomain, SecretKeys: cfg.SecretKeys})
 	if err != nil {
 		return err
 	}
 	defer app.Close()
+	if cmd == "rotate-secrets" {
+		// Round 56a: the workspaces' secrets (connector tokens), on every
+		// server; the operators' TOTP secrets in multi-tenant mode.
+		n, err := app.Secrets.Rotate(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "re-encrypted %d workspace secret(s) with the key %q\n", n, cfg.SecretKeys.Active()); err != nil {
+			return err
+		}
+		if !cfg.Multitenant {
+			return nil
+		}
+	}
 	in := stdin
 	if *code != "" {
 		in = strings.NewReader(*code + "\n")

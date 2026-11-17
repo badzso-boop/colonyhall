@@ -63,6 +63,24 @@ func (e ActorKind) Valid() bool {
 	}
 }
 
+// Defines values for AddToolGrantRequestTargetKind.
+const (
+	AddToolGrantRequestTargetKindConnector AddToolGrantRequestTargetKind = "connector"
+	AddToolGrantRequestTargetKindWorkshop  AddToolGrantRequestTargetKind = "workshop"
+)
+
+// Valid indicates whether the value is a known member of the AddToolGrantRequestTargetKind enum.
+func (e AddToolGrantRequestTargetKind) Valid() bool {
+	switch e {
+	case AddToolGrantRequestTargetKindConnector:
+		return true
+	case AddToolGrantRequestTargetKindWorkshop:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentActivityRequestState.
 const (
 	Idle    AgentActivityRequestState = "idle"
@@ -459,6 +477,111 @@ func (e CompactionTrigger) Valid() bool {
 	case CompactionTriggerManual:
 		return true
 	case CompactionTriggerRegenerate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectorAuth.
+const (
+	ConnectorAuthBasic  ConnectorAuth = "basic"
+	ConnectorAuthBearer ConnectorAuth = "bearer"
+	ConnectorAuthHeader ConnectorAuth = "header"
+	ConnectorAuthNone   ConnectorAuth = "none"
+)
+
+// Valid indicates whether the value is a known member of the ConnectorAuth enum.
+func (e ConnectorAuth) Valid() bool {
+	switch e {
+	case ConnectorAuthBasic:
+		return true
+	case ConnectorAuthBearer:
+		return true
+	case ConnectorAuthHeader:
+		return true
+	case ConnectorAuthNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectorKind.
+const (
+	ConnectorKindHttp ConnectorKind = "http"
+	ConnectorKindMcp  ConnectorKind = "mcp"
+)
+
+// Valid indicates whether the value is a known member of the ConnectorKind enum.
+func (e ConnectorKind) Valid() bool {
+	switch e {
+	case ConnectorKindHttp:
+		return true
+	case ConnectorKindMcp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectorState.
+const (
+	ConnectorStateError ConnectorState = "error"
+	ConnectorStateNew   ConnectorState = "new"
+	ConnectorStateOk    ConnectorState = "ok"
+)
+
+// Valid indicates whether the value is a known member of the ConnectorState enum.
+func (e ConnectorState) Valid() bool {
+	switch e {
+	case ConnectorStateError:
+		return true
+	case ConnectorStateNew:
+		return true
+	case ConnectorStateOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateConnectorRequestAuth.
+const (
+	CreateConnectorRequestAuthBasic  CreateConnectorRequestAuth = "basic"
+	CreateConnectorRequestAuthBearer CreateConnectorRequestAuth = "bearer"
+	CreateConnectorRequestAuthHeader CreateConnectorRequestAuth = "header"
+	CreateConnectorRequestAuthNone   CreateConnectorRequestAuth = "none"
+)
+
+// Valid indicates whether the value is a known member of the CreateConnectorRequestAuth enum.
+func (e CreateConnectorRequestAuth) Valid() bool {
+	switch e {
+	case CreateConnectorRequestAuthBasic:
+		return true
+	case CreateConnectorRequestAuthBearer:
+		return true
+	case CreateConnectorRequestAuthHeader:
+		return true
+	case CreateConnectorRequestAuthNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateConnectorRequestKind.
+const (
+	CreateConnectorRequestKindHttp CreateConnectorRequestKind = "http"
+	CreateConnectorRequestKindMcp  CreateConnectorRequestKind = "mcp"
+)
+
+// Valid indicates whether the value is a known member of the CreateConnectorRequestKind enum.
+func (e CreateConnectorRequestKind) Valid() bool {
+	switch e {
+	case CreateConnectorRequestKindHttp:
+		return true
+	case CreateConnectorRequestKindMcp:
 		return true
 	default:
 		return false
@@ -1539,6 +1662,141 @@ func (e TerminalSummaryStatus) Valid() bool {
 	}
 }
 
+// Defines values for ToolCallEntryOutcome.
+const (
+	ToolCallEntryOutcomeDenied  ToolCallEntryOutcome = "denied"
+	ToolCallEntryOutcomeError   ToolCallEntryOutcome = "error"
+	ToolCallEntryOutcomeLimit   ToolCallEntryOutcome = "limit"
+	ToolCallEntryOutcomeOk      ToolCallEntryOutcome = "ok"
+	ToolCallEntryOutcomeTimeout ToolCallEntryOutcome = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the ToolCallEntryOutcome enum.
+func (e ToolCallEntryOutcome) Valid() bool {
+	switch e {
+	case ToolCallEntryOutcomeDenied:
+		return true
+	case ToolCallEntryOutcomeError:
+		return true
+	case ToolCallEntryOutcomeLimit:
+		return true
+	case ToolCallEntryOutcomeOk:
+		return true
+	case ToolCallEntryOutcomeTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolCallEntryTargetKind.
+const (
+	ToolCallEntryTargetKindConnector ToolCallEntryTargetKind = "connector"
+	ToolCallEntryTargetKindExtension ToolCallEntryTargetKind = "extension"
+)
+
+// Valid indicates whether the value is a known member of the ToolCallEntryTargetKind enum.
+func (e ToolCallEntryTargetKind) Valid() bool {
+	switch e {
+	case ToolCallEntryTargetKindConnector:
+		return true
+	case ToolCallEntryTargetKindExtension:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolGrantTargetKind.
+const (
+	ToolGrantTargetKindConnector ToolGrantTargetKind = "connector"
+	ToolGrantTargetKindExtension ToolGrantTargetKind = "extension"
+	ToolGrantTargetKindWorkshop  ToolGrantTargetKind = "workshop"
+)
+
+// Valid indicates whether the value is a known member of the ToolGrantTargetKind enum.
+func (e ToolGrantTargetKind) Valid() bool {
+	switch e {
+	case ToolGrantTargetKindConnector:
+		return true
+	case ToolGrantTargetKindExtension:
+		return true
+	case ToolGrantTargetKindWorkshop:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolRisk.
+const (
+	ToolRiskExternal ToolRisk = "external"
+	ToolRiskRead     ToolRisk = "read"
+	ToolRiskWrite    ToolRisk = "write"
+)
+
+// Valid indicates whether the value is a known member of the ToolRisk enum.
+func (e ToolRisk) Valid() bool {
+	switch e {
+	case ToolRiskExternal:
+		return true
+	case ToolRiskRead:
+		return true
+	case ToolRiskWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolRiskRequestRisk.
+const (
+	ToolRiskRequestRiskEmpty    ToolRiskRequestRisk = ""
+	ToolRiskRequestRiskExternal ToolRiskRequestRisk = "external"
+	ToolRiskRequestRiskRead     ToolRiskRequestRisk = "read"
+	ToolRiskRequestRiskWrite    ToolRiskRequestRisk = "write"
+)
+
+// Valid indicates whether the value is a known member of the ToolRiskRequestRisk enum.
+func (e ToolRiskRequestRisk) Valid() bool {
+	switch e {
+	case ToolRiskRequestRiskEmpty:
+		return true
+	case ToolRiskRequestRiskExternal:
+		return true
+	case ToolRiskRequestRiskRead:
+		return true
+	case ToolRiskRequestRiskWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateConnectorRequestAuth.
+const (
+	UpdateConnectorRequestAuthBasic  UpdateConnectorRequestAuth = "basic"
+	UpdateConnectorRequestAuthBearer UpdateConnectorRequestAuth = "bearer"
+	UpdateConnectorRequestAuthHeader UpdateConnectorRequestAuth = "header"
+	UpdateConnectorRequestAuthNone   UpdateConnectorRequestAuth = "none"
+)
+
+// Valid indicates whether the value is a known member of the UpdateConnectorRequestAuth enum.
+func (e UpdateConnectorRequestAuth) Valid() bool {
+	switch e {
+	case UpdateConnectorRequestAuthBasic:
+		return true
+	case UpdateConnectorRequestAuthBearer:
+		return true
+	case UpdateConnectorRequestAuthHeader:
+		return true
+	case UpdateConnectorRequestAuthNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WikiRevisionKind.
 const (
 	WikiRevisionKindAppend  WikiRevisionKind = "append"
@@ -1876,6 +2134,16 @@ type AddPriceRequest struct {
 	OutputPerMtok     float64    `json:"output_per_mtok"`
 	ValidFrom         *time.Time `json:"valid_from,omitempty"`
 }
+
+// AddToolGrantRequest defines model for AddToolGrantRequest.
+type AddToolGrantRequest struct {
+	AgentId    openapi_types.UUID            `json:"agent_id"`
+	TargetId   *openapi_types.UUID           `json:"target_id,omitempty"`
+	TargetKind AddToolGrantRequestTargetKind `json:"target_kind"`
+}
+
+// AddToolGrantRequestTargetKind defines model for AddToolGrantRequest.TargetKind.
+type AddToolGrantRequestTargetKind string
 
 // AdminStatus defines model for AdminStatus.
 type AdminStatus struct {
@@ -2473,6 +2741,62 @@ type CompactionUnitStatus struct {
 	ThresholdTokens      int                 `json:"threshold_tokens"`
 }
 
+// Connector defines model for Connector.
+type Connector struct {
+	// ApprovalOff Write and external calls run without a human's approval (owner's choice)
+	ApprovalOff bool               `json:"approval_off"`
+	Auth        ConnectorAuth      `json:"auth"`
+	BaseUrl     string             `json:"base_url"`
+	CreatedAt   time.Time          `json:"created_at"`
+	HasSecret   bool               `json:"has_secret"`
+	HeaderName  *string            `json:"header_name,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	Kind        ConnectorKind      `json:"kind"`
+	LastError   *string            `json:"last_error,omitempty"`
+
+	// SecretHint The last 4 characters of a long secret
+	SecretHint *string `json:"secret_hint,omitempty"`
+
+	// Slug Short name; its tools are <slug>__<tool> in the gateway
+	Slug          string          `json:"slug"`
+	State         ConnectorState  `json:"state"`
+	Title         string          `json:"title"`
+	Tools         []ConnectorTool `json:"tools"`
+	ToolsCachedAt *time.Time      `json:"tools_cached_at,omitempty"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+// ConnectorAuth defines model for Connector.Auth.
+type ConnectorAuth string
+
+// ConnectorKind defines model for Connector.Kind.
+type ConnectorKind string
+
+// ConnectorState defines model for Connector.State.
+type ConnectorState string
+
+// ConnectorApprovalRequest defines model for ConnectorApprovalRequest.
+type ConnectorApprovalRequest struct {
+	ApprovalOff bool `json:"approval_off"`
+}
+
+// ConnectorList defines model for ConnectorList.
+type ConnectorList struct {
+	Connectors []Connector `json:"connectors"`
+
+	// SecretsAvailable The server has COLONY_SECRET_KEYS: connectors may carry a secret
+	SecretsAvailable bool `json:"secrets_available"`
+}
+
+// ConnectorTool defines model for ConnectorTool.
+type ConnectorTool struct {
+	Description   string   `json:"description"`
+	EffectiveRisk ToolRisk `json:"effective_risk"`
+	Name          string   `json:"name"`
+	Overridden    *bool    `json:"overridden,omitempty"`
+	Risk          ToolRisk `json:"risk"`
+}
+
 // ContextMessage defines model for ContextMessage.
 type ContextMessage struct {
 	Attachments  *[]string          `json:"attachments,omitempty"`
@@ -2544,6 +2868,25 @@ type CreateChannelRequest struct {
 	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
 	Name      string                `json:"name"`
 }
+
+// CreateConnectorRequest defines model for CreateConnectorRequest.
+type CreateConnectorRequest struct {
+	Auth       *CreateConnectorRequestAuth `json:"auth,omitempty"`
+	BaseUrl    string                      `json:"base_url"`
+	HeaderName *string                     `json:"header_name,omitempty"`
+	Kind       CreateConnectorRequestKind  `json:"kind"`
+
+	// Secret Write-only; for basic: user:password
+	Secret *string `json:"secret,omitempty"`
+	Slug   string  `json:"slug"`
+	Title  string  `json:"title"`
+}
+
+// CreateConnectorRequestAuth defines model for CreateConnectorRequest.Auth.
+type CreateConnectorRequestAuth string
+
+// CreateConnectorRequestKind defines model for CreateConnectorRequest.Kind.
+type CreateConnectorRequestKind string
 
 // CreateCustomerRequest defines model for CreateCustomerRequest.
 type CreateCustomerRequest struct {
@@ -4631,6 +4974,66 @@ type TokenList struct {
 	Tokens []Token `json:"tokens"`
 }
 
+// ToolCallEntry defines model for ToolCallEntry.
+type ToolCallEntry struct {
+	ActorId    openapi_types.UUID      `json:"actor_id"`
+	ApprovalId *openapi_types.UUID     `json:"approval_id,omitempty"`
+	DurationMs int                     `json:"duration_ms"`
+	Error      *string                 `json:"error,omitempty"`
+	Id         openapi_types.UUID      `json:"id"`
+	InBytes    int                     `json:"in_bytes"`
+	OutBytes   int                     `json:"out_bytes"`
+	Outcome    ToolCallEntryOutcome    `json:"outcome"`
+	Risk       ToolRisk                `json:"risk"`
+	StartedAt  time.Time               `json:"started_at"`
+	TargetId   openapi_types.UUID      `json:"target_id"`
+	TargetKind ToolCallEntryTargetKind `json:"target_kind"`
+	Tool       string                  `json:"tool"`
+}
+
+// ToolCallEntryOutcome defines model for ToolCallEntry.Outcome.
+type ToolCallEntryOutcome string
+
+// ToolCallEntryTargetKind defines model for ToolCallEntry.TargetKind.
+type ToolCallEntryTargetKind string
+
+// ToolCallList defines model for ToolCallList.
+type ToolCallList struct {
+	Calls []ToolCallEntry `json:"calls"`
+}
+
+// ToolGrant defines model for ToolGrant.
+type ToolGrant struct {
+	AgentHandle *string             `json:"agent_handle,omitempty"`
+	AgentId     openapi_types.UUID  `json:"agent_id"`
+	CreatedAt   time.Time           `json:"created_at"`
+	GrantedBy   openapi_types.UUID  `json:"granted_by"`
+	Id          openapi_types.UUID  `json:"id"`
+	TargetId    *openapi_types.UUID `json:"target_id,omitempty"`
+	TargetKind  ToolGrantTargetKind `json:"target_kind"`
+	TargetName  *string             `json:"target_name,omitempty"`
+}
+
+// ToolGrantTargetKind defines model for ToolGrant.TargetKind.
+type ToolGrantTargetKind string
+
+// ToolGrantList defines model for ToolGrantList.
+type ToolGrantList struct {
+	Grants []ToolGrant `json:"grants"`
+}
+
+// ToolRisk defines model for ToolRisk.
+type ToolRisk string
+
+// ToolRiskRequest defines model for ToolRiskRequest.
+type ToolRiskRequest struct {
+	// Risk Empty removes the override
+	Risk ToolRiskRequestRisk `json:"risk"`
+}
+
+// ToolRiskRequestRisk Empty removes the override
+type ToolRiskRequestRisk string
+
 // UpdateActorProfileRequest defines model for UpdateActorProfileRequest.
 type UpdateActorProfileRequest struct {
 	AvatarEmoji *string `json:"avatar_emoji,omitempty"`
@@ -4670,6 +5073,20 @@ type UpdateCompactionSettingsRequest struct {
 type UpdateCompactionSummaryRequest struct {
 	Markdown string `json:"markdown"`
 }
+
+// UpdateConnectorRequest defines model for UpdateConnectorRequest.
+type UpdateConnectorRequest struct {
+	Auth       *UpdateConnectorRequestAuth `json:"auth,omitempty"`
+	BaseUrl    *string                     `json:"base_url,omitempty"`
+	HeaderName *string                     `json:"header_name,omitempty"`
+
+	// Secret Write-only; a new value replaces the old
+	Secret *string `json:"secret,omitempty"`
+	Title  *string `json:"title,omitempty"`
+}
+
+// UpdateConnectorRequestAuth defines model for UpdateConnectorRequest.Auth.
+type UpdateConnectorRequestAuth string
 
 // UpdateDelegationSettingsRequest defines model for UpdateDelegationSettingsRequest.
 type UpdateDelegationSettingsRequest struct {
@@ -5143,6 +5560,16 @@ type ListWikiPagesParams struct {
 // ListWikiPagesParamsDeleted defines parameters for ListWikiPages.
 type ListWikiPagesParamsDeleted int
 
+// ListToolCallsParams defines parameters for ListToolCalls.
+type ListToolCallsParams struct {
+	// TargetId Only this connector's calls
+	TargetId *openapi_types.UUID `form:"target_id,omitempty" json:"target_id,omitempty"`
+
+	// Before started_at of the last call of the previous page
+	Before *time.Time `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // CreateActorJSONRequestBody defines body for CreateActor for application/json ContentType.
 type CreateActorJSONRequestBody = CreateActorRequest
 
@@ -5416,6 +5843,21 @@ type EditWikiPageJSONRequestBody = EditWikiPageRequest
 
 // AppendWikiPageJSONRequestBody defines body for AppendWikiPage for application/json ContentType.
 type AppendWikiPageJSONRequestBody = AppendWikiPageRequest
+
+// CreateConnectorJSONRequestBody defines body for CreateConnector for application/json ContentType.
+type CreateConnectorJSONRequestBody = CreateConnectorRequest
+
+// UpdateConnectorJSONRequestBody defines body for UpdateConnector for application/json ContentType.
+type UpdateConnectorJSONRequestBody = UpdateConnectorRequest
+
+// SetConnectorApprovalJSONRequestBody defines body for SetConnectorApproval for application/json ContentType.
+type SetConnectorApprovalJSONRequestBody = ConnectorApprovalRequest
+
+// SetConnectorToolRiskJSONRequestBody defines body for SetConnectorToolRisk for application/json ContentType.
+type SetConnectorToolRiskJSONRequestBody = ToolRiskRequest
+
+// AddToolGrantJSONRequestBody defines body for AddToolGrant for application/json ContentType.
+type AddToolGrantJSONRequestBody = AddToolGrantRequest
 
 // SetWorkspaceStorageQuotaJSONRequestBody defines body for SetWorkspaceStorageQuota for application/json ContentType.
 type SetWorkspaceStorageQuotaJSONRequestBody = StorageQuotaRequest

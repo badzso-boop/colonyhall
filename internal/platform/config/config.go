@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"colonyhall/internal/platform/clientip"
+	"colonyhall/internal/platform/egress"
 	"colonyhall/internal/platform/secretbox"
 )
 
@@ -90,6 +91,10 @@ type Config struct {
 	// COLONY_SECRET_KEYS, or the file COLONY_SECRET_KEYS_FILE names.
 	// Required in multi-tenant mode. Nil when unset.
 	SecretKeys *secretbox.Keyring
+	// EgressAllow are the internal addresses the Workshop's connectors may
+	// reach (round 56a, COLONY_EGRESS_ALLOW: CIDRs, addresses and host
+	// names). Empty: public https only. Refused in multi-tenant mode.
+	EgressAllow egress.Policy
 }
 
 // Environments.
@@ -140,6 +145,10 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	egressAllow, err := egress.ParsePolicy(os.Getenv("COLONY_EGRESS_ALLOW"))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: COLONY_EGRESS_ALLOW: %w", err)
+	}
 	opAllow, err := clientip.ParseList(os.Getenv("COLONY_OPERATOR_ALLOWLIST"))
 	if err != nil {
 		return Config{}, fmt.Errorf("config: COLONY_OPERATOR_ALLOWLIST: %w", err)
@@ -148,6 +157,7 @@ func FromEnv() (Config, error) {
 		Env:                getenv("COLONY_ENV", EnvProduction),
 		OperatorDevAccess:  os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
 		SecretKeys:         keys,
+		EgressAllow:        egressAllow,
 		OperatorAllowlist:  opAllow,
 		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
 		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
@@ -180,6 +190,9 @@ func FromEnv() (Config, error) {
 	}
 	if c.OperatorDevAccess && c.Env != EnvDevelopment {
 		return c, fmt.Errorf("config: COLONY_OPERATOR_DEV_ACCESS=1 lets the operator read every workspace; it needs COLONY_ENV=development and is refused in production")
+	}
+	if c.Multitenant && !c.EgressAllow.Empty() {
+		return c, fmt.Errorf("config: COLONY_EGRESS_ALLOW opens internal addresses to every customer's connectors; it is refused when COLONY_MULTITENANT=1")
 	}
 	if c.Multitenant && c.SecretKeys == nil {
 		return c, fmt.Errorf("config: COLONY_SECRET_KEYS (or COLONY_SECRET_KEYS_FILE) is required when COLONY_MULTITENANT=1; create one with `colonyhall secret-key`")

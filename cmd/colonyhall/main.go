@@ -248,6 +248,7 @@ func run(logger *slog.Logger) error {
 		SecretKeys:         cfg.SecretKeys,
 		OperatorDevAccess:  cfg.OperatorDevAccess,
 		OperatorAllowlist:  cfg.OperatorAllowlist,
+		EgressPolicy:       cfg.EgressAllow,
 	})
 	if err != nil {
 		return err

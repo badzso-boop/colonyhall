@@ -203,6 +203,14 @@ func (s *ctSuite) seed() {
 		t.Fatalf("seed break-glass: %v", err)
 	}
 	s.obj["breakglass"] = bg.ID.String()
+	// Round 56a: a Workshop connector (an HTTP one: no tool fetch, no
+	// network) and a grant of it to acme's agent.
+	must(a.do("POST", "/api/v1/workshop/connectors", owner, map[string]any{"slug": "acmeconn", "title": acmeData + " connector",
+		"kind": "http", "base_url": "https://api.example.com/" + acmeData}, &created), http.StatusCreated, "connector")
+	s.obj["connector"] = created.ID
+	must(a.do("POST", "/api/v1/workshop/grants", owner, map[string]any{"agent_id": s.obj["agent"], "target_kind": "connector",
+		"target_id": s.obj["connector"]}, &created), http.StatusOK, "tool grant")
+	s.obj["toolGrant"] = created.ID
 
 	for _, id := range s.obj {
 		if _, err := ids.Parse(id); err == nil {
@@ -384,7 +392,15 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 	case "approvalId":
 		return s.obj["approval"], true
 	case "grantId":
+		if strings.HasPrefix(path, "/workshop/") {
+			return s.obj["toolGrant"], true
+		}
 		return s.obj["grant"], true
+	case "connectorId":
+		// Round 56a: acme's Workshop connector.
+		return s.obj["connector"], true
+	case "tool":
+		return "search", false
 	case "previewId":
 		return s.obj["preview"], true
 	case "workspaceId":

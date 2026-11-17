@@ -142,3 +142,11 @@ sql:
     schema: migrations
     queries: internal/modules/operator/postgres/queries.sql
     gen: { go: { <<: *go, out: internal/modules/operator/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/secrets/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/secrets/postgres/sqlcgen } }
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/workshop/postgres/queries.sql
+    gen: { go: { <<: *go, out: internal/modules/workshop/postgres/sqlcgen } }
