@@ -6,7 +6,8 @@
     "extensions": "Bővítmények",
     "connectors": "Kapcsolatok",
     "grants": "Engedélyek",
-    "calls": "Hívásnapló"
+    "calls": "Hívásnapló",
+    "builder": "Építő"
   },
   "connectors": {
     "new": "Új kapcsolat",
@@ -162,7 +163,12 @@
     "output": "Eredmény",
     "logs": "Napló",
     "testHint": "A teszt valódi hívás a bővítmény botjaként; jóváhagyást nem kér, a hívásnaplóba tesztként kerül.",
-    "diffRoutines": "Új vagy változott rutinok: {{list}}"
+    "diffRoutines": "Új vagy változott rutinok: {{list}}",
+    "export": "Exportálás",
+    "import": "Importálás",
+    "importHint": "Egy exportált bővítmény (.json). Vázlatként jön létre; élesíteni jóváhagyással lehet.",
+    "importSlug": "Új rövid név (ha a régi foglalt)",
+    "imported": "Importálva: {{name}} (vázlat)"
   },
   "routines": {
     "title_one": "{{count}} rutin",
@@ -183,5 +189,16 @@
       "done": "kész",
       "failed": "hiba"
     }
+  },
+  "builder": {
+    "intro": "Az Építő egy agent, akivel beszélgetve bővítményt csinálhatsz: megírja, teszteli, és élesítés előtt jóváhagyást kér tőled. Bármelyik agent Építő lehet, akinek a gazdája tulajdonos vagy admin.",
+    "safety": "Az Építő a gazdája nevében dolgozik, annál többet nem tehet. Élesíteni csak egy ember tud a jóváhagyási kártyán; kapcsolatot és titkot is csak ember vesz fel.",
+    "agent": "Agent",
+    "agentHint": "Csak azok az agentek, akiknek a gazdája tulajdonos vagy admin.",
+    "make": "Építővé teszem",
+    "empty": "Még nincs Építő",
+    "howTitle": "Javasolt utasítás az Építőnek",
+    "howHint": "Tedd az agent szabályai közé, vagy írd neki az első üzenetben.",
+    "instructions": "Te vagy a Műhely Építője. Ha valaki új funkciót kér: kérdezd meg, mit szeretne pontosan; nézd meg a workshop_list-tel, milyen kapcsolatok vannak (ha hiányzik egy, kérd meg az embert, hogy vegye fel a Műhelyben); hozd létre a bővítményt (extension_create), írd meg a manifestet és a kódot (extension_draft), teszteld (extension_test), és csak utána kérj élesítést (extension_publish). Magyarázd el röviden, mit csinál és milyen jogokat kér."
   }
 }

@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { RoutinesPanel } from "./RoutinesPanel";
 import { useTranslation } from "react-i18next";
-import { Plus, Puzzle, Trash2 } from "lucide-react";
+import { Download, Plus, Puzzle, Trash2, Upload } from "lucide-react";
 import { fullTime } from "@/shared/lib";
 import {
   Badge,
@@ -24,7 +24,9 @@ import {
   useAddVersion,
   useApproveVersion,
   useCreateExtension,
+  exportExtension,
   useDeleteExtension,
+  useImportExtension,
   useExtensions,
   useExtensionVersion,
   useRollback,
@@ -32,6 +34,7 @@ import {
   useSetExtensionEnabled,
   useTakeOver,
   useTestTool,
+  type Bundle,
   type Extension,
   type ExtensionDiff,
 } from "../api";
@@ -76,6 +79,7 @@ export function ExtensionsTab({ owner }: { owner: boolean }) {
         >
           {t("extensions.new")}
         </Button>
+        <ImportButton />
       </div>
       {!runner ? <Notice tone="info">{t("extensions.noRunner")}</Notice> : null}
       {extensions.length === 0 ? (
@@ -152,6 +156,26 @@ function ExtensionCard({ x, owner }: { x: Extension; owner: boolean }) {
           >
             {t("extensions.newVersion")}
           </Button>
+          <IconButton
+            label={t("extensions.export")}
+            icon={<Download className="size-4" />}
+            onClick={() =>
+              exportExtension(x.id)
+                .then((b) => {
+                  const url = URL.createObjectURL(
+                    new Blob([JSON.stringify(b, null, 2)], {
+                      type: "application/json",
+                    }),
+                  );
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${b.slug}-v${b.version}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                })
+                .catch((e: Error) => toast(e.message, { tone: "danger" }))
+            }
+          />
           <IconButton
             label={t("extensions.delete")}
             icon={<Trash2 className="size-4" />}
@@ -251,6 +275,90 @@ function ExtensionCard({ x, owner }: { x: Extension; owner: boolean }) {
         <DeleteDialog x={x} onClose={() => setDeleting(false)} />
       ) : null}
     </li>
+  );
+}
+
+function ImportButton() {
+  const { t } = useTranslation("workshop");
+  const importer = useImportExtension();
+  const [bundle, setBundle] = useState<Bundle | null>(null);
+  const [slug, setSlug] = useState("");
+  return (
+    <>
+      <label
+        className="inline-flex cursor-pointer items-center gap-1 text-ui text-fg-muted hover:text-fg"
+        title={t("extensions.importHint")}
+      >
+        <Upload className="size-4" />
+        {t("extensions.import")}
+        <input
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            try {
+              const b = JSON.parse(await file.text()) as Bundle;
+              setBundle(b);
+              setSlug(b.slug);
+            } catch {
+              toast(t("extensions.manifestBad"), { tone: "danger" });
+            }
+          }}
+        />
+      </label>
+      {bundle ? (
+        <Dialog
+          open
+          onOpenChange={(o) => !o && setBundle(null)}
+          title={t("extensions.import")}
+          closeLabel={t("extensions.close")}
+          footer={
+            <Button
+              variant="primary"
+              disabled={!validSlug(slug)}
+              loading={importer.isPending}
+              onClick={() =>
+                importer.mutate(
+                  { bundle, ...(slug !== bundle.slug ? { slug } : {}) },
+                  {
+                    onSuccess: (x) => {
+                      toast(t("extensions.imported", { name: x.title }));
+                      setBundle(null);
+                    },
+                  },
+                )
+              }
+            >
+              {t("extensions.import")}
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            {importer.error ? (
+              <Notice tone="danger">{importer.error.message}</Notice>
+            ) : null}
+            <p className="text-ui">
+              {bundle.title} · v{bundle.version}
+            </p>
+            <p className="text-meta text-fg-muted">
+              {t("extensions.importHint")}
+            </p>
+            <label className="flex flex-col gap-1 text-ui">
+              <span className="font-medium">{t("extensions.importSlug")}</span>
+              <Input
+                value={slug}
+                maxLength={16}
+                className="font-mono"
+                onChange={(e) => setSlug(e.target.value)}
+              />
+            </label>
+          </div>
+        </Dialog>
+      ) : null}
+    </>
   );
 }
 

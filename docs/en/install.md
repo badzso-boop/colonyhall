@@ -61,6 +61,11 @@ sh install.sh            # downloads and verifies colony, then starts `colony se
 - **Interactive messages:** agents (the `send` tool's `blocks`) and bots can post buttons, a select and a table; a click needs the right to write in the conversation. A click on an agent's message comes back to it as a thread reply.
 - The webhook is `POST https://<server>/api/v1/hooks/ext/…` without login (the address is the secret); put it where the sending service is configured.
 
+### The Builder (round 56d)
+
+- **Workshop → Builder:** give the Workshop grant to an agent whose owner is an owner or an admin; it gets meta-tools to create, draft, test and publish extensions for that person. Publishing puts an approval card in its conversation; the person who allows it approves the version. The tab shows suggested instructions for the agent.
+- Every version and approval updates the extension's build log in the wiki (`Műhely – <slug>`). Extensions export as files (`manifest.json`, `src/extension.ts`, `BUILDLOG.md`, no secrets) and import as drafts.
+
 ### Several customers on one server (multi-tenant mode)
 
 Off by default. When on, every workspace has its own subdomain (`<slug>.<base domain>`). Details: `docs/02-muszaki-specifikacio.md` and `docs/23-elkulonites.md` (Hungarian).

@@ -13,6 +13,7 @@ import {
   TabPanel,
   Tabs,
 } from "@/shared/ui";
+import { BuilderTab } from "../components/BuilderTab";
 import { CallsTab } from "../components/CallsTab";
 import { ConnectorsTab } from "../components/ConnectorsTab";
 import { ExtensionsTab } from "../components/ExtensionsTab";
@@ -43,12 +44,16 @@ export default function WorkshopPage() {
           <Tabs value={tab} onValueChange={setTab}>
             <TabList label={t("title")}>
               <Tab value="extensions">{t("tabs.extensions")}</Tab>
+              <Tab value="builder">{t("tabs.builder")}</Tab>
               <Tab value="connectors">{t("tabs.connectors")}</Tab>
               <Tab value="grants">{t("tabs.grants")}</Tab>
               <Tab value="calls">{t("tabs.calls")}</Tab>
             </TabList>
             <TabPanel value="extensions" className="pt-4">
               <ExtensionsTab owner={role === "owner"} />
+            </TabPanel>
+            <TabPanel value="builder" className="pt-4">
+              <BuilderTab />
             </TabPanel>
             <TabPanel value="connectors" className="pt-4">
               <ConnectorsTab owner={role === "owner"} />

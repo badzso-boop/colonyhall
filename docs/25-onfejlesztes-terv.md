@@ -361,3 +361,13 @@ Hamis külső MCP-szerver (go-sdk, `httptest`) és hamis HTTP API (Jira, GIF) a 
 **Biztonsági átnézés után** (`2c440ed`): gomb- és opciócímkében nem lehet `@` (a kattintás senki mást nem szólíthat meg); üzenet-rutin csak ott figyel, ahova a bot jóváhagyással bekerült; a webhook-cím megszűnik a rutinnal, és a bővítmény kikapcsolásával vagy törlésével; a gombnyomáshoz írási jog kell.
 
 **Hátra (56d):** az Építő és a Műhely meta-eszközei (köztük a csatorna létrehozása agentnek, 14.1), az építési napló a wikiben, export/import.
+
+### 14.4 56d: az Építő, építési napló, export/import (2026-11-17)
+
+**Kész:** az Építő meta-eszközei (`workshop/mcptools/builder.go`), az építési napló a wikiben, export/import (REST), a PWA-ban a Műhely **Építő** fülje (engedély adása, javasolt utasítás) és a Bővítmények fülön export/import.
+
+- **Ki az Építő:** bármely agent, aki `workshop` engedélyt kapott, és akinek a gazdája élő tulajdonos vagy admin (13.10: nem rendszeractor; a 8. szabály érintetlen). Ha a gazda elveszti a jogát, az agent elveszti a meta-eszközöket.
+- **Meta-eszközök** (mind a gazda nevében, annál többet nem tehetnek): `workshop_list`, `extension_create`, `extension_draft` (a verzió szerzője az Építő, a nyom kedvéért), `extension_get`, `extension_test` (a bővítmény botjaként), `channel_create` (a gazda hozza létre, az Építő tag lesz; agent maga továbbra sem hozhat létre csatornát — 14.1 döntése így teljesül), `extension_publish` és `extension_rollback`: **jóváhagyási kártya** a beszélgetésében azzal, amit a verzió hozzáad; a hívás vár, és **aki engedélyezi, az hagyja jóvá** (csak tulajdonos/admin). Kapcsolatot és titkot továbbra is csak ember vesz fel.
+- **Építési napló:** minden verzió, jóváhagyás és visszaállás után a karbantartó nevében frissül a `Műhely – <slug>` wikioldal: mit csinál, bot, karbantartó, eszközök, rutinok, kapcsolatok/kifelé/adattár, a verziók szerzővel és jóváhagyóval, és hogy melyik jóváhagyás mit adott hozzá.
+- **Export/import:** `GET …/export` fájlokként (`manifest.json`, `src/extension.ts`, `BUILDLOG.md`; titok soha) — egy Gitea-repóba tehető mappa (13.15/2.); `POST /workshop/extensions/import` vázlatként hozza létre (más rövid névvel és bottal is), jóváhagyni a szokott módon kell; a hivatkozott kapcsolatoknak itt is létezniük kell.
+- **Nem készült el (később):** a „megbízott építő” szerepkör és a „Javaslom a magba” gomb (13.10), a bővítmény-katalógus Giteában.

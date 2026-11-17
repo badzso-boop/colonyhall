@@ -348,3 +348,22 @@ export function useCreateWebhook(id: string) {
     onSuccess: done,
   });
 }
+
+export type Bundle = Schemas["ExtensionBundle"];
+
+export async function exportExtension(id: string): Promise<Bundle> {
+  return unwrap(
+    await api.GET("/workshop/extensions/{extensionId}/export", {
+      params: { path: { extensionId: id } },
+    }),
+  );
+}
+
+export function useImportExtension() {
+  const done = useInvalidate();
+  return useMutation({
+    mutationFn: async (body: Schemas["ImportExtensionRequest"]) =>
+      unwrap(await api.POST("/workshop/extensions/import", { body })),
+    onSuccess: done,
+  });
+}

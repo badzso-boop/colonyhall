@@ -6,7 +6,8 @@
     "extensions": "Extensions",
     "connectors": "Connectors",
     "grants": "Grants",
-    "calls": "Call log"
+    "calls": "Call log",
+    "builder": "Builder"
   },
   "connectors": {
     "new": "New connector",
@@ -162,7 +163,12 @@
     "output": "Result",
     "logs": "Log",
     "testHint": "A test is a real call as the extension's bot; it asks no approval and is logged as a test.",
-    "diffRoutines": "New or changed routines: {{list}}"
+    "diffRoutines": "New or changed routines: {{list}}",
+    "export": "Export",
+    "import": "Import",
+    "importHint": "An exported extension (.json). It comes in as a draft; it goes live with an approval.",
+    "importSlug": "New short name (if the old one is taken)",
+    "imported": "Imported: {{name}} (draft)"
   },
   "routines": {
     "title_one": "{{count}} routine",
@@ -183,5 +189,16 @@
       "done": "done",
       "failed": "failed"
     }
+  },
+  "builder": {
+    "intro": "The Builder is an agent you talk to to make an extension: it writes it, tests it and asks for your approval before it goes live. Any agent whose owner is an owner or an admin can be a Builder.",
+    "safety": "The Builder works for its owner and can do no more. Only a person makes a version live, on the approval card; connectors and secrets are a person's too.",
+    "agent": "Agent",
+    "agentHint": "Only agents whose owner is an owner or an admin.",
+    "make": "Make it a Builder",
+    "empty": "No Builder yet",
+    "howTitle": "Suggested instructions for the Builder",
+    "howHint": "Put them in the agent's rules, or write them in your first message.",
+    "instructions": "You are the Workshop's Builder. When someone asks for a new feature: ask what exactly they want; check the connectors with workshop_list (if one is missing, ask the person to add it in the Workshop); create the extension (extension_create), write the manifest and the code (extension_draft), test it (extension_test), and only then ask for publishing (extension_publish). Explain briefly what it does and which rights it asks for."
   }
 }

@@ -57,6 +57,11 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 - **Interaktív üzenetek:** az agentek (a `send` eszköz `blocks` mezője) és a botok gombokat, választót és táblázatot küldhetnek; a kattintáshoz írási jog kell a beszélgetésben. Egy agent üzenetén a kattintás szálbeli válaszként jut el hozzá.
 - A webhook `POST https://<szerver>/api/v1/hooks/ext/…`, belépés nélkül (a cím maga a titok); a küldő szolgáltatás beállításaiba kerül.
 
+### Az Építő (56d. kör)
+
+- **Műhely → Építő:** egy agent, akinek a gazdája tulajdonos vagy admin, `workshop` engedélyt kap, és meta-eszközökkel bővítményt hoz létre, ír, tesztel és élesítést kér a gazdája nevében. Az élesítés jóváhagyási kártyát tesz a beszélgetésébe; aki engedélyezi, az hagyja jóvá a verziót. A fül javasolt utasítást is mutat az agentnek.
+- Minden verzió és jóváhagyás frissíti a bővítmény építési naplóját a wikiben (`Műhely – <rövid név>`). A bővítmény fájlokként exportálható (`manifest.json`, `src/extension.ts`, `BUILDLOG.md`, titok nélkül), és vázlatként importálható.
+
 ### Több ügyfél egy szerveren (többbérlős mód)
 
 Alapból kikapcsolva. Bekapcsolva minden munkaterület a saját aldomainjén érhető el (`<slug>.<alapdomain>`); részletek: `docs/02-muszaki-specifikacio.md`, „Többbérlős működés”, és `docs/23-elkulonites.md`.
