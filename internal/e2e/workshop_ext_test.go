@@ -429,3 +429,33 @@ export async function quietpost(i: any, ctx: any) { return await ctx.colony.send
 		t.Fatalf("the write tool ran without approval: %q %v", out, isErr)
 	}
 }
+
+// Field test of 2026-11-18: an input with a slash (owner/repo) stays a
+// path of segments; "." and ".." never leave the template's place.
+func TestHTTPToolPathSegments(t *testing.T) {
+	fetch := &fakeFetcher{}
+	e := extEnv(t, fetch, workshop.Limits{})
+	admin := server.DevAdminToken
+	e.do("POST", "/api/v1/workshop/connectors", admin, map[string]any{"slug": "gh", "title": "GH", "kind": "http", "base_url": "https://api.example.com/v3"}, nil)
+	var ext apispec.Extension
+	e.do("POST", "/api/v1/workshop/extensions", admin, map[string]any{"slug": "repo", "title": "Repo"}, &ext)
+	m := map[string]any{"connectors": []string{"gh"}, "tools": []map[string]any{{"name": "repo", "kind": "http", "risk": "read",
+		"request": map[string]any{"connector": "gh", "method": "GET", "path": "/repos/{{input.repo}}"}}}}
+	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions", admin, map[string]any{"manifest": m}, nil)
+	var tr apispec.ExtensionTestResult
+	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": "repo", "input": map[string]any{"repo": "golang/go"}}, &tr)
+	if got := fetch.last().URL; got != "https://api.example.com/v3/repos/golang/go" || tr.IsError {
+		t.Fatalf("url %q, result %+v", got, tr)
+	}
+	n := len(fetch.reqs)
+	for _, bad := range []string{"../../admin", "a/../b", "a//b", "a/./b"} {
+		e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": "repo", "input": map[string]any{"repo": bad}}, &tr)
+		if !tr.IsError || len(fetch.reqs) != n {
+			t.Fatalf("%q was requested: %+v", bad, tr)
+		}
+	}
+	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": "repo", "input": map[string]any{"repo": "a b?c#d"}}, &tr)
+	if got := fetch.last().URL; got != "https://api.example.com/v3/repos/a%20b%3Fc%23d" {
+		t.Fatalf("escaping: %q", got)
+	}
+}

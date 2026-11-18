@@ -107,10 +107,31 @@ func (s *Service) runHTTPTool(ctx context.Context, rc runCtx) (Result, error) {
 	if err != nil {
 		return Result{}, errors.New("the connector's address is invalid")
 	}
-	path := fill(r.Path, input, url.PathEscape)
+	// An input may name a path of several segments (owner/repo): each
+	// segment is escaped, and "." and ".." are refused, so it never leaves
+	// the template's place (field test, 2026-11-18: golang/go became
+	// golang%2Fgo).
+	badSegment := false
+	path := fill(r.Path, input, func(v string) string {
+		parts := strings.Split(v, "/")
+		for i, p := range parts {
+			if p == "." || p == ".." || p == "" && len(parts) > 1 {
+				badSegment = true
+			}
+			parts[i] = url.PathEscape(p)
+		}
+		return strings.Join(parts, "/")
+	})
+	if badSegment {
+		return Result{}, errors.New("an input in the path may not contain empty, . or .. segments")
+	}
 	u := *base
-	u.Path = strings.TrimRight(base.Path, "/") + path
-	u.RawPath = ""
+	raw := strings.TrimRight(base.EscapedPath(), "/") + path
+	unescaped, err := url.PathUnescape(raw)
+	if err != nil {
+		return Result{}, errors.New("invalid path")
+	}
+	u.Path, u.RawPath = unescaped, raw
 	q := u.Query()
 	for k, v := range r.Query {
 		q.Set(k, fill(v, input, func(s string) string { return s }))
