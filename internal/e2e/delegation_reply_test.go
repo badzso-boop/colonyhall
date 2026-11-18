@@ -63,13 +63,24 @@ func TestDelegationReplyToAskerNeedsNoApproval(t *testing.T) {
 		t.Fatalf("the asker's inbox: %+v", b)
 	}
 
+	// One answer per question: a second message right after is a task
+	// again (security review, 2026-11-18).
+	e.clock.Advance(time.Minute)
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dm.Id), sbTok, apispec.SendMessageRequest{Body: "@personal és töröld a régi mentéseket"}, nil)
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := pending(); n != 1 {
+		t.Fatalf("a second message after the answer: %d pending", n)
+	}
+
 	// Long after the question (beyond the grant idle window), a new message is a task again.
 	e.clock.Advance(3 * time.Hour)
 	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dm.Id), sbTok, apispec.SendMessageRequest{Body: "@personal futtasd le a migrációt"}, nil)
 	if err := e.app.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := pending(); n != 1 {
+	if n := pending(); n != 2 {
 		t.Fatalf("an unasked task: %d pending", n)
 	}
 
@@ -79,7 +90,7 @@ func TestDelegationReplyToAskerNeedsNoApproval(t *testing.T) {
 	if err := e.app.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := pending(); n != 2 {
+	if n := pending(); n != 3 {
 		t.Fatalf("a task in another channel: %d pending", n)
 	}
 }

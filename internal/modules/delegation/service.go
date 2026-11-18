@@ -268,19 +268,36 @@ func (s *Service) answersRequest(ctx context.Context, ch conversation.Channel, m
 	if msg.ThreadRootID != ids.Nil && ch.Kind == conversation.KindDM {
 		units = append(units, ids.Nil) // a DM is one conversation, threads included
 	}
+	// One answer per request: the author's first message after the
+	// recipient's latest request answers it; any further one is a task
+	// again (security review, 2026-11-18).
 	window := time.Duration(st.GrantIdleMinutes) * time.Minute
 	for _, unit := range units {
 		list, err := s.Conversation.MessagesInUnit(ctx, ch.ID, unit)
 		if err != nil {
 			return false, err
 		}
-		for _, m := range list {
-			if m.AuthorID != recipientID || m.DeletedAt != nil || m.ID == msgID || !m.CreatedAt.Before(msg.CreatedAt) || now.Sub(m.CreatedAt) > window {
+		asked, answered := false, false
+		for _, m := range list { // oldest first
+			if m.ID == msgID {
+				break
+			}
+			if m.DeletedAt != nil || !m.CreatedAt.Before(msg.CreatedAt) {
 				continue
 			}
-			if ch.Kind == conversation.KindDM || slices.Contains(m.Mentions, authorID) {
-				return true, nil
+			switch m.AuthorID {
+			case recipientID:
+				if now.Sub(m.CreatedAt) <= window && (ch.Kind == conversation.KindDM || slices.Contains(m.Mentions, authorID)) {
+					asked, answered = true, false
+				}
+			case authorID:
+				if asked {
+					answered = true
+				}
 			}
+		}
+		if asked && !answered {
+			return true, nil
 		}
 	}
 	return false, nil
