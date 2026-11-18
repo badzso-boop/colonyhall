@@ -221,7 +221,7 @@ tools:
       max_items: 20
 ```
 
-A sablon csak `{{input.x}}` helyettesítést ismer (URL-ben kódolva, JSON-törzsben JSON-ként), más kódot nem. A kimenet egy egyszerű JSON-útvonal-részhalmaz.
+A sablon csak `{{input.x}}` helyettesítést ismer (URL-ben kódolva, JSON-törzsben JSON-ként), más kódot nem. Útvonalban egy bemenet egyetlen szegmens (a perjel is kódolva); több szegmenshez (pl. `owner/repo`) kifejezetten `{{input.x|path}}` kell, és `.`, `..` vagy üres szegmens ekkor sem lehet (terepi teszt és biztonsági átnézés, 2026-11-18). A kimenet egy egyszerű JSON-útvonal-részhalmaz.
 
 **Kódeszköz:** `kind: js`, a forrás TS vagy JS. Mentéskor a szerver **esbuild-del** (Go-könyvtár, Node nélkül) egy fájlba fordítja (`bundle`), importok nélkül. Az eszköz egy exportált függvény: `export async function my_issues(input, ctx) { … }`.
 

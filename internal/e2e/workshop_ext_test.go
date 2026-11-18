@@ -440,8 +440,16 @@ func TestHTTPToolPathSegments(t *testing.T) {
 	var ext apispec.Extension
 	e.do("POST", "/api/v1/workshop/extensions", admin, map[string]any{"slug": "repo", "title": "Repo"}, &ext)
 	m := map[string]any{"connectors": []string{"gh"}, "tools": []map[string]any{{"name": "repo", "kind": "http", "risk": "read",
-		"request": map[string]any{"connector": "gh", "method": "GET", "path": "/repos/{{input.repo}}"}}}}
+		"request": map[string]any{"connector": "gh", "method": "GET", "path": "/repos/{{input.repo|path}}"}},
+		{"name": "user", "kind": "http", "risk": "read",
+			"request": map[string]any{"connector": "gh", "method": "GET", "path": "/users/{{input.name}}"}}}}
 	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions", admin, map[string]any{"manifest": m}, nil)
+	// Without |path a slash stays inside the one segment.
+	var ur apispec.ExtensionTestResult
+	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": "user", "input": map[string]any{"name": "a/collaborators"}}, &ur)
+	if got := fetch.last().URL; got != "https://api.example.com/v3/users/a%2Fcollaborators" {
+		t.Fatalf("a single segment: %q", got)
+	}
 	var tr apispec.ExtensionTestResult
 	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": "repo", "input": map[string]any{"repo": "golang/go"}}, &tr)
 	if got := fetch.last().URL; got != "https://api.example.com/v3/repos/golang/go" || tr.IsError {

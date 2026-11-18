@@ -17,7 +17,10 @@ import (
 	"colonyhall/internal/platform/ids"
 )
 
-var templateRe = regexp.MustCompile(`\{\{\s*input\.([A-Za-z0-9_]+)\s*\}\}`)
+// templateRe: {{input.x}}, or {{input.x|path}} in a path: an input of
+// several segments (owner/repo). Without |path a slash is escaped, so an
+// input never reaches another endpoint (security review, 2026-11-18).
+var templateRe = regexp.MustCompile(`\{\{\s*input\.([A-Za-z0-9_]+)\s*(\|\s*path\s*)?\}\}`)
 
 // inputValue returns input[key] (nil if absent).
 func inputValue(input map[string]any, key string) any { return input[key] }
@@ -36,9 +39,14 @@ func asString(v any) string {
 
 // fill replaces {{input.x}} in a string; escape is applied to every value.
 func fill(s string, input map[string]any, escape func(string) string) string {
+	return fillPath(s, input, func(v string, _ bool) string { return escape(v) })
+}
+
+// fillPath is fill with the |path modifier passed to escape.
+func fillPath(s string, input map[string]any, escape func(v string, multi bool) string) string {
 	return templateRe.ReplaceAllStringFunc(s, func(m string) string {
-		key := templateRe.FindStringSubmatch(m)[1]
-		return escape(asString(inputValue(input, key)))
+		sm := templateRe.FindStringSubmatch(m)
+		return escape(asString(inputValue(input, sm[1])), sm[2] != "")
 	})
 }
 
@@ -112,7 +120,13 @@ func (s *Service) runHTTPTool(ctx context.Context, rc runCtx) (Result, error) {
 	// the template's place (field test, 2026-11-18: golang/go became
 	// golang%2Fgo).
 	badSegment := false
-	path := fill(r.Path, input, func(v string) string {
+	path := fillPath(r.Path, input, func(v string, multi bool) string {
+		if !multi {
+			if v == "." || v == ".." {
+				badSegment = true
+			}
+			return url.PathEscape(v)
+		}
 		parts := strings.Split(v, "/")
 		for i, p := range parts {
 			if p == "." || p == ".." || p == "" && len(parts) > 1 {
