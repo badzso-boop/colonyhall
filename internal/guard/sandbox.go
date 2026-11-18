@@ -288,7 +288,7 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlann
 					}
 				}
 				if allowPlanner {
-					servers["colony-planner"] = map[string]any{
+					servers[BridgeServerName] = map[string]any{
 						"type": "http",
 						"url":  "http://127.0.0.1:3130/mcp",
 					}
@@ -345,7 +345,7 @@ func (s *Sandbox) clientMounts(client, agentDir string, allowWebRead, allowPlann
 					}
 				}
 				if allowPlanner {
-					servers["colony-planner"] = map[string]any{
+					servers[BridgeServerName] = map[string]any{
 						"disabled":  false,
 						"url":       "http://127.0.0.1:3130/mcp",
 						"serverUrl": "http://127.0.0.1:3130/mcp",
@@ -474,7 +474,7 @@ func denyCommands(r *os.Root, name string, allowWebRead, allowPlanner bool, cg *
 		allowList = append(allowList, "mcp(colony-web/*)")
 	}
 	if allowPlanner {
-		allowList = append(allowList, "mcp(colony-planner/*)")
+		allowList = append(allowList, "mcp("+BridgeServerName+"/*)")
 	}
 	if cg != nil {
 		allowList = append(allowList, "mcp(codegraph/*)")
@@ -498,7 +498,7 @@ func denyCommands(r *os.Root, name string, allowWebRead, allowPlanner bool, cg *
 			}
 		}
 		if allowPlanner {
-			servers["colony-planner"] = map[string]any{
+			servers[BridgeServerName] = map[string]any{
 				"disabled":  false,
 				"url":       "http://127.0.0.1:3130/mcp",
 				"serverUrl": "http://127.0.0.1:3130/mcp",

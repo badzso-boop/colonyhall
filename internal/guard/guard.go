@@ -950,7 +950,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 				a.Log.Error("guard: start planner mcp server", "err", err)
 			} else {
 				plannerSrv = ps
-				plannerSrv.DefaultChannel = it.ChannelID
+				plannerSrv.DefaultChannel, plannerSrv.Thread = bridgeConversation(it.Item)
 				defer func() { _ = plannerSrv.Close() }()
 			}
 		}

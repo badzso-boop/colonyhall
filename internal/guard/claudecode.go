@@ -211,8 +211,7 @@ func (c *ClaudeCode) Work(ctx context.Context, req WorkRequest) (RunResult, erro
 		allowedTools = append(allowedTools, "mcp__colony-web__web_read")
 	}
 	if req.AllowPlanner {
-		allowedTools = append(allowedTools, "mcp__colony-planner__planner_read", "mcp__colony-planner__calendar_read",
-			"mcp__colony-planner__channel_info")
+		allowedTools = append(allowedTools, "mcp__"+BridgeServerName) // every tool the bridge serves
 	}
 	if req.CodeGraph {
 		allowedTools = append(allowedTools, CodeGraphTool)

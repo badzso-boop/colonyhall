@@ -115,12 +115,12 @@ func TestE2E_SandboxPlannerTools(t *testing.T) {
 			if err := json.Unmarshal(raw, &cfg); err != nil {
 				return "error parsing MCP config: " + err.Error(), nil
 			}
-			srv, ok := cfg.MCPServers["colony-planner"]
+			srv, ok := cfg.MCPServers["colonyhall"]
 			if !ok {
-				return "error: colony-planner not in mcpServers", nil
+				return "error: colonyhall not in mcpServers", nil
 			}
 			if srv.URL != "http://127.0.0.1:3130/mcp" {
-				return "unexpected colony-planner URL: " + srv.URL, nil
+				return "unexpected colonyhall URL: " + srv.URL, nil
 			}
 
 			// In sandbox mode, guard starts PlannerServer on agentDir/planner.sock
