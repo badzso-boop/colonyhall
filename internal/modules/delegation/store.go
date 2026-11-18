@@ -31,6 +31,12 @@ type Store interface {
 	RevokeGrantConditional(ctx context.Context, id ids.ID, revokedBy ids.ID, revokedAt time.Time) (int64, error)
 	ListGrants(ctx context.Context, workspaceID ids.ID, activeOnly bool, now time.Time) ([]Grant, error)
 
+	// ClaimAnswer records that answerID answers the request message for
+	// answererID; it reports false when that request was already answered
+	// (one answer per request, 2026-11-18). The same answer again (an event
+	// handled twice) reports true.
+	ClaimAnswer(ctx context.Context, workspaceID, requestMsgID, answererID, answerMsgID ids.ID, at time.Time) (bool, error)
+
 	// Settings
 	GetSettings(ctx context.Context, workspaceID ids.ID) (Settings, error)
 	UpsertSettings(ctx context.Context, s Settings) error

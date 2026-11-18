@@ -342,6 +342,14 @@ type Delegation struct {
 	ViaGrant     bool
 }
 
+type DelegationAnswer struct {
+	RequestMessageID uuid.UUID
+	AnswererID       uuid.UUID
+	WorkspaceID      uuid.UUID
+	AnswerMessageID  uuid.UUID
+	CreatedAt        time.Time
+}
+
 type DelegationGrant struct {
 	ID           uuid.UUID
 	WorkspaceID  uuid.UUID

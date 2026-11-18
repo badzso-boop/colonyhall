@@ -119,3 +119,12 @@ SET grant_idle_minutes = EXCLUDED.grant_idle_minutes,
     grant_max_hours = EXCLUDED.grant_max_hours,
     updated_at = EXCLUDED.updated_at;
 
+
+-- name: ClaimAnswer :execrows
+INSERT INTO delegation_answer (request_message_id, answerer_id, workspace_id, answer_message_id, created_at)
+VALUES ($1, $2, $3, $4, $5)
+-- The same answer again (an event handled twice) still counts; another
+-- message does not.
+ON CONFLICT (request_message_id, answerer_id) DO UPDATE
+    SET answer_message_id = delegation_answer.answer_message_id
+    WHERE delegation_answer.answer_message_id = EXCLUDED.answer_message_id;

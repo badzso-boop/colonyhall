@@ -201,6 +201,18 @@ func (s *Store) ListPendingByPairAndConversation(ctx context.Context, workspaceI
 	return out, nil
 }
 
+// ClaimAnswer records the first answer to a request (primary key).
+func (s *Store) ClaimAnswer(ctx context.Context, workspaceID, requestMsgID, answererID, answerMsgID ids.ID, at time.Time) (bool, error) {
+	n, err := s.q(ctx).ClaimAnswer(ctx, sqlcgen.ClaimAnswerParams{
+		RequestMessageID: uuid.UUID(requestMsgID),
+		AnswererID:       uuid.UUID(answererID),
+		WorkspaceID:      uuid.UUID(workspaceID),
+		AnswerMessageID:  uuid.UUID(answerMsgID),
+		CreatedAt:        at,
+	})
+	return n == 1, err
+}
+
 func (s *Store) InsertGrant(ctx context.Context, g delegation.Grant) error {
 	return s.q(ctx).InsertGrant(ctx, sqlcgen.InsertGrantParams{
 		ID:           uuid.UUID(g.ID),

@@ -268,39 +268,34 @@ func (s *Service) answersRequest(ctx context.Context, ch conversation.Channel, m
 	if msg.ThreadRootID != ids.Nil && ch.Kind == conversation.KindDM {
 		units = append(units, ids.Nil) // a DM is one conversation, threads included
 	}
-	// One answer per request: the author's first message after the
-	// recipient's latest request answers it; any further one is a task
-	// again (security review, 2026-11-18).
+	// The recipient's latest request before msg (in this thread, or anywhere
+	// in the main stream of a DM) within the idle window.
 	window := time.Duration(st.GrantIdleMinutes) * time.Minute
+	var request conversation.Message
 	for _, unit := range units {
 		list, err := s.Conversation.MessagesInUnit(ctx, ch.ID, unit)
 		if err != nil {
 			return false, err
 		}
-		asked, answered := false, false
-		for _, m := range list { // oldest first
-			if m.ID == msgID {
-				break
-			}
-			if m.DeletedAt != nil || !m.CreatedAt.Before(msg.CreatedAt) {
+		for _, m := range list {
+			if m.AuthorID != recipientID || m.ID == msgID || !m.CreatedAt.Before(msg.CreatedAt) || now.Sub(m.CreatedAt) > window {
 				continue
 			}
-			switch m.AuthorID {
-			case recipientID:
-				if now.Sub(m.CreatedAt) <= window && (ch.Kind == conversation.KindDM || slices.Contains(m.Mentions, authorID)) {
-					asked, answered = true, false
-				}
-			case authorID:
-				if asked {
-					answered = true
-				}
+			if ch.Kind != conversation.KindDM && !slices.Contains(m.Mentions, authorID) {
+				continue
+			}
+			if request.ID == ids.Nil || m.CreatedAt.After(request.CreatedAt) {
+				request = m
 			}
 		}
-		if asked && !answered {
-			return true, nil
-		}
 	}
-	return false, nil
+	if request.ID == ids.Nil {
+		return false, nil
+	}
+	// One answer per request (security review, 2026-11-18): the first
+	// reply claims it, in the database, so a further message (in any
+	// thread, deleted or not, at the same time) is a task again.
+	return s.Store.ClaimAnswer(ctx, msg.WorkspaceID, request.ID, authorID, msgID, now)
 }
 
 func (s *Service) createDelegationAndQuestion(ctx context.Context, e eventlog.Event, p conversation.MessageCreated, fromAgent, toAgent identity.Actor, ch conversation.Channel, msgID ids.ID, conv ConversationKey) error {

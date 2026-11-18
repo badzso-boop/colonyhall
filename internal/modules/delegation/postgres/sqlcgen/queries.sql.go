@@ -35,6 +35,38 @@ func (q *Queries) ApproveDelegationViaGrant(ctx context.Context, arg ApproveDele
 	return result.RowsAffected(), nil
 }
 
+const claimAnswer = `-- name: ClaimAnswer :execrows
+INSERT INTO delegation_answer (request_message_id, answerer_id, workspace_id, answer_message_id, created_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (request_message_id, answerer_id) DO UPDATE
+    SET answer_message_id = delegation_answer.answer_message_id
+    WHERE delegation_answer.answer_message_id = EXCLUDED.answer_message_id
+`
+
+type ClaimAnswerParams struct {
+	RequestMessageID uuid.UUID
+	AnswererID       uuid.UUID
+	WorkspaceID      uuid.UUID
+	AnswerMessageID  uuid.UUID
+	CreatedAt        time.Time
+}
+
+// The same answer again (an event handled twice) still counts; another
+// message does not.
+func (q *Queries) ClaimAnswer(ctx context.Context, arg ClaimAnswerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimAnswer,
+		arg.RequestMessageID,
+		arg.AnswererID,
+		arg.WorkspaceID,
+		arg.AnswerMessageID,
+		arg.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getActiveGrantByPairAndConversation = `-- name: GetActiveGrantByPairAndConversation :one
 SELECT id, workspace_id, channel_id, thread_root_id, agent_a_id, agent_b_id, delegation_id, approved_by, approved_at, last_used_at, expires_at, revoked_by, revoked_at FROM delegation_grant
 WHERE workspace_id = $1

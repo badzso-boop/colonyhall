@@ -27,6 +27,7 @@ type Store struct {
 	byMsgTarget  map[msgTargetKey]ids.ID
 	grants       map[ids.ID]delegation.Grant
 	settings     map[ids.ID]delegation.Settings
+	answers      map[[2]ids.ID]ids.ID
 }
 
 // New returns an empty in-memory store.
@@ -36,6 +37,7 @@ func New() *Store {
 		byQuestionID: make(map[ids.ID]ids.ID),
 		byMsgTarget:  make(map[msgTargetKey]ids.ID),
 		grants:       make(map[ids.ID]delegation.Grant),
+		answers:      make(map[[2]ids.ID]ids.ID),
 		settings:     make(map[ids.ID]delegation.Settings),
 	}
 }
@@ -209,6 +211,18 @@ func (s *Store) ListPendingByPairAndConversation(_ context.Context, workspaceID,
 		return out[i].CreatedAt.Before(out[j].CreatedAt)
 	})
 	return out, nil
+}
+
+// ClaimAnswer records the first answer to a request.
+func (s *Store) ClaimAnswer(_ context.Context, _, requestMsgID, answererID, answerMsgID ids.ID, _ time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := [2]ids.ID{requestMsgID, answererID}
+	if got, ok := s.answers[k]; ok {
+		return got == answerMsgID, nil // the same answer again still counts
+	}
+	s.answers[k] = answerMsgID
+	return true, nil
 }
 
 func (s *Store) InsertGrant(_ context.Context, g delegation.Grant) error {

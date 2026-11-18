@@ -14,6 +14,7 @@ import (
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/modules/question"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/ids"
 )
 
 func testDelegation(t *testing.T, b Backend) {
@@ -360,5 +361,22 @@ func testDelegation(t *testing.T, b Backend) {
 	_, err = b.Delegation.GetActiveGrant(ctx, f.ws.ID, f.agent.ID, agent2.ID, f.channel.ID, msg.ID, revokeTime)
 	if !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound for revoked grant, got %v", err)
+	}
+
+	// One answer per request (2026-11-18): the first claim wins, the same
+	// answer again still counts, another message does not.
+	ans1 := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: f.channel.ID, AuthorID: agent2.ID, Kind: "text", Body: "done", CreatedAt: t0}
+	ans2 := conversation.Message{ID: gen.New(), WorkspaceID: f.ws.ID, ChannelID: f.channel.ID, AuthorID: agent2.ID, Kind: "text", Body: "and more", CreatedAt: t0}
+	must(t, b.Conversation.InsertMessage(ctx, ans1))
+	must(t, b.Conversation.InsertMessage(ctx, ans2))
+	for i, c := range []struct {
+		answer ids.ID
+		want   bool
+	}{{ans1.ID, true}, {ans1.ID, true}, {ans2.ID, false}} {
+		got, err := b.Delegation.ClaimAnswer(ctx, f.ws.ID, msg.ID, agent2.ID, c.answer, t0)
+		must(t, err)
+		if got != c.want {
+			t.Fatalf("claim %d: got %v, want %v", i, got, c.want)
+		}
 	}
 }

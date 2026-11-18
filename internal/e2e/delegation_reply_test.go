@@ -73,6 +73,22 @@ func TestDelegationReplyToAskerNeedsNoApproval(t *testing.T) {
 	if n := pending(); n != 1 {
 		t.Fatalf("a second message after the answer: %d pending", n)
 	}
+	// Nor in a thread of the DM: the request is used up wherever.
+	var dmMsgs apispec.MessageList
+	e.do("GET", fmt.Sprintf("/api/v1/channels/%s/messages", dm.Id), server.DevAdminToken, nil, &dmMsgs)
+	var first string
+	for _, m := range dmMsgs.Messages {
+		if m.Body == "@personal 12 futás, +3,4 %" {
+			first = m.Id.String()
+		}
+	}
+	e.do("POST", fmt.Sprintf("/api/v1/channels/%s/messages", dm.Id), sbTok, map[string]any{"body": "@personal és a naplót is", "thread_root_id": first}, nil)
+	if err := e.app.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := pending(); n != 2 {
+		t.Fatalf("a second message in a DM thread: %d pending", n)
+	}
 
 	// Long after the question (beyond the grant idle window), a new message is a task again.
 	e.clock.Advance(3 * time.Hour)
@@ -80,7 +96,7 @@ func TestDelegationReplyToAskerNeedsNoApproval(t *testing.T) {
 	if err := e.app.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := pending(); n != 2 {
+	if n := pending(); n != 3 {
 		t.Fatalf("an unasked task: %d pending", n)
 	}
 
@@ -90,7 +106,7 @@ func TestDelegationReplyToAskerNeedsNoApproval(t *testing.T) {
 	if err := e.app.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := pending(); n != 3 {
+	if n := pending(); n != 4 {
 		t.Fatalf("a task in another channel: %d pending", n)
 	}
 }
