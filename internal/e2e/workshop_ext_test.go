@@ -4,9 +4,9 @@
 package e2e
 
 import (
-	"fmt"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,6 +37,15 @@ func (f *fakeFetcher) Fetch(_ context.Context, r workshop.FetchRequest) (worksho
 	if strings.Contains(r.URL, "/echo") { // a service that echoes the credential (httpbin's /bearer)
 		var b strings.Builder
 		for k, v := range r.Auth {
+			if strings.Contains(r.URL, "/echo-escaped") && v != "" {
+				// The same value, every letter JSON-escaped.
+				var esc strings.Builder
+				for _, c := range v {
+					fmt.Fprintf(&esc, `\u%04x`, c)
+				}
+				fmt.Fprintf(&b, `{"header":%q,"value":"%s"}`, k, esc.String())
+				continue
+			}
 			fmt.Fprintf(&b, `{"header":%q,"value":%q}`, k, v)
 		}
 		return workshop.FetchResponse{Status: 200, ContentType: "application/json", Body: []byte(b.String())}, nil
@@ -491,6 +500,7 @@ func TestConnectorSecretIsRedactedFromAnswers(t *testing.T) {
 	e.do("POST", "/api/v1/workshop/extensions", admin, map[string]any{"slug": "echo", "title": "Echo"}, &ext)
 	m := map[string]any{"connectors": []string{"echo"}, "tools": []map[string]any{
 		{"name": "http", "kind": "http", "risk": "read", "request": map[string]any{"connector": "echo", "method": "GET", "path": "/echo"}},
+		{"name": "escaped", "kind": "http", "risk": "read", "request": map[string]any{"connector": "echo", "method": "GET", "path": "/echo-escaped"}},
 		{"name": "code", "kind": "js", "risk": "read"}}}
 	src := `export async function code(i: any, ctx: any) {
   const r = await ctx.fetch("https://api.example.com/echo", { auth: "echo" });
@@ -499,10 +509,13 @@ func TestConnectorSecretIsRedactedFromAnswers(t *testing.T) {
 	if s := e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions", admin, map[string]any{"manifest": m, "source": src}, nil); s != http.StatusCreated {
 		t.Fatalf("version: %d", s)
 	}
-	for _, tool := range []string{"http", "code"} {
+	for _, tool := range []string{"http", "escaped", "code"} {
 		var tr apispec.ExtensionTestResult
 		e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": tool, "input": map[string]any{}}, &tr)
-		if strings.Contains(tr.Output, testExtSecret) || !strings.Contains(tr.Output, "[secret]") {
+		var decoded any
+		_ = json.Unmarshal([]byte(tr.Output), &decoded)
+		again, _ := json.Marshal(decoded)
+		if strings.Contains(tr.Output, testExtSecret) || strings.Contains(string(again), testExtSecret) || !strings.Contains(tr.Output, "[secret]") {
 			t.Fatalf("%s: the secret in the answer: %q", tool, tr.Output)
 		}
 		if got := fetch.last().Auth["Authorization"]; got != "Bearer "+testExtSecret {

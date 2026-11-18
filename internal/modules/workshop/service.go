@@ -48,11 +48,25 @@ const redactedSecret = "[secret]"
 // Redact hides the connector's secret in an answer: a service may echo the
 // credential (httpbin's /bearer does; live test, 2026-11-18), and it must
 // reach neither an agent nor extension code.
+//
+// JSON is decoded too: an escaped secret (\u0066ake…) does not match the
+// raw text but is the secret again once a model or code decodes it
+// (security review, 2026-11-18). A JSON answer with the secret in any
+// string is marshalled again with it hidden.
 func (ep Endpoint) Redact(text string) string {
-	for _, v := range ep.secrets {
-		if v != "" && strings.Contains(text, v) {
-			text = strings.ReplaceAll(text, v, redactedSecret)
+	if len(ep.secrets) == 0 {
+		return text
+	}
+	text = ep.redactPlain(text)
+	var doc any
+	if json.Unmarshal([]byte(text), &doc) != nil {
+		return text
+	}
+	if red, changed := ep.redactValue(doc); changed {
+		if b, err := json.Marshal(red); err == nil {
+			return string(b)
 		}
+		return redactedSecret
 	}
 	return text
 }
@@ -63,6 +77,44 @@ func (ep Endpoint) RedactBytes(b []byte) []byte {
 		return b
 	}
 	return []byte(ep.Redact(string(b)))
+}
+
+func (ep Endpoint) redactPlain(text string) string {
+	for _, v := range ep.secrets {
+		if v != "" && strings.Contains(text, v) {
+			text = strings.ReplaceAll(text, v, redactedSecret)
+		}
+	}
+	return text
+}
+
+// redactValue hides the secret in every string (keys too) of a decoded
+// JSON value and reports whether it found one.
+func (ep Endpoint) redactValue(v any) (any, bool) {
+	switch x := v.(type) {
+	case string:
+		r := ep.redactPlain(x)
+		return r, r != x
+	case []any:
+		changed := false
+		for i, e := range x {
+			var c bool
+			x[i], c = ep.redactValue(e)
+			changed = changed || c
+		}
+		return x, changed
+	case map[string]any:
+		changed := false
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			rk := ep.redactPlain(k)
+			re, c := ep.redactValue(e)
+			out[rk] = re
+			changed = changed || c || rk != k
+		}
+		return out, changed
+	}
+	return v, false
 }
 
 // Result is a tool's answer.
@@ -907,8 +959,9 @@ func (s *Service) Call(ctx context.Context, in CallInput) (Result, error) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			outcome = OutcomeTimeout
 		}
-		logCall(outcome, ep.Redact(errText(err)), 0)
-		return Result{}, fmt.Errorf("%s: %s", in.Name, ep.Redact(errText(err)))
+		msg := errText(errors.New(ep.Redact(err.Error()))) // hidden first, then cut
+		logCall(outcome, msg, 0)
+		return Result{}, fmt.Errorf("%s: %s", in.Name, msg)
 	}
 	res.Text = ep.Redact(res.Text)
 	size := len(res.Text)
