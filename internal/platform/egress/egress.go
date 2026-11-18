@@ -205,13 +205,24 @@ func (p Policy) Client(o Options) *http.Client {
 					return nil, err
 				}
 			}
+			// Every allowed address is tried in turn (the first may be
+			// unreachable, e.g. IPv6 without a route); a refused one never.
 			named := p.hostAllowed(host)
+			lastErr := ErrAddress
 			for _, a := range addrs {
-				if named || p.addrAllowed(a) {
-					return dialer.DialContext(ctx, network, net.JoinHostPort(a.Unmap().String(), port))
+				if !named && !p.addrAllowed(a) {
+					continue
+				}
+				c, err := dialer.DialContext(ctx, network, net.JoinHostPort(a.Unmap().String(), port))
+				if err == nil {
+					return c, nil
+				}
+				lastErr = err
+				if ctx.Err() != nil {
+					break
 				}
 			}
-			return nil, ErrAddress
+			return nil, lastErr
 		},
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: o.Timeout,

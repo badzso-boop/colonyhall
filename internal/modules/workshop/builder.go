@@ -28,7 +28,7 @@ import (
 // Errors of the Builder.
 var (
 	ErrNotBuilder     = errors.New("this agent is not a Builder: it needs the Workshop grant and an owner who is an owner or an admin")
-	ErrNotApprovedNow = errors.New("the person did not approve it")
+	ErrNotApprovedNow = errors.New("NOT published: the person denied it (or did not answer in time); the live version did not change. Tell them so, and do not ask again unless they want you to")
 )
 
 // Wiki writes the extensions' build logs (the wiki module).

@@ -145,3 +145,16 @@ func TestClientDeclaredHosts(t *testing.T) {
 		t.Fatal("undeclared host reached")
 	}
 }
+
+// The first address may be unreachable: the next allowed one is tried.
+func TestClientTriesTheNextAddress(t *testing.T) {
+	u := serverURL(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	q, _ := ParsePolicy("two.test")
+	// 127.0.0.2 has nothing listening on the port; 127.0.0.1 has the server.
+	c := q.Client(Options{Resolver: fakeResolver{"two.test": {netip.MustParseAddr("127.0.0.2"), netip.MustParseAddr(u.Hostname())}}})
+	res, err := c.Get("http://two.test:" + u.Port())
+	if err != nil {
+		t.Fatalf("the second address was not tried: %v", err)
+	}
+	_ = res.Body.Close()
+}
