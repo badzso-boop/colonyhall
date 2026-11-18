@@ -272,7 +272,7 @@ func (p *SandboxProxy) handleConnect(clientConn net.Conn, target string) {
 		return
 	}
 
-	ip, ok := p.checkAllowed(host, port)
+	ips, ok := p.checkAllowed(host, port)
 	if !ok {
 		p.logRefusal(host, portStr)
 		_, _ = clientConn.Write([]byte("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nForbidden\n"))
@@ -280,15 +280,9 @@ func (p *SandboxProxy) handleConnect(clientConn net.Conn, target string) {
 		return
 	}
 
-	dial := p.DialContext
-	if dial == nil {
-		dial = (&net.Dialer{}).DialContext
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), p.DialTimeout)
-	defer cancel()
-	// Dial the address that was checked, never the name again: a second
+	// Dial the addresses that were checked, never the name again: a second
 	// DNS answer could point at a private address (DNS rebinding).
-	targetConn, err := dial(ctx, "tcp", net.JoinHostPort(ip.String(), portStr))
+	targetConn, err := p.dialChecked(ips, portStr)
 	if err != nil {
 		_, _ = clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 		_ = clientConn.Close()
@@ -333,7 +327,7 @@ func (p *SandboxProxy) handlePlainHTTP(clientConn net.Conn, req *http.Request) {
 	}
 
 	// Plain HTTP is ONLY allowed to the Colonyhall server
-	ip, ok := p.checkAllowed(host, port)
+	ips, ok := p.checkAllowed(host, port)
 	if !p.isServer(host, port) || !ok {
 		p.logRefusal(host, portStr)
 		resp := "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nPlain HTTP is only allowed to the Colonyhall server\n"
@@ -342,13 +336,7 @@ func (p *SandboxProxy) handlePlainHTTP(clientConn net.Conn, req *http.Request) {
 		return
 	}
 
-	dial := p.DialContext
-	if dial == nil {
-		dial = (&net.Dialer{}).DialContext
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), p.DialTimeout)
-	defer cancel()
-	targetConn, err := dial(ctx, "tcp", net.JoinHostPort(ip.String(), portStr))
+	targetConn, err := p.dialChecked(ips, portStr)
 	if err != nil {
 		_, _ = clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 		_ = clientConn.Close()
@@ -369,7 +357,9 @@ func (p *SandboxProxy) handlePlainHTTP(clientConn net.Conn, req *http.Request) {
 // checked address to dial. Log mode skips the allowlist (to discover what a
 // client needs) but never the address checks: private, loopback and the other
 // internal ranges stay closed in every mode, except the Colonyhall server.
-func (p *SandboxProxy) checkAllowed(host string, port int) (net.IP, bool) {
+// checkAllowed reports whether host:port may be reached and the checked
+// addresses to dial, in the resolver's order.
+func (p *SandboxProxy) checkAllowed(host string, port int) ([]net.IP, bool) {
 	host = strings.ToLower(host)
 	portStr := strconv.Itoa(port)
 
@@ -381,7 +371,7 @@ func (p *SandboxProxy) checkAllowed(host string, port int) (net.IP, bool) {
 
 	if ip := net.ParseIP(host); ip != nil {
 		if p.isServerIP(ip, port) {
-			return ip, true
+			return []net.IP{ip}, true
 		}
 		return nil, false // IP literals only for the server
 	}
@@ -396,12 +386,38 @@ func (p *SandboxProxy) checkAllowed(host string, port int) (net.IP, bool) {
 	if err != nil || len(addrs) == 0 {
 		return nil, false
 	}
+	ips := make([]net.IP, 0, len(addrs))
 	for _, addr := range addrs {
 		if isBlockedIP(addr.IP) && !p.isServerIP(addr.IP, port) {
 			return nil, false
 		}
+		ips = append(ips, addr.IP)
 	}
-	return addrs[0].IP, true
+	return ips, true
+}
+
+// dialChecked dials the checked addresses in turn: the first may be
+// unreachable (an IPv6 address on a machine without an IPv6 route made
+// sandboxed runs fail with "Bad Gateway", live test 2026-11-18). Never the
+// name again: a second DNS answer could point at a private address.
+func (p *SandboxProxy) dialChecked(ips []net.IP, port string) (net.Conn, error) {
+	dial := p.DialContext
+	if dial == nil {
+		dial = (&net.Dialer{}).DialContext
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), p.DialTimeout)
+	defer cancel()
+	err := errors.New("no address")
+	for _, ip := range ips {
+		var c net.Conn
+		if c, err = dial(ctx, "tcp", net.JoinHostPort(ip.String(), port)); err == nil {
+			return c, nil
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, err
 }
 
 func (p *SandboxProxy) inAllowlist(host string, port int) bool {

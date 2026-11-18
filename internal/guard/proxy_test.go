@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -158,6 +159,52 @@ func TestProxy_AllowedCONNECT(t *testing.T) {
 	}
 	if string(buf) != msg {
 		t.Fatalf("expected echo %q, got %q", msg, string(buf))
+	}
+}
+
+// An unreachable first address (IPv6 without a route) does not fail the
+// tunnel: the next checked address is dialled (live test, 2026-11-18).
+func TestProxy_CONNECTTriesTheNextAddress(t *testing.T) {
+	echoL, echoPort := startEchoServer(t)
+	defer func() { _ = echoL.Close() }()
+	sockPath := filepath.Join(t.TempDir(), "proxy.sock")
+	res := &mockResolver{mapping: map[string][]net.IP{
+		"api.example.com": {net.ParseIP("2001:4860:4840:400::"), net.ParseIP("93.184.216.34")},
+	}}
+	var mu sync.Mutex
+	var tried []string
+	pr, err := StartSandboxProxy(ProxyConfig{
+		Mode:     "filtered",
+		Allow:    []string{fmt.Sprintf("api.example.com:%d", echoPort)},
+		SockPath: sockPath,
+		Resolver: res,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			mu.Lock()
+			tried = append(tried, addr)
+			mu.Unlock()
+			if strings.HasPrefix(addr, "[2001:") {
+				return nil, errors.New("network is unreachable")
+			}
+			return net.Dial("tcp", echoL.Addr().String())
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pr.Close() }()
+	conn := dialProxyUnix(t, sockPath)
+	defer func() { _ = conn.Close() }()
+	if _, err := fmt.Fprintf(conn, "CONNECT api.example.com:%d HTTP/1.1\r\nHost: api.example.com:%d\r\n\r\n", echoPort, echoPort); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil || !strings.Contains(line, "200") {
+		t.Fatalf("expected the tunnel through the second address, got %q %v", line, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(tried) != 2 || !strings.HasPrefix(tried[1], "93.184.216.34:") {
+		t.Fatalf("dialled %v", tried)
 	}
 }
 
