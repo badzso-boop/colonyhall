@@ -171,6 +171,7 @@ func (s *Service) runHTTPTool(ctx context.Context, rc runCtx) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	res.Body = ep.RedactBytes(res.Body)
 	text := string(res.Body)
 	if rc.tool.Output != nil && len(rc.tool.Output.Pick) > 0 && strings.Contains(res.ContentType, "json") {
 		var doc any
@@ -351,6 +352,7 @@ func (s *Service) hostFetch(ctx context.Context, rc runCtx, payload json.RawMess
 			}
 		}
 	}
+	var redact Endpoint
 	if in.Auth != "" {
 		// The connector's secret, put on by the server; only to the
 		// connector's own origin.
@@ -362,6 +364,7 @@ func (s *Service) hostFetch(ctx context.Context, rc runCtx, payload json.RawMess
 			return nil, fmt.Errorf("auth %q works only on the connector's own address", in.Auth)
 		}
 		req.Auth = ep.Header
+		redact = ep
 	} else {
 		host := strings.ToLower(u.Hostname())
 		ok := false
@@ -377,6 +380,7 @@ func (s *Service) hostFetch(ctx context.Context, rc runCtx, payload json.RawMess
 	if err != nil {
 		return nil, err
 	}
+	res.Body = redact.RedactBytes(res.Body) // the code never sees the secret
 	out := map[string]any{"status": res.Status, "content_type": res.ContentType, "body": string(res.Body)}
 	if strings.Contains(res.ContentType, "json") {
 		var j any
@@ -494,8 +498,9 @@ func (s *Service) hostCall(ctx context.Context, rc runCtx, payload json.RawMessa
 		}
 		res, err := s.Remote.CallTool(ctx, ep, tool, in.Input)
 		if err != nil {
-			return nil, err
+			return nil, errors.New(ep.Redact(err.Error()))
 		}
+		res.Text = ep.Redact(res.Text)
 		if res.IsError {
 			return nil, errors.New(clip(res.Text, 1000))
 		}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,36 @@ import (
 type Endpoint struct {
 	URL    string
 	Header map[string]string
+	// secrets are the values Redact hides: the connector's secret and the
+	// header built from it.
+	secrets []string
+}
+
+// minRedact: a shorter secret is not searched for (it would hide ordinary
+// text); real credentials are far longer.
+const minRedact = 6
+
+// redactedSecret replaces a connector's secret in what a tool returns.
+const redactedSecret = "[secret]"
+
+// Redact hides the connector's secret in an answer: a service may echo the
+// credential (httpbin's /bearer does; live test, 2026-11-18), and it must
+// reach neither an agent nor extension code.
+func (ep Endpoint) Redact(text string) string {
+	for _, v := range ep.secrets {
+		if v != "" && strings.Contains(text, v) {
+			text = strings.ReplaceAll(text, v, redactedSecret)
+		}
+	}
+	return text
+}
+
+// RedactBytes is Redact for a body.
+func (ep Endpoint) RedactBytes(b []byte) []byte {
+	if len(ep.secrets) == 0 {
+		return b
+	}
+	return []byte(ep.Redact(string(b)))
 }
 
 // Result is a tool's answer.
@@ -542,8 +573,22 @@ func (s *Service) endpoint(ctx context.Context, c Connector) (Endpoint, error) {
 	case AuthHeader:
 		ep.Header[c.HeaderName] = v
 	case AuthBasic:
-		ep.Header["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(v))
+		enc := base64.StdEncoding.EncodeToString([]byte(v))
+		ep.Header["Authorization"] = "Basic " + enc
+		ep.secrets = append(ep.secrets, enc)
+		if _, pw, ok := strings.Cut(v, ":"); ok && len(pw) >= minRedact {
+			ep.secrets = append(ep.secrets, pw)
+		}
 	}
+	if len(v) >= minRedact {
+		ep.secrets = append(ep.secrets, v)
+		// As it appears inside a JSON string.
+		if q, err := json.Marshal(v); err == nil && string(q[1:len(q)-1]) != v {
+			ep.secrets = append(ep.secrets, string(q[1:len(q)-1]))
+		}
+	}
+	// Longest first: a value inside another is not left half-hidden.
+	sort.Slice(ep.secrets, func(i, j int) bool { return len(ep.secrets[i]) > len(ep.secrets[j]) })
 	return ep, nil
 }
 
@@ -862,9 +907,10 @@ func (s *Service) Call(ctx context.Context, in CallInput) (Result, error) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			outcome = OutcomeTimeout
 		}
-		logCall(outcome, errText(err), 0)
-		return Result{}, fmt.Errorf("%s: %s", in.Name, errText(err))
+		logCall(outcome, ep.Redact(errText(err)), 0)
+		return Result{}, fmt.Errorf("%s: %s", in.Name, ep.Redact(errText(err)))
 	}
+	res.Text = ep.Redact(res.Text)
 	size := len(res.Text)
 	res = cutResult(res)
 	outcome := OutcomeOK

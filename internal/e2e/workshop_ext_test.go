@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"fmt"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -33,6 +34,13 @@ func (f *fakeFetcher) Fetch(_ context.Context, r workshop.FetchRequest) (worksho
 	f.mu.Lock()
 	f.reqs = append(f.reqs, r)
 	f.mu.Unlock()
+	if strings.Contains(r.URL, "/echo") { // a service that echoes the credential (httpbin's /bearer)
+		var b strings.Builder
+		for k, v := range r.Auth {
+			fmt.Fprintf(&b, `{"header":%q,"value":%q}`, k, v)
+		}
+		return workshop.FetchResponse{Status: 200, ContentType: "application/json", Body: []byte(b.String())}, nil
+	}
 	if strings.Contains(r.URL, "/search") {
 		return workshop.FetchResponse{Status: 200, ContentType: "application/json",
 			Body: []byte(`{"issues":[{"key":"PROJ-1","fields":{"summary":"Fix login"}},{"key":"PROJ-2","fields":{"summary":"Docs"}}],"total":2}`)}, nil
@@ -465,5 +473,40 @@ func TestHTTPToolPathSegments(t *testing.T) {
 	e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": "repo", "input": map[string]any{"repo": "a b?c#d"}}, &tr)
 	if got := fetch.last().URL; got != "https://api.example.com/v3/repos/a%20b%3Fc%23d" {
 		t.Fatalf("escaping: %q", got)
+	}
+}
+
+// A service that echoes the credential (httpbin's /bearer does; live test,
+// 2026-11-18): the secret reaches neither the agent's answer nor the
+// extension's code; the request still carries it.
+func TestConnectorSecretIsRedactedFromAnswers(t *testing.T) {
+	fetch := &fakeFetcher{}
+	e := extEnv(t, fetch, workshop.Limits{})
+	admin := server.DevAdminToken
+	if s := e.do("POST", "/api/v1/workshop/connectors", admin, map[string]any{"slug": "echo", "title": "Echo", "kind": "http",
+		"base_url": "https://api.example.com", "auth": "bearer", "secret": testExtSecret}, nil); s != http.StatusCreated {
+		t.Fatalf("connector: %d", s)
+	}
+	var ext apispec.Extension
+	e.do("POST", "/api/v1/workshop/extensions", admin, map[string]any{"slug": "echo", "title": "Echo"}, &ext)
+	m := map[string]any{"connectors": []string{"echo"}, "tools": []map[string]any{
+		{"name": "http", "kind": "http", "risk": "read", "request": map[string]any{"connector": "echo", "method": "GET", "path": "/echo"}},
+		{"name": "code", "kind": "js", "risk": "read"}}}
+	src := `export async function code(i: any, ctx: any) {
+  const r = await ctx.fetch("https://api.example.com/echo", { auth: "echo" });
+  return r.body;
+}`
+	if s := e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions", admin, map[string]any{"manifest": m, "source": src}, nil); s != http.StatusCreated {
+		t.Fatalf("version: %d", s)
+	}
+	for _, tool := range []string{"http", "code"} {
+		var tr apispec.ExtensionTestResult
+		e.do("POST", "/api/v1/workshop/extensions/"+ext.Id.String()+"/versions/1/test", admin, map[string]any{"tool": tool, "input": map[string]any{}}, &tr)
+		if strings.Contains(tr.Output, testExtSecret) || !strings.Contains(tr.Output, "[secret]") {
+			t.Fatalf("%s: the secret in the answer: %q", tool, tr.Output)
+		}
+		if got := fetch.last().Auth["Authorization"]; got != "Bearer "+testExtSecret {
+			t.Fatalf("%s: the request lost its credential: %q", tool, got)
+		}
 	}
 }
