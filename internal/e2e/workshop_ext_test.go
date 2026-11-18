@@ -43,7 +43,8 @@ func (f *fakeFetcher) Fetch(_ context.Context, r workshop.FetchRequest) (worksho
 				for _, c := range v {
 					fmt.Fprintf(&esc, `\u%04x`, c)
 				}
-				fmt.Fprintf(&b, `{"header":%q,"value":"%s"}`, k, esc.String())
+				// Not one JSON document: two lines (NDJSON) and some text.
+				fmt.Fprintf(&b, "{\"header\":%q}\nvalue: \"%s\" (escaped)", k, esc.String())
 				continue
 			}
 			fmt.Fprintf(&b, `{"header":%q,"value":%q}`, k, v)

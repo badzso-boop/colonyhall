@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -85,8 +86,33 @@ func (ep Endpoint) redactPlain(text string) string {
 			text = strings.ReplaceAll(text, v, redactedSecret)
 		}
 	}
+	// A JSON string with escapes anywhere in the text (NDJSON, JSON in
+	// HTML, a document that does not parse as a whole) is decoded on its
+	// own (security review, 2026-11-18). What a service encodes otherwise
+	// (base64, reversed) it has the secret for anyway.
+	if strings.Contains(text, `\`) {
+		text = jsonStringRe.ReplaceAllStringFunc(text, func(lit string) string {
+			if !strings.Contains(lit, `\`) {
+				return lit
+			}
+			var dec string
+			if json.Unmarshal([]byte(lit), &dec) != nil {
+				return lit
+			}
+			for _, v := range ep.secrets {
+				if v != "" && strings.Contains(dec, v) {
+					b, _ := json.Marshal(ep.redactPlain(dec))
+					return string(b)
+				}
+			}
+			return lit
+		})
+	}
 	return text
 }
+
+// jsonStringRe matches a JSON string literal.
+var jsonStringRe = regexp.MustCompile(`"(?:[^"\\]|\\.)*"`)
 
 // redactValue hides the secret in every string (keys too) of a decoded
 // JSON value and reports whether it found one.
