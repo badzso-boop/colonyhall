@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"slices"
 	"strings"
 	"time"
 
@@ -353,8 +354,9 @@ func FindRecipients(ctx context.Context, conv conversation.Reader, dir identity.
 // ThreadFollowers returns who a reply reaches without a mention: a human's
 // reply in a channel thread goes to the agents that wrote in that thread
 // (like following a thread in Slack). A reply that mentions someone reaches
-// only them, and an agent's reply wakes nobody this way, so two agents in a
-// thread cannot keep waking each other.
+// only them. An agent's reply reaches only the agents that asked it there
+// (threadAskers): one answer per question, so two agents in a thread cannot
+// keep waking each other.
 func ThreadFollowers(ctx context.Context, conv conversation.Reader, dir identity.Directory, ch conversation.Channel, p conversation.MessageCreated) (map[ids.ID]bool, error) {
 	if p.ThreadRootID == "" || len(p.Mentions) > 0 || ch.Kind == conversation.KindDM || p.NoThreadFollow {
 		return nil, nil
@@ -367,12 +369,12 @@ func ThreadFollowers(ctx context.Context, conv conversation.Reader, dir identity
 	if err != nil {
 		return nil, err
 	}
-	if author.Kind != identity.KindHuman {
-		return nil, nil
-	}
 	rootID, err := ids.Parse(p.ThreadRootID)
 	if err != nil {
 		return nil, err
+	}
+	if author.Kind != identity.KindHuman {
+		return threadAskers(ctx, conv, dir, rootID, authorID, p)
 	}
 	authors, err := conv.ThreadAuthorIDs(ctx, rootID)
 	if err != nil {
@@ -381,6 +383,60 @@ func ThreadFollowers(ctx context.Context, conv conversation.Reader, dir identity
 	out := make(map[ids.ID]bool, len(authors))
 	for _, id := range authors {
 		out[id] = true
+	}
+	return out, nil
+}
+
+// threadAskers returns the agents an agent's plain reply in a thread answers
+// (live test, 2026-11-18: an agent asked another in a thread and never got
+// its answer): those that mentioned the replying agent in this thread
+// within ReplyOriginWindow and that it has not answered there since. A
+// question gets one answer this way; the asker's own plain reply wakes
+// nobody, since the answering agent never mentioned it.
+func threadAskers(ctx context.Context, conv conversation.Reader, dir identity.Directory, rootID, authorID ids.ID, p conversation.MessageCreated) (map[ids.ID]bool, error) {
+	msgs, err := conv.MessagesInUnit(ctx, ids.Nil, rootID)
+	if err != nil {
+		return nil, err
+	}
+	if len(msgs) == 0 || msgs[0].ID != rootID {
+		root, err := conv.MessageByID(ctx, rootID)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append([]conversation.Message{root}, msgs...)
+	}
+	asked := map[ids.ID]bool{}
+	for _, m := range msgs { // oldest first: what came before this reply
+		if m.ID.String() == p.MessageID {
+			break
+		}
+		if m.DeletedAt != nil || m.CreatedAt.After(p.CreatedAt) {
+			continue
+		}
+		if m.AuthorID == authorID {
+			clear(asked) // it answered everything before
+			continue
+		}
+		if p.CreatedAt.Sub(m.CreatedAt) <= ReplyOriginWindow && slices.Contains(m.Mentions, authorID) {
+			asked[m.AuthorID] = true
+		}
+	}
+	if len(asked) == 0 {
+		return nil, nil
+	}
+	list := make([]ids.ID, 0, len(asked))
+	for id := range asked {
+		list = append(list, id)
+	}
+	actors, err := dir.ActorsByIDs(ctx, list)
+	if err != nil {
+		return nil, err
+	}
+	out := map[ids.ID]bool{}
+	for _, a := range actors {
+		if a.Kind == identity.KindAgent {
+			out[a.ID] = true
+		}
 	}
 	return out, nil
 }

@@ -363,6 +363,35 @@ func TestThreadReplyReachesAgentsInTheThread(t *testing.T) {
 		t.Fatalf("an agent's reply woke the other agent: %v", got)
 	}
 
+	// 3b. An agent asks another in the thread (mention); the answer without
+	// a mention reaches the asker once (live test, 2026-11-18). The asker's
+	// plain follow-up and a second answer wake nobody.
+	ack(server.DevAgentToken)
+	ack(other.Token)
+	if _, s := e.send(server.DevAgentToken, general, map[string]any{"body": "@helper mennyi hiba volt?", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("agent question: %d", s)
+	}
+	ack(other.Token)
+	if _, s := e.send(other.Token, general, map[string]any{"body": "Három hiba volt.", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("helper answer: %d", s)
+	}
+	if got := bodies(server.DevAgentToken); len(got) != 1 || got[0] != "Három hiba volt." {
+		t.Fatalf("the asking agent should get the answer, got %v", got)
+	}
+	ack(server.DevAgentToken)
+	if _, s := e.send(server.DevAgentToken, general, map[string]any{"body": "Akkor a hibákat is átnézem.", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("asker follow-up: %d", s)
+	}
+	if got := bodies(other.Token); len(got) != 0 {
+		t.Fatalf("the asker's plain follow-up woke the answering agent: %v", got)
+	}
+	if _, s := e.send(other.Token, general, map[string]any{"body": "Még valami.", "thread_root_id": root.ID}); s != http.StatusCreated {
+		t.Fatalf("second answer: %d", s)
+	}
+	if got := bodies(server.DevAgentToken); len(got) != 0 {
+		t.Fatalf("a second answer woke the asker again: %v", got)
+	}
+
 	// 4. A plain reply in a thread @fake-agent never wrote in reaches nobody.
 	root2, _ := e.send(server.DevAdminToken, general, map[string]any{"body": "Más téma."})
 	if _, s := e.send(server.DevAdminToken, general, map[string]any{"body": "Folytatás.", "thread_root_id": root2.ID}); s != http.StatusCreated {

@@ -224,6 +224,9 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 
 		// A reply is not a task: the full-access agent asked the author here
 		// first (Norbi's decision, 2026-11-01), so the answer goes through.
+		// It is an answer item: the guard keeps answers for a full-access
+		// agent (and frames them as information), while it refuses every
+		// other agent message (live test, 2026-11-18).
 		if replied, err := s.answersRequest(ctx, ch, msgID, author.ID, rec.Actor.ID, st, now); err != nil {
 			return err
 		} else if replied {
@@ -231,7 +234,7 @@ func (s *Service) onMessageCreated(ctx context.Context, e eventlog.Event, p conv
 				ID:          s.IDs.New(),
 				WorkspaceID: e.WorkspaceID,
 				RecipientID: rec.Actor.ID,
-				ItemKind:    delivery.ItemMessage,
+				ItemKind:    delivery.ItemAnswer,
 				ItemID:      msgID,
 				ChannelID:   ch.ID,
 				FromActorID: author.ID,
