@@ -65,9 +65,19 @@
       <div class="sky" aria-hidden="true">{{svg:sky}}</div>
       <div class="surface__inner">
         <div class="hero">
-          <h1 id="hero-title" class="hero__title">{{t:hero.title}}</h1>
-          <p class="hero__subtitle">{{t:hero.subtitle}}</p>
-          <p class="hero__body">{{t:hero.body}}</p>
+          <p class="hero__brand">{{svg:mark}}<span>{{t:hero.title}}</span></p>
+          <h1 id="hero-title" class="hero__title">{{t:hero.headline}}</h1>
+          <p class="hero__subtitle">{{t:hero.pitch}}</p>
+          <p class="hero__limits">{{md:hero.limits}}</p>
+          <div class="wishes">
+            <p class="wishes__label" id="wishes-label">{{t:workshop.tryLabel}}</p>
+            <div class="wishes__list" role="group" aria-labelledby="wishes-label">
+              <button type="button" class="wish" data-wish="standup" aria-pressed="false" aria-controls="build">{{t:workshop.w1.label}}</button>
+              <button type="button" class="wish" data-wish="lunch" aria-pressed="false" aria-controls="build">{{t:workshop.w2.label}}</button>
+              <button type="button" class="wish" data-wish="repo" aria-pressed="false" aria-controls="build">{{t:workshop.w3.label}}</button>
+            </div>
+          </div>
+          <p class="hero__body"><strong>{{t:hero.subtitle}}</strong> {{t:hero.body}}</p>
           <div class="hero__actions">
             <a class="btn btn--primary" href="#nursery">{{t:hero.install}}</a>
             <a class="btn" href="{{link:repo}}">{{svg:github}}{{t:hero.github}}</a>
@@ -113,6 +123,10 @@
                 </ol>
               </aside>
             </div>
+            <section class="build" id="build" hidden aria-label="{{t:workshop.panelLabel}}">
+              <div class="build__head"><span><span aria-hidden="true">#</span> {{t:monitor.general}}</span><button type="button" class="build__close" id="build-close">{{t:workshop.close}}</button></div>
+              <ol class="build__log" id="build-log"></ol>
+            </section>
           </div>
           <div class="monitor__stand" aria-hidden="true"></div>
           <div class="monitor__burrow" aria-hidden="true"></div>
@@ -170,10 +184,36 @@
 
     <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
 
-    <!-- 3. The tunnels -->
+    <!-- 3. The workshop -->
+    <section class="chamber" id="workshop" aria-labelledby="workshop-title">
+      <div class="chamber__text">
+        <p class="kicker">03 · {{t:workshop.kicker}}</p>
+        <h2 id="workshop-title">{{t:workshop.title}}</h2>
+        <p>{{t:workshop.body}}</p>
+        <p>{{t:workshop.body2}}</p>
+      </div>
+      <div class="chamber__art">
+        <figure class="ext" aria-label="{{t:workshop.ext.label}}">
+          <div class="ext__head">
+            <span class="ext__name">{{t:workshop.ext.name}}</span>
+            <span class="ext__state">{{t:workshop.ext.state}}</span>
+            <span class="ext__bot"><span class="av av--agent av--xs" aria-hidden="true">l</span>{{t:workshop.ext.bot}}</span>
+          </div>
+          <p class="ext__group">{{t:workshop.ext.toolsTitle}}</p>
+          <ul class="ext__list"><li>{{t:workshop.ext.t1}}</li><li>{{t:workshop.ext.t2}}</li></ul>
+          <p class="ext__group">{{t:workshop.ext.routinesTitle}}</p>
+          <ul class="ext__list"><li>{{t:workshop.ext.r1}}</li><li>{{t:workshop.ext.r2}}</li></ul>
+          <p class="ext__history">{{t:workshop.ext.history}}</p>
+        </figure>
+      </div>
+    </section>
+
+    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+
+    <!-- 4. The tunnels -->
     <section class="chamber chamber--wide" id="tunnels" aria-labelledby="tunnels-title">
       <div class="chamber__text">
-        <p class="kicker">03 · {{t:tunnels.kicker}}</p>
+        <p class="kicker">04 · {{t:tunnels.kicker}}</p>
         <h2 id="tunnels-title">{{t:tunnels.title}}</h2>
         <p>{{t:tunnels.body}}</p>
       </div>
@@ -192,12 +232,12 @@
       </div>
     </section>
 
-    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
 
-    <!-- 4. Workrooms -->
+    <!-- 5. Workrooms -->
     <section class="chamber chamber--wide" id="workrooms" aria-labelledby="workrooms-title">
       <div class="chamber__text">
-        <p class="kicker">04 · {{t:workrooms.kicker}}</p>
+        <p class="kicker">05 · {{t:workrooms.kicker}}</p>
         <h2 id="workrooms-title">{{t:workrooms.title}}</h2>
       </div>
       <ul class="rooms" id="rooms">
@@ -210,24 +250,24 @@
       </ul>
     </section>
 
-    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
 
-    <!-- 5. Your ground -->
+    <!-- 6. Your ground -->
     <section class="chamber" id="ground" aria-labelledby="ground-title">
       <div class="chamber__text">
-        <p class="kicker">05 · {{t:ground.kicker}}</p>
+        <p class="kicker">06 · {{t:ground.kicker}}</p>
         <h2 id="ground-title">{{t:ground.title}}</h2>
         <p>{{t:ground.body}}</p>
       </div>
       <div class="chamber__art">{{svg:ground}}</div>
     </section>
 
-    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
 
-    <!-- 6. The nursery -->
+    <!-- 7. The nursery -->
     <section class="chamber chamber--flip" id="nursery" aria-labelledby="nursery-title">
       <div class="chamber__text">
-        <p class="kicker">06 · {{t:nursery.kicker}}</p>
+        <p class="kicker">07 · {{t:nursery.kicker}}</p>
         <h2 id="nursery-title">{{t:nursery.title}}</h2>
         <p>{{md:nursery.body}}</p>
         <ol class="install">
@@ -257,12 +297,12 @@
       </div>
     </section>
 
-    <div class="tunnel" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 50, 20 70, 40 110 S 50 150, 50 160" pathLength="1"/></svg></div>
+    <div class="tunnel tunnel--r" aria-hidden="true"><svg viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 0 C 50 40, 80 70, 60 110 S 50 150, 50 160" pathLength="1"/></svg></div>
 
-    <!-- 7. Strata -->
+    <!-- 8. Strata -->
     <section class="chamber chamber--wide strata" id="strata" aria-labelledby="strata-title">
       <div class="chamber__text">
-        <p class="kicker">07 · {{t:strata.kicker}}</p>
+        <p class="kicker">08 · {{t:strata.kicker}}</p>
         <h2 id="strata-title">{{t:strata.title}}</h2>
         <p>{{t:strata.intro}}</p>
       </div>
@@ -282,10 +322,10 @@
       </div>
     </section>
 
-    <!-- 8. Open colony -->
+    <!-- 9. Open colony -->
     <section class="chamber" id="open" aria-labelledby="open-title">
       <div class="chamber__text">
-        <p class="kicker">08 · {{t:open.kicker}}</p>
+        <p class="kicker">09 · {{t:open.kicker}}</p>
         <h2 id="open-title">{{t:open.title}}</h2>
         <p>{{md:open.body}}</p>
         <p class="links">
@@ -299,7 +339,7 @@
     </section>
   </main>
 
-  <!-- 9. Footer -->
+  <!-- 10. Footer -->
   <footer class="foot">
     <div class="sleepers" id="sleepers" title="{{t:footer.sleeping}}">{{svg:sleepers}}</div>
     <nav class="foot__links" aria-label="{{t:footer.label}}">
@@ -313,6 +353,7 @@
     <p class="foot__note">{{t:footer.privacy}}</p>
   </footer>
 
+  <link rel="stylesheet" href="../css/late.css">
   <script type="application/json" id="site-data">{{data}}</script>
 </body>
 </html>

@@ -20,7 +20,8 @@ const composer = root?.querySelector(".app__composer");
 const screen = root?.querySelector(".monitor__screen");
 const burrow = root?.querySelector(".monitor__burrow");
 let visible = true;
-const held = () => !visible;
+let demo = false; // the Workshop demo has the screen (workshop-demo.js)
+const held = () => !visible || demo;
 const sleep = (ms) => wait(ms, held);
 let live = null; // the step that is running (it turns "stopped" at the gate)
 
@@ -177,6 +178,12 @@ motion.subscribe(() => {
   }
   if (!motion.reduced && !looping) loop();
 });
+
+/** The Workshop demo takes the screen (on) or gives it back: the script holds meanwhile. */
+export function hold(on) {
+  demo = on;
+  root?.classList.toggle("is-building", on);
+}
 
 export function start() {
   if (!root) return;

@@ -12,6 +12,7 @@ import * as map from "./map.js";
 import * as terminal from "./terminal.js";
 import * as strata from "./strata.js";
 import * as eggs from "./eggs.js";
+import * as workshop from "./workshop-demo.js";
 import { onVisibility } from "./motion.js";
 
 for (const el of document.querySelectorAll("[data-js-only]")) el.hidden = false;
@@ -71,3 +72,4 @@ map.start();
 terminal.start();
 strata.start();
 eggs.start();
+workshop.start();

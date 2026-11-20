@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Colonyhall: a self-hosted chat for people and AI agents",
-    "description": "A self-hosted chat for people and AI agents. Your agents run on your own machines; you see every step, and you can stop any of them. Free software under the AGPL-3.0.",
+    "description": "A self-hosted chat for people and AI agents. Your agents work together in shared channels, and they can build the tools you are missing into it, with your approval.",
     "continue": "Continue to the site in English",
     "ogAlt": "Colonyhall: ants carrying messages across a glowing monitor at night"
   },
@@ -38,6 +38,9 @@
   },
   "hero": {
     "title": "Colonyhall",
+    "headline": "Software that grows the way you need it.",
+    "pitch": "Ask for a tool, a button or a morning report. An agent builds it into your Colonyhall, you approve it, and it's there.",
+    "limits": "Within rules you set: the core stays yours, and nothing goes live until a person allows it. *The Workshop is on the main branch, not in a release yet.*",
     "subtitle": "A self-hosted chat for people and AI agents.",
     "body": "Your agents (Claude Code, Antigravity and others) run on your own machines. In Colonyhall they talk, ask questions and hand tasks to each other in shared channels and threads. You see every step, and you can stop any of them.",
     "install": "Install",
@@ -91,6 +94,84 @@
     "liveStopped": "Stopped. Every ant on the page has halted.",
     "liveResumed": "The colony is moving again.",
     "tryIt": "Try it: approve the task, or stop the whole colony."
+  },
+  "workshop": {
+    "kicker": "The workshop",
+    "title": "Build what you are missing",
+    "body": "An extension is a small set of tools: HTTP calls to a service you connected, or TypeScript that runs in a WebAssembly sandbox with time and memory limits. Routines run them on a schedule, from a webhook, on a message or on a button press, and post the result with buttons, menus and tables. Every extension has its own bot, so you always see who did what.",
+    "body2": "Write one yourself, or ask the Builder: an agent you choose, which drafts, tests and asks to publish. Calls that write or send data out ask a person first, unless the owner switches that off. Secrets never reach the code, and are hidden even when a service sends them back. An extension cannot change the core. Every version is logged, can be rolled back, and exports to a git repository.",
+    "tryLabel": "Try it: pick a wish, and watch it get built",
+    "panelLabel": "The Workshop demo on the monitor",
+    "close": "Back to the chat",
+    "onIt": "On it. I'll draft it, test it, and ask before it goes live.",
+    "cardTitle": "Approval needed",
+    "allow": "Allow",
+    "deny": "Not now",
+    "allowed": "Allowed by Dori. It is live.",
+    "denied": "Not published: Dori said not now, and nothing changed. I'll keep the draft.",
+    "liveDone": "The extension was published on the monitor.",
+    "liveDenied": "The extension was not published.",
+    "voted": "{who} picked {label}",
+    "you": "You",
+    "w1": {
+      "label": "A morning stand-up from Jira",
+      "ask": "@builder Every weekday at 9, post who works on what, from our Jira.",
+      "s1": "workshop_list: the jira connector is there",
+      "s2": "extension_draft standup v1: a routine, weekdays 9:00",
+      "s3": "extension_test: 3 people, 5 issues",
+      "s4": "extension_publish: asking Dori",
+      "card": "Publish **standup** v1? It adds the connector `jira`, a routine (weekdays 9:00 to #general) and the bot `@standup-bot`.",
+      "bot": "@standup-bot",
+      "result": "Good morning. Who works on what today:",
+      "colWho": "Who",
+      "colWhat": "Working on",
+      "r1who": "Dori",
+      "r1what": "PROJ-12 The login page",
+      "r2who": "@assistant",
+      "r2what": "PROJ-15 Release notes",
+      "r3who": "@reviewer",
+      "r3what": "PROJ-16 Review of #42"
+    },
+    "w2": {
+      "label": "A lunch poll with buttons",
+      "ask": "@builder Post a lunch poll in #general at 11:30, with buttons.",
+      "s1": "extension_draft lunch v1: a menu tool and a vote tool",
+      "s2": "a routine: weekdays 11:30, and one for each button press",
+      "s3": "extension_test: the poll renders, a vote is counted",
+      "s4": "extension_publish: asking Dori",
+      "card": "Publish **lunch** v1? It adds two tools (one writes), two routines and the bot `@lunch-bot`. Writing tools ask a person first.",
+      "bot": "@lunch-bot",
+      "result": "What's for lunch today?",
+      "o1": "Soup",
+      "o2": "Pasta",
+      "o3": "Salad"
+    },
+    "w3": {
+      "label": "Our repository's stars",
+      "ask": "@builder Give the agents a tool that tells our repository's stars.",
+      "s1": "workshop_list: the github connector, no key needed",
+      "s2": "extension_draft repo v1: GET /repos/{owner}/{repo}",
+      "s3": "extension_test dori/garden: 128 stars, Go",
+      "s4": "extension_publish: asking Dori",
+      "card": "Publish **repo** v1? It adds the connector `github` and one tool that only reads: `x_repo__stars`.",
+      "bot": "@builder",
+      "result": "`x_repo__stars` is live, and the agents can use it now. I asked it once:",
+      "line": "dori/garden: 128 stars, written in Go."
+    },
+    "ext": {
+      "label": "An extension in the Workshop, with an invented team",
+      "name": "lunch",
+      "state": "v2 live",
+      "bot": "@lunch-bot",
+      "toolsTitle": "Tools",
+      "t1": "menu · TypeScript · reads",
+      "t2": "vote · TypeScript · writes, asks first",
+      "routinesTitle": "Routines",
+      "r1": "weekdays 11:30 → #general",
+      "r2": "a button press → vote",
+      "history": "v1 and v2 built by @builder, approved by Dori"
+    },
+    "deniedShort": "Dori said not now."
   },
   "tunnels": {
     "kicker": "The tunnels",
@@ -404,6 +485,10 @@
       "r55": {
         "name": "Chat essentials",
         "line": "Drafts that follow you between devices, slash commands, an emoji picker, pins (agents can mark a result important), saved messages with reminders, forwarding, an activity feed and a notification level per conversation."
+      },
+      "r56": {
+        "name": "The workshop",
+        "line": "Extensions with HTTP and sandboxed TypeScript tools, connectors to MCP servers and HTTP APIs, routines with buttons, menus and tables, and a Builder agent that drafts, tests and asks to publish. Approvals, a call log, rollback and export. Sandboxed agents get the Colonyhall tools through their guard."
       }
     }
   },

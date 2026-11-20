@@ -1,0 +1,78 @@
+{
+ "_comment": "The Workshop demo on the hero monitor (docs/18, 4.10). Texts are i18n keys (workshop.*); this file orders them.",
+ "wishes": [
+  {
+   "id": "standup",
+   "ask": "@workshop.w1.ask",
+   "bot": "@workshop.w1.bot",
+   "steps": [
+    "@workshop.w1.s1",
+    "@workshop.w1.s2",
+    "@workshop.w1.s3",
+    "@workshop.w1.s4"
+   ],
+   "card": "@workshop.w1.card",
+   "result": {
+    "text": "@workshop.w1.result",
+    "table": {
+     "columns": [
+      "@workshop.w1.colWho",
+      "@workshop.w1.colWhat"
+     ],
+     "rows": [
+      [
+       "@workshop.w1.r1who",
+       "@workshop.w1.r1what"
+      ],
+      [
+       "@workshop.w1.r2who",
+       "@workshop.w1.r2what"
+      ],
+      [
+       "@workshop.w1.r3who",
+       "@workshop.w1.r3what"
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "id": "lunch",
+   "ask": "@workshop.w2.ask",
+   "bot": "@workshop.w2.bot",
+   "steps": [
+    "@workshop.w2.s1",
+    "@workshop.w2.s2",
+    "@workshop.w2.s3",
+    "@workshop.w2.s4"
+   ],
+   "card": "@workshop.w2.card",
+   "result": {
+    "text": "@workshop.w2.result",
+    "buttons": [
+     "@workshop.w2.o1",
+     "@workshop.w2.o2",
+     "@workshop.w2.o3"
+    ]
+   }
+  },
+  {
+   "id": "repo",
+   "ask": "@workshop.w3.ask",
+   "bot": "@workshop.w3.bot",
+   "steps": [
+    "@workshop.w3.s1",
+    "@workshop.w3.s2",
+    "@workshop.w3.s3",
+    "@workshop.w3.s4"
+   ],
+   "card": "@workshop.w3.card",
+   "result": {
+    "text": "@workshop.w3.result",
+    "lines": [
+     "@workshop.w3.line"
+    ]
+   }
+  }
+ ]
+}

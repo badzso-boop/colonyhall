@@ -23,6 +23,8 @@ A 48. kör 5. része (`site/`, GitHub Pages). Ez a dokumentum az 5.1-es pont: No
 - **A hangyák kinézete:** a megvalósító **több vázlatot** rajzol (különböző karakterekkel), Norbi választ, és csak utána épül rájuk az oldal.
 - **Nevek:** az agentek `@assistant`, `@reviewer`, `@scribe`, `@builder` és `@homelab`; a kitalált ember **Dori**.
 
+**A Műhely a tetejére (Norbi döntése, 2026-11-19, az 56. kör után).** Az oldal fő üzenete az lett, hogy az alkalmazás a felhasználó igényei szerint bővül: a hero főcíme *„Software that grows the way you need it.”*, alatta egy mondat arról, hogy egy agent építi be, és ember hagyja jóvá. A „bármennyire testreszabható” helyett szándékosan őszinte: közvetlenül alatta áll a határ (a mag a tiéd marad, semmi nem élesedik ember engedélye nélkül), és hogy a Műhely még csak a `main` ágon van, kiadásban nem. A régi alcím („A self-hosted chat for people and AI agents.”) a hero bekezdésének első mondata lett. Új interakció a monitoron (4.10) és új kamra (3., The workshop).
+
 ## 2. Koncepció: leereszkedés a bolyba
 
 A márka már meglévő karakterére épül (`docs/07-design-system.md`, 1. szakasz): **hangyaboly éjjel**, mély, meleg feketék, és egyetlen erős piros, a katonahangya. Új arculat nincs: az oldal ugyanazokat a tokeneket, betűtípusokat és a hangya jelet használja, mint a PWA.
@@ -39,16 +41,17 @@ Egyetlen hosszú oldal (`/en/`), a kamrák sorrendjében. A gyökér (`/`) a nye
 
 | # | Kamra | Tartalom | Fő elem |
 |---|---|---|---|
-| 0 | **Felszín (hero)** | név, egymondatos ígéret, telepítő parancs másolás gombbal, GitHub-link | az élő monitor (4.2) |
+| 0 | **Felszín (hero)** | név, a Műhely-főcím és határai, három kipróbálható kívánság, a chat egy bekezdésben, telepítő parancs másolás gombbal, GitHub-link | az élő monitor (4.2) és a Műhely-bemutató rajta (4.10) |
 | 1 | **The hall** | mi a Colonyhall: csatornák, szálak, emberek és agentek egy helyen | a bemutató folytatása, feromon-nyomok (4.3) |
 | 2 | **The gate** | az irányítás: jóváhagyás, delegálási engedélyek, Claude-limitek, leállítás | Approve / Stop, a boly megfagy (4.4) |
-| 3 | **The tunnels** | az architektúra: szerver, őrök, agentek, sandbox | interaktív járattérkép (4.5) |
-| 4 | **Workrooms** | funkciók: élő lépések, terminálok, fájlböngésző, tervező és naptár, keresés, PWA | kis kamrák, mindegyikben egy hangya végzi az adott munkát |
-| 5 | **Your ground** | a saját gépeden fut: nincs telemetria, a bejelentkezések a tieid, csak oda kapcsolódik, amit beállítasz (`docs/17`, 0.8) | a boly fala, kívül semmi |
-| 6 | **The nursery** | telepítés három lépésben, platformok, `colony doctor` | terminálkamra (4.6) |
-| 7 | **Strata** | „Built by agents”: a fejlesztési körök rétegei | rétegek és kövületek (4.7) |
-| 8 | **Open colony** | AGPL-3.0 + kereskedelmi licenc, CLA, közreműködés, `SECURITY.md` | |
-| 9 | **Lábléc** | dokumentáció (`docs/en/`), API-referencia, GitHub, forráskód-link, licenc | alvó hangyák (4.8) |
+| 3 | **The workshop** | a bővítmények: HTTP- és TypeScript-eszközök (WASM homokozó), rutinok gombokkal, menükkel, táblázatokkal, saját bot, az Építő, jóváhagyás, titkok, mag, napló, visszaállítás, export | egy bővítmény kártyája, ahogy a Műhely oldal mutatja (kitalált `lunch`) |
+| 4 | **The tunnels** | az architektúra: szerver, őrök, agentek, sandbox | interaktív járattérkép (4.5) |
+| 5 | **Workrooms** | funkciók: élő lépések, terminálok, fájlböngésző, tervező és naptár, keresés, PWA | kis kamrák, mindegyikben egy hangya végzi az adott munkát |
+| 6 | **Your ground** | a saját gépeden fut: nincs telemetria, a bejelentkezések a tieid, csak oda kapcsolódik, amit beállítasz (`docs/17`, 0.8) | a boly fala, kívül semmi |
+| 7 | **The nursery** | telepítés három lépésben, platformok, `colony doctor` | terminálkamra (4.6) |
+| 8 | **Strata** | „Built by agents”: a fejlesztési körök rétegei | rétegek és kövületek (4.7) |
+| 9 | **Open colony** | AGPL-3.0 + kereskedelmi licenc, CLA, közreműködés, `SECURITY.md` | |
+| 10 | **Lábléc** | dokumentáció (`docs/en/`), API-referencia, GitHub, forráskód-link, licenc | alvó hangyák (4.8) |
 
 A kamrák nevei munkacímek; a végleges angol szöveg a megvalósításkor készül, és az i18n-fájlba kerül.
 
@@ -117,6 +120,14 @@ A kamrák nevei munkacímek; a végleges angol szöveg a megvalósításkor kés
 - Csak `transform` és `opacity` animál, layout nem.
 - **`prefers-reduced-motion`:** a hangyák nem másznak, hanem a helyükön állnak (címkével), a járatok azonnal készen vannak, a monitor és a terminál a forgatókönyv végállapotát mutatja, a számlálók a végső számot. Minden információ ugyanúgy elérhető, és a Stop gomb is működik (állapotot vált, animáció nélkül).
 
+### 4.10 A Műhely-bemutató a monitoron (2026-11-19)
+
+- A hero-ban, a főcím alatt három előre megírt kívánság áll gombként: reggeli stand-up a Jirából (táblázat), ebédszavazás gombokkal, a repó csillagai (egy csak olvasó eszköz). Szabad szöveges mező nincs: az oldal statikus, AI nélkül, és ezt nem is színleli.
+- Kattintásra a monitor átadja a képernyőjét (a saját forgatókönyve addig áll): Dori kéri a `@builder`-t, jönnek a valódi Műhely-eszközök nevei lépésként (`workshop_list`, `extension_draft`, `extension_test`, `extension_publish`), majd egy jóváhagyási kártya vár. **A látogató nyomja meg az Allow-t** (vagy a „Not now”-t), ez a kapu üzenetét erősíti. Engedélyre a `@builder` hangyája felviszi az új részt a képernyőre, és megjelenik a bővítmény első üzenete, a szavazásnál működő gombokkal; elutasításra a Builder jelzi, hogy nem élesedett, és semmi nem változott (ahogy a valódi Műhely is mondja).
+- A „Back to the chat” gomb vagy az Escape visszaadja a képernyőt a monitornak. Mobilon a kattintás a monitorhoz görget.
+- **Csökkentett mozgásnál** azonnal lefut, hangya nélkül; a fókusz az Allow gombra kerül, így billentyűzettel végigvihető. **JS nélkül** a kívánságok nem látszanak (a `no-js` osztály), a kamra teljes szöveggel ott van.
+- A forgatókönyv a `site/src/data/workshop.json`-ban, a szövegek az `en.json` `workshop.*` kulcsai alatt; a szkript `site/src/js/workshop-demo.js`. A panel és a kamra stílusa a `site/src/css/late.css`-ben van, a `body` végén betöltve, hogy ne késleltesse a hero első megjelenését.
+
 ## 5. A termék bemutatása valódi adat nélkül
 
 - Minden, ami a terméket mutatja, **kitalált**: egy kitalált ember (**Dori**), kitalált agentek (`@assistant`, `@reviewer`, `@scribe`, `@builder`, `@homelab`), kitalált csatornák (`#general`, `#release`), kitalált gépek (`laptop`, `homelab`, `gpu-box`), kitalált repó és fájlnevek. A `@homelab` agent a `homelab` gépen fut, és az ottani szolgáltatásokra figyel (pl. ő jelzi, hogy kész a mentés).
@@ -166,11 +177,15 @@ A kamrák nevei munkacímek; a végleges angol szöveg a megvalósításkor kés
 | Hol | Szöveg (tervezet) |
 |---|---|
 | Hero, cím | **Colonyhall** |
-| Hero, alcím | A self-hosted chat for people and AI agents. |
+| Hero, alcím | A self-hosted chat for people and AI agents. *(2026-11-19 óta a hero-bekezdés kiemelt első mondata; a főcím a Műhelyé.)* |
 | Hero, bekezdés | Your agents (Claude Code, Antigravity and others) run on your own machines. In Colonyhall they talk, ask questions and hand tasks to each other in shared channels and threads. You see every step, and you can stop any of them. |
 | Hero, gombok | `Install` · `View on GitHub` |
 | The hall | Channels, threads and direct messages, the way a team chat works, except that half the members are agents. Mention an agent and the guard on its machine wakes it with the message. Its answer, and every step on the way, arrives in the same thread. |
 | The gate | Agents work for people, not on their own authority. An agent's task for a full-access agent waits for a human's approval, and one approval covers that conversation for a while. Usage limits, budgets and an emergency stop are always one click away. *Humans see everything. Humans can stop anything.* |
+| Hero, főcím | **Software that grows the way you need it.** |
+| Hero, ígéret | Ask for a tool, a button or a morning report. An agent builds it into your Colonyhall, you approve it, and it's there. |
+| Hero, határok | Within rules you set: the core stays yours, and nothing goes live until a person allows it. *The Workshop is on the main branch, not in a release yet.* |
+| The workshop | An extension is a small set of tools: HTTP calls to a service you connected, or TypeScript that runs in a WebAssembly sandbox with time and memory limits. Routines run them on a schedule, from a webhook, on a message or on a button press, and post the result with buttons, menus and tables. Every extension has its own bot, so you always see who did what. — Write one yourself, or ask the Builder: an agent you choose, which drafts, tests and asks to publish. Calls that write or send data out ask a person first, unless the owner switches that off. Secrets never reach the code, and are hidden even when a service sends them back. An extension cannot change the core. Every version is logged, can be rolled back, and exports to a git repository. |
 | The tunnels | One server (the web app, the API and Postgres in Docker Compose) and one guard per machine. The guard runs the AI clients you already use, logged in by you, and reports to the server over its public API. Where it can, it runs agents in a sandbox with their own worktree and a network allowlist. |
 | Workrooms | Live steps of every run. Terminals for long commands. A file browser with git status. A planner and calendars, read-only for agents. Search across channels, threads and the wiki. A web app you can install on your phone. |
 | Your ground | Colonyhall has no telemetry, no update check and no error reporting. It connects only to what you configure: your AI providers, your git server, the calendars you subscribe to. It never logs in to an AI account for you. |
@@ -282,3 +297,4 @@ Minden kör egy réteg. Állapot: **shipped** (kész és beolvasztva), **digging
 | 53 | Search quality | Search tuned against real questions. The first attempt was measured, did not help, and was rolled back; the next one starts from that measurement. | planned |
 | 54 | Storage | My files, deleting your own uploads, the workspace's storage with an optional quota, warnings at 80% and 95%, and agents that pause when it is full. | shipped |
 | 55 | Chat essentials | Drafts that follow you between devices, slash commands, an emoji picker, pins (agents can mark a result important), saved messages with reminders, forwarding, an activity feed and a notification level per conversation. | shipped |
+| 56 | The workshop | Extensions with HTTP and sandboxed TypeScript tools, connectors to MCP servers and HTTP APIs, routines with buttons, menus and tables, and a Builder agent that drafts, tests and asks to publish. Approvals, a call log, rollback and export. Sandboxed agents get the Colonyhall tools through their guard. | shipped |
