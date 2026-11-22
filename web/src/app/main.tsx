@@ -21,7 +21,7 @@ if (import.meta.env.PROD) {
 
 createRoot(root).render(
   <StrictMode>
-    <BrowserRouter basename="/app">
+    <BrowserRouter basename="/agent">
       <App />
     </BrowserRouter>
   </StrictMode>,

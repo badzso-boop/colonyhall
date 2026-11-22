@@ -16,7 +16,7 @@ import (
 func serveApp(t *testing.T, dist fstest.MapFS, target string) *httptest.ResponseRecorder {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle("GET /app/", appHandler(dist))
+	mux.Handle("GET /agent/", appHandler(dist))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec
@@ -31,7 +31,7 @@ var builtApp = fstest.MapFS{
 }
 
 func TestAppServesIndexAndFallsBackForRoutes(t *testing.T) {
-	for _, target := range []string{"/app/", "/app/c/123", "/app/wiki/telepites", "/app/index.html"} {
+	for _, target := range []string{"/agent/", "/agent/c/123", "/agent/wiki/telepites", "/agent/index.html"} {
 		rec := serveApp(t, builtApp, target)
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<title>Colonyhall</title>") {
 			t.Fatalf("%s: %d %q", target, rec.Code, rec.Body.String())
@@ -46,28 +46,28 @@ func TestAppServesIndexAndFallsBackForRoutes(t *testing.T) {
 }
 
 func TestAppCachesHashedAssetsOnly(t *testing.T) {
-	rec := serveApp(t, builtApp, "/app/assets/index-abc.js")
+	rec := serveApp(t, builtApp, "/agent/assets/index-abc.js")
 	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
 		t.Fatalf("asset: %d %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatal("asset without nosniff")
 	}
-	rec = serveApp(t, builtApp, "/app/brand/favicon.svg")
+	rec = serveApp(t, builtApp, "/agent/brand/favicon.svg")
 	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "no-cache" {
 		t.Fatalf("public file: %d %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }
 
 func TestAppServesTheManifestWithItsType(t *testing.T) {
-	rec := serveApp(t, builtApp, "/app/manifest.webmanifest")
+	rec := serveApp(t, builtApp, "/agent/manifest.webmanifest")
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/manifest+json" {
 		t.Fatalf("manifest: %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
 }
 
 func TestAppMissingFilesAre404NotTheIndex(t *testing.T) {
-	for _, target := range []string{"/app/assets/gone.js", "/app/missing.png", "/app/.keep"} {
+	for _, target := range []string{"/agent/assets/gone.js", "/agent/missing.png", "/agent/.keep"} {
 		if rec := serveApp(t, builtApp, target); rec.Code != http.StatusNotFound {
 			t.Fatalf("%s: %d, want 404", target, rec.Code)
 		}
@@ -75,22 +75,22 @@ func TestAppMissingFilesAre404NotTheIndex(t *testing.T) {
 }
 
 func TestAppWithoutBuildAnswers503(t *testing.T) {
-	rec := serveApp(t, fstest.MapFS{".keep": {Data: nil}}, "/app/")
+	rec := serveApp(t, fstest.MapFS{".keep": {Data: nil}}, "/agent/")
 	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), "make web") {
 		t.Fatalf("unbuilt: %d %q", rec.Code, rec.Body.String())
 	}
 }
 
-// TestNewRoutesAppToThePWA: /app/ goes to the embedded build (200 when
+// TestNewRoutesAppToThePWA: /agent/ goes to the embedded build (200 when
 // `make web` ran, 503 otherwise), never to the dev page's file server.
 func TestNewRoutesAppToThePWA(t *testing.T) {
 	h := New(http.NewServeMux(), func(context.Context) error { return nil }, slog.New(slog.DiscardHandler))
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/app/c/123", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/agent/c/123", nil))
 	if rec.Code != http.StatusOK && rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("/app/c/123: %d", rec.Code)
+		t.Fatalf("/agent/c/123: %d", rec.Code)
 	}
 	if strings.Contains(rec.Body.String(), "Colonyhall (dev)") || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
-		t.Fatalf("/app/ was not served by the PWA handler: %q", rec.Body.String())
+		t.Fatalf("/agent/ was not served by the PWA handler: %q", rec.Body.String())
 	}
 }

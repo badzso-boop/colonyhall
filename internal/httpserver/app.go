@@ -10,14 +10,14 @@ import (
 	"strings"
 )
 
-// appHandler serves the PWA build (web/dist) under /app/. Hashed files in
+// appHandler serves the PWA build (web/dist) under /agent/. Hashed files in
 // assets/ are cached for a year; everything else, and index.html above all,
 // is revalidated so a deploy shows up on the next load. Paths that are not
 // files fall back to index.html (client-side routing), except paths that
 // look like files (assets/ or an extension), which get a real 404.
 func appHandler(dist fs.FS) http.Handler {
 	files := http.FileServerFS(dist)
-	return http.StripPrefix("/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.StripPrefix("/agent", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 		if name == "" || name == "index.html" {

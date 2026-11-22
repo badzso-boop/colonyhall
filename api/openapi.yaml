@@ -7152,7 +7152,7 @@ components:
       type: object
       required: [url, expires_at]
       properties:
-        url: { type: string, description: "https://<slug>.<domain>/app/invite#<token>; shown once" }
+        url: { type: string, description: "https://<slug>.<domain>/agent/invite#<token>; shown once" }
         expires_at: { type: string, format: date-time }
     CreatedCustomer:
       type: object

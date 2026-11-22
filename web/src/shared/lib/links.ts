@@ -17,5 +17,5 @@ export function messageHref(m: MessageRef): string {
 
 /** The full, shareable URL of a message ("Copy link"). */
 export function messageURL(m: MessageRef, origin: string): string {
-  return `${origin}/app${messageHref(m)}`;
+  return `${origin}/agent${messageHref(m)}`;
 }

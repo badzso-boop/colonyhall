@@ -53,7 +53,7 @@ func NewWithTimeouts(api *http.ServeMux, ready func(context.Context) error, logg
 	if err != nil {
 		panic(err)
 	}
-	api.Handle("GET /app/", appHandler(dist))
+	api.Handle("GET /agent/", appHandler(dist))
 	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist), deadlines(t, api))))
 }
 
