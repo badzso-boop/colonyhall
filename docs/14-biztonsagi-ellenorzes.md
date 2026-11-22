@@ -4,13 +4,15 @@
 
 Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatkozik rá.
 
-**Tudatosan kimarad (Norbi döntése, 2026-11-12):** HTTPS és HSTS, a karbantartó PC-jén nem root őr, a homelab `bypassPermissions` agentje, a homelab LAN-portjai. A szerver alapból `127.0.0.1`-en figyel; magánhálózaton (pl. Tailscale) érdemes futtatni.
+**Tudatosan kimarad (Norbi döntése, 2026-11-12):** a karbantartó PC-jén nem root őr, a homelab `bypassPermissions` agentje, a homelab LAN-portjai. A szerver alapból `127.0.0.1`-en figyel; magánhálózaton (pl. Tailscale) érdemes futtatni.
+
+**Frissítés (2026-11-22):** `colonyhall.ujjweb.hu` nyilvánosan elérhető, host nginx + Cloudflare Tunnel mögött (TLS a Cloudflare élén terminál, a nginx és a szerver közötti kapcsolat a géphelyi Tailscale-címen, plaintext, bizalmi határon belül — ugyanaz a minta, mint a többi ujjweb.hu-szolgáltatásnál). Ezzel a V9.1.1 és V3.4.1 sorok ✅-ra váltanak: `COLONY_SECURE_COOKIES=1`, a nginx a valódi kliens-IP-t `X-Forwarded-For`-ban adja tovább, a szerver `COLONY_TRUSTED_PROXIES`-ban megbízik a nginx címében. A V4.3.1 (admin MFA hiánya) és a V2.1.7 (kiszivárgott jelszó ellenőrzés hiánya) változatlanul nyitott — ezekig különösen fontos erős, egyedi jelszót használni az admin fiókon.
 
 ## Összesítés
 
 | Mérce | ✅ | 🟡 | ❌ | – |
 |---|---|---|---|---|
-| ASVS 4.0 L2 (37 pont) | 29 | 4 | 3 | 1 |
+| ASVS 4.0 L2 (37 pont) | 31 | 3 | 2 | 1 |
 | LLM Top 10 (10 pont) | 6 | 2 | 0 | 2 |
 
 ## ASVS 4.0, 2. szint
@@ -27,7 +29,7 @@ Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatk
 | V3.2.1 | Új munkamenet-token belépéskor | ✅ | Belépéskor új munkamenet (`identity/session.go`) |
 | V3.3.1 | Kilépéskor a munkamenet érvénytelen | ✅ | A munkamenet a szerveren visszavonódik |
 | V3.3.2 | Újrahitelesítés legalább 30 naponta | ✅ | `SessionTTL` 30 nap |
-| V3.4.1 | Süti `Secure` jelzővel | 🟡 | Csak `COLONY_SECURE_COOKIES=1`-gyel (HTTPS nélkül nem lehet); a HTTPS kimarad |
+| V3.4.1 | Süti `Secure` jelzővel | ✅ | `COLONY_SECURE_COOKIES=1`, a `colonyhall.ujjweb.hu` TLS-en (Cloudflare Tunnel) fut (2026-11-22) |
 | V3.4.2–3 | Süti `HttpOnly`, `SameSite` | ✅ | `HttpOnly`, `SameSite=Lax` (`identity/httpapi/handlers.go`) |
 | V3.5.x | Token alapú munkamenet | ✅ | A tokenek csak hash-elve, a megjeleníthető előtag 8 karakter (`TokenPrefix`, fuzz-teszt) |
 | V3.5.3 | Egy MCP-munkamenet nem vehető át | ✅ | A munkamenet a megnyitó szereplőhöz kötve (`f63d273`) |
@@ -46,13 +48,13 @@ Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatk
 | V7.x | Biztonsági események naplózása | ✅ | Hash-láncolt audit (`audit/model.go`), `auth.locked_out` |
 | V8.1.1 | Érzékeny válasz nem kerül gyorsítótárba | ✅ | Az API válaszai `Cache-Control: no-store` (`0ce1c2b`) |
 | V8.3.x | Érzékeny adat kezelése | 🟡 | A titkok csak a `colonyhall-exchange` mappán át; a beszélgetések titkosítatlanul az adatbázisban (az üzemeltető gépén) |
-| V9.1.1 | TLS minden kapcsolaton | ❌ | Nincs beépített HTTPS (döntés); magánhálózat ajánlott |
+| V9.1.1 | TLS minden kapcsolaton | ✅ | A böngésző és a Cloudflare él között TLS; onnan a Tunnelen és a géphelyi nginx-en keresztül a szerverig plaintext, bizalmi határon belül (2026-11-22) |
 | V12.1.x | Feltöltési méret és tárolás | ✅ | Méretkorlát, a feltöltés lemezen várakozik, nem memóriában (`70b9388`) |
 | V12.3.x | Útvonal-bejárás elleni védelem | ✅ | A mappaböngésző feloldja a symlinkeket (`dca04b5`); fájllinkek vezérlőkarakter nélkül (`6a22c3a`) |
 | V12.5.x | Feltöltött fájl kiszolgálása | ✅ | `Content-Disposition: attachment`, `nosniff` |
 | V13.1.x | API-szerződés és típusellenőrzés | 🟡 | OpenAPI-szerződés, minden e2e-válasz ellenőrizve; a kérések tartalomtípusát nem minden végpont ellenőrzi külön |
 | V14.2.x | Függőségek | ✅ | `govulncheck`, `npm audit`, Dependabot (`a7034f6`), rögzített image-digestek (`f6b6d4e`) |
-| V14.3.x / 14.4.x | Biztonsági fejlécek | 🟡 | CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP megvan; HSTS nincs (HTTPS nélkül nincs értelme) |
+| V14.3.x / 14.4.x | Biztonsági fejlécek | 🟡 | CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP megvan; HSTS-t a Cloudflare élen kellene bekapcsolni, a szerver maga nem küldi |
 | V14.x | Futtatókörnyezet megszigorítása | ✅ | Csak olvasható gyökér, `cap_drop: ALL`, `no-new-privileges`, memória- és PID-korlát (`e976960`); a build-környezetbe nem kerül titok vagy git-előzmény (`9cf0f28`); a kiadás aláíró tokenje el van választva a függőségek kódjától (`1d28804`) |
 
 ## OWASP Top 10 for LLM Applications (2025)
@@ -85,5 +87,5 @@ A `go test` a mintákat futtatja; hosszabb futás például: `go test ./internal
 ## Nyitott (Norbi döntése)
 
 1. Kiszivárgott jelszavak ellenőrzése (V2.1.7).
-2. MFA az admin felülethez (V4.3.1), legkésőbb a többbérlős operátornál.
-3. HTTPS és HSTS (V9, V14.4): kimarad, amíg csak magánhálózaton fut.
+2. MFA az admin felülethez (V4.3.1) — a nyilvános elérés (2026-11-22) óta ez a legfontosabb nyitott pont: egy admin jelszó kompromittálódása most már nem igényel VPN-hozzáférést is.
+3. HSTS a Cloudflare élen (V14.4): a TLS megvan, a HSTS-fejlécet még be kell kapcsolni a Cloudflare oldalán.
