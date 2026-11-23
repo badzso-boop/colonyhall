@@ -116,7 +116,7 @@ func newFixture(t *testing.T, backend string, owner identity.Actor) *fixture {
 	mux := http.NewServeMux()
 	RegisterProxy(mux, svc, fakeAuth{by: map[string]identity.Actor{
 		"admin": admin, "member": member, "stranger": stranger, "agent": agent,
-	}}, slog.New(slog.DiscardHandler))
+	}}, slog.New(slog.DiscardHandler), true)
 	f.proxy = httptest.NewServer(mux)
 	t.Cleanup(f.proxy.Close)
 	return f
@@ -374,5 +374,41 @@ func TestLinksURL(t *testing.T) {
 	}
 	if got := (Links{Origin: "https://preview.example.com/", Port: "8081"}).URL(r, "p1"); got != "https://preview.example.com/api/v1/previews/p1/proxy/" {
 		t.Fatalf("origin: %q", got)
+	}
+}
+
+// The proxy never dials link-local (cloud metadata) or unspecified
+// addresses, nor loopback unless allowed, whatever the guard reported.
+func TestDialGuard(t *testing.T) {
+	strict, loose := dialGuard(false), dialGuard(true)
+	for addr, ok := range map[string]bool{
+		"100.64.0.5:41000": true, "192.0.2.10:41000": true, "[2001:db8::1]:80": true,
+		"127.0.0.1:41000": false, "[::1]:80": false, "169.254.169.254:80": false,
+		"[fe80::1]:80": false, "0.0.0.0:80": false, "[::ffff:169.254.169.254]:80": false, "224.0.0.1:80": false,
+	} {
+		if err := strict("tcp", addr, nil); (err == nil) != ok {
+			t.Errorf("strict %s: %v", addr, err)
+		}
+	}
+	if err := loose("tcp", "127.0.0.1:41000", nil); err != nil {
+		t.Errorf("loopback allowed: %v", err)
+	}
+	if err := loose("tcp", "169.254.169.254:80", nil); err == nil {
+		t.Error("metadata address allowed with loopback")
+	}
+}
+
+func TestProxyRefusesBlockedTarget(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("a loopback preview was dialled")
+	}))
+	defer backend.Close()
+	f := newFixture(t, backend.URL, agent)
+	mux := http.NewServeMux()
+	RegisterProxy(mux, &preview.Service{Store: f.store, Directory: directory{}, Clock: f.clock},
+		fakeAuth{by: map[string]identity.Actor{"admin": admin}}, slog.New(slog.DiscardHandler), false)
+	f.proxy.Config.Handler = mux
+	if res := f.do(t, "GET", "/", "admin", nil, nil); res.StatusCode != http.StatusBadGateway {
+		t.Fatalf("loopback target: %d", res.StatusCode)
 	}
 }

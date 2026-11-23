@@ -22,7 +22,7 @@ import (
 // preview listener. The app's own listener never proxies (its origin
 // carries the person's session).
 func TestPreviewProxyLifecycle(t *testing.T) {
-	e := newEnvWith(t, func(o *server.Options) { o.PreviewAddr = ":18081" })
+	e := newEnvWith(t, func(o *server.Options) { o.PreviewAddr, o.PreviewAllowLoopback = ":18081", true })
 	if e.app.PreviewHandler == nil {
 		t.Fatal("no preview handler with PreviewAddr set")
 	}

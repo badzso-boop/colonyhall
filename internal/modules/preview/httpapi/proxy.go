@@ -11,8 +11,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/netip"
 	"net/url"
 	"strings"
+	"syscall"
+	"time"
 
 	"colonyhall/internal/httpx"
 	"colonyhall/internal/modules/identity"
@@ -62,16 +65,50 @@ var strippedRequestHeaders = []string{"Authorization", httpx.CSRFHeader}
 // RegisterProxy mounts the reverse proxy on the preview listener's mux.
 // Only there: on the app's own origin a preview's scripts would act with
 // the person's session.
-func RegisterProxy(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAuthenticator, logger *slog.Logger) {
+//
+// allowLoopback lets it reach 127.0.0.0/8 and ::1 (a guard on the
+// server's own machine; tests). Link-local (cloud metadata), unspecified
+// and multicast addresses are never reached.
+func RegisterProxy(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAuthenticator, logger *slog.Logger, allowLoopback bool) {
 	h := &proxyHandler{svc: svc, auth: auth, log: logger}
+	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second, Control: dialGuard(allowLoopback)}
+	h.transport = &http.Transport{DialContext: d.DialContext, MaxIdleConns: 100, IdleConnTimeout: 90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 2 * time.Minute}
 	mux.Handle("/api/v1/previews/{previewId}/proxy", h)
 	mux.Handle("/api/v1/previews/{previewId}/proxy/{path...}", h)
 }
 
 type proxyHandler struct {
-	svc  *preview.Service
-	auth identity.RequestAuthenticator
-	log  *slog.Logger
+	svc       *preview.Service
+	auth      identity.RequestAuthenticator
+	log       *slog.Logger
+	transport http.RoundTripper
+}
+
+// errBlockedTarget: the guard reported an address the proxy never dials.
+var errBlockedTarget = errors.New("preview address not allowed")
+
+// dialGuard checks the address actually dialled (after DNS), so a name
+// that resolves to a refused address is refused too.
+func dialGuard(allowLoopback bool) func(network, address string, _ syscall.RawConn) error {
+	return func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return errBlockedTarget
+		}
+		ip, err := netip.ParseAddr(host)
+		if err != nil {
+			return errBlockedTarget
+		}
+		ip = ip.Unmap()
+		switch {
+		case ip.IsLoopback() && !allowLoopback,
+			ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsInterfaceLocalMulticast(),
+			ip.IsMulticast(), ip.IsUnspecified():
+			return errBlockedTarget
+		}
+		return nil
+	}
 }
 
 // authenticate is RequireAuth without the CSRF check: the preview's own
@@ -120,6 +157,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rp := &httputil.ReverseProxy{
+		Transport: h.transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			// The path stays as it is: the preview runs with this base
 			// (COLONY_PREVIEW_BASE).
@@ -141,7 +179,11 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			h.log.Info("preview proxy: backend unreachable", "preview", id, "err", err)
+			if errors.Is(err, errBlockedTarget) {
+				h.log.Warn("preview proxy: refused address", "preview", id, "host", p.HostID, "target", target.Host)
+			} else {
+				h.log.Info("preview proxy: backend unreachable", "preview", id, "err", err)
+			}
 			offline(w, r, p.State)
 		},
 	}
