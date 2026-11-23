@@ -2856,6 +2856,17 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
 
+  /previews/{previewId}/restart:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: restartPreview
+      tags: [previews]
+      description: "Humans: an admin, or a person who manages the agent. Round 57: asks the agent's machine to start the preview again with the same name, compose file and conversation (a new preview, state requested, default TTL); the guard validates the compose file again. If one with this name is already active, that one is returned. 400 when the agent is no longer active or allowed previews."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Requested, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
+
   /previews/{previewId}/proxy:
     parameters:
       - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }

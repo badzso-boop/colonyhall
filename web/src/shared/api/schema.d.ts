@@ -3118,6 +3118,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/previews/{previewId}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Humans: an admin, or a person who manages the agent. Round 57: asks the agent's machine to start the preview again with the same name, compose file and conversation (a new preview, state requested, default TTL); the guard validates the compose file again. If one with this name is already active, that one is returned. 400 when the agent is no longer active or allowed previews. */
+        post: operations["restartPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/previews/{previewId}/proxy": {
         parameters: {
             query?: never;
@@ -12494,6 +12513,29 @@ export interface operations {
         responses: {
             /** @description Stopped */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    restartPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Requested */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

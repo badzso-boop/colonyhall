@@ -133,6 +133,19 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 		httpx.JSON(w, http.StatusOK, previewOut(r, links, p))
 	}))
 
+	mux.Handle("POST /api/v1/previews/{previewId}/restart", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "previewId")
+		if !ok {
+			return
+		}
+		p, err := svc.Restart(r.Context(), httpx.Actor(r), id)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, previewOut(r, links, p))
+	}))
+
 	// Round 57: the app's own origin never proxies a preview (its scripts
 	// would act with the person's session); the proxy is on the preview
 	// listener (RegisterProxy). Behind RequireAuth, so a break-glass

@@ -32,7 +32,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [notes](#notes) (1)
 - [operator](#operator) (20)
 - [planner](#planner) (11)
-- [previews](#previews) (10)
+- [previews](#previews) (11)
 - [question](#question) (2)
 - [runs](#runs) (10)
 - [saved](#saved) (4)
@@ -2990,6 +2990,20 @@ As proxyPreviewRoot, for the rest of the path.
 | 101 | WebSocket upgrade (live reload), forwarded to the preview |
 | 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
 | 502 | The preview is not running or does not answer: string (`text/html`) |
+
+### `POST /previews/{previewId}/restart`
+
+`restartPreview` · Auth: signed in
+
+Humans: an admin, or a person who manages the agent. Round 57: asks the agent's machine to start the preview again with the same name, compose file and conversation (a new preview, state requested, default TTL); the guard validates the compose file again. If one with this name is already active, that one is returned. 400 when the agent is no longer active or allowed previews.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 201 | Requested: [Preview](#preview) (`application/json`) |
 
 ### `POST /previews/{previewId}/stop`
 
