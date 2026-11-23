@@ -16,6 +16,7 @@ import { registerHostEvents } from "@/features/hosts";
 import { registerIdentityEvents, useSession } from "@/features/identity";
 import { registerLeaseEvents } from "@/features/leases";
 import { registerPlannerEvents } from "@/features/planner";
+import { registerPreviewEvents } from "@/features/previews";
 import { registerQuestionEvents } from "@/features/questions";
 import { registerRulesEvents } from "@/features/rules";
 import { registerSavedEvents } from "@/features/saved";
@@ -55,6 +56,7 @@ function useLiveUpdates(enabled: boolean) {
       registerLeaseEvents(qc),
       registerRulesEvents(qc),
       registerHostEvents(qc),
+      registerPreviewEvents(qc),
       registerFilesEvents(qc),
       registerSavedEvents(qc),
       registerActivityEvents(qc),

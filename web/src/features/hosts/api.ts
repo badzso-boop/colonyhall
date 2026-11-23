@@ -7,12 +7,11 @@ import { ApiError, api, onResync, onUntypedEvent, unwrap, type Schemas } from "@
 export type ClaudeLimits = Schemas["ClaudeLimits"];
 export type Host = Schemas["Host"];
 export type HostDirEntry = Schemas["HostDirEntry"];
-export type Preview = Schemas["Preview"];
+export type { Preview } from "@/features/previews";
 
 export const hostKeys = {
   list: ["hosts", "list"] as const,
   limits: ["hosts", "claude-limits"] as const,
-  previews: ["hosts", "previews"] as const,
   dirs: (hostId: string, path: string) => ["hosts", hostId, "dirs", path] as const,
 };
 
@@ -152,17 +151,8 @@ export function useCreatePairingCode() {
 }
 
 /** The workspace's previews; the caller filters them to a machine. */
-export function usePreviews(enabled = true) {
-  return useQuery({ queryKey: hostKeys.previews, enabled, queryFn: async () => unwrap(await api.GET("/previews")).previews });
-}
-
-export function useStopPreview() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (previewId: string) => unwrap(await api.POST("/previews/{previewId}/stop", { params: { path: { previewId } } })),
-    onSettled: () => void qc.invalidateQueries({ queryKey: hostKeys.previews }),
-  });
-}
+// Previews are their own feature since round 57 (the live preview).
+export { usePreviews, useStopPreview } from "@/features/previews";
 
 const hostEvents = [
   "host.enrolled",
@@ -179,17 +169,13 @@ const hostEvents = [
   "agent.created",
   "agent.archived",
 ];
-const previewEvents = ["preview.requested", "preview.running", "preview.stopped", "preview.failed"];
 
 /** Live updates of the machine pages: every host or agent change re-reads the list. */
 export function registerHostEvents(qc: QueryClient): () => void {
   const hosts = () => invalidateHosts(qc);
-  const previews = () => void qc.invalidateQueries({ queryKey: hostKeys.previews });
   const offs = [
     ...hostEvents.map((t) => onUntypedEvent(t, hosts)),
-    ...previewEvents.map((t) => onUntypedEvent(t, previews)),
     onResync(hosts),
-    onResync(previews),
   ];
   return () => offs.forEach((off) => off());
 }

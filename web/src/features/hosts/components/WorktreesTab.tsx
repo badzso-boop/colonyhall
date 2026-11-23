@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, GitBranch, MonitorPlay } from "lucide-react";
 import { useActors } from "@/features/identity";
+import { usePreviewParam } from "@/features/previews";
 import { localeOf } from "@/shared/i18n";
 import { fullTime, relativeTime, sanitizeUrl } from "@/shared/lib";
 import { Badge, Button, Dialog, EmptyState, toast } from "@/shared/ui";
@@ -21,6 +22,7 @@ export function WorktreesTab({ host, now }: { host: Host; now: Date }) {
   const previews = usePreviews();
   const stop = useStopPreview();
   const [confirm, setConfirm] = useState<Preview | null>(null);
+  const [, openPreview] = usePreviewParam();
   const handle = (id: string) => {
     const a = host.agents.find((x) => x.agent_id === id);
     return `@${a?.handle ?? actors.data?.get(id)?.handle ?? id.slice(0, 8)}`;
@@ -76,8 +78,13 @@ export function WorktreesTab({ host, now }: { host: Host; now: Date }) {
                       {t("previews.expires", { when: relativeTime(p.expires_at, now, locale) })}
                     </span>
                   ) : null}
+                  {p.state === "running" && p.proxy_url ? (
+                    <Button size="sm" className="ml-auto" icon={<MonitorPlay className="size-4" />} onClick={() => openPreview(p.id)}>
+                      {t("previews.open")}
+                    </Button>
+                  ) : null}
                   {live ? (
-                    <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirm(p)}>
+                    <Button size="sm" variant="danger" className={p.state === "running" && p.proxy_url ? undefined : "ml-auto"} onClick={() => setConfirm(p)}>
                       {t("previews.stop")}
                     </Button>
                   ) : null}

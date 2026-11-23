@@ -1,0 +1,27 @@
+{
+  "title": "Live preview",
+  "start": "Start preview",
+  "open": "Preview",
+  "stop": "Stop",
+  "refresh": "Refresh",
+  "openNewTab": "Open in new tab",
+  "close": "Close",
+  "cancel": "Cancel",
+  "offline": "The preview is not running ({{state}}). It shows here as soon as it starts.",
+  "noProxy": "The server has no preview proxy (COLONY_PREVIEW_ADDR), so it cannot open here.",
+  "resize": "Width of the preview",
+  "frame": "Preview of {{name}}",
+  "askAgent": "Please start a live preview (preview_start) of the app with a compose.yaml.",
+  "startHint": "Puts a request to the agent in the composer: the agent starts the preview with its own compose file.",
+  "confirmTitle": "Stop the preview {{name}}?",
+  "confirmBody": "The preview's containers stop. The panel can be closed and reopened later; the agent can start a stopped preview again.",
+  "stopped": "The preview stopped.",
+  "stopFailed": "Could not stop the preview.",
+  "notFound": "This preview was not found.",
+  "states": {
+    "requested": "starting",
+    "running": "running",
+    "stopped": "stopped",
+    "failed": "failed"
+  }
+}

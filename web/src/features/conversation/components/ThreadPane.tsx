@@ -11,6 +11,7 @@ import { EmptyState, IconButton, Skeleton } from "@/shared/ui";
 import { GrantBar } from "@/features/approvals";
 import { CompactionLive } from "@/features/compaction";
 import { useActors, useSession } from "@/features/identity";
+import { PreviewHeaderButton } from "@/features/previews";
 import { useChannels, useMarkThreadRead, useThread } from "../api";
 import { useAttachments } from "../attachments";
 import { useViewer } from "../viewer";
@@ -59,7 +60,12 @@ export function ThreadPane({ rootId }: { rootId: string }) {
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
       <h2 className="text-title font-semibold">{t("message.thread")}</h2>
       {channel && channel.kind !== "dm" ? <span className="truncate text-ui text-fg-muted"># {channel.name}</span> : null}
-      <IconButton className="ml-auto" label={t("message.closeThread")} icon={<X className="size-4" />} onClick={() => dispatch({ type: "closeThread" })} />
+      {human && channelId ? (
+        <span className="ml-auto">
+          <PreviewHeaderButton channelId={channelId} threadRootId={rootId} target="thread" />
+        </span>
+      ) : null}
+      <IconButton className={human && channelId ? undefined : "ml-auto"} label={t("message.closeThread")} icon={<X className="size-4" />} onClick={() => dispatch({ type: "closeThread" })} />
     </header>
   );
   if (thread.isError) return <div className="flex h-full flex-col">{header}<EmptyState title={t("notFound")} /></div>;

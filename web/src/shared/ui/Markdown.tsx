@@ -3,7 +3,7 @@
 
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Check, Copy, FileText } from "lucide-react";
-import { cn, parseMarkdown, sanitizeUrl, splitChips, type Block, type Chip, type FileLink, type Inline } from "@/shared/lib";
+import { cn, interceptLink, parseMarkdown, sanitizeUrl, splitChips, type Block, type Chip, type FileLink, type Inline } from "@/shared/lib";
 
 export type MarkdownProps = {
   text: string;
@@ -81,7 +81,17 @@ function inline(nodes: Inline[] | undefined, ctx: Ctx): ReactNode {
         const href = sanitizeUrl(n.href);
         if (!href) return <Fragment key={i}>{n.raw ?? n.text}</Fragment>;
         return (
-          <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="text-accent-text underline-offset-2 hover:underline">
+          <a
+            key={i}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent-text underline-offset-2 hover:underline"
+            onClick={(e) => {
+              // A plain click on a link the app opens itself (a preview, round 57).
+              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && interceptLink(href)) e.preventDefault();
+            }}
+          >
             {inline(n.children ?? [{ type: "text", text: n.text }], ctx)}
           </a>
         );

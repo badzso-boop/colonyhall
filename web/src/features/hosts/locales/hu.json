@@ -190,7 +190,8 @@
     "confirmTitle": "Leállítod a(z) {{name}} előnézetet?",
     "confirmBody": "Az előnézet konténerei leállnak, a link megszűnik.",
     "stopped": "Az előnézet leállt.",
-    "stopFailed": "Nem sikerült leállítani az előnézetet."
+    "stopFailed": "Nem sikerült leállítani az előnézetet.",
+    "open": "Megnyitás itt"
   },
   "settings": {
     "name": "Név",
