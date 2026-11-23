@@ -31,8 +31,36 @@ func qjsModule(memoryMB int) ([]byte, error) {
 		if wasmErr == nil {
 			wasmBytes, wasmErr = capMemory(raw, uint64(memoryMB)*1024*1024/PageSize)
 		}
+		if wasmErr == nil {
+			wasmErr = precompile(wasmBytes, memoryMB)
+		}
 	})
 	return wasmBytes, wasmErr
+}
+
+// precompile has the qjs package compile the module once, with a context
+// that is never cancelled. The package caches the compiled module process-wide
+// (keyed by the bytes), so the compilation (seconds under load or the race
+// detector) is not counted against the first tool's time limit.
+func precompile(module []byte, memoryMB int) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("compile the QuickJS module: %v", p)
+		}
+	}()
+	dir, err := os.MkdirTemp("", "colonyhall-ext-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	// The same Option shape as Run (CloseOnContextDone is part of the cached runtime config).
+	rt, err := qjs.New(qjs.Option{QuickJSWasmBytes: module, CWD: dir, Context: context.Background(), CloseOnContextDone: true,
+		MemoryLimit: memoryMB * 1024 * 1024, Stdout: io.Discard, Stderr: io.Discard})
+	if err != nil {
+		return fmt.Errorf("compile the QuickJS module: %w", err)
+	}
+	rt.Close()
+	return nil
 }
 
 // prelude builds the ctx object the tool function gets. The host calls go
