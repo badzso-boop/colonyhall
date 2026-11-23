@@ -40,7 +40,7 @@ func TestSecurityHeadersPerArea(t *testing.T) {
 	mux := http.NewServeMux()
 	h := NewWithTimeouts(mux, func(context.Context) error { return nil }, slog.Default(), Timeouts{})
 	for path, wantCSP := range map[string]string{
-		"/agent/":      "script-src 'self'",
+		"/agent/":    "script-src 'self'",
 		"/healthz":   devPageCSP,
 		"/api/v1/me": apiCSP,
 	} {
