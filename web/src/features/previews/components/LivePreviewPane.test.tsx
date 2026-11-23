@@ -36,6 +36,7 @@ function setup(ui: React.ReactNode, previews: Preview[] = [running]) {
       calls.push(`${req.method} ${path}`);
       const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
       if (path.endsWith("/stop")) return json({ ...running, state: "stopped" });
+      if (path.endsWith("/restart")) return json({ ...running, id: "p2", state: "requested" });
       if (path.endsWith("/previews")) return json({ previews });
       return json({});
     }),
@@ -132,4 +133,15 @@ test("on a narrow screen the preview is a full-screen sheet without a divider", 
   setup(<PreviewColumn previewId="p1" narrow onClose={() => {}} />);
   expect(screen.getByRole("dialog", { name: "Élő előnézet" })).toBeTruthy();
   expect(screen.queryByRole("separator")).toBeNull();
+});
+
+test("a stopped preview restarts from the toolbar", async () => {
+  const calls = setup(<LivePreviewPane previewId="p1" onClose={() => {}} />, [{ ...running, state: "stopped" }]);
+  fireEvent.click(screen.getByRole("button", { name: "Újraindítás" }));
+  await waitFor(() => expect(calls).toContain("POST /api/v1/previews/p1/restart"));
+});
+
+test("a running preview shows no restart button", () => {
+  setup(<LivePreviewPane previewId="p1" onClose={() => {}} />);
+  expect(screen.queryByRole("button", { name: "Újraindítás" })).toBeNull();
 });

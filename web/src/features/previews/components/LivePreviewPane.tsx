@@ -8,7 +8,8 @@ import { useActors } from "@/features/identity";
 import { useLocalStorage } from "@/shared/hooks";
 import { cn, sanitizeUrl } from "@/shared/lib";
 import { Badge, Button, Dialog, EmptyState, IconButton, toast } from "@/shared/ui";
-import { usePreviews, useStopPreview } from "../api";
+import { usePreviews, useRestartPreview, useStopPreview } from "../api";
+import { usePreviewParam } from "../pane";
 import { blocker, clampWidth, DEFAULT_WIDTH, dragWidth, MIN_WIDTH, WIDTH_KEY, type Preview } from "../model";
 
 const stateTone = { requested: "info", running: "success", stopped: "neutral", failed: "danger" } as const;
@@ -24,6 +25,8 @@ export function LivePreviewPane({ previewId, onClose }: { previewId: string; onC
   const previews = usePreviews();
   const actors = useActors();
   const stop = useStopPreview();
+  const restart = useRestartPreview();
+  const [, open] = usePreviewParam();
   const [reload, setReload] = useState(0);
   const [confirm, setConfirm] = useState(false);
   const p: Preview | undefined = previews.data?.find((x) => x.id === previewId);
@@ -52,6 +55,25 @@ export function LivePreviewPane({ previewId, onClose }: { previewId: string; onC
         ) : null}
         {p && (p.state === "running" || p.state === "requested") ? (
           <IconButton size="sm" label={t("stop")} icon={<CircleStop className="size-4 text-danger" />} onClick={() => setConfirm(true)} />
+        ) : null}
+        {p && (p.state === "stopped" || p.state === "failed") ? (
+          <Button
+            size="sm"
+            icon={<RotateCw className="size-4" />}
+            title={t("restartHint", { name: p.name })}
+            loading={restart.isPending}
+            onClick={() =>
+              restart.mutate(p.id, {
+                onSuccess: (np) => {
+                  toast(t("restarting"));
+                  open(np.id);
+                },
+                onError: () => toast(t("restartFailed"), { tone: "danger" }),
+              })
+            }
+          >
+            {t("restart")}
+          </Button>
         ) : null}
         <IconButton size="sm" label={t("close")} icon={<X className="size-4" />} onClick={onClose} />
       </div>

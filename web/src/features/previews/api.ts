@@ -19,6 +19,15 @@ export function useStopPreview() {
   });
 }
 
+/** Round 57: a person starts a stopped preview again with its last compose file. */
+export function useRestartPreview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (previewId: string) => unwrap(await api.POST("/previews/{previewId}/restart", { params: { path: { previewId } } })),
+    onSettled: () => void qc.invalidateQueries({ queryKey: previewKeys.all }),
+  });
+}
+
 const previewEvents = ["preview.requested", "preview.running", "preview.stopped", "preview.failed"];
 
 /** Live updates: every preview change re-reads the list. */

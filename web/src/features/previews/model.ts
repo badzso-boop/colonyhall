@@ -33,10 +33,21 @@ export const isLive = (p: Pick<Preview, "state">) => p.state === "running" || p.
  * channel (and thread, when given), or null.
  */
 export function previewFor(previews: Preview[], channelId: string, threadRootId?: string | null): Preview | null {
-  const here = previews
+  return here(previews, channelId, threadRootId).find(isLive) ?? null;
+}
+
+/**
+ * The newest preview of this conversation in any state, or null: a
+ * stopped one can be restarted with its last compose file.
+ */
+export function lastPreviewFor(previews: Preview[], channelId: string, threadRootId?: string | null): Preview | null {
+  return here(previews, channelId, threadRootId)[0] ?? null;
+}
+
+function here(previews: Preview[], channelId: string, threadRootId?: string | null): Preview[] {
+  return previews
     .filter((p) => p.channel_id === channelId && (!threadRootId || p.thread_root_id === threadRootId))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  return here.find(isLive) ?? null;
 }
 
 /**

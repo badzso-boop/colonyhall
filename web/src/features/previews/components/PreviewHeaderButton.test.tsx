@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Ujj Norbert
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { useComposerInsert } from "@/shared/lib";
 import { previewKeys } from "../api";
@@ -43,8 +43,23 @@ test("with a live preview here the button opens the split view, keeping the pane
   expect(q.get("thread")).toBe("t9");
 });
 
-test("without one it asks the agent in the composer", () => {
+test("with a stopped one it restarts it and opens the new preview", async () => {
   setup([{ ...running, state: "stopped" }]);
+  const fetchMock = vi.mocked(fetch);
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    const req = input instanceof Request ? input : new Request(String(input));
+    if (req.method === "POST" && req.url.endsWith("/previews/p1/restart")) {
+      return new Response(JSON.stringify({ ...running, id: "p2", state: "requested" }), { status: 201, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ previews: [] }), { headers: { "Content-Type": "application/json" } });
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Újraindítás" }));
+  await waitFor(() => expect(new URLSearchParams(screen.getByTestId("where").textContent!).get("preview")).toBe("p2"));
+  expect(useComposerInsert.getState().text ?? "").not.toContain("preview_start");
+});
+
+test("with none here it asks the agent in the composer", () => {
+  setup([{ ...running, channel_id: "other" }]);
   const before = useComposerInsert.getState().nonce;
   fireEvent.click(screen.getByRole("button", { name: "Előnézet indítása" }));
   expect(useComposerInsert.getState().nonce).toBe(before + 1);
