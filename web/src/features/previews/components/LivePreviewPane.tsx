@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, MonitorPlay, RotateCw, Square, X } from "lucide-react";
+import { CircleStop, ExternalLink, MonitorPlay, RotateCw, X } from "lucide-react";
 import { useActors } from "@/features/identity";
 import { useLocalStorage } from "@/shared/hooks";
 import { cn, sanitizeUrl } from "@/shared/lib";
@@ -51,7 +51,7 @@ export function LivePreviewPane({ previewId, onClose }: { previewId: string; onC
           </a>
         ) : null}
         {p && (p.state === "running" || p.state === "requested") ? (
-          <IconButton size="sm" label={t("stop")} icon={<Square className="size-4" />} onClick={() => setConfirm(true)} />
+          <IconButton size="sm" label={t("stop")} icon={<CircleStop className="size-4 text-danger" />} onClick={() => setConfirm(true)} />
         ) : null}
         <IconButton size="sm" label={t("close")} icon={<X className="size-4" />} onClick={onClose} />
       </div>
