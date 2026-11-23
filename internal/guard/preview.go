@@ -273,6 +273,12 @@ func ValidateComposeYAML(raw []byte, composePath, rootDir string) (*ComposeInfo,
 			var isBind bool
 			switch val := v.(type) {
 			case string:
+				// Compose interpolates variables before it splits the
+				// string, so "${X}" may become any bind mount: refuse
+				// every variable, whatever the colon count.
+				if strings.Contains(val, "$") {
+					return nil, fmt.Errorf("refused: service %q volume %q uses ~ or a variable", sName, val)
+				}
 				parts := strings.Split(val, ":")
 				// A single container path ("/app/node_modules") is an
 				// anonymous volume, not a bind mount of a host path.
@@ -288,6 +294,11 @@ func ValidateComposeYAML(raw []byte, composePath, rootDir string) (*ComposeInfo,
 					}
 				}
 			case map[string]any:
+				for _, k := range []string{"source", "target"} {
+					if v, ok := val[k].(string); ok && strings.Contains(v, "$") {
+						return nil, fmt.Errorf("refused: service %q volume %q uses ~ or a variable", sName, v)
+					}
+				}
 				if sVal, ok := val["source"].(string); ok {
 					if strings.Contains(sVal, "docker.sock") {
 						return nil, fmt.Errorf("refused: service %q mounts docker socket", sName)

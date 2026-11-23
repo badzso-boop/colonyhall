@@ -59,6 +59,12 @@ func TestAnonymousVolumeAllowedBindStillChecked(t *testing.T) {
 	if _, err := ValidateComposeYAML([]byte(ok), filepath.Join(root, "compose.yaml"), root); err != nil {
 		t.Fatalf("anonymous volume refused: %v", err)
 	}
+	for _, v := range []string{"${X}", "$X", "./a:${Y}", "{ type: bind, source: \"${X}\", target: /h }"} {
+		raw := "services:\n  web:\n    image: x\n    volumes:\n      - " + v + "\n"
+		if _, err := ValidateComposeYAML([]byte(raw), filepath.Join(root, "compose.yaml"), root); err == nil {
+			t.Fatalf("volume with a variable accepted: %s", v)
+		}
+	}
 	bad := "services:\n  web:\n    image: x\n    volumes:\n      - /etc:/app/etc\n"
 	if _, err := ValidateComposeYAML([]byte(bad), filepath.Join(root, "compose.yaml"), root); err == nil || !strings.Contains(err.Error(), "outside root") {
 		t.Fatalf("host bind outside the root accepted: %v", err)
