@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -214,6 +216,10 @@ type Options struct {
 	GiteaPublicURL     string
 	GiteaWebhookSecret string
 	GitProvider        provider.GitProvider
+	// PreviewAddr and PreviewOrigin: the preview listener (round 57,
+	// config.PreviewAddr); App.PreviewHandler serves it.
+	PreviewAddr   string
+	PreviewOrigin string
 
 	// CalendarRefresh is how often subscribed calendars are fetched
 	// (default 15 minutes); CalendarFetcher replaces the safe fetcher in tests.
@@ -263,33 +269,36 @@ type Options struct {
 
 // App is a wired-up Colonyhall server.
 type App struct {
-	Handler      http.Handler
-	Identity     *identity.Service
-	Conversation *conversation.Service
-	Delivery     *delivery.Service
-	Audit        *audit.Service
-	Hosts        *hosts.Service
-	Schedule     *schedule.Service
-	Approval     *approval.Service
-	Wiki         *wiki.Service
-	Question     *question.Service
-	Files        *files.Service
-	Git          *git.Service
-	Preview      *preview.Service
-	AgentRules   *agentrules.Service
-	Notes        *notes.Service
-	Drafts       *draft.Service
-	Saved        *saved.Service
-	Workshop     *workshop.Service
-	Secrets      *secrets.Service
-	Activity     *activity.Service
-	Planner      *planner.Service
-	Decisions    *decision.Service
-	Leases       *lease.Service
-	Sidebar      *sidebar.Service
-	Compaction   *compaction.Service
-	Delegation   *delegation.Service
-	DBStats      *dbstats.Service
+	Handler http.Handler
+	// PreviewHandler serves the preview listener (the reverse proxy); nil
+	// without Options.PreviewAddr.
+	PreviewHandler http.Handler
+	Identity       *identity.Service
+	Conversation   *conversation.Service
+	Delivery       *delivery.Service
+	Audit          *audit.Service
+	Hosts          *hosts.Service
+	Schedule       *schedule.Service
+	Approval       *approval.Service
+	Wiki           *wiki.Service
+	Question       *question.Service
+	Files          *files.Service
+	Git            *git.Service
+	Preview        *preview.Service
+	AgentRules     *agentrules.Service
+	Notes          *notes.Service
+	Drafts         *draft.Service
+	Saved          *saved.Service
+	Workshop       *workshop.Service
+	Secrets        *secrets.Service
+	Activity       *activity.Service
+	Planner        *planner.Service
+	Decisions      *decision.Service
+	Leases         *lease.Service
+	Sidebar        *sidebar.Service
+	Compaction     *compaction.Service
+	Delegation     *delegation.Service
+	DBStats        *dbstats.Service
 	// Operator is the platform operator (round 51); nil in single-tenant mode.
 	Operator    *operator.Service
 	Runs        *runs.Service
@@ -648,7 +657,13 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	hosthttp.RegisterLogin(mux, hoSvc, hostLogin, idSvc)
 	mux.Handle("GET /ws/host", hostGw)
 	wikihttp.Register(mux, wiSvc, idSvc)
-	previewhttp.Register(mux, prSvc, idSvc, hoSvc)
+	previewLinks := previewhttp.Links{Origin: opt.PreviewOrigin}
+	if opt.PreviewAddr != "" {
+		if _, port, err := net.SplitHostPort(opt.PreviewAddr); err == nil {
+			previewLinks.Port = port
+		}
+	}
+	previewhttp.Register(mux, prSvc, idSvc, hoSvc, previewLinks)
 	schedhttp.Register(mux, scSvc, idSvc)
 	ruSvc := &runs.Service{Store: ruStore, Agents: idSvc, Conversation: cvSvc, Hosts: hoSvc, Events: events, Bus: b, Tx: tx, IDs: opt.IDs, Clock: opt.Clock}
 	runhttp.Register(mux, ruSvc, idSvc)
@@ -798,7 +813,20 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		WebhookOn: opt.GiteaWebhookSecret != "", MaxUploadMB: cmp.Or(opt.MaxUploadMB, files.DefaultMaxUploadMB), Search: seSvc,
 		Multitenant: opt.Multitenant, LoginAllowlist: opt.LoginAllowlist, TrustedProxies: len(opt.TrustedProxies) > 0})
 
-	handler := httpserver.NewWithTimeouts(mux, ready, opt.Logger, opt.HTTPTimeouts)
+	var frameSrc []string
+	switch {
+	case opt.PreviewOrigin != "":
+		frameSrc = []string{strings.TrimRight(opt.PreviewOrigin, "/")}
+	case previewLinks.Port != "":
+		frameSrc = []string{"http://*:" + previewLinks.Port, "https://*:" + previewLinks.Port}
+	}
+	handler := httpserver.NewWithOptions(mux, ready, opt.Logger, httpserver.Options{Timeouts: opt.HTTPTimeouts, FrameSrc: frameSrc})
+	var previewHandler http.Handler
+	if opt.PreviewAddr != "" {
+		pmux := http.NewServeMux()
+		previewhttp.RegisterProxy(pmux, prSvc, idSvc, opt.Logger)
+		previewHandler = httpserver.PreviewHandler(pmux, opt.Logger)
+	}
 	var opSvc *operator.Service
 	if opt.Multitenant {
 		// Round 51: a suspended workspace's schedules wait (the loop runs
@@ -837,52 +865,60 @@ func New(ctx context.Context, opt Options) (*App, error) {
 		adminMux.Handle("GET /{$}", http.RedirectHandler("/app/", http.StatusFound))
 		admin := httpserver.NewWithTimeouts(adminMux, ready, opt.Logger, opt.HTTPTimeouts)
 		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler, admin, opt.OperatorAllowlist)
+		if previewHandler != nil {
+			// <slug>.<base domain> on the preview port: that workspace only.
+			previewHandler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, previewHandler, http.NotFoundHandler(), opt.OperatorAllowlist)
+		}
+	}
+	if previewHandler != nil {
+		previewHandler = clientip.Resolver{Trusted: opt.TrustedProxies}.Handler(previewHandler)
 	}
 	// Outermost: everything after it (the tenant layer, the limits, the
 	// logs) sees the same client address (round 40).
 	handler = clientip.Resolver{Trusted: opt.TrustedProxies}.Handler(handler)
 	return &App{
-		Handler:      handler,
-		Identity:     idSvc,
-		Conversation: cvSvc,
-		Workshop:     wsSvc,
-		Secrets:      secSvc,
-		Delivery:     dlSvc,
-		Audit:        auSvc,
-		Hosts:        hoSvc,
-		Schedule:     scSvc,
-		Approval:     apSvc,
-		Wiki:         wiSvc,
-		Question:     qSvc,
-		Files:        fiSvc,
-		Git:          gitSvc,
-		Preview:      prSvc,
-		AgentRules:   rlSvc,
-		Notes:        ntSvc,
-		Drafts:       drSvc,
-		Saved:        svSvc,
-		Activity:     acSvc,
-		Planner:      plSvc,
-		calRefresh:   opt.CalendarRefresh,
-		Decisions:    dcSvc,
-		Leases:       lsSvc,
-		Sidebar:      sbSvc,
-		Compaction:   cmSvc,
-		Delegation:   dgSvc,
-		DBStats:      dsSvc,
-		Operator:     opSvc,
-		Runs:         ruSvc,
-		Search:       seSvc,
-		Indexer:      seIdx,
-		Gateway:      gw,
-		HostGateway:  hostGw,
-		HostFs:       hostFs,
-		HostLogin:    hostLogin,
-		logger:       opt.Logger,
-		Consumers:    consumers,
-		Events:       events,
-		Bus:          b,
-		close:        closeAll,
+		Handler:        handler,
+		PreviewHandler: previewHandler,
+		Identity:       idSvc,
+		Conversation:   cvSvc,
+		Workshop:       wsSvc,
+		Secrets:        secSvc,
+		Delivery:       dlSvc,
+		Audit:          auSvc,
+		Hosts:          hoSvc,
+		Schedule:       scSvc,
+		Approval:       apSvc,
+		Wiki:           wiSvc,
+		Question:       qSvc,
+		Files:          fiSvc,
+		Git:            gitSvc,
+		Preview:        prSvc,
+		AgentRules:     rlSvc,
+		Notes:          ntSvc,
+		Drafts:         drSvc,
+		Saved:          svSvc,
+		Activity:       acSvc,
+		Planner:        plSvc,
+		calRefresh:     opt.CalendarRefresh,
+		Decisions:      dcSvc,
+		Leases:         lsSvc,
+		Sidebar:        sbSvc,
+		Compaction:     cmSvc,
+		Delegation:     dgSvc,
+		DBStats:        dsSvc,
+		Operator:       opSvc,
+		Runs:           ruSvc,
+		Search:         seSvc,
+		Indexer:        seIdx,
+		Gateway:        gw,
+		HostGateway:    hostGw,
+		HostFs:         hostFs,
+		HostLogin:      hostLogin,
+		logger:         opt.Logger,
+		Consumers:      consumers,
+		Events:         events,
+		Bus:            b,
+		close:          closeAll,
 	}, nil
 }
 

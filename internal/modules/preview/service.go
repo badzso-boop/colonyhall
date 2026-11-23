@@ -269,6 +269,24 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, id ids.ID) (Previe
 	return p, nil
 }
 
+// ProxyTarget is the running preview a person opens through the server's
+// reverse proxy (round 57). Same visibility as Get; agents never use it
+// (the proxy would let them reach other machines' ports through the
+// server), and a preview that is not running is ErrOffline.
+func (s *Service) ProxyTarget(ctx context.Context, by identity.Actor, id ids.ID) (Preview, error) {
+	if by.Kind != identity.KindHuman {
+		return Preview{}, ErrForbidden
+	}
+	p, err := s.Get(ctx, by, id)
+	if err != nil {
+		return Preview{}, err
+	}
+	if p.State != StateRunning || p.URL == "" || !s.Clock.Now().Before(p.ExpiresAt) {
+		return p, ErrOffline
+	}
+	return p, nil
+}
+
 // List returns previews for a workspace, optionally filtered by agentID. A
 // person sees only the previews of agents they may see (round 38).
 func (s *Service) List(ctx context.Context, by identity.Actor, agentID ids.ID) ([]Preview, error) {

@@ -32,7 +32,7 @@ Base path: `/api/v1`. **Auth** says whether an operation needs a signed-in calle
 - [notes](#notes) (1)
 - [operator](#operator) (20)
 - [planner](#planner) (11)
-- [previews](#previews) (4)
+- [previews](#previews) (10)
 - [question](#question) (2)
 - [runs](#runs) (10)
 - [saved](#saved) (4)
@@ -2890,6 +2890,107 @@ Humans. Get a preview by ID.
 | --- | --- |
 | 200 | OK: [Preview](#preview) (`application/json`) |
 
+### `GET /previews/{previewId}/proxy`
+
+`proxyPreviewRoot` · Auth: signed in
+
+Humans who may see the preview (as getPreview). Round 57: the reverse proxy to a running preview, served only on the preview listener (COLONY_PREVIEW_ADDR, its own origin, so the preview's scripts cannot use the app's session); the main listener answers 404. The path is forwarded unchanged (the preview is started with COLONY_PREVIEW_BASE set to it); the session cookie, Authorization and X-CSRF-Token are not forwarded.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+
+| Response | Body |
+| --- | --- |
+| 101 | WebSocket upgrade (live reload), forwarded to the preview |
+| 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
+| 502 | The preview is not running or does not answer: string (`text/html`) |
+
+### `DELETE /previews/{previewId}/proxy/{path}`
+
+`proxyPreviewDelete` · Auth: signed in
+
+As proxyPreviewRoot, for the rest of the path.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+| `path` | path | string | yes | The rest of the path; it may contain slashes. |
+
+| Response | Body |
+| --- | --- |
+| 101 | WebSocket upgrade (live reload), forwarded to the preview |
+| 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
+| 502 | The preview is not running or does not answer: string (`text/html`) |
+
+### `GET /previews/{previewId}/proxy/{path}`
+
+`proxyPreviewGet` · Auth: signed in
+
+As proxyPreviewRoot, for the rest of the path.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+| `path` | path | string | yes | The rest of the path; it may contain slashes. |
+
+| Response | Body |
+| --- | --- |
+| 101 | WebSocket upgrade (live reload), forwarded to the preview |
+| 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
+| 502 | The preview is not running or does not answer: string (`text/html`) |
+
+### `PATCH /previews/{previewId}/proxy/{path}`
+
+`proxyPreviewPatch` · Auth: signed in
+
+As proxyPreviewRoot, for the rest of the path.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+| `path` | path | string | yes | The rest of the path; it may contain slashes. |
+
+| Response | Body |
+| --- | --- |
+| 101 | WebSocket upgrade (live reload), forwarded to the preview |
+| 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
+| 502 | The preview is not running or does not answer: string (`text/html`) |
+
+### `POST /previews/{previewId}/proxy/{path}`
+
+`proxyPreviewPost` · Auth: signed in
+
+As proxyPreviewRoot, for the rest of the path.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+| `path` | path | string | yes | The rest of the path; it may contain slashes. |
+
+| Response | Body |
+| --- | --- |
+| 101 | WebSocket upgrade (live reload), forwarded to the preview |
+| 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
+| 502 | The preview is not running or does not answer: string (`text/html`) |
+
+### `PUT /previews/{previewId}/proxy/{path}`
+
+`proxyPreviewPut` · Auth: signed in
+
+As proxyPreviewRoot, for the rest of the path.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `previewId` | path | string (uuid) | yes |  |
+| `path` | path | string | yes | The rest of the path; it may contain slashes. |
+
+| Response | Body |
+| --- | --- |
+| 101 | WebSocket upgrade (live reload), forwarded to the preview |
+| 200 | The preview's own answer, any status and type: string (binary) (`*/*`) |
+| 502 | The preview is not running or does not answer: string (`text/html`) |
+
 ### `POST /previews/{previewId}/stop`
 
 `stopPreview` · Auth: signed in
@@ -5682,8 +5783,9 @@ Folders only. With an empty `path` the entries are the guard.yaml roots
 | `expires_at` | string (date-time) | yes |  |
 | `id` | string (uuid) | yes |  |
 | `name` | string | yes |  |
+| `proxy_url` | string |  | Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR). |
 | `state` | string | yes | One of: `requested`, `running`, `stopped`, `failed`. |
-| `url` | string |  |  |
+| `url` | string |  | The address the guard reported (on the guard's network). |
 
 ### HostPreviewReport
 
@@ -6326,10 +6428,11 @@ Type: string
 | `host_id` | string (uuid) | yes |  |
 | `id` | string (uuid) | yes |  |
 | `name` | string | yes |  |
+| `proxy_url` | string |  | Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR). |
 | `state` | string | yes | One of: `requested`, `running`, `stopped`, `failed`. |
 | `thread_root_id` | string (uuid) |  |  |
 | `updated_at` | string (date-time) | yes |  |
-| `url` | string |  |  |
+| `url` | string |  | The address the guard reported (on the guard's network). |
 | `workspace_id` | string (uuid) | yes |  |
 
 ### PreviewList

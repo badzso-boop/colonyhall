@@ -3118,6 +3118,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/previews/{previewId}/proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Humans who may see the preview (as getPreview). Round 57: the reverse proxy to a running preview, served only on the preview listener (COLONY_PREVIEW_ADDR, its own origin, so the preview's scripts cannot use the app's session); the main listener answers 404. The path is forwarded unchanged (the preview is started with COLONY_PREVIEW_BASE set to it); the session cookie, Authorization and X-CSRF-Token are not forwarded. */
+        get: operations["proxyPreviewRoot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/previews/{previewId}/proxy/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+                /** @description The rest of the path; it may contain slashes. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        /** @description As proxyPreviewRoot, for the rest of the path. */
+        get: operations["proxyPreviewGet"];
+        /** @description As proxyPreviewRoot, for the rest of the path. */
+        put: operations["proxyPreviewPut"];
+        /** @description As proxyPreviewRoot, for the rest of the path. */
+        post: operations["proxyPreviewPost"];
+        /** @description As proxyPreviewRoot, for the rest of the path. */
+        delete: operations["proxyPreviewDelete"];
+        options?: never;
+        head?: never;
+        /** @description As proxyPreviewRoot, for the rest of the path. */
+        patch: operations["proxyPreviewPatch"];
+        trace?: never;
+    };
     "/planner/tasks": {
         parameters: {
             query?: never;
@@ -6746,7 +6790,10 @@ export interface components {
             compose_path: string;
             /** @enum {string} */
             state: "requested" | "running" | "stopped" | "failed";
+            /** @description The address the guard reported (on the guard's network). */
             url?: string;
+            /** @description Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR). */
+            proxy_url?: string;
             error?: string;
             /** Format: date-time */
             expires_at: string;
@@ -6774,7 +6821,10 @@ export interface components {
             compose_path: string;
             /** @enum {string} */
             state: "requested" | "running" | "stopped" | "failed";
+            /** @description The address the guard reported (on the guard's network). */
             url?: string;
+            /** @description Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR). */
+            proxy_url?: string;
             error?: string;
             /** Format: date-time */
             expires_at: string;
@@ -12449,6 +12499,256 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Preview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    proxyPreviewRoot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket upgrade (live reload), forwarded to the preview */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The preview's own answer, any status and type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The preview is not running or does not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    proxyPreviewGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+                /** @description The rest of the path; it may contain slashes. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket upgrade (live reload), forwarded to the preview */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The preview's own answer, any status and type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The preview is not running or does not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    proxyPreviewPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+                /** @description The rest of the path; it may contain slashes. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket upgrade (live reload), forwarded to the preview */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The preview's own answer, any status and type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The preview is not running or does not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    proxyPreviewPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+                /** @description The rest of the path; it may contain slashes. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket upgrade (live reload), forwarded to the preview */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The preview's own answer, any status and type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The preview is not running or does not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    proxyPreviewDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+                /** @description The rest of the path; it may contain slashes. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket upgrade (live reload), forwarded to the preview */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The preview's own answer, any status and type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The preview is not running or does not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    proxyPreviewPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                previewId: string;
+                /** @description The rest of the path; it may contain slashes. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket upgrade (live reload), forwarded to the preview */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The preview's own answer, any status and type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The preview is not running or does not answer */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -432,6 +432,9 @@ func (s *ctSuite) pathParam(path, name string) (string, bool) {
 		return "search", false
 	case "previewId":
 		return s.obj["preview"], true
+	case "path":
+		// Round 57: the rest of a preview proxy path.
+		return "index.html", false
 	case "workspaceId":
 		// Round 51: the operator's routes (admin host only).
 		return s.obj["workspace"], true

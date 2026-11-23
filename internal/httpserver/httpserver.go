@@ -31,6 +31,20 @@ func New(api *http.ServeMux, ready func(context.Context) error, logger *slog.Log
 
 // NewWithTimeouts is New with per-request read and write deadlines.
 func NewWithTimeouts(api *http.ServeMux, ready func(context.Context) error, logger *slog.Logger, t Timeouts) http.Handler {
+	return NewWithOptions(api, ready, logger, Options{Timeouts: t})
+}
+
+// Options are the handler's settings.
+type Options struct {
+	Timeouts
+	// FrameSrc are the sources the PWA may embed in a frame besides its
+	// own origin: the preview listener (round 57).
+	FrameSrc []string
+}
+
+// NewWithOptions is New with deadlines and the PWA's frame sources.
+func NewWithOptions(api *http.ServeMux, ready func(context.Context) error, logger *slog.Logger, o Options) http.Handler {
+	t := o.Timeouts
 	api.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -54,7 +68,7 @@ func NewWithTimeouts(api *http.ServeMux, ready func(context.Context) error, logg
 		panic(err)
 	}
 	api.Handle("GET /app/", appHandler(dist))
-	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist), deadlines(t, api))))
+	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist, o.FrameSrc...), deadlines(t, api))))
 }
 
 type statusWriter struct {
@@ -114,4 +128,11 @@ func recoverer(logger *slog.Logger, next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+// PreviewHandler wraps the preview listener's routes (round 57): the
+// reverse proxy only. No deadlines (the live-reload WebSockets stay open);
+// its pages may be framed by the app on the same host name, any port.
+func PreviewHandler(mux *http.ServeMux, logger *slog.Logger) http.Handler {
+	return recoverer(logger, logRequests(logger, previewHeaders(mux)))
 }
