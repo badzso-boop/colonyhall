@@ -6,7 +6,7 @@ Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatk
 
 **Tudatosan kimarad (Norbi döntése, 2026-11-12):** a karbantartó PC-jén nem root őr, a homelab `bypassPermissions` agentje, a homelab LAN-portjai. A szerver alapból `127.0.0.1`-en figyel; magánhálózaton (pl. Tailscale) érdemes futtatni.
 
-**Frissítés (2026-11-22):** `colonyhall.ujjweb.hu` nyilvánosan elérhető, host nginx + Cloudflare Tunnel mögött (TLS a Cloudflare élén terminál, a nginx és a szerver közötti kapcsolat a géphelyi Tailscale-címen, plaintext, bizalmi határon belül — ugyanaz a minta, mint a többi ujjweb.hu-szolgáltatásnál). Ezzel a V9.1.1 és V3.4.1 sorok ✅-ra váltanak: `COLONY_SECURE_COOKIES=1`, a nginx a valódi kliens-IP-t `X-Forwarded-For`-ban adja tovább, a szerver `COLONY_TRUSTED_PROXIES`-ban megbízik a nginx címében. A V4.3.1 (admin MFA hiánya) és a V2.1.7 (kiszivárgott jelszó ellenőrzés hiánya) változatlanul nyitott — ezekig különösen fontos erős, egyedi jelszót használni az admin fiókon.
+**Frissítés (2026-11-22):** a karbantartó éles példánya nyilvánosan elérhető, host nginx + Cloudflare Tunnel mögött (TLS a Cloudflare élén terminál, a nginx és a szerver közötti kapcsolat a géphelyi Tailscale-címen, plaintext, bizalmi határon belül — ugyanaz a minta, mint a karbantartó többi szolgáltatásánál). Ezzel a V9.1.1 és V3.4.1 sorok ✅-ra váltanak: `COLONY_SECURE_COOKIES=1`, a nginx a valódi kliens-IP-t `X-Forwarded-For`-ban adja tovább, a szerver `COLONY_TRUSTED_PROXIES`-ban megbízik a nginx címében. A V4.3.1 (admin MFA hiánya) és a V2.1.7 (kiszivárgott jelszó ellenőrzés hiánya) változatlanul nyitott — ezekig különösen fontos erős, egyedi jelszót használni az admin fiókon.
 
 ## Összesítés
 
@@ -29,7 +29,7 @@ Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatk
 | V3.2.1 | Új munkamenet-token belépéskor | ✅ | Belépéskor új munkamenet (`identity/session.go`) |
 | V3.3.1 | Kilépéskor a munkamenet érvénytelen | ✅ | A munkamenet a szerveren visszavonódik |
 | V3.3.2 | Újrahitelesítés legalább 30 naponta | ✅ | `SessionTTL` 30 nap |
-| V3.4.1 | Süti `Secure` jelzővel | ✅ | `COLONY_SECURE_COOKIES=1`, a `colonyhall.ujjweb.hu` TLS-en (Cloudflare Tunnel) fut (2026-11-22) |
+| V3.4.1 | Süti `Secure` jelzővel | ✅ | `COLONY_SECURE_COOKIES=1`, az éles példány TLS-en (Cloudflare Tunnel) fut (2026-11-22) |
 | V3.4.2–3 | Süti `HttpOnly`, `SameSite` | ✅ | `HttpOnly`, `SameSite=Lax` (`identity/httpapi/handlers.go`) |
 | V3.5.x | Token alapú munkamenet | ✅ | A tokenek csak hash-elve, a megjeleníthető előtag 8 karakter (`TokenPrefix`, fuzz-teszt) |
 | V3.5.3 | Egy MCP-munkamenet nem vehető át | ✅ | A munkamenet a megnyitó szereplőhöz kötve (`f63d273`) |
