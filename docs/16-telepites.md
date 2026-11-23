@@ -62,6 +62,15 @@ A `colony setup` megkérdezi, mi legyen a gép: **szerver**, **őr** vagy **mind
 - **Műhely → Építő:** egy agent, akinek a gazdája tulajdonos vagy admin, `workshop` engedélyt kap, és meta-eszközökkel bővítményt hoz létre, ír, tesztel és élesítést kér a gazdája nevében. Az élesítés jóváhagyási kártyát tesz a beszélgetésébe; aki engedélyezi, az hagyja jóvá a verziót. A fül javasolt utasítást is mutat az agentnek.
 - Minden verzió és jóváhagyás frissíti a bővítmény építési naplóját a wikiben (`Műhely – <rövid név>`). A bővítmény fájlokként exportálható (`manifest.json`, `src/extension.ts`, `BUILDLOG.md`, titok nélkül), és vázlatként importálható.
 
+### Élő előnézet (57. kör)
+
+Az agent webalkalmazása a beszélgetés mellett, beágyazva fut; a szerver fordított proxyként, **külön porton** (saját originen) szolgálja ki, így az előnézet szkriptje nem fér hozzá a felhasználó munkamenetéhez. Részletek: `docs/02-muszaki-specifikacio.md`, „Élő előnézet”.
+
+- `.env`: `COLONY_PREVIEW_PORT` (alapból `8081`; a compose ugyanazon a `COLONY_BIND` címen publikálja, mint a fő portot). A böngésző a fő cím hosztnevét használja ezzel a porttal; ha más címen éri el (fordított proxy, HTTPS), add meg: `COLONY_PREVIEW_ORIGIN=https://preview.example.com`. Erősebb elkülönítéshez ez legyen az apptól eltérő hosztnév.
+- `COLONY_PREVIEW_NETS`: a hálózatok, ahol a szerver előnézetet elérhet (alapból a Tailscale-tartományok). Az őr `guard.yaml`-jában a `preview_host` legyen olyan cím, amit a szerver elér (a gép Tailscale IP-je); otthoni hálózathoz add hozzá (`192.168.1.0/24`), egy gépen natívan futó szerverhez és őrhöz a `127.0.0.0/8`-at.
+- HTTPS mögött az előnézeti portnak is HTTPS-en kell lennie (különben a böngésző vegyes tartalomként tiltja): a Caddy-példában egy második blokk (`preview.pelda.hu { reverse_proxy 127.0.0.1:8081 }`) és `COLONY_PREVIEW_ORIGIN=https://preview.pelda.hu`.
+- Sablonok az agentnek: a `preview_start` leírásában (Vite/React, statikus); WSL `/mnt/*` mappában pollinggal figyelik a fájlokat.
+
 ### Több ügyfél egy szerveren (többbérlős mód)
 
 Alapból kikapcsolva. Bekapcsolva minden munkaterület a saját aldomainjén érhető el (`<slug>.<alapdomain>`); részletek: `docs/02-muszaki-specifikacio.md`, „Többbérlős működés”, és `docs/23-elkulonites.md`.

@@ -885,6 +885,8 @@ Minden más láthatatlan: a `~/.ssh`, a többi projekt, a másik kliens belépé
 4. A felületen látszanak a futó előnézetek, egy gombbal leállíthatók; időkorlát után maguktól leállnak; a vészleállító és az agent szüneteltetése is megállítja őket.
 5. Agentenkénti engedély („indíthat előnézetet”); az első indításnál emberi jóváhagyás a chatben.
 
+**Élő előnézet (57. kör, Norbi döntései, 2026-11-23):** az előnézet a beszélgetés mellett, átméretezhető osztott nézetben fut; a szerver beépített fordított proxyja szolgálja ki (HTTP és WebSocket, a Vite HMR-hez), saját porton és originen, hogy az agent kódja ne férjen a felhasználó munkamenetéhez; mindig explicit `compose.yaml` kell, a `preview_start` sablonokat ad (Vite, statikus); WSL `/mnt/*` alatt polling. Az előnézetet továbbra is az agent indítja; a felület gombja megnyitja vagy kérést tesz a szerkesztőbe. Részletek: `docs/02-muszaki-specifikacio.md`.
+
 **Ütemezés:** megvalósítva (2026-10-16, 13. feladat, `feature/preview` ág). A szerver oldalon új `preview` modul, `allow_preview` hozzárendelési jelző, `preview_start` és `preview_stop` MCP eszközök, automatikus szálüzenet linkkel, REST végpontok (`/api/v1/previews`, `/stop`, `/host/previews/{id}`), audit események és vészleállító integráció. Az őr oldalon szigorú compose validátor és felülbíráló felülíró-fájl generátor (`!override` portkiosztás és alapértelmezett erőforráskorlátok), agentenkénti 10 portos tartományszeletelés, és egyeztető ciklus.
 
 ## Munkaterület: git worktree agentenként
