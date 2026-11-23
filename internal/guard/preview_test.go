@@ -339,7 +339,7 @@ func TestGenerateOverrideContent(t *testing.T) {
 	defaultLimits := map[string]bool{"web": true, "worker": true}
 	servicesWithPorts := map[string]bool{"web": true, "worker": true}
 
-	bytes, err := GenerateOverrideContent("127.0.0.1", ports, defaultLimits, servicesWithPorts)
+	bytes, err := GenerateOverrideContent("127.0.0.1", ports, defaultLimits, servicesWithPorts, nil, nil)
 	if err != nil {
 		t.Fatalf("generate override: %v", err)
 	}
