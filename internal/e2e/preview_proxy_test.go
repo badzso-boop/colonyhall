@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,9 @@ import (
 // preview listener. The app's own listener never proxies (its origin
 // carries the person's session).
 func TestPreviewProxyLifecycle(t *testing.T) {
-	e := newEnvWith(t, func(o *server.Options) { o.PreviewAddr, o.PreviewAllowLoopback = ":18081", true })
+	e := newEnvWith(t, func(o *server.Options) {
+		o.PreviewAddr, o.PreviewNets = ":18081", []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+	})
 	if e.app.PreviewHandler == nil {
 		t.Fatal("no preview handler with PreviewAddr set")
 	}

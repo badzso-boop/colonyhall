@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -116,7 +117,7 @@ func newFixture(t *testing.T, backend string, owner identity.Actor) *fixture {
 	mux := http.NewServeMux()
 	RegisterProxy(mux, svc, fakeAuth{by: map[string]identity.Actor{
 		"admin": admin, "member": member, "stranger": stranger, "agent": agent,
-	}}, slog.New(slog.DiscardHandler), true)
+	}}, slog.New(slog.DiscardHandler), testNets)
 	f.proxy = httptest.NewServer(mux)
 	t.Cleanup(f.proxy.Close)
 	return f
@@ -377,24 +378,29 @@ func TestLinksURL(t *testing.T) {
 	}
 }
 
-// The proxy never dials link-local (cloud metadata) or unspecified
-// addresses, nor loopback unless allowed, whatever the guard reported.
+// testNets: the httptest backends listen on loopback.
+var testNets = append([]netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}, DefaultNets...)
+
+// The proxy dials only the allowed networks, and never link-local (cloud
+// metadata) or unspecified addresses, whatever the guard reported.
 func TestDialGuard(t *testing.T) {
-	strict, loose := dialGuard(false), dialGuard(true)
+	strict := dialGuard(DefaultNets)
 	for addr, ok := range map[string]bool{
-		"100.64.0.5:41000": true, "192.0.2.10:41000": true, "[2001:db8::1]:80": true,
+		"100.64.0.5:41000": true, "[fd7a:115c:a1e0::5]:80": true,
+		"192.168.1.10:41000": false, "172.17.0.2:5432": false, "10.0.0.1:80": false,
 		"127.0.0.1:41000": false, "[::1]:80": false, "169.254.169.254:80": false,
 		"[fe80::1]:80": false, "0.0.0.0:80": false, "[::ffff:169.254.169.254]:80": false, "224.0.0.1:80": false,
 	} {
 		if err := strict("tcp", addr, nil); (err == nil) != ok {
-			t.Errorf("strict %s: %v", addr, err)
+			t.Errorf("default %s: %v", addr, err)
 		}
 	}
-	if err := loose("tcp", "127.0.0.1:41000", nil); err != nil {
-		t.Errorf("loopback allowed: %v", err)
+	all := dialGuard([]netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")})
+	if err := all("tcp", "127.0.0.1:41000", nil); err != nil {
+		t.Errorf("listed loopback refused: %v", err)
 	}
-	if err := loose("tcp", "169.254.169.254:80", nil); err == nil {
-		t.Error("metadata address allowed with loopback")
+	if err := all("tcp", "169.254.169.254:80", nil); err == nil {
+		t.Error("metadata address dialled inside an allowed network")
 	}
 }
 
@@ -406,7 +412,7 @@ func TestProxyRefusesBlockedTarget(t *testing.T) {
 	f := newFixture(t, backend.URL, agent)
 	mux := http.NewServeMux()
 	RegisterProxy(mux, &preview.Service{Store: f.store, Directory: directory{}, Clock: f.clock},
-		fakeAuth{by: map[string]identity.Actor{"admin": admin}}, slog.New(slog.DiscardHandler), false)
+		fakeAuth{by: map[string]identity.Actor{"admin": admin}}, slog.New(slog.DiscardHandler), DefaultNets)
 	f.proxy.Config.Handler = mux
 	if res := f.do(t, "GET", "/", "admin", nil, nil); res.StatusCode != http.StatusBadGateway {
 		t.Fatalf("loopback target: %d", res.StatusCode)

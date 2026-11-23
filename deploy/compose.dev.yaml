@@ -60,7 +60,7 @@ services:
       # Round 57: the preview reverse proxy on its own port (its own origin).
       COLONY_PREVIEW_ADDR: ":${COLONY_PREVIEW_PORT:-8081}"
       COLONY_PREVIEW_ORIGIN: ${COLONY_PREVIEW_ORIGIN:-}
-      COLONY_PREVIEW_ALLOW_LOOPBACK: ${COLONY_PREVIEW_ALLOW_LOOPBACK:-}
+      COLONY_PREVIEW_NETS: ${COLONY_PREVIEW_NETS:-}
       # Where this server's source can be downloaded (AGPL section 13); empty: upstream.
       COLONY_SOURCE_URL: ${COLONY_SOURCE_URL:-}
       COLONY_GITEA_WEBHOOK_SECRET: ${COLONY_GITEA_WEBHOOK_SECRET:-}

@@ -66,12 +66,13 @@ var strippedRequestHeaders = []string{"Authorization", httpx.CSRFHeader}
 // Only there: on the app's own origin a preview's scripts would act with
 // the person's session.
 //
-// allowLoopback lets it reach 127.0.0.0/8 and ::1 (a guard on the
-// server's own machine; tests). Link-local (cloud metadata), unspecified
-// and multicast addresses are never reached.
-func RegisterProxy(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAuthenticator, logger *slog.Logger, allowLoopback bool) {
+// allowed are the networks previews may be on (COLONY_PREVIEW_NETS; by
+// default Tailscale's, DefaultNets): the proxy dials nothing else.
+// Link-local (cloud metadata), unspecified and multicast addresses are
+// never dialled, even inside an allowed network.
+func RegisterProxy(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAuthenticator, logger *slog.Logger, allowed []netip.Prefix) {
 	h := &proxyHandler{svc: svc, auth: auth, log: logger}
-	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second, Control: dialGuard(allowLoopback)}
+	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second, Control: dialGuard(allowed)}
 	h.transport = &http.Transport{DialContext: d.DialContext, MaxIdleConns: 100, IdleConnTimeout: 90 * time.Second,
 		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 2 * time.Minute}
 	mux.Handle("/api/v1/previews/{previewId}/proxy", h)
@@ -88,9 +89,13 @@ type proxyHandler struct {
 // errBlockedTarget: the guard reported an address the proxy never dials.
 var errBlockedTarget = errors.New("preview address not allowed")
 
+// DefaultNets are Tailscale's address ranges: guards and the server reach
+// each other there.
+var DefaultNets = []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("fd7a:115c:a1e0::/48")}
+
 // dialGuard checks the address actually dialled (after DNS), so a name
 // that resolves to a refused address is refused too.
-func dialGuard(allowLoopback bool) func(network, address string, _ syscall.RawConn) error {
+func dialGuard(allowed []netip.Prefix) func(network, address string, _ syscall.RawConn) error {
 	return func(_, address string, _ syscall.RawConn) error {
 		host, _, err := net.SplitHostPort(address)
 		if err != nil {
@@ -101,13 +106,16 @@ func dialGuard(allowLoopback bool) func(network, address string, _ syscall.RawCo
 			return errBlockedTarget
 		}
 		ip = ip.Unmap()
-		switch {
-		case ip.IsLoopback() && !allowLoopback,
-			ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsInterfaceLocalMulticast(),
-			ip.IsMulticast(), ip.IsUnspecified():
+		if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() ||
+			ip.IsMulticast() || ip.IsUnspecified() {
 			return errBlockedTarget
 		}
-		return nil
+		for _, p := range allowed {
+			if p.Contains(ip) {
+				return nil
+			}
+		}
+		return errBlockedTarget
 	}
 }
 

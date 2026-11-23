@@ -220,9 +220,9 @@ type Options struct {
 	// config.PreviewAddr); App.PreviewHandler serves it.
 	PreviewAddr   string
 	PreviewOrigin string
-	// PreviewAllowLoopback lets the proxy reach previews on 127.0.0.1
-	// (a guard on the server's own machine; COLONY_PREVIEW_ALLOW_LOOPBACK).
-	PreviewAllowLoopback bool
+	// PreviewNets are the networks the proxy may reach previews on
+	// (COLONY_PREVIEW_NETS); empty: previewhttp.DefaultNets (Tailscale).
+	PreviewNets []netip.Prefix
 
 	// CalendarRefresh is how often subscribed calendars are fetched
 	// (default 15 minutes); CalendarFetcher replaces the safe fetcher in tests.
@@ -827,7 +827,11 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	var previewHandler http.Handler
 	if opt.PreviewAddr != "" {
 		pmux := http.NewServeMux()
-		previewhttp.RegisterProxy(pmux, prSvc, idSvc, opt.Logger, opt.PreviewAllowLoopback)
+		nets := opt.PreviewNets
+		if len(nets) == 0 {
+			nets = previewhttp.DefaultNets
+		}
+		previewhttp.RegisterProxy(pmux, prSvc, idSvc, opt.Logger, nets)
 		previewHandler = httpserver.PreviewHandler(pmux, opt.Logger)
 	}
 	var opSvc *operator.Service

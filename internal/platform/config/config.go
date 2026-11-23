@@ -59,10 +59,12 @@ type Config struct {
 	// address as browsers see it (scheme://host:port), when it is not the
 	// app's host name with PreviewAddr's port (behind a reverse proxy).
 	PreviewOrigin string
-	// PreviewAllowLoopback (COLONY_PREVIEW_ALLOW_LOOPBACK=1): the proxy may
-	// reach previews on 127.0.0.1 (server and guard on one machine,
-	// natively). Off: a guard cannot point the server at its own services.
-	PreviewAllowLoopback bool
+	// PreviewNets (COLONY_PREVIEW_NETS, comma-separated prefixes) are the
+	// networks the proxy may reach previews on; empty: Tailscale's. A guard
+	// cannot point the server at anything else (its own services, the
+	// container network). Add the LAN (192.168.1.0/24) or 127.0.0.0/8 (one
+	// machine, natively) when previews live there.
+	PreviewNets []netip.Prefix
 	// CalendarRefresh is how often subscribed calendars are fetched (default 15m).
 	CalendarRefresh time.Duration
 	// EmbedURL is the search's embedding server (the Raspberry Pi); empty:
@@ -254,38 +256,42 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("config: COLONY_OPERATOR_ALLOWLIST: %w", err)
 	}
+	previewNets, err := clientip.ParseList(os.Getenv("COLONY_PREVIEW_NETS"))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: COLONY_PREVIEW_NETS: %w", err)
+	}
 	c := Config{
-		Env:                  getenv("COLONY_ENV", EnvProduction),
-		OperatorDevAccess:    os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
-		SecretKeys:           keys,
-		EgressAllow:          egressAllow,
-		Ext:                  ext,
-		OperatorAllowlist:    opAllow,
-		EmbedURL:             os.Getenv("COLONY_EMBED_URL"),
-		RerankURL:            os.Getenv("COLONY_RERANK_URL"),
-		RerankTop:            rerankTop,
-		RerankTimeout:        rerankTimeout,
-		CalendarRefresh:      calRefresh,
-		Role:                 getenv("COLONY_ROLE", "all"),
-		HTTPAddr:             getenv("COLONY_HTTP_ADDR", ":8080"),
-		Store:                getenv("COLONY_STORE", "postgres"),
-		DatabaseURL:          os.Getenv("COLONY_DATABASE_URL"),
-		DevSeed:              os.Getenv("COLONY_DEV_SEED") == "1",
-		SecureCookies:        os.Getenv("COLONY_SECURE_COOKIES") != "0",
-		FilesDir:             getenv("COLONY_FILES_DIR", "./data/files"),
-		MaxUploadMB:          maxUpload,
-		GiteaURL:             os.Getenv("COLONY_GITEA_URL"),
-		GiteaToken:           os.Getenv("COLONY_GITEA_TOKEN"),
-		GiteaPublicURL:       os.Getenv("COLONY_GITEA_PUBLIC_URL"),
-		PreviewAddr:          os.Getenv("COLONY_PREVIEW_ADDR"),
-		PreviewOrigin:        os.Getenv("COLONY_PREVIEW_ORIGIN"),
-		PreviewAllowLoopback: os.Getenv("COLONY_PREVIEW_ALLOW_LOOPBACK") == "1",
-		SourceURL:            getenv("COLONY_SOURCE_URL", DefaultSourceURL),
-		GiteaWebhookSecret:   os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
-		Multitenant:          os.Getenv("COLONY_MULTITENANT") == "1",
-		BaseDomain:           strings.ToLower(strings.Trim(os.Getenv("COLONY_BASE_DOMAIN"), ". ")),
-		TrustedProxies:       trusted,
-		LoginAllowlist:       allow,
+		Env:                getenv("COLONY_ENV", EnvProduction),
+		OperatorDevAccess:  os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
+		SecretKeys:         keys,
+		EgressAllow:        egressAllow,
+		Ext:                ext,
+		OperatorAllowlist:  opAllow,
+		PreviewNets:        previewNets,
+		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
+		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
+		RerankTop:          rerankTop,
+		RerankTimeout:      rerankTimeout,
+		CalendarRefresh:    calRefresh,
+		Role:               getenv("COLONY_ROLE", "all"),
+		HTTPAddr:           getenv("COLONY_HTTP_ADDR", ":8080"),
+		Store:              getenv("COLONY_STORE", "postgres"),
+		DatabaseURL:        os.Getenv("COLONY_DATABASE_URL"),
+		DevSeed:            os.Getenv("COLONY_DEV_SEED") == "1",
+		SecureCookies:      os.Getenv("COLONY_SECURE_COOKIES") != "0",
+		FilesDir:           getenv("COLONY_FILES_DIR", "./data/files"),
+		MaxUploadMB:        maxUpload,
+		GiteaURL:           os.Getenv("COLONY_GITEA_URL"),
+		GiteaToken:         os.Getenv("COLONY_GITEA_TOKEN"),
+		GiteaPublicURL:     os.Getenv("COLONY_GITEA_PUBLIC_URL"),
+		PreviewAddr:        os.Getenv("COLONY_PREVIEW_ADDR"),
+		PreviewOrigin:      os.Getenv("COLONY_PREVIEW_ORIGIN"),
+		SourceURL:          getenv("COLONY_SOURCE_URL", DefaultSourceURL),
+		GiteaWebhookSecret: os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
+		Multitenant:        os.Getenv("COLONY_MULTITENANT") == "1",
+		BaseDomain:         strings.ToLower(strings.Trim(os.Getenv("COLONY_BASE_DOMAIN"), ". ")),
+		TrustedProxies:     trusted,
+		LoginAllowlist:     allow,
 	}
 	if c.Multitenant && c.BaseDomain == "" {
 		return c, fmt.Errorf("config: COLONY_BASE_DOMAIN is required when COLONY_MULTITENANT=1")
