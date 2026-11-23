@@ -8,7 +8,7 @@ import { Outlet, useLocation } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { cn, useShortcut } from "@/shared/lib";
 import { useLocalStorage, useWidth } from "@/shared/hooks";
-import { place, usePanes } from "@/shared/panes";
+import { place, usePanes, type SlotContent } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
 import { useActivityUnread } from "@/features/activity";
 import { AgentDialogs } from "@/features/agents";
@@ -19,6 +19,7 @@ import { BottomBar } from "./BottomBar";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionBar } from "./ConnectionBar";
 import { Header } from "./header/Header";
+import { SideSlot } from "./panes/SideSlot";
 import { WorkPane } from "./panes/WorkPane";
 import { openOverlay } from "./overlays";
 import { ShortcutHelp } from "./ShortcutHelp";
@@ -80,6 +81,8 @@ export function Shell() {
 
   const thread = panes.thread ? <ThreadPane key={panes.thread} rootId={panes.thread} /> : null;
   const right = placement.right === "thread" ? thread : placement.right === "work" ? <WorkPane /> : null;
+  // The right slot remembers a width per content: a file browser opens wider than a thread.
+  const rightContent: SlotContent = placement.right === "work" ? (panes.tabs[panes.active]?.kind ?? "agent") : "thread";
   const switcher =
     placement.other !== null ? (
       <button
@@ -120,12 +123,14 @@ export function Shell() {
         </aside>
         {drawer ? <div aria-hidden className="absolute inset-0 z-(--z-pane) bg-overlay" onClick={() => setDrawer(false)} /> : null}
         {placement.left === "work" ? (
-          <div className="w-[560px] shrink-0 border-r border-border">
-            <WorkPane />
-          </div>
+          <SideSlot side="left" content="left" width={width} className="flex-col border-r border-border">
+            <div className="min-h-0 flex-1">
+              <WorkPane />
+            </div>
+          </SideSlot>
         ) : null}
         {placement.screen === "main" ? (
-          <main id="main" tabIndex={-1} className={cn("min-w-0 flex-1 bg-bg outline-none", home && "max-md:hidden")}>
+          <main id="main" tabIndex={-1} className={cn("min-w-0 flex-1 bg-bg outline-none", (right || placement.left === "work") && "md:min-w-[360px]", home && "max-md:hidden")}>
             <Outlet />
           </main>
         ) : (
@@ -143,10 +148,10 @@ export function Shell() {
           </main>
         )}
         {right ? (
-          <div className={cn("flex shrink-0 flex-col border-l border-border bg-surface", width === "wide" ? "w-[440px]" : "w-[380px]")}>
+          <SideSlot side="right" content={rightContent} width={width} className="flex-col border-l border-border bg-surface">
             {width === "medium" ? switcher : null}
             <div className="min-h-0 flex-1">{right}</div>
-          </div>
+          </SideSlot>
         ) : null}
       </div>
       {placement.screen === "main" ? <BottomBar /> : null}

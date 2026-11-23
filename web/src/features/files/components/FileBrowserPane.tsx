@@ -101,9 +101,9 @@ function Browser({ agentId, channelId, initial }: { agentId: string; channelId: 
         )
       ) : (
         <div className="flex min-h-0 flex-1 flex-col @container">
-          <div className="grid min-h-0 flex-1 grid-rows-[minmax(8rem,40%)_1fr] @[720px]:grid-cols-[minmax(14rem,32%)_1fr] @[720px]:grid-rows-1">
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(8rem,40%)_minmax(0,1fr)] @[720px]:grid-cols-[minmax(14rem,32%)_minmax(0,1fr)] @[720px]:grid-rows-1">
             <div className="min-h-0 border-b border-border @[720px]:border-r @[720px]:border-b-0">{tree}</div>
-            <div className="min-h-0">{viewer}</div>
+            <div className="min-h-0 min-w-0">{viewer}</div>
           </div>
         </div>
       )}

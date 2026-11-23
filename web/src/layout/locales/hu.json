@@ -72,7 +72,9 @@
     "closeWork": "Munkapanel bezárása",
     "showThread": "Szál",
     "showWork": "Munkapanel",
-    "back": "Vissza"
+    "back": "Vissza",
+    "resize": "Panel átméretezése",
+    "resizeHint": "Húzd az átméretezéshez, dupla kattintás: alapméret"
   },
   "palette": {
     "title": "Parancspaletta",

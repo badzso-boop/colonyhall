@@ -174,6 +174,7 @@ Ikonok: **Lucide** (`lucide-react`), sűrű helyen 16 px, máshol 20 px. A logó
   - **széles (≥ 1280 px):** a szál jobbra kerül (440 px). A munkapanel (fülekkel: terminál, fájlok, agent-áttekintő) jobbra kerül, ha ott üres; ha a szál nyitva van, balra, az oldalsáv helyére (560 px), és ilyenkor az oldalsáv fiókként nyílik.
   - **közepes:** egy jobb oldali hely, az elrejtett panelre egy váltósávval lehet visszaváltani.
   - **telefon:** egymás után nyíló képernyők, „Vissza” gombbal.
+  - **átméretezés (széles és közepes):** a mellékpanelek belső szélét húzva (vagy fókuszálva a nyilakkal, Home/End) a panel szélesebb vagy keskenyebb lesz, dupla kattintás az alapméretre állít. A szélességet tartalomfajtánként (szál, agent-áttekintő, fájlok, terminál, bal munkapanel) és szélességi osztályonként jegyzi meg a böngésző (`colony.pane.widths`). Alapból a fájlböngésző szélesebben nyílik (széles: 760 px, közepes: 560 px), a terminál 640 px. A panel legalább 320 px, a chat legalább 360 px marad; a panel tartalma soha nem lóg ki az oldalból (nincs vízszintes görgetés).
 - **Szerkesztő:**
   - lekerekített keret;
   - a „+” menü (fájl, telefonon kamera), Fájlok és Terminál gomb, súgó (csak ha elfér), piros küldés gomb;
