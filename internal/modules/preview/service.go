@@ -38,6 +38,9 @@ type Conversation interface {
 // Directory is what preview needs to look up actors.
 type Directory interface {
 	ActorByID(ctx context.Context, id ids.ID) (identity.Actor, error)
+	// Current reloads an actor with its computed Halted flag (paused, or
+	// an agent during the emergency stop).
+	Current(ctx context.Context, id ids.ID) (identity.Actor, error)
 }
 
 // Service manages previews.
@@ -149,7 +152,11 @@ func (s *Service) Restart(ctx context.Context, by identity.Actor, id ids.ID) (Pr
 	if !by.IsAdmin() && !by.CanManage(agent) {
 		return Preview{}, ErrForbidden
 	}
+	// Paused, stopped, deleted, or the emergency stop is on: no restart.
 	if agent.State != identity.StateActive || agent.ArchivedAt != nil {
+		return Preview{}, ErrNotAllowed
+	}
+	if agent, err = s.Directory.Current(ctx, old.AgentID); err != nil || agent.Halted {
 		return Preview{}, ErrNotAllowed
 	}
 	// The same name is running already: that one is the answer.

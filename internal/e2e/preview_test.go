@@ -284,6 +284,10 @@ func TestPreviewHumanControls(t *testing.T) {
 		t.Fatalf("second restart: %d %s", s, same.ID)
 	}
 
+	if s := e.do("POST", "/api/v1/previews/"+again.ID+"/stop", server.DevAdminToken, nil, nil); s != http.StatusOK {
+		t.Fatalf("stop restarted: %d", s)
+	}
+
 	// No longer allowed previews: refused.
 	e.configure(agent, map[string]any{
 		"host_id":       hostID,
@@ -293,11 +297,24 @@ func TestPreviewHumanControls(t *testing.T) {
 		"root_dir":      "/app",
 		"allow_preview": false,
 	})
-	if s := e.do("POST", "/api/v1/previews/"+again.ID+"/stop", server.DevAdminToken, nil, nil); s != http.StatusOK {
-		t.Fatalf("stop restarted: %d", s)
-	}
 	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAdminToken, nil, nil); s != http.StatusBadRequest {
 		t.Fatalf("restart without allow_preview: %d", s)
+	}
+
+	// Allowed again, but the emergency stop is on (the agent is halted): refused.
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": true,
+	})
+	if s := e.do("POST", "/api/v1/admin/emergency-stop", server.DevAdminToken, map[string]any{"reason": "test"}, nil); s != http.StatusOK {
+		t.Fatalf("emergency stop: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAdminToken, nil, nil); s != http.StatusBadRequest {
+		t.Fatalf("restart during emergency stop: %d", s)
 	}
 }
 

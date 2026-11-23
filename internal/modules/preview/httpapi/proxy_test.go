@@ -58,6 +58,10 @@ func (fakeAuth) RecordBreakGlassRead(context.Context, identity.Actor, string, st
 
 type directory struct{}
 
+func (d directory) Current(ctx context.Context, id ids.ID) (identity.Actor, error) {
+	return d.ActorByID(ctx, id)
+}
+
 func (directory) ActorByID(_ context.Context, id ids.ID) (identity.Actor, error) {
 	for _, a := range []identity.Actor{agent, owned} {
 		if a.ID == id {
