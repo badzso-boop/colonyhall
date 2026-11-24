@@ -72,7 +72,11 @@ roots:
 # on one machine must get ranges that do not overlap, e.g. 41000-41999 and
 # 42000-42999.
 # preview_ports: 41000-41999
-# preview_host: 127.0.0.1
+# preview_host is the address the previews listen on. People open them
+# through the server's proxy (round 57), so it must be an address the
+# server reaches: this machine's Tailscale IP (the server's
+# COLONY_PREVIEW_NETS lists the networks it may dial).
+# preview_host: 100.64.0.10
 
 # tmux socket name of the agents' terminals (tmux -L). tmux keeps sockets
 # per Linux user ($TMUX_TMPDIR/tmux-<uid>/), so guards of different users

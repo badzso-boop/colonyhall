@@ -190,7 +190,8 @@
     "confirmTitle": "Stop the preview {{name}}?",
     "confirmBody": "The preview's containers stop and the link goes away.",
     "stopped": "The preview stopped.",
-    "stopFailed": "Could not stop the preview."
+    "stopFailed": "Could not stop the preview.",
+    "open": "Open here"
   },
   "settings": {
     "name": "Name",

@@ -51,6 +51,20 @@ type Config struct {
 	GiteaPublicURL string
 	// GiteaWebhookSecret is the HMAC secret for verifying incoming webhooks.
 	GiteaWebhookSecret string
+	// PreviewAddr (COLONY_PREVIEW_ADDR, e.g. ":8081") is the preview
+	// listener: the reverse proxy to running previews on its own origin
+	// (round 57). Empty: no proxy, previews are links only.
+	PreviewAddr string
+	// PreviewOrigin (COLONY_PREVIEW_ORIGIN) is the preview listener's
+	// address as browsers see it (scheme://host:port), when it is not the
+	// app's host name with PreviewAddr's port (behind a reverse proxy).
+	PreviewOrigin string
+	// PreviewNets (COLONY_PREVIEW_NETS, comma-separated prefixes) are the
+	// networks the proxy may reach previews on; empty: Tailscale's. A guard
+	// cannot point the server at anything else (its own services, the
+	// container network). Add the LAN (192.168.1.0/24) or 127.0.0.0/8 (one
+	// machine, natively) when previews live there.
+	PreviewNets []netip.Prefix
 	// CalendarRefresh is how often subscribed calendars are fetched (default 15m).
 	CalendarRefresh time.Duration
 	// EmbedURL is the search's embedding server (the Raspberry Pi); empty:
@@ -242,6 +256,10 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("config: COLONY_OPERATOR_ALLOWLIST: %w", err)
 	}
+	previewNets, err := clientip.ParseList(os.Getenv("COLONY_PREVIEW_NETS"))
+	if err != nil {
+		return Config{}, fmt.Errorf("config: COLONY_PREVIEW_NETS: %w", err)
+	}
 	c := Config{
 		Env:                getenv("COLONY_ENV", EnvProduction),
 		OperatorDevAccess:  os.Getenv("COLONY_OPERATOR_DEV_ACCESS") == "1",
@@ -249,6 +267,7 @@ func FromEnv() (Config, error) {
 		EgressAllow:        egressAllow,
 		Ext:                ext,
 		OperatorAllowlist:  opAllow,
+		PreviewNets:        previewNets,
 		EmbedURL:           os.Getenv("COLONY_EMBED_URL"),
 		RerankURL:          os.Getenv("COLONY_RERANK_URL"),
 		RerankTop:          rerankTop,
@@ -265,6 +284,8 @@ func FromEnv() (Config, error) {
 		GiteaURL:           os.Getenv("COLONY_GITEA_URL"),
 		GiteaToken:         os.Getenv("COLONY_GITEA_TOKEN"),
 		GiteaPublicURL:     os.Getenv("COLONY_GITEA_PUBLIC_URL"),
+		PreviewAddr:        os.Getenv("COLONY_PREVIEW_ADDR"),
+		PreviewOrigin:      os.Getenv("COLONY_PREVIEW_ORIGIN"),
 		SourceURL:          getenv("COLONY_SOURCE_URL", DefaultSourceURL),
 		GiteaWebhookSecret: os.Getenv("COLONY_GITEA_WEBHOOK_SECRET"),
 		Multitenant:        os.Getenv("COLONY_MULTITENANT") == "1",

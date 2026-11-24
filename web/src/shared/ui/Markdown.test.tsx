@@ -3,6 +3,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Markdown } from "./Markdown";
+import { registerLinkHandler } from "@/shared/lib";
 
 const labels = { copyLabel: "Másolás", copiedLabel: "Másolva" };
 
@@ -69,4 +70,17 @@ test("code blocks keep their text and have a copy button", () => {
   const { container } = render(<Markdown text={"```go\nfmt.Println(\"<b>\")\n```"} {...labels} />);
   expect(container.querySelector("pre code")?.textContent).toBe('fmt.Println("<b>")');
   expect(screen.getByRole("button", { name: "Másolás" })).toBeTruthy();
+});
+
+test("a link a feature takes (a preview, round 57) is not followed; others are", () => {
+  const off = registerLinkHandler((href) => href.startsWith("http://192.0.2.1:41000"));
+  render(<Markdown text="[app](http://192.0.2.1:41000/) and [docs](https://example.com/)" {...labels} />);
+  const taken = fireEvent.click(screen.getByText("app"));
+  const followed = fireEvent.click(screen.getByText("docs"));
+  // fireEvent returns false when the default (following the link) was prevented.
+  expect(taken).toBe(false);
+  expect(followed).toBe(true);
+  // A ctrl-click still opens a new tab.
+  expect(fireEvent.click(screen.getByText("app"), { ctrlKey: true })).toBe(true);
+  off();
 });

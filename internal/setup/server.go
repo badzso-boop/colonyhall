@@ -132,6 +132,10 @@ services:
       COLONY_MAX_UPLOAD_MB: ${COLONY_MAX_UPLOAD_MB:-25}
       COLONY_GITEA_URL: ${COLONY_GITEA_URL:-}
       COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
+      # Round 57: the preview reverse proxy on its own port (its own origin).
+      COLONY_PREVIEW_ADDR: ":${COLONY_PREVIEW_PORT:-8081}"
+      COLONY_PREVIEW_ORIGIN: ${COLONY_PREVIEW_ORIGIN:-}
+      COLONY_PREVIEW_NETS: ${COLONY_PREVIEW_NETS:-}
       # Where this server's source can be downloaded (AGPL section 13); empty: upstream.
       COLONY_SOURCE_URL: ${COLONY_SOURCE_URL:-}
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
@@ -181,6 +185,7 @@ services:
       - files:/data/files
     ports:
       - "${COLONY_BIND:-127.0.0.1}:${COLONY_PORT:-8080}:8080"
+      - "${COLONY_BIND:-127.0.0.1}:${COLONY_PREVIEW_PORT:-8081}:${COLONY_PREVIEW_PORT:-8081}"
 
   # Round 56b: the Workshop's code runner (COLONY_ROLE=ext-runner): the same
   # image, its own process, no database, no secrets, no published port; it

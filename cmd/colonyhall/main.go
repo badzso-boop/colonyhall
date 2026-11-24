@@ -255,6 +255,9 @@ func run(logger *slog.Logger) error {
 		GiteaPublicURL:     cfg.GiteaPublicURL,
 		SourceURL:          cfg.SourceURL,
 		GiteaWebhookSecret: cfg.GiteaWebhookSecret,
+		PreviewAddr:        cfg.PreviewAddr,
+		PreviewOrigin:      cfg.PreviewOrigin,
+		PreviewNets:        cfg.PreviewNets,
 		EmbedURL:           cfg.EmbedURL,
 		RerankURL:          cfg.RerankURL,
 		RerankTop:          cfg.RerankTop,
@@ -292,13 +295,22 @@ func run(logger *slog.Logger) error {
 	// spare the WebSockets and the MCP stream); the server bounds the rest.
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: app.Handler, ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 	go func() { errCh <- srv.ListenAndServe() }()
 	var hostSrv *http.Server
 	if extHosts != nil {
 		hostSrv = &http.Server{Addr: cfg.Ext.HostAddr, Handler: extHosts.Handler(), ReadHeaderTimeout: 10 * time.Second}
 		go func() { errCh <- hostSrv.ListenAndServe() }()
 		logger.Info("workshop code runner", "runner", cfg.Ext.RunnerURL, "host_listener", cfg.Ext.HostAddr)
+	}
+	var previewSrv *http.Server
+	if app.PreviewHandler != nil {
+		// Round 57: the preview reverse proxy on its own origin. No write
+		// deadline: live-reload WebSockets stay open.
+		previewSrv = &http.Server{Addr: cfg.PreviewAddr, Handler: app.PreviewHandler, ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
+		go func() { errCh <- previewSrv.ListenAndServe() }()
+		logger.Info("preview proxy listening", "addr", cfg.PreviewAddr)
 	}
 	logger.Info("colonyhall listening", "addr", cfg.HTTPAddr, "store", cfg.Store, "version", server.Version)
 
@@ -314,6 +326,9 @@ func run(logger *slog.Logger) error {
 	logger.Info("shutting down")
 	if hostSrv != nil {
 		_ = hostSrv.Shutdown(shutdownCtx)
+	}
+	if previewSrv != nil {
+		_ = previewSrv.Shutdown(shutdownCtx)
 	}
 	return srv.Shutdown(shutdownCtx)
 }

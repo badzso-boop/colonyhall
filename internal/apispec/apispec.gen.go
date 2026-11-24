@@ -3862,8 +3862,13 @@ type HostPreview struct {
 	ExpiresAt   time.Time          `json:"expires_at"`
 	Id          openapi_types.UUID `json:"id"`
 	Name        string             `json:"name"`
-	State       HostPreviewState   `json:"state"`
-	Url         *string            `json:"url,omitempty"`
+
+	// ProxyUrl Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR).
+	ProxyUrl *string          `json:"proxy_url,omitempty"`
+	State    HostPreviewState `json:"state"`
+
+	// Url The address the guard reported (on the guard's network).
+	Url *string `json:"url,omitempty"`
 }
 
 // HostPreviewState defines model for HostPreview.State.
@@ -4567,20 +4572,25 @@ type PlannerTaskStatus string
 
 // Preview defines model for Preview.
 type Preview struct {
-	AgentId      openapi_types.UUID  `json:"agent_id"`
-	ChannelId    openapi_types.UUID  `json:"channel_id"`
-	ComposePath  string              `json:"compose_path"`
-	CreatedAt    time.Time           `json:"created_at"`
-	Error        *string             `json:"error,omitempty"`
-	ExpiresAt    time.Time           `json:"expires_at"`
-	HostId       openapi_types.UUID  `json:"host_id"`
-	Id           openapi_types.UUID  `json:"id"`
-	Name         string              `json:"name"`
+	AgentId     openapi_types.UUID `json:"agent_id"`
+	ChannelId   openapi_types.UUID `json:"channel_id"`
+	ComposePath string             `json:"compose_path"`
+	CreatedAt   time.Time          `json:"created_at"`
+	Error       *string            `json:"error,omitempty"`
+	ExpiresAt   time.Time          `json:"expires_at"`
+	HostId      openapi_types.UUID `json:"host_id"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+
+	// ProxyUrl Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR).
+	ProxyUrl     *string             `json:"proxy_url,omitempty"`
 	State        PreviewState        `json:"state"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 	UpdatedAt    time.Time           `json:"updated_at"`
-	Url          *string             `json:"url,omitempty"`
-	WorkspaceId  openapi_types.UUID  `json:"workspace_id"`
+
+	// Url The address the guard reported (on the guard's network).
+	Url         *string            `json:"url,omitempty"`
+	WorkspaceId openapi_types.UUID `json:"workspace_id"`
 }
 
 // PreviewState defines model for Preview.State.

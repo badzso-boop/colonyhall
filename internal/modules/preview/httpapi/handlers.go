@@ -42,7 +42,7 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) 
 	return id, true
 }
 
-func previewOut(p preview.Preview) apispec.Preview {
+func previewOut(r *http.Request, links Links, p preview.Preview) apispec.Preview {
 	var urlPtr, errPtr *string
 	if p.URL != "" {
 		urlPtr = &p.URL
@@ -62,14 +62,27 @@ func previewOut(p preview.Preview) apispec.Preview {
 		State:        apispec.PreviewState(p.State),
 		Url:          urlPtr,
 		Error:        errPtr,
+		ProxyUrl:     proxyURL(r, links, p),
 		ExpiresAt:    p.ExpiresAt,
 		CreatedAt:    p.CreatedAt,
 		UpdatedAt:    p.UpdatedAt,
 	}
 }
 
+// proxyURL is set for people only: agents do not use the proxy.
+func proxyURL(r *http.Request, links Links, p preview.Preview) *string {
+	if httpx.Actor(r).Kind != identity.KindHuman {
+		return nil
+	}
+	u := links.URL(r, p.ID.String())
+	if u == "" {
+		return nil
+	}
+	return &u
+}
+
 // Register mounts the preview routes on mux.
-func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAuthenticator, hostAuth HostAuthenticator) {
+func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAuthenticator, hostAuth HostAuthenticator, links Links) {
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
 
 	mux.Handle("GET /api/v1/previews", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +102,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 		}
 		out := apispec.PreviewList{Previews: make([]apispec.Preview, 0, len(ps))}
 		for _, p := range ps {
-			out.Previews = append(out.Previews, previewOut(p))
+			out.Previews = append(out.Previews, previewOut(r, links, p))
 		}
 		httpx.JSON(w, http.StatusOK, out)
 	}))
@@ -104,7 +117,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, previewOut(p))
+		httpx.JSON(w, http.StatusOK, previewOut(r, links, p))
 	}))
 
 	mux.Handle("POST /api/v1/previews/{previewId}/stop", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -117,8 +130,33 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 			httpx.Error(w, r, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, previewOut(p))
+		httpx.JSON(w, http.StatusOK, previewOut(r, links, p))
 	}))
+
+	mux.Handle("POST /api/v1/previews/{previewId}/restart", wrap(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "previewId")
+		if !ok {
+			return
+		}
+		p, err := svc.Restart(r.Context(), httpx.Actor(r), id)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		httpx.JSON(w, http.StatusCreated, previewOut(r, links, p))
+	}))
+
+	// Round 57: the app's own origin never proxies a preview (its scripts
+	// would act with the person's session); the proxy is on the preview
+	// listener (RegisterProxy). Behind RequireAuth, so a break-glass
+	// session gets its usual refusal.
+	notHere := wrap(func(w http.ResponseWriter, r *http.Request) {
+		httpx.Error(w, r, db.ErrNotFound)
+	})
+	for _, m := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
+		mux.Handle(m+" /api/v1/previews/{previewId}/proxy", notHere)
+		mux.Handle(m+" /api/v1/previews/{previewId}/proxy/{path...}", notHere)
+	}
 
 	// Guard route: report preview state.
 	mux.HandleFunc("POST /api/v1/host/previews/{previewId}", func(w http.ResponseWriter, r *http.Request) {

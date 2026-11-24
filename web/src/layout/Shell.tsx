@@ -11,6 +11,7 @@ import { useLocalStorage, useWidth } from "@/shared/hooks";
 import { place, usePanes, type SlotContent } from "@/shared/panes";
 import { ThreadPane, useConversationOrder, useMentionTotal } from "@/features/conversation";
 import { useActivityUnread } from "@/features/activity";
+import { PreviewColumn, usePreviewLinks, usePreviewParam } from "@/features/previews";
 import { AgentDialogs } from "@/features/agents";
 import { BreakGlassBanner, useSession } from "@/features/identity";
 import { ScheduleBuilderHost } from "@/features/schedules";
@@ -52,6 +53,9 @@ export function Shell() {
   const order = useConversationOrder();
   const role = useSession().data?.actor.role;
   const admin = role === "owner" || role === "admin";
+  // Round 57: the live preview beside the conversation (?preview=<id>).
+  const [previewId, , closePreview] = usePreviewParam();
+  usePreviewLinks();
 
   // Shortcuts of the frame (round 31 part 8); Radix closes dialogs on Esc itself.
   useShortcut("mod+k", "global", "palette", () => openOverlay("palette"));
@@ -153,6 +157,7 @@ export function Shell() {
             <div className="min-h-0 flex-1">{right}</div>
           </SideSlot>
         ) : null}
+        {previewId ? <PreviewColumn key={previewId} previewId={previewId} narrow={width === "narrow"} onClose={closePreview} /> : null}
       </div>
       {placement.screen === "main" ? <BottomBar /> : null}
       <FloatingWindows />

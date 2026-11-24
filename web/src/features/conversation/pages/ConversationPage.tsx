@@ -9,6 +9,7 @@ import { usePanes } from "@/shared/panes";
 import { EmptyState, Skeleton, toast } from "@/shared/ui";
 import { GrantBar } from "@/features/approvals";
 import { useActors, useSession } from "@/features/identity";
+import { PreviewHeaderButton } from "@/features/previews";
 import { useChannels, useMembers } from "../api";
 import { useAttachments } from "../attachments";
 import { isChannelTab, type ChannelTab } from "../channel";
@@ -78,7 +79,14 @@ function Conversation({ channel, actors, meId }: { channel: Channel; actors: Map
 
   return (
     <DropZone onFiles={tray.add} className="flex h-full min-h-0 flex-col">
-      <ChannelHeader channel={channel} title={title} actors={actors} admin={admin} onSettings={setSettings} />
+      <ChannelHeader
+        channel={channel}
+        title={title}
+        actors={actors}
+        admin={admin}
+        onSettings={setSettings}
+        extra={viewer.human ? <PreviewHeaderButton channelId={channel.id} /> : null}
+      />
       {viewer.human ? <GrantBar channelId={channel.id} isDm={channel.kind === "dm"} admin={viewer.admin} /> : null}
       <Feed key={channel.id} channel={channel} actors={actors} viewer={viewer} handlers={handlers} />
       <ActivityLine channelId={channel.id} actors={actors} />

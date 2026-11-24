@@ -2856,6 +2856,80 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
         "200": { description: Stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
 
+  /previews/{previewId}/restart:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: restartPreview
+      tags: [previews]
+      description: "Humans: an admin, or a person who manages the agent. Round 57: asks the agent's machine to start the preview again with the same name, compose file and conversation (a new preview, state requested, default TTL); the guard validates the compose file again. If one with this name is already active, that one is returned. 400 when the agent is no longer active or allowed previews."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "201": { description: Requested, content: { application/json: { schema: { $ref: "#/components/schemas/Preview" } } } }
+
+  /previews/{previewId}/proxy:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: proxyPreviewRoot
+      tags: [previews]
+      description: "Humans who may see the preview (as getPreview). Round 57: the reverse proxy to a running preview, served only on the preview listener (COLONY_PREVIEW_ADDR, its own origin, so the preview's scripts cannot use the app's session); the main listener answers 404. The path is forwarded unchanged (the preview is started with COLONY_PREVIEW_BASE set to it); the session cookie, Authorization and X-CSRF-Token are not forwarded."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "The preview's own answer, any status and type", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "101": { description: "WebSocket upgrade (live reload), forwarded to the preview" }
+        "502": { description: "The preview is not running or does not answer", content: { text/html: { schema: { type: string } }, application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+
+  /previews/{previewId}/proxy/{path}:
+    parameters:
+      - { name: previewId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: path, in: path, required: true, description: "The rest of the path; it may contain slashes.", schema: { type: string } }
+    get:
+      operationId: proxyPreviewGet
+      tags: [previews]
+      description: "As proxyPreviewRoot, for the rest of the path."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "The preview's own answer, any status and type", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "101": { description: "WebSocket upgrade (live reload), forwarded to the preview" }
+        "502": { description: "The preview is not running or does not answer", content: { text/html: { schema: { type: string } }, application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    post:
+      operationId: proxyPreviewPost
+      tags: [previews]
+      description: "As proxyPreviewRoot, for the rest of the path."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "The preview's own answer, any status and type", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "101": { description: "WebSocket upgrade (live reload), forwarded to the preview" }
+        "502": { description: "The preview is not running or does not answer", content: { text/html: { schema: { type: string } }, application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    put:
+      operationId: proxyPreviewPut
+      tags: [previews]
+      description: "As proxyPreviewRoot, for the rest of the path."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "The preview's own answer, any status and type", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "101": { description: "WebSocket upgrade (live reload), forwarded to the preview" }
+        "502": { description: "The preview is not running or does not answer", content: { text/html: { schema: { type: string } }, application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    patch:
+      operationId: proxyPreviewPatch
+      tags: [previews]
+      description: "As proxyPreviewRoot, for the rest of the path."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "The preview's own answer, any status and type", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "101": { description: "WebSocket upgrade (live reload), forwarded to the preview" }
+        "502": { description: "The preview is not running or does not answer", content: { text/html: { schema: { type: string } }, application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    delete:
+      operationId: proxyPreviewDelete
+      tags: [previews]
+      description: "As proxyPreviewRoot, for the rest of the path."
+      responses:
+        default: { $ref: "#/components/responses/Problem" }
+        "200": { description: "The preview's own answer, any status and type", content: { "*/*": { schema: { type: string, format: binary } } } }
+        "101": { description: "WebSocket upgrade (live reload), forwarded to the preview" }
+        "502": { description: "The preview is not running or does not answer", content: { text/html: { schema: { type: string } }, application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+
   /planner/tasks:
     get:
       operationId: listPlannerTasks
@@ -6360,7 +6434,8 @@ components:
         name: { type: string }
         compose_path: { type: string }
         state: { type: string, enum: [requested, running, stopped, failed] }
-        url: { type: string }
+        url: { type: string, description: "The address the guard reported (on the guard's network)." }
+        proxy_url: { type: string, description: "Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR)." }
         error: { type: string }
         expires_at: { type: string, format: date-time }
     HostPreviewReport:
@@ -6383,7 +6458,8 @@ components:
         name: { type: string }
         compose_path: { type: string }
         state: { type: string, enum: [requested, running, stopped, failed] }
-        url: { type: string }
+        url: { type: string, description: "The address the guard reported (on the guard's network)." }
+        proxy_url: { type: string, description: "Round 57: the address the browser opens the preview on, through the server's reverse proxy (its own origin). Absent when the server has no preview listener (COLONY_PREVIEW_ADDR)." }
         error: { type: string }
         expires_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }

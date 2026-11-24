@@ -273,8 +273,16 @@ func ValidateComposeYAML(raw []byte, composePath, rootDir string) (*ComposeInfo,
 			var isBind bool
 			switch val := v.(type) {
 			case string:
+				// Compose interpolates variables before it splits the
+				// string, so "${X}" may become any bind mount: refuse
+				// every variable, whatever the colon count.
+				if strings.Contains(val, "$") {
+					return nil, fmt.Errorf("refused: service %q volume %q uses ~ or a variable", sName, val)
+				}
 				parts := strings.Split(val, ":")
-				if len(parts) > 0 {
+				// A single container path ("/app/node_modules") is an
+				// anonymous volume, not a bind mount of a host path.
+				if len(parts) > 1 {
 					sPart := strings.TrimSpace(parts[0])
 					if strings.Contains(sPart, "docker.sock") {
 						return nil, fmt.Errorf("refused: service %q mounts docker socket", sName)
@@ -286,6 +294,11 @@ func ValidateComposeYAML(raw []byte, composePath, rootDir string) (*ComposeInfo,
 					}
 				}
 			case map[string]any:
+				for _, k := range []string{"source", "target"} {
+					if v, ok := val[k].(string); ok && strings.Contains(v, "$") {
+						return nil, fmt.Errorf("refused: service %q volume %q uses ~ or a variable", sName, v)
+					}
+				}
 				if sVal, ok := val["source"].(string); ok {
 					if strings.Contains(sVal, "docker.sock") {
 						return nil, fmt.Errorf("refused: service %q mounts docker socket", sName)
@@ -489,7 +502,9 @@ func (p *PortPool) IsUsed(port int) bool {
 }
 
 // GenerateOverrideContent generates docker-compose override YAML bytes.
-func GenerateOverrideContent(previewHost string, ports []ComposeServicePort, defaultLimits map[string]bool, servicesWithPorts map[string]bool) ([]byte, error) {
+// Every service listed in services gets the variables in env (round 57:
+// COLONY_PREVIEW_BASE, the path the server's proxy serves the preview on).
+func GenerateOverrideContent(previewHost string, ports []ComposeServicePort, defaultLimits map[string]bool, servicesWithPorts map[string]bool, services []string, env map[string]string) ([]byte, error) {
 	servicesMapNode := &yaml.Node{
 		Kind: yaml.MappingNode,
 	}
@@ -510,6 +525,11 @@ func GenerateOverrideContent(previewHost string, ports []ComposeServicePort, def
 	}
 	for s := range servicesWithPorts {
 		allServices[s] = true
+	}
+	if len(env) > 0 {
+		for _, s := range services {
+			allServices[s] = true
+		}
 	}
 
 	var sortedServices []string
@@ -570,6 +590,21 @@ func GenerateOverrideContent(previewHost string, ports []ComposeServicePort, def
 			)
 		}
 
+		if len(env) > 0 && slices.Contains(services, sName) {
+			envNode := &yaml.Node{Kind: yaml.MappingNode}
+			keys := make([]string, 0, len(env))
+			for k := range env {
+				keys = append(keys, k)
+			}
+			slices.Sort(keys)
+			for _, k := range keys {
+				envNode.Content = append(envNode.Content,
+					&yaml.Node{Kind: yaml.ScalarNode, Value: k},
+					&yaml.Node{Kind: yaml.ScalarNode, Value: env[k], Style: yaml.DoubleQuotedStyle})
+			}
+			sNode.Content = append(sNode.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "environment"}, envNode)
+		}
+
 		if len(sNode.Content) > 0 {
 			servicesMapNode.Content = append(servicesMapNode.Content,
 				&yaml.Node{Kind: yaml.ScalarNode, Value: sName},
@@ -592,6 +627,14 @@ func GenerateOverrideContent(previewHost string, ports []ComposeServicePort, def
 	}
 
 	return yaml.Marshal(docNode)
+}
+
+// PreviewBasePath is the path the server's reverse proxy serves a preview
+// on (round 57). The proxy forwards it unchanged, so a dev server started
+// with this base (Vite --base, Next basePath) builds links and its live
+// reload socket under it.
+func PreviewBasePath(previewID string) string {
+	return "/api/v1/previews/" + previewID + "/proxy/"
 }
 
 // DockerRunner runs docker compose commands.
@@ -803,7 +846,8 @@ func (s *PreviewSupervisor) Reconcile(ctx context.Context, previews []HostPrevie
 			}
 
 			// Generate override file
-			overrideContent, err := GenerateOverrideContent(s.PreviewHost, info.Ports, info.NeedsDefaultLimits, info.ServicesWithPorts)
+			overrideContent, err := GenerateOverrideContent(s.PreviewHost, info.Ports, info.NeedsDefaultLimits, info.ServicesWithPorts,
+				info.Services, map[string]string{"COLONY_PREVIEW_BASE": PreviewBasePath(p.ID)})
 			if err != nil {
 				s.Ports.Free(p.ID)
 				_ = s.Client.ReportPreview(ctx, p.ID, "failed", "", fmt.Sprintf("generate override: %s", err))

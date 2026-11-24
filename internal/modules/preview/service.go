@@ -38,6 +38,9 @@ type Conversation interface {
 // Directory is what preview needs to look up actors.
 type Directory interface {
 	ActorByID(ctx context.Context, id ids.ID) (identity.Actor, error)
+	// Current reloads an actor with its computed Halted flag (paused, or
+	// an agent during the emergency stop).
+	Current(ctx context.Context, id ids.ID) (identity.Actor, error)
 }
 
 // Service manages previews.
@@ -107,14 +110,11 @@ func (s *Service) Start(ctx context.Context, by identity.Actor, in StartInput) (
 		return Preview{}, err
 	}
 
-	now := s.Clock.Now()
 	var threadRootPtr *ids.ID
 	if in.ThreadRootID != ids.Nil {
 		threadRootPtr = &in.ThreadRootID
 	}
-
-	p := Preview{
-		ID:           s.IDs.New(),
+	return s.request(ctx, by, Preview{
 		WorkspaceID:  by.WorkspaceID,
 		AgentID:      by.ID,
 		HostID:       as.HostID,
@@ -122,18 +122,86 @@ func (s *Service) Start(ctx context.Context, by identity.Actor, in StartInput) (
 		ThreadRootID: threadRootPtr,
 		Name:         strings.TrimSpace(in.Name),
 		ComposePath:  strings.TrimSpace(in.ComposePath),
-		State:        StateRequested,
-		ExpiresAt:    now.Add(ttl),
-		CreatedAt:    now,
-		UpdatedAt:    now,
+	}, ttl)
+}
+
+// Restart asks the agent's machine to start a preview again with the
+// same compose file, name and conversation (round 57): a person need not
+// ask the agent for a preview it already ran. The guard picks up the new
+// requested preview and validates the compose file again, as for
+// preview_start. Who may: an admin, or a person who manages the agent
+// (as StopByID); the agent must still be active and allowed previews.
+func (s *Service) Restart(ctx context.Context, by identity.Actor, id ids.ID) (Preview, error) {
+	if by.Halted {
+		return Preview{}, ErrForbidden
 	}
+	old, err := s.Store.ByID(ctx, id)
+	if err != nil {
+		return Preview{}, err
+	}
+	if old.WorkspaceID != by.WorkspaceID || !s.seen(ctx, by, old.AgentID) {
+		return Preview{}, db.ErrNotFound
+	}
+	if by.Kind != identity.KindHuman {
+		return Preview{}, ErrForbidden
+	}
+	agent, err := s.Directory.ActorByID(ctx, old.AgentID)
+	if err != nil {
+		return Preview{}, ErrForbidden
+	}
+	if !by.IsAdmin() && !by.CanManage(agent) {
+		return Preview{}, ErrForbidden
+	}
+	// Paused, stopped, deleted, or the emergency stop is on: no restart.
+	if agent.State != identity.StateActive || agent.ArchivedAt != nil {
+		return Preview{}, ErrNotAllowed
+	}
+	if agent, err = s.Directory.Current(ctx, old.AgentID); err != nil || agent.Halted {
+		return Preview{}, ErrNotAllowed
+	}
+	// The same name is running already: that one is the answer.
+	if cur, err := s.Store.ActiveByAgentAndName(ctx, old.AgentID, old.Name); err == nil {
+		return cur, nil
+	} else if !errors.Is(err, db.ErrNotFound) {
+		return Preview{}, err
+	}
+	as, err := s.Hosts.Assignment(ctx, old.AgentID)
+	if err != nil || !as.AllowPreview || as.Mode != hosts.AgentModeDirect || as.Sandbox {
+		return Preview{}, ErrNotAllowed
+	}
+	// The announcement is the agent's message: it must still write there.
+	if old.ChannelID != ids.Nil {
+		if ok, err := s.Conversation.CanWrite(ctx, agent, old.ChannelID); err != nil || !ok {
+			return Preview{}, ErrNotAllowed
+		}
+	}
+	return s.request(ctx, by, Preview{
+		WorkspaceID:  old.WorkspaceID,
+		AgentID:      old.AgentID,
+		HostID:       as.HostID,
+		ChannelID:    old.ChannelID,
+		ThreadRootID: old.ThreadRootID,
+		Name:         old.Name,
+		ComposePath:  old.ComposePath,
+	}, DefaultTTL)
+}
+
+// request stores a new requested preview and its event; the guard of
+// p.HostID starts it. by is who asked (the agent, or a person restarting).
+func (s *Service) request(ctx context.Context, by identity.Actor, p Preview, ttl time.Duration) (Preview, error) {
+	now := s.Clock.Now()
+	p.ID = s.IDs.New()
+	p.State = StateRequested
+	p.ExpiresAt = now.Add(ttl)
+	p.CreatedAt = now
+	p.UpdatedAt = now
 
 	var seq int64
-	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
+	err := s.Tx.InTx(ctx, func(ctx context.Context) error {
 		if err := s.Store.Create(ctx, p); err != nil {
 			return err
 		}
-		ev, err := eventlog.NewEvent(s.IDs.New(), by.WorkspaceID, EventPreviewRequested, by.ID, in.ChannelID,
+		ev, err := eventlog.NewEvent(s.IDs.New(), p.WorkspaceID, EventPreviewRequested, by.ID, p.ChannelID,
 			"preview", p.ID, PreviewEvent{
 				PreviewID:   p.ID.String(),
 				AgentID:     p.AgentID.String(),
@@ -265,6 +333,24 @@ func (s *Service) Get(ctx context.Context, by identity.Actor, id ids.ID) (Previe
 	}
 	if p.WorkspaceID != by.WorkspaceID || !s.seen(ctx, by, p.AgentID) {
 		return Preview{}, db.ErrNotFound
+	}
+	return p, nil
+}
+
+// ProxyTarget is the running preview a person opens through the server's
+// reverse proxy (round 57). Same visibility as Get; agents never use it
+// (the proxy would let them reach other machines' ports through the
+// server), and a preview that is not running is ErrOffline.
+func (s *Service) ProxyTarget(ctx context.Context, by identity.Actor, id ids.ID) (Preview, error) {
+	if by.Kind != identity.KindHuman {
+		return Preview{}, ErrForbidden
+	}
+	p, err := s.Get(ctx, by, id)
+	if err != nil {
+		return Preview{}, err
+	}
+	if p.State != StateRunning || p.URL == "" || !s.Clock.Now().Before(p.ExpiresAt) {
+		return p, ErrOffline
 	}
 	return p, nil
 }

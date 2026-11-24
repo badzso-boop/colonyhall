@@ -7,7 +7,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"io/fs"
+	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"strings"
 	"time"
@@ -22,7 +24,7 @@ import (
 var inlineScriptRe = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 
 // appCSP builds the PWA's policy from its built index.html.
-func appCSP(dist fs.FS) string {
+func appCSP(dist fs.FS, frameSrc ...string) string {
 	scripts := []string{"'self'"}
 	if page, err := fs.ReadFile(dist, "index.html"); err == nil {
 		for _, m := range inlineScriptRe.FindAllSubmatch(page, -1) {
@@ -38,6 +40,7 @@ func appCSP(dist fs.FS) string {
 		"img-src 'self' data: blob:",
 		"font-src 'self' data:",
 		"connect-src 'self'",
+		"frame-src " + strings.Join(append([]string{"'self'"}, frameSrc...), " "),
 		"worker-src 'self'",
 		"manifest-src 'self'",
 		"media-src 'self' blob:",
@@ -77,6 +80,55 @@ func securityHeaders(appPolicy string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// previewHeaders: a preview is the agent's page, not ours. It may be
+// embedded only by a page on the same host name (the app, on its own port)
+// and keeps its own Content-Security-Policy; ours only adds the frame rule.
+func previewHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		if validHost(host) {
+			h.Add("Content-Security-Policy", "frame-ancestors http://"+hostSource(host)+":* https://"+hostSource(host)+":*")
+		} else {
+			h.Add("Content-Security-Policy", "frame-ancestors 'none'")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// validHost keeps a request's Host header out of the policy unless it is
+// a plain host name or address.
+func validHost(h string) bool {
+	h = strings.Trim(h, "[]")
+	if h == "" || len(h) > 253 {
+		return false
+	}
+	if _, err := netip.ParseAddr(h); err == nil {
+		return true
+	}
+	for _, c := range h {
+		switch {
+		case c == '.', c == '-', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func hostSource(h string) string {
+	h = strings.Trim(h, "[]")
+	if a, err := netip.ParseAddr(h); err == nil && a.Is6() {
+		return "[" + h + "]"
+	}
+	return h
 }
 
 // Timeouts bounds how long one request may take to read and to answer.

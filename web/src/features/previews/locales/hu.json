@@ -1,0 +1,31 @@
+{
+  "title": "Élő előnézet",
+  "start": "Előnézet indítása",
+  "open": "Előnézet",
+  "stop": "Leállítás",
+  "refresh": "Újratöltés",
+  "openNewTab": "Új lapon megnyitás",
+  "close": "Bezárás",
+  "cancel": "Mégse",
+  "offline": "Az előnézet nem fut ({{state}}). Amint elindul, itt megjelenik.",
+  "noProxy": "A szerveren nincs előnézeti proxy (COLONY_PREVIEW_ADDR), ezért itt nem nyitható meg.",
+  "resize": "Az előnézet szélessége",
+  "frame": "{{name}} előnézete",
+  "askAgent": "Kérlek, indíts élő előnézetet (preview_start) az alkalmazásról egy compose.yaml-lal.",
+  "startHint": "A szerkesztőbe kerül egy kérés az agentnek: az agent indítja az előnézetet a saját compose fájljával.",
+  "confirmTitle": "Leállítod a(z) {{name}} előnézetet?",
+  "confirmBody": "Az előnézet konténerei leállnak. A panel bezárható és később újra megnyitható; a leállított előnézet az „Újraindítás” gombbal indul újra.",
+  "stopped": "Az előnézet leállt.",
+  "stopFailed": "Nem sikerült leállítani az előnézetet.",
+  "notFound": "Ez az előnézet nem található.",
+  "restart": "Újraindítás",
+  "restartHint": "Az agent gépe a legutóbbi compose fájllal újraindítja: {{name}}.",
+  "restartFailed": "Nem sikerült újraindítani az előnézetet.",
+  "restarting": "Az előnézet indul.",
+  "states": {
+    "requested": "indul",
+    "running": "fut",
+    "stopped": "leállítva",
+    "failed": "hiba"
+  }
+}

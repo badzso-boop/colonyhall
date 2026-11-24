@@ -40,6 +40,10 @@ services:
       COLONY_MAX_UPLOAD_MB: ${COLONY_MAX_UPLOAD_MB:-25}
       COLONY_GITEA_URL: ${COLONY_GITEA_URL:-}
       COLONY_GITEA_PUBLIC_URL: ${COLONY_GITEA_PUBLIC_URL:-}
+      # Round 57: the preview reverse proxy on its own port (its own origin).
+      COLONY_PREVIEW_ADDR: ":${COLONY_PREVIEW_PORT:-8081}"
+      COLONY_PREVIEW_ORIGIN: ${COLONY_PREVIEW_ORIGIN:-}
+      COLONY_PREVIEW_NETS: ${COLONY_PREVIEW_NETS:-}
       # Where this server's source can be downloaded (AGPL section 13); empty: upstream.
       COLONY_SOURCE_URL: ${COLONY_SOURCE_URL:-}
       COLONY_GITEA_TOKEN: ${COLONY_GITEA_TOKEN:-}
@@ -89,6 +93,7 @@ services:
     ports:
       # Only on a private address (e.g. the Tailscale IP): never 0.0.0.0, never public.
       - "${COLONY_BIND:?set COLONY_BIND to the server's private (e.g. Tailscale) IP}:${COLONY_PORT:-8080}:8080"
+      - "${COLONY_BIND:?set COLONY_BIND to the server's private (e.g. Tailscale) IP}:${COLONY_PREVIEW_PORT:-8081}:${COLONY_PREVIEW_PORT:-8081}"
     networks:
       - default
       - shared-db-net

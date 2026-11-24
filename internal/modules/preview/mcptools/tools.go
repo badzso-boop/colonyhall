@@ -57,7 +57,8 @@ func Register(s *mcp.Server, svc *preview.Service, current CurrentActor) {
 		Name: "preview_start",
 		Description: "Start a preview application defined in a docker compose file. " +
 			"The host machine will validate the compose file, start containers with safety overrides, " +
-			"and share a link in the chat thread once ready.",
+			"and share a link in the chat thread once ready; people open it inside Colonyhall, next to the conversation. " +
+			preview.TemplateGuide,
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in StartInput) (*mcp.CallToolResult, any, error) {
 		actor, err := current(ctx)
 		if err != nil {

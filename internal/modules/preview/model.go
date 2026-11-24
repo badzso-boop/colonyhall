@@ -37,6 +37,9 @@ var (
 	ErrBadPath        = errors.New("invalid compose path (must be a clean relative .yaml or .yml path)")
 	ErrBadTTL         = errors.New("invalid ttl (must be between 1 minute and 24 hours)")
 	ErrAlreadyRunning = errors.New("a preview with this name is already active")
+	// ErrOffline: the preview exists but is not running (or has no address
+	// yet); the proxy answers 502.
+	ErrOffline = errors.New("the preview is not running")
 )
 
 var nameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,49}$`)

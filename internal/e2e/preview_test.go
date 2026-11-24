@@ -205,7 +205,7 @@ func TestPreviewHumanControls(t *testing.T) {
 	e := newEnv(t)
 	agent := e.agentID()
 	general := e.generalID()
-	hostID, _ := e.enroll("box-2")
+	hostID, hostToken := e.enroll("box-2")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -254,6 +254,67 @@ func TestPreviewHumanControls(t *testing.T) {
 	}
 	if stopped.State != "stopped" {
 		t.Errorf("expected state stopped, got %s", stopped.State)
+	}
+
+	// Round 57: the agent cannot restart through REST; a person can, with
+	// the same name, compose file and conversation, and the guard sees it.
+	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAgentToken, nil, nil); s != http.StatusForbidden {
+		t.Fatalf("agent restart: %d", s)
+	}
+	var again previewOut
+	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAdminToken, nil, &again); s != http.StatusCreated {
+		t.Fatalf("restart preview: %d", s)
+	}
+	if again.ID == pID || again.State != "requested" || again.Name != "human-test" || again.ComposePath != "docker-compose.yaml" || again.ChannelID != general || again.HostID != hostID {
+		t.Fatalf("restarted preview: %+v", again)
+	}
+	var cfg struct {
+		Previews []struct {
+			ID          string `json:"id"`
+			ComposePath string `json:"compose_path"`
+		} `json:"previews"`
+	}
+	e.do("GET", "/api/v1/host/config", hostToken, nil, &cfg)
+	if len(cfg.Previews) != 1 || cfg.Previews[0].ID != again.ID || cfg.Previews[0].ComposePath != "docker-compose.yaml" {
+		t.Fatalf("guard does not see the restarted preview: %+v", cfg.Previews)
+	}
+	// Restarting the old one again answers the active one, no duplicate.
+	var same previewOut
+	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAdminToken, nil, &same); s != http.StatusCreated || same.ID != again.ID {
+		t.Fatalf("second restart: %d %s", s, same.ID)
+	}
+
+	if s := e.do("POST", "/api/v1/previews/"+again.ID+"/stop", server.DevAdminToken, nil, nil); s != http.StatusOK {
+		t.Fatalf("stop restarted: %d", s)
+	}
+
+	// No longer allowed previews: refused.
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": false,
+	})
+	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAdminToken, nil, nil); s != http.StatusBadRequest {
+		t.Fatalf("restart without allow_preview: %d", s)
+	}
+
+	// Allowed again, but the emergency stop is on (the agent is halted): refused.
+	e.configure(agent, map[string]any{
+		"host_id":       hostID,
+		"client":        "claude-code",
+		"model":         "haiku",
+		"allow_work":    true,
+		"root_dir":      "/app",
+		"allow_preview": true,
+	})
+	if s := e.do("POST", "/api/v1/admin/emergency-stop", server.DevAdminToken, map[string]any{"reason": "test"}, nil); s != http.StatusOK {
+		t.Fatalf("emergency stop: %d", s)
+	}
+	if s := e.do("POST", "/api/v1/previews/"+pID+"/restart", server.DevAdminToken, nil, nil); s != http.StatusBadRequest {
+		t.Fatalf("restart during emergency stop: %d", s)
 	}
 }
 
