@@ -57,7 +57,7 @@ func tenantHandler(base string, secureCookies bool, workspaces identity.Store, n
 			// The operator's API, its app and the health checks; anything
 			// else (the customers' API, sockets, MCP) is not here.
 			p := r.URL.Path
-			if p == "/" || p == "/healthz" || p == "/readyz" || strings.HasPrefix(p, "/app/") || strings.HasPrefix(p, "/api/v1/operator/") {
+			if p == "/" || p == "/healthz" || p == "/readyz" || strings.HasPrefix(p, "/agent/") || strings.HasPrefix(p, "/api/v1/operator/") {
 				admin.ServeHTTP(w, r)
 			} else {
 				noTenant(w)

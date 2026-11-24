@@ -7478,7 +7478,7 @@ export interface components {
             slug: string;
         };
         InviteLink: {
-            /** @description https://<slug>.<domain>/app/invite#<token>; shown once */
+            /** @description https://<slug>.<domain>/agent/invite#<token>; shown once */
             url: string;
             /** Format: date-time */
             expires_at: string;

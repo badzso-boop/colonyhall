@@ -3,11 +3,11 @@
 
 // Colonyhall service worker: caches the app shell only (docs/07, PWA basics).
 // Never caches the API (/api/), the WebSocket (/ws/) or anything outside
-// /app/. BUILD is filled in at build time (vite.config.ts), so every deploy
+// /agent/. BUILD is filled in at build time (vite.config.ts), so every deploy
 // is a new worker and the app can offer "Új verzió érhető el".
 const BUILD = "__BUILD_ID__";
 const CACHE = `colonyhall-shell-${BUILD}`;
-const SHELL = "/app/";
+const SHELL = "/agent/";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.add(SHELL)));
@@ -31,10 +31,10 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin || !url.pathname.startsWith("/app/")) return;
+  if (url.origin !== self.location.origin || !url.pathname.startsWith("/agent/")) return;
 
   // Hashed build files never change: cache first.
-  if (url.pathname.startsWith("/app/assets/")) {
+  if (url.pathname.startsWith("/agent/assets/")) {
     event.respondWith(
       caches.match(req).then(
         (hit) =>

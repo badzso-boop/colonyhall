@@ -371,7 +371,7 @@ func Register(mux *http.ServeMux, svc *operator.Service, opt Options) {
 			return
 		}
 		httpx.JSON(w, http.StatusCreated, apispec.BreakGlassOpened{BreakGlass: breakGlassToAPI(link.BreakGlass),
-			Url: customerURL(r, opt, c.Slug, "/app/break-glass#"+link.Token), HandoffExpiresAt: link.HandoffExpiresAt})
+			Url: customerURL(r, opt, c.Slug, "/agent/break-glass#"+link.Token), HandoffExpiresAt: link.HandoffExpiresAt})
 	}))
 
 	mux.Handle("DELETE /api/v1/operator/workspaces/{workspaceId}/break-glass/{breakGlassId}", auth(func(w http.ResponseWriter, r *http.Request) {
@@ -459,7 +459,7 @@ func workspaceID(w http.ResponseWriter, r *http.Request) (ids.ID, bool) {
 // request came to admin.<domain>[:port], the link goes to <slug>.<domain>
 // with the same port.
 func inviteToAPI(r *http.Request, opt Options, slug string, link operator.InviteLink) apispec.InviteLink {
-	return apispec.InviteLink{Url: customerURL(r, opt, slug, "/app/invite#"+link.Token), ExpiresAt: link.ExpiresAt}
+	return apispec.InviteLink{Url: customerURL(r, opt, slug, "/agent/invite#"+link.Token), ExpiresAt: link.ExpiresAt}
 }
 
 // customerURL is a link on the customer's subdomain: the request came to

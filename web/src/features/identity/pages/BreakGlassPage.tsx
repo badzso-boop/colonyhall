@@ -25,7 +25,7 @@ export default function BreakGlassPage() {
     started.current = true;
     redeem.mutate(token, {
       onSuccess: () => {
-        globalThis.history?.replaceState(null, "", "/app/");
+        globalThis.history?.replaceState(null, "", "/agent/");
         navigate("/", { replace: true });
       },
     });

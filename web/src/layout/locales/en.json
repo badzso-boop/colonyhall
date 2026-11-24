@@ -72,7 +72,9 @@
     "closeWork": "Close the work pane",
     "showThread": "Thread",
     "showWork": "Work pane",
-    "back": "Back"
+    "back": "Back",
+    "resize": "Resize panel",
+    "resizeHint": "Drag to resize; double-click resets"
   },
   "palette": {
     "title": "Command palette",

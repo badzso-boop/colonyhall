@@ -67,7 +67,7 @@ func securityHeaders(appPolicy string, next http.Handler) http.Handler {
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		switch p := r.URL.Path; {
-		case p == "/app" || strings.HasPrefix(p, "/app/"):
+		case p == "/agent" || strings.HasPrefix(p, "/agent/"):
 			h.Set("Content-Security-Policy", appPolicy)
 		case strings.HasPrefix(p, "/api/"), p == "/mcp", strings.HasPrefix(p, "/ws/"):
 			h.Set("Content-Security-Policy", apiCSP)

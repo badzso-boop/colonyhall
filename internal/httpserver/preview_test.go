@@ -18,14 +18,14 @@ func TestAppFramesOnlyThePreviewListener(t *testing.T) {
 	h := NewWithOptions(mux, func(context.Context) error { return nil }, slog.New(slog.DiscardHandler),
 		Options{FrameSrc: []string{"http://*:8081", "https://*:8081"}})
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/app/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/agent/", nil))
 	csp := rec.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "frame-src 'self' http://*:8081 https://*:8081") || !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Fatalf("app CSP: %s", csp)
 	}
 	rec = httptest.NewRecorder()
 	NewWithTimeouts(http.NewServeMux(), func(context.Context) error { return nil }, slog.New(slog.DiscardHandler), Timeouts{}).
-		ServeHTTP(rec, httptest.NewRequest("GET", "/app/", nil))
+		ServeHTTP(rec, httptest.NewRequest("GET", "/agent/", nil))
 	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "frame-src 'self';") {
 		t.Fatalf("no preview listener, app CSP: %s", csp)
 	}

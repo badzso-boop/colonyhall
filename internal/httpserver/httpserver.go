@@ -67,7 +67,7 @@ func NewWithOptions(api *http.ServeMux, ready func(context.Context) error, logge
 	if err != nil {
 		panic(err)
 	}
-	api.Handle("GET /app/", appHandler(dist))
+	api.Handle("GET /agent/", appHandler(dist))
 	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist, o.FrameSrc...), deadlines(t, api))))
 }
 

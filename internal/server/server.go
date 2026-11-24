@@ -869,7 +869,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 			Database: func(ctx context.Context) (apispec.OperatorDatabase, error) {
 				return operatorDatabase(ctx, ready, dsSvc)
 			}})
-		adminMux.Handle("GET /{$}", http.RedirectHandler("/app/", http.StatusFound))
+		adminMux.Handle("GET /{$}", http.RedirectHandler("/agent/", http.StatusFound))
 		admin := httpserver.NewWithTimeouts(adminMux, ready, opt.Logger, opt.HTTPTimeouts)
 		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler, admin, opt.OperatorAllowlist)
 		if previewHandler != nil {

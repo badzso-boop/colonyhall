@@ -32,7 +32,7 @@ test("offers an update when a new worker is installed over a running one", async
   registerServiceWorker(onUpdate, container as unknown as ServiceWorkerContainer);
   await Promise.resolve();
   await Promise.resolve();
-  const base = import.meta.env.BASE_URL; // "/app/" in the build
+  const base = import.meta.env.BASE_URL; // "/agent/" in the build
   expect(container.register).toHaveBeenCalledWith(`${base}sw.js`, { scope: base });
   fire.updatefound();
   worker.state = "installed";

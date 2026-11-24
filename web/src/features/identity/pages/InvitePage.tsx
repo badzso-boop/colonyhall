@@ -39,7 +39,7 @@ export default function InvitePage() {
       {
         onSuccess: () => {
           // The token must not stay in the address bar or the history.
-          globalThis.history?.replaceState(null, "", "/app/");
+          globalThis.history?.replaceState(null, "", "/agent/");
           navigate("/", { replace: true });
         },
       },
