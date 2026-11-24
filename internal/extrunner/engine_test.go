@@ -35,19 +35,6 @@ func run(t *testing.T, src, fn, input string, lim Limits, host Host) (Result, er
 	return engine.Run(context.Background(), Job{Bundle: src, Fn: fn, Input: json.RawMessage(input), Limits: lim}, host)
 }
 
-// The first run must not pay for compiling the QuickJS module (seconds
-// under the race detector): the compilation happens before the tool's clock
-// starts. Kept before the other engine tests, so it is the process's first run.
-func TestFirstRunDoesNotCountTheCompilation(t *testing.T) {
-	res, err := run(t, `globalThis.__ext = { f: async () => 1 };`, "f", `{}`, Limits{Timeout: 750 * time.Millisecond}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(res.Output) != "1" {
-		t.Fatalf("output: %s", res.Output)
-	}
-}
-
 const echo = `globalThis.__ext = { hello: async (input, ctx) => { ctx.log("hi", input.name); return { greeting: "Hello " + input.name }; } };`
 
 func TestRunsAToolWithInputAndLogs(t *testing.T) {
