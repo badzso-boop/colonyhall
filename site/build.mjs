@@ -5,7 +5,12 @@
 // site keeps, whatever its design (round 48, part 5.2; docs/18):
 //   - nothing loaded from another origin at runtime: no external scripts,
 //     stylesheets, fonts, images or frames (self-host everything; no
-//     tracking, no cookies);
+//     cookies). The one exception is the analytics script (our own,
+//     cookieless Umami), configured at build time from the environment
+//     (SITE_ANALYTICS_SCRIPT, SITE_ANALYTICS_WEBSITE_ID, SITE_ANALYTICS_DOMAINS;
+//     never committed, the addresses are the deployment's own): it is
+//     rendered only when all of them are set and only on the language pages,
+//     and it counts only on the listed domains;
 //   - a size budget for the whole site;
 //   - every page has a language, a title and a description;
 //   - every i18n key the template and the scripts use exists in en.json.
@@ -72,6 +77,24 @@ for (const l of languages) {
 }
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// --- analytics: our own Umami (cookieless), from the build environment so
+// the deployment's addresses stay out of the repository. Nothing set = no
+// script; a partial setting is an error rather than a silent no-op.
+const analytics = {
+  script: process.env.SITE_ANALYTICS_SCRIPT ?? "",
+  websiteId: process.env.SITE_ANALYTICS_WEBSITE_ID ?? "",
+  domains: (process.env.SITE_ANALYTICS_DOMAINS ?? "").split(",").map((d) => d.trim()).filter(Boolean),
+};
+const analyticsOn = Boolean(analytics.script || analytics.websiteId || analytics.domains.length);
+if (analyticsOn) {
+  if (!/^https:\/\/[^/"'\s]+\/[^"'\s]*$/.test(analytics.script)) problems.push("SITE_ANALYTICS_SCRIPT must be an https:// address");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(analytics.websiteId)) problems.push("SITE_ANALYTICS_WEBSITE_ID must be a UUID");
+  if (!analytics.domains.length || analytics.domains.some((d) => !/^[a-z0-9.-]+$/i.test(d))) problems.push("SITE_ANALYTICS_DOMAINS must list the host names to count on, comma-separated");
+}
+const analyticsTag = analyticsOn
+  ? `<script defer src="${esc(analytics.script)}" data-website-id="${esc(analytics.websiteId)}" data-domains="${esc(analytics.domains.join(","))}"></script>`
+  : "";
 
 // A tiny inline markup for copy: `code`, **strong**, *em*, [text](link:name).
 function inline(s) {
@@ -171,6 +194,7 @@ function render(lang) {
       case "cfg": return esc(config[arg]);
       case "lang": return lang;
       case "alternates": return alternates;
+      case "analytics": return analyticsTag;
       case "partial": return partials[arg] ? partials[arg](tr, lang) : (problems.push(`page.html: unknown partial "${arg}"`), "");
       case "data": return JSON.stringify(blob).replace(/</g, "\\u003c");
       default: problems.push(`page.html: unknown placeholder ${m}`); return m;
@@ -253,7 +277,8 @@ for (const f of out) {
   const ext = extname(f) || "(none)";
   sizes[ext] = (sizes[ext] ?? 0) + size;
   if (![".html", ".css", ".js", ".mjs", ".svg"].includes(extname(f))) continue;
-  const text = readFileSync(f, "utf8");
+  // The configured analytics tag is the one allowed exception (see the top).
+  const text = analyticsTag ? readFileSync(f, "utf8").split(analyticsTag).join("") : readFileSync(f, "utf8");
   if (external.test(text)) problems.push(`${rel}: loads something from another origin; self-host it`);
   if (/document\.cookie|localStorage|sessionStorage|indexedDB|navigator\.sendBeacon/i.test(text)) problems.push(`${rel}: cookies, storage or beacons (the site keeps nothing)`);
   if (extname(f) === ".html") {
@@ -273,4 +298,5 @@ if (problems.length) {
 const kb = (n) => `${(n / 1024).toFixed(1)} kB`;
 console.log(`site: ${languages.join(", ")}; ${out.length} files, ${kb(total)} of ${kb(BUDGET_BYTES)}`);
 console.log("  " + Object.entries(sizes).sort((a, b) => b[1] - a[1]).map(([e, n]) => `${e} ${kb(n)}`).join(", "));
+console.log(`  analytics: ${analyticsOn ? `on (${analytics.domains.join(", ")})` : "off"}`);
 console.log(CHECK_ONLY ? "site: checks passed" : `site: checks passed, built into ${relative(process.cwd(), DIST) || "dist"}/`);

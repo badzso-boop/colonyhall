@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="../css/site.css">
   <script>document.documentElement.classList.replace("no-js", "js");</script>
   <script type="module" src="../js/main.js"></script>
+  {{analytics}}
 </head>
 <body>
   <a class="skip" href="#content">{{t:nav.skip}}</a>
@@ -31,8 +32,8 @@
   <header class="bar">
     <a class="bar__brand" href="#top" aria-label="{{t:nav.home}}">{{svg:mark}}<span>Colonyhall</span></a>
     <nav class="bar__nav" aria-label="{{t:nav.label}}">
-      <a href="{{link:docs}}">{{t:nav.docs}}</a>
-      <a href="{{link:repo}}">{{t:nav.github}}</a>
+      <a href="{{link:docs}}" data-umami-event="nav-docs">{{t:nav.docs}}</a>
+      <a href="{{link:repo}}" data-umami-event="nav-github">{{t:nav.github}}</a>
     </nav>
     <div class="bar__controls">
       <button type="button" class="ctl" id="theme-toggle" hidden aria-label="{{t:theme.system}}">
@@ -72,20 +73,20 @@
           <div class="wishes">
             <p class="wishes__label" id="wishes-label">{{t:workshop.tryLabel}}</p>
             <div class="wishes__list" role="group" aria-labelledby="wishes-label">
-              <button type="button" class="wish" data-wish="standup" aria-pressed="false" aria-controls="build">{{t:workshop.w1.label}}</button>
-              <button type="button" class="wish" data-wish="lunch" aria-pressed="false" aria-controls="build">{{t:workshop.w2.label}}</button>
-              <button type="button" class="wish" data-wish="repo" aria-pressed="false" aria-controls="build">{{t:workshop.w3.label}}</button>
+              <button type="button" class="wish" data-wish="standup" data-umami-event="workshop-wish" data-umami-event-wish="standup" aria-pressed="false" aria-controls="build">{{t:workshop.w1.label}}</button>
+              <button type="button" class="wish" data-wish="lunch" data-umami-event="workshop-wish" data-umami-event-wish="lunch" aria-pressed="false" aria-controls="build">{{t:workshop.w2.label}}</button>
+              <button type="button" class="wish" data-wish="repo" data-umami-event="workshop-wish" data-umami-event-wish="repo" aria-pressed="false" aria-controls="build">{{t:workshop.w3.label}}</button>
             </div>
           </div>
           <p class="hero__body"><strong>{{t:hero.subtitle}}</strong> {{t:hero.body}}</p>
           <div class="hero__actions">
-            <a class="btn btn--primary" href="#nursery">{{t:hero.install}}</a>
-            <a class="btn" href="{{link:repo}}">{{svg:github}}{{t:hero.github}}</a>
+            <a class="btn btn--primary" href="#nursery" data-umami-event="hero-install">{{t:hero.install}}</a>
+            <a class="btn" href="{{link:repo}}" data-umami-event="hero-github">{{svg:github}}{{t:hero.github}}</a>
           </div>
           <div class="cmd" data-copy-root>
             <span class="sr-only">{{t:hero.commandLabel}}</span>
             <code class="cmd__text" data-copy-text tabindex="0">curl -fsSLO {{link:installScript}}</code>
-            <button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button>
+            <button type="button" class="cmd__btn" data-copy data-umami-event="copy-command" data-umami-event-where="hero" data-js-only hidden>{{t:copy.button}}</button>
           </div>
         </div>
 
@@ -271,11 +272,11 @@
         <h2 id="nursery-title">{{t:nursery.title}}</h2>
         <p>{{md:nursery.body}}</p>
         <ol class="install">
-          <li data-copy-root><span class="install__step">{{t:nursery.step1}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">curl -fsSLO {{link:installScript}}</code><button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button></span></li>
-          <li data-copy-root><span class="install__step">{{t:nursery.step2}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">less install.sh</code><button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button></span></li>
-          <li data-copy-root><span class="install__step">{{t:nursery.step3}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">sh install.sh</code><button type="button" class="cmd__btn" data-copy data-js-only hidden>{{t:copy.button}}</button></span></li>
+          <li data-copy-root><span class="install__step">{{t:nursery.step1}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">curl -fsSLO {{link:installScript}}</code><button type="button" class="cmd__btn" data-copy data-umami-event="copy-command" data-umami-event-where="install-step1" data-js-only hidden>{{t:copy.button}}</button></span></li>
+          <li data-copy-root><span class="install__step">{{t:nursery.step2}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">less install.sh</code><button type="button" class="cmd__btn" data-copy data-umami-event="copy-command" data-umami-event-where="install-step2" data-js-only hidden>{{t:copy.button}}</button></span></li>
+          <li data-copy-root><span class="install__step">{{t:nursery.step3}}</span><span class="cmd"><code class="cmd__text" data-copy-text tabindex="0">sh install.sh</code><button type="button" class="cmd__btn" data-copy data-umami-event="copy-command" data-umami-event-where="install-step3" data-js-only hidden>{{t:copy.button}}</button></span></li>
         </ol>
-        <p class="platforms">{{t:nursery.platforms}} · <a href="{{link:install}}">{{t:nursery.guide}}</a></p>
+        <p class="platforms">{{t:nursery.platforms}} · <a href="{{link:install}}" data-umami-event="install-guide">{{t:nursery.guide}}</a></p>
         <p class="install__note">{{md:nursery.notYet}}</p>
       </div>
       <div class="chamber__art">
@@ -343,12 +344,12 @@
   <footer class="foot">
     <div class="sleepers" id="sleepers" title="{{t:footer.sleeping}}">{{svg:sleepers}}</div>
     <nav class="foot__links" aria-label="{{t:footer.label}}">
-      <a href="{{link:docs}}">{{t:footer.docs}}</a>
-      <a href="{{link:api}}">{{t:footer.api}}</a>
-      <a href="{{link:repo}}">{{t:footer.github}}</a>
-      <a href="{{link:issues}}">{{t:footer.issues}}</a>
-      <a href="{{link:repo}}">{{t:footer.source}}</a>
-      <a href="{{link:license}}">{{t:footer.license}}</a>
+      <a href="{{link:docs}}" data-umami-event="footer-docs">{{t:footer.docs}}</a>
+      <a href="{{link:api}}" data-umami-event="footer-api">{{t:footer.api}}</a>
+      <a href="{{link:repo}}" data-umami-event="footer-github">{{t:footer.github}}</a>
+      <a href="{{link:issues}}" data-umami-event="footer-issues">{{t:footer.issues}}</a>
+      <a href="{{link:repo}}" data-umami-event="footer-source">{{t:footer.source}}</a>
+      <a href="{{link:license}}" data-umami-event="footer-license">{{t:footer.license}}</a>
     </nav>
     <p class="foot__note">{{t:footer.privacy}}</p>
   </footer>
