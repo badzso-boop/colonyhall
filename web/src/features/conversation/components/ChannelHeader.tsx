@@ -121,22 +121,22 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
   const shown = [...people.filter((a) => a.kind === "human"), ...people.filter((a) => a.kind === "agent")].slice(0, 4);
   return (
     <header className="shrink-0 border-b border-border bg-surface">
-      <div className="flex h-12 items-center gap-2 px-4">
+      <div className="flex h-12 items-center gap-1.5 px-3 sm:gap-2 sm:px-4">
         {channel.kind === "private" ? <Lock aria-hidden className="size-4 shrink-0 text-fg-subtle" /> : null}
         {channel.kind === "public" ? <Hash aria-hidden className="size-4 shrink-0 text-fg-subtle" /> : null}
-        <h1 className="text-title font-semibold whitespace-nowrap">{title}</h1>
+        <h1 className="min-w-0 truncate text-title font-semibold whitespace-nowrap max-sm:flex-1">{title}</h1>
         {channel.archived_at ? <Archive aria-label={t("channel.archivedBar")} className="size-4 shrink-0 text-fg-subtle" /> : null}
         {muted ? <BellOff aria-label={t("mute.muted")} className="size-4 shrink-0 text-fg-subtle" /> : null}
         {locked ? <LockKeyhole aria-label={t("channel.lock.locked")} className="size-4 shrink-0 text-warning" /> : null}
         {channel.description && !open ? (
-          <p className="min-w-0 flex-1 truncate text-ui text-fg-muted">
+          <p className="min-w-0 flex-1 truncate text-ui text-fg-muted max-sm:hidden">
             <LinkedText text={channel.description} />
           </p>
         ) : (
-          <span className="flex-1" />
+          <span className="flex-1 max-sm:hidden" />
         )}
         {channel.description && channel.description.length > 60 ? (
-          <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="shrink-0 text-meta text-accent-text hover:underline">
+          <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="shrink-0 text-meta text-accent-text hover:underline max-sm:hidden">
             {t(open ? "message.less" : "message.more")}
           </button>
         ) : null}
@@ -157,7 +157,7 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
                 emoji={a.avatar_emoji}
                 size="sm"
                 ringColor={hueVar(a.effective_color)}
-                className={cn(i > 0 && "-ml-1.5", "ring-2 ring-surface", locked && a.kind === "agent" && "opacity-50")}
+                className={cn(i > 0 && "-ml-1.5 max-sm:hidden", "ring-2 ring-surface", locked && a.kind === "agent" && "opacity-50")}
               />
             ))}
             <span className="ml-1 text-meta text-fg-muted tabular-nums">{members.data.length}</span>
@@ -184,7 +184,7 @@ export function ChannelHeader({ channel, title, actors, admin, onSettings, extra
             ) : null}
           </MenuContent>
         </Menu>
-        {isChannel && admin ? <IconButton size="sm" label={t("channel.settings")} icon={<Settings className="size-4" />} onClick={() => onSettings("altalanos")} /> : null}
+        {isChannel && admin ? <IconButton size="sm" className="max-sm:hidden" label={t("channel.settings")} icon={<Settings className="size-4" />} onClick={() => onSettings("altalanos")} /> : null}
       </div>
       {open && channel.description ? (
         <p className="px-4 pb-2 text-ui whitespace-pre-wrap text-fg-muted">
