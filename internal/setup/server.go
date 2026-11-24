@@ -658,11 +658,11 @@ func (e *Env) ServerSteps(upgrade bool) []Step {
 			ID: "srv.summary", Title: e.UI.T("finished"),
 			Done: func(*Env) (bool, error) { return false, nil },
 			Apply: func(e *Env) error {
-				e.UI.Say("srvReady", e.serverURL()+"/app/")
+				e.UI.Say("srvReady", e.serverURL()+"/agent/")
 				if generated != "" {
 					e.UI.Say("srvPassGenerated", generated)
 				}
-				e.UI.Say("srvOpen", e.serverURL()+"/app/", e.Answers.Server.AdminHandle)
+				e.UI.Say("srvOpen", e.serverURL()+"/agent/", e.Answers.Server.AdminHandle)
 				e.UI.Say("srvNoTLS")
 				return nil
 			},

@@ -7,7 +7,7 @@ import { defineConfig, type Plugin } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// The PWA is served by the Go server at /app/ (internal/httpserver/app.go).
+// The PWA is served by the Go server at /agent/ (internal/httpserver/app.go).
 // `npm run dev` proxies the API and the WebSocket to `make dev` / `make run-mem`.
 // Emits sw.js with a build id derived from the bundle, so each deploy
 // installs a new service worker (web/sw/sw.js).
@@ -25,7 +25,7 @@ function serviceWorker(): Plugin {
 }
 
 export default defineConfig({
-  base: "/app/",
+  base: "/agent/",
   plugins: [react(), tailwindcss(), serviceWorker()],
   resolve: {
     // "@/…" is src/ (docs/08-frontend-architektura.md, 11.); also in tsconfig.json "paths".

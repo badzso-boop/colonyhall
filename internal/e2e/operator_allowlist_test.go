@@ -29,7 +29,7 @@ func TestOperatorConsoleAnswersOnlyTheAllowlist(t *testing.T) {
 		_, body := acme.on("nosuch."+baseDomain).raw("GET", "/api/v1/operator/auth/session", "", nil)
 		return body
 	}()
-	for _, p := range []string{"/api/v1/operator/auth/session", "/app/", "/"} {
+	for _, p := range []string{"/api/v1/operator/auth/session", "/agent/", "/"} {
 		res, body := outsider.send("GET", p, nil)
 		_ = res.Body.Close()
 		if res.StatusCode != http.StatusNotFound || string(body) != unknown {

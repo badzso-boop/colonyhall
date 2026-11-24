@@ -20,7 +20,7 @@ import (
 
 func TestAppCSPAllowsOnlyTheInlineThemeScriptByHash(t *testing.T) {
 	script := "\n      (function () { document.documentElement.classList.add('x'); })();\n    "
-	dist := fstest.MapFS{"index.html": {Data: []byte("<html><head><script>" + script + "</script><script type=\"module\" src=\"/app/assets/a.js\"></script></head></html>")}}
+	dist := fstest.MapFS{"index.html": {Data: []byte("<html><head><script>" + script + "</script><script type=\"module\" src=\"/agent/assets/a.js\"></script></head></html>")}}
 	sum := sha256.Sum256([]byte(script))
 	csp := appCSP(dist)
 	for _, want := range []string{
@@ -40,7 +40,7 @@ func TestSecurityHeadersPerArea(t *testing.T) {
 	mux := http.NewServeMux()
 	h := NewWithTimeouts(mux, func(context.Context) error { return nil }, slog.Default(), Timeouts{})
 	for path, wantCSP := range map[string]string{
-		"/app/":      "script-src 'self'",
+		"/agent/":    "script-src 'self'",
 		"/healthz":   devPageCSP,
 		"/api/v1/me": apiCSP,
 	} {

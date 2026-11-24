@@ -60,6 +60,26 @@ func TestRunsAToolWithInputAndLogs(t *testing.T) {
 	}
 }
 
+// The module's first compile is not part of a call's time limit (it took
+// longer than the 10 s default under -race on the CI runner).
+func TestCompileIsNotCountedInTheTimeLimit(t *testing.T) {
+	orig := warmModule
+	t.Cleanup(func() { warmModule = orig })
+	warmModule = func(module []byte, memoryMB int) error {
+		time.Sleep(time.Second)
+		return orig(module, memoryMB)
+	}
+	e := &QJS{MemoryMB: 64, Slots: 1}
+	res, err := e.Run(context.Background(), Job{Bundle: echo, Fn: "hello", Input: json.RawMessage(`{"name":"A"}`),
+		Limits: Limits{Timeout: 900 * time.Millisecond}}, noHost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(res.Output) != `{"greeting":"Hello A"}` {
+		t.Fatalf("output: %s", res.Output)
+	}
+}
+
 func TestHostCalls(t *testing.T) {
 	src := `globalThis.__ext = { f: async (input, ctx) => {
 		const page = await ctx.fetch("https://api.example.com/x", { method: "GET", auth: "jira" });

@@ -4003,7 +4003,7 @@ type InviteInfo struct {
 type InviteLink struct {
 	ExpiresAt time.Time `json:"expires_at"`
 
-	// Url https://<slug>.<domain>/app/invite#<token>; shown once
+	// Url https://<slug>.<domain>/agent/invite#<token>; shown once
 	Url string `json:"url"`
 }
 

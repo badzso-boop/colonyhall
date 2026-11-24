@@ -5782,7 +5782,7 @@ Type: string
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `expires_at` | string (date-time) | yes |  |
-| `url` | string | yes | https://<slug>.<domain>/app/invite#<token>; shown once |
+| `url` | string | yes | https://<slug>.<domain>/agent/invite#<token>; shown once |
 
 ### InviteTokenRequest
 

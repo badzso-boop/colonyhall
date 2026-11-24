@@ -92,6 +92,28 @@ type QJS struct {
 	slots    chan struct{}
 	once     sync.Once
 	Slots    int
+	warmOnce sync.Once
+	warmErr  error
+}
+
+// warmModule makes one runtime without a deadline so wazero compiles the
+// module (process-wide, cached) before any call's clock starts: on a slow
+// machine, or under -race, the first compile alone outlasts a call's limit.
+// CloseOnContextDone must match the calls': the compiled runtime config is
+// cached with it. A variable so a test can slow it down.
+var warmModule = func(module []byte, memoryMB int) error {
+	dir, err := os.MkdirTemp("", "colonyhall-ext-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	rt, err := qjs.New(qjs.Option{QuickJSWasmBytes: module, CWD: dir, Context: context.Background(), CloseOnContextDone: true,
+		MemoryLimit: memoryMB * 1024 * 1024, Stdout: io.Discard, Stderr: io.Discard})
+	if err != nil {
+		return err
+	}
+	rt.Close()
+	return nil
 }
 
 func (q *QJS) init() {
@@ -120,6 +142,10 @@ func (q *QJS) Run(ctx context.Context, job Job, host Host) (res Result, err erro
 	module, err := qjsModule(mem)
 	if err != nil {
 		return Result{}, err
+	}
+	q.warmOnce.Do(func() { q.warmErr = warmModule(module, mem) })
+	if q.warmErr != nil {
+		return Result{}, q.warmErr
 	}
 	if !validFn(job.Fn) {
 		return Result{}, fmt.Errorf("invalid function name %q", job.Fn)

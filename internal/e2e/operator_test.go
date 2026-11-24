@@ -162,7 +162,7 @@ func TestOperatorCreatesACustomerAndTheInviteBringsTheOwner(t *testing.T) {
 	if s := op.do("POST", "/api/v1/operator/workspaces", map[string]any{"name": "Gamma Kft", "slug": "gamma"}, &created); s != http.StatusCreated {
 		t.Fatalf("create: %d", s)
 	}
-	prefix := "http://gamma." + baseDomain + "/app/invite#"
+	prefix := "http://gamma." + baseDomain + "/agent/invite#"
 	token, ok := strings.CutPrefix(created.Invite.Url, prefix)
 	if !ok || token == "" || created.Customer.HasOwner || created.Customer.Invite == nil || created.Customer.Invite.Used ||
 		!created.Invite.ExpiresAt.Equal(acme.clock.Now().Add(identity.InviteTTL)) {
@@ -374,7 +374,7 @@ func TestSuspendedWorkspaceIsRefusedEverywhere(t *testing.T) {
 	page.header.Set("Accept", "text/html,application/xhtml+xml")
 	for lang, want := range map[string]string{"hu-HU,hu;q=0.9": "A munkaterület szünetel", "en-GB,en;q=0.8": "This workspace is paused", "": "A munkaterület szünetel"} {
 		page.header.Set("Accept-Language", lang)
-		res, raw := page.send("GET", "/app/", nil)
+		res, raw := page.send("GET", "/agent/", nil)
 		_ = res.Body.Close()
 		if res.StatusCode != http.StatusForbidden || !strings.Contains(string(raw), want) || strings.Contains(string(raw), "unpaid") ||
 			!strings.HasPrefix(res.Header.Get("Content-Type"), "text/html") {
