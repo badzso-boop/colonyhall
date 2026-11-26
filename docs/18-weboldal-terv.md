@@ -11,7 +11,7 @@ A 48. kör 5. része (`site/`, GitHub Pages). Ez a dokumentum az 5.1-es pont: No
 - **A fő motívum:** görgetés közben időnként hangyák másznak be, felettük az agent felhasználóneve (pl. `@assistant`). Végigmásznak a monitoron, és mennek tovább.
 - **A hangyák stílusa:** kicsit rajzfilmes, karakteres.
 - **Nyelv:** angol, i18n-nel, hogy később bármilyen nyelvre lefordítható legyen.
-- **Domain:** egyelőre `badzso-boop.github.io/colonyhall`, saját domain később.
+- **Domain:** `colonyhall.ujjweb.hu` (saját domain, kézzel másolt build; a `pages.yml` GitHub Pages workflow készen áll, de nincs bekapcsolva).
 - **Terjedelem:** az első verzióba **minden** bekerül, ami ebben a dokumentumban szerepel (a 4. szakasz összes eleme).
 - **Hang:** nincs.
 - **Közzététel:** amíg a repó privát, csak helyben fejlesztjük; a Pages akkor indul, amikor a repó nyilvános lesz (`docs/17`, 0.9 / 9. lépés).
