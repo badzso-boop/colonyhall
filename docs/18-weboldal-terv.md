@@ -163,7 +163,7 @@ A kamrák nevei munkacímek; a végleges angol szöveg a megvalósításkor kés
 
 ## 9. Kötelező szabályok (az 5.2-ből, változatlanul)
 
-- nincs követés, süti, futásidőben betöltött külső script vagy betűtípus;
+- nincs süti, futásidőben betöltött külső script vagy betűtípus; **egyetlen kivétel (2026-11-24):** a saját, süti nélküli Umami látogatás- és kattintásszámláló. A címe nem kerül a repóba: a build a környezetből olvassa (`SITE_ANALYTICS_SCRIPT` a `script.js` teljes címe, `SITE_ANALYTICS_WEBSITE_ID` az Umami website-azonosító, `SITE_ANALYTICS_DOMAINS` vesszővel elválasztott hosztnevek, ahol számol); a Pages-workflow ugyanilyen nevű repó-változókból (`vars.*`) adja át. Ha egyik sincs megadva, nincs script; ha csak egy része, a build hibát jelez. A „más origin” ellenőrzés csak ezt az egy, pontosan így renderelt címkét engedi át, és csak a nyelvi oldalakba kerül (az átirányító `index.html`-be nem; az app saját felülete sosem tartalmazza). A kattintások `data-umami-event` attribútumok a `page.html`-ben (`nav-*`, `hero-*`, `footer-*`, `install-guide`, `copy-command` + `where`, `workshop-wish` + `wish`); a kampányokat UTM-paraméteres linkekkel különítjük el. Saját böngészőben a számlálás kikapcsolása: `localStorage.setItem("umami.disabled", "1")` az oldal konzoljában;
 - a fő szöveg JS nélkül is működik;
 - `prefers-reduced-motion` és `prefers-color-scheme` tiszteletben tartva;
 - WCAG AA, billentyűzet, alt szövegek;
@@ -293,7 +293,7 @@ Minden kör egy réteg. Állapot: **shipped** (kész és beolvasztva), **digging
 | 49 | GPU machine | Local model runtimes, a GPU relay through the guard, and a VRAM scheduler. | planned |
 | 50 | Token cleanup | Expired tokens are cleaned up, and admins see the database size. | shipped |
 | 51 | Hosted workspaces | A platform operator console with two-factor login, customers with owner invites, suspension, plans that limit storage, and a read-only, audited break-glass access the owner can close. Hosted guards and encrypted project keys come next. | shipped |
-| 52 | This site | The public site: the colony, the strata and the install, with no tracking and no external requests. | shipped |
+| 52 | This site | The public site: the colony, the strata and the install, with no cookies and nothing loaded from elsewhere but our own visit counter. | shipped |
 | 53 | Search quality | Search tuned against real questions. The first attempt was measured, did not help, and was rolled back; the next one starts from that measurement. | planned |
 | 54 | Storage | My files, deleting your own uploads, the workspace's storage with an optional quota, warnings at 80% and 95%, and agents that pause when it is full. | shipped |
 | 55 | Chat essentials | Drafts that follow you between devices, slash commands, an emoji picker, pins (agents can mark a result important), saved messages with reminders, forwarding, an activity feed and a notification level per conversation. | shipped |

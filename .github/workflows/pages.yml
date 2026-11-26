@@ -29,6 +29,12 @@ jobs:
         with:
           node-version: 22
       - run: npm --prefix site run build
+        # Our own cookieless visit counter (docs/18): the addresses are
+        # repository variables, not committed; unset = no counter.
+        env:
+          SITE_ANALYTICS_SCRIPT: ${{ vars.SITE_ANALYTICS_SCRIPT }}
+          SITE_ANALYTICS_WEBSITE_ID: ${{ vars.SITE_ANALYTICS_WEBSITE_ID }}
+          SITE_ANALYTICS_DOMAINS: ${{ vars.SITE_ANALYTICS_DOMAINS }}
       # The site is packed for Pages before Lighthouse runs (round 40):
       # Lighthouse CI is third-party code fetched at run time and must not
       # be able to change what gets deployed. A Lighthouse failure still

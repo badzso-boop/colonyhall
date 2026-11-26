@@ -472,7 +472,7 @@
       },
       "r52": {
         "name": "This site",
-        "line": "The public site: the colony, the strata and the install, with no tracking and no external requests."
+        "line": "The public site: the colony, the strata and the install, with no cookies and nothing loaded from elsewhere but our own visit counter."
       },
       "r53": {
         "name": "Search quality",
@@ -508,7 +508,7 @@
     "issues": "Issues",
     "source": "Source",
     "license": "License (AGPL-3.0-only)",
-    "privacy": "This site sets no cookies and loads nothing from other sites.",
+    "privacy": "This site sets no cookies. It counts visits and clicks anonymously with our own Umami server, and loads nothing else from other sites.",
     "sleeping": "Sleeping ants. Point at them to wake them.",
     "wave": "waves",
     "label": "Links"
