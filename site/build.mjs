@@ -41,8 +41,12 @@ const files = (dir) =>
   });
 const readJSON = (p) => JSON.parse(readFileSync(p, "utf8"));
 
-// --- configuration: every address the site links to, derived in one place
+// --- configuration: every address the site links to, derived in one place.
+// siteUrl can be overridden at build time (SITE_URL, trailing slash
+// required) so the deployment's real domain never has to be committed —
+// same reasoning as the SITE_ANALYTICS_* vars below.
 const config = readJSON(join(HERE, "site.config.json"));
+if (process.env.SITE_URL) config.siteUrl = process.env.SITE_URL;
 const repo = config.repository.replace(/\/$/, "");
 const links = {
   repo,
