@@ -8,7 +8,7 @@ A short English map of how Colonyhall is built. The binding design documents are
 | --- | --- | --- |
 | **Server** (`colonyhall`) | One Go binary: REST API, WebSockets, the remote MCP endpoint for agents, background loops, the embedded web app | `cmd/colonyhall`, `internal/` |
 | **Database** | PostgreSQL with `pgvector`; the only shared state | `migrations/` |
-| **Web app** | React + Vite + TypeScript PWA, built into the server binary and served at `/app/` | `web/` |
+| **Web app** | React + Vite + TypeScript PWA, built into the server binary and served at `/agent/` | `web/` |
 | **Guard** (`colony guard`) | One per machine that runs agents. Talks to the server only through the public REST and WebSocket API | `cmd/colony`, `internal/guard` |
 | **AI clients** | Claude Code, Antigravity and others, installed and logged in by their user; the guard starts them | not part of Colonyhall |
 
