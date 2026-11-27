@@ -33,15 +33,6 @@ type HostAuthenticator interface {
 	AuthenticateHost(ctx context.Context, token string) (hosts.Host, error)
 }
 
-func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {
-	id, err := ids.Parse(r.PathValue(name))
-	if err != nil {
-		httpx.Error(w, r, &httpx.BadRequest{Detail: name + " must be a UUID"})
-		return ids.Nil, false
-	}
-	return id, true
-}
-
 func previewOut(r *http.Request, links Links, p preview.Preview) apispec.Preview {
 	var urlPtr, errPtr *string
 	if p.URL != "" {
@@ -108,7 +99,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 	}))
 
 	mux.Handle("GET /api/v1/previews/{previewId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "previewId")
+		id, ok := httpx.PathID(w, r, "previewId")
 		if !ok {
 			return
 		}
@@ -121,7 +112,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 	}))
 
 	mux.Handle("POST /api/v1/previews/{previewId}/stop", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "previewId")
+		id, ok := httpx.PathID(w, r, "previewId")
 		if !ok {
 			return
 		}
@@ -134,7 +125,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 	}))
 
 	mux.Handle("POST /api/v1/previews/{previewId}/restart", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "previewId")
+		id, ok := httpx.PathID(w, r, "previewId")
 		if !ok {
 			return
 		}
@@ -160,7 +151,7 @@ func Register(mux *http.ServeMux, svc *preview.Service, auth identity.RequestAut
 
 	// Guard route: report preview state.
 	mux.HandleFunc("POST /api/v1/host/previews/{previewId}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "previewId")
+		id, ok := httpx.PathID(w, r, "previewId")
 		if !ok {
 			return
 		}

@@ -17,6 +17,7 @@ import (
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/textutil"
 )
 
 // ConsumerName is the name of the approval eventlog consumer.
@@ -59,7 +60,7 @@ func (s *Service) CreateRequest(ctx context.Context, by identity.Actor, in Creat
 	if by.Kind != identity.KindAgent {
 		return ApprovalRequest{}, ErrForbidden
 	}
-	toolName := clip(strings.TrimSpace(in.ToolName), 120)
+	toolName := textutil.Clip(strings.TrimSpace(in.ToolName), 120)
 	if toolName == "" {
 		return ApprovalRequest{}, ErrBadToolName
 	}
@@ -236,7 +237,7 @@ func (s *Service) Decide(ctx context.Context, by identity.Actor, id ids.ID, deci
 		return ApprovalRequest{}, ErrAlreadyDecided
 	}
 
-	message = clip(strings.TrimSpace(message), 1000)
+	message = textutil.Clip(strings.TrimSpace(message), 1000)
 	newState := StateAllowed
 	if decision == DecisionDeny {
 		newState = StateDenied

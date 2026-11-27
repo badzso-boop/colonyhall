@@ -33,7 +33,7 @@ func opt(s string) *string {
 
 func registerRoutines(mux *http.ServeMux, svc *workshop.Service, wrap func(http.HandlerFunc) http.Handler) {
 	mux.Handle("GET /api/v1/workshop/extensions/{extensionId}/routines", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "extensionId")
+		id, ok := httpx.PathID(w, r, "extensionId")
 		if !ok {
 			return
 		}
@@ -62,7 +62,7 @@ func registerRoutines(mux *http.ServeMux, svc *workshop.Service, wrap func(http.
 	}))
 
 	mux.Handle("POST /api/v1/workshop/extensions/{extensionId}/routines/{routine}/webhook", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "extensionId")
+		id, ok := httpx.PathID(w, r, "extensionId")
 		if !ok {
 			return
 		}

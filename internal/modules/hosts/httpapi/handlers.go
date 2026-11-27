@@ -44,15 +44,6 @@ func requireHost(svc *hosts.Service, next http.HandlerFunc) http.Handler {
 	})
 }
 
-func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {
-	id, err := ids.Parse(r.PathValue(name))
-	if err != nil {
-		httpx.Error(w, r, &httpx.BadRequest{Detail: name + " must be a UUID"})
-		return ids.Nil, false
-	}
-	return id, true
-}
-
 // hostOut is the API shape of a host. The report is the module's own type:
 // its JSON matches the HostReport schema.
 type hostOut struct {
@@ -159,7 +150,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 	}))
 
 	mux.Handle("PATCH /api/v1/hosts/{hostId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "hostId")
+		id, ok := httpx.PathID(w, r, "hostId")
 		if !ok {
 			return
 		}
@@ -183,7 +174,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 	}))
 
 	mux.Handle("PUT /api/v1/hosts/{hostId}/owner", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "hostId")
+		id, ok := httpx.PathID(w, r, "hostId")
 		if !ok {
 			return
 		}
@@ -202,7 +193,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 	}))
 
 	mux.Handle("PUT /api/v1/hosts/{hostId}/state", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "hostId")
+		id, ok := httpx.PathID(w, r, "hostId")
 		if !ok {
 			return
 		}
@@ -231,7 +222,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 	mux.Handle("DELETE /api/v1/grants/{grantId}", immutable)
 
 	mux.Handle("PATCH /api/v1/agents/{agentId}/limits", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "agentId")
+		id, ok := httpx.PathID(w, r, "agentId")
 		if !ok {
 			return
 		}
@@ -305,7 +296,7 @@ func Register(mux *http.ServeMux, svc *hosts.Service, auth identity.RequestAuthe
 	}))
 
 	mux.Handle("POST /api/v1/host/agents/{agentId}/token", requireHost(svc, func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "agentId")
+		id, ok := httpx.PathID(w, r, "agentId")
 		if !ok {
 			return
 		}

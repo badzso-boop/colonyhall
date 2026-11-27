@@ -11,10 +11,10 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/textutil"
 )
 
 // templateRe: {{input.x}}, or {{input.x|path}} in a path: an input of
@@ -181,16 +181,9 @@ func (s *Service) runHTTPTool(ctx context.Context, rc runCtx) (Result, error) {
 		}
 	}
 	if res.Status >= 400 {
-		return Result{Text: fmt.Sprintf("HTTP %d: %s", res.Status, clip(text, 2000)), IsError: true}, nil
+		return Result{Text: fmt.Sprintf("HTTP %d: %s", res.Status, textutil.Clip(text, 2000)), IsError: true}, nil
 	}
 	return Result{Text: text}, nil
-}
-
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n]) + "…"
 }
 
 // path evaluates a simple JSON path: "a.b", "items[].key" (map over an
@@ -502,7 +495,7 @@ func (s *Service) hostCall(ctx context.Context, rc runCtx, payload json.RawMessa
 		}
 		res.Text = ep.Redact(res.Text)
 		if res.IsError {
-			return nil, errors.New(clip(res.Text, 1000))
+			return nil, errors.New(textutil.Clip(res.Text, 1000))
 		}
 		return json.Marshal(res.Text)
 	}
@@ -520,7 +513,7 @@ func (s *Service) hostCall(ctx context.Context, rc runCtx, payload json.RawMessa
 		return nil, err
 	}
 	if res.IsError {
-		return nil, errors.New(clip(res.Text, 1000))
+		return nil, errors.New(textutil.Clip(res.Text, 1000))
 	}
 	var v any
 	if json.Unmarshal([]byte(res.Text), &v) == nil {

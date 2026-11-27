@@ -136,7 +136,7 @@ func (h *proxyHandler) authenticate(r *http.Request) (identity.Actor, error) {
 }
 
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r, "previewId")
+	id, ok := httpx.PathID(w, r, "previewId")
 	if !ok {
 		return
 	}

@@ -151,12 +151,12 @@ func (s *Store) InsertMessage(ctx context.Context, m conversation.Message) error
 		mentions = []ids.ID{} // a nil slice would be stored as NULL
 	}
 	err := s.q(ctx).InsertMessage(ctx, sqlcgen.InsertMessageParams{
-		ID: m.ID, WorkspaceID: m.WorkspaceID, ChannelID: m.ChannelID, ThreadRootID: nullID(m.ThreadRootID),
+		ID: m.ID, WorkspaceID: m.WorkspaceID, ChannelID: m.ChannelID, ThreadRootID: ids.NilAsNull(m.ThreadRootID),
 		AuthorID: m.AuthorID, ClientMsgID: nullString(m.ClientMsgID), Kind: m.Kind, Body: m.Body,
 		Mentions: mentions, ReplyCount: int32(m.ReplyCount), LastReplyAt: m.LastReplyAt, CreatedAt: m.CreatedAt,
-		OriginChannelID: nullID(m.OriginChannelID), OriginThreadID: nullID(m.OriginThreadID),
-		AnswersMessageID: nullID(m.AnswersMessageID), Important: m.Important, AlsoInChannel: m.AlsoInChannel,
-		ForwardedFromID: nullID(m.ForwardedFromID), Blocks: blocksJSON(m.Blocks),
+		OriginChannelID: ids.NilAsNull(m.OriginChannelID), OriginThreadID: ids.NilAsNull(m.OriginThreadID),
+		AnswersMessageID: ids.NilAsNull(m.AnswersMessageID), Important: m.Important, AlsoInChannel: m.AlsoInChannel,
+		ForwardedFromID: ids.NilAsNull(m.ForwardedFromID), Blocks: blocksJSON(m.Blocks),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -196,7 +196,7 @@ func (s *Store) MessagesByIDs(ctx context.Context, idList []ids.ID) ([]conversat
 // ListMessages returns a page, oldest first.
 func (s *Store) ListMessages(ctx context.Context, channelID, before ids.ID, limit int) ([]conversation.Message, error) {
 	return manyMessages(s.q(ctx).ListMessages(ctx, sqlcgen.ListMessagesParams{
-		ChannelID: channelID, Before: nullID(before), PageSize: int32(limit),
+		ChannelID: channelID, Before: ids.NilAsNull(before), PageSize: int32(limit),
 	}))
 }
 
@@ -288,13 +288,6 @@ func manyMessages(rows []sqlcgen.Message, err error) ([]conversation.Message, er
 		out = append(out, toMessage(r))
 	}
 	return out, nil
-}
-
-func nullID(id ids.ID) *ids.ID {
-	if id == ids.Nil {
-		return nil
-	}
-	return &id
 }
 
 func nullString(s string) *string {

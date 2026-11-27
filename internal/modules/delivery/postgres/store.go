@@ -29,7 +29,7 @@ func (s *Store) Insert(ctx context.Context, d delivery.Delivery) (bool, error) {
 	n, err := s.q(ctx).InsertDelivery(ctx, sqlcgen.InsertDeliveryParams{
 		ID: d.ID, WorkspaceID: d.WorkspaceID, RecipientID: d.RecipientID, ItemKind: d.ItemKind, ItemID: d.ItemID,
 		ChannelID: channel, Flags: int16(d.Flags), EventSeq: d.EventSeq, CreatedAt: d.CreatedAt,
-		FromActorID: nullID(d.FromActorID), DelegatedBy: nullID(d.DelegatedBy), ViaGrant: d.ViaGrant,
+		FromActorID: ids.NilAsNull(d.FromActorID), DelegatedBy: ids.NilAsNull(d.DelegatedBy), ViaGrant: d.ViaGrant,
 	})
 	return n == 1, err
 }
@@ -85,7 +85,7 @@ func (s *Store) AckByItemID(ctx context.Context, itemID ids.ID, at time.Time) (i
 
 // AckByChannel marks the channel's pending deliveries as handled.
 func (s *Store) AckByChannel(ctx context.Context, channelID, recipientID ids.ID, at time.Time) (int, error) {
-	n, err := s.q(ctx).AckByChannel(ctx, sqlcgen.AckByChannelParams{At: at, ChannelID: &channelID, RecipientID: nullID(recipientID)})
+	n, err := s.q(ctx).AckByChannel(ctx, sqlcgen.AckByChannelParams{At: at, ChannelID: &channelID, RecipientID: ids.NilAsNull(recipientID)})
 	return int(n), err
 }
 
@@ -101,7 +101,7 @@ func (s *Store) InsertTerminalEvent(ctx context.Context, te delivery.TerminalEve
 		WorkspaceID:  te.WorkspaceID,
 		AgentID:      te.AgentID,
 		ChannelID:    te.ChannelID,
-		ThreadRootID: nullID(te.ThreadRootID),
+		ThreadRootID: ids.NilAsNull(te.ThreadRootID),
 		Name:         te.Name,
 		ExitCode:     exitCode,
 		DurationMs:   te.DurationMs,
@@ -141,11 +141,4 @@ func (s *Store) TerminalEventsByIDs(ctx context.Context, eventIDs []ids.ID) ([]d
 		out = append(out, te)
 	}
 	return out, nil
-}
-
-func nullID(id ids.ID) *ids.ID {
-	if id == ids.Nil {
-		return nil
-	}
-	return &id
 }

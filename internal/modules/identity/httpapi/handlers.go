@@ -310,7 +310,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("GET /api/v1/actors/{id}/tokens", auth(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r)
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -327,7 +327,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("POST /api/v1/actors/{id}/tokens", auth(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r)
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -345,7 +345,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("DELETE /api/v1/tokens/{id}", auth(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r)
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -357,7 +357,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("PUT /api/v1/actors/{id}/state", auth(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r)
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -374,7 +374,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("PATCH /api/v1/actors/{id}/profile", auth(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r)
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -432,7 +432,7 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 	}))
 
 	mux.Handle("PUT /api/v1/actors/{id}/role", auth(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r)
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -482,15 +482,6 @@ func Register(mux *http.ServeMux, svc *identity.Service, opt Options) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
-}
-
-func pathID(w http.ResponseWriter, r *http.Request) (ids.ID, bool) {
-	id, err := ids.Parse(r.PathValue("id"))
-	if err != nil {
-		httpx.Error(w, r, &httpx.BadRequest{Detail: "id must be a UUID"})
-		return ids.Nil, false
-	}
-	return id, true
 }
 
 // sessionInfo is the caller and, for a break-glass session (round 51b),

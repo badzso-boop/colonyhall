@@ -25,7 +25,7 @@ func RegisterFs(mux *http.ServeMux, svc *hosts.Service, relay *hosts.FsRelay, au
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
 
 	mux.Handle("POST /api/v1/hosts/{hostId}/fs", wrap(func(w http.ResponseWriter, r *http.Request) {
-		hostID, ok := pathID(w, r, "hostId")
+		hostID, ok := httpx.PathID(w, r, "hostId")
 		if !ok {
 			return
 		}

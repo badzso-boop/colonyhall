@@ -6,7 +6,6 @@ package approval
 import (
 	"errors"
 	"time"
-	"unicode/utf8"
 
 	"colonyhall/internal/modules/runs"
 	"colonyhall/internal/platform/ids"
@@ -65,11 +64,4 @@ var (
 // Redact masks secrets in s using the same patterns as the runs module.
 func Redact(s string) string {
 	return runs.Redact(s)
-}
-
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n]) + "…"
 }

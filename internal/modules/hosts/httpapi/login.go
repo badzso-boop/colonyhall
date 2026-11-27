@@ -26,7 +26,7 @@ func RegisterLogin(mux *http.ServeMux, svc *hosts.Service, relay *hosts.LoginRel
 	wrap := func(h http.HandlerFunc) http.Handler { return httpx.RequireAuth(auth, h) }
 
 	mux.Handle("PUT /api/v1/hosts/{hostId}/claude-login", wrap(func(w http.ResponseWriter, r *http.Request) {
-		hostID, ok := pathID(w, r, "hostId")
+		hostID, ok := httpx.PathID(w, r, "hostId")
 		if !ok {
 			return
 		}
@@ -45,7 +45,7 @@ func RegisterLogin(mux *http.ServeMux, svc *hosts.Service, relay *hosts.LoginRel
 	}))
 
 	mux.Handle("DELETE /api/v1/hosts/{hostId}/claude-login", wrap(func(w http.ResponseWriter, r *http.Request) {
-		hostID, ok := pathID(w, r, "hostId")
+		hostID, ok := httpx.PathID(w, r, "hostId")
 		if !ok {
 			return
 		}

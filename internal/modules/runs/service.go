@@ -18,6 +18,7 @@ import (
 	"colonyhall/internal/platform/clock"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/textutil"
 )
 
 // Hosts provides host assignment info for agents.
@@ -59,7 +60,7 @@ func (s *Service) ReportError(ctx context.Context, by identity.Actor, in ReportI
 	if by.Kind != identity.KindAgent {
 		return Error{}, ErrForbidden
 	}
-	summary := clip(strings.TrimSpace(Redact(in.Summary)), MaxSummary)
+	summary := textutil.Clip(strings.TrimSpace(Redact(in.Summary)), MaxSummary)
 	if summary == "" {
 		return Error{}, ErrEmpty
 	}
@@ -77,7 +78,7 @@ func (s *Service) ReportError(ctx context.Context, by identity.Actor, in ReportI
 		return Error{}, err
 	}
 	e := Error{ID: s.IDs.New(), WorkspaceID: by.WorkspaceID, AgentID: by.ID, ChannelID: ch.ID, ThreadRootID: in.ThreadRootID,
-		Summary: summary, Detail: clip(Redact(in.Detail), MaxDetail), CreatedAt: s.Clock.Now()}
+		Summary: summary, Detail: textutil.Clip(Redact(in.Detail), MaxDetail), CreatedAt: s.Clock.Now()}
 	var seq int64
 	err = s.Tx.InTx(ctx, func(ctx context.Context) error {
 		if err := s.Store.InsertError(ctx, e); err != nil {
@@ -202,7 +203,7 @@ func (s *Service) ReportRun(ctx context.Context, by identity.Actor, in ReportRun
 		}
 	}
 	in.HostID = ids.Nil
-	in.Client, in.Model, in.SessionID = clip(strings.TrimSpace(in.Client), 40), clip(strings.TrimSpace(in.Model), 100), clip(strings.TrimSpace(in.SessionID), 100)
+	in.Client, in.Model, in.SessionID = textutil.Clip(strings.TrimSpace(in.Client), 40), textutil.Clip(strings.TrimSpace(in.Model), 100), textutil.Clip(strings.TrimSpace(in.SessionID), 100)
 	if len(in.Steps) > 200 {
 		in.Steps = in.Steps[:200]
 	}
