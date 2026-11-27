@@ -823,7 +823,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 	case previewLinks.Port != "":
 		frameSrc = []string{"http://*:" + previewLinks.Port, "https://*:" + previewLinks.Port}
 	}
-	handler := httpserver.NewWithOptions(mux, ready, opt.Logger, httpserver.Options{Timeouts: opt.HTTPTimeouts, FrameSrc: frameSrc})
+	handler := httpserver.NewWithOptions(mux, ready, opt.Logger, httpserver.Options{Timeouts: opt.HTTPTimeouts, FrameSrc: frameSrc, HSTS: opt.SecureCookies})
 	var previewHandler http.Handler
 	if opt.PreviewAddr != "" {
 		pmux := http.NewServeMux()
@@ -870,7 +870,7 @@ func New(ctx context.Context, opt Options) (*App, error) {
 				return operatorDatabase(ctx, ready, dsSvc)
 			}})
 		adminMux.Handle("GET /{$}", http.RedirectHandler("/agent/", http.StatusFound))
-		admin := httpserver.NewWithTimeouts(adminMux, ready, opt.Logger, opt.HTTPTimeouts)
+		admin := httpserver.NewWithOptions(adminMux, ready, opt.Logger, httpserver.Options{Timeouts: opt.HTTPTimeouts, HSTS: opt.SecureCookies})
 		handler = tenantHandler(opt.BaseDomain, opt.SecureCookies, idStore, handler, admin, opt.OperatorAllowlist)
 		if previewHandler != nil {
 			// <slug>.<base domain> on the preview port: that workspace only.

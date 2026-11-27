@@ -58,9 +58,18 @@ const devPageCSP = "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 // apiCSP: JSON and downloads never need to run anything.
 const apiCSP = "default-src 'none'; frame-ancestors 'none'"
 
-func securityHeaders(appPolicy string, next http.Handler) http.Handler {
+// hstsPolicy keeps browsers on HTTPS for a year. It deliberately has no
+// includeSubDomains and no preload: the domain may be shared with other
+// sites that do not all serve HTTPS.
+const hstsPolicy = "max-age=31536000"
+
+func securityHeaders(appPolicy string, hsts bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		if hsts {
+			// Browsers ignore it over plain HTTP (RFC 6797 8.1).
+			h.Set("Strict-Transport-Security", hstsPolicy)
+		}
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
