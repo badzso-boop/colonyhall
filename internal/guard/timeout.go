@@ -6,6 +6,7 @@ package guard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -26,6 +27,26 @@ func (t runTimeoutType) String() string {
 		return "max_run"
 	default:
 		return "none"
+	}
+}
+
+// timeoutMessage is the chat reply of a run the guard killed: how long the
+// client was silent (idle) or which run limit it reached (max_run), in the
+// largest whole unit.
+func timeoutMessage(t runTimeoutType, idle, maxRun time.Duration) string {
+	if t == timeoutIdle {
+		if idle >= time.Minute {
+			return fmt.Sprintf("⏱ Leállítottam: %d perce nem jött semmi a klienstől.", int(idle.Minutes()))
+		}
+		return fmt.Sprintf("⏱ Leállítottam: %d másodperce nem jött semmi a klienstől.", int(idle.Seconds()))
+	}
+	switch {
+	case maxRun >= time.Hour:
+		return fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d órás korlátot.", int(maxRun.Hours()))
+	case maxRun >= time.Minute:
+		return fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d perces korlátot.", int(maxRun.Minutes()))
+	default:
+		return fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d másodperces korlátot.", int(maxRun.Seconds()))
 	}
 }
 
