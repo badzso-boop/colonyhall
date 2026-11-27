@@ -1045,22 +1045,7 @@ func (a *Agent) work(ctx context.Context, it PromptItem, task string) error {
 			return errHalted
 		}
 		if timedOut != timeoutNone {
-			var timeoutMsg string
-			if timedOut == timeoutIdle {
-				if a.Cfg.IdleTimeout >= time.Minute {
-					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d perce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Minutes()))
-				} else {
-					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d másodperce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Seconds()))
-				}
-			} else {
-				if a.Cfg.MaxRun >= time.Hour {
-					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d órás korlátot.", int(a.Cfg.MaxRun.Hours()))
-				} else if a.Cfg.MaxRun >= time.Minute {
-					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d perces korlátot.", int(a.Cfg.MaxRun.Minutes()))
-				} else {
-					timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d másodperces korlátot.", int(a.Cfg.MaxRun.Seconds()))
-				}
-			}
+			timeoutMsg := timeoutMessage(timedOut, a.Cfg.IdleTimeout, a.Cfg.MaxRun)
 			a.Log.Warn("guard: work run killed due to timeout", "agent", a.logName(), "reason", timedOut.String(), "session", res.SessionID)
 			replyMsgID, replyErr := a.replyLongWithID(ctx, it.Item, timeoutMsg, "gw-"+it.ID)
 			a.reportRun(ctx, "work", a.Cfg.WorkModel, res.SessionID, it.ChannelID, it.ThreadRootID, 1, res, "error", "", steps, replyMsgID, visitedURLs)

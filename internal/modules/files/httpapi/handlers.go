@@ -176,7 +176,7 @@ func registerStorage(mux *http.ServeMux, svc *files.Service, wrap func(http.Hand
 	}))
 
 	mux.Handle("DELETE /api/v1/files/{fileId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "fileId")
+		id, ok := httpx.PathID(w, r, "fileId")
 		if !ok {
 			return
 		}
@@ -271,7 +271,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// POST /api/v1/channels/{channelId}/files
 	mux.Handle("POST /api/v1/channels/{channelId}/files", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "channelId")
+		channelID, ok := httpx.PathID(w, r, "channelId")
 		if !ok {
 			return
 		}
@@ -319,7 +319,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// GET /api/v1/files/{fileId}
 	mux.Handle("GET /api/v1/files/{fileId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		fileID, ok := pathID(w, r, "fileId")
+		fileID, ok := httpx.PathID(w, r, "fileId")
 		if !ok {
 			return
 		}
@@ -333,7 +333,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// GET /api/v1/files/{fileId}/content
 	mux.Handle("GET /api/v1/files/{fileId}/content", wrap(func(w http.ResponseWriter, r *http.Request) {
-		fileID, ok := pathID(w, r, "fileId")
+		fileID, ok := httpx.PathID(w, r, "fileId")
 		if !ok {
 			return
 		}
@@ -366,7 +366,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// POST /api/v1/messages/{messageId}/file-fetch
 	mux.Handle("POST /api/v1/messages/{messageId}/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
-		messageID, ok := pathID(w, r, "messageId")
+		messageID, ok := httpx.PathID(w, r, "messageId")
 		if !ok {
 			return
 		}
@@ -397,7 +397,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// GET /api/v1/file-fetch/{id}
 	mux.Handle("GET /api/v1/file-fetch/{id}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		reqID, ok := pathID(w, r, "id")
+		reqID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -437,7 +437,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// PUT /api/v1/agent/file-fetch/{id}/content
 	mux.Handle("PUT /api/v1/agent/file-fetch/{id}/content", wrap(func(w http.ResponseWriter, r *http.Request) {
-		reqID, ok := pathID(w, r, "id")
+		reqID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -455,7 +455,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// POST /api/v1/agent/file-fetch/{id}/fail
 	mux.Handle("POST /api/v1/agent/file-fetch/{id}/fail", wrap(func(w http.ResponseWriter, r *http.Request) {
-		reqID, ok := pathID(w, r, "id")
+		reqID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -505,7 +505,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// POST /api/v1/agents/{agentId}/fs
 	mux.Handle("POST /api/v1/agents/{agentId}/fs", wrap(func(w http.ResponseWriter, r *http.Request) {
-		agentID, ok := pathID(w, r, "agentId")
+		agentID, ok := httpx.PathID(w, r, "agentId")
 		if !ok {
 			return
 		}
@@ -541,7 +541,7 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 
 	// POST /api/v1/agents/{agentId}/file-fetch
 	mux.Handle("POST /api/v1/agents/{agentId}/file-fetch", wrap(func(w http.ResponseWriter, r *http.Request) {
-		agentID, ok := pathID(w, r, "agentId")
+		agentID, ok := httpx.PathID(w, r, "agentId")
 		if !ok {
 			return
 		}
@@ -635,13 +635,4 @@ func Register(mux *http.ServeMux, svc *files.Service, auth identity.RequestAuthe
 		}
 		httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}))
-}
-
-func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {
-	id, err := ids.Parse(r.PathValue(name))
-	if err != nil {
-		httpx.Error(w, r, &httpx.BadRequest{Detail: name + " must be a UUID"})
-		return ids.Nil, false
-	}
-	return id, true
 }

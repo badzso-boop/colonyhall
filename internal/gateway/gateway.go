@@ -11,7 +11,9 @@
 //	server → {"type":"replay_done","seq":456}
 //
 // Every connection keeps its own cursor and reads events from the event log
-// itself; the bus only wakes it up (Dendrite notifier pattern). A client
+// itself; the bus only wakes it up (Dendrite notifier pattern). The
+// connections of a workspace read through a shared feed (feed.go), so one
+// event costs about one query, not one per open socket. A client
 // that reconnects with last_seq gets everything it missed, on any server
 // instance. A connection that falls behind is closed; the client then
 // reconnects and replays from its last sequence, so nothing is lost.
@@ -75,9 +77,13 @@ type Gateway struct {
 	OriginPatterns []string
 
 	revalidate atomic.Int64
+	// feedSize overrides how many recent events a workspace feed keeps
+	// (tests); 0 means feedSize.
+	feedSize int
 
 	mu         sync.Mutex
 	conns      map[*connection]struct{}
+	feeds      map[ids.ID]*feed
 	activities map[activityKey]time.Time
 	progress   map[progressKey]*runProgress
 }
@@ -201,19 +207,41 @@ func (g *Gateway) now() time.Time {
 	return time.Now()
 }
 
+// register adds the connection and attaches it to its workspace's feed.
 func (g *Gateway) register(c *connection) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.conns == nil {
 		g.conns = make(map[*connection]struct{})
 	}
+	if g.feeds == nil {
+		g.feeds = make(map[ids.ID]*feed)
+	}
+	f := g.feeds[c.actor.WorkspaceID]
+	if f == nil {
+		f = newFeed(g.Events, c.actor.WorkspaceID, g.feedSize, readBatch)
+		g.feeds[c.actor.WorkspaceID] = f
+	}
+	f.refs++
+	c.feed = f
 	g.conns[c] = struct{}{}
 }
 
+// unregister removes the connection; the last one of a workspace releases
+// the workspace's feed and its buffer.
 func (g *Gateway) unregister(c *connection) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if _, ok := g.conns[c]; !ok {
+		return
+	}
 	delete(g.conns, c)
+	if f := c.feed; f != nil {
+		f.refs--
+		if f.refs == 0 && g.feeds[c.actor.WorkspaceID] == f {
+			delete(g.feeds, c.actor.WorkspaceID)
+		}
+	}
 }
 
 // IsWorking reports whether the agent currently has an active, unexpired working activity.
@@ -617,6 +645,7 @@ func (g *Gateway) logger() *slog.Logger {
 type connection struct {
 	g      *Gateway
 	ws     *websocket.Conn
+	feed   *feed
 	actor  identity.Actor
 	cursor int64
 	// authSeq is the log head when the actor was authenticated.
@@ -637,16 +666,22 @@ func (c *connection) writeJSON(ctx context.Context, v any) error {
 	return wsjson.Write(ctx, c.ws, v)
 }
 
-// catchUp sends every visible event after the cursor.
+// catchUp sends every visible event after the cursor. It runs right after
+// a wake-up, so the ticket it observes tells the feed which reads are recent
+// enough to have seen the events that woke it.
 func (c *connection) catchUp(ctx context.Context) error {
+	return c.replay(ctx, c.feed.observe(), c.writeJSON)
+}
+
+// replay sends every visible event after the cursor through send. The
+// events come from the shared feed and must not be modified.
+func (c *connection) replay(ctx context.Context, obs uint64, send func(context.Context, any) error) error {
 	for {
-		events, err := c.g.Events.Since(ctx, c.cursor, readBatch)
+		events, next, err := c.feed.since(ctx, c.cursor, obs)
 		if err != nil {
 			return err
 		}
-		if len(events) == 0 {
-			return nil
-		}
+		before := c.cursor
 		for _, e := range events {
 			if c.accessChanged(ctx, e) {
 				return errAccessChanged
@@ -660,11 +695,15 @@ func (c *connection) catchUp(ctx context.Context) error {
 				if e.ChannelID != ids.Nil {
 					out.ChannelID = e.ChannelID.String()
 				}
-				if err := c.writeJSON(ctx, out); err != nil {
+				if err := send(ctx, out); err != nil {
 					return err
 				}
 			}
 			c.cursor = e.Seq
+		}
+		c.cursor = max(c.cursor, next)
+		if c.cursor == before {
+			return nil
 		}
 	}
 }

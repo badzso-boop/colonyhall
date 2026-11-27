@@ -10,7 +10,6 @@ import (
 	"errors"
 	"regexp"
 	"time"
-	"unicode/utf8"
 
 	"colonyhall/internal/platform/ids"
 )
@@ -227,10 +226,3 @@ var secretPattern = regexp.MustCompile(`(col_|colh_|sk-ant-[a-z0-9]*-|sk-|AIza|y
 
 // Redact masks secrets in s.
 func Redact(s string) string { return secretPattern.ReplaceAllString(s, "${1}[redacted]") }
-
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n]) + "…"
-}

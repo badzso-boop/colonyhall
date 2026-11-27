@@ -19,6 +19,7 @@ import (
 
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/db"
+	"colonyhall/internal/platform/ids"
 	"colonyhall/internal/platform/tenant"
 )
 
@@ -273,6 +274,17 @@ func classify(err error) (int, string, string, string) {
 		return http.StatusConflict, "Conflict", err.Error(), ""
 	}
 	return http.StatusInternalServerError, "Internal Server Error", err.Error(), ""
+}
+
+// PathID parses the named path value as an ID; when it is not one, it
+// answers 400 ("<name> must be a UUID") and returns false.
+func PathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {
+	id, err := ids.Parse(r.PathValue(name))
+	if err != nil {
+		Error(w, r, &BadRequest{Detail: name + " must be a UUID"})
+		return ids.Nil, false
+	}
+	return id, true
 }
 
 // Deref returns *p, or def when p is nil. Used with generated request types,

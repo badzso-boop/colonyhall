@@ -69,15 +69,6 @@ func grantToAPI(g workshop.GrantView) apispec.ToolGrant {
 	return out
 }
 
-func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {
-	id, err := ids.Parse(r.PathValue(name))
-	if err != nil {
-		httpx.Error(w, r, &httpx.BadRequest{Detail: name + " must be a UUID"})
-		return ids.Nil, false
-	}
-	return id, true
-}
-
 func strPtr[T ~string](p *T) *string {
 	if p == nil {
 		return nil
@@ -134,7 +125,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("GET /api/v1/workshop/connectors/{connectorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "connectorId")
+		id, ok := httpx.PathID(w, r, "connectorId")
 		if !ok {
 			return
 		}
@@ -143,7 +134,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("PATCH /api/v1/workshop/connectors/{connectorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "connectorId")
+		id, ok := httpx.PathID(w, r, "connectorId")
 		if !ok {
 			return
 		}
@@ -159,7 +150,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("DELETE /api/v1/workshop/connectors/{connectorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "connectorId")
+		id, ok := httpx.PathID(w, r, "connectorId")
 		if !ok {
 			return
 		}
@@ -171,7 +162,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("POST /api/v1/workshop/connectors/{connectorId}/refresh", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "connectorId")
+		id, ok := httpx.PathID(w, r, "connectorId")
 		if !ok {
 			return
 		}
@@ -180,7 +171,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("PUT /api/v1/workshop/connectors/{connectorId}/approval", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "connectorId")
+		id, ok := httpx.PathID(w, r, "connectorId")
 		if !ok {
 			return
 		}
@@ -195,7 +186,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("PUT /api/v1/workshop/connectors/{connectorId}/tools/{tool}/risk", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "connectorId")
+		id, ok := httpx.PathID(w, r, "connectorId")
 		if !ok {
 			return
 		}
@@ -245,7 +236,7 @@ func Register(mux *http.ServeMux, svc *workshop.Service, auth identity.RequestAu
 	}))
 
 	mux.Handle("DELETE /api/v1/workshop/grants/{grantId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "grantId")
+		id, ok := httpx.PathID(w, r, "grantId")
 		if !ok {
 			return
 		}

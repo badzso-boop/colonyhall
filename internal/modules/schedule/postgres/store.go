@@ -23,13 +23,6 @@ type Store struct{ DB *db.Postgres }
 
 func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.DB.Q(ctx)) }
 
-func nullID(id ids.ID) *ids.ID {
-	if id == ids.Nil {
-		return nil
-	}
-	return &id
-}
-
 func toSchedule(r sqlcgen.Schedule) schedule.Schedule {
 	sc := schedule.Schedule{ID: r.ID, WorkspaceID: r.WorkspaceID, CreatedBy: r.CreatedBy, ChannelID: r.ChannelID, Body: r.Body,
 		Cron: r.Cron, Timezone: r.Timezone, CatchUp: r.CatchUp, State: r.State, NextRunAt: r.NextRunAt, LastRunAt: r.LastRunAt,
@@ -57,7 +50,7 @@ func list(rows []sqlcgen.Schedule, err error) ([]schedule.Schedule, error) {
 // Create stores a schedule.
 func (s *Store) Create(ctx context.Context, sc schedule.Schedule) error {
 	return s.q(ctx).CreateSchedule(ctx, sqlcgen.CreateScheduleParams{ID: sc.ID, WorkspaceID: sc.WorkspaceID, CreatedBy: sc.CreatedBy,
-		ChannelID: sc.ChannelID, ThreadRootID: nullID(sc.ThreadRootID), Body: sc.Body, Cron: sc.Cron, Timezone: sc.Timezone,
+		ChannelID: sc.ChannelID, ThreadRootID: ids.NilAsNull(sc.ThreadRootID), Body: sc.Body, Cron: sc.Cron, Timezone: sc.Timezone,
 		CatchUp: sc.CatchUp, State: sc.State, NextRunAt: sc.NextRunAt, CreatedAt: sc.CreatedAt})
 }
 
@@ -94,7 +87,7 @@ func (s *Store) Claim(ctx context.Context, id ids.ID, dueAt, next time.Time, sta
 
 // Record stores a run's outcome.
 func (s *Store) Record(ctx context.Context, id, messageID ids.ID, runErr string) error {
-	return s.q(ctx).RecordRun(ctx, sqlcgen.RecordRunParams{MessageID: nullID(messageID), RunError: runErr, ID: id})
+	return s.q(ctx).RecordRun(ctx, sqlcgen.RecordRunParams{MessageID: ids.NilAsNull(messageID), RunError: runErr, ID: id})
 }
 
 // SetState changes a schedule's state.

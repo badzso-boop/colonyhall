@@ -760,22 +760,7 @@ func (a *Agent) doRunDirectGroup(ctx context.Context, stateDir, stateFile string
 		return errHalted
 	}
 	if timedOut != timeoutNone {
-		var timeoutMsg string
-		if timedOut == timeoutIdle {
-			if a.Cfg.IdleTimeout >= time.Minute {
-				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d perce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Minutes()))
-			} else {
-				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: %d másodperce nem jött semmi a klienstől.", int(a.Cfg.IdleTimeout.Seconds()))
-			}
-		} else {
-			if a.Cfg.MaxRun >= time.Hour {
-				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d órás korlátot.", int(a.Cfg.MaxRun.Hours()))
-			} else if a.Cfg.MaxRun >= time.Minute {
-				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d perces korlátot.", int(a.Cfg.MaxRun.Minutes()))
-			} else {
-				timeoutMsg = fmt.Sprintf("⏱ Leállítottam: elérte a(z) %d másodperces korlátot.", int(a.Cfg.MaxRun.Seconds()))
-			}
-		}
+		timeoutMsg := timeoutMessage(timedOut, a.Cfg.IdleTimeout, a.Cfg.MaxRun)
 		a.Log.Warn("guard: direct run killed due to timeout", "agent", a.logName(), "reason", timedOut.String(), "session", sessionID)
 		replyTarget := last
 		if last.Route() != nil {

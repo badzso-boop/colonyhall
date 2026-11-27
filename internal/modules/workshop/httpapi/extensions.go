@@ -83,7 +83,7 @@ func manifestToAPI(m workshop.Manifest) apispec.ExtensionManifest {
 }
 
 func registerExtensions(mux *http.ServeMux, svc *workshop.Service, wrap func(http.HandlerFunc) http.Handler) {
-	extID := func(w http.ResponseWriter, r *http.Request) (ids.ID, bool) { return pathID(w, r, "extensionId") }
+	extID := func(w http.ResponseWriter, r *http.Request) (ids.ID, bool) { return httpx.PathID(w, r, "extensionId") }
 	version := func(w http.ResponseWriter, r *http.Request) (int, bool) {
 		n, err := strconv.Atoi(r.PathValue("version"))
 		if err != nil || n < 1 {
@@ -300,7 +300,7 @@ func registerExtensions(mux *http.ServeMux, svc *workshop.Service, wrap func(htt
 
 func registerBundles(mux *http.ServeMux, svc *workshop.Service, wrap func(http.HandlerFunc) http.Handler) {
 	mux.Handle("GET /api/v1/workshop/extensions/{extensionId}/export", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "extensionId")
+		id, ok := httpx.PathID(w, r, "extensionId")
 		if !ok {
 			return
 		}

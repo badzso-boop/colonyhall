@@ -40,6 +40,9 @@ type Options struct {
 	// FrameSrc are the sources the PWA may embed in a frame besides its
 	// own origin: the preview listener (round 57).
 	FrameSrc []string
+	// HSTS sends Strict-Transport-Security: set when the server runs
+	// behind HTTPS (COLONY_SECURE_COOKIES).
+	HSTS bool
 }
 
 // NewWithOptions is New with deadlines and the PWA's frame sources.
@@ -68,7 +71,7 @@ func NewWithOptions(api *http.ServeMux, ready func(context.Context) error, logge
 		panic(err)
 	}
 	api.Handle("GET /agent/", appHandler(dist))
-	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist, o.FrameSrc...), deadlines(t, api))))
+	return recoverer(logger, logRequests(logger, securityHeaders(appCSP(dist, o.FrameSrc...), o.HSTS, deadlines(t, api))))
 }
 
 type statusWriter struct {

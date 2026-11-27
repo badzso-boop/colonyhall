@@ -19,6 +19,7 @@ import (
 	"colonyhall/internal/modules/conversation"
 	"colonyhall/internal/modules/identity"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/textutil"
 )
 
 // Timeouts and back-off (docs/11-rag-terv.md, 9.).
@@ -356,7 +357,7 @@ func fuse(kw, sem []Candidate) []Hit {
 	for _, id := range order {
 		h := byID[id]
 		if h.Snippet == "" {
-			h.Snippet = clip(h.Chunk.Body, 240)
+			h.Snippet = textutil.Clip(h.Chunk.Body, 240)
 		}
 		out = append(out, *h)
 	}
@@ -367,13 +368,6 @@ func fuse(kw, sem []Candidate) []Hit {
 		return out[i].Chunk.SourceAt.After(out[j].Chunk.SourceAt)
 	})
 	return out
-}
-
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n]) + "…"
 }
 
 // rerankHits reorders the top RerankTop hits by the reranker's score; the

@@ -22,6 +22,7 @@ import (
 	"colonyhall/internal/modules/schedule"
 	"colonyhall/internal/platform/db"
 	"colonyhall/internal/platform/ids"
+	"colonyhall/internal/platform/textutil"
 )
 
 // ConsumerName is the Workshop's event consumer (routines on messages and
@@ -360,7 +361,7 @@ func (s *Service) postResult(ctx context.Context, bot identity.Actor, channelID,
 		in.Blocks, in.Body = blocks, obj.Text
 	}
 	if res.IsError {
-		in.Body = "⚠ " + clip(text, 2000)
+		in.Body = "⚠ " + textutil.Clip(text, 2000)
 		in.Blocks = nil
 	}
 	_, err := s.Channels.SendMessage(ctx, bot, in)
@@ -374,7 +375,7 @@ func (s *Service) askAgent(ctx context.Context, bot identity.Actor, r Routine, t
 	body := "@" + r.Agent + " " + strings.TrimSpace(r.Prompt)
 	if trig.Kind != TriggerCron {
 		data, _ := json.MarshalIndent(trig, "", "  ")
-		body += "\n\n```json\n" + clip(string(data), 3000) + "\n```"
+		body += "\n\n```json\n" + textutil.Clip(string(data), 3000) + "\n```"
 	}
 	_, err := s.Channels.SendMessage(ctx, bot, conversation.SendInput{ChannelID: channelID, ThreadRootID: threadID, Body: body, Elaborate: true})
 	return err
@@ -465,7 +466,7 @@ func (s *Service) onMessage(ctx context.Context, workspaceID ids.ID, p conversat
 				continue
 			}
 			if err := s.queue(ctx, e, r.Name, TriggerMessage, triggerData{Kind: TriggerMessage, MessageID: p.MessageID,
-				ThreadRootID: p.ThreadRootID, ChannelID: p.ChannelID, Channel: "#" + ch.Name, Author: handle, Text: clip(p.Body, 8000)}); err != nil {
+				ThreadRootID: p.ThreadRootID, ChannelID: p.ChannelID, Channel: "#" + ch.Name, Author: handle, Text: textutil.Clip(p.Body, 8000)}); err != nil {
 				return err
 			}
 		}

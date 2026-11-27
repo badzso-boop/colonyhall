@@ -34,7 +34,7 @@ func (s *Store) Append(ctx context.Context, e *eventlog.Event) error {
 		}
 		seq, err := q.InsertEvent(ctx, sqlcgen.InsertEventParams{
 			ID: e.ID, WorkspaceID: e.WorkspaceID, Type: e.Type, ActorID: e.ActorID,
-			ChannelID: nullID(e.ChannelID), AggregateType: e.AggregateType, AggregateID: e.AggregateID,
+			ChannelID: ids.NilAsNull(e.ChannelID), AggregateType: e.AggregateType, AggregateID: e.AggregateID,
 			Payload: e.Payload, SchemaVersion: int32(e.SchemaVersion), At: e.At,
 		})
 		e.Seq = seq
@@ -76,11 +76,4 @@ func (s *Store) Offset(ctx context.Context, consumer string) (int64, error) {
 // SetOffset stores a consumer's position.
 func (s *Store) SetOffset(ctx context.Context, consumer string, seq int64) error {
 	return s.q(ctx).SetConsumerOffset(ctx, sqlcgen.SetConsumerOffsetParams{ConsumerName: consumer, LastSeq: seq})
-}
-
-func nullID(id ids.ID) *ids.ID {
-	if id == ids.Nil {
-		return nil
-	}
-	return &id
 }

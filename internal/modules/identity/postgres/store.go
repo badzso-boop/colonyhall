@@ -53,7 +53,7 @@ func (s *Store) CreateActor(ctx context.Context, a identity.Actor) error {
 		Timezone:    tz,
 		StatusText:  a.StatusText,
 		Color:       nullString(a.Color),
-		OwnerID:     nullID(a.OwnerID),
+		OwnerID:     ids.NilAsNull(a.OwnerID),
 	})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -85,7 +85,7 @@ func (s *Store) ListActors(ctx context.Context, workspaceID ids.ID) ([]identity.
 func (s *Store) CreateToken(ctx context.Context, t identity.Token) error {
 	return s.q(ctx).CreateToken(ctx, sqlcgen.CreateTokenParams{
 		ID: t.ID, ActorID: t.ActorID, TokenHash: t.Hash, Label: t.Label, CreatedAt: t.CreatedAt,
-		HostID: nullID(t.HostID), ExpiresAt: t.ExpiresAt, Prefix: strOrNil(t.Prefix),
+		HostID: ids.NilAsNull(t.HostID), ExpiresAt: t.ExpiresAt, Prefix: strOrNil(t.Prefix),
 	})
 }
 
@@ -113,7 +113,7 @@ func (s *Store) ActorByTokenHash(ctx context.Context, hash []byte, now time.Time
 
 // RevokeHostTokens revokes a host's agent tokens.
 func (s *Store) RevokeHostTokens(ctx context.Context, hostID, agentID ids.ID, at time.Time) error {
-	return s.q(ctx).RevokeHostTokens(ctx, sqlcgen.RevokeHostTokensParams{At: &at, HostID: &hostID, AgentID: nullID(agentID)})
+	return s.q(ctx).RevokeHostTokens(ctx, sqlcgen.RevokeHostTokensParams{At: &at, HostID: &hostID, AgentID: ids.NilAsNull(agentID)})
 }
 
 func toActor(r sqlcgen.Actor) identity.Actor {
@@ -285,13 +285,6 @@ func toToken(t sqlcgen.ApiToken) identity.Token {
 	return out
 }
 
-func nullID(id ids.ID) *ids.ID {
-	if id == ids.Nil {
-		return nil
-	}
-	return &id
-}
-
 // ListTokens lists an actor's tokens, oldest first.
 func (s *Store) ListTokens(ctx context.Context, actorID ids.ID) ([]identity.Token, error) {
 	rows, err := s.q(ctx).ListTokens(ctx, actorID)
@@ -383,7 +376,7 @@ func (s *Store) SetActorRole(ctx context.Context, id ids.ID, role identity.Role)
 
 // SetActorOwner sets or clears an agent's owner.
 func (s *Store) SetActorOwner(ctx context.Context, id, ownerID ids.ID) error {
-	return s.q(ctx).SetActorOwner(ctx, sqlcgen.SetActorOwnerParams{ID: id, OwnerID: nullID(ownerID)})
+	return s.q(ctx).SetActorOwner(ctx, sqlcgen.SetActorOwnerParams{ID: id, OwnerID: ids.NilAsNull(ownerID)})
 }
 
 // deleteBatch is how many rows one cleanup statement removes, so a first

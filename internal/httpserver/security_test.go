@@ -68,6 +68,27 @@ func TestSecurityHeadersPerArea(t *testing.T) {
 	}
 }
 
+// HSTS goes out only when the server runs behind HTTPS (secure cookies),
+// on every area, and never covers subdomains: the domain may be shared.
+func TestStrictTransportSecurityFollowsSecureCookies(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		mux := http.NewServeMux()
+		h := NewWithOptions(mux, func(context.Context) error { return nil }, slog.New(slog.DiscardHandler), Options{HSTS: on})
+		for _, path := range []string{"/agent/", "/healthz", "/api/v1/me"} {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			got := rec.Header().Get("Strict-Transport-Security")
+			want := ""
+			if on {
+				want = "max-age=31536000"
+			}
+			if got != want {
+				t.Errorf("HSTS %v, %s: Strict-Transport-Security %q, want %q", on, path, got, want)
+			}
+		}
+	}
+}
+
 // A client that stops sending its body is cut off; only a real WebSocket
 // route (and the MCP stream) is long-lived.
 func TestReadDeadlineSparesLongLivedConnections(t *testing.T) {

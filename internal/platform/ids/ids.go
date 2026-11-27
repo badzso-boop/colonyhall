@@ -55,3 +55,12 @@ func (s *Sequential) New() ID {
 
 // Parse parses an ID from its string form.
 func Parse(s string) (ID, error) { return uuid.Parse(s) }
+
+// NilAsNull returns nil for the zero ID and a pointer to id otherwise: the
+// form of a nullable UUID column.
+func NilAsNull(id ID) *ID {
+	if id == Nil {
+		return nil
+	}
+	return &id
+}

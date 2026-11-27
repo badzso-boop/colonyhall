@@ -242,7 +242,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("GET /api/v1/channels/{id}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -255,7 +255,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("PATCH /api/v1/channels/{id}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -274,7 +274,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 
 	archive := func(on bool) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			channelID, ok := pathID(w, r, "id")
+			channelID, ok := httpx.PathID(w, r, "id")
 			if !ok {
 				return
 			}
@@ -295,7 +295,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	mux.Handle("POST /api/v1/channels/{id}/unarchive", wrap(archive(false)))
 	lock := func(on bool) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			channelID, ok := pathID(w, r, "id")
+			channelID, ok := httpx.PathID(w, r, "id")
 			if !ok {
 				return
 			}
@@ -314,7 +314,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	mux.Handle("POST /api/v1/channels/{id}/unlock", wrap(lock(false)))
 
 	mux.Handle("PUT /api/v1/channels/{id}/mute", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -333,7 +333,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("PUT /api/v1/channels/{id}/notify", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -359,7 +359,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("DELETE /api/v1/channels/{id}/mute", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -416,7 +416,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("POST /api/v1/messages/{id}/thread/read", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "id")
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -428,7 +428,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("GET /api/v1/channels/{id}/members", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -453,7 +453,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("POST /api/v1/channels/{id}/members", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -481,11 +481,11 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("PATCH /api/v1/channels/{id}/members/{actorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
-		actorID, ok := pathID(w, r, "actorId")
+		actorID, ok := httpx.PathID(w, r, "actorId")
 		if !ok {
 			return
 		}
@@ -517,11 +517,11 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("DELETE /api/v1/channels/{id}/members/{actorId}", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
-		actorID, ok := pathID(w, r, "actorId")
+		actorID, ok := httpx.PathID(w, r, "actorId")
 		if !ok {
 			return
 		}
@@ -533,7 +533,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("GET /api/v1/channels/{id}/messages", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -559,7 +559,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("POST /api/v1/channels/{id}/messages", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -747,7 +747,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("GET /api/v1/messages/{id}/thread", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "id")
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -765,7 +765,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 
 	reaction := func(add bool) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			id, ok := pathID(w, r, "id")
+			id, ok := httpx.PathID(w, r, "id")
 			if !ok {
 				return
 			}
@@ -785,7 +785,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}
 	pin := func(on bool) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			id, ok := pathID(w, r, "id")
+			id, ok := httpx.PathID(w, r, "id")
 			if !ok {
 				return
 			}
@@ -822,7 +822,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("POST /api/v1/messages/{id}/forward", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "id")
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -849,7 +849,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	mux.Handle("DELETE /api/v1/messages/{id}/pin", wrap(pin(false)))
 
 	mux.Handle("GET /api/v1/channels/{id}/pins", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -869,7 +869,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	mux.Handle("DELETE /api/v1/messages/{id}/reactions/{emoji}", wrap(reaction(false)))
 
 	mux.Handle("POST /api/v1/channels/{id}/read", wrap(func(w http.ResponseWriter, r *http.Request) {
-		channelID, ok := pathID(w, r, "id")
+		channelID, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -881,7 +881,7 @@ func Register(mux *http.ServeMux, svc *conversation.Service, auth identity.Reque
 	}))
 
 	mux.Handle("POST /api/v1/messages/{id}/retract", wrap(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "id")
+		id, ok := httpx.PathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -922,15 +922,6 @@ func parseThreadCursor(s string) (conversation.ThreadCursor, error) {
 		return conversation.ThreadCursor{}, err
 	}
 	return conversation.ThreadCursor{LastReplyAt: time.Unix(0, n).UTC(), RootID: root}, nil
-}
-
-func pathID(w http.ResponseWriter, r *http.Request, name string) (ids.ID, bool) {
-	id, err := ids.Parse(r.PathValue(name))
-	if err != nil {
-		httpx.Error(w, r, &httpx.BadRequest{Detail: name + " must be a UUID"})
-		return ids.Nil, false
-	}
-	return id, true
 }
 
 // RetractNoteText is the only text of the guard's note after a retracted

@@ -210,6 +210,8 @@ Két WebSocket végpont van: egy a böngészőknek (/ws/ui), egy az őröknek (/
 
 **Kézbesítési garancia:** legalább egyszer. Minden wake és control saját azonosítót kap, az őr ez alapján szűri a duplikátumokat (idempotens). Ha 2 szívverés kimarad, a szerver az agentet „nem válaszol” állapotba teszi. Újracsatlakozáskor az őr a last_seq-től kapja meg, ami kimaradt, és először mindig a vészleállítás állapotát.
 
+**Közös olvasás munkaterületenként:** minden kapcsolat a saját kurzorától olvassa az eseménynaplót, a busz csak felébreszti. Egy munkaterület kapcsolatai egy közös olvasón (`gateway/feed.go`) át olvasnak: az ugyanarra a kurzorra egyszerre induló lekérdezések egyetlen lekérdezéssé vonódnak össze, és a munkaterület legutóbbi 1024 eseménye memóriában marad, így a naprakész kapcsolatok onnan olvasnak; a régebbi kurzor a naplóból olvas, mint addig. Egy új esemény így nagyjából egy lekérdezésbe kerül, nem nyitott kapcsolatonként egybe. Az olvasás mindig a munkaterület hatókörében fut (RLS), a láthatósági szűrés kapcsolatonként marad; az utolsó kapcsolat bontásakor a közös olvasó megszűnik.
+
 ## MCP eszközök
 
 Az eszközök kimenete alapból tömör szöveg, mert a modellnek ez a legolcsóbb. format: "json" paraméterrel strukturált válasz kérhető. A listák legfeljebb 20 eleműek, a végükre „+N további · cursor: …” kerül. A hibaüzenet mindig megmondja, mit tegyen a modell (pl. „ismeretlen csatorna; elérhetők: \#szamlazo, \#homelab-ops”).

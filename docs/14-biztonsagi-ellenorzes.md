@@ -12,7 +12,7 @@ Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatk
 
 | Mérce | ✅ | 🟡 | ❌ | – |
 |---|---|---|---|---|
-| ASVS 4.0 L2 (37 pont) | 31 | 3 | 2 | 1 |
+| ASVS 4.0 L2 (37 pont) | 32 | 2 | 2 | 1 |
 | LLM Top 10 (10 pont) | 6 | 2 | 0 | 2 |
 
 ## ASVS 4.0, 2. szint
@@ -54,7 +54,7 @@ Jelölés: ✅ teljesül · 🟡 részben · ❌ nem teljesül · – nem vonatk
 | V12.5.x | Feltöltött fájl kiszolgálása | ✅ | `Content-Disposition: attachment`, `nosniff` |
 | V13.1.x | API-szerződés és típusellenőrzés | 🟡 | OpenAPI-szerződés, minden e2e-válasz ellenőrizve; a kérések tartalomtípusát nem minden végpont ellenőrzi külön |
 | V14.2.x | Függőségek | ✅ | `govulncheck`, `npm audit`, Dependabot (`a7034f6`), rögzített image-digestek (`f6b6d4e`) |
-| V14.3.x / 14.4.x | Biztonsági fejlécek | 🟡 | CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP megvan; HSTS-t a Cloudflare élen kellene bekapcsolni, a szerver maga nem küldi |
+| V14.3.x / 14.4.x | Biztonsági fejlécek | ✅ | CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP megvan; a szerver `Strict-Transport-Security: max-age=31536000` fejlécet küld, ha biztonságos sütikkel fut (`COLONY_SECURE_COOKIES`, alapból be; `httpserver/security.go`). `includeSubDomains` és `preload` nélkül, mert a domaint más oldalak is használják |
 | V14.x | Futtatókörnyezet megszigorítása | ✅ | Csak olvasható gyökér, `cap_drop: ALL`, `no-new-privileges`, memória- és PID-korlát (`e976960`); a build-környezetbe nem kerül titok vagy git-előzmény (`9cf0f28`); a kiadás aláíró tokenje el van választva a függőségek kódjától (`1d28804`) |
 
 ## OWASP Top 10 for LLM Applications (2025)
@@ -88,4 +88,3 @@ A `go test` a mintákat futtatja; hosszabb futás például: `go test ./internal
 
 1. Kiszivárgott jelszavak ellenőrzése (V2.1.7).
 2. MFA az admin felülethez (V4.3.1) — a nyilvános elérés (2026-11-22) óta ez a legfontosabb nyitott pont: egy admin jelszó kompromittálódása most már nem igényel VPN-hozzáférést is.
-3. HSTS a Cloudflare élen (V14.4): a TLS megvan, a HSTS-fejlécet még be kell kapcsolni a Cloudflare oldalán.

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"colonyhall/internal/modules/saved"
@@ -22,14 +21,6 @@ import (
 type Store struct{ DB *db.Postgres }
 
 func (s *Store) q(ctx context.Context) *sqlcgen.Queries { return sqlcgen.New(s.DB.Q(ctx)) }
-
-func nullID(id ids.ID) *uuid.UUID {
-	if id == ids.Nil {
-		return nil
-	}
-	u := uuid.UUID(id)
-	return &u
-}
 
 func fromRow(r sqlcgen.SavedItem) saved.Item {
 	it := saved.Item{ID: r.ID, WorkspaceID: r.WorkspaceID, ActorID: r.ActorID, Note: r.Note, RemindAt: r.RemindAt,
@@ -67,7 +58,7 @@ func many(rows []sqlcgen.SavedItem, err error) ([]saved.Item, error) {
 // Insert implements saved.Store.
 func (s *Store) Insert(ctx context.Context, it saved.Item) error {
 	err := s.q(ctx).InsertSaved(ctx, sqlcgen.InsertSavedParams{ID: it.ID, WorkspaceID: it.WorkspaceID, ActorID: it.ActorID,
-		MessageID: nullID(it.MessageID), ChannelID: nullID(it.ChannelID), Note: it.Note, RemindAt: it.RemindAt,
+		MessageID: ids.NilAsNull(it.MessageID), ChannelID: ids.NilAsNull(it.ChannelID), Note: it.Note, RemindAt: it.RemindAt,
 		RemindedAt: it.RemindedAt, DoneAt: it.DoneAt, CreatedAt: it.CreatedAt})
 	if db.IsUniqueViolation(err) {
 		return db.ErrConflict
@@ -88,7 +79,7 @@ func (s *Store) Get(ctx context.Context, id ids.ID) (saved.Item, error) {
 
 // ByMessage implements saved.Store.
 func (s *Store) ByMessage(ctx context.Context, actorID, messageID ids.ID) (saved.Item, error) {
-	return one(s.q(ctx).SavedByMessage(ctx, sqlcgen.SavedByMessageParams{ActorID: actorID, MessageID: nullID(messageID)}))
+	return one(s.q(ctx).SavedByMessage(ctx, sqlcgen.SavedByMessageParams{ActorID: actorID, MessageID: ids.NilAsNull(messageID)}))
 }
 
 // Delete implements saved.Store.
@@ -98,7 +89,7 @@ func (s *Store) Delete(ctx context.Context, id ids.ID) error { return s.q(ctx).D
 func (s *Store) List(ctx context.Context, workspaceID, actorID ids.ID, f saved.Filter, after *saved.Cursor, limit int) ([]saved.Item, error) {
 	p := sqlcgen.ListSavedParams{WorkspaceID: workspaceID, ActorID: actorID, Filter: string(f), PageSize: int32(limit)}
 	if after != nil {
-		p.BeforeAt, p.BeforeID = &after.At, nullID(after.ID)
+		p.BeforeAt, p.BeforeID = &after.At, ids.NilAsNull(after.ID)
 	}
 	return many(s.q(ctx).ListSaved(ctx, p))
 }
